@@ -325,7 +325,7 @@ export interface ProductionSystemIntegrationInput {
   readonly volume: ProductionVolumeRuntimePort;
   /** Omitted while canonical L12/Capital owner evidence is not mounted. */
   readonly capitalSummary?: ProductionCapitalSummaryReadPort | null;
-  /** Read-only existing L01/Q evidence; omitted binds accepted ABSTAIN_UNKNOWN. */
+  /** Read-only existing L01/Q evidence; omitted projects canonical NOT_CONFIGURED/ABSTAIN_UNKNOWN and mounts no runtime. */
   readonly qAdvisory?: QAdvisoryObservationBinding | null;
   /** Exact cached owners; absent in today's server assembly and therefore fail-closed. */
   readonly capitalEconomicsOwners?: ProductionCanonicalEconomicsOwners | null;

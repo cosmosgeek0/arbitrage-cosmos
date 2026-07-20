@@ -1,6 +1,42 @@
 import { SYSTEM_COMPONENT_IDS } from '../../../dist/systemIntegration/contracts/constants.js';
 
-export const T0 = 1_800_000_000_000;
+export const T0 = Date.parse('2026-08-01T00:00:00Z');
+
+export const Q_READINESS_WAIVER = Object.freeze({
+  id: 'READINESS-CLUSTER-001-Q-INFERENCE',
+  scope: 'KEYLESS_PUBLIC_DATA_VALIDATE_ONLY',
+  mode: 'VALIDATE_ONLY',
+  reason: 'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED',
+  owner: 'cosmosgeek',
+  expiresAt: '2026-10-18T00:00:00Z',
+  status: 'VALID',
+});
+
+export const VALID_SERVICE_READINESS_POLICY = Object.freeze({
+  status: 'VALID',
+  accepted: true,
+  reasonCode: 'READINESS_POLICY_VALID',
+  waiver: Q_READINESS_WAIVER,
+});
+
+const Q_BLOCKER_CODES = Object.freeze([
+  'FRESHNESS_NOT_REPORTED',
+  'Q_CLIENT_NOT_CONFIGURED',
+  'Q_OWNER_OBSERVATION_NOT_CONFIGURED',
+  'Q_SAFE_FALLBACK_ABSTAIN_UNKNOWN',
+  'Q_TRANSPORT_NOT_CONFIGURED',
+  'RELEASE_NOT_AVAILABLE',
+  'TRUTH_UNAVAILABLE',
+]);
+
+function serviceReadinessBasis(componentId) {
+  if (['capital-supervision', 'multileg-risk', 'execution-coordinator-validate-only', 'reconciliation'].includes(componentId)) {
+    return 'VALIDATE_ONLY_EXECUTOR';
+  }
+  if (componentId === 'ledger-persistence') return 'PERSISTENCE';
+  if (componentId === 'engine-supervisor') return 'MANAGED_LIFECYCLE';
+  return 'PUBLIC_DATA';
+}
 
 export function makeOpsReadback(overrides = {}) {
   return Object.freeze({
@@ -65,19 +101,26 @@ export function makeBootReleaseReadback(recordOverrides = {}, readbackOverrides 
 
 function component(componentId, index) {
   const publicSource = componentId === 'public-spot-source' || componentId === 'public-usdm-source';
+  const qAbstention = componentId === 'q-inference';
   return Object.freeze({
     componentId,
-    owner: componentId === 'engine-supervisor' ? 'SYSTEM_INTEGRATION' : 'AUDITED_APP',
-    ownerPath: componentId === 'engine-supervisor' ? 'server/src/systemIntegration/**' : `owner/${componentId}`,
-    releaseStatuses: Object.freeze(publicSource ? ['BUILT_AND_TESTED', 'WIRED', 'LIVE_PUBLIC'] : ['BUILT_AND_TESTED', 'WIRED']),
-    truthLabel: publicSource ? 'LIVE_PUBLIC' : 'DRY_RUN',
+    owner: componentId === 'engine-supervisor'
+      ? 'SYSTEM_INTEGRATION'
+      : qAbstention ? 'Q_INFERENCE' : 'AUDITED_APP',
+    ownerPath: componentId === 'engine-supervisor'
+      ? 'server/src/systemIntegration/**'
+      : qAbstention ? 'quant/src/quant_edge/inference' : `owner/${componentId}`,
+    releaseStatuses: Object.freeze(qAbstention
+      ? ['BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED']
+      : publicSource ? ['BUILT_AND_TESTED', 'WIRED', 'LIVE_PUBLIC'] : ['BUILT_AND_TESTED', 'WIRED']),
+    truthLabel: qAbstention ? 'UNAVAILABLE' : publicSource ? 'LIVE_PUBLIC' : 'DRY_RUN',
     desiredState: 'RUNNING',
-    phase: 'RUNNING',
-    domainObservedState: 'READY',
+    phase: qAbstention ? 'BLOCKED' : 'RUNNING',
+    domainObservedState: qAbstention ? 'ABSTAIN_UNKNOWN' : 'READY',
     sourceLifecycle: null,
-    readiness: 'READY',
-    authority: publicSource ? 'LIVE_PUBLIC' : 'DERIVED_LIVE',
-    completeness: 'COMPLETE',
+    readiness: qAbstention ? 'BLOCKED' : 'READY',
+    authority: qAbstention ? 'UNAVAILABLE' : publicSource ? 'LIVE_PUBLIC' : 'DERIVED_LIVE',
+    completeness: qAbstention ? 'UNAVAILABLE' : 'COMPLETE',
     sourceTimestamp: publicSource ? Object.freeze({
       sourceTimeMs: T0 - 1_000,
       receivedAtMs: T0 - 900,
@@ -93,20 +136,42 @@ function component(componentId, index) {
       effectiveAuthority: 'LIVE_PUBLIC',
       evaluatedAt: T0 - 100,
     }) : null,
-    lastReceiveAtMs: T0 - 800 - index,
-    lastProcessAtMs: T0 - 700 - index,
-    lastSuccessAtMs: T0 - 500 - index,
+    ...(qAbstention ? {
+      processingLagMs: null,
+      retry: Object.freeze({
+        state: 'UNAVAILABLE', attempt: null, ceiling: null, delayMs: null,
+        retryAtMs: null, cooldownUntilMs: null,
+      }),
+      dataQuality: Object.freeze({
+        state: 'UNAVAILABLE', invalidCount: null, duplicateCount: null,
+        outOfOrderCount: null, sequenceGapCount: null, observedAtMs: null,
+      }),
+      checkpoint: Object.freeze({ state: 'UNAVAILABLE', revision: null, persistedAtMs: null }),
+    } : {}),
+    lastReceiveAtMs: qAbstention ? null : T0 - 800 - index,
+    lastProcessAtMs: qAbstention ? null : T0 - 700 - index,
+    lastSuccessAtMs: qAbstention ? null : T0 - 500 - index,
     dependencies: Object.freeze(index === 0 ? [] : [SYSTEM_COMPONENT_IDS[index - 1]]),
-    queue: Object.freeze({ depth: index % 3, capacity: 100, dropped: 0, coalesced: 0, observedAtMs: T0 - 100 }),
+    queue: qAbstention
+      ? null
+      : Object.freeze({ depth: index % 3, capacity: 100, dropped: 0, coalesced: 0, observedAtMs: T0 - 100 }),
     lastFailure: null,
-    blockerCodes: Object.freeze([]),
-    generation: 1,
+    blockerCodes: qAbstention ? Q_BLOCKER_CODES : Object.freeze([]),
+    generation: qAbstention ? 0 : 1,
     restartCount: 0,
     supportedControls: Object.freeze(componentId === 'engine-supervisor'
       ? ['SET_SAFE_MODE', 'SET_KILL_SWITCH', 'SET_INTAKE_PAUSED', 'RESTART_COMPONENT']
       : []),
     capitalExposed: false,
-    operatorAttentionRequired: false,
+    operatorAttentionRequired: qAbstention,
+    serviceReadiness: Object.freeze({
+      basis: serviceReadinessBasis(componentId),
+      expected: true,
+      observed: true,
+      requiredForServiceReadiness: !qAbstention,
+      excludedFromServiceReadiness: qAbstention,
+      waiver: qAbstention ? Q_READINESS_WAIVER : null,
+    }),
   });
 }
 
@@ -120,18 +185,35 @@ export function makeSupervisor(overrides = {}) {
     revision: 7,
     evaluatedAtMs: T0 - 100,
     phase: 'RUNNING',
-    control: Object.freeze({ revision: 3, generation: 2, safeMode: 'READ_ONLY', killSwitchEngaged: false, intakePaused: false, updatedAtMs: T0 - 200, correlationId: 'cor_control_test' }),
+    control: Object.freeze({ revision: 3, generation: 2, safeMode: 'VALIDATE_ONLY', killSwitchEngaged: false, intakePaused: false, updatedAtMs: T0 - 200, correlationId: 'cor_control_test' }),
     truthLabel: 'DRY_RUN',
     components,
     edges,
-    rootBlockerComponentIds: Object.freeze([]),
-    operatorAttentionComponentIds: Object.freeze([]),
+    rootBlockerComponentIds: Object.freeze(['q-inference']),
+    operatorAttentionComponentIds: Object.freeze(['q-inference']),
     overallPosture: 'READY',
     runtimeGeneration: 4,
     controlGeneration: 2,
-    firstRootBlockerComponentId: null,
-    rootCauses: Object.freeze([]),
-    attentionQueue: Object.freeze([]),
+    serviceReadinessPolicy: VALID_SERVICE_READINESS_POLICY,
+    firstRequiredReadinessBlockerComponentId: null,
+    firstRootBlockerComponentId: 'q-inference',
+    rootCauses: Object.freeze([Object.freeze({
+      componentId: 'q-inference',
+      severity: 'HIGH',
+      reasonCodes: Q_BLOCKER_CODES,
+      failure: null,
+      dependencyPath: Object.freeze(['q-inference']),
+      affectedComponentIds: Object.freeze(['q-inference']),
+      capitalExposed: false,
+    })]),
+    attentionQueue: Object.freeze([Object.freeze({
+      componentId: 'q-inference',
+      rootComponentId: 'q-inference',
+      severity: 'HIGH',
+      reasonCodes: Q_BLOCKER_CODES,
+      capitalExposed: false,
+      recommendedOperatorAction: null,
+    })]),
     summaries: Object.freeze({
       sourceCoverage: Object.freeze({ truthLabel: 'LIVE_PUBLIC', universeSymbols: 10, spotCoveredSymbols: 10, usdMCoveredSymbols: 10, quietSymbolsRetained: 10, materialGapCount: 0, rateLimitedSourceCount: 0, lastMaterialGapAtMs: null }),
       strategies: Object.freeze({

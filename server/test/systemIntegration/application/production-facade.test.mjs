@@ -1,15 +1,25 @@
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import test from 'node:test';
+import express from 'express';
 
 import {
   createSourcedTimestamp,
+  evaluateFreshness,
 } from '../../../dist/foundation/contracts/index.js';
 import {
+  buildApplicationComponents,
   createSystemIntegrationApplication,
+  projectSupervisorPhaseReadiness,
 } from '../../../dist/systemIntegration/application/index.js';
+import {
+  deriveI00MeaningfulAdvanceEvidence,
+  projectI00Health,
+} from '../../../dist/systemIntegration/application/health.js';
 import {
   PASSIVE_OWNER_EVIDENCE_CORRELATION_ID,
   createPassiveOwnerEvidenceReadPort,
+  projectNotConfiguredQAdvisoryComponent,
 } from '../../../dist/systemIntegration/adapters/index.js';
 import {
   readManagedControlRuntimeEffect,
@@ -21,11 +31,71 @@ import {
 import {
   createSystemIntegrationRouter,
   parseControlBody,
+  registerI00HealthRoutes,
 } from '../../../dist/systemIntegration/routes/index.js';
+import {
+  VALIDATE_ONLY_EXECUTOR_OWNER_READINESS_FUNCTIONS,
+  probeValidateOnlyExecutorOwners,
+} from '../../../dist/systemIntegration/verticalSlice/index.js';
 import { BoundedInMemoryLedger } from '../fixtures/memory-ledger.mjs';
 import { ManualClock, ManualScheduler } from '../fixtures/manual-clock.mjs';
 
 const T0 = 1_910_000_000_000;
+const READINESS_VALID_NOW = Date.parse('2026-08-01T00:00:00Z');
+const READINESS_WAIVER_EXPIRY = Date.parse('2026-10-18T00:00:00Z');
+const SIGNED_Q_READINESS_WAIVER = Object.freeze({
+  id: 'READINESS-CLUSTER-001-Q-INFERENCE',
+  scope: 'KEYLESS_PUBLIC_DATA_VALIDATE_ONLY',
+  mode: 'VALIDATE_ONLY',
+  reason: 'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED',
+  owner: 'cosmosgeek',
+  expiresAt: '2026-10-18T00:00:00Z',
+});
+
+function completedValidateOnlyRunFixture(nowMs) {
+  return Object.freeze({
+    disposition: 'READY',
+    evaluatedAtMs: nowMs,
+    recordId: 'validate-only-readiness-run-1',
+    persistenceId: 'ledger:validate-only-readiness-run-1',
+    capitalReservationDialect: 'OWNER_SUPPLIED_PREBUILT',
+    riskVerdict: Object.freeze({
+      correlationId: 'validate-only-readiness-run-1',
+      decision: 'APPROVED',
+      allowed: true,
+      maxAllowedSize: 1,
+      requiredConfirmation: false,
+      decisiveInputSnapshot: Object.freeze({
+        checks: Object.freeze([Object.freeze({
+          code: 'LIVE_EXECUTION_BARRIER',
+          status: 'PASS',
+          blocking: true,
+          detail: 'The completed fixture remained validate-only.',
+          observed: 'VALIDATE_ONLY',
+          limit: 'VALIDATE_ONLY',
+          evidenceTimestamp: nowMs,
+        })]),
+      }),
+      evaluatedAt: nowMs,
+      expiresAt: nowMs + 1_000,
+      checks: Object.freeze([]),
+      blockingCodes: Object.freeze([]),
+    }),
+    executionPlan: Object.freeze({ planId: 'validate-only-readiness-plan-1' }),
+    executionState: Object.freeze({
+      lifecycle: 'READY',
+      exposedSinceMs: null,
+      updatedAtMs: nowMs,
+    }),
+    reconciliation: Object.freeze({
+      status: 'EXACT',
+      recommendation: null,
+      evaluatedAtMs: nowMs,
+      reasons: Object.freeze([]),
+    }),
+    failure: null,
+  });
+}
 const ORDINARY_DRAIN_BLOCKING_REFERENCE_TYPES = Object.freeze([
   'TICKET',
   'AMBIGUOUS_MUTATION',
@@ -50,6 +120,97 @@ function canonicalDrainTruth(overrides = {}) {
   });
 }
 
+function passiveComponentPort(snapshot) {
+  return Object.freeze({ readComponentSnapshot: () => snapshot });
+}
+
+function publicSourceSnapshot(componentId, nowMs) {
+  const sourceTimestamp = createSourcedTimestamp({
+    sourceTimeMs: nowMs,
+    receivedAtMs: nowMs,
+    maxAgeMs: 1_000,
+    authority: 'LIVE_PUBLIC',
+    completeness: 'COMPLETE',
+    sourceId: `application.test.${componentId}`,
+  });
+  return Object.freeze({
+    componentId,
+    owner: 'INTELLIGENCE_RUNTIME',
+    ownerPath: 'server/src/intelligenceRuntime',
+    releaseStatuses: Object.freeze(['BUILT_AND_TESTED', 'IMPORTED', 'WIRED', 'LIVE_PUBLIC']),
+    truthLabel: 'LIVE_PUBLIC',
+    desiredState: 'RUNNING',
+    phase: 'RUNNING',
+    domainObservedState: 'RUNNING',
+    sourceLifecycle: null,
+    readiness: 'READY',
+    authority: 'LIVE_PUBLIC',
+    completeness: 'COMPLETE',
+    sourceTimestamp,
+    freshness: evaluateFreshness(sourceTimestamp, nowMs),
+    lastReceiveAtMs: nowMs,
+    lastProcessAtMs: nowMs,
+    lastSuccessAtMs: nowMs,
+    dependencies: Object.freeze([]),
+    queue: null,
+    lastFailure: null,
+    blockerCodes: Object.freeze([]),
+    generation: 1,
+    restartCount: 0,
+    supportedControls: Object.freeze(['SET_PUBLIC_SOURCE_LIFECYCLE']),
+    capitalExposed: false,
+    operatorAttentionRequired: false,
+  });
+}
+
+function keylessComponentPorts(nowMs) {
+  return Object.freeze({
+    'public-spot-source': passiveComponentPort(publicSourceSnapshot('public-spot-source', nowMs)),
+    'public-usdm-source': passiveComponentPort(publicSourceSnapshot('public-usdm-source', nowMs)),
+    'q-inference': passiveComponentPort(projectNotConfiguredQAdvisoryComponent(nowMs)),
+  });
+}
+
+function forgedPassiveExecutorPorts() {
+  const owners = {
+    'capital-supervision': 'CAPITAL_SUPERVISION',
+    'multileg-risk': 'BACKEND_FOUNDATION_RISK',
+    'execution-coordinator-validate-only': 'BACKEND_FOUNDATION_EXECUTION',
+    reconciliation: 'BACKEND_FOUNDATION_RECONCILIATION',
+  };
+  return Object.freeze(Object.fromEntries(Object.entries(owners).map(([componentId, owner]) => [
+    componentId,
+    passiveComponentPort(Object.freeze({
+      componentId,
+      owner,
+      ownerPath: `forged/passive/${componentId}`,
+      releaseStatuses: Object.freeze(['BUILT_AND_TESTED', 'WIRED']),
+      truthLabel: 'UNKNOWN',
+      desiredState: 'RUNNING',
+      phase: 'RUNNING',
+      domainObservedState: 'VALIDATE_ONLY_EXECUTOR_AVAILABLE_PRIVATE_LIVE_REFUSAL_CONFIRMED',
+      sourceLifecycle: null,
+      readiness: 'READY',
+      authority: 'DERIVED_LIVE',
+      completeness: 'COMPLETE',
+      sourceTimestamp: null,
+      freshness: null,
+      lastReceiveAtMs: null,
+      lastProcessAtMs: READINESS_VALID_NOW,
+      lastSuccessAtMs: READINESS_VALID_NOW,
+      dependencies: Object.freeze([]),
+      queue: null,
+      lastFailure: null,
+      blockerCodes: Object.freeze([]),
+      generation: 1,
+      restartCount: 0,
+      supportedControls: Object.freeze([]),
+      capitalExposed: false,
+      operatorAttentionRequired: false,
+    })),
+  ])));
+}
+
 function blockingReference(referenceType) {
   const suffix = referenceType.toLowerCase().replaceAll('_', '-');
   return Object.freeze({
@@ -63,7 +224,7 @@ function blockingReference(referenceType) {
 }
 
 function fixture(options = {}) {
-  const clock = new ManualClock(T0);
+  const clock = new ManualClock(options.nowMs ?? T0);
   const scheduler = new ManualScheduler(clock);
   const order = [];
   let externalKill = options.externalKill ?? true;
@@ -152,7 +313,7 @@ function fixture(options = {}) {
               sourceTimeMs: ctx.nowMs,
               receivedAtMs: ctx.nowMs,
               maxAgeMs: 1_000,
-              authority: 'SYNTHETIC_TEST',
+              authority: options.physicalAuthority ?? 'SYNTHETIC_TEST',
               completeness: 'COMPLETE',
               sourceId: `application.test.${name}`,
             }) : null,
@@ -194,7 +355,7 @@ function fixture(options = {}) {
           sourceTimeMs: ctx.nowMs,
           receivedAtMs: ctx.nowMs,
           maxAgeMs: 1_000,
-          authority: 'SYNTHETIC_TEST',
+          authority: options.physicalAuthority ?? 'SYNTHETIC_TEST',
           completeness: 'COMPLETE',
           sourceId: 'application.test.market',
         }) : null,
@@ -239,6 +400,10 @@ function fixture(options = {}) {
       basis: basis.port,
       volume: volume.port,
     },
+    ...(options.components ? { components: Object.freeze({ ...options.components }) } : {}),
+    ...(Object.hasOwn(options, 'readinessPolicy')
+      ? { readinessPolicy: options.readinessPolicy }
+      : {}),
     strategyIntake: Object.freeze({
       basis: Object.freeze({
         readPaused: () => strategyIntakeState.basis,
@@ -518,6 +683,369 @@ function validControlRequest(f, mutation, suffix) {
 }
 
 const ACTOR = Object.freeze({ id: 'application-test-operator', email: null, source: 'loopback' });
+
+async function startFreshKeylessValidateOnly(options = {}) {
+  const nowMs = options.nowMs ?? READINESS_VALID_NOW;
+  const f = fixture({
+    nowMs,
+    externalKill: false,
+    physicalAuthority: 'LIVE_PUBLIC',
+    components: Object.freeze({
+      ...keylessComponentPorts(nowMs),
+      ...(options.componentPorts ?? {}),
+    }),
+    ...(Object.hasOwn(options, 'readinessPolicy')
+      ? { readinessPolicy: options.readinessPolicy }
+      : {}),
+  });
+  assert.equal(f.app.start().ok, true);
+  await drive(f, 6);
+  if (typeof options.beforeValidateOnly === 'function') await options.beforeValidateOnly(f);
+  assert.equal((await f.app.controls.mutate(validControlRequest(f, {
+    command: 'SET_SAFE_MODE', safeMode: 'VALIDATE_ONLY',
+  }, `readiness-mode-${nowMs}`), ACTOR)).ok, true);
+  await drive(f, 2);
+  assert.equal(f.app.controlState().killSwitchEngaged, true);
+  assert.equal(f.app.controlState().intakePaused, true);
+  assert.equal(f.app.restartBarrier().canOpenOrIncrease, false);
+  assert.equal(f.app.restartBarrier().reasonCodes.some((code) => code.startsWith('ACCOUNT_TRUTH_')), true);
+  assert.equal(f.app.restartBarrier().reasonCodes.some((code) => code.startsWith('RECONCILIATION_TRUTH_')), true);
+  return f;
+}
+
+function healthOutcome(f, kind) {
+  const supervisor = f.app.supervisor();
+  const projection = projectI00Health(
+    kind,
+    supervisor,
+    true,
+    deriveI00MeaningfulAdvanceEvidence(supervisor),
+  );
+  return Object.freeze({
+    projection,
+    statusCode: projection.ok ? 200 : 503,
+  });
+}
+
+async function readHealthRoutes(f) {
+  const app = express();
+  const readFailures = [];
+  registerI00HealthRoutes(app, Object.freeze({
+    readSupervisor: () => f.app.supervisor(),
+    applicationStartOk: () => true,
+    applicationStartFailureCodes: () => Object.freeze([]),
+    onSupervisorReadFailure: (error) => { readFailures.push(error); },
+    nowMs: () => f.clock.nowMs(),
+  }));
+  const server = createServer(app);
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  const address = server.address();
+  assert.ok(address && typeof address !== 'string');
+  const base = `http://127.0.0.1:${address.port}`;
+  try {
+    const [live, ready, trade] = await Promise.all([
+      fetch(`${base}/health/live`),
+      fetch(`${base}/health/ready`),
+      fetch(`${base}/health/trade-ready`),
+    ]);
+    const result = Object.freeze({
+      live: Object.freeze({ status: live.status, body: await live.json() }),
+      ready: Object.freeze({ status: ready.status, body: await ready.json() }),
+      trade: Object.freeze({ status: trade.status, body: await trade.json() }),
+    });
+    assert.deepEqual(readFailures, []);
+    for (const [kind, outcome] of [
+      ['LIVE', result.live],
+      ['READY', result.ready],
+      ['TRADE_READY', result.trade],
+    ]) {
+      const expectedKeys = [
+        'componentCount',
+        'dependencyEdgeCount',
+        'evaluatedAtMs',
+        'executionBarrier',
+        'kind',
+        'lastMeaningfulAdvanceAtMs',
+        'meaningfulAdvanceAgeMs',
+        'meaningfulAdvanceOwnerComponentId',
+        'ok',
+        ...(kind === 'LIVE' ? ['okSemantics'] : []),
+        'overallPosture',
+        'reasonCodes',
+        'rootBlockerComponentId',
+        'schemaVersion',
+      ].sort();
+      assert.deepEqual(Object.keys(outcome.body).sort(), expectedKeys, kind);
+      assert.equal(outcome.body.kind, kind);
+      const publicBytes = JSON.stringify(outcome.body);
+      for (const forbidden of [
+        'serviceReadinessPolicy',
+        'requiredServiceReadinessComponentIds',
+        'excludedServiceReadinessComponentIds',
+        'components',
+        'edges',
+        'rootCauses',
+        'operatorAttentionQueue',
+        'managedInventory',
+        'READINESS-CLUSTER-001-Q-INFERENCE',
+        'KEYLESS_PUBLIC_DATA_VALIDATE_ONLY',
+        'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED',
+        'cosmosgeek',
+        '2026-10-18T00:00:00Z',
+      ]) assert.equal(publicBytes.includes(forbidden), false, `${kind}:${forbidden}`);
+    }
+    return result;
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+  }
+}
+
+test('fresh keyless readiness flips 503 to 200 only under the exact unexpired Q waiver while trade readiness stays closed', async () => {
+  const missing = await startFreshKeylessValidateOnly();
+  const expired = await startFreshKeylessValidateOnly({
+    nowMs: READINESS_WAIVER_EXPIRY,
+    readinessPolicy: SIGNED_Q_READINESS_WAIVER,
+  });
+  const malformed = await startFreshKeylessValidateOnly({
+    readinessPolicy: Object.freeze({ ...SIGNED_Q_READINESS_WAIVER, owner: 'unsigned-owner' }),
+  });
+  const wrongMode = await startFreshKeylessValidateOnly({
+    readinessPolicy: Object.freeze({ ...SIGNED_Q_READINESS_WAIVER, mode: 'READ_ONLY' }),
+  });
+  const wrongScope = await startFreshKeylessValidateOnly({
+    readinessPolicy: Object.freeze({ ...SIGNED_Q_READINESS_WAIVER, scope: 'KEYLESS_PUBLIC_DATA' }),
+  });
+  let validBeforeModeRoutes = null;
+  const valid = await startFreshKeylessValidateOnly({
+    readinessPolicy: SIGNED_Q_READINESS_WAIVER,
+    beforeValidateOnly: async (f) => { validBeforeModeRoutes = await readHealthRoutes(f); },
+  });
+
+  assert.equal(healthOutcome(missing, 'READY').statusCode, 503);
+  assert.equal(healthOutcome(expired, 'READY').statusCode, 503);
+  assert.equal(healthOutcome(malformed, 'READY').statusCode, 503);
+  assert.equal(healthOutcome(wrongMode, 'READY').statusCode, 503);
+  assert.equal(healthOutcome(wrongScope, 'READY').statusCode, 503);
+  assert.deepEqual(
+    [missing, expired, malformed, wrongMode, wrongScope].map((f) => (
+      f.app.supervisor().serviceReadinessPolicy.status
+    )),
+    ['MISSING', 'EXPIRED', 'MALFORMED', 'WRONG_MODE', 'WRONG_SCOPE'],
+  );
+  for (const f of [missing, expired, malformed, wrongMode, wrongScope, valid]) {
+    assert.equal(healthOutcome(f, 'LIVE').statusCode, 200);
+    const trade = healthOutcome(f, 'TRADE_READY');
+    assert.equal(trade.statusCode, 503);
+    assert.ok(trade.projection.reasonCodes.includes('LIVE_EXECUTION_NOT_IMPLEMENTED'));
+  }
+  for (const f of [missing, expired]) {
+    const routes = await readHealthRoutes(f);
+    assert.equal(routes.live.status, 200);
+    assert.equal(routes.ready.status, 503);
+    assert.equal(routes.trade.status, 503);
+    assert.ok(routes.trade.body.reasonCodes.includes('LIVE_EXECUTION_NOT_IMPLEMENTED'));
+  }
+
+  const ready = healthOutcome(valid, 'READY');
+  const validSupervisor = valid.app.supervisor();
+  assert.equal(ready.statusCode, 200, JSON.stringify({
+    reasonCodes: ready.projection.reasonCodes,
+    posture: validSupervisor.overallPosture,
+    policy: validSupervisor.serviceReadinessPolicy.status,
+    requiredBlocker: validSupervisor.firstRequiredReadinessBlockerComponentId,
+    managedPhase: valid.app.managedRuntime().supervisor.phase,
+  }));
+  assert.equal(ready.projection.componentCount, 14);
+  assert.equal(validBeforeModeRoutes.live.status, 200);
+  assert.equal(validBeforeModeRoutes.ready.status, 503);
+  assert.equal(validBeforeModeRoutes.trade.status, 503);
+  const validAfterModeRoutes = await readHealthRoutes(valid);
+  assert.equal(validAfterModeRoutes.live.status, 200);
+  assert.equal(validAfterModeRoutes.ready.status, 200);
+  assert.equal(validAfterModeRoutes.ready.body.componentCount, 14);
+  assert.equal(validAfterModeRoutes.trade.status, 503);
+  assert.ok(validAfterModeRoutes.trade.body.reasonCodes.includes('LIVE_EXECUTION_NOT_IMPLEMENTED'));
+  const q = validSupervisor.components.find((component) => component.componentId === 'q-inference');
+  assert.equal(q.domainObservedState, 'ABSTAIN_UNKNOWN');
+  assert.equal(q.truthLabel, 'UNAVAILABLE');
+  assert.equal(q.authority, 'UNAVAILABLE');
+  assert.equal(q.completeness, 'UNAVAILABLE');
+  assert.equal(q.phase, 'BLOCKED');
+  assert.equal(q.readiness, 'BLOCKED');
+  assert.ok(q.releaseStatuses.includes('NOT_CONFIGURED'));
+  assert.equal(
+    valid.app.managedRuntime().supervisor.components.find((component) => component.name === 'q-inference'),
+    undefined,
+  );
+  assert.equal(validSupervisor.firstRootBlockerComponentId, 'q-inference');
+  assert.equal(validSupervisor.firstRequiredReadinessBlockerComponentId, null);
+  const engine = validSupervisor.components.find((component) => component.componentId === 'engine-supervisor');
+  assert.equal(engine.phase, 'RUNNING');
+  assert.equal(engine.readiness, 'READY');
+  assert.deepEqual(engine.blockerCodes, []);
+  assert.equal(engine.operatorAttentionRequired, false);
+  assert.equal(validSupervisor.control.killSwitchEngaged, true);
+  assert.equal(validSupervisor.control.intakePaused, true);
+  for (const componentId of [
+    'capital-supervision',
+    'multileg-risk',
+    'execution-coordinator-validate-only',
+    'reconciliation',
+  ]) {
+    const component = valid.app.supervisor().components.find((entry) => entry.componentId === componentId);
+    assert.equal(component.readiness, 'READY', componentId);
+    assert.equal(component.truthLabel, 'UNKNOWN', componentId);
+    assert.equal(component.authority, 'DERIVED_LIVE', componentId);
+    assert.equal(component.domainObservedState, 'VALIDATE_ONLY_EXECUTOR_AVAILABLE_PRIVATE_LIVE_REFUSAL_CONFIRMED');
+    assert.equal(component.releaseStatuses.includes('SYNTHETIC_ONLY'), false, componentId);
+  }
+  const noRun = valid.app.supervisor().summaries;
+  assert.equal(noRun.risk.latestVerdict, 'UNAVAILABLE');
+  assert.equal(noRun.risk.latestVerdictId, null);
+  assert.equal(noRun.execution.planId, null);
+  assert.equal(noRun.reconciliation.checkpointId, null);
+
+  const executor = valid.app.validateOnly;
+  const evidence = executor.readExecutorReadinessEvidence(READINESS_VALID_NOW);
+  assert.equal(evidence.runResult, null);
+  assert.equal(evidence.capitalState, null);
+  assert.equal(evidence.riskVerdict, null);
+  assert.equal(evidence.executionPlan, null);
+  assert.equal(evidence.reconciliationResult, null);
+  assert.equal(probeValidateOnlyExecutorOwners(VALIDATE_ONLY_EXECUTOR_OWNER_READINESS_FUNCTIONS), true);
+  assert.equal(probeValidateOnlyExecutorOwners(Object.freeze({
+    ...VALIDATE_ONLY_EXECUTOR_OWNER_READINESS_FUNCTIONS,
+    risk: () => { throw new TypeError('evaluateMultiLegRisk: invalid input — counterfeit'); },
+  })), false, 'an arbitrary always-throwing owner cannot attest responsiveness');
+
+  valid.app.latestValidateOnly = completedValidateOnlyRunFixture(READINESS_VALID_NOW);
+  assert.equal(healthOutcome(valid, 'READY').statusCode, 200);
+  const readCurrentExecutorEvidence = executor.readExecutorReadinessEvidence.bind(executor);
+  executor.readExecutorReadinessEvidence = () => {
+    throw new Error('deterministic executor loss after a completed validate-only run');
+  };
+  const postRunProbeLoss = valid.app.supervisor();
+  assert.equal(healthOutcome(valid, 'READY').statusCode, 503);
+  assert.equal(postRunProbeLoss.summaries.risk.latestVerdict, 'APPROVE');
+  assert.equal(postRunProbeLoss.summaries.execution.planId, 'validate-only-readiness-plan-1');
+  assert.equal(postRunProbeLoss.summaries.reconciliation.checkpointId, 'ledger:validate-only-readiness-run-1');
+  for (const componentId of evidence.componentIds) {
+    const component = postRunProbeLoss.components.find((entry) => entry.componentId === componentId);
+    assert.equal(component.readiness, 'BLOCKED', componentId);
+    assert.ok(component.blockerCodes.includes('VALIDATE_ONLY_EXECUTOR_READINESS_EVIDENCE_UNAVAILABLE'));
+  }
+  executor.readExecutorReadinessEvidence = readCurrentExecutorEvidence;
+  valid.app.latestValidateOnly = null;
+
+  const resume = await valid.app.controls.mutate(validControlRequest(valid, {
+    command: 'SET_INTAKE_PAUSED', paused: false,
+  }, 'readiness-intake-release'), ACTOR);
+  assert.equal(resume.ok, false);
+  assert.equal(resume.failure.code, 'KILL_SWITCH_ENGAGED');
+  assert.equal(valid.app.controlState().intakePaused, true);
+  const executorPersistence = executor.persistence;
+  const readPersistenceReadiness = executorPersistence.readValidateOnlyExecutorPersistenceReadiness;
+  executorPersistence.readValidateOnlyExecutorPersistenceReadiness = () => false;
+  assert.equal(healthOutcome(valid, 'READY').statusCode, 503);
+  executorPersistence.readValidateOnlyExecutorPersistenceReadiness = readPersistenceReadiness;
+  executor.readExecutorReadinessEvidence = (nowMs) => Object.freeze({
+    ...readCurrentExecutorEvidence(nowMs),
+    evaluatedAtMs: nowMs - 1,
+  });
+  assert.equal(healthOutcome(valid, 'READY').statusCode, 503);
+  executor.readExecutorReadinessEvidence = () => { throw new Error('deterministic missing executor'); };
+  const failedEvidenceSupervisor = valid.app.supervisor();
+  for (const componentId of evidence.componentIds) {
+    assert.notEqual(
+      failedEvidenceSupervisor.components.find((entry) => entry.componentId === componentId).readiness,
+      'READY',
+      componentId,
+    );
+  }
+  assert.equal(healthOutcome(valid, 'READY').statusCode, 503);
+
+  const forgedPassive = await startFreshKeylessValidateOnly({
+    readinessPolicy: SIGNED_Q_READINESS_WAIVER,
+    componentPorts: forgedPassiveExecutorPorts(),
+  });
+  forgedPassive.app.validateOnly.readExecutorReadinessEvidence = () => {
+    throw new Error('deterministic missing executor with forged passive owners');
+  };
+  const forgedPassiveSupervisor = forgedPassive.app.supervisor();
+  for (const componentId of evidence.componentIds) {
+    const component = forgedPassiveSupervisor.components.find((entry) => entry.componentId === componentId);
+    assert.notEqual(component.readiness, 'READY', componentId);
+    assert.notEqual(
+      component.domainObservedState,
+      'VALIDATE_ONLY_EXECUTOR_AVAILABLE_PRIVATE_LIVE_REFUSAL_CONFIRMED',
+      componentId,
+    );
+  }
+  assert.equal(healthOutcome(forgedPassive, 'READY').statusCode, 503);
+});
+
+test('engine-supervisor readiness exhaustively preserves all ten managed phases', () => {
+  const expected = new Map([
+    ['STOPPED', 'STOPPED'],
+    ['VALIDATING', 'WARMING'],
+    ['STARTING', 'WARMING'],
+    ['RUNNING', 'READY'],
+    ['DEGRADED', 'DEGRADED'],
+    ['PAUSING', 'WARMING'],
+    ['PAUSED', 'WARMING'],
+    ['STOPPING', 'WARMING'],
+    ['BLOCKED', 'BLOCKED'],
+    ['FAILED', 'FAILED'],
+  ]);
+  assert.equal(expected.size, 10);
+  for (const [phase, readiness] of expected) {
+    assert.equal(projectSupervisorPhaseReadiness(
+      'RUNNING', phase, phase === 'FAILED', false, true, true,
+    ), readiness, phase);
+  }
+  assert.equal(projectSupervisorPhaseReadiness('RUNNING', 'RUNNING', false, true, true, true), 'DEGRADED');
+  assert.equal(projectSupervisorPhaseReadiness('RUNNING', 'RUNNING', true, false, true, true), 'FAILED');
+  assert.equal(projectSupervisorPhaseReadiness('STOPPED', 'RUNNING', false, false, true, true), 'DEGRADED');
+  assert.equal(projectSupervisorPhaseReadiness('PAUSED', 'RUNNING', false, false, true, true), 'DEGRADED');
+  assert.equal(projectSupervisorPhaseReadiness('RUNNING', 'RUNNING', false, false, false, true), 'DEGRADED');
+  assert.equal(projectSupervisorPhaseReadiness('RUNNING', 'RUNNING', false, false, true, false), 'DEGRADED');
+});
+
+test('engine-supervisor requires a running driver and current managed lifecycle evidence', async () => {
+  const f = fixture({ externalKill: false });
+  assert.equal(f.app.start().ok, true);
+  await drive(f, 6);
+  const decoded = decodeSystemCheckpoint(f.ledger.getConfigValue(SYSTEM_PERSISTENCE_CONFIG_KEY));
+  assert.equal(decoded.ok, true);
+  const managed = f.app.managedRuntime();
+  const projectEngine = (managedOverride) => buildApplicationComponents({
+    nowMs: f.clock.nowMs(),
+    managed: Object.freeze({ ...managed, ...managedOverride }),
+    health: Object.freeze({}),
+    checkpoint: decoded.value,
+    persistenceFailureCode: null,
+    applicationFailureCode: null,
+    controlSafetyReasonCodes: Object.freeze([]),
+    control: Object.freeze({ ...f.app.controlState(), safeMode: 'VALIDATE_ONLY' }),
+    validateOnlyRun: null,
+    executorReadinessEvidence: null,
+  }).find((component) => component.componentId === 'engine-supervisor');
+
+  const stoppedDriver = projectEngine({ driverRunning: false });
+  assert.equal(stoppedDriver.readiness, 'DEGRADED');
+  assert.equal(stoppedDriver.authority, 'UNAVAILABLE');
+  assert.ok(stoppedDriver.blockerCodes.includes('MANAGED_DRIVER_NOT_RUNNING'));
+
+  for (const lastDriveAtMs of [null, f.clock.nowMs() - 2_001]) {
+    const staleLifecycle = projectEngine({ lastDriveAtMs });
+    assert.equal(staleLifecycle.readiness, 'DEGRADED');
+    assert.equal(staleLifecycle.completeness, 'UNAVAILABLE');
+    assert.ok(staleLifecycle.blockerCodes.includes('MANAGED_LIFECYCLE_NOT_CURRENT'));
+  }
+});
 
 test('application shell persists startup before any data component and reads never restart or refresh', async () => {
   const f = fixture();
@@ -1259,6 +1787,7 @@ test('production facade exposes three passive unavailable-owner events without g
   assert.equal(f.app.start().ok, true);
   await drive(f, 6);
   const controlBeforeReads = f.app.controlState();
+  const postureBeforePassiveReads = f.app.supervisor().overallPosture;
 
   const trace = await f.app.read.trace(PASSIVE_OWNER_EVIDENCE_CORRELATION_ID);
   assert.ok(trace);
@@ -1275,7 +1804,7 @@ test('production facade exposes three passive unavailable-owner events without g
   )), true);
 
   const supervisor = f.app.supervisor();
-  assert.notEqual(supervisor.overallPosture, 'READY');
+  assert.equal(supervisor.overallPosture, postureBeforePassiveReads);
   assert.equal(supervisor.truthLabel === 'LIVE_PUBLIC', false);
   assert.equal(supervisor.traceIndex.entries.some((entry) => (
     entry.correlationId === PASSIVE_OWNER_EVIDENCE_CORRELATION_ID
@@ -1286,6 +1815,7 @@ test('production facade exposes three passive unavailable-owner events without g
   assert.equal(passiveEvidence.readPassiveOwnerEvidence().readinessAuthority, 'NONE');
   assert.equal(Object.hasOwn(passiveEvidence, 'mutate'), false);
   assert.equal(Object.hasOwn(passiveEvidence, 'refresh'), false);
+  assert.equal(trace.events.some((event) => Object.hasOwn(event, 'serviceReadiness')), false);
 });
 
 test('warming required source becomes ready without fabricating a historical failure', async () => {

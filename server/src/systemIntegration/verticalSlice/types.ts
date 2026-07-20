@@ -31,9 +31,38 @@ import type {
   ReconciliationResult,
 } from '../../foundation/reconciliation/index.js';
 import type {
+  SystemComponentId,
   SystemReleaseStatus,
   SystemTruthLabel,
 } from '../contracts/constants.js';
+
+export const VALIDATE_ONLY_EXECUTOR_COMPONENT_IDS = Object.freeze([
+  'capital-supervision',
+  'multileg-risk',
+  'execution-coordinator-validate-only',
+  'reconciliation',
+] as const satisfies readonly SystemComponentId[]);
+
+export interface ValidateOnlyExecutorReadinessEvidence {
+  readonly schema: 'cosmos.system-integration.executor-readiness.v1';
+  readonly evaluatedAtMs: number;
+  readonly componentIds: typeof VALIDATE_ONLY_EXECUTOR_COMPONENT_IDS;
+  readonly executorPresent: true;
+  readonly persistenceWired: true;
+  readonly responsive: true;
+  readonly correctPrivateLiveRefusal: true;
+  readonly mode: 'VALIDATE_ONLY';
+  readonly privateCapability: 'NOT_CONFIGURED';
+  readonly tradeCapability: 'NOT_CONFIGURED';
+  readonly executionAuthority: 'NONE';
+  readonly liveExecutionPermitted: false;
+  readonly refusalCode: 'LIVE_EXECUTION_NOT_IMPLEMENTED';
+  readonly runResult: null;
+  readonly capitalState: null;
+  readonly riskVerdict: null;
+  readonly executionPlan: null;
+  readonly reconciliationResult: null;
+}
 
 /**
  * Capital's existing allocator requires this local envelope before it will
@@ -216,6 +245,8 @@ export interface ValidateOnlyPersistenceRecord
   extends Omit<ValidateOnlyRunSnapshot, 'persistenceId'> {}
 
 export interface ValidateOnlyPersistencePort {
+  /** Read-only proof that the real durable executor seam is loaded and writable. */
+  readValidateOnlyExecutorPersistenceReadiness(): boolean;
   loadValidateOnlyApprovalState(
     approvalId: string,
   ): Promise<Readonly<OperatorApprovalState> | null>;

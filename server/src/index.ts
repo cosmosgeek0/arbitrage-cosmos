@@ -71,10 +71,9 @@ import {
 } from './systemIntegration/adapters/index.js';
 import type { SystemControlMutation } from './systemIntegration/contracts/index.js';
 import {
-  deriveI00MeaningfulAdvanceEvidence,
-  projectI00Health,
-} from './systemIntegration/application/health.js';
-import type { SystemSupervisorReadModel } from './systemIntegration/supervisor/index.js';
+  SIGNED_Q_READINESS_WAIVER,
+  type SystemSupervisorReadModel,
+} from './systemIntegration/supervisor/index.js';
 import {
   createNodeRepeatingScheduler,
   createSystemUtcClock,
@@ -94,7 +93,10 @@ import {
   createProductionSystemIntegrationPorts,
   type ProductionCapitalSummaryReadPort,
 } from './systemIntegration/production/index.js';
-import { createSystemIntegrationRouter } from './systemIntegration/routes/index.js';
+import {
+  createSystemIntegrationRouter,
+  registerI00HealthRoutes,
+} from './systemIntegration/routes/index.js';
 import {
   createCanonicalSupervisorOpsReadback,
   createCanonicalRestartTruthCoordinator,
@@ -256,6 +258,10 @@ const systemIntegrationProduction = createProductionSystemIntegrationPorts({
   basis: basisRuntime,
   volume: volumeRuntime,
   capitalSummary: capitalSummaryReadPort,
+  // The current production host has no Q transport/owner mount. Keep that
+  // absence explicit so the signed readiness policy can match only the exact
+  // NOT_CONFIGURED + ABSTAIN_UNKNOWN state.
+  qAdvisory: null,
 });
 const liveEdgeMutationJournal = new LiveEdgeMutationJournalPersistenceAdapter(
   ledger,
@@ -329,6 +335,7 @@ systemIntegration = createSystemIntegrationApplication({
   ledger,
   clock: systemIntegrationClock,
   scheduler: systemIntegrationScheduler,
+  readinessPolicy: SIGNED_Q_READINESS_WAIVER,
   runtimes: systemIntegrationProduction.runtimes,
   components: systemIntegrationProduction.components,
   summaries: systemIntegrationProduction.summaries,
@@ -833,48 +840,15 @@ function recordSupervisorReadFailure(error: unknown): void {
   });
 }
 
-function sendI00Health(
-  res: express.Response,
-  kind: 'LIVE' | 'READY' | 'TRADE_READY',
-): void {
-  try {
-    const supervisor = systemIntegration.supervisor();
-    const meaningfulAdvance = deriveI00MeaningfulAdvanceEvidence(supervisor);
-    const projection = projectI00Health(
-      kind,
-      supervisor,
-      canonicalApplicationStartOk,
-      meaningfulAdvance,
-      canonicalApplicationStartFailureCodes,
-    );
-    res.status(projection.ok ? 200 : 503).json(projection);
-  } catch (error) {
-    recordSupervisorReadFailure(error);
-    const processResponsive = kind === 'LIVE';
-    res.status(processResponsive ? 200 : 503).json({
-      schemaVersion: 'i00.health.v1',
-      kind,
-      ok: processResponsive,
-      evaluatedAtMs: Date.now(),
-      overallPosture: 'FAILED',
-      rootBlockerComponentId: null,
-      reasonCodes: [processResponsive ? 'SUPERVISOR_READ_UNAVAILABLE_LIVENESS_ONLY' : 'SUPERVISOR_READ_UNAVAILABLE'],
-      ...(processResponsive ? { okSemantics: 'PROCESS_LIVENESS_ONLY' } : {}),
-      componentCount: 0,
-      dependencyEdgeCount: 0,
-      meaningfulAdvanceOwnerComponentId: null,
-      lastMeaningfulAdvanceAtMs: null,
-      meaningfulAdvanceAgeMs: null,
-      executionBarrier: 'LIVE_EXECUTION_NOT_IMPLEMENTED',
-    });
-  }
-}
-
 // Deployment/watchdog probes are intentionally outside the authenticated API
 // namespace and expose only bounded canonical supervisor posture.
-app.get('/health/live', (_req, res) => sendI00Health(res, 'LIVE'));
-app.get('/health/ready', (_req, res) => sendI00Health(res, 'READY'));
-app.get('/health/trade-ready', (_req, res) => sendI00Health(res, 'TRADE_READY'));
+registerI00HealthRoutes(app, Object.freeze({
+  readSupervisor: () => systemIntegration.supervisor(),
+  applicationStartOk: () => canonicalApplicationStartOk,
+  applicationStartFailureCodes: () => canonicalApplicationStartFailureCodes,
+  onSupervisorReadFailure: recordSupervisorReadFailure,
+  nowMs: () => Date.now(),
+}));
 
 function runAsync(res: express.Response, task: () => Promise<void>): void {
   void task().catch((error) => {

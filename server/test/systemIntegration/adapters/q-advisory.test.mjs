@@ -10,6 +10,7 @@ import {
   ProductionQAdvisoryRuntime,
   Q_ADVISORY_EXPECTED_REMOTE_COMPONENT_ID,
   Q_ADVISORY_SAFE_FALLBACK,
+  projectNotConfiguredQAdvisoryComponent,
 } from '../../../dist/systemIntegration/adapters/qAdvisory.js';
 import { validateSystemComponentSnapshot } from '../../../dist/systemIntegration/contracts/validation.js';
 
@@ -132,7 +133,29 @@ test('default production mount is inert and explicitly NOT_CONFIGURED/ABSTAIN_UN
   assert.equal(component.readiness, 'BLOCKED');
   assert.equal(component.capitalExposed, false);
   assert.ok(component.releaseStatuses.includes('NOT_CONFIGURED'));
-  assert.equal(runtime.health(ctx()).fatal.code, 'Q_CLIENT_NOT_CONFIGURED');
+  const lifecycle = runtime.health(ctx());
+  assert.equal(lifecycle.running, true);
+  assert.equal(lifecycle.fatal.code, 'Q_CLIENT_NOT_CONFIGURED');
+  assert.equal(runtime.readComponentSnapshot().readiness, 'BLOCKED');
+});
+
+test('omitted production Q binding has one validator-clean passive blocked projection', () => {
+  const component = projectNotConfiguredQAdvisoryComponent(NOW);
+  assert.deepEqual(validateSystemComponentSnapshot(component), []);
+  assert.equal(component.componentId, 'q-inference');
+  assert.equal(component.phase, 'BLOCKED');
+  assert.equal(component.domainObservedState, 'ABSTAIN_UNKNOWN');
+  assert.equal(component.readiness, 'BLOCKED');
+  assert.equal(component.truthLabel, 'UNAVAILABLE');
+  assert.equal(component.authority, 'UNAVAILABLE');
+  assert.equal(component.completeness, 'UNAVAILABLE');
+  assert.equal(component.lastFailure, null);
+  assert.deepEqual(component.blockerCodes, [
+    'Q_CLIENT_NOT_CONFIGURED',
+    'Q_TRANSPORT_NOT_CONFIGURED',
+    'Q_OWNER_OBSERVATION_NOT_CONFIGURED',
+    'Q_SAFE_FALLBACK_ABSTAIN_UNKNOWN',
+  ]);
 });
 
 test('protocol mismatch is rejected before any L01 bridge observation', async () => {
@@ -152,6 +175,7 @@ test('protocol mismatch is rejected before any L01 bridge observation', async ()
   assert.ok(status.blockerCodes.includes('PROTOCOL_SCHEMA_MISMATCH'));
   assert.equal(status.advisoryAction, 'ABSTAIN_UNKNOWN');
   assert.equal(bridgeReads, 0);
+  assert.notEqual(runtime.health(ctx()).fatal, null);
 });
 
 test('unavailable champion fails closed without reading or dispatching bridge work', async () => {
@@ -259,6 +283,8 @@ test('adapter source has no egress, ambient config, timer, fixture, or money-pat
     /engine\/(?:basis|volume)/,
     /capitalFoundation/,
     /foundation\/(?:risk|execution|reconciliation)/,
+    /readinessPolicy/,
+    /READINESS-CLUSTER-001/,
     /binance/i,
     /ledger/i,
   ]) assert.equal(forbidden.test(source), false, `forbidden Q adapter dependency ${forbidden}`);

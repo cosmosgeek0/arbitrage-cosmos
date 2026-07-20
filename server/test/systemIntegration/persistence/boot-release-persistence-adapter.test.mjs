@@ -348,6 +348,7 @@ test('synchronous Ledger close throw is not success and rewrites clean evidence 
 
 test('shutdown composition orders listener closure before boot completion and exits failed shutdown nonzero', () => {
   const source = readFileSync(new URL('../../../src/index.ts', import.meta.url), 'utf8');
+  const healthRoutesSource = readFileSync(new URL('../../../src/systemIntegration/routes/health.ts', import.meta.url), 'utf8');
   const listenersClosed = source.indexOf('await Promise.all([httpClosed, websocketClosed])');
   const finalization = source.indexOf('const finalization = finalizeSystemBootReleaseCleanShutdown');
   const successfulOutcome = source.indexOf("return 'SHUTDOWN_COMPLETE' as const", finalization);
@@ -367,7 +368,11 @@ test('shutdown composition orders listener closure before boot completion and ex
   const listenerAdmission = source.indexOf('if (canonicalApplicationStartOk) {', failedBootBranch);
   assert.ok(failedBootBranch > 0 && listenerAdmission > failedBootBranch);
   assert.match(source, /applicationStartOk: \(\) => canonicalApplicationStartOk/);
-  assert.match(source, /projectI00Health\([\s\S]*?canonicalApplicationStartOk,[\s\S]*?canonicalApplicationStartFailureCodes/);
+  assert.match(source, /applicationStartFailureCodes: \(\) => canonicalApplicationStartFailureCodes/);
+  assert.match(
+    healthRoutesSource,
+    /projectI00Health\([\s\S]*?options\.applicationStartOk\(\),[\s\S]*?options\.applicationStartFailureCodes\(\)/,
+  );
   const shutdownStart = source.indexOf('function gracefulShutdown(');
   const drainAdmissionClosed = source.indexOf('ordinaryShutdownAdmission.beginDrainEvaluation();', shutdownStart);
   const intakePause = source.indexOf("command: 'SET_INTAKE_PAUSED', paused: true", shutdownStart);

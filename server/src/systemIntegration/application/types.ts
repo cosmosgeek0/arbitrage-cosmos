@@ -72,6 +72,8 @@ export interface SystemIntegrationApplicationOptions {
   readonly scheduler: RepeatingScheduler;
   readonly runtimes: CoreRuntimePorts;
   readonly readEnvironment: () => ControlEnvironment;
+  /** Closed source policy supplied explicitly by the production composition. */
+  readonly readinessPolicy?: unknown;
   readonly components?: ApplicationComponentReadPorts;
   readonly summaries?: ApplicationSummaryReadPort;
   readonly traces?: ApplicationTraceReadPort;

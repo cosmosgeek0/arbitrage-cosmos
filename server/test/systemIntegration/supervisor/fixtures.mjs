@@ -2,8 +2,9 @@ import {
   SYSTEM_COMPONENT_IDS,
 } from '../../../dist/systemIntegration/contracts/constants.js';
 import { evaluateFreshness } from '../../../dist/foundation/contracts/index.js';
+import { SIGNED_Q_READINESS_WAIVER } from '../../../dist/systemIntegration/supervisor/readinessPolicy.js';
 
-export const NOW = 1_900_000_000_000;
+export const NOW = Date.parse('2026-08-01T00:00:00Z');
 export const CORRELATION = 'cor_supervisor_fixture_1';
 
 const OWNER = {
@@ -29,7 +30,6 @@ const FRESH_COMPONENTS = new Set([
   'market-universe',
   'intelligence-runtime',
   'market-intelligence',
-  'q-inference',
   'basis-engine',
   'volume-engine',
 ]);
@@ -58,6 +58,7 @@ export function failure(componentId, code, over = {}) {
 export function component(componentId, over = {}) {
   const dry = DRY_COMPONENTS.has(componentId);
   const fresh = FRESH_COMPONENTS.has(componentId);
+  const qAbstention = componentId === 'q-inference';
   const sourceTimestamp = fresh ? {
     sourceTimeMs: NOW - 100,
     receivedAtMs: NOW - 80,
@@ -70,31 +71,38 @@ export function component(componentId, over = {}) {
     componentId,
     owner: OWNER[componentId],
     ownerPath: `server/src/${componentId}`,
-    releaseStatuses: dry
+    releaseStatuses: qAbstention
+      ? ['BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED']
+      : dry
       ? ['BUILT_AND_TESTED', 'WIRED', 'SYNTHETIC_ONLY']
       : ['BUILT_AND_TESTED', 'WIRED', 'LIVE_PUBLIC'],
-    truthLabel: dry ? 'DRY_RUN' : 'LIVE_PUBLIC',
+    truthLabel: qAbstention ? 'UNAVAILABLE' : dry ? 'DRY_RUN' : 'LIVE_PUBLIC',
     desiredState: 'RUNNING',
-    phase: 'RUNNING',
-    domainObservedState: 'RUNNING',
+    phase: qAbstention ? 'BLOCKED' : 'RUNNING',
+    domainObservedState: qAbstention ? 'ABSTAIN_UNKNOWN' : 'RUNNING',
     sourceLifecycle: null,
-    readiness: 'READY',
-    authority: dry ? 'SYNTHETIC_TEST' : 'LIVE_PUBLIC',
-    completeness: 'COMPLETE',
+    readiness: qAbstention ? 'BLOCKED' : 'READY',
+    authority: qAbstention ? 'UNAVAILABLE' : dry ? 'SYNTHETIC_TEST' : 'LIVE_PUBLIC',
+    completeness: qAbstention ? 'UNAVAILABLE' : 'COMPLETE',
     sourceTimestamp,
     freshness: sourceTimestamp ? evaluateFreshness(sourceTimestamp, NOW) : null,
     lastReceiveAtMs: fresh ? NOW - 80 : null,
     lastProcessAtMs: fresh ? NOW - 60 : null,
-    lastSuccessAtMs: NOW - 40,
-    dependencies: [],
+    lastSuccessAtMs: qAbstention ? null : NOW - 40,
+    dependencies: qAbstention ? ['market-intelligence'] : [],
     queue: null,
     lastFailure: null,
-    blockerCodes: [],
-    generation: 1,
+    blockerCodes: qAbstention ? [
+      'Q_CLIENT_NOT_CONFIGURED',
+      'Q_TRANSPORT_NOT_CONFIGURED',
+      'Q_OWNER_OBSERVATION_NOT_CONFIGURED',
+      'Q_SAFE_FALLBACK_ABSTAIN_UNKNOWN',
+    ] : [],
+    generation: qAbstention ? 0 : 1,
     restartCount: 0,
     supportedControls: [],
     capitalExposed: false,
-    operatorAttentionRequired: false,
+    operatorAttentionRequired: qAbstention,
     ...over,
   };
 }
@@ -275,6 +283,7 @@ export function projectionInput(over = {}) {
     revision: 1,
     runtime,
     control,
+    readinessPolicy: SIGNED_Q_READINESS_WAIVER,
     components: components(over.componentOverrides ?? {}),
     summaries: summaries(over.summaryOverrides ?? {}),
     traceEvents: [traceEvent()],

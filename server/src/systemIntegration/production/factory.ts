@@ -43,8 +43,8 @@ import type {
   ComponentStepContext,
 } from '../../foundation/control/index.js';
 import {
-  createAcceptedQAbstentionBinding,
   createProductionQAdvisoryRuntime,
+  projectNotConfiguredQAdvisoryComponent,
 } from '../adapters/qAdvisory.js';
 import type {
   SystemComponentSnapshot,
@@ -2058,12 +2058,9 @@ export function createProductionSystemIntegrationPorts(
   );
   const basisLifecycle = new BasisLifecyclePort(input.basis, maxAgeMs);
   const volumeLifecycle = new VolumeLifecyclePort(input.volume, maxAgeMs);
-  const qAdvisory = createProductionQAdvisoryRuntime({
-    clock: input.clock,
-    binding: input.qAdvisory === undefined
-      ? createAcceptedQAbstentionBinding()
-      : input.qAdvisory,
-  });
+  const qAdvisory = input.qAdvisory == null
+    ? null
+    : createProductionQAdvisoryRuntime({ clock: input.clock, binding: input.qAdvisory });
   const capitalReadGuard: CapitalReadGuard = { active: false, reentered: false };
 
   const runtimes = Object.freeze({
@@ -2083,11 +2080,13 @@ export function createProductionSystemIntegrationPorts(
       stop: () => publicIntelligence.stopIntelligence(),
       health: (ctx: ComponentStepContext) => publicIntelligence.intelligenceHealth(ctx),
     }),
-    q: Object.freeze({
-      validate: (ctx: ComponentStepContext) => qAdvisory.validate?.(ctx),
-      start: () => qAdvisory.start(),
-      stop: () => qAdvisory.stop(),
-      health: (ctx: ComponentStepContext) => qAdvisory.health(ctx),
+    ...(qAdvisory === null ? {} : {
+      q: Object.freeze({
+        validate: (ctx: ComponentStepContext) => qAdvisory.validate?.(ctx),
+        start: () => qAdvisory.start(),
+        stop: () => qAdvisory.stop(),
+        health: (ctx: ComponentStepContext) => qAdvisory.health(ctx),
+      }),
     }),
     basis: Object.freeze({
       start: () => basisLifecycle.start(),
@@ -2109,7 +2108,9 @@ export function createProductionSystemIntegrationPorts(
       readComponentSnapshot: () => evidence.readComponent('USDM'),
     }),
     'q-inference': Object.freeze({
-      readComponentSnapshot: () => qAdvisory.readComponentSnapshot(),
+      readComponentSnapshot: () => qAdvisory === null
+        ? projectNotConfiguredQAdvisoryComponent(input.clock.nowMs())
+        : qAdvisory.readComponentSnapshot(),
     }),
   });
 

@@ -44,8 +44,10 @@ import {
   LIVE_EXECUTION_NOT_IMPLEMENTED,
 } from '../contracts/constants.js';
 import { createSealedDryRunVenueHarness } from './dryRunVenue.js';
+import { VALIDATE_ONLY_EXECUTOR_COMPONENT_IDS } from './types.js';
 import type {
   ValidateOnlyDisposition,
+  ValidateOnlyExecutorReadinessEvidence,
   ValidateOnlyOrchestratorInput,
   ValidateOnlyOwnerInvocations,
   ValidateOnlyPersistencePort,
@@ -227,8 +229,10 @@ function baseSnapshot(
   });
 }
 
-function modeFailure(input: ValidateOnlyOrchestratorInput): Readonly<StructuredFailure> | null {
-  const rawRequested = typeof input.requestedMode === 'string' ? input.requestedMode : '';
+export function classifyValidateOnlyRequestedMode(
+  requestedMode: unknown,
+): typeof LIVE_EXECUTION_NOT_IMPLEMENTED | 'VALIDATE_ONLY_REQUIRED' | null {
+  const rawRequested = typeof requestedMode === 'string' ? requestedMode : '';
   const requested = rawRequested.length <= 128
     ? rawRequested.trim().toUpperCase()
     : rawRequested.slice(0, 128).trim().toUpperCase();
@@ -237,6 +241,14 @@ function modeFailure(input: ValidateOnlyOrchestratorInput): Readonly<StructuredF
     (BLOCKED_EXECUTION_MODE_REQUESTS as readonly string[]).includes(normalized) ||
     normalized.split('_').some((token) => token === 'LIVE' || token === 'MANUAL' || token === 'AUTONOMOUS');
   if (requestsExecutionAuthority) {
+    return LIVE_EXECUTION_NOT_IMPLEMENTED;
+  }
+  return requested === 'VALIDATE_ONLY' ? null : 'VALIDATE_ONLY_REQUIRED';
+}
+
+function modeFailure(input: ValidateOnlyOrchestratorInput): Readonly<StructuredFailure> | null {
+  const classified = classifyValidateOnlyRequestedMode(input.requestedMode);
+  if (classified === LIVE_EXECUTION_NOT_IMPLEMENTED) {
     return failure(
       input,
       'mode-gate',
@@ -245,16 +257,15 @@ function modeFailure(input: ValidateOnlyOrchestratorInput): Readonly<StructuredF
       'Use VALIDATE_ONLY. Live, manual-armed, and autonomous execution are not implemented.',
     );
   }
-  if (requested !== 'VALIDATE_ONLY') {
-    return failure(
-      input,
-      'mode-gate',
-      'VALIDATE_ONLY_REQUIRED',
-      'This vertical slice runs only in VALIDATE_ONLY mode.',
-      'Use the read/advisory surfaces without invoking the execution-validation slice.',
-    );
-  }
-  return null;
+  return classified === 'VALIDATE_ONLY_REQUIRED'
+    ? failure(
+        input,
+        'mode-gate',
+        'VALIDATE_ONLY_REQUIRED',
+        'This vertical slice runs only in VALIDATE_ONLY mode.',
+        'Use the read/advisory surfaces without invoking the execution-validation slice.',
+      )
+    : null;
 }
 
 function exactAvailable(amount: NonNegativeDecimal, consumed: NonNegativeDecimal): NonNegativeDecimal | null {
@@ -684,8 +695,116 @@ function planMatchesRiskIntent(plan: Readonly<ExecutionPlanDefinition>, intent: 
   );
 }
 
+export interface ValidateOnlyExecutorOwnerReadinessFunctions {
+  readonly approval: typeof evaluateOperatorApproval;
+  readonly risk: typeof evaluateMultiLegRisk;
+  readonly execution: typeof createExecutionCoordinator;
+  readonly reconciliation: typeof reconcileExecutionState;
+}
+
+export const VALIDATE_ONLY_EXECUTOR_OWNER_READINESS_FUNCTIONS:
+Readonly<ValidateOnlyExecutorOwnerReadinessFunctions> = Object.freeze({
+  approval: evaluateOperatorApproval,
+  risk: evaluateMultiLegRisk,
+  execution: createExecutionCoordinator,
+  reconciliation: reconcileExecutionState,
+});
+
+function rejectsWithExactOwnerContract(probe: () => unknown, message: RegExp): boolean {
+  try {
+    probe();
+    return false;
+  } catch (error) {
+    return error instanceof TypeError && message.test(error.message);
+  }
+}
+
+/**
+ * Prove the readiness seam is bound to each canonical owner and that each
+ * owner responds with its own deterministic malformed-input refusal. Function
+ * identity prevents an arbitrary always-throwing substitute from attesting.
+ */
+export function probeValidateOnlyExecutorOwners(
+  owners: Readonly<ValidateOnlyExecutorOwnerReadinessFunctions>,
+): boolean {
+  if (owners.approval !== evaluateOperatorApproval
+      || owners.risk !== evaluateMultiLegRisk
+      || owners.execution !== createExecutionCoordinator
+      || owners.reconciliation !== reconcileExecutionState) return false;
+  return rejectsWithExactOwnerContract(
+    () => owners.approval({} as never, {} as never, {} as never),
+    /^evaluateOperatorApproval: malformed input -/u,
+  ) && rejectsWithExactOwnerContract(
+    () => owners.risk({} as never),
+    /^evaluateMultiLegRisk: invalid input —/u,
+  ) && rejectsWithExactOwnerContract(
+    () => owners.execution({} as never, {} as never, {} as never),
+    /^strategy must be 'BASIS'$/u,
+  ) && rejectsWithExactOwnerContract(
+    () => owners.reconciliation(null as never, {} as never, -1, {} as never),
+    /^reconcileExecutionState: nowMs must be valid UTC ms$/u,
+  );
+}
+
 export class ValidateOnlyOrchestrator {
-  constructor(private readonly persistence: ValidateOnlyPersistencePort) {}
+  constructor(
+    private readonly persistence: ValidateOnlyPersistencePort,
+    private readonly readinessOwners: Readonly<ValidateOnlyExecutorOwnerReadinessFunctions>
+      = VALIDATE_ONLY_EXECUTOR_OWNER_READINESS_FUNCTIONS,
+  ) {}
+
+  /**
+   * Read-only composition/readiness attestation. It invokes only deterministic
+   * malformed-input owner refusals and the persistence readiness probe; it
+   * never runs a validation, mutates an owner, or reaches a venue/network.
+   */
+  readExecutorReadinessEvidence(nowMs: number): Readonly<ValidateOnlyExecutorReadinessEvidence> {
+    if (!isValidUtcMillis(nowMs)) throw new TypeError('Executor readiness requires injected valid UTC time.');
+    const ownersResponsive = probeValidateOnlyExecutorOwners(this.readinessOwners);
+    const persistenceWired = typeof this.persistence?.loadValidateOnlyApprovalState === 'function'
+      && typeof this.persistence?.persistValidateOnly === 'function'
+      && typeof this.persistence?.readValidateOnlyExecutorPersistenceReadiness === 'function';
+    let persistenceResponsive = false;
+    try {
+      persistenceResponsive = persistenceWired
+        && this.persistence.readValidateOnlyExecutorPersistenceReadiness() === true;
+    } catch {
+      persistenceResponsive = false;
+    }
+    const validateOnlyAccepted = classifyValidateOnlyRequestedMode('VALIDATE_ONLY') === null;
+    const liveModesRefused = (BLOCKED_EXECUTION_MODE_REQUESTS as readonly string[]).every((mode) => (
+      classifyValidateOnlyRequestedMode(mode) === LIVE_EXECUTION_NOT_IMPLEMENTED
+    ));
+    const unavailablePrivateModesRefused = ['PRIVATE', 'PRIVATE_READ', 'SIGNED', 'SIGNED_TEST']
+      .every((mode) => classifyValidateOnlyRequestedMode(mode) !== null);
+    if (!ownersResponsive
+        || !persistenceResponsive
+        || !validateOnlyAccepted
+        || !liveModesRefused
+        || !unavailablePrivateModesRefused) {
+      throw new Error('Validate-only executor composition readiness is not proven.');
+    }
+    return Object.freeze({
+      schema: 'cosmos.system-integration.executor-readiness.v1',
+      evaluatedAtMs: nowMs,
+      componentIds: VALIDATE_ONLY_EXECUTOR_COMPONENT_IDS,
+      executorPresent: true,
+      persistenceWired: true,
+      responsive: ownersResponsive && persistenceResponsive,
+      correctPrivateLiveRefusal: true,
+      mode: 'VALIDATE_ONLY',
+      privateCapability: 'NOT_CONFIGURED',
+      tradeCapability: 'NOT_CONFIGURED',
+      executionAuthority: 'NONE',
+      liveExecutionPermitted: false,
+      refusalCode: LIVE_EXECUTION_NOT_IMPLEMENTED,
+      runResult: null,
+      capitalState: null,
+      riskVerdict: null,
+      executionPlan: null,
+      reconciliationResult: null,
+    });
+  }
 
   async execute(input: Readonly<ValidateOnlyOrchestratorInput>): Promise<Readonly<ValidateOnlyRunResult>> {
     if (!isValidUtcMillis(input.nowMs) || !CORRELATION_ID.test(input.correlationId)) {

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { evaluateFreshness } from '../../../dist/foundation/contracts/index.js';
 import {
@@ -11,6 +12,8 @@ import {
   SYSTEM_TOPOLOGY_EDGES,
   buildSystemSupervisorProjection,
   buildSystemTraceIndex,
+  evaluateReadinessPolicy,
+  SIGNED_Q_READINESS_WAIVER,
   serializeSystemSupervisorSnapshot,
   serializeSystemTraceIndex,
   traceByCorrelationId,
@@ -19,6 +22,7 @@ import {
   CORRELATION,
   NOW,
   clone,
+  failure,
   projectionInput,
   traceEvent,
 } from './fixtures.mjs';
@@ -36,6 +40,184 @@ test('projection emits every canonical node and deterministic dependency edge', 
   assert.equal(snapshot.edges.length, SYSTEM_TOPOLOGY_EDGES.length);
   assert.equal(snapshot.schemaVersion, 1);
   assert.equal(snapshot.control.generation, 1);
+  assert.equal(snapshot.overallPosture, 'READY');
+  assert.equal(snapshot.serviceReadinessPolicy.status, 'VALID');
+  assert.equal(snapshot.firstRootBlockerComponentId, 'q-inference');
+  assert.equal(snapshot.firstRequiredReadinessBlockerComponentId, null);
+  const qRoot = snapshot.rootCauses.find((root) => root.componentId === 'q-inference');
+  const qAttention = snapshot.attentionQueue.find((item) => item.componentId === 'q-inference');
+  assert.ok(qRoot);
+  assert.ok(qRoot.reasonCodes.includes('Q_CLIENT_NOT_CONFIGURED'));
+  assert.ok(qAttention);
+  assert.equal(qAttention.rootComponentId, 'q-inference');
+  const q = snapshot.components.find((component) => component.componentId === 'q-inference');
+  assert.equal(q.readiness, 'BLOCKED');
+  assert.equal(q.truthLabel, 'UNAVAILABLE');
+  assert.equal(q.authority, 'UNAVAILABLE');
+  assert.equal(q.completeness, 'UNAVAILABLE');
+  assert.ok(q.releaseStatuses.includes('NOT_CONFIGURED'));
+  assert.deepEqual(q.serviceReadiness, {
+    basis: 'PUBLIC_DATA',
+    expected: true,
+    observed: true,
+    requiredForServiceReadiness: false,
+    excludedFromServiceReadiness: true,
+    waiver: {
+      ...SIGNED_Q_READINESS_WAIVER,
+      status: 'VALID',
+    },
+  });
+});
+
+test('signed Q readiness policy is exact, injected-clock-bound, and fail-closed for every invalid disposition', () => {
+  assert.equal(evaluateReadinessPolicy(
+    SIGNED_Q_READINESS_WAIVER,
+    Date.parse('2026-10-17T23:59:59.999Z'),
+    'VALIDATE_ONLY',
+  ).status, 'VALID');
+  assert.equal(evaluateReadinessPolicy(
+    SIGNED_Q_READINESS_WAIVER,
+    Date.parse('2026-10-18T00:00:00Z'),
+    'VALIDATE_ONLY',
+  ).status, 'EXPIRED');
+  assert.equal(evaluateReadinessPolicy(undefined, NOW, 'VALIDATE_ONLY').status, 'MISSING');
+  assert.equal(evaluateReadinessPolicy({ ...SIGNED_Q_READINESS_WAIVER, extra: true }, NOW, 'VALIDATE_ONLY').status, 'MALFORMED');
+  assert.equal(evaluateReadinessPolicy({ ...SIGNED_Q_READINESS_WAIVER, mode: 'READ_ONLY' }, NOW, 'VALIDATE_ONLY').status, 'WRONG_MODE');
+  assert.equal(evaluateReadinessPolicy({ ...SIGNED_Q_READINESS_WAIVER, scope: 'OTHER' }, NOW, 'VALIDATE_ONLY').status, 'WRONG_SCOPE');
+  assert.equal(evaluateReadinessPolicy(SIGNED_Q_READINESS_WAIVER, NOW, 'READ_ONLY').status, 'WRONG_MODE');
+
+  for (const [status, readinessPolicy, control] of [
+    ['MISSING', undefined, undefined],
+    ['MALFORMED', { ...SIGNED_Q_READINESS_WAIVER, owner: 'not-the-signer' }, undefined],
+    ['WRONG_MODE', { ...SIGNED_Q_READINESS_WAIVER, mode: 'READ_ONLY' }, undefined],
+    ['WRONG_SCOPE', { ...SIGNED_Q_READINESS_WAIVER, scope: 'OTHER' }, undefined],
+    ['WRONG_MODE', SIGNED_Q_READINESS_WAIVER, { safeMode: 'READ_ONLY' }],
+  ]) {
+    const input = projectionInput({
+      ...(readinessPolicy === undefined ? {} : { readinessPolicy }),
+      ...(control === undefined ? {} : { control }),
+    });
+    if (readinessPolicy === undefined) delete input.readinessPolicy;
+    const snapshot = project(input);
+    assert.equal(snapshot.serviceReadinessPolicy.status, status);
+    const q = snapshot.components.find((component) => component.componentId === 'q-inference');
+    assert.equal(q.serviceReadiness.requiredForServiceReadiness, true);
+    assert.equal(q.serviceReadiness.excludedFromServiceReadiness, false);
+    assert.notEqual(snapshot.overallPosture, 'READY');
+    assert.equal(snapshot.firstRequiredReadinessBlockerComponentId, 'q-inference');
+  }
+
+  const expired = project(projectionInput({
+    nowMs: Date.parse('2026-10-18T00:00:00Z'),
+  }));
+  assert.equal(expired.serviceReadinessPolicy.status, 'EXPIRED');
+  assert.equal(expired.components.find((component) => component.componentId === 'q-inference')
+    .serviceReadiness.requiredForServiceReadiness, true);
+  assert.notEqual(expired.overallPosture, 'READY');
+
+  const source = readFileSync(new URL('../../../src/systemIntegration/supervisor/readinessPolicy.ts', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /process\.env|Deno\.env|Bun\.env/);
+});
+
+test('valid policy excludes only the exact signed Q not-configured abstention state', () => {
+  for (const qOverride of [
+    {
+      releaseStatuses: ['BUILT_AND_TESTED', 'IMPORTED', 'BLOCKED'],
+      phase: 'FAILED',
+      domainObservedState: 'Q_RUNTIME_CORRUPTED',
+      readiness: 'FAILED',
+      lastFailure: failure('q-inference', 'Q_RUNTIME_CORRUPTED'),
+      blockerCodes: ['Q_RUNTIME_CORRUPTED'],
+    },
+    {
+      lastFailure: failure('q-inference', 'Q_OWNER_FAILURE_PRESENT'),
+    },
+    {
+      releaseStatuses: ['BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED', 'SYNTHETIC_ONLY'],
+    },
+    {
+      capitalExposed: true,
+      supportedControls: ['SET_COMPONENT_STATE'],
+    },
+    {
+      processingLagMs: 1,
+      retry: {
+        state: 'BACKING_OFF', attempt: 2, ceiling: 8, delayMs: 500,
+        retryAtMs: NOW + 500, cooldownUntilMs: null,
+      },
+      dataQuality: {
+        state: 'DEGRADED', invalidCount: 1, duplicateCount: 0,
+        outOfOrderCount: 0, sequenceGapCount: 0, observedAtMs: NOW,
+      },
+      checkpoint: { state: 'CURRENT', revision: 'q-checkpoint-1', persistedAtMs: NOW },
+    },
+  ]) {
+    const snapshot = project(projectionInput({
+      componentOverrides: {
+        'q-inference': qOverride,
+      },
+    }));
+    const q = snapshot.components.find((component) => component.componentId === 'q-inference');
+    assert.equal(snapshot.serviceReadinessPolicy.status, 'VALID');
+    assert.equal(q.serviceReadiness.excludedFromServiceReadiness, false);
+    assert.equal(q.serviceReadiness.requiredForServiceReadiness, true);
+    assert.notEqual(snapshot.overallPosture, 'READY');
+    assert.equal(snapshot.firstRequiredReadinessBlockerComponentId, 'q-inference');
+  }
+});
+
+test('executor identity alone cannot turn passive UNKNOWN owner evidence into service readiness', () => {
+  const componentOverrides = Object.fromEntries([
+    'capital-supervision',
+    'multileg-risk',
+    'execution-coordinator-validate-only',
+    'reconciliation',
+  ].map((componentId) => [componentId, {
+    releaseStatuses: ['BUILT_AND_TESTED', 'WIRED'],
+    truthLabel: 'UNKNOWN',
+    phase: 'RUNNING',
+    domainObservedState: 'PASSIVE_OWNER_CLAIMS_READY',
+    readiness: 'READY',
+    authority: 'DERIVED_LIVE',
+    completeness: 'COMPLETE',
+    sourceTimestamp: null,
+    freshness: null,
+    lastFailure: null,
+    blockerCodes: [],
+  }]));
+  const snapshot = project(projectionInput({ componentOverrides }));
+  for (const componentId of Object.keys(componentOverrides)) {
+    assert.equal(
+      snapshot.components.find((component) => component.componentId === componentId).readiness,
+      'DEGRADED',
+      componentId,
+    );
+  }
+  assert.notEqual(snapshot.overallPosture, 'READY');
+  assert.equal(snapshot.firstRequiredReadinessBlockerComponentId, 'capital-supervision');
+});
+
+test('a fresh RUNNING restart is not poisoned by retained historical supervisor failure evidence', () => {
+  const priorFailure = failure('engine-supervisor', 'REQUIRED_SOURCE_STALE');
+  const input = projectionInput({
+    runtime: {
+      generation: 2,
+      phase: 'RUNNING',
+      desiredState: 'RUNNING',
+      lastError: priorFailure,
+    },
+    control: { generation: 2 },
+    componentOverrides: {
+      'engine-supervisor': { generation: 2 },
+    },
+  });
+  const snapshot = project(input);
+  const engine = snapshot.components.find((component) => component.componentId === 'engine-supervisor');
+  assert.equal(snapshot.overallPosture, 'READY');
+  assert.equal(snapshot.firstRequiredReadinessBlockerComponentId, null);
+  assert.equal(engine.readiness, 'READY');
+  assert.equal(engine.lastFailure, null);
+  assert.deepEqual(input.runtime.lastError, priorFailure, 'the Foundation owner retains historical failure evidence');
 });
 
 test('canonical topology arrays and their records are immutable', () => {
@@ -48,7 +230,8 @@ test('canonical topology arrays and their records are immutable', () => {
 test('projected components and trace events remain valid canonical contract values', () => {
   const snapshot = project();
   for (const component of snapshot.components) {
-    assert.deepEqual(validateSystemComponentSnapshot(component), [], component.componentId);
+    const { serviceReadiness: _serviceReadiness, ...ownerContract } = component;
+    assert.deepEqual(validateSystemComponentSnapshot(ownerContract), [], component.componentId);
   }
   for (const entry of snapshot.traceIndex.entries) {
     for (const event of entry.snapshot.events) {
@@ -77,6 +260,7 @@ test('intentionally stopped components are not reported as root blockers', () =>
     desiredState: 'STOPPED',
     phase: 'STOPPED',
     readiness: 'STOPPED',
+    operatorAttentionRequired: false,
   }]));
   const snapshot = project(projectionInput({
     runtime: { desiredState: 'STOPPED', phase: 'STOPPED' },
@@ -86,6 +270,25 @@ test('intentionally stopped components are not reported as root blockers', () =>
   assert.equal(snapshot.firstRootBlockerComponentId, null);
   assert.deepEqual(snapshot.rootCauses, []);
   assert.deepEqual(snapshot.attentionQueue, []);
+});
+
+test('a stopped required component in a RUNNING shell has a separate service-readiness blocker', () => {
+  const snapshot = project(projectionInput({
+    componentOverrides: {
+      'market-intelligence': {
+        desiredState: 'STOPPED',
+        phase: 'STOPPED',
+        readiness: 'STOPPED',
+        operatorAttentionRequired: false,
+      },
+    },
+  }));
+  assert.equal(snapshot.phase, 'RUNNING');
+  assert.notEqual(snapshot.overallPosture, 'READY');
+  assert.equal(snapshot.firstRequiredReadinessBlockerComponentId, 'market-intelligence');
+  const fullEvidenceRoot = snapshot.rootCauses.find((root) => root.componentId === 'market-intelligence');
+  assert.ok(fullEvidenceRoot, 'full Q attention retains its stopped upstream dependency as a causal root');
+  assert.deepEqual(fullEvidenceRoot.affectedComponentIds, ['q-inference']);
 });
 
 test('one engine failure remains scoped and does not erase the other engine', () => {
@@ -170,7 +373,8 @@ test('supervisor re-evaluates once-fresh timestamp evidence against its own inje
   assert.equal(spot.truthLabel, 'UNAVAILABLE');
   assert.equal(spot.readiness, 'BLOCKED');
   assert.equal(spot.releaseStatuses.includes('LIVE_PUBLIC'), false);
-  assert.deepEqual(validateSystemComponentSnapshot(spot), []);
+  const { serviceReadiness: _serviceReadiness, ...ownerContract } = spot;
+  assert.deepEqual(validateSystemComponentSnapshot(ownerContract), []);
 });
 
 test('cached freshness without its canonical source timestamp cannot remain live or READY', () => {

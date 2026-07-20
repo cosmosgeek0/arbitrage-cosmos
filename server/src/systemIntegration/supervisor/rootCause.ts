@@ -16,6 +16,7 @@ import type {
   SystemRootCause,
   SystemRootCauseProjection,
   SystemRootCauseSeverity,
+  SystemServiceReadinessComponentProjection,
 } from './types.js';
 
 const SEVERITY_RANK: Readonly<Record<SystemRootCauseSeverity, number>> = Object.freeze({
@@ -39,10 +40,13 @@ function hardUnavailable(component: SystemComponentSnapshot): boolean {
     || component.truthLabel === 'UNAVAILABLE';
 }
 
-function degraded(component: SystemComponentSnapshot): boolean {
+function degraded(component: SystemServiceReadinessComponentProjection): boolean {
+  const lifecycleTruthIsNonAuthorizing = component.readiness === 'READY'
+    && (component.serviceReadiness.basis === 'MANAGED_LIFECYCLE'
+      || component.serviceReadiness.basis === 'VALIDATE_ONLY_EXECUTOR');
   return component.readiness === 'DEGRADED'
     || component.readiness === 'WARMING'
-    || component.truthLabel === 'UNKNOWN'
+    || (!lifecycleTruthIsNonAuthorizing && component.truthLabel === 'UNKNOWN')
     || component.completeness === 'PARTIAL'
     || (component.freshness !== null && component.freshness.state !== 'FRESH');
 }
@@ -85,7 +89,7 @@ function compareAttention(left: SystemAttentionItem, right: SystemAttentionItem)
 /** Resolve a dependency cascade to the first upstream component with facts. */
 function rootFor(
   componentId: SystemComponentId,
-  components: ReadonlyMap<SystemComponentId, Readonly<SystemComponentSnapshot>>,
+  components: ReadonlyMap<SystemComponentId, Readonly<SystemServiceReadinessComponentProjection>>,
   path: readonly SystemComponentId[] = [],
 ): { root: SystemComponentId; path: readonly SystemComponentId[] } {
   if (path.includes(componentId)) return { root: componentId, path: Object.freeze([...path, componentId]) };
@@ -98,7 +102,7 @@ function rootFor(
   const blockedDependencies = SYSTEM_TOPOLOGY_EDGES
     .filter((edge) => edge.to === componentId && edge.required)
     .map((edge) => components.get(edge.from))
-    .filter((candidate): candidate is Readonly<SystemComponentSnapshot> => Boolean(candidate))
+    .filter((candidate): candidate is Readonly<SystemServiceReadinessComponentProjection> => Boolean(candidate))
     .filter((candidate) => hardUnavailable(candidate) || degraded(candidate))
     .sort((left, right) => SYSTEM_COMPONENT_ORDER[left.componentId] - SYSTEM_COMPONENT_ORDER[right.componentId]);
   const first = blockedDependencies[0];
@@ -108,7 +112,7 @@ function rootFor(
 
 function edgeState(
   edge: { readonly from: SystemComponentId; readonly to: SystemComponentId; readonly required: boolean },
-  dependency: SystemComponentSnapshot,
+  dependency: SystemServiceReadinessComponentProjection,
 ): SystemDependencyEdge['state'] {
   if (hardUnavailable(dependency)) return edge.required ? 'BLOCKED' : 'DEGRADED';
   if (degraded(dependency)) return 'DEGRADED';
@@ -116,7 +120,7 @@ function edgeState(
 }
 
 export function projectRootCauses(
-  inputComponents: readonly Readonly<SystemComponentSnapshot>[],
+  inputComponents: readonly Readonly<SystemServiceReadinessComponentProjection>[],
 ): Readonly<SystemRootCauseProjection> {
   const components = new Map(inputComponents.map((component) => [component.componentId, component]));
   const rootByComponent = new Map<SystemComponentId, { root: SystemComponentId; path: readonly SystemComponentId[] }>();
@@ -161,7 +165,7 @@ export function projectRootCauses(
     // inherit exposed-capital severity from another branch.
     const affected = [...new Set([rootId, ...groupedRoot.affected])]
       .map((componentId) => components.get(componentId))
-      .filter((component): component is Readonly<SystemComponentSnapshot> => component !== undefined)
+      .filter((component): component is Readonly<SystemServiceReadinessComponentProjection> => component !== undefined)
       .filter(componentProblem)
       .sort((left, right) => SYSTEM_COMPONENT_ORDER[left.componentId] - SYSTEM_COMPONENT_ORDER[right.componentId]);
     const path = groupedRoot.paths.sort((left, right) => left.length - right.length || left.join('|').localeCompare(right.join('|')))[0] ?? [rootId];
@@ -195,12 +199,39 @@ export function projectRootCauses(
   }
   attentionQueue.sort(compareAttention);
 
+  const firstRequiredRoot = rootCauses.find((root) => (
+    root.affectedComponentIds.some((componentId) => (
+      components.get(componentId)?.serviceReadiness.requiredForServiceReadiness === true
+    ))
+  ));
+  const excluded = new Set(inputComponents
+    .filter((component) => component.serviceReadiness.excludedFromServiceReadiness)
+    .map((component) => component.componentId));
+  const firstRequiredEdgeBlocker = edges.find((edge) => (
+    edge.required
+    && edge.state !== 'AVAILABLE'
+    && !excluded.has(edge.from)
+    && !excluded.has(edge.to)
+  ));
+  const firstRequiredComponentBlocker = inputComponents.find((component) => (
+    component.serviceReadiness.requiredForServiceReadiness
+    && component.readiness !== 'READY'
+  ));
+  // Full root causes intentionally omit desired STOPPED components. Service
+  // readiness still needs a causal blocker identity whenever a RUNNING shell
+  // has a required non-READY component or dependency edge.
+  const firstRequiredReadinessBlockerComponentId = firstRequiredRoot?.componentId
+    ?? firstRequiredEdgeBlocker?.rootBlockerComponentId
+    ?? firstRequiredComponentBlocker?.componentId
+    ?? null;
+
   return Object.freeze({
     components: Object.freeze([...inputComponents]),
     edges: Object.freeze(edges),
     rootCauses: Object.freeze(rootCauses),
     attentionQueue: Object.freeze(attentionQueue.slice(0, 100)),
     firstRootBlockerComponentId: rootCauses[0]?.componentId ?? null,
+    firstRequiredReadinessBlockerComponentId,
   });
 }
 

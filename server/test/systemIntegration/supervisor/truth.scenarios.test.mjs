@@ -230,3 +230,109 @@ test('[SC-29] VALIDATE_ONLY permission does not manufacture observed dry-run tru
   assert.equal(snapshot.truthLabel, 'UNAVAILABLE', 'SC-29 invariant=PERMISSION_NOT_OBSERVED_TRUTH');
   assert.equal(snapshot.summaries.execution.truthLabel, 'UNAVAILABLE', 'SC-29 invariant=NO_DRY_RUN_SUMMARY_WITHOUT_COORDINATOR');
 });
+
+test('UNKNOWN truth is non-authorizing and preserves only fully attested lifecycle or executor readiness', () => {
+  const snapshot = project(projectionInput({
+    componentOverrides: {
+      'engine-supervisor': {
+        releaseStatuses: ['BUILT_AND_TESTED', 'WIRED'],
+        truthLabel: 'UNKNOWN',
+        authority: 'DERIVED_LIVE',
+        completeness: 'COMPLETE',
+        readiness: 'READY',
+        lastProcessAtMs: NOW,
+        lastSuccessAtMs: NOW,
+        operatorAttentionRequired: false,
+      },
+      'capital-supervision': {
+        releaseStatuses: ['BUILT_AND_TESTED', 'WIRED'],
+        truthLabel: 'UNKNOWN',
+        domainObservedState: 'VALIDATE_ONLY_EXECUTOR_AVAILABLE_PRIVATE_LIVE_REFUSAL_CONFIRMED',
+        authority: 'DERIVED_LIVE',
+        completeness: 'COMPLETE',
+        readiness: 'READY',
+        lastProcessAtMs: NOW,
+        lastSuccessAtMs: NOW,
+      },
+      'public-spot-source': {
+        releaseStatuses: ['BUILT_AND_TESTED', 'WIRED'],
+        truthLabel: 'UNKNOWN',
+        authority: 'DERIVED_LIVE',
+        readiness: 'READY',
+      },
+    },
+  }));
+
+  const engine = snapshot.components.find((entry) => entry.componentId === 'engine-supervisor');
+  const capital = snapshot.components.find((entry) => entry.componentId === 'capital-supervision');
+  const publicSpot = snapshot.components.find((entry) => entry.componentId === 'public-spot-source');
+  assert.equal(engine.serviceReadiness.basis, 'MANAGED_LIFECYCLE');
+  assert.equal(engine.truthLabel, 'UNKNOWN');
+  assert.equal(engine.readiness, 'READY');
+  assert.deepEqual(engine.blockerCodes, []);
+  assert.equal(capital.serviceReadiness.basis, 'VALIDATE_ONLY_EXECUTOR');
+  assert.equal(capital.truthLabel, 'UNKNOWN');
+  assert.equal(capital.readiness, 'READY');
+  assert.deepEqual(capital.blockerCodes, []);
+  assert.equal(publicSpot.serviceReadiness.basis, 'PUBLIC_DATA');
+  assert.equal(publicSpot.truthLabel, 'UNKNOWN');
+  assert.equal(publicSpot.readiness, 'DEGRADED');
+
+  for (const executorOverride of [
+    { lastProcessAtMs: null, lastSuccessAtMs: null },
+    { lastProcessAtMs: NOW - 1, lastSuccessAtMs: NOW - 1 },
+  ]) {
+    const forged = project(projectionInput({
+      componentOverrides: {
+        'capital-supervision': {
+          releaseStatuses: ['BUILT_AND_TESTED', 'WIRED'],
+          truthLabel: 'UNKNOWN',
+          domainObservedState: 'VALIDATE_ONLY_EXECUTOR_AVAILABLE_PRIVATE_LIVE_REFUSAL_CONFIRMED',
+          authority: 'DERIVED_LIVE',
+          completeness: 'COMPLETE',
+          readiness: 'READY',
+          ...executorOverride,
+        },
+      },
+    })).components.find((entry) => entry.componentId === 'capital-supervision');
+    assert.equal(forged.readiness, 'DEGRADED');
+  }
+
+  for (const engineOverride of [
+    { lastProcessAtMs: null, lastSuccessAtMs: null },
+    { lastProcessAtMs: NOW - 2_001, lastSuccessAtMs: NOW - 2_001 },
+    { blockerCodes: ['EFFECTIVE_INTAKE_PAUSED'], operatorAttentionRequired: true },
+    { lastFailure: failure('engine-supervisor', 'MANAGED_DRIVER_FAILED') },
+  ]) {
+    const forged = project(projectionInput({
+      componentOverrides: {
+        'engine-supervisor': {
+          releaseStatuses: ['BUILT_AND_TESTED', 'WIRED'],
+          truthLabel: 'UNKNOWN',
+          authority: 'DERIVED_LIVE',
+          completeness: 'COMPLETE',
+          readiness: 'READY',
+          lastProcessAtMs: NOW,
+          lastSuccessAtMs: NOW,
+          operatorAttentionRequired: false,
+          ...engineOverride,
+        },
+      },
+    })).components.find((entry) => entry.componentId === 'engine-supervisor');
+    assert.equal(forged.readiness, 'DEGRADED');
+  }
+
+  const partial = project(projectionInput({
+    componentOverrides: {
+      'engine-supervisor': {
+        releaseStatuses: ['BUILT_AND_TESTED', 'WIRED'],
+        truthLabel: 'UNKNOWN',
+        authority: 'DERIVED_LIVE',
+        completeness: 'PARTIAL',
+        readiness: 'READY',
+      },
+    },
+  })).components.find((entry) => entry.componentId === 'engine-supervisor');
+  assert.equal(partial.readiness, 'DEGRADED');
+  assert.ok(partial.blockerCodes.includes('SOURCE_PARTIAL'));
+});

@@ -270,8 +270,13 @@ test('factory construction is inert and exposes only passive public source proje
     'q-inference',
   ]);
   const q = world.ports.components['q-inference'].readComponentSnapshot();
-  assert.equal(q.readiness, 'STOPPED');
+  assert.equal(q.readiness, 'BLOCKED');
+  assert.equal(q.domainObservedState, 'ABSTAIN_UNKNOWN');
+  assert.equal(q.truthLabel, 'UNAVAILABLE');
+  assert.equal(q.authority, 'UNAVAILABLE');
+  assert.equal(q.lastFailure, null);
   assert.ok(q.releaseStatuses.includes('NOT_CONFIGURED'));
+  assert.equal(world.ports.runtimes.q, undefined);
   assert.equal(world.ports.components['intelligence-runtime'], undefined);
   assert.equal(world.ports.components['market-intelligence'], undefined);
   assert.equal(world.ports.components['capital-supervision'], undefined);
@@ -429,9 +434,6 @@ test('accepted public owners drive UniverseGraph and IntelligenceRuntimeBridge r
   assert.equal(world.ports.attentionFocus.setPinned('BTCUSDT', true), true);
   assert.deepEqual(world.ports.attentionFocus.readPinnedSymbols(), ['BTCUSDT']);
   assert.equal(world.ports.attentionFocus.readFocusState('BTCUSDT').effectivePinned, true);
-  await world.ports.runtimes.q.start();
-  assert.equal(world.ports.runtimes.q.health(world.ctx()).fatal.code, 'CHAMPION_UNAVAILABLE');
-
   world.clock.now = START + 1_000;
   world.spot.set('BTCUSDT', START + 900);
   world.usdm.set('BTCUSDT', START + 950);

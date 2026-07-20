@@ -201,6 +201,7 @@ const serverIndex = readFileSync('server/src/index.ts', 'utf8');
 const marketEngineSource = readFileSync('server/src/engine/marketData.ts', 'utf8');
 const liquidationProjectionSource = readFileSync('server/src/binance/liquidations.ts', 'utf8');
 const productionFactorySource = readFileSync('server/src/systemIntegration/production/factory.ts', 'utf8');
+const i00HealthRoutesSource = readFileSync('server/src/systemIntegration/routes/health.ts', 'utf8');
 const tokenDetailSource = readFileSync('web/src/pages/TokenDetail.tsx', 'utf8');
 const tokenIconSource = readFileSync('web/src/components/TokenIcon.tsx', 'utf8');
 const profileSource = readFileSync('server/src/binance/profile.ts', 'utf8');
@@ -255,7 +256,8 @@ check(
 );
 check(
   'a failed canonical supervisor health read records its cause instead of a bare catch',
-  /function\s+sendI00Health\([\s\S]*?\}\s*catch\s*\(error\)\s*\{\s*recordSupervisorReadFailure\(error\);/.test(serverIndex) &&
+  /function\s+sendI00Health\([\s\S]*?\}\s*catch\s*\(error\)\s*\{\s*options\.onSupervisorReadFailure\(error\);/.test(i00HealthRoutesSource) &&
+    /registerI00HealthRoutes\(app,[\s\S]*?onSupervisorReadFailure:\s*recordSupervisorReadFailure,/.test(serverIndex) &&
     /function\s+recordSupervisorReadFailure\([\s\S]*?safeLogEvent\('error_event',\s*null,\s*\{\s*source:\s*'server\.i00_health',[\s\S]*?cause:\s*message,/.test(serverIndex)
 );
 check(

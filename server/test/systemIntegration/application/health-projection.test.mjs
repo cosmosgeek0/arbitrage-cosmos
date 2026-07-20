@@ -6,7 +6,7 @@ import {
   projectI00Health,
 } from '../../../dist/systemIntegration/application/health.js';
 
-const EVALUATED_AT_MS = 1_800_000_000_000;
+const EVALUATED_AT_MS = Date.parse('2026-08-01T00:00:00Z');
 
 function readyAdvanceOwner(overrides = {}) {
   return {
@@ -41,6 +41,21 @@ function supervisor(overrides = {}) {
     evaluatedAtMs: EVALUATED_AT_MS,
     overallPosture: 'READY',
     firstRootBlockerComponentId: null,
+    firstRequiredReadinessBlockerComponentId: null,
+    serviceReadinessPolicy: {
+      status: 'VALID',
+      accepted: true,
+      reasonCode: 'READINESS_POLICY_VALID',
+      waiver: {
+        id: 'READINESS-CLUSTER-001-Q-INFERENCE',
+        scope: 'KEYLESS_PUBLIC_DATA_VALIDATE_ONLY',
+        mode: 'VALIDATE_ONLY',
+        reason: 'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED',
+        owner: 'cosmosgeek',
+        expiresAt: '2026-10-18T00:00:00Z',
+        status: 'VALID',
+      },
+    },
     components: [{ componentId: 'ledger-persistence' }, readyAdvanceOwner()],
     edges: [],
     summaries: { ledger: { writable: true, schemaCompatibilityState: 'AVAILABLE' } },
@@ -51,7 +66,7 @@ function supervisor(overrides = {}) {
 function recentAdvance(overrides = {}) {
   return {
     ownerComponentId: 'market-universe',
-    observedAtMs: 1_799_999_999_500,
+    observedAtMs: EVALUATED_AT_MS - 500,
     maxAgeMs: 1_000,
     ...overrides,
   };
@@ -78,6 +93,7 @@ test('readiness follows canonical supervisor posture and root blocker', () => {
   const blocked = projectI00Health('READY', supervisor({
     overallPosture: 'DEGRADED',
     firstRootBlockerComponentId: 'public-spot-source',
+    firstRequiredReadinessBlockerComponentId: 'public-spot-source',
   }), true, recentAdvance());
   assert.equal(blocked.ok, false);
   assert.deepEqual(blocked.reasonCodes, ['PRODUCT_POSTURE_DEGRADED', 'ROOT_BLOCKER_PRESENT']);
@@ -89,7 +105,7 @@ test('readiness fails closed until an owner supplies recent meaningful-advance e
   assert.equal(missing.lastMeaningfulAdvanceAtMs, null);
   assert.deepEqual(missing.reasonCodes, ['MEANINGFUL_ADVANCE_NOT_SUPPLIED']);
 
-  const stale = projectI00Health('READY', supervisor(), true, recentAdvance({ observedAtMs: 1_799_999_998_000 }));
+  const stale = projectI00Health('READY', supervisor(), true, recentAdvance({ observedAtMs: EVALUATED_AT_MS - 2_000 }));
   assert.equal(stale.ok, false);
   assert.equal(stale.meaningfulAdvanceAgeMs, 2_000);
   assert.deepEqual(stale.reasonCodes, ['MEANINGFUL_ADVANCE_STALE']);
@@ -140,6 +156,33 @@ test('readiness fails closed on unavailable or mismatched Ledger schema compatib
     assert.equal(projected.ok, false);
     assert.ok(projected.reasonCodes.includes(`LEDGER_SCHEMA_COMPATIBILITY_${state}`));
   }
+});
+
+test('readiness preserves application-start, Ledger-writability, and required service barriers', () => {
+  const startFailed = projectI00Health(
+    'READY',
+    supervisor(),
+    false,
+    recentAdvance(),
+    ['BOOT_RELEASE_READ_FAILED'],
+  );
+  assert.equal(startFailed.ok, false);
+  assert.ok(startFailed.reasonCodes.includes('BOOT_RELEASE_READ_FAILED'));
+  assert.ok(startFailed.reasonCodes.includes('APPLICATION_START_FAILED'));
+
+  const ledgerBlocked = projectI00Health('READY', supervisor({
+    summaries: { ledger: { writable: false, schemaCompatibilityState: 'AVAILABLE' } },
+  }), true, recentAdvance());
+  assert.equal(ledgerBlocked.ok, false);
+  assert.ok(ledgerBlocked.reasonCodes.includes('LEDGER_NOT_WRITABLE'));
+
+  const edgeBlocked = projectI00Health('READY', supervisor({
+    overallPosture: 'DEGRADED',
+    firstRequiredReadinessBlockerComponentId: 'market-universe',
+  }), true, recentAdvance());
+  assert.equal(edgeBlocked.ok, false);
+  assert.ok(edgeBlocked.reasonCodes.includes('PRODUCT_POSTURE_DEGRADED'));
+  assert.ok(edgeBlocked.reasonCodes.includes('ROOT_BLOCKER_PRESENT'));
 });
 
 test('readiness rejects invented, unavailable, non-ready, and non-current advance owners', () => {

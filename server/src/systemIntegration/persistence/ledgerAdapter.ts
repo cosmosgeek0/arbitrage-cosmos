@@ -2008,6 +2008,15 @@ export class SystemLedgerPersistenceAdapter {
    * ValidateOnlyPersistencePort. The domain record is validated as bounded,
    * secret-free plain data and committed exactly once with its trace.
    */
+  readValidateOnlyExecutorPersistenceReadiness(): boolean {
+    if (this.sealed || !this.currentState().ok || typeof this.ledger.probeWritable !== 'function') return false;
+    try {
+      return this.ledger.probeWritable(false) === true;
+    } catch {
+      return false;
+    }
+  }
+
   async loadValidateOnlyApprovalState(
     approvalId: string,
   ): Promise<Readonly<OperatorApprovalState> | null> {

@@ -1,5 +1,9 @@
 import type { SystemTraceEvent, SystemTraceSnapshot } from '../../systemIntegration/contracts/types.js';
-import type { SystemSupervisorReadModel } from '../../systemIntegration/supervisor/types.js';
+import type {
+  SystemReadinessPolicyProjection,
+  SystemServiceReadinessDisposition,
+  SystemSupervisorReadModel,
+} from '../../systemIntegration/supervisor/types.js';
 import type {
   CanonicalOpsIntakeInterlock,
   CanonicalSupervisorOpsReadback,
@@ -82,6 +86,13 @@ export interface ProductRuntimeComponentPresentation {
   readonly statusLabel: string;
   readonly stateLabel: string;
 }
+
+/**
+ * Product carries the canonical System readiness policy and per-component
+ * disposition without evaluating either contract again.
+ */
+export type ProductRuntimeServiceReadinessPolicy = SystemReadinessPolicyProjection;
+export type ProductRuntimeServiceReadinessDisposition = SystemServiceReadinessDisposition;
 
 export interface ProductRuntimeMaterialSourceRecord {
   readonly cursor: string;
@@ -473,6 +484,7 @@ export interface ProductRuntimeComponentProjection {
   readonly supportedControlIds: readonly string[];
   readonly correlationId: string | null;
   readonly truthLabel: ProductRuntimeTruthLabel;
+  readonly serviceReadiness: Readonly<ProductRuntimeServiceReadinessDisposition>;
   readonly canonicalPresentation: Readonly<ProductRuntimeComponentPresentation>;
 }
 
@@ -483,6 +495,7 @@ export interface ProductRuntimeManagedInventoryComponentEvidenceRef {
   readonly source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION';
   readonly componentId: string;
   readonly componentProjectionIndex: number;
+  readonly serviceReadiness: Readonly<ProductRuntimeServiceReadinessDisposition>;
 }
 
 export interface ProductRuntimeManagedInventoryOwnerEvidenceRef {
@@ -648,6 +661,9 @@ export interface ProductRuntimeSupervisorEnvelope {
   readonly evaluatedAtMs: number;
   readonly truthLabel: ProductRuntimeTruthLabel;
   readonly persistentSyntheticLabel: boolean;
+  readonly serviceReadinessPolicy: Readonly<ProductRuntimeServiceReadinessPolicy>;
+  readonly firstRequiredReadinessBlockerComponentId:
+    SystemSupervisorReadModel['firstRequiredReadinessBlockerComponentId'];
   readonly opsReadback: Readonly<CanonicalSupervisorOpsReadback>;
   readonly opsIntakeInterlock: Readonly<CanonicalOpsIntakeInterlock>;
   readonly bootReleaseReadback: Readonly<ProductRuntimeBootReleaseReadback>;

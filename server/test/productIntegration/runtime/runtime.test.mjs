@@ -12,7 +12,9 @@ import {
   projectProductMaterialEventPage,
 } from '../../../dist/productIntegration/runtime/index.js';
 import {
+  Q_READINESS_WAIVER,
   T0,
+  VALID_SERVICE_READINESS_POLICY,
   makeBootReleaseReadback,
   makeOpsInterlock,
   makeOpsReadback,
@@ -82,7 +84,7 @@ test('Product readiness consumes the exact canonical application-start result', 
   const envelope = await service.readSupervisor();
   assert.equal(envelope.dashboard.overallPosture, 'READY');
   assert.equal(envelope.ownerView.machineReady, 'UNKNOWN');
-  assert.equal(envelope.ownerView.topRootBlocker, 'BOOT_RELEASE_READ_FAILED');
+  assert.equal(envelope.ownerView.topRootBlocker, 'q-inference');
   assert.equal(envelope.ownerView.tradeReady, 'NO');
 });
 
@@ -99,6 +101,10 @@ test('production runtime barrel is fixture-free and supervisor envelope is exact
   assert.equal(envelope.opsIntakeInterlock.blocksNewEntries, false);
   assert.equal(envelope.opsIntakeInterlock.externalActionAuthorization, 'NONE');
   assert.equal(envelope.dashboard.overallPosture, 'READY');
+  assert.deepEqual(envelope.serviceReadinessPolicy, VALID_SERVICE_READINESS_POLICY);
+  assert.notStrictEqual(envelope.serviceReadinessPolicy, envelope.dashboard.serviceReadinessPolicy);
+  assert.equal(envelope.firstRequiredReadinessBlockerComponentId, null);
+  assert.equal(envelope.dashboard.firstRootBlockerComponentId, 'q-inference');
   assert.deepEqual({
     state: envelope.dashboard.summaries.ledger.schemaCompatibilityState,
     current: envelope.dashboard.summaries.ledger.currentSchemaVersion,
@@ -198,7 +204,7 @@ test('production runtime barrel is fixture-free and supervisor envelope is exact
     assert.equal(evidence['ops-interlock'].value, 'OPS_INTERLOCK_CLEAR');
   }
   assert.equal(envelope.ownerView.unresolvedRecovery, null);
-  assert.equal(envelope.ownerView.topRootBlocker, null);
+  assert.equal(envelope.ownerView.topRootBlocker, 'q-inference');
   assert.deepEqual(
     envelope.components.filter((component) => component.lastAdvanceAtMs !== null).map((component) => ({
       componentId: component.componentId,
@@ -410,6 +416,7 @@ test('I00 managed inventory reconciles all 33 roles without widening the 14-comp
           source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION',
           componentId,
           componentProjectionIndex: envelope.components.indexOf(canonical),
+          serviceReadiness: canonical.serviceReadiness,
         });
         assert.strictEqual(envelope.components[entry.evidence[index].componentProjectionIndex], canonical);
       });
@@ -427,6 +434,127 @@ test('I00 managed inventory reconciles all 33 roles without widening the 14-comp
   const qCanonical = envelope.components.find((component) => component.componentId === 'q-inference');
   assert.strictEqual(envelope.components[qInventory.evidence[0].componentProjectionIndex], qCanonical);
   assert.equal(envelope.components[qInventory.evidence[0].componentProjectionIndex].truthLabel, qCanonical.truthLabel);
+  assert.equal(qInventory.inventoryState, 'EVIDENCE_PRESENT');
+  assert.deepEqual(qInventory.evidence[0].serviceReadiness, qCanonical.serviceReadiness);
+  assert.deepEqual(qInventory.evidence[0].serviceReadiness.waiver, Q_READINESS_WAIVER);
+  assert.equal(qInventory.evidence[0].serviceReadiness.excludedFromServiceReadiness, true);
+});
+
+test('authenticated Product projection mirrors missing and expired readiness policy fail-closed without ambient-time evaluation', () => {
+  const source = makeSupervisor();
+  const expiredWaiver = Object.freeze({ ...Q_READINESS_WAIVER, status: 'EXPIRED' });
+  const cases = [
+    Object.freeze({
+      policy: Object.freeze({
+        status: 'MISSING', accepted: false,
+        reasonCode: 'READINESS_POLICY_MISSING', waiver: null,
+      }),
+      waiver: null,
+    }),
+    Object.freeze({
+      policy: Object.freeze({
+        status: 'EXPIRED', accepted: false,
+        reasonCode: 'READINESS_POLICY_EXPIRED', waiver: expiredWaiver,
+      }),
+      waiver: expiredWaiver,
+    }),
+  ];
+
+  for (const entry of cases) {
+    const components = Object.freeze(source.components.map((component) => component.componentId === 'q-inference'
+      ? Object.freeze({
+        ...component,
+        serviceReadiness: Object.freeze({
+          ...component.serviceReadiness,
+          requiredForServiceReadiness: true,
+          excludedFromServiceReadiness: false,
+          waiver: entry.waiver,
+        }),
+      })
+      : component));
+    const snapshot = makeSupervisor({
+      components,
+      overallPosture: 'DEGRADED',
+      serviceReadinessPolicy: entry.policy,
+      firstRequiredReadinessBlockerComponentId: 'q-inference',
+    });
+    const envelope = buildProductRuntimeSupervisorEnvelope({
+      ...OPS_PROJECTION,
+      snapshot,
+      materialEvents: projectProductMaterialEventPage('0', 200, makeRead().events({ afterCursor: '0', limit: 200 })),
+      traces: [],
+      // This instant is before the signed expiry. EXPIRED must still remain
+      // EXPIRED because Product carries System truth and owns no policy clock.
+      nowMs: T0,
+    });
+    const q = envelope.components.find((component) => component.componentId === 'q-inference');
+    const qInventory = envelope.managedInventory.entries.find((candidate) => candidate.identity === 'q-inference');
+
+    assert.deepEqual(envelope.serviceReadinessPolicy, entry.policy);
+    assert.equal(envelope.firstRequiredReadinessBlockerComponentId, 'q-inference');
+    assert.equal(envelope.dashboard.firstRootBlockerComponentId, 'q-inference');
+    assert.equal(envelope.ownerView.machineReady, 'NO');
+    assert.equal(envelope.ownerView.tradeReady, 'NO');
+    assert.equal(envelope.ownerView.topRootBlocker, 'q-inference');
+    assert.equal(q.serviceReadiness.requiredForServiceReadiness, true);
+    assert.equal(q.serviceReadiness.excludedFromServiceReadiness, false);
+    assert.deepEqual(q.serviceReadiness.waiver, entry.waiver);
+    assert.deepEqual(qInventory.evidence[0].serviceReadiness, q.serviceReadiness);
+  }
+});
+
+test('authenticated Product projection preserves a valid-but-inapplicable Q failure as required causal evidence', () => {
+  const source = makeSupervisor();
+  const components = Object.freeze(source.components.map((component) => component.componentId === 'q-inference'
+    ? Object.freeze({
+      ...component,
+      releaseStatuses: Object.freeze(['BUILT_AND_TESTED', 'IMPORTED', 'BLOCKED']),
+      phase: 'FAILED',
+      domainObservedState: 'Q_RUNTIME_CORRUPTED',
+      readiness: 'FAILED',
+      lastFailure: Object.freeze({
+        component: 'q-inference',
+        stage: 'owner-probe',
+        code: 'Q_RUNTIME_CORRUPTED',
+        message: 'Q runtime reported corrupted state.',
+        occurredAt: T0 - 100,
+        retryable: false,
+        safeCurrentState: 'BLOCKED',
+        recommendedOperatorAction: 'Repair Q without changing the signed waiver.',
+        correlationId: 'cor.product.q-corrupted',
+      }),
+      blockerCodes: Object.freeze(['Q_RUNTIME_CORRUPTED']),
+      serviceReadiness: Object.freeze({
+        ...component.serviceReadiness,
+        requiredForServiceReadiness: true,
+        excludedFromServiceReadiness: false,
+      }),
+    })
+    : component));
+  const snapshot = makeSupervisor({
+    components,
+    overallPosture: 'DEGRADED',
+    firstRequiredReadinessBlockerComponentId: 'q-inference',
+  });
+  const envelope = buildProductRuntimeSupervisorEnvelope({
+    ...OPS_PROJECTION,
+    snapshot,
+    materialEvents: projectProductMaterialEventPage('0', 200, makeRead().events({ afterCursor: '0', limit: 200 })),
+    traces: [],
+    nowMs: T0,
+  });
+  const q = envelope.components.find((component) => component.componentId === 'q-inference');
+  const dashboardQ = envelope.dashboard.components.find((component) => component.componentId === 'q-inference');
+
+  assert.deepEqual(envelope.serviceReadinessPolicy, VALID_SERVICE_READINESS_POLICY);
+  assert.equal(envelope.ownerView.machineReady, 'NO');
+  assert.equal(envelope.firstRequiredReadinessBlockerComponentId, 'q-inference');
+  assert.equal(q.observedLifecycle, 'FAILED');
+  assert.equal(q.capability, 'UNAVAILABLE');
+  assert.equal(q.serviceReadiness.requiredForServiceReadiness, true);
+  assert.equal(q.serviceReadiness.excludedFromServiceReadiness, false);
+  assert.equal(dashboardQ.domainObservedState, 'Q_RUNTIME_CORRUPTED');
+  assert.equal(dashboardQ.lastFailure.code, 'Q_RUNTIME_CORRUPTED');
 });
 
 test('managed inventory withholds partial or duplicate canonical evidence instead of false-green coverage', () => {
@@ -591,7 +719,7 @@ test('supervisor READY with unavailable canonical public advance cannot mint Pro
   const intelligence = envelope.components.find((component) => component.componentId === 'market-intelligence');
   assert.equal(intelligence.truthLabel, 'UNKNOWN');
   assert.equal(intelligence.capability, 'UNKNOWN');
-  assert.equal(envelope.ownerView.topRootBlocker, 'MEANINGFUL_ADVANCE_NOT_SUPPLIED');
+  assert.equal(envelope.ownerView.topRootBlocker, 'q-inference');
 
   const unknownSnapshot = makeSupervisor({ truthLabel: 'UNKNOWN', overallPosture: 'BLOCKED' });
   const unknown = buildProductRuntimeSupervisorEnvelope({ ...OPS_PROJECTION, snapshot: unknownSnapshot, materialEvents: page, traces: [], nowMs: T0 });

@@ -293,6 +293,55 @@ function failure(
   });
 }
 
+/**
+ * Canonical production Q owner truth when no observation binding exists.
+ * This keeps Q in the 14-component graph without mounting a managed runtime
+ * or manufacturing source freshness for an unavailable transport.
+ */
+export function projectNotConfiguredQAdvisoryComponent(
+  nowMs: number,
+): Readonly<SystemComponentSnapshot> {
+  if (!isValidUtcMillis(nowMs)) throw new TypeError('Q not-configured projection requires valid UTC ms');
+  const component: Readonly<SystemComponentSnapshot> = Object.freeze({
+    componentId: 'q-inference',
+    owner: 'Q_INFERENCE',
+    ownerPath: 'quant/src/quant_edge/inference',
+    releaseStatuses: Object.freeze(['BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED'] as const),
+    truthLabel: 'UNAVAILABLE',
+    desiredState: 'RUNNING',
+    phase: 'BLOCKED',
+    domainObservedState: Q_ADVISORY_SAFE_FALLBACK,
+    sourceLifecycle: null,
+    readiness: 'BLOCKED',
+    authority: 'UNAVAILABLE',
+    completeness: 'UNAVAILABLE',
+    sourceTimestamp: null,
+    freshness: null,
+    lastReceiveAtMs: null,
+    lastProcessAtMs: null,
+    lastSuccessAtMs: null,
+    dependencies: Object.freeze(['market-intelligence'] as const),
+    queue: null,
+    lastFailure: null,
+    blockerCodes: Object.freeze([
+      'Q_CLIENT_NOT_CONFIGURED',
+      'Q_TRANSPORT_NOT_CONFIGURED',
+      'Q_OWNER_OBSERVATION_NOT_CONFIGURED',
+      'Q_SAFE_FALLBACK_ABSTAIN_UNKNOWN',
+    ]),
+    generation: 0,
+    restartCount: 0,
+    supportedControls: Object.freeze([]),
+    capitalExposed: false,
+    operatorAttentionRequired: true,
+  });
+  const issues = validateSystemComponentSnapshot(component);
+  if (issues.length > 0) {
+    throw new TypeError(`invalid Q not-configured projection: ${issues.map((issue) => `${issue.path}:${issue.code}`).join(', ')}`);
+  }
+  return component;
+}
+
 function transportBlocker(state: BridgeObservation['transportState']): string | null {
   if (state === 'CONNECTED') return null;
   if (state === 'UNKNOWN') return 'Q_TRANSPORT_NOT_CONFIGURED';

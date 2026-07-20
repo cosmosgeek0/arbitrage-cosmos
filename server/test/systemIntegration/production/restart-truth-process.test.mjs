@@ -14,6 +14,53 @@ import {
 } from '../../../dist/systemIntegration/persistence/index.js';
 
 const HOST = '127.0.0.1';
+const PUBLIC_HEALTH_KEYS = Object.freeze([
+  'componentCount',
+  'dependencyEdgeCount',
+  'evaluatedAtMs',
+  'executionBarrier',
+  'kind',
+  'lastMeaningfulAdvanceAtMs',
+  'meaningfulAdvanceAgeMs',
+  'meaningfulAdvanceOwnerComponentId',
+  'ok',
+  'overallPosture',
+  'reasonCodes',
+  'rootBlockerComponentId',
+  'schemaVersion',
+].sort());
+
+function assertMinimalPublicHealth(body, kind) {
+  assert.deepEqual(
+    Object.keys(body).sort(),
+    [...PUBLIC_HEALTH_KEYS, ...(kind === 'LIVE' ? ['okSemantics'] : [])].sort(),
+    kind,
+  );
+  assert.equal(body.kind, kind);
+  const bytes = JSON.stringify(body);
+  for (const forbidden of [
+    'serviceReadinessPolicy',
+    'requiredServiceReadinessComponentIds',
+    'excludedServiceReadinessComponentIds',
+    'components',
+    'edges',
+    'rootCauses',
+    'operatorAttentionQueue',
+    'managedInventory',
+    'READINESS-CLUSTER-001-Q-INFERENCE',
+    'KEYLESS_PUBLIC_DATA_VALIDATE_ONLY',
+    'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED',
+    'cosmosgeek',
+    '2026-10-18T00:00:00Z',
+  ]) assert.equal(bytes.includes(forbidden), false, `${kind}:${forbidden}`);
+}
+
+async function getHealth(base, path, kind) {
+  const response = await fetch(`${base}${path}`, { signal: AbortSignal.timeout(2_000) });
+  const body = await response.json();
+  assertMinimalPublicHealth(body, kind);
+  return { status: response.status, body };
+}
 
 async function availablePort() {
   return new Promise((resolve, reject) => {
@@ -61,7 +108,7 @@ async function waitForServer(child, base) {
   throw new Error('restart test child did not become locally reachable');
 }
 
-async function runBoot(dataDir, sentinels) {
+async function runBoot(dataDir, sentinels, exerciseReadinessControl = false) {
   const port = await availablePort();
   const base = `http://${HOST}:${port}`;
   const child = spawn(
@@ -99,8 +146,90 @@ async function runBoot(dataDir, sentinels) {
   child.stderr.on('data', (chunk) => { logs = `${logs}${chunk}`.slice(-24_000); });
   try {
     await waitForServer(child, base);
-    const ready = await fetch(`${base}/health/ready`, { signal: AbortSignal.timeout(2_000) });
-    assert.equal(ready.status, 503);
+    const live = await getHealth(base, '/health/live', 'LIVE');
+    assert.equal(live.status, 200);
+    const readyBefore = await getHealth(base, '/health/ready', 'READY');
+    if (exerciseReadinessControl) {
+      assert.equal(readyBefore.status, 503);
+      const controlsResponse = await fetch(`${base}/api/system-integration/controls`, {
+        signal: AbortSignal.timeout(2_000),
+      });
+      assert.equal(controlsResponse.status, 200, logs);
+      const controls = await controlsResponse.json();
+      assert.equal(controls.safeMode, 'READ_ONLY');
+      assert.equal(Number.isSafeInteger(controls.revision), true);
+      const mutationResponse = await fetch(`${base}/api/system-integration/controls`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'idempotency-key': 'readiness.process.validate-only.0001',
+        },
+        body: JSON.stringify({
+          command: 'SET_SAFE_MODE',
+          expectedRevision: controls.revision,
+          reason: 'Exercise the real production health and control transport',
+          safeMode: 'VALIDATE_ONLY',
+        }),
+        signal: AbortSignal.timeout(5_000),
+      });
+      const mutation = await mutationResponse.json();
+      assert.equal(mutationResponse.status, 200, JSON.stringify(mutation));
+      assert.equal(mutation.ok, true);
+      assert.equal(mutation.after.safeMode, 'VALIDATE_ONLY');
+
+      let supervisor = null;
+      for (let attempt = 0; attempt < 120; attempt += 1) {
+        const supervisorResponse = await fetch(`${base}/api/system-integration/supervisor`, {
+          signal: AbortSignal.timeout(2_000),
+        });
+        assert.equal(supervisorResponse.status, 200);
+        supervisor = await supervisorResponse.json();
+        const marketUniverse = supervisor.components.find((component) => component.componentId === 'market-universe');
+        if (marketUniverse?.blockerCodes.includes('MARKET_UNIVERSE_START_REJECTED')) break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      assert.ok(supervisor);
+      const readyAfter = await getHealth(base, '/health/ready', 'READY');
+      assert.equal(readyAfter.status, 503);
+      assert.equal(readyAfter.body.ok, false);
+      assert.equal(readyAfter.body.componentCount, 14);
+      assert.equal(supervisor.components.length, 14);
+      assert.equal(supervisor.serviceReadinessPolicy.status, 'VALID');
+      assert.equal(supervisor.serviceReadinessPolicy.accepted, true);
+      assert.equal(supervisor.serviceReadinessPolicy.waiver.id, 'READINESS-CLUSTER-001-Q-INFERENCE');
+      assert.equal(supervisor.serviceReadinessPolicy.waiver.reason, 'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED');
+      assert.equal(supervisor.serviceReadinessPolicy.waiver.expiresAt, '2026-10-18T00:00:00Z');
+      const marketUniverse = supervisor.components.find((component) => component.componentId === 'market-universe');
+      assert.notEqual(marketUniverse.readiness, 'READY');
+      assert.ok(marketUniverse.blockerCodes.includes('MARKET_UNIVERSE_START_REJECTED'));
+      for (const componentId of ['public-spot-source', 'public-usdm-source']) {
+        const source = supervisor.components.find((component) => component.componentId === componentId);
+        assert.equal(source.readiness, 'STOPPED', componentId);
+        assert.ok(source.blockerCodes.includes('SOURCE_NOT_STARTED'), componentId);
+        assert.ok(source.blockerCodes.includes('SOURCE_OBSERVATION_UNAVAILABLE'), componentId);
+      }
+
+      const productResponse = await fetch(`${base}/api/product-integration/v1/supervisor`, {
+        signal: AbortSignal.timeout(2_000),
+      });
+      assert.equal(productResponse.status, 200);
+      const product = await productResponse.json();
+      assert.equal(product.components.length, 14);
+      assert.equal(product.dashboard.components.length, 14);
+      assert.equal(product.serviceReadinessPolicy.status, 'VALID');
+      assert.equal(product.serviceReadinessPolicy.accepted, true);
+      assert.equal(product.serviceReadinessPolicy.waiver.id, 'READINESS-CLUSTER-001-Q-INFERENCE');
+      assert.equal(product.serviceReadinessPolicy.waiver.reason, 'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED');
+      assert.equal(product.serviceReadinessPolicy.waiver.expiresAt, '2026-10-18T00:00:00Z');
+      assert.equal(product.managedInventory.expectedIdentityCount, 33);
+      assert.equal(product.managedInventory.entries.length, 33);
+      assert.equal(product.managedInventory.canonicalComponentCount, 14);
+      assert.equal(product.managedInventory.observedCanonicalComponentCount, 14);
+    }
+    const trade = await getHealth(base, '/health/trade-ready', 'TRADE_READY');
+    assert.equal(trade.status, 503);
+    assert.equal(trade.body.ok, false);
+    assert.ok(trade.body.reasonCodes.includes('LIVE_EXECUTION_NOT_IMPLEMENTED'));
     child.kill('SIGTERM');
     const exit = await waitForExit(child);
     assert.equal(exit.code, 0, logs);
@@ -125,14 +254,14 @@ function durableSnapshot(dataDir) {
   }
 }
 
-test('production performs a durable fail-closed restart-truth refresh on each clean process boot', async () => {
+test('production preserves minimal fail-closed health routes and durable restart truth across clean boots', async () => {
   const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-restart-truth-process-'));
   const sentinels = {
     network: path.join(dataDir, 'network-egress.log'),
     private: path.join(dataDir, 'private-egress.log'),
   };
   try {
-    await runBoot(dataDir, sentinels);
+    await runBoot(dataDir, sentinels, true);
     const first = durableSnapshot(dataDir);
     assert.equal(first.checkpoint.generation, 1);
     assert.equal(first.checkpoint.lastStartup.generation, 1);

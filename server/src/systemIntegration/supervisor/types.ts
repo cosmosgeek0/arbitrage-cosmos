@@ -15,6 +15,11 @@ import type {
   SystemTruthLabel,
 } from '../contracts/constants.js';
 import type { LedgerSchemaCompatibilityState } from '../persistence/types.js';
+import type {
+  QReadinessWaiver,
+  ReadinessPolicyEvaluation,
+} from './readinessPolicy.js';
+import type { SystemTopologyNode } from './topology.js';
 
 export const SYSTEM_OVERALL_POSTURES = Object.freeze([
   'STOPPED',
@@ -217,6 +222,8 @@ export interface SystemSupervisorProjectionInput {
   readonly revision: number;
   readonly runtime: Readonly<RuntimeStatusSnapshot>;
   readonly control: Readonly<SystemControlState>;
+  /** Explicit policy input. Missing input is an intentional fail-closed state. */
+  readonly readinessPolicy?: unknown;
   /** Exactly one explicit canonical adapter snapshot for every component ID. */
   readonly components: readonly Readonly<SystemComponentSnapshot>[];
   /** Domain-owned facts only. The supervisor displays them but never derives policy. */
@@ -225,13 +232,40 @@ export interface SystemSupervisorProjectionInput {
   readonly traceEvents: readonly Readonly<SystemTraceEvent>[];
 }
 
-export type SystemSupervisorReadModel = Readonly<SystemSupervisorSnapshot & {
+export interface SystemReadinessWaiverProjection extends QReadinessWaiver {
+  readonly status: Extract<ReadinessPolicyEvaluation['status'], 'VALID' | 'EXPIRED'>;
+}
+
+export interface SystemServiceReadinessDisposition {
+  readonly basis: SystemTopologyNode['serviceReadinessBasis'];
+  readonly expected: boolean;
+  readonly observed: boolean;
+  readonly requiredForServiceReadiness: boolean;
+  readonly excludedFromServiceReadiness: boolean;
+  readonly waiver: Readonly<SystemReadinessWaiverProjection> | null;
+}
+
+export type SystemServiceReadinessComponentProjection = Readonly<SystemComponentSnapshot & {
+  readonly serviceReadiness: Readonly<SystemServiceReadinessDisposition>;
+}>;
+
+export interface SystemReadinessPolicyProjection {
+  readonly status: ReadinessPolicyEvaluation['status'];
+  readonly accepted: boolean;
+  readonly reasonCode: ReadinessPolicyEvaluation['reasonCode'];
+  readonly waiver: Readonly<SystemReadinessWaiverProjection> | null;
+}
+
+export type SystemSupervisorReadModel = Readonly<Omit<SystemSupervisorSnapshot, 'components'> & {
   readonly overallPosture: SystemOverallPosture;
   /** Foundation process startup generation; distinct from persisted control generation. */
   readonly runtimeGeneration: number;
   /** Persisted integration control/checkpoint generation. */
   readonly controlGeneration: number;
+  readonly serviceReadinessPolicy: Readonly<SystemReadinessPolicyProjection>;
+  readonly firstRequiredReadinessBlockerComponentId: SystemComponentId | null;
   readonly firstRootBlockerComponentId: SystemComponentId | null;
+  readonly components: readonly Readonly<SystemServiceReadinessComponentProjection>[];
   readonly rootCauses: readonly Readonly<SystemRootCause>[];
   readonly attentionQueue: readonly Readonly<SystemAttentionItem>[];
   readonly summaries: Readonly<SystemSupervisorSummaries>;
@@ -240,9 +274,10 @@ export type SystemSupervisorReadModel = Readonly<SystemSupervisorSnapshot & {
 }>;
 
 export interface SystemRootCauseProjection {
-  readonly components: readonly Readonly<SystemComponentSnapshot>[];
+  readonly components: readonly Readonly<SystemServiceReadinessComponentProjection>[];
   readonly edges: readonly Readonly<SystemDependencyEdge>[];
   readonly rootCauses: readonly Readonly<SystemRootCause>[];
   readonly attentionQueue: readonly Readonly<SystemAttentionItem>[];
   readonly firstRootBlockerComponentId: SystemComponentId | null;
+  readonly firstRequiredReadinessBlockerComponentId: SystemComponentId | null;
 }

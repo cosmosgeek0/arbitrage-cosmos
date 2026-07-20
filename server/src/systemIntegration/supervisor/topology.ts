@@ -7,6 +7,12 @@ export interface SystemTopologyNode {
   readonly componentId: SystemComponentId;
   readonly requiresFreshSource: boolean;
   readonly shellCritical: boolean;
+  readonly serviceReadinessBasis:
+    | 'PUBLIC_DATA'
+    | 'VALIDATE_ONLY_EXECUTOR'
+    | 'PERSISTENCE'
+    | 'MANAGED_LIFECYCLE';
+  readonly serviceReadinessRequirement: 'REQUIRED' | 'SIGNED_WAIVER_ELIGIBLE';
 }
 
 export interface SystemTopologyEdge {
@@ -33,11 +39,31 @@ const SHELL_CRITICAL_COMPONENTS = new Set<SystemComponentId>([
   'engine-supervisor',
 ]);
 
+const VALIDATE_ONLY_EXECUTOR_COMPONENTS = new Set<SystemComponentId>([
+  'capital-supervision',
+  'multileg-risk',
+  'execution-coordinator-validate-only',
+  'reconciliation',
+]);
+
+function serviceReadinessBasis(
+  componentId: SystemComponentId,
+): SystemTopologyNode['serviceReadinessBasis'] {
+  if (VALIDATE_ONLY_EXECUTOR_COMPONENTS.has(componentId)) return 'VALIDATE_ONLY_EXECUTOR';
+  if (componentId === 'ledger-persistence') return 'PERSISTENCE';
+  if (componentId === 'engine-supervisor') return 'MANAGED_LIFECYCLE';
+  return 'PUBLIC_DATA';
+}
+
 export const SYSTEM_TOPOLOGY_NODES: readonly Readonly<SystemTopologyNode>[] = Object.freeze(
   SYSTEM_COMPONENT_IDS.map((componentId) => Object.freeze({
     componentId,
     requiresFreshSource: FRESH_SOURCE_COMPONENTS.has(componentId),
     shellCritical: SHELL_CRITICAL_COMPONENTS.has(componentId),
+    serviceReadinessBasis: serviceReadinessBasis(componentId),
+    serviceReadinessRequirement: componentId === 'q-inference'
+      ? 'SIGNED_WAIVER_ELIGIBLE' as const
+      : 'REQUIRED' as const,
   })),
 );
 

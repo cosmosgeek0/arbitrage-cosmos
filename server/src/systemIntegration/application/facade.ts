@@ -63,6 +63,7 @@ import {
 } from '../controls/index.js';
 import {
   ValidateOnlyOrchestrator,
+  type ValidateOnlyExecutorReadinessEvidence,
   type ValidateOnlyOrchestratorInput,
   type ValidateOnlyRunResult,
   type ValidateOnlyRunSnapshot,
@@ -1867,7 +1868,7 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
     });
   }
 
-  private postureBlockerCodes(control: Readonly<SystemControlState>): readonly string[] {
+  private controlSafetyReasonCodes(control: Readonly<SystemControlState>): readonly string[] {
     const codes: string[] = [];
     if (control.killSwitchEngaged) codes.push('EFFECTIVE_KILL_SWITCH_ENGAGED');
     if (control.intakePaused) codes.push('EFFECTIVE_INTAKE_PAUSED');
@@ -1965,9 +1966,10 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       applicationFailureCode: this.applicationFailureCode
         ?? this.controlPublicationFailureCode
         ?? this.restartTruthRefreshFailureCode,
-      postureBlockerCodes: this.postureBlockerCodes(control),
+      controlSafetyReasonCodes: this.controlSafetyReasonCodes(control),
       control,
       validateOnlyRun: this.latestValidateOnly,
+      executorReadinessEvidence: this.executorReadinessEvidence(nowMs, managed),
     });
     const summaries = mergeApplicationSummaries(
       defaultApplicationSummaries(
@@ -2009,11 +2011,28 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
       components,
       summaries,
       traceEvents: this.traceEvents(),
+      ...(Object.hasOwn(this.options, 'readinessPolicy')
+        ? { readinessPolicy: this.options.readinessPolicy }
+        : {}),
     });
     if (!projected.ok) {
       throw new Error(`System integration supervisor projection failed: ${projected.failure.code}: ${projected.failure.message}`);
     }
     return projected.value;
+  }
+
+  private executorReadinessEvidence(
+    nowMs: number,
+    managed: Readonly<ManagedCompositionReadSnapshot>,
+  ): Readonly<ValidateOnlyExecutorReadinessEvidence> | null {
+    if (!this.startupSucceeded
+        || this.phaseValue !== 'RUNNING'
+        || managed.supervisor.phase !== 'RUNNING') return null;
+    try {
+      return this.validateOnly.readExecutorReadinessEvidence(nowMs);
+    } catch {
+      return null;
+    }
   }
 
   private eventPage(query: Readonly<SystemIntegrationEventQuery>): Readonly<SystemIntegrationEventPage> {
@@ -2178,9 +2197,10 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
           applicationFailureCode: this.applicationFailureCode
             ?? this.controlPublicationFailureCode
             ?? this.restartTruthRefreshFailureCode,
-          postureBlockerCodes: this.postureBlockerCodes(control),
+          controlSafetyReasonCodes: this.controlSafetyReasonCodes(control),
           control,
           validateOnlyRun: this.latestValidateOnly,
+          executorReadinessEvidence: this.executorReadinessEvidence(nowMs, managed),
         });
     const finalCheckpoint = this.persistence.persistFinalShutdown({
       stoppedAtMs: nowMs,

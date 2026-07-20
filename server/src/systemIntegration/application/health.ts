@@ -126,7 +126,10 @@ export function projectI00Health(
         : 'LEDGER_SCHEMA_COMPATIBILITY_UNAVAILABLE');
     }
     if (supervisor.overallPosture !== 'READY') reasons.push(`PRODUCT_POSTURE_${supervisor.overallPosture}`);
-    if (supervisor.firstRootBlockerComponentId !== null) reasons.push('ROOT_BLOCKER_PRESENT');
+    if (supervisor.serviceReadinessPolicy?.accepted !== true) {
+      reasons.push(supervisor.serviceReadinessPolicy?.reasonCode ?? 'READINESS_POLICY_MISSING');
+    }
+    if (supervisor.firstRequiredReadinessBlockerComponentId !== null) reasons.push('ROOT_BLOCKER_PRESENT');
 
     if (meaningfulAdvance === null) {
       reasons.push('MEANINGFUL_ADVANCE_NOT_SUPPLIED');
@@ -182,7 +185,8 @@ export function projectI00Health(
       && ledgerWritable === true
       && ledgerSchemaCompatibility === 'AVAILABLE'
       && supervisor.overallPosture === 'READY'
-      && supervisor.firstRootBlockerComponentId === null
+      && supervisor.serviceReadinessPolicy?.accepted === true
+      && supervisor.firstRequiredReadinessBlockerComponentId === null
       && meaningfulAdvanceFresh
       && meaningfulAdvanceOwnerCurrentAndReady;
   }
@@ -198,7 +202,7 @@ export function projectI00Health(
     ok,
     evaluatedAtMs: supervisor.evaluatedAtMs,
     overallPosture: supervisor.overallPosture,
-    rootBlockerComponentId: supervisor.firstRootBlockerComponentId,
+    rootBlockerComponentId: supervisor.firstRequiredReadinessBlockerComponentId,
     reasonCodes: unique(reasons),
     componentCount: supervisor.components.length,
     dependencyEdgeCount: supervisor.edges.length,

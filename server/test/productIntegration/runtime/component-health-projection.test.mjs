@@ -81,6 +81,51 @@ test('MIS-063 Product health preserves every per-component operational dimension
   });
 });
 
+test('Product health carries canonical service-readiness disposition without policy inference', () => {
+  const source = makeSupervisor();
+  const projection = envelope(source);
+
+  assert.equal(projection.components.length, 14);
+  for (const component of projection.components) {
+    const canonical = source.components.find((candidate) => candidate.componentId === component.componentId);
+    assert.deepEqual(component.serviceReadiness, canonical.serviceReadiness);
+    assert.notStrictEqual(component.serviceReadiness, canonical.serviceReadiness);
+  }
+
+  const q = projection.components.find((component) => component.componentId === 'q-inference');
+  assert.equal(q.observedLifecycle, 'BLOCKED');
+  assert.equal(q.capability, 'NOT_CONFIGURED');
+  assert.equal(q.truthLabel, 'UNAVAILABLE');
+  assert.equal(q.blockerCode, 'FRESHNESS_NOT_REPORTED');
+  assert.deepEqual(q.serviceReadiness, {
+    basis: 'PUBLIC_DATA',
+    expected: true,
+    observed: true,
+    requiredForServiceReadiness: false,
+    excludedFromServiceReadiness: true,
+    waiver: {
+      id: 'READINESS-CLUSTER-001-Q-INFERENCE',
+      scope: 'KEYLESS_PUBLIC_DATA_VALIDATE_ONLY',
+      mode: 'VALIDATE_ONLY',
+      reason: 'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED',
+      owner: 'cosmosgeek',
+      expiresAt: '2026-10-18T00:00:00Z',
+      status: 'VALID',
+    },
+  });
+});
+
+test('Product health fails closed when canonical component disposition is absent', () => {
+  const source = makeSupervisor();
+  const components = source.components.map((component) => component.componentId === 'basis-engine'
+    ? Object.freeze(Object.fromEntries(Object.entries(component).filter(([key]) => key !== 'serviceReadiness')))
+    : component);
+  assert.throws(
+    () => envelope(makeSupervisor({ components: Object.freeze(components) })),
+    /canonical component service-readiness disposition is missing/u,
+  );
+});
+
 test('MIS-063 legacy or absent fields project UNKNOWN/UNAVAILABLE, never fabricated zeros', () => {
   const projection = envelope(makeSupervisor());
   const basis = projection.components.find((component) => component.componentId === 'basis-engine');

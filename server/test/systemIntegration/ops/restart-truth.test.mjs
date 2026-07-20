@@ -19,6 +19,16 @@ function utcSeconds(value) {
 
 function owner(componentId, overrides = {}) {
   const base = canonicalComponent(componentId);
+  const publicSourceTimestamp = componentId === 'public-spot-source' || componentId === 'public-usdm-source'
+    ? {
+        sourceTimeMs: NOW - 100,
+        receivedAtMs: NOW - 80,
+        maxAgeMs: 5_000,
+        authority: 'LIVE_PUBLIC',
+        completeness: 'COMPLETE',
+        sourceId: `restart-truth.${componentId}`,
+      }
+    : null;
   const recorded = componentId === 'capital-supervision' || componentId === 'reconciliation'
     ? {
         releaseStatuses: ['BUILT_AND_TESTED', 'WIRED'],
@@ -30,6 +40,13 @@ function owner(componentId, overrides = {}) {
     : {};
   return {
     ...base,
+    ...(publicSourceTimestamp === null ? {} : {
+      sourceTimestamp: publicSourceTimestamp,
+      freshness: evaluateFreshness(publicSourceTimestamp, NOW),
+      lastReceiveAtMs: NOW - 80,
+      lastProcessAtMs: NOW - 60,
+      lastSuccessAtMs: NOW - 40,
+    }),
     ...recorded,
     ...overrides,
   };

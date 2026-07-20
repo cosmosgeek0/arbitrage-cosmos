@@ -1,7 +1,11 @@
 import { createHash } from 'node:crypto';
 import type { SystemComponentSnapshot } from '../../systemIntegration/contracts/types.js';
 import type { SystemTruthLabel } from '../../systemIntegration/contracts/constants.js';
-import type { SystemSupervisorReadModel } from '../../systemIntegration/supervisor/types.js';
+import type {
+  SystemReadinessPolicyProjection,
+  SystemServiceReadinessDisposition,
+  SystemSupervisorReadModel,
+} from '../../systemIntegration/supervisor/types.js';
 import type {
   CanonicalOpsIntakeInterlock,
   CanonicalSupervisorOpsReadback,
@@ -34,6 +38,8 @@ import {
   type ProductRuntimeIncidentSnapshot,
   type ProductRuntimeMaterialEventPage,
   type ProductRuntimeOwnerView,
+  type ProductRuntimeServiceReadinessDisposition,
+  type ProductRuntimeServiceReadinessPolicy,
   type ProductRuntimeSurfaceDatum,
   type ProductRuntimeSurfaceProjection,
   type ProductRuntimeSupervisorEnvelope,
@@ -86,8 +92,46 @@ function age(nowMs: number, occurredAtMs: number | null): number | null {
   return occurredAtMs === null || occurredAtMs > nowMs ? null : nowMs - occurredAtMs;
 }
 
+function serviceReadinessDisposition(
+  disposition: Readonly<SystemServiceReadinessDisposition>,
+): Readonly<ProductRuntimeServiceReadinessDisposition> {
+  if (typeof disposition !== 'object' || disposition === null) {
+    throw new TypeError('canonical component service-readiness disposition is missing');
+  }
+  return Object.freeze({
+    basis: disposition.basis,
+    expected: disposition.expected,
+    observed: disposition.observed,
+    requiredForServiceReadiness: disposition.requiredForServiceReadiness,
+    excludedFromServiceReadiness: disposition.excludedFromServiceReadiness,
+    waiver: disposition.waiver === null
+      ? null
+      : Object.freeze({ ...disposition.waiver }),
+  });
+}
+
+function serviceReadinessPolicy(
+  policy: Readonly<SystemReadinessPolicyProjection>,
+): Readonly<ProductRuntimeServiceReadinessPolicy> {
+  if (typeof policy !== 'object' || policy === null) {
+    throw new TypeError('canonical service-readiness policy is missing');
+  }
+  return Object.freeze({
+    status: policy.status,
+    accepted: policy.accepted,
+    reasonCode: policy.reasonCode,
+    waiver: policy.waiver === null
+      ? null
+      : Object.freeze({ ...policy.waiver }),
+  });
+}
+
 function componentTruth(component: Readonly<SystemComponentSnapshot>): ProductRuntimeTruthLabel {
   if (component.truthLabel === 'UNAVAILABLE') {
+    // Q's signed readiness semantics separate availability truth from
+    // configuration capability: truth remains UNAVAILABLE while capability
+    // carries NOT_CONFIGURED.
+    if (component.componentId === 'q-inference') return 'UNAVAILABLE';
     if (component.releaseStatuses.includes('MISSING')) return 'MISSING';
     if (component.releaseStatuses.includes('NOT_CONFIGURED')) return 'NOT_CONFIGURED';
     return 'UNAVAILABLE';
@@ -265,6 +309,7 @@ function components(
       supportedControlIds: controlIds(component),
       correlationId: recent?.correlationId ?? null,
       truthLabel: projectedTruthLabel,
+      serviceReadiness: serviceReadinessDisposition(component.serviceReadiness),
       canonicalPresentation: canonicalComponentPresentation({
         observedLifecycle: projectedObservedLifecycle,
         capability: projectedCapability,
@@ -1215,6 +1260,7 @@ export function buildProductRuntimeSupervisorEnvelope(input: Readonly<{
   if (!Number.isFinite(input.nowMs)) throw new TypeError('nowMs must be injected finite UTC milliseconds');
   if (typeof input.applicationStartOk !== 'boolean') throw new TypeError('applicationStartOk must be an injected boolean');
   const dashboard = cloneDashboard(input.snapshot);
+  const projectedServiceReadinessPolicy = serviceReadinessPolicy(input.snapshot.serviceReadinessPolicy);
   const projectedComponents = components(input.snapshot, input.nowMs);
   const incidentSnapshot = projectProductRuntimeIncidentSnapshot(input.incidentSnapshot ?? Object.freeze({
     availability: Object.freeze({
@@ -1261,6 +1307,8 @@ export function buildProductRuntimeSupervisorEnvelope(input: Readonly<{
     evaluatedAtMs: input.nowMs,
     truthLabel: productTruthLabel(input.snapshot.truthLabel),
     persistentSyntheticLabel: hasSyntheticEvidence(input),
+    serviceReadinessPolicy: projectedServiceReadinessPolicy,
+    firstRequiredReadinessBlockerComponentId: input.snapshot.firstRequiredReadinessBlockerComponentId,
     opsReadback: Object.freeze({ ...input.opsReadback }),
     opsIntakeInterlock: Object.freeze({
       ...input.opsIntakeInterlock,

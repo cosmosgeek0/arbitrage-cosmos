@@ -45,6 +45,66 @@ function releaseUnavailable(component: SystemComponentSnapshot): boolean {
   return component.releaseStatuses.some((status) => BLOCKED_RELEASE_STATUSES.has(status));
 }
 
+function validateOnlyExecutorReadinessAttested(
+  component: SystemComponentSnapshot,
+  nowMs: number,
+): boolean {
+  return component.domainObservedState === 'VALIDATE_ONLY_EXECUTOR_AVAILABLE_PRIVATE_LIVE_REFUSAL_CONFIRMED'
+    && component.desiredState === 'RUNNING'
+    && component.phase === 'RUNNING'
+    && component.readiness === 'READY'
+    && component.authority === 'DERIVED_LIVE'
+    && component.completeness === 'COMPLETE'
+    && component.sourceLifecycle === null
+    && component.sourceTimestamp === null
+    && component.freshness === null
+    && component.lastReceiveAtMs === null
+    && component.lastProcessAtMs === nowMs
+    && component.lastSuccessAtMs === nowMs
+    && component.queue === null
+    && component.lastFailure === null
+    && component.blockerCodes.length === 0
+    && component.releaseStatuses.includes('BUILT_AND_TESTED')
+    && component.releaseStatuses.includes('WIRED')
+    && !component.releaseStatuses.includes('SYNTHETIC_ONLY')
+    && Number.isSafeInteger(component.generation)
+    && component.generation > 0
+    && component.capitalExposed === false;
+}
+
+function managedLifecycleReadinessAttested(
+  component: SystemComponentSnapshot,
+  nowMs: number,
+): boolean {
+  const currentLifecycleAt = component.lastProcessAtMs;
+  return component.componentId === 'engine-supervisor'
+    && component.domainObservedState === 'RUNNING'
+    && component.desiredState === 'RUNNING'
+    && component.phase === 'RUNNING'
+    && component.readiness === 'READY'
+    && component.authority === 'DERIVED_LIVE'
+    && component.completeness === 'COMPLETE'
+    && component.sourceLifecycle === null
+    && component.sourceTimestamp === null
+    && component.freshness === null
+    && component.lastReceiveAtMs === null
+    && typeof currentLifecycleAt === 'number'
+    && Number.isSafeInteger(currentLifecycleAt)
+    && currentLifecycleAt <= nowMs
+    && nowMs - currentLifecycleAt <= 2_000
+    && component.lastSuccessAtMs === currentLifecycleAt
+    && component.queue === null
+    && component.lastFailure === null
+    && component.blockerCodes.length === 0
+    && component.releaseStatuses.includes('BUILT_AND_TESTED')
+    && component.releaseStatuses.includes('WIRED')
+    && !component.releaseStatuses.includes('SYNTHETIC_ONLY')
+    && Number.isSafeInteger(component.generation)
+    && component.generation > 0
+    && component.capitalExposed === false
+    && component.operatorAttentionRequired === false;
+}
+
 function deriveTruthLabel(
   component: SystemComponentSnapshot,
   freshness: Readonly<FreshnessReport> | null,
@@ -62,7 +122,7 @@ function deriveTruthLabel(
   if (component.authority === 'RECORDED_REPLAY' || component.truthLabel === 'RECORDED_REPLAY') {
     return 'RECORDED_REPLAY';
   }
-  if (DRY_RUN_COMPONENTS.has(component.componentId)) return 'DRY_RUN';
+  if (DRY_RUN_COMPONENTS.has(component.componentId) && component.truthLabel === 'DRY_RUN') return 'DRY_RUN';
   if (synthetic) return 'SYNTHETIC_ONLY';
 
   if (freshness && freshness.state !== 'FRESH') return 'UNAVAILABLE';
@@ -79,6 +139,8 @@ function normalizedReadiness(
   truthLabel: SystemTruthLabel,
   freshness: Readonly<FreshnessReport> | null,
   requiresFreshSource: boolean,
+  readinessBasis: 'PUBLIC_DATA' | 'VALIDATE_ONLY_EXECUTOR' | 'PERSISTENCE' | 'MANAGED_LIFECYCLE',
+  nowMs: number,
 ): SystemReadinessState {
   if (component.readiness === 'FAILED') return 'FAILED';
   if (component.desiredState === 'STOPPED' && component.phase === 'STOPPED') return 'STOPPED';
@@ -95,7 +157,13 @@ function normalizedReadiness(
   if (component.queue && (component.queue.dropped > 0 || component.queue.depth >= component.queue.capacity)) {
     return 'DEGRADED';
   }
-  if (truthLabel === 'UNKNOWN') return 'DEGRADED';
+  if (truthLabel === 'UNKNOWN') {
+    if (readinessBasis === 'MANAGED_LIFECYCLE'
+        && managedLifecycleReadinessAttested(component, nowMs)) return component.readiness;
+    if (readinessBasis === 'VALIDATE_ONLY_EXECUTOR'
+        && validateOnlyExecutorReadinessAttested(component, nowMs)) return component.readiness;
+    return 'DEGRADED';
+  }
   return component.readiness;
 }
 
@@ -105,11 +173,17 @@ function truthBlockerCodes(
   freshness: Readonly<FreshnessReport> | null,
   readiness: SystemReadinessState,
   requiresFreshSource: boolean,
+  readinessBasis: 'PUBLIC_DATA' | 'VALIDATE_ONLY_EXECUTOR' | 'PERSISTENCE' | 'MANAGED_LIFECYCLE',
+  nowMs: number,
 ): readonly string[] {
   const codes = [...component.blockerCodes];
   if (releaseUnavailable(component)) codes.push('RELEASE_NOT_AVAILABLE');
   if (truthLabel === 'UNAVAILABLE') codes.push('TRUTH_UNAVAILABLE');
-  if (truthLabel === 'UNKNOWN') codes.push('TRUTH_UNKNOWN');
+  const nonDataReadinessAttested = (readinessBasis === 'MANAGED_LIFECYCLE'
+      && managedLifecycleReadinessAttested(component, nowMs))
+    || (readinessBasis === 'VALIDATE_ONLY_EXECUTOR'
+      && validateOnlyExecutorReadinessAttested(component, nowMs));
+  if (truthLabel === 'UNKNOWN' && !nonDataReadinessAttested) codes.push('TRUTH_UNKNOWN');
   if (requiresFreshSource && freshness === null) codes.push('FRESHNESS_NOT_REPORTED');
   if (freshness?.state === 'STALE') codes.push('SOURCE_STALE');
   if (freshness?.state === 'CLOCK_SKEWED') codes.push('SOURCE_CLOCK_SKEWED');
@@ -159,13 +233,22 @@ export function normalizeComponentTruth(
     : component.completeness;
   const normalized = { ...component, authority, completeness };
   const truthLabel = deriveTruthLabel(normalized, freshness, topology.requiresFreshSource);
-  const readiness = normalizedReadiness(normalized, truthLabel, freshness, topology.requiresFreshSource);
+  const readiness = normalizedReadiness(
+    normalized,
+    truthLabel,
+    freshness,
+    topology.requiresFreshSource,
+    topology.serviceReadinessBasis,
+    nowMs,
+  );
   const blockerCodes = truthBlockerCodes(
     normalized,
     truthLabel,
     freshness,
     readiness,
     topology.requiresFreshSource,
+    topology.serviceReadinessBasis,
+    nowMs,
   );
 
   return Object.freeze({

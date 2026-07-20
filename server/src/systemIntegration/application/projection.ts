@@ -29,7 +29,11 @@ import {
   type SystemLedgerSummary,
   type SystemSupervisorSummaries,
 } from '../supervisor/index.js';
-import type { ValidateOnlyRunSnapshot } from '../verticalSlice/types.js';
+import {
+  VALIDATE_ONLY_EXECUTOR_COMPONENT_IDS,
+  type ValidateOnlyExecutorReadinessEvidence,
+  type ValidateOnlyRunSnapshot,
+} from '../verticalSlice/types.js';
 import type {
   ApplicationComponentReadPorts,
   ApplicationOwnerSummaries,
@@ -398,6 +402,76 @@ function dryRunComponent(
   });
 }
 
+function validExecutorReadinessEvidence(
+  evidence: Readonly<ValidateOnlyExecutorReadinessEvidence> | null,
+  nowMs: number,
+): evidence is Readonly<ValidateOnlyExecutorReadinessEvidence> {
+  return evidence !== null
+    && evidence.schema === 'cosmos.system-integration.executor-readiness.v1'
+    && evidence.evaluatedAtMs === nowMs
+    && Array.isArray(evidence.componentIds)
+    && evidence.componentIds.length === VALIDATE_ONLY_EXECUTOR_COMPONENT_IDS.length
+    && evidence.componentIds.every((componentId, index) => (
+      componentId === VALIDATE_ONLY_EXECUTOR_COMPONENT_IDS[index]
+    ))
+    && evidence.executorPresent === true
+    && evidence.persistenceWired === true
+    && evidence.responsive === true
+    && evidence.correctPrivateLiveRefusal === true
+    && evidence.mode === 'VALIDATE_ONLY'
+    && evidence.privateCapability === 'NOT_CONFIGURED'
+    && evidence.tradeCapability === 'NOT_CONFIGURED'
+    && evidence.executionAuthority === 'NONE'
+    && evidence.liveExecutionPermitted === false
+    && evidence.refusalCode === 'LIVE_EXECUTION_NOT_IMPLEMENTED'
+    && evidence.runResult === null
+    && evidence.capitalState === null
+    && evidence.riskVerdict === null
+    && evidence.executionPlan === null
+    && evidence.reconciliationResult === null;
+}
+
+function executorReadinessComponent(
+  componentId: (typeof VALIDATE_ONLY_EXECUTOR_COMPONENT_IDS)[number],
+  evidence: Readonly<ValidateOnlyExecutorReadinessEvidence> | null,
+  nowMs: number,
+  generation: number,
+): Readonly<SystemComponentSnapshot> | null {
+  if (!validExecutorReadinessEvidence(evidence, nowMs)) return null;
+  const metadata = COMPONENT_METADATA[componentId];
+  const releaseStatuses: readonly SystemReleaseStatus[] = componentId === 'capital-supervision'
+    ? Object.freeze(['BUILT_AND_TESTED', 'IMPORTED', 'WIRED'])
+    : Object.freeze(['BUILT_AND_TESTED', 'WIRED']);
+  return Object.freeze({
+    componentId,
+    owner: metadata.owner,
+    ownerPath: metadata.ownerPath,
+    releaseStatuses,
+    truthLabel: 'UNKNOWN',
+    desiredState: 'RUNNING',
+    phase: 'RUNNING',
+    domainObservedState: 'VALIDATE_ONLY_EXECUTOR_AVAILABLE_PRIVATE_LIVE_REFUSAL_CONFIRMED',
+    sourceLifecycle: null,
+    readiness: 'READY',
+    authority: 'DERIVED_LIVE',
+    completeness: 'COMPLETE',
+    sourceTimestamp: null,
+    freshness: null,
+    lastReceiveAtMs: null,
+    lastProcessAtMs: evidence.evaluatedAtMs,
+    lastSuccessAtMs: evidence.evaluatedAtMs,
+    dependencies: dependenciesFor(componentId),
+    queue: null,
+    lastFailure: null,
+    blockerCodes: Object.freeze([]),
+    generation,
+    restartCount: 0,
+    supportedControls: metadata.supportedControls,
+    capitalExposed: false,
+    operatorAttentionRequired: false,
+  });
+}
+
 function ledgerComponent(
   checkpoint: Readonly<SystemIntegrationCheckpointState> | null,
   persistenceFailureCode: string | null,
@@ -423,14 +497,48 @@ function ledgerComponent(
 }
 
 function supervisorComponent(
+  nowMs: number,
   managed: Readonly<ManagedCompositionReadSnapshot>,
   control: Readonly<SystemControlState>,
   failureCode: string | null,
-  postureBlockerCodes: readonly string[],
+  controlSafetyReasonCodes: readonly string[],
 ): Readonly<SystemComponentSnapshot> {
   const metadata = COMPONENT_METADATA['engine-supervisor'];
   const failed = failureCode !== null || managed.driverFailureCode !== null || managed.supervisor.phase === 'FAILED';
-  const postureBlocked = postureBlockerCodes.length > 0;
+  const operating = managed.supervisor.desiredState === 'RUNNING'
+    && managed.supervisor.phase === 'RUNNING';
+  const lifecycleCurrent = managed.lastDriveAtMs !== null
+    && Number.isSafeInteger(managed.lastDriveAtMs)
+    && managed.lastDriveAtMs <= nowMs
+    && nowMs - managed.lastDriveAtMs <= 2_000;
+  const driverEvidenceMissing = operating && managed.driverRunning !== true;
+  const lifecycleEvidenceMissing = operating && !lifecycleCurrent;
+  // The top-level control projection keeps cold kill/intake truth visible and
+  // every execution/restart gate continues to enforce it. In zero-capital
+  // VALIDATE_ONLY those controls are not blockers of the public-observation
+  // service denominator, so the engine's service posture is honestly empty.
+  const servicePostureBlockerCodes = control.safeMode === 'VALIDATE_ONLY'
+    ? Object.freeze([] as string[])
+    : controlSafetyReasonCodes;
+  const servicePostureBlocked = servicePostureBlockerCodes.length > 0;
+  const readiness = projectSupervisorPhaseReadiness(
+    managed.supervisor.desiredState,
+    managed.supervisor.phase,
+    failed,
+    servicePostureBlocked,
+    managed.driverRunning,
+    lifecycleCurrent,
+  );
+  const phaseBlocker = managed.supervisor.phase === 'BLOCKED'
+    ? 'MANAGED_RUNTIME_BLOCKED'
+    : managed.supervisor.phase === 'DEGRADED'
+      ? 'MANAGED_RUNTIME_DEGRADED'
+      : null;
+  const lifecycleBlockers = Object.freeze([
+    ...(driverEvidenceMissing ? ['MANAGED_DRIVER_NOT_RUNNING'] : []),
+    ...(lifecycleEvidenceMissing ? ['MANAGED_LIFECYCLE_NOT_CURRENT'] : []),
+  ]);
+  const lifecycleUnavailable = driverEvidenceMissing || lifecycleEvidenceMissing;
   return Object.freeze({
     ...unavailableComponent('engine-supervisor', failureCode ?? managed.driverFailureCode ?? 'SUPERVISOR_NOT_STARTED'),
     releaseStatuses: failed ? metadata.unavailableStatuses : metadata.availableStatuses,
@@ -438,18 +546,51 @@ function supervisorComponent(
     desiredState: managed.supervisor.desiredState,
     phase: failed ? 'FAILED' : managed.supervisor.phase,
     domainObservedState: managed.supervisor.phase,
-    readiness: failed ? 'FAILED' : managed.supervisor.phase === 'RUNNING' ? 'DEGRADED' : managed.supervisor.phase === 'STOPPED' ? 'STOPPED' : 'WARMING',
-    authority: failed ? 'UNAVAILABLE' : 'DERIVED_LIVE',
-    completeness: failed ? 'UNAVAILABLE' : 'COMPLETE',
+    readiness,
+    authority: failed || lifecycleUnavailable ? 'UNAVAILABLE' : 'DERIVED_LIVE',
+    completeness: failed || lifecycleUnavailable ? 'UNAVAILABLE' : 'COMPLETE',
     lastProcessAtMs: managed.lastDriveAtMs,
-    lastSuccessAtMs: failed ? null : managed.lastDriveAtMs,
+    lastSuccessAtMs: failed || lifecycleUnavailable ? null : managed.lastDriveAtMs,
     blockerCodes: failed
-      ? Object.freeze([failureCode ?? managed.driverFailureCode ?? 'SUPERVISOR_FAILED', ...postureBlockerCodes])
-      : Object.freeze([...postureBlockerCodes]),
+      ? Object.freeze([failureCode ?? managed.driverFailureCode ?? 'SUPERVISOR_FAILED', ...lifecycleBlockers, ...servicePostureBlockerCodes])
+      : Object.freeze([...(phaseBlocker === null ? [] : [phaseBlocker]), ...lifecycleBlockers, ...servicePostureBlockerCodes]),
     generation: control.generation,
     supportedControls: metadata.supportedControls,
-    operatorAttentionRequired: failed || postureBlocked,
+    operatorAttentionRequired: failed
+      || servicePostureBlockerCodes.length > 0
+      || lifecycleUnavailable
+      || readiness === 'BLOCKED'
+      || readiness === 'DEGRADED',
   });
+}
+
+export function projectSupervisorPhaseReadiness(
+  desiredState: ManagedCompositionReadSnapshot['supervisor']['desiredState'],
+  phase: RuntimePhase,
+  failed: boolean,
+  postureBlocked: boolean,
+  driverRunning: boolean,
+  lifecycleCurrent: boolean,
+): SystemComponentSnapshot['readiness'] {
+  if (failed) return 'FAILED';
+  if (phase === 'RUNNING' && desiredState !== 'RUNNING') return 'DEGRADED';
+  if (phase === 'RUNNING' && (!driverRunning || !lifecycleCurrent)) return 'DEGRADED';
+  switch (phase) {
+    case 'STOPPED': return 'STOPPED';
+    case 'VALIDATING':
+    case 'STARTING':
+    case 'PAUSING':
+    case 'PAUSED':
+    case 'STOPPING': return 'WARMING';
+    case 'RUNNING': return postureBlocked ? 'DEGRADED' : 'READY';
+    case 'DEGRADED': return 'DEGRADED';
+    case 'BLOCKED': return 'BLOCKED';
+    case 'FAILED': return 'FAILED';
+    default: {
+      const exhaustive: never = phase;
+      throw new TypeError(`Unhandled supervisor phase ${String(exhaustive)}`);
+    }
+  }
 }
 
 export interface BuildApplicationComponentsInput {
@@ -460,9 +601,10 @@ export interface BuildApplicationComponentsInput {
   readonly checkpoint: Readonly<SystemIntegrationCheckpointState> | null;
   readonly persistenceFailureCode: string | null;
   readonly applicationFailureCode: string | null;
-  readonly postureBlockerCodes: readonly string[];
+  readonly controlSafetyReasonCodes: readonly string[];
   readonly control: Readonly<SystemControlState>;
   readonly validateOnlyRun: Readonly<ValidateOnlyRunSnapshot> | null;
+  readonly executorReadinessEvidence: Readonly<ValidateOnlyExecutorReadinessEvidence> | null;
 }
 
 export function buildApplicationComponents(
@@ -484,10 +626,11 @@ export function buildApplicationComponents(
     if (componentId === 'ledger-persistence') return ledgerComponent(input.checkpoint, input.persistenceFailureCode);
     if (componentId === 'engine-supervisor') {
       return supervisorComponent(
+        input.nowMs,
         input.managed,
         input.control,
         input.applicationFailureCode,
-        input.postureBlockerCodes,
+        input.controlSafetyReasonCodes,
       );
     }
     if (dry.has(componentId)) {
@@ -495,7 +638,32 @@ export function buildApplicationComponents(
         componentId as 'capital-supervision' | 'multileg-risk' | 'execution-coordinator-validate-only' | 'reconciliation',
         input.validateOnlyRun,
       );
-      if (projected) return projected;
+      const available = executorReadinessComponent(
+        componentId as (typeof VALIDATE_ONLY_EXECUTOR_COMPONENT_IDS)[number],
+        input.executorReadinessEvidence,
+        input.nowMs,
+        input.managed.supervisor.generation,
+      );
+      if (projected) {
+        if (available) return projected;
+        // Preserve the real historical validate-only result, but do not let a
+        // prior run authorize current service readiness after the executor,
+        // persistence, or refusal attestation disappears.
+        return Object.freeze({
+          ...projected,
+          readiness: 'BLOCKED' as const,
+          blockerCodes: Object.freeze([
+            ...projected.blockerCodes,
+            'VALIDATE_ONLY_EXECUTOR_READINESS_EVIDENCE_UNAVAILABLE',
+          ]),
+          operatorAttentionRequired: true,
+        });
+      }
+      if (available) return available;
+      return unavailableComponent(
+        componentId,
+        'VALIDATE_ONLY_EXECUTOR_READINESS_EVIDENCE_UNAVAILABLE',
+      );
     }
     return passiveComponent(componentId, input.ports);
   }));

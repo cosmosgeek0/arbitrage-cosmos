@@ -205,6 +205,7 @@ export function buildProductRuntimeManagedInventory(
         source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION' as const,
         componentId: matches[0]!.component.componentId,
         componentProjectionIndex: matches[0]!.index,
+        serviceReadiness: matches[0]!.component.serviceReadiness,
       }))),
       reasonCode: null,
     });

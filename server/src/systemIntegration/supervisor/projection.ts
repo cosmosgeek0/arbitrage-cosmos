@@ -38,6 +38,7 @@ import type {
 } from '../contracts/types.js';
 import { validateSystemComponentSnapshot } from '../contracts/validation.js';
 import { projectRootCauses } from './rootCause.js';
+import { evaluateReadinessPolicy } from './readinessPolicy.js';
 import {
   buildSystemTraceIndex,
   recentCorrelatedDecisions,
@@ -65,6 +66,9 @@ import type {
   SystemSupervisorProjectionInput,
   SystemSupervisorReadModel,
   SystemSupervisorSummaries,
+  SystemReadinessPolicyProjection,
+  SystemReadinessWaiverProjection,
+  SystemServiceReadinessComponentProjection,
 } from './types.js';
 
 const MAX_COUNT = 1_000_000_000;
@@ -77,6 +81,65 @@ const VALIDATE_ONLY_COMPONENTS = new Set<SystemComponentId>([
   'execution-coordinator-validate-only',
   'reconciliation',
 ]);
+
+const EXACT_Q_WAIVER_BLOCKERS = Object.freeze([
+  'FRESHNESS_NOT_REPORTED',
+  'Q_CLIENT_NOT_CONFIGURED',
+  'Q_OWNER_OBSERVATION_NOT_CONFIGURED',
+  'Q_SAFE_FALLBACK_ABSTAIN_UNKNOWN',
+  'Q_TRANSPORT_NOT_CONFIGURED',
+  'RELEASE_NOT_AVAILABLE',
+  'TRUTH_UNAVAILABLE',
+] as const);
+
+function exactSignedQWaiverState(component: Readonly<SystemComponentSnapshot>): boolean {
+  return component.componentId === 'q-inference'
+    && component.owner === 'Q_INFERENCE'
+    && component.desiredState === 'RUNNING'
+    && component.phase === 'BLOCKED'
+    && component.domainObservedState === 'ABSTAIN_UNKNOWN'
+    && component.readiness === 'BLOCKED'
+    && component.truthLabel === 'UNAVAILABLE'
+    && component.authority === 'UNAVAILABLE'
+    && component.completeness === 'UNAVAILABLE'
+    && component.sourceLifecycle === null
+    && component.sourceTimestamp === null
+    && component.freshness === null
+    && component.lastReceiveAtMs === null
+    && component.lastProcessAtMs === null
+    && component.lastSuccessAtMs === null
+    && component.processingLagMs === null
+    && component.retry?.state === 'UNAVAILABLE'
+    && component.retry.attempt === null
+    && component.retry.ceiling === null
+    && component.retry.delayMs === null
+    && component.retry.retryAtMs === null
+    && component.retry.cooldownUntilMs === null
+    && component.dataQuality?.state === 'UNAVAILABLE'
+    && component.dataQuality.invalidCount === null
+    && component.dataQuality.duplicateCount === null
+    && component.dataQuality.outOfOrderCount === null
+    && component.dataQuality.sequenceGapCount === null
+    && component.dataQuality.observedAtMs === null
+    && component.checkpoint?.state === 'UNAVAILABLE'
+    && component.checkpoint.revision === null
+    && component.checkpoint.persistedAtMs === null
+    && component.queue === null
+    && component.lastFailure === null
+    && component.releaseStatuses.length === 3
+    && ['BUILT_AND_TESTED', 'IMPORTED', 'NOT_CONFIGURED'].every((status) => (
+      component.releaseStatuses.includes(status as (typeof component.releaseStatuses)[number])
+    ))
+    && component.blockerCodes.length === EXACT_Q_WAIVER_BLOCKERS.length
+    && EXACT_Q_WAIVER_BLOCKERS.every((code) => component.blockerCodes.includes(code))
+    && component.dependencies.length === 1
+    && component.dependencies[0] === 'market-intelligence'
+    && component.generation === 0
+    && component.restartCount === 0
+    && component.supportedControls.length === 0
+    && component.capitalExposed === false
+    && component.operatorAttentionRequired === true;
+}
 
 function invalid(
   input: Pick<SystemSupervisorProjectionInput, 'nowMs' | 'correlationId'>,
@@ -416,9 +479,25 @@ function mergeFoundationStatus(
 ): SystemComponentSnapshot {
   const runtimeComponent = runtime.components.find((component) => component.name === source.componentId);
   const isSupervisor = source.componentId === 'engine-supervisor';
-  const phase = isSupervisor ? runtime.phase : runtimeComponent?.phase ?? source.phase;
+  // Q's managed row proves only that the read-only observation mount is
+  // responsive. Its owner snapshot remains authoritative for the separately
+  // blocked/not-configured Q capability phase.
+  const ownerPhaseAuthoritative = source.componentId === 'q-inference';
+  const phase = isSupervisor
+    ? runtime.phase
+    : ownerPhaseAuthoritative ? source.phase : runtimeComponent?.phase ?? source.phase;
   const desiredState = isSupervisor ? runtime.desiredState : source.desiredState;
-  const lastFailure = isSupervisor ? runtime.lastError ?? source.lastFailure : source.lastFailure ?? runtimeComponent?.lastError ?? null;
+  // Foundation intentionally retains the last supervisor error after a
+  // successful restart as historical evidence. Only a currently faulted
+  // supervisor phase may promote that retained record into this component's
+  // current failure field; the owner runtime/failure history keeps the prior
+  // incident available without poisoning a fresh RUNNING generation forever.
+  const supervisorFailureIsCurrent = runtime.phase === 'FAILED'
+    || runtime.phase === 'BLOCKED'
+    || runtime.phase === 'DEGRADED';
+  const lastFailure = isSupervisor
+    ? (supervisorFailureIsCurrent ? runtime.lastError ?? source.lastFailure : source.lastFailure)
+    : source.lastFailure ?? runtimeComponent?.lastError ?? null;
   const authority = runtimeComponent
     ? weakestAuthority(source.authority, runtimeComponent.authority)
     : source.authority;
@@ -544,14 +623,25 @@ function normalizeSummaries(
 
 function deriveOverallPosture(
   runtime: RuntimeStatusSnapshot,
-  components: readonly Readonly<SystemComponentSnapshot>[],
+  components: readonly Readonly<SystemServiceReadinessComponentProjection>[],
+  edges: SystemSupervisorReadModel['edges'],
 ): SystemOverallPosture {
   if (runtime.desiredState === 'STOPPED' && runtime.phase === 'STOPPED') return 'STOPPED';
-  const shell = components.filter((component) => SYSTEM_TOPOLOGY_NODES.find((node) => node.componentId === component.componentId)?.shellCritical);
+  const required = components.filter((component) => component.serviceReadiness.requiredForServiceReadiness);
+  const shell = required.filter((component) => SYSTEM_TOPOLOGY_NODES.find((node) => node.componentId === component.componentId)?.shellCritical);
   if (runtime.phase === 'FAILED' || shell.some((component) => component.readiness === 'FAILED')) return 'FAILED';
   if (runtime.phase === 'BLOCKED' || shell.some((component) => component.readiness === 'BLOCKED')) return 'BLOCKED';
-  if (runtime.phase === 'VALIDATING' || runtime.phase === 'STARTING' || components.some((component) => component.readiness === 'WARMING')) return 'WARMING';
-  if (components.every((component) => component.readiness === 'READY')) return 'READY';
+  if (runtime.phase === 'VALIDATING' || runtime.phase === 'STARTING' || required.some((component) => component.readiness === 'WARMING')) return 'WARMING';
+  const excluded = new Set(components
+    .filter((component) => component.serviceReadiness.excludedFromServiceReadiness)
+    .map((component) => component.componentId));
+  const requiredEdgeUnavailable = edges.some((edge) => (
+    edge.required
+    && !excluded.has(edge.from)
+    && !excluded.has(edge.to)
+    && edge.state !== 'AVAILABLE'
+  ));
+  if (required.every((component) => component.readiness === 'READY') && !requiredEdgeUnavailable) return 'READY';
   return 'DEGRADED';
 }
 
@@ -576,6 +666,11 @@ export function buildSystemSupervisorProjection(
     if (!Number.isSafeInteger(input.revision) || input.revision < 0) throw new TypeError('revision is invalid');
     validateRuntime(input.runtime);
     validateControl(input.control);
+    const policyEvaluation = evaluateReadinessPolicy(
+      input.readinessPolicy,
+      input.nowMs,
+      input.control.safeMode,
+    );
     if (!Array.isArray(input.components) || input.components.length !== SYSTEM_COMPONENT_IDS.length) {
       throw new TypeError(`components must contain exactly ${SYSTEM_COMPONENT_IDS.length} canonical snapshots`);
     }
@@ -594,7 +689,7 @@ export function buildSystemSupervisorProjection(
     const secretPaths = findSecretLikePaths(input);
     if (secretPaths.length > 0) throw new TypeError(`secret-like fields rejected at ${secretPaths.join(', ')}`);
 
-    const components = SYSTEM_COMPONENT_IDS.map((componentId) => {
+    const normalizedComponents = SYSTEM_COMPONENT_IDS.map((componentId) => {
       const source = sourceComponentMap.get(componentId) as Readonly<SystemComponentSnapshot>;
       const truthNormalized = normalizeComponentTruth(mergeFoundationStatus(source, input.runtime), input.nowMs);
       const normalized = projectLedgerCapabilityTruth(truthNormalized, input.summaries.ledger);
@@ -604,11 +699,41 @@ export function buildSystemSupervisorProjection(
       }
       return normalized;
     }).sort((left, right) => SYSTEM_COMPONENT_ORDER[left.componentId] - SYSTEM_COMPONENT_ORDER[right.componentId]);
+    const waiver = policyEvaluation.waiver === null
+      ? null
+      : Object.freeze({
+          ...policyEvaluation.waiver,
+          status: policyEvaluation.status as 'VALID' | 'EXPIRED',
+        }) satisfies Readonly<SystemReadinessWaiverProjection>;
+    const components: readonly Readonly<SystemServiceReadinessComponentProjection>[] = Object.freeze(
+      normalizedComponents.map((component) => {
+        const topology = SYSTEM_TOPOLOGY_NODES.find((node) => node.componentId === component.componentId);
+        if (!topology) throw new TypeError(`component ${component.componentId} is absent from readiness topology`);
+        const excluded = policyEvaluation.accepted && exactSignedQWaiverState(component);
+        return Object.freeze({
+          ...component,
+          serviceReadiness: Object.freeze({
+            basis: topology.serviceReadinessBasis,
+            expected: true,
+            observed: true,
+            requiredForServiceReadiness: !excluded,
+            excludedFromServiceReadiness: excluded,
+            waiver: component.componentId === 'q-inference' ? waiver : null,
+          }),
+        });
+      }),
+    );
     const componentMap = new Map(components.map((component) => [component.componentId, component]));
     const rootProjection = projectRootCauses(components);
     const traceIndex = buildSystemTraceIndex(input.traceEvents, input.nowMs);
     const summaries = normalizeSummaries(input.summaries, componentMap);
     const control = Object.freeze({ ...input.control });
+    const serviceReadinessPolicy: Readonly<SystemReadinessPolicyProjection> = Object.freeze({
+      status: policyEvaluation.status,
+      accepted: policyEvaluation.accepted,
+      reasonCode: policyEvaluation.reasonCode,
+      waiver,
+    });
     const result: SystemSupervisorReadModel = Object.freeze({
       schemaVersion: 1 as const,
       revision: input.revision,
@@ -620,9 +745,11 @@ export function buildSystemSupervisorProjection(
       edges: rootProjection.edges,
       rootBlockerComponentIds: Object.freeze(rootProjection.rootCauses.map((cause) => cause.componentId)),
       operatorAttentionComponentIds: Object.freeze([...new Set(rootProjection.attentionQueue.map((item) => item.componentId))]),
-      overallPosture: deriveOverallPosture(input.runtime, components),
+      overallPosture: deriveOverallPosture(input.runtime, components, rootProjection.edges),
       runtimeGeneration: input.runtime.generation,
       controlGeneration: input.control.generation,
+      serviceReadinessPolicy,
+      firstRequiredReadinessBlockerComponentId: rootProjection.firstRequiredReadinessBlockerComponentId,
       firstRootBlockerComponentId: rootProjection.firstRootBlockerComponentId,
       rootCauses: rootProjection.rootCauses,
       attentionQueue: rootProjection.attentionQueue,

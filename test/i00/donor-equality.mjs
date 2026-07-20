@@ -85,6 +85,7 @@ export const PHASE2_GRAPH_BOUNDARY = deepFreeze({
     '1ccfe5a7ea53eab1cc503d828b59c606eaaefe23',
     '6e712d7fafa6f2cf932379cd3081495c6dbeb3e1',
     '6bcd69e189e14be3a44f9e84974b0e1cfca086ba',
+    'b3ef8258febee6ba58abe2c6ca3526dbab0b29d0',
   ]),
   permittedNonDonorMerge: deepFreeze({
     id: 'CANONICAL_MAIN_DIRECTOR_STATE_SYNC',
@@ -351,21 +352,21 @@ export const RECEIPT_BOUND_AUTHORITY = deepFreeze({
 });
 
 export const POST_L_TOPOLOGY_AUTHORITY = deepFreeze({
-  sourceCommit: '583de5024c54919b0e678618ac62aed23d3e61bb',
-  sourceTree: 'ae01db0db3f73b74434d0be39d9dd6009554689e',
-  sourceParents: deepFreeze(['cc187e07cb82700bb8e1851b2ced1dd6e7954948']),
-  path: 'docs/archive/i00-phase4/EVIDENCE_WAVE_POST_L_TOPOLOGY_RECEIPT.v1.json',
-  blobSha: 'baf9bfa8cd9ac1713f983579adc8be0182917663',
-  sha256: '5b4ceec47648bc4243e9f8f7d4c3325f280006d759eade0725086b5c53a99abc',
+  sourceCommit: '6752b7ba47cdbc6b56e334b6f3655353a612e1c6',
+  sourceTree: '152ff0777a8b2ca3e051dfcf429db32ec0edbef1',
+  sourceParents: deepFreeze(['b3ef8258febee6ba58abe2c6ca3526dbab0b29d0']),
+  path: 'docs/archive/i00-phase4/FIRST_HOST_POST_L_TOPOLOGY_RECEIPT.v1.json',
+  blobSha: 'fbf7a4b0eb7711881a8a8e0169a10219506d00b5',
+  sha256: '805d0a1f9e319c519d5d903ba74ede6d96ee20d5b2723125396f3c939beb6000',
   receiptSchemaVersion: 'i00.post-l-topology-receipt.v1',
   receiptStatus: 'AUTHORIZED_POST_L_TOPOLOGY',
   receiptScope: 'RECEIPT_BOUND_DONOR_EQUALITY_ONLY',
   landing: deepFreeze({
-    commit: '6bcd69e189e14be3a44f9e84974b0e1cfca086ba',
-    tree: '861e9d3820628deb906a54fb5a2d3e956a9cf133',
+    commit: 'b3ef8258febee6ba58abe2c6ca3526dbab0b29d0',
+    tree: '2f549942e216192e62c90d11634e435d5882b541',
     parents: deepFreeze([
-      '6e712d7fafa6f2cf932379cd3081495c6dbeb3e1',
-      'ce0376a0c0f6f1d41b55099d9efb4aa4c9bf6150',
+      '6f21016e309e2d578685b722e7566393bbf99f99',
+      'c165493a89c96e1706c5bec53ed5196222349f62',
     ]),
   }),
   correction: deepFreeze({
@@ -687,6 +688,7 @@ function validateManifest() {
     '1ccfe5a7ea53eab1cc503d828b59c606eaaefe23',
     '6e712d7fafa6f2cf932379cd3081495c6dbeb3e1',
     '6bcd69e189e14be3a44f9e84974b0e1cfca086ba',
+    'b3ef8258febee6ba58abe2c6ca3526dbab0b29d0',
   ]) || !PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges.every((value) => FULL_SHA.test(value))) {
     failures.push('STATIC_POST_L_MERGE_ALLOWLIST_INVALID');
   }

@@ -11,6 +11,26 @@ function request({ address = '127.0.0.1', host = 'localhost:8080', method = 'GET
   };
 }
 
+const ACCESS_ENV_NAMES = [
+  'CF_ACCESS_TEAM_DOMAIN',
+  'CF_ACCESS_AUD',
+  'CONTROL_ROOM_OPERATOR_EMAIL',
+  'AWS_CONTROL_OPERATOR_EMAIL',
+];
+
+async function withAccessEnvironmentUnset(fn) {
+  const savedEnv = Object.fromEntries(ACCESS_ENV_NAMES.map((name) => [name, process.env[name]]));
+  for (const name of ACCESS_ENV_NAMES) delete process.env[name];
+  try {
+    await fn();
+  } finally {
+    for (const [name, value] of Object.entries(savedEnv)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
+}
+
 test('loopback detection does not confuse remote addresses with localhost', () => {
   assert.equal(isLoopbackAddress('127.0.0.1'), true);
   assert.equal(isLoopbackAddress('::ffff:127.0.0.1'), true);
@@ -100,7 +120,7 @@ async function withAccessHarness(fn) {
     jwksUrl() { return new URL(`http://127.0.0.1:${port}/certs`); }
   }
   const savedEnv = {};
-  for (const name of ['CF_ACCESS_TEAM_DOMAIN', 'CF_ACCESS_AUD', 'CONTROL_ROOM_OPERATOR_EMAIL', 'AWS_CONTROL_OPERATOR_EMAIL']) {
+  for (const name of ACCESS_ENV_NAMES) {
     savedEnv[name] = process.env[name];
   }
   process.env.CF_ACCESS_TEAM_DOMAIN = TEAM_DOMAIN;
@@ -122,6 +142,54 @@ async function withAccessHarness(fn) {
     await new Promise((resolve) => server.close(resolve));
   }
 }
+
+test('configured Access requires a valid assertion even from loopback', async () => {
+  await withAccessHarness(async ({ access, privateKey }) => {
+    const missing = await access().verify(request());
+    assert.equal(missing.authorized, false);
+    assert.equal(missing.code, 'ASSERTION_REQUIRED');
+    assert.equal(missing.operator, null);
+
+    const token = await signToken(privateKey);
+    const accepted = await access().verify(request({ headers: { 'cf-access-jwt-assertion': token } }));
+    assert.equal(accepted.authorized, true);
+    assert.equal(accepted.operator.source, 'cloudflare-access');
+  });
+});
+
+test('configured Access applies the same assertion rule to loopback WebSocket upgrades', async () => {
+  await withAccessHarness(async ({ access, privateKey }) => {
+    const headers = { origin: 'https://localhost:8080' };
+    const missing = await access().verify(request({ headers }), { websocket: true });
+    assert.equal(missing.authorized, false);
+    assert.equal(missing.code, 'ASSERTION_REQUIRED');
+
+    const token = await signToken(privateKey);
+    const accepted = await access().verify(request({
+      headers: { ...headers, 'cf-access-jwt-assertion': token },
+    }), { websocket: true });
+    assert.equal(accepted.authorized, true);
+    assert.equal(accepted.operator.source, 'cloudflare-access');
+  });
+});
+
+test('unconfigured local development retains loopback compatibility', async () => {
+  await withAccessEnvironmentUnset(async () => {
+    const result = await new OperatorAccess().verify(request());
+    assert.equal(result.authorized, true);
+    assert.equal(result.operator.source, 'loopback');
+  });
+});
+
+test('partial Access configuration also disables loopback compatibility', async () => {
+  await withAccessEnvironmentUnset(async () => {
+    process.env.CF_ACCESS_AUD = AUD;
+    const result = await new OperatorAccess().verify(request());
+    assert.equal(result.authorized, false);
+    assert.equal(result.code, 'OPERATOR_NOT_CONFIGURED');
+    assert.equal(result.operator, null);
+  });
+});
 
 async function signToken(privateKey, {
   alg = 'RS256',

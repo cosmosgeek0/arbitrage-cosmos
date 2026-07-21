@@ -58,6 +58,15 @@ function hasEdgeMarkers(req: IncomingMessage): boolean {
   return EDGE_HEADERS.some((name) => firstHeader(req, name).trim().length > 0);
 }
 
+function hasAccessIdentityConfiguration(): boolean {
+  return [
+    process.env.CF_ACCESS_TEAM_DOMAIN,
+    process.env.CF_ACCESS_AUD,
+    process.env.CONTROL_ROOM_OPERATOR_EMAIL,
+    process.env.AWS_CONTROL_OPERATOR_EMAIL,
+  ].some((value) => String(value ?? '').trim().length > 0);
+}
+
 function sameOrigin(req: IncomingMessage, remote: boolean, required: boolean): OperatorVerification | null {
   const rawOrigin = firstHeader(req, 'origin').trim();
   if (!rawOrigin) {
@@ -131,7 +140,10 @@ export class OperatorAccess {
   ): Promise<OperatorVerification> {
     const host = firstHeader(req, 'host').trim();
     const loopback = isLoopbackAddress(req.socket.remoteAddress);
-    const local = loopback && localHost(host) && !hasEdgeMarkers(req);
+    const local = loopback
+      && localHost(host)
+      && !hasEdgeMarkers(req)
+      && !hasAccessIdentityConfiguration();
     const fetchSite = firstHeader(req, 'sec-fetch-site').trim().toLowerCase();
     if (fetchSite && fetchSite !== 'same-origin' && fetchSite !== 'none') {
       return { authorized: false, operator: null, code: 'CROSS_SITE_REQUEST', reason: 'Cross-site browser request blocked.' };

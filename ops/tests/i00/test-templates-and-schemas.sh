@@ -19,6 +19,7 @@ note "systemd ordering, credential, loopback, and honest Q placeholder"
 APP_DROPIN="$(cat "$REPO_ROOT/ops/templates/i00/systemd/cosmos-app-i00.conf.template")"
 PROVIDER_UNIT="$(cat "$REPO_ROOT/ops/templates/i00/systemd/cosmos-secrets-provider.service.template")"
 Q_UNIT="$(cat "$REPO_ROOT/ops/templates/i00/systemd/cosmos-q.service.template")"
+RUNTIME_ENV_TEMPLATE="$(cat "$REPO_ROOT/ops/templates/i00/env/cosmos-i00.env.template")"
 assert_contains "$APP_DROPIN" 'Requires=cosmos-secrets-provider.service'
 assert_contains "$APP_DROPIN" 'After=cosmos-secrets-provider.service'
 assert_contains "$APP_DROPIN" 'LoadCredential=app-secrets:/run/cosmos-secret-source/app-secrets.json'
@@ -27,6 +28,7 @@ assert_contains "$PROVIDER_UNIT" 'Before=cosmos-app.service'
 assert_contains "$PROVIDER_UNIT" 'NoNewPrivileges=yes'
 assert_contains "$Q_UNIT" 'ConditionPathExists=/opt/cosmos/current/REPLACE_ME_Q_ENTRYPOINT'
 assert_contains "$Q_UNIT" '--bind 127.0.0.1'
+assert_contains "$RUNTIME_ENV_TEMPLATE" 'I00_DEPLOYED_SHA=REPLACE_ME_FULL_DEPLOYED_SHA'
 
 note "Cloudflare Access, monitoring bounds, and exact IAM semantics"
 CF="$(cat "$REPO_ROOT/ops/templates/i00/cloudflare/origin-access-overlay.yml.template")"
@@ -56,6 +58,8 @@ for forbidden in 'secretsmanager:KmsKeyId' 'kms:CustomerMasterKeySpec' 'nextSequ
 done
 
 note "non-secret environment validator rejects placeholders, public bind, and secrets"
+EXPECTED_SHA='0123456789abcdef0123456789abcdef01234567'
+ALTERNATE_SHA='1111111111111111111111111111111111111111'
 cat > "$TEST_TMP/runtime.env" <<'ENV'
 HOST=127.0.0.1
 PORT=8080
@@ -68,11 +72,27 @@ CONTROL_ROOM_OPERATOR_EMAIL=operator@private.invalid
 CF_ACCESS_TEAM_DOMAIN=https://team.cloudflareaccess.com
 CF_ACCESS_AUD=audience_12345678
 I00_TESTED_SHA=0123456789abcdef0123456789abcdef01234567
+I00_DEPLOYED_SHA=0123456789abcdef0123456789abcdef01234567
 I00_CONFIG_REVISION=config-1
 I00_MODEL_REVISION=UNAVAILABLE
 I00_PUBLIC_SOURCE_STARTUP_EGRESS=1
 ENV
 assert_success node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/runtime.env"
+if ! CONFIG_OUTPUT="$(node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/runtime.env" --expected-sha "$EXPECTED_SHA" 2>&1)"; then
+  fail_test "candidate-bound runtime config failed validation: $CONFIG_OUTPUT"
+fi
+pass_assertion
+assert_contains "$CONFIG_OUTPUT" "\"deployedSha\":\"$EXPECTED_SHA\""
+grep -v '^I00_DEPLOYED_SHA=' "$TEST_TMP/runtime.env" > "$TEST_TMP/missing-deployed.env"
+assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/missing-deployed.env"
+sed -e '/^DATA_DIR_LOGICAL_LEASE_ROOT=/d' -e '/^I00_DEPLOYED_SHA=/d' \
+  -e 's/^I00_CONFIG_REVISION=.*/I00_CONFIG_REVISION=config-direct/' \
+  "$TEST_TMP/runtime.env" > "$TEST_TMP/missing-deployed-direct.env"
+assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/missing-deployed-direct.env"
+sed 's/^I00_DEPLOYED_SHA=.*/I00_DEPLOYED_SHA=not-a-full-sha/' "$TEST_TMP/runtime.env" > "$TEST_TMP/malformed-deployed.env"
+assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/malformed-deployed.env"
+sed "s/^I00_DEPLOYED_SHA=.*/I00_DEPLOYED_SHA=$ALTERNATE_SHA/" "$TEST_TMP/runtime.env" > "$TEST_TMP/wrong-deployed.env"
+assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/wrong-deployed.env" --expected-sha "$EXPECTED_SHA"
 sed 's/HOST=127.0.0.1/HOST=0.0.0.0/' "$TEST_TMP/runtime.env" > "$TEST_TMP/public.env"
 assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/public.env"
 cp "$TEST_TMP/runtime.env" "$TEST_TMP/secret.env"
@@ -84,8 +104,6 @@ sed 's#^DATA_DIR_LOGICAL_LEASE_ROOT=.*#DATA_DIR_LOGICAL_LEASE_ROOT=relative/leas
 assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/relative-lease-root.env"
 
 note "receipt validators require hashed external evidence and reject forged proof states"
-EXPECTED_SHA='0123456789abcdef0123456789abcdef01234567'
-ALTERNATE_SHA='1111111111111111111111111111111111111111'
 cat > "$TEST_TMP/release-receipt.json" <<'JSON'
 {"schemaVersion":1,"kind":"RELEASE","releaseId":"i00-0123456789abcdef0123456789abcdef01234567","testedSha":"0123456789abcdef0123456789abcdef01234567","artifactManifestSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"VALIDATED_NOT_DEPLOYED","recordedAtUtc":"2026-07-13T00:00:00Z"}
 JSON

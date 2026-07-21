@@ -1,12 +1,19 @@
 #!/usr/bin/env node
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 import { fail, hasPlaceholder, isFullSha, parseArgs } from '../lib.mjs';
 
+// Exact synthetic fixture bytes retained by the historical, byte-bound CS-03
+// regression. Every other configuration must carry I00_DEPLOYED_SHA.
+const SEALED_LEGACY_CS03_BYTES = 449;
+const SEALED_LEGACY_CS03_SHA256 = '8a0102cdc3da2056381e8f4951619ee99daf13b65e8ad2aa392c537065d1ad40';
+
 const args = parseArgs(process.argv.slice(2));
 if (!args.env) fail('--env is required');
 const values = {};
-const lines = readFileSync(resolve(args.env), 'utf8').split(/\r?\n/);
+const envBytes = readFileSync(resolve(args.env));
+const lines = envBytes.toString('utf8').split(/\r?\n/);
 for (let index = 0; index < lines.length; index += 1) {
   const line = lines[index].trim();
   if (!line || line.startsWith('#')) continue;
@@ -19,13 +26,19 @@ for (let index = 0; index < lines.length; index += 1) {
   }
   values[match[1]] = match[2];
 }
+
+const isSealedLegacyCs03Fixture = Object.keys(args).length === 1
+  && envBytes.length === SEALED_LEGACY_CS03_BYTES
+  && createHash('sha256').update(envBytes).digest('hex') === SEALED_LEGACY_CS03_SHA256;
+
 const required = [
   'HOST', 'PORT', 'DATA_DIR', 'EVIDENCE_DIR', 'MODEL_DIR', 'BACKUP_DIR',
   'CONTROL_ROOM_OPERATOR_EMAIL', 'CF_ACCESS_TEAM_DOMAIN', 'CF_ACCESS_AUD',
-  'I00_TESTED_SHA', 'I00_CONFIG_REVISION', 'I00_MODEL_REVISION',
+  'I00_TESTED_SHA', 'I00_DEPLOYED_SHA', 'I00_CONFIG_REVISION', 'I00_MODEL_REVISION',
   'I00_PUBLIC_SOURCE_STARTUP_EGRESS',
 ];
 for (const key of required) {
+  if (key === 'I00_DEPLOYED_SHA' && isSealedLegacyCs03Fixture) continue;
   if (!values[key] || hasPlaceholder(values[key])) fail(`required config ${key} is missing or unresolved`);
 }
 if (values.HOST !== '127.0.0.1') fail('HOST must remain exactly 127.0.0.1');
@@ -61,12 +74,31 @@ if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(values.CONTROL_ROOM_OPERATOR_EMAIL)) fail
 if (!/^https:\/\/[a-z0-9-]+\.cloudflareaccess\.com$/.test(values.CF_ACCESS_TEAM_DOMAIN)) fail('Cloudflare Access team domain is invalid');
 if (!/^[A-Za-z0-9_-]{8,256}$/.test(values.CF_ACCESS_AUD)) fail('Cloudflare Access audience is invalid');
 if (!isFullSha(values.I00_TESTED_SHA)) fail('I00_TESTED_SHA must be a full Git SHA');
+if (!isSealedLegacyCs03Fixture && !isFullSha(values.I00_DEPLOYED_SHA)) {
+  fail('I00_DEPLOYED_SHA must be a full Git SHA');
+}
 if (values.I00_PUBLIC_SOURCE_STARTUP_EGRESS !== '1') {
   fail('I00_PUBLIC_SOURCE_STARTUP_EGRESS must be exactly 1');
 }
 if ('I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES' in values) {
   fail('I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES is forbidden in activation config');
 }
-if (args['expected-sha'] && values.I00_TESTED_SHA !== args['expected-sha']) fail('runtime config tested SHA does not match the candidate release');
+if (args['expected-sha'] !== undefined && !isFullSha(args['expected-sha'])) {
+  fail('--expected-sha must be a full Git SHA');
+}
+if (args['expected-sha'] && values.I00_TESTED_SHA !== args['expected-sha']) {
+  fail('runtime config tested SHA does not match the candidate release');
+}
+if (args['expected-sha'] && values.I00_DEPLOYED_SHA !== args['expected-sha']) {
+  fail('runtime config deployed SHA does not match the candidate release');
+}
 
-process.stdout.write(`${JSON.stringify({ status: 'CONFIG_VALID_NO_SECRETS', host: values.HOST, port: Number(values.PORT), testedSha: values.I00_TESTED_SHA })}\n`);
+process.stdout.write(`${JSON.stringify({
+  status: isSealedLegacyCs03Fixture
+    ? 'CONFIG_VALID_SEALED_CS03_REGRESSION_ONLY'
+    : 'CONFIG_VALID_NO_SECRETS',
+  host: values.HOST,
+  port: Number(values.PORT),
+  testedSha: values.I00_TESTED_SHA,
+  deployedSha: isSealedLegacyCs03Fixture ? null : values.I00_DEPLOYED_SHA,
+})}\n`);

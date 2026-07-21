@@ -160,6 +160,11 @@ test('production g1 clean to g2 SIGKILL to g3 restart preserves crash-pending Pr
     assert.equal(envelope.bootReleaseReadback.latest.operationId, 'system.application.boot.g3');
     assert.equal(envelope.bootReleaseReadback.latest.correlationId, 'system-boot-g3');
     assert.equal(envelope.bootReleaseReadback.latest.lifecycleState, 'ACTIVE');
+    assert.equal(envelope.bootReleaseReadback.latest.deployedCommit, DEPLOYED_SHA);
+    assert.equal(
+      envelope.bootReleaseReadback.history.every((record) => record.deployedCommit === DEPLOYED_SHA),
+      true,
+    );
     assert.deepEqual(
       envelope.bootReleaseReadback.history.map((record) => [record.generation, record.lifecycleState]),
       [[3, 'ACTIVE'], [2, 'CRASH_PENDING'], [1, 'CLEAN_COMPLETED']],
@@ -171,6 +176,7 @@ test('production g1 clean to g2 SIGKILL to g3 restart preserves crash-pending Pr
     assert.equal(crashed.clean, null);
     assert.deepEqual(envelope.bootReleaseReadback.crashPendingOperationIds, ['system.application.boot.g2']);
     assert.deepEqual(envelope.bootReleaseReadback.reasonCodes, ['CRASH_PENDING_BOOT_PRESENT']);
+    assert.equal(envelope.bootReleaseReadback.reasonCodes.includes('DEPLOYED_COMMIT_UNKNOWN'), false);
     await terminateBoot(activeBoot, 'SIGTERM', { code: 0, signal: null });
     activeBoot = null;
     assert.equal(existsSync(sentinels.network), false);

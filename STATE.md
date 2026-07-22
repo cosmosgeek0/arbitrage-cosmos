@@ -12,12 +12,14 @@
 - Q venv portability correction (2026-07-22): the active acceptance manifest hash now binds CPython implementation/version truth and the complete sorted locked distribution set without filesystem paths. Venv prefix/executable identity checks and the pyproject/lockfile pins remain mandatory; `docs/archive/i00-phase4/QVENV-PORTABILITY-001_CORRECTION_RECEIPT.md` records the correction.
 - Acceptance uv-input correction (2026-07-22): complete-acceptance run mode now requires an explicit absolute `--uv` executable path with the platform uv basename, binds its resolved-path and binary SHA-256 provenance, and prepends only the explicit path's directory to the sealed child `PATH`; `docs/archive/i00-phase4/ACCEPTANCE-UV-INPUT-003_CORRECTION_RECEIPT.md` records the correction.
 - Acceptance soak diagnostic correction (2026-07-22): complete acceptance now derives temporary namespaces from physical filesystem paths, preserves a bounded performance-child output tail when that child does not emit a receipt, and reports the child's final non-empty line; `docs/archive/i00-phase4/ACCEPTANCE-SOAK-DIAG-004_CORRECTION_RECEIPT.md` records the correction.
+- Peak-RSS SLO correction (2026-07-23): SLO-RSS-005 raises only the local-proxy peak-RSS soft bound to 640 MiB through the mandatory 2026-10-18 re-review. At or after that cutoff without a new ruling, the effective soft bound returns to 512 MiB. The 768 MiB hard bound and RSS slope bounds are unchanged; `docs/archive/i00-phase4/SLO-RSS-005_CORRECTION_RECEIPT.md` records the ruling.
 
 | item | expected | found | status |
 |---|---|---|---|
 | acceptance runtime evidence | current measured projection | 15 mapped identities; 14 canonical components; 8 controls | BUILT_AND_TESTED |
 | acceptance candidate projection | measured controls and catalog crosswalk | 8 controls; crosswalk 4/9/4 | BUILT_AND_TESTED |
 | correction receipt | current branch proof | `docs/archive/i00-phase4/ACCEPTANCE-SOAK-DIAG-004_CORRECTION_RECEIPT.md` | RECORDED |
+| peak-RSS SLO | soft review window; hard and slope unchanged | 640 MiB through 2026-10-18; then 512 MiB | BUILT_AND_TESTED |
 
 This file owns current product state. `ARCHITECTURE.md` Part II owns code authority, `MISSION.md` owns purpose, and `verification/product-truth-20260716/STATE.md` alone owns campaign status and next action.
 

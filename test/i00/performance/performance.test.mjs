@@ -14,6 +14,8 @@ import {
   CANONICAL_SYSTEM_COMPONENT_IDS,
   CANONICAL_SYSTEM_COMPONENT_OWNERS,
   I00_MANAGED_INVENTORY_EXPECTATIONS,
+  LOCAL_PROXY_RSS_PRIOR_SOFT_BYTES,
+  LOCAL_PROXY_RSS_REVIEW_EXPIRES_AT_UTC,
   LOCAL_PROXY_SLOS,
   PERFORMANCE_RUNTIME_CONTROL_EXPECTATIONS,
   PROTECTED_OWNER_DIRECTIVES,
@@ -27,6 +29,7 @@ import {
   aggregateSloStatus,
   assertLoopbackHost,
   evaluateBound,
+  localProxyRssSloAt,
   nearestRank,
   scanSecretText,
   sha256,
@@ -686,8 +689,8 @@ function performanceDocument() {
       passed: true, reasonCodes: [],
     },
     limitations: REQUIRED_LIMITATIONS.map((entry) => ({ ...entry })),
-    slo: {
-      scope: 'LOCAL_PROXY_INITIAL_GATES', checks, invariantFailures: [], overall: 'PASS',
+  slo: {
+      scope: 'LOCAL_PROXY_INITIAL_GATES', evaluatedAtUtc: '2026-07-14T00:01:01.000Z', checks, invariantFailures: [], overall: 'PASS',
       degradationVisibility: 'CANONICAL_NON_GREEN_VISIBLE', productionClaim: 'UNKNOWN',
     },
     artifacts: {
@@ -1348,13 +1351,13 @@ test('local proxy event-loop SLO uses the worst of the three direct phase p99s',
     rawHttpLatencies: [1],
     invariants: [],
   }));
-  const slo = buildSlo(phases, raw, { passed: true, reasonCodes: [] }, true);
+  const slo = buildSlo(phases, raw, { passed: true, reasonCodes: [] }, true, '2026-07-23T00:00:00.000Z');
   const eventLoopCheck = slo.checks.find((check) => check.metric === 'node.event_loop_lag_ms.p99');
   assert.equal(eventLoopCheck.observed, 18);
   assert.equal(eventLoopCheck.status, 'PASS');
 
   phases[2].process.eventLoopP99Ms = { ...phases[2].process.eventLoopP99Ms, count: 0 };
-  const blocked = buildSlo(phases, raw, { passed: true, reasonCodes: [] }, true);
+  const blocked = buildSlo(phases, raw, { passed: true, reasonCodes: [] }, true, '2026-07-23T00:00:00.000Z');
   assert.equal(blocked.overall, 'BLOCKED');
   assert.ok(blocked.invariantFailures.includes('PHASE_EVENT_LOOP_MEASUREMENT_INVALID'));
 });
@@ -1462,6 +1465,98 @@ test('metric summaries and local proxy bounds use deterministic fail-closed clas
   assert.equal(evaluateBound('cpu', 91, LOCAL_PROXY_SLOS.cpuHostPercent).status, 'BLOCKED');
   assert.equal(evaluateBound('cpu', null, LOCAL_PROXY_SLOS.cpuHostPercent).status, 'NOT_CONFIGURED');
   assert.equal(aggregateSloStatus([], ['INVARIANT']), 'BLOCKED');
+});
+
+test('SLO-RSS-005 accepts the observed composition peak, preserves the hard gate, and expires closed', () => {
+  const active = localProxyRssSloAt('2026-07-23T00:00:00.000Z');
+  assert.equal(active.soft, 671_088_640);
+  assert.equal(active.hard, 805_306_368);
+  assert.equal(evaluateBound('process.rss_bytes.max', 583_024_640, active).status, 'PASS');
+  assert.equal(evaluateBound('process.rss_bytes.max', 805_306_369, active).status, 'BLOCKED');
+  assert.deepEqual(LOCAL_PROXY_SLOS.rssSlopeBytesPerHour, {
+    soft: 10_485_760,
+    hard: 52_428_800,
+    unit: 'bytes/hour',
+  });
+
+  const expired = localProxyRssSloAt(LOCAL_PROXY_RSS_REVIEW_EXPIRES_AT_UTC);
+  assert.equal(expired.soft, LOCAL_PROXY_RSS_PRIOR_SOFT_BYTES);
+  assert.equal(expired.hard, 805_306_368);
+  assert.equal(evaluateBound('process.rss_bytes.max', 583_024_640, expired).status, 'DEGRADED');
+
+  const crossingTimes = [
+    ['2026-10-17T23:58:00.000Z', '2026-10-17T23:58:20.000Z'],
+    ['2026-10-17T23:58:30.000Z', '2026-10-17T23:58:50.000Z'],
+    ['2026-10-17T23:59:40.000Z', '2026-10-18T00:00:00.000Z'],
+  ];
+  const crossingPhases = [
+    phase('CANONICAL_RESTART_GATE', 1, 100),
+    phase('UNCLEAN_TERMINATION', 2, 200),
+    phase('POST_CRASH_RECOVERY', 3, 300),
+  ].map((phaseRow, index) => ({
+    ...phaseRow,
+    startedAtUtc: crossingTimes[index][0],
+    endedAtUtc: crossingTimes[index][1],
+  }));
+  const crossingRaw = crossingPhases.map((phaseRow) => ({
+    phase: phaseRow,
+    rawTelemetry: [{ cpuHostPercent: 1, rssBytes: 583_024_640 }],
+    rawHttpLatencies: [1],
+    invariants: [],
+  }));
+  const cutoffEvaluationUtc = new Date(Date.parse(LOCAL_PROXY_RSS_REVIEW_EXPIRES_AT_UTC)).toISOString();
+  const crossingSlo = buildSlo(
+    crossingPhases,
+    crossingRaw,
+    { passed: true, reasonCodes: [] },
+    true,
+    cutoffEvaluationUtc,
+  );
+  assert.equal(crossingSlo.evaluatedAtUtc, cutoffEvaluationUtc);
+  assert.equal(crossingSlo.checks.find((check) => check.metric === 'process.rss_bytes.max').status, 'DEGRADED');
+});
+
+test('SLO-RSS-005 receipt validation applies the completed-run cutoff and rejects premature evaluation', () => {
+  const cutoffEvaluationUtc = new Date(Date.parse(LOCAL_PROXY_RSS_REVIEW_EXPIRES_AT_UTC)).toISOString();
+  const cutoffDocument = performanceDocument();
+  cutoffDocument.createdAtUtc = '2026-10-17T23:57:00.000Z';
+  const phaseTimes = [
+    ['2026-10-17T23:57:30.000Z', '2026-10-17T23:58:00.000Z'],
+    ['2026-10-17T23:58:30.000Z', '2026-10-17T23:59:00.000Z'],
+    ['2026-10-17T23:59:30.000Z', cutoffEvaluationUtc],
+  ];
+  cutoffDocument.phases.forEach((phaseRow, index) => {
+    phaseRow.startedAtUtc = phaseTimes[index][0];
+    phaseRow.endedAtUtc = phaseTimes[index][1];
+    phaseRow.process.rssBytes = summary(583_024_640);
+  });
+  cutoffDocument.slo.evaluatedAtUtc = cutoffEvaluationUtc;
+  const rssCheckIndex = cutoffDocument.slo.checks.findIndex((check) => check.metric === 'process.rss_bytes.max');
+  cutoffDocument.slo.checks[rssCheckIndex] = evaluateBound(
+    'process.rss_bytes.max',
+    583_024_640,
+    localProxyRssSloAt(cutoffEvaluationUtc),
+  );
+  cutoffDocument.slo.overall = aggregateSloStatus(cutoffDocument.slo.checks, []);
+  const cutoffValidation = validatePerformanceDocument(cutoffDocument, { headSha: HEAD, treeSha: TREE });
+  assert.ok(cutoffValidation.semanticFailures.includes('PERFORMANCE_SLO_NOT_PASS'));
+  assert.ok(!cutoffValidation.semanticFailures.includes('PERFORMANCE_RSS_SLO_INVALID'));
+  assert.ok(!cutoffValidation.semanticFailures.includes('PERFORMANCE_SLO_EVALUATION_TIME_INVALID'));
+
+  const temporaryBoundAtCutoff = structuredClone(cutoffDocument);
+  temporaryBoundAtCutoff.slo.checks[rssCheckIndex] = evaluateBound(
+    'process.rss_bytes.max',
+    583_024_640,
+    LOCAL_PROXY_SLOS.rssBytes,
+  );
+  temporaryBoundAtCutoff.slo.overall = aggregateSloStatus(temporaryBoundAtCutoff.slo.checks, []);
+  const temporaryBoundRejected = validatePerformanceDocument(temporaryBoundAtCutoff, { headSha: HEAD, treeSha: TREE });
+  assert.ok(temporaryBoundRejected.semanticFailures.includes('PERFORMANCE_RSS_SLO_INVALID'));
+
+  const prematureEvaluation = performanceDocument();
+  prematureEvaluation.slo.evaluatedAtUtc = '2026-07-14T00:00:30.000Z';
+  const prematureRejected = validatePerformanceDocument(prematureEvaluation, { headSha: HEAD, treeSha: TREE });
+  assert.ok(prematureRejected.semanticFailures.includes('PERFORMANCE_SLO_EVALUATION_TIME_INVALID'));
 });
 
 test('schema oneOf applies exactly one branch and retains sibling constraints', () => {
@@ -1611,6 +1706,12 @@ test('performance schema and semantics accept complete runtime evidence and reje
   const forgedEventLoopRejected = validatePerformanceDocument(forgedEventLoopSlo, { headSha: HEAD, treeSha: TREE });
   assert.equal(forgedEventLoopRejected.passed, false);
   assert.ok(forgedEventLoopRejected.semanticFailures.includes('PERFORMANCE_EVENT_LOOP_SLO_INVALID'));
+
+  const forgedRssSlo = structuredClone(valid);
+  forgedRssSlo.slo.checks.find((check) => check.metric === 'process.rss_bytes.max').soft = 1;
+  const forgedRssRejected = validatePerformanceDocument(forgedRssSlo, { headSha: HEAD, treeSha: TREE });
+  assert.equal(forgedRssRejected.passed, false);
+  assert.ok(forgedRssRejected.semanticFailures.includes('PERFORMANCE_RSS_SLO_INVALID'));
 
   const intervalSubstitution = structuredClone(valid);
   intervalSubstitution.phases[1].process.eventLoopP99Ms = singletonSummary(12);

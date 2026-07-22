@@ -156,16 +156,28 @@ const PROTECTED_OWNER_DIRECTIVE_BUNDLE_LIMITATIONS = Object.freeze([
 ]);
 const MAX_PROTECTED_OWNER_DIRECTIVE_BUNDLE_BYTES = 256 * 1024;
 
+export const LOCAL_PROXY_RSS_PRIOR_SOFT_BYTES = 536_870_912;
+export const LOCAL_PROXY_RSS_REVIEW_EXPIRES_AT_UTC = '2026-10-18T00:00:00Z';
+
 export const LOCAL_PROXY_SLOS = Object.freeze({
   cpuHostPercent: Object.freeze({ soft: 70, hard: 90, unit: 'percent' }),
   eventLoopLagMs: Object.freeze({ soft: 50, hard: 200, unit: 'ms' }),
-  rssBytes: Object.freeze({ soft: 536_870_912, hard: 805_306_368, unit: 'bytes' }),
+  rssBytes: Object.freeze({ soft: 671_088_640, hard: 805_306_368, unit: 'bytes' }),
   rssSlopeBytesPerHour: Object.freeze({ soft: 10_485_760, hard: 52_428_800, unit: 'bytes/hour' }),
   walBytes: Object.freeze({ soft: 1_073_741_824, hard: 5_368_709_120, unit: 'bytes' }),
   httpP95Ms: Object.freeze({ soft: 250, hard: 1_000, unit: 'ms' }),
   httpUnexpectedPercent: Object.freeze({ soft: 1, hard: 5, unit: 'percent' }),
   apiBytesPerSecond: Object.freeze({ soft: 5_242_880, hard: 20_971_520, unit: 'bytes/second' }),
 });
+
+export function localProxyRssSloAt(observedAtUtc) {
+  const observedAtMs = Date.parse(observedAtUtc);
+  const reviewExpiresAtMs = Date.parse(LOCAL_PROXY_RSS_REVIEW_EXPIRES_AT_UTC);
+  if (!Number.isFinite(observedAtMs) || observedAtMs >= reviewExpiresAtMs) {
+    return Object.freeze({ ...LOCAL_PROXY_SLOS.rssBytes, soft: LOCAL_PROXY_RSS_PRIOR_SOFT_BYTES });
+  }
+  return LOCAL_PROXY_SLOS.rssBytes;
+}
 
 export const SAFE_HTTP_ENDPOINTS = Object.freeze([
   Object.freeze({ path: '/health/live', expectedStatuses: Object.freeze([200]) }),

@@ -704,7 +704,8 @@ const performance = {
   },
   limitations: REQUIRED_LIMITATIONS.map((entry) => ({ ...entry })),
   slo: {
-    scope: 'LOCAL_PROXY_INITIAL_GATES', checks: performanceChecks, invariantFailures: [], overall: 'PASS',
+    scope: 'LOCAL_PROXY_INITIAL_GATES', evaluatedAtUtc: '2026-07-13T00:00:00.000Z',
+    checks: performanceChecks, invariantFailures: [], overall: 'PASS',
     degradationVisibility: 'CANONICAL_NON_GREEN_VISIBLE', productionClaim: 'UNKNOWN',
   },
   artifacts: {

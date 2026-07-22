@@ -610,9 +610,10 @@
     },
     "slo": {
       "type": "object", "additionalProperties": false,
-      "required": ["scope", "checks", "invariantFailures", "overall", "degradationVisibility", "productionClaim"],
+      "required": ["scope", "evaluatedAtUtc", "checks", "invariantFailures", "overall", "degradationVisibility", "productionClaim"],
       "properties": {
         "scope": { "const": "LOCAL_PROXY_INITIAL_GATES" },
+        "evaluatedAtUtc": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$" },
         "checks": { "type": "array", "minItems": 8, "items": { "$ref": "#/$defs/sloCheck" } },
         "invariantFailures": { "type": "array", "items": { "type": "string", "minLength": 3, "maxLength": 160 } },
         "overall": { "enum": ["PASS", "DEGRADED", "BLOCKED"] },

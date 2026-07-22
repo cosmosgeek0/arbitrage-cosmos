@@ -41,6 +41,7 @@ import {
   assertLoopbackHost,
   canonicalJson,
   evaluateBound,
+  localProxyRssSloAt,
   parseBoundedInteger,
   parseProtectedOwnerDirectiveBundle,
   scanSecretText,
@@ -1798,7 +1799,7 @@ function hostFingerprint() {
   return Object.freeze({ fingerprintSha256: sha256(canonicalJson(host)), ...host });
 }
 
-export function buildSlo(phases, raw, continuity, secretScanPassed) {
+export function buildSlo(phases, raw, continuity, secretScanPassed, evaluatedAtUtc) {
   const telemetry = raw.flatMap((entry) => entry.rawTelemetry);
   const httpLatencies = raw.flatMap((entry) => entry.rawHttpLatencies);
   const scheduled = phases.reduce((sum, phase) => sum + phase.http.scheduled, 0);
@@ -1813,7 +1814,7 @@ export function buildSlo(phases, raw, continuity, secretScanPassed) {
   const checks = [
     evaluateBound('host.cpu.percent.p95', summarize(telemetry.map((sample) => sample.cpuHostPercent)).p95, LOCAL_PROXY_SLOS.cpuHostPercent),
     evaluateBound('node.event_loop_lag_ms.p99', phaseEventLoopMeasurementValid ? Math.max(...phaseEventLoopP99s) : null, LOCAL_PROXY_SLOS.eventLoopLagMs),
-    evaluateBound('process.rss_bytes.max', summarize(telemetry.map((sample) => sample.rssBytes)).max, LOCAL_PROXY_SLOS.rssBytes),
+    evaluateBound('process.rss_bytes.max', summarize(telemetry.map((sample) => sample.rssBytes)).max, localProxyRssSloAt(evaluatedAtUtc)),
     evaluateBound('soak.rss_slope_bytes_per_hour.max', rssSlopes.length === 0 ? null : Math.max(...rssSlopes), LOCAL_PROXY_SLOS.rssSlopeBytesPerHour),
     evaluateBound('storage.wal_bytes.max', Math.max(...phases.map((phase) => phase.storage.wal.maxBytes)), LOCAL_PROXY_SLOS.walBytes),
     evaluateBound('api.http_latency_ms.p95', summarize(httpLatencies).p95, LOCAL_PROXY_SLOS.httpP95Ms),
@@ -1836,6 +1837,7 @@ export function buildSlo(phases, raw, continuity, secretScanPassed) {
       : 'FALSE_GREEN_BLOCKED';
   return Object.freeze({
     scope: 'LOCAL_PROXY_INITIAL_GATES',
+    evaluatedAtUtc,
     checks,
     invariantFailures: [...new Set(invariantFailures)].toSorted(),
     overall,
@@ -2044,9 +2046,10 @@ export async function runLocalProxySoak(options) {
       limitations: REQUIRED_LIMITATIONS,
     };
     const secretScanPassed = logFindings.length === 0;
+    const sloEvaluatedAtUtc = new Date().toISOString();
     const report = {
       ...reportWithoutSlo,
-      slo: buildSlo(phases, raw, continuity, secretScanPassed),
+      slo: buildSlo(phases, raw, continuity, secretScanPassed, sloEvaluatedAtUtc),
       artifacts: {
         receiptRelativePath: `evidence/${requestedOutput.replaceAll('\\', '/')}`,
         receiptWriteMode: 'IMMUTABLE_CREATE_ONLY',
@@ -2171,6 +2174,24 @@ export function validatePerformanceDocument(document, expectedSource = {}) {
     semanticFailures.push('PERFORMANCE_RUNTIME_INVENTORY_DRIFT');
   }
   const phases = Array.isArray(document?.phases) ? document.phases : [];
+  const createdAtMs = Date.parse(document?.createdAtUtc ?? '');
+  const sloEvaluatedAtMs = Date.parse(document?.slo?.evaluatedAtUtc ?? '');
+  const phaseTimeRows = phases.map((phase) => ({
+    startedAtMs: Date.parse(phase?.startedAtUtc ?? ''),
+    endedAtMs: Date.parse(phase?.endedAtUtc ?? ''),
+  }));
+  if (!Number.isFinite(createdAtMs)
+      || !Number.isFinite(sloEvaluatedAtMs)
+      || phaseTimeRows.length !== 3
+      || phaseTimeRows.some(({ startedAtMs, endedAtMs }) => (
+        !Number.isFinite(startedAtMs)
+        || !Number.isFinite(endedAtMs)
+        || startedAtMs < createdAtMs
+        || endedAtMs < startedAtMs
+        || endedAtMs > sloEvaluatedAtMs
+      ))) {
+    semanticFailures.push('PERFORMANCE_SLO_EVALUATION_TIME_INVALID');
+  }
   if (phases.length !== 3 || phases.some((phase) => !phaseProcessEventLoopValid(phase?.process))) {
     semanticFailures.push('PERFORMANCE_PHASE_EVENT_LOOP_MEASUREMENT_INVALID');
   }
@@ -2187,6 +2208,22 @@ export function validatePerformanceDocument(document, expectedSource = {}) {
       || eventLoopChecks.length !== 1
       || canonicalJson(eventLoopChecks[0]) !== canonicalJson(expectedEventLoopCheck)) {
     semanticFailures.push('PERFORMANCE_EVENT_LOOP_SLO_INVALID');
+  }
+  const rssChecks = Array.isArray(document?.slo?.checks)
+    ? document.slo.checks.filter((check) => check?.metric === 'process.rss_bytes.max')
+    : [];
+  const phaseRssMaxes = phases.map((phase) => phase?.process?.rssBytes?.max);
+  const expectedRssCheck = phases.length === 3 && phaseRssMaxes.every(Number.isFinite)
+    ? evaluateBound(
+      'process.rss_bytes.max',
+      Math.max(...phaseRssMaxes),
+      localProxyRssSloAt(document?.slo?.evaluatedAtUtc),
+    )
+    : null;
+  if (expectedRssCheck === null
+      || rssChecks.length !== 1
+      || canonicalJson(rssChecks[0]) !== canonicalJson(expectedRssCheck)) {
+    semanticFailures.push('PERFORMANCE_RSS_SLO_INVALID');
   }
   const recomputedOverall = Array.isArray(document?.slo?.checks)
       && Array.isArray(document?.slo?.invariantFailures)

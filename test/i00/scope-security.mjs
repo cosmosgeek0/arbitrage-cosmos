@@ -74,6 +74,7 @@ const COMMAND_LAYER_EXECUTABLE_ALLOWLIST = new Map([
   ])],
   ['test/i00/complete-acceptance.mjs', new Set([
     'CHILD_PROCESS',
+    'ENVIRONMENT_READ',
   ])],
   ['test/i00/ops-command.mjs', new Set([
     'CHILD_PROCESS',

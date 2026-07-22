@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
+import { realpathSync, statSync } from 'node:fs';
+import { userInfo } from 'node:os';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -9,11 +11,31 @@ const MODES = new Set(['--plan', '--run', '--validate-only']);
 const supplied = process.argv.slice(2);
 const selectedModes = supplied.filter((argument) => MODES.has(argument));
 
+function executablePath(candidate) {
+  if (typeof candidate !== 'string' || candidate.length === 0) return null;
+  try {
+    const resolved = realpathSync(candidate);
+    return statSync(resolved).isFile() ? resolved : null;
+  } catch {
+    return null;
+  }
+}
+
+function localUvExecutable() {
+  return executablePath(process.env.UV_BIN) ?? executablePath(resolve(
+    userInfo().homedir,
+    '.local',
+    'bin',
+    process.platform === 'win32' ? 'uv.exe' : 'uv',
+  ));
+}
+
 if (selectedModes.length > 1) {
   process.stderr.write('I00_COMPLETE_ENTRY_FAILED:EXACTLY_ONE_MODE_REQUIRED\n');
   process.exitCode = 1;
 } else {
   const delegated = selectedModes.length === 0 ? ['--plan', ...supplied] : supplied;
+  const uvBin = localUvExecutable();
   const child = spawn(process.execPath, [DELEGATE, ...delegated], {
     cwd: ROOT,
     env: {
@@ -23,6 +45,7 @@ if (selectedModes.length > 1) {
       TZ: 'UTC',
       LC_ALL: 'C',
       CI: '1',
+      ...(uvBin === null ? {} : { UV_BIN: uvBin }),
     },
     shell: false,
     stdio: 'inherit',

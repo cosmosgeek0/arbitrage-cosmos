@@ -35,6 +35,12 @@ test('complete entrypoint delegates plan-only without running acceptance', () =>
   assert.equal(ids.filter((id) => id === 'repository_test_all').length, 1);
   assert.equal(ids.filter((id) => id === 'ops_all_local').length, 1);
   assert.equal(ids.filter((id) => id === 'ops_i00_all_local').length, 1);
+  assert.equal(ids.filter((id) => id === 'q_current_gate').length, 1);
+  assert.equal(ids.includes('q_exact_donor_q17'), false);
+  assert.equal(ids.includes('q_exact_donor_all'), false);
+  const qCurrent = plan.steps.find((step) => step.id === 'q_current_gate');
+  assert.equal(qCurrent.kind, 'Q_CURRENT');
+  assert.deepEqual(qCurrent.command, ['node', 'test/run-quant-gates.mjs']);
 
   const commands = plan.steps.map((step) => step.command.join(' '));
   for (const duplicate of [
@@ -78,6 +84,8 @@ test('complete entrypoint is delegation-only and shell-free', () => {
   const source = readFileSync(ENTRYPOINT, 'utf8');
   assert.match(source, /performance\/local-acceptance\.mjs/);
   assert.match(source, /shell:\s*false/);
+  assert.match(source, /executablePath\(process\.env\.UV_BIN\)/);
+  assert.match(source, /realpathSync\(candidate\)/);
   for (const forbidden of [
     'npm test', 'test:all', 'pytest', 'ops/tests/run-all.sh',
     'ops/tests/i00/run-all.sh', 'local-proxy-soak.mjs',

@@ -740,8 +740,7 @@ const performanceEvidenceEntries = [{
 const performanceEvidence = { entries: performanceEvidenceEntries, sha256: sha256(JSON.stringify(performanceEvidenceEntries)) };
 
 const plans = [
-  { id: 'q_exact_donor_q17', kind: 'Q_ARCHIVE', command: ['<accepted-q-venv>/bin/python', '-m', 'pytest', '-p', '_hypothesis_pytestplugin', '-p', 'pytest_cov.plugin', 'tests/q17', '-q', '--cov=quant_edge.final_proof', '--cov-branch', '--cov-report=term', '--tb=short'] },
-  { id: 'q_exact_donor_all', kind: 'Q_ARCHIVE', command: ['<accepted-q-venv>/bin/python', '-m', 'pytest', '-p', '_hypothesis_pytestplugin', '-p', 'pytest_cov.plugin', '-q', '--tb=short'] },
+  { id: 'q_current_gate', kind: 'Q_CURRENT', command: ['node', 'test/run-quant-gates.mjs'] },
   { id: 'root_test', kind: 'COMMAND', command: ['npm', 'test'] },
   { id: 'repository_test_all', kind: 'COMMAND', command: ['npm', 'run', 'test:all'] },
   { id: 'ops_all_local', kind: 'COMMAND', command: ['bash', 'ops/tests/run-all.sh'] },
@@ -752,13 +751,11 @@ const plans = [
   { id: 'source_freeze', kind: 'SOURCE_FREEZE', command: [] },
   { id: 'diff_check', kind: 'COMMAND', command: ['git', 'diff', '--check'] },
 ];
-const q17Command = ['/tmp/q-donor-archive/quant/.venv/bin/python', ...plans[0].command.slice(1)];
-const qAllCommand = ['/tmp/q-donor-archive/quant/.venv/bin/python', ...plans[1].command.slice(1)];
 const measuredPerformanceCommand = [process.execPath, 'test/i00/performance/local-proxy-soak.mjs', '--run', `--tested-sha=${headSha}`, '--duration-seconds=60', '--out=local-proxy-performance-20260712235800000-1234.json'];
 const commonStep = (id, command, stdoutBytes = 1, stdoutSha256 = SHA) => ({
   id,
   command,
-  cwdRelative: id.startsWith('q_exact_') ? '../../tmp/q-donor-archive/quant' : '.',
+  cwdRelative: '.',
   startedAtUtc,
   endedAtUtc,
   durationMs: 1,
@@ -775,12 +772,11 @@ const commonStep = (id, command, stdoutBytes = 1, stdoutSha256 = SHA) => ({
   passed: true,
 });
 const steps = [
-  commonStep('q_exact_donor_q17', q17Command),
-  commonStep('q_exact_donor_all', qAllCommand),
-  commonStep('root_test', plans[2].command),
-  commonStep('repository_test_all', plans[3].command),
-  commonStep('ops_all_local', plans[4].command),
-  commonStep('ops_i00_all_local', plans[5].command),
+  commonStep('q_current_gate', plans[0].command),
+  commonStep('root_test', plans[1].command),
+  commonStep('repository_test_all', plans[2].command),
+  commonStep('ops_all_local', plans[3].command),
+  commonStep('ops_i00_all_local', plans[4].command),
   { ...commonStep('generated_report_parity', []), artifacts: [] },
   commonStep('local_proxy_performance', measuredPerformanceCommand),
   commonStep('browser_receipt', [], browserReceipt.byteLength, browserReceipt.sha256),
@@ -792,7 +788,7 @@ const steps = [
     finalInitialEvidence: sourceEvidence,
     performanceEvidence,
   },
-  commonStep('diff_check', plans[10].command),
+  commonStep('diff_check', plans[9].command),
 ];
 const receipt = {
   schemaVersion: 'i00.local-acceptance.v1',

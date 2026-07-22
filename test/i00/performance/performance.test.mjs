@@ -1329,13 +1329,16 @@ test('complete acceptance exposes explicit modes and each required layer exactly
   assert.equal(parseOptions(['--validate-only', '--performance-receipt=evidence/perf.json', '--browser-receipt=evidence/browser.json']).mode, 'VALIDATE_ONLY');
   assert.throws(() => parseOptions(['--run', '--plan']), /EXACTLY_ONE_MODE_REQUIRED/);
   const ids = ACCEPTANCE_PLAN.map((step) => step.id);
-  assert.equal(ids.length, 11);
+  assert.equal(ids.length, 10);
   assert.equal(new Set(ids).size, ids.length);
   assert.deepEqual(ids, [
-    'q_exact_donor_q17', 'q_exact_donor_all', 'root_test', 'repository_test_all', 'ops_all_local',
+    'q_current_gate', 'root_test', 'repository_test_all', 'ops_all_local',
     'ops_i00_all_local', 'generated_report_parity', 'local_proxy_performance', 'browser_receipt',
     'source_freeze', 'diff_check',
   ]);
+  assert.deepEqual(ACCEPTANCE_PLAN[0], {
+    id: 'q_current_gate', kind: 'Q_CURRENT', command: ['node', 'test/run-quant-gates.mjs'],
+  });
   assert.ok(ACCEPTANCE_PLAN.find((step) => step.id === 'local_proxy_performance').command.includes('--run'));
 });
 
@@ -2024,7 +2027,7 @@ test('exact accepted Q donor identities remain pinned in the harness contract', 
   assert.equal(Q_RECEIPT_SHA256, '9cfa0356228d7f48674df2d9db523f0f0d53dab1a4e4255b6ba9676e463ec5dc');
 });
 
-test('exact Q donor inventory rejects a hostile partial archive before pytest', () => {
+test('exact Q donor inventory rejects hostile partial or tampered archives before the current gate', () => {
   const expected = Q_ARCHIVE_REQUIRED_FILES.map((entry) => ({
     path: entry.path,
     mode: '100644',
@@ -2040,6 +2043,17 @@ test('exact Q donor inventory rejects a hostile partial archive before pytest', 
   assert.equal(validation.passed, false);
   assert.ok(validation.failures.includes('Q_ARCHIVE_REQUIRED_ENTRY_MISSING:EDGE_PROTOCOL_V1.md'));
   assert.ok(validation.failures.includes('Q_ARCHIVE_ENTRY_MISSING:EDGE_PROTOCOL_V1.md'));
+
+  const complete = Q_ARCHIVE_REQUIRED_FILES.map((entry) => ({
+    path: entry.path,
+    kind: 'REGULAR',
+    mode: '100644',
+    sha256: entry.sha256,
+  }));
+  complete[0].sha256 = '0'.repeat(64);
+  const tampered = validateQArchiveInventory(expected, complete);
+  assert.equal(tampered.passed, false);
+  assert.ok(tampered.failures.includes('Q_ARCHIVE_REQUIRED_ENTRY_HASH_MISMATCH:EDGE_PROTOCOL_V1.md'));
 });
 
 test('Q venv manifest hash is path-independent and rejects environment drift', () => {

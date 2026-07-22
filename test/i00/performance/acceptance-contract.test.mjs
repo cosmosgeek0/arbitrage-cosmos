@@ -23,8 +23,10 @@ import {
   EXPECTED_ACCEPTED_DONORS,
   Q_ARCHIVE_REQUIRED_FILES,
   Q_DONOR_ARCHIVE_ARGS,
+  assertCurrentQuantGatePassed,
   buildIntegrationCandidateReceiptDocument,
   classifyReceiptProvenanceDiagnostic,
+  executeCurrentQuantGate,
   parseOptions,
   renderIntegrationCandidateReceiptMarkdown,
   validateCandidateSealTopologyDocument,
@@ -116,9 +118,7 @@ function externalBoundaryFixture() {
 function commandResultsFixture() {
   return ACCEPTANCE_PLAN.map((plan, index) => ({
     id: plan.id,
-    command: plan.kind === 'Q_ARCHIVE'
-      ? ['/tmp/q-donor-archive/quant/.venv/bin/python', ...plan.command.slice(1)]
-      : plan.kind === 'PERFORMANCE'
+    command: plan.kind === 'PERFORMANCE'
         ? [process.execPath, 'test/i00/performance/local-proxy-soak.mjs', '--run', `--tested-sha=${CANDIDATE}`, '--duration-seconds=60', '--out=local-proxy-performance-20260714000000000-1.json']
         : [...plan.command],
     exitCode: 0,
@@ -330,9 +330,7 @@ function completeFixture() {
   const initialEvidence = { entries: initialEntries, sha256: sha256(JSON.stringify(initialEntries)) };
   const commandResults = commandResultsFixture();
   const steps = ACCEPTANCE_PLAN.map((plan, index) => {
-    const command = plan.kind === 'Q_ARCHIVE'
-      ? ['/tmp/q-donor-archive/quant/.venv/bin/python', ...plan.command.slice(1)]
-      : plan.kind === 'PERFORMANCE'
+    const command = plan.kind === 'PERFORMANCE'
         ? [process.execPath, 'test/i00/performance/local-proxy-soak.mjs', '--run', `--tested-sha=${CANDIDATE}`, '--duration-seconds=60', '--out=local-proxy-performance-20260714000000000-1.json']
         : [...plan.command];
     return {
@@ -451,6 +449,36 @@ test('exact Q donor archive preserves the complete accepted repository root', ()
     sha256: entry.sha256,
   }));
   assert.equal(validateQArchiveInventory(expected, observed).passed, true);
+
+  const tampered = structuredClone(observed);
+  tampered[0].sha256 = '0'.repeat(64);
+  const tamperedValidation = validateQArchiveInventory(expected, tampered);
+  assert.equal(tamperedValidation.passed, false);
+  assert.ok(tamperedValidation.failures.includes(`Q_ARCHIVE_REQUIRED_ENTRY_HASH_MISMATCH:${tampered[0].path}`));
+});
+
+test('a failing current quant gate fails the complete acceptance chain', async () => {
+  const calls = [];
+  const failed = await executeCurrentQuantGate({ PATH: '/usr/bin' }, async (request) => {
+    calls.push(request);
+    return {
+      id: request.id,
+      command: request.command,
+      exitCode: 1,
+      exitSignal: null,
+      timedOut: false,
+      outputOverflow: false,
+      passed: false,
+    };
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].id, 'q_current_gate');
+  assert.deepEqual(calls[0].command, ['node', 'test/run-quant-gates.mjs']);
+  assert.equal(path.relative(path.resolve(import.meta.dirname, '../../..'), calls[0].cwd), '');
+  assert.throws(() => assertCurrentQuantGatePassed([failed]), /Q_CURRENT_GATE_FAILED/);
+
+  const passed = { ...failed, exitCode: 0, passed: true };
+  assert.equal(assertCurrentQuantGatePassed([passed]), passed);
 });
 
 test('Q archive child supervision fails boundedly and tears down the peer', async () => {
@@ -731,11 +759,12 @@ test('complete receipt binds all exact steps, candidate source, source freeze, Q
   assert.ok(validate(qEnvironmentDrift).semanticFailures.includes('COMPLETE_RECEIPT_Q_PROVENANCE_INVALID'));
 
   const falseGreen = structuredClone(fixture.document);
-  falseGreen.steps[2].exitCode = 1;
+  const qCurrentStep = falseGreen.steps.find((step) => step.id === 'q_current_gate');
+  qCurrentStep.exitCode = 1;
   assert.ok(validate(falseGreen).semanticFailures.includes('COMPLETE_RECEIPT_STEP_FAILED'));
 
   const commandForgery = structuredClone(fixture.document);
-  commandForgery.steps[2].command = ['true'];
+  commandForgery.steps.find((step) => step.id === 'root_test').command = ['true'];
   assert.ok(validate(commandForgery).semanticFailures.includes('COMPLETE_RECEIPT_STEP_COMMAND_INVALID'));
 
   const omittedMeasurement = structuredClone(fixture.document);

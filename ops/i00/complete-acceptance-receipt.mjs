@@ -9,7 +9,7 @@ import {
 
 export const COMPLETE_ACCEPTANCE_SCHEMA = 'i00.local-acceptance.v1';
 export const COMPLETE_ACCEPTANCE_TRUTH = 'LOCAL_COMPLETE_ACCEPTANCE_MEASURED';
-export const COMPLETE_ACCEPTANCE_STEP_COUNT = 11;
+export const COMPLETE_ACCEPTANCE_STEP_COUNT = 10;
 export const SOURCE_FREEZE_FORMAT = 'GIT_BLOBS_PLUS_PROTECTED_OWNER_DIRECTIVE_HASHES_V2';
 
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
@@ -28,8 +28,7 @@ const Q_ENVIRONMENT = Object.freeze({
 });
 
 const PLAN = Object.freeze([
-  Object.freeze({ id: 'q_exact_donor_q17', kind: 'Q_ARCHIVE' }),
-  Object.freeze({ id: 'q_exact_donor_all', kind: 'Q_ARCHIVE' }),
+  Object.freeze({ id: 'q_current_gate', kind: 'Q_CURRENT', command: ['node', 'test/run-quant-gates.mjs'] }),
   Object.freeze({ id: 'root_test', kind: 'COMMAND', command: ['npm', 'test'] }),
   Object.freeze({ id: 'repository_test_all', kind: 'COMMAND', command: ['npm', 'run', 'test:all'] }),
   Object.freeze({ id: 'ops_all_local', kind: 'COMMAND', command: ['bash', 'ops/tests/run-all.sh'] }),
@@ -153,7 +152,7 @@ function assertHashPinnedOwnerDirectives(rows, label) {
 }
 
 function assertPlan(receipt, expectedSha) {
-  assert(Array.isArray(receipt.plan) && receipt.plan.length === PLAN.length, 'complete acceptance plan must contain exactly 11 steps');
+  assert(Array.isArray(receipt.plan) && receipt.plan.length === PLAN.length, 'complete acceptance plan must contain exactly 10 steps');
   for (let index = 0; index < PLAN.length; index += 1) {
     const actual = receipt.plan[index];
     const expected = PLAN[index];
@@ -162,11 +161,6 @@ function assertPlan(receipt, expectedSha) {
     assert(Array.isArray(actual.command), `complete acceptance plan[${index}].command must be an array`);
     if (expected.command) {
       assert(exactJson(actual.command, expected.command), `complete acceptance plan ${expected.id} command is invalid`);
-    } else if (expected.kind === 'Q_ARCHIVE') {
-      assert(actual.command[0] === '<accepted-q-venv>/bin/python'
-        && actual.command[1] === '-m'
-        && actual.command[2] === 'pytest'
-        && actual.command.at(-1) === '--tb=short', `complete acceptance plan ${expected.id} Q command is invalid`);
     } else {
       assert(actual.command.length === 4
         && /(?:^|\/)node(?:\.exe)?$/.test(actual.command[0])
@@ -182,14 +176,6 @@ function assertStepCommand(step, plan, recordedPlan, expectedSha) {
   assert(Array.isArray(step.command), `complete acceptance step ${step.id}.command must be an array`);
   if (plan.command) {
     assert(exactJson(step.command, plan.command), `complete acceptance step ${step.id} command is invalid`);
-    return;
-  }
-  if (plan.kind === 'Q_ARCHIVE') {
-    const expectedSuffix = plan.id === 'q_exact_donor_q17'
-      ? ['-m', 'pytest', '-p', '_hypothesis_pytestplugin', '-p', 'pytest_cov.plugin', 'tests/q17', '-q', '--cov=quant_edge.final_proof', '--cov-branch', '--cov-report=term', '--tb=short']
-      : ['-m', 'pytest', '-p', '_hypothesis_pytestplugin', '-p', 'pytest_cov.plugin', '-q', '--tb=short'];
-    assert(typeof step.command[0] === 'string' && step.command[0].endsWith('/quant/.venv/bin/python')
-      && exactJson(step.command.slice(1), expectedSuffix), `complete acceptance step ${step.id} Q command is invalid`);
     return;
   }
   const duration = Number(step.command[4]?.slice('--duration-seconds='.length));
@@ -211,7 +197,7 @@ function assertStep(step, plan, recordedPlan, receiptStart, receiptEnd, expected
   requireExactKeys(step, [...COMMON_STEP_KEYS, ...extraKeys], `complete acceptance step ${plan.id}`);
   assert(step.id === plan.id, `complete acceptance step ${plan.id} identity/order is invalid`);
   assertStepCommand(step, plan, recordedPlan, expectedSha);
-  assert(step.cwdRelative === '.' || (plan.kind === 'Q_ARCHIVE' && typeof step.cwdRelative === 'string' && step.cwdRelative.endsWith('/q-donor-archive/quant')), `complete acceptance step ${plan.id}.cwdRelative is invalid`);
+  assert(step.cwdRelative === '.', `complete acceptance step ${plan.id}.cwdRelative is invalid`);
   assertIsoUtc(step.startedAtUtc, `complete acceptance step ${plan.id}.startedAtUtc`);
   assertIsoUtc(step.endedAtUtc, `complete acceptance step ${plan.id}.endedAtUtc`);
   assert(Date.parse(step.startedAtUtc) >= receiptStart
@@ -255,7 +241,8 @@ function assertSourceFreeze(receipt) {
   assertProtectedOwnerDirectives(receipt.sourceFreeze.protectedOwnerDirectives, 'complete acceptance sourceFreeze.protectedOwnerDirectives');
   assert(exactJson(receipt.sourceFreeze.protectedOwnerDirectives, receipt.source.protectedOwnerDirectives), 'complete acceptance sourceFreeze protected inputs do not match source truth');
   assertEvidenceManifest(receipt.sourceFreeze.evidence, 'complete acceptance sourceFreeze.evidence');
-  const step = receipt.steps[9];
+  const step = receipt.steps.find((candidate) => candidate?.id === 'source_freeze');
+  assert(step !== undefined, 'complete acceptance source_freeze step is missing');
   for (const label of ['initial', 'final']) {
     requireExactKeys(step[label], ['format', 'fileCount', 'sha256', 'protectedOwnerDirectives'], `complete acceptance source_freeze.${label}`);
     assert(step[label].format === SOURCE_FREEZE_FORMAT
@@ -422,7 +409,7 @@ export function validateCompleteAcceptanceReceipt({
     && exactJson(qIntegrity.pytestPluginPolicy.explicit, ['_hypothesis_pytestplugin', 'pytest_cov.plugin']),
   'complete acceptance Q pytest plugin policy is invalid');
   assertPlan(receipt, expectedSha);
-  assert(Array.isArray(receipt.steps) && receipt.steps.length === PLAN.length, 'complete acceptance must contain exactly 11 measured step results');
+  assert(Array.isArray(receipt.steps) && receipt.steps.length === PLAN.length, 'complete acceptance must contain exactly 10 measured step results');
   for (let index = 0; index < PLAN.length; index += 1) assertStep(receipt.steps[index], PLAN[index], receipt.plan[index], receiptStart, receiptEnd, expectedSha);
   assertEmptyArray(receipt.missingSteps, 'complete acceptance missingSteps');
   assertReceiptDescriptorBindings(receipt);
@@ -455,9 +442,11 @@ export function validateCompleteAcceptanceReceipt({
     const entry = evidenceEntries.get(descriptor.relativePath);
     assert(entry?.sha256 === descriptor.sha256 && entry?.byteLength === descriptor.byteLength, `complete acceptance source freeze omits bound browser evidence ${descriptor.relativePath}`);
   }
-  assert(receipt.steps[7].stdoutBytes > 0, 'complete acceptance performance step has no measured command output');
-  assert(receipt.steps[8].stdoutSha256 === receipt.browserReceipt.sha256
-    && receipt.steps[8].stdoutBytes === receipt.browserReceipt.byteLength, 'complete acceptance browser step is not bound to its measured receipt');
+  const performanceStep = receipt.steps.find((step) => step?.id === 'local_proxy_performance');
+  const browserStep = receipt.steps.find((step) => step?.id === 'browser_receipt');
+  assert(performanceStep?.stdoutBytes > 0, 'complete acceptance performance step has no measured command output');
+  assert(browserStep?.stdoutSha256 === receipt.browserReceipt.sha256
+    && browserStep?.stdoutBytes === receipt.browserReceipt.byteLength, 'complete acceptance browser step is not bound to its measured receipt');
 
   return Object.freeze({
     receipt,

@@ -350,8 +350,7 @@ const DESIGN_ROLE_CONTRACTS = Object.freeze({
 });
 
 export const ACCEPTANCE_PLAN = Object.freeze([
-  Object.freeze({ id: 'q_exact_donor_q17', kind: 'Q_ARCHIVE', command: Object.freeze(['<accepted-q-venv>/bin/python', '-m', 'pytest', '-p', '_hypothesis_pytestplugin', '-p', 'pytest_cov.plugin', 'tests/q17', '-q', '--cov=quant_edge.final_proof', '--cov-branch', '--cov-report=term', '--tb=short']) }),
-  Object.freeze({ id: 'q_exact_donor_all', kind: 'Q_ARCHIVE', command: Object.freeze(['<accepted-q-venv>/bin/python', '-m', 'pytest', '-p', '_hypothesis_pytestplugin', '-p', 'pytest_cov.plugin', '-q', '--tb=short']) }),
+  Object.freeze({ id: 'q_current_gate', kind: 'Q_CURRENT', command: Object.freeze(['node', 'test/run-quant-gates.mjs']) }),
   Object.freeze({ id: 'root_test', kind: 'COMMAND', command: Object.freeze(['npm', 'test']) }),
   Object.freeze({ id: 'repository_test_all', kind: 'COMMAND', command: Object.freeze(['npm', 'run', 'test:all']) }),
   Object.freeze({ id: 'ops_all_local', kind: 'COMMAND', command: Object.freeze(['bash', 'ops/tests/run-all.sh']) }),
@@ -1668,6 +1667,45 @@ async function inspectAcceptedQVenv({ quantRoot, resolvedVenv, environment }) {
   });
 }
 
+function resolveAcceptanceUvExecutable() {
+  const executableName = process.platform === 'win32' ? 'uv.exe' : 'uv';
+  const candidates = [
+    process.env.UV_BIN,
+    ...(process.env.PATH ?? '').split(path.delimiter).filter(Boolean).map((directory) => path.join(directory, executableName)),
+    path.join(os.homedir(), '.local', 'bin', executableName),
+  ];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string' || candidate.length === 0) continue;
+    try {
+      const resolved = realpathSync(candidate);
+      if (statSync(resolved).isFile()) return resolved;
+    } catch {
+      // Continue through the bounded candidate list.
+    }
+  }
+  throw new Error('Q_CURRENT_UV_EXECUTABLE_MISSING');
+}
+
+export function executeCurrentQuantGate(environment, execute = runCommand) {
+  return execute({
+    id: 'q_current_gate',
+    command: ['node', 'test/run-quant-gates.mjs'],
+    cwd: ROOT,
+    environment,
+  });
+}
+
+export function assertCurrentQuantGatePassed(steps) {
+  const step = Array.isArray(steps) && steps.length === 1 ? steps[0] : null;
+  if (step?.id !== 'q_current_gate'
+      || step.exitCode !== 0
+      || step.exitSignal !== null
+      || step.timedOut !== false
+      || step.outputOverflow !== false
+      || step.passed !== true) throw new Error('Q_CURRENT_GATE_FAILED');
+  return step;
+}
+
 async function runQArchiveGate(tempRoot, qVenv, environment) {
   if (qVenv === null) throw new Error('Q_VENV_REQUIRED_USE_EXPLICIT_Q_VENV');
   const donor = await verifyQDonorGit(environment);
@@ -1684,27 +1722,16 @@ async function runQArchiveGate(tempRoot, qVenv, environment) {
     pythonSha256: sha256(readFileSync(path.join(resolvedVenv, 'bin/python'))),
     integrity: await inspectAcceptedQVenv({ quantRoot, resolvedVenv, environment }),
   });
-  const qEnvironment = safeEnvironment(tempRoot, {
-    PYTHONPATH: 'src',
-    PYTHONNOUSERSITE: '1',
-    PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1',
-  });
-  const focused = await runCommand({
-    id: 'q_exact_donor_q17',
-    command: [path.join(quantRoot, '.venv/bin/python'), '-m', 'pytest', '-p', '_hypothesis_pytestplugin', '-p', 'pytest_cov.plugin', 'tests/q17', '-q', '--cov=quant_edge.final_proof', '--cov-branch', '--cov-report=term', '--tb=short'],
-    cwd: quantRoot,
-    environment: qEnvironment,
-  });
-  if (!focused.passed) return { provenance: { ...donor, venv: venvProvenance }, steps: [focused] };
-  const complete = await runCommand({
-    id: 'q_exact_donor_all',
-    command: [path.join(quantRoot, '.venv/bin/python'), '-m', 'pytest', '-p', '_hypothesis_pytestplugin', '-p', 'pytest_cov.plugin', '-q', '--tb=short'],
-    cwd: quantRoot,
-    environment: qEnvironment,
-  });
+  const currentVenv = path.join(ROOT, 'quant/.venv');
+  if (!statSync(path.join(currentVenv, 'bin/python'), { throwIfNoEntry: false })?.isFile()) {
+    throw new Error('Q_CURRENT_VENV_PYTHON_MISSING');
+  }
+  const current = await executeCurrentQuantGate(
+    safeEnvironment(tempRoot, { UV_BIN: resolveAcceptanceUvExecutable() }),
+  );
   return {
     provenance: { ...donor, venv: venvProvenance },
-    steps: [focused, complete],
+    steps: [current],
   };
 }
 
@@ -4012,11 +4039,6 @@ async function validateIntegrationCandidateReceiptAtRevision(environment, revisi
 
 function completeStepCommandValid(step, plan, expectedHead) {
   if (!step || !plan || step.id !== plan.id || !Array.isArray(step.command)) return false;
-  if (plan.kind === 'Q_ARCHIVE') {
-    return typeof step.command[0] === 'string'
-      && step.command[0].endsWith('/quant/.venv/bin/python')
-      && exactList(step.command.slice(1), plan.command.slice(1));
-  }
   if (plan.kind === 'PERFORMANCE') {
     const args = step.command.slice(1);
     const durationMatch = /^--duration-seconds=(\d+)$/u.exec(args[3] ?? '');
@@ -4137,8 +4159,8 @@ async function runCompleteAcceptance(options) {
     const q = await runQArchiveGate(tempRoot, options.qVenv, environment);
     qProvenance = q.provenance;
     steps.push(...q.steps);
-    if (q.steps.some((step) => !step.passed)) throw new Error('Q_EXACT_DONOR_GATE_FAILED');
-    for (const plan of ACCEPTANCE_PLAN.slice(2)) {
+    assertCurrentQuantGatePassed(q.steps);
+    for (const plan of ACCEPTANCE_PLAN.slice(1)) {
       let result;
       if (plan.kind === 'REPORT_PARITY') result = await verifyReportParity();
       else if (plan.kind === 'SOURCE_FREEZE') {

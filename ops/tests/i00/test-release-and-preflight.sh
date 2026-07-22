@@ -383,12 +383,14 @@ if (kind === 'browser') {
   entry.sha256 = descriptor.sha256;
   entry.byteLength = descriptor.byteLength;
   complete.sourceFreeze.evidence.sha256 = sha(JSON.stringify(complete.sourceFreeze.evidence.entries));
-  complete.steps[8].stdoutSha256 = descriptor.sha256;
-  complete.steps[8].stdoutBytes = descriptor.byteLength;
-  complete.steps[9].initialEvidence = structuredClone(complete.sourceFreeze.evidence);
-  complete.steps[9].finalInitialEvidence = structuredClone(complete.sourceFreeze.evidence);
+  const browserStep = complete.steps.find((step) => step.id === 'browser_receipt');
+  const sourceFreezeStep = complete.steps.find((step) => step.id === 'source_freeze');
+  browserStep.stdoutSha256 = descriptor.sha256;
+  browserStep.stdoutBytes = descriptor.byteLength;
+  sourceFreezeStep.initialEvidence = structuredClone(complete.sourceFreeze.evidence);
+  sourceFreezeStep.finalInitialEvidence = structuredClone(complete.sourceFreeze.evidence);
 } else {
-  const performanceEvidence = complete.steps[9].performanceEvidence;
+  const performanceEvidence = complete.steps.find((step) => step.id === 'source_freeze').performanceEvidence;
   performanceEvidence.entries[0].sha256 = descriptor.sha256;
   performanceEvidence.entries[0].byteLength = descriptor.byteLength;
   performanceEvidence.sha256 = sha(JSON.stringify(performanceEvidence.entries));
@@ -426,8 +428,8 @@ assert_acceptance_forgery() {
   assert_failure_contains "$expected" node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$root/source" --runtime-deps "$root/deps" --output-root "$root/out" --tested-sha "$SHA" --tested-receipt "$root/tested.json" --built-at-utc 2026-07-13T00:00:00Z --config-revision c --model-revision m --simulation-source
   assert_not_file "$root/out/i00-$SHA"
 }
-assert_acceptance_forgery missing-step 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.steps.splice(3,1);fs.writeFileSync(p,JSON.stringify(v));' 'exactly 11 measured step results'
-assert_acceptance_forgery command-label 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.steps[2].command=["npm","run","looks-green"];fs.writeFileSync(p,JSON.stringify(v));' 'root_test command is invalid'
+assert_acceptance_forgery missing-step 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.steps.splice(3,1);fs.writeFileSync(p,JSON.stringify(v));' 'exactly 10 measured step results'
+assert_acceptance_forgery command-label 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.steps.find((s)=>s.id==="root_test").command=["npm","run","looks-green"];fs.writeFileSync(p,JSON.stringify(v));' 'root_test command is invalid'
 assert_acceptance_forgery candidate-sha 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.source.headSha="b".repeat(40);fs.writeFileSync(p,JSON.stringify(v));' 'candidate SHA/tree mismatch'
 assert_acceptance_forgery external-boundary 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.externalBoundary.signedCalls="PASS";fs.writeFileSync(p,JSON.stringify(v));' 'external boundary truth is invalid'
 assert_acceptance_forgery browser-bytes 'const fs=require("fs"),path=require("path"),p=process.argv[1],root=process.argv[2],v=JSON.parse(fs.readFileSync(p));fs.appendFileSync(path.join(root,v.browserReceipt.relativePath)," ");' 'browser acceptance bytes do not match'

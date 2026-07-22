@@ -18,8 +18,9 @@
 | Acceptance contract | PASS | 51/51; exit 0. |
 | Command contract | PASS | 30/30; exit 0. |
 | Ops receipt contract | PASS | 173 assertions; exit 0. |
-| Root test | PENDING | Canonical root suite pending. |
-| Full matrix | PENDING | Canonical full suite pending. |
+| Canonical Quant gate | PASS | 3,243 tests under the enforced platform law; exit 0. |
+| Root test | PASS | `npm test`; exit 0. |
+| Full matrix | PASS | `npm run test:all`; exit 0. |
 | Historical evidence | UNCHANGED | No historical Q receipt or acceptance evidence file is edited. |
 | Gate posture | UNCHANGED | No skip, waiver, authority, private call, or money path is added. |
 | External effects | NONE | No push, deployment, provider mutation, private exchange call, or secret use. |

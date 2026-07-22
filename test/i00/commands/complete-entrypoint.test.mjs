@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   mkdtempSync,
+  realpathSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -154,6 +155,9 @@ test('complete entrypoint is delegation-only and shell-free', () => {
   assert.match(source, /shell:\s*false/);
   assert.match(source, /validateUvExecutableInput\(explicitOptionValue\(supplied, 'uv'\)\)/);
   assert.match(source, /prependUvToPath\(SEALED_ENVIRONMENT, uv\.executablePath\)/);
+  assert.match(source, /TMPDIR:\s*realpathSync\('\/tmp'\)/u);
+  assert.doesNotMatch(source, /TMPDIR:\s*'\/tmp'/u);
+  assert.equal(realpathSync('/tmp'), process.platform === 'darwin' ? '/private/tmp' : realpathSync('/tmp'));
   assert.doesNotMatch(source, /process\.env\.UV_BIN|userInfo|homedir|localUvExecutable/u);
   for (const forbidden of [
     'npm test', 'test:all', 'pytest', 'ops/tests/run-all.sh',

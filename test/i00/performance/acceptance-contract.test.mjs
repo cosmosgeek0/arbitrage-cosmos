@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, statSync, symlinkSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -28,6 +28,8 @@ import {
   classifyReceiptProvenanceDiagnostic,
   executeCurrentQuantGate,
   parseOptions,
+  readPerformanceReceiptAfterChild,
+  realTemporaryRoot,
   renderIntegrationCandidateReceiptMarkdown,
   validateCandidateSealTopologyDocument,
   validateCompleteReceiptDocument,
@@ -50,6 +52,49 @@ const PROOF_CONTROL_ROWS = JSON.parse(readFileSync(
   new URL('../../../fixtures/i00/proof-catalog.json', import.meta.url),
   'utf8',
 )).controls;
+
+test('acceptance temporary roots resolve a symlinked parent to its physical path', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'i00-real-temp-root-'));
+  try {
+    const physical = path.join(root, 'physical');
+    const alias = path.join(root, 'alias');
+    mkdirSync(physical);
+    symlinkSync(physical, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    assert.equal(realTemporaryRoot(alias), realpathSync(physical));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('failed performance child writes a bounded diagnostic and preserves its final line', () => {
+  const root = mkdtempSync(path.join(os.tmpdir(), 'i00-soak-failure-'));
+  try {
+    const evidenceRoot = path.join(root, 'evidence');
+    mkdirSync(evidenceRoot);
+    const runId = '20260722000000000-1';
+    const finalLine = 'LOCAL_PROXY_SOAK_FAILED:EXPECTED_CHILD_LINE';
+    const outputTail = Buffer.concat([
+      Buffer.alloc(70 * 1024, 0x61),
+      Buffer.from(`\n${finalLine}\n`),
+    ]);
+    assert.throws(
+      () => readPerformanceReceiptAfterChild({
+        result: { passed: false, exitCode: 1, exitSignal: null },
+        runId,
+        performancePath: path.join(evidenceRoot, 'absent.json'),
+        outputTail,
+        evidenceRoot,
+      }),
+      (error) => error instanceof Error && error.message === finalLine,
+    );
+    const diagnosticPath = path.join(evidenceRoot, `soak-failure-${runId}.log`);
+    const diagnostic = readFileSync(diagnosticPath);
+    assert.ok(statSync(diagnosticPath).size <= 64 * 1024);
+    assert.equal(diagnostic.toString('utf8').endsWith(`${finalLine}\n`), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 function managedInventoryFixture() {
   const entries = I00_MANAGED_INVENTORY_EXPECTATIONS.map((expected) => ({

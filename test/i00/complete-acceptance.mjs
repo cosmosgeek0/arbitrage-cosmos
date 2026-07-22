@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
+import { realpathSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -16,7 +17,7 @@ const selectedModes = supplied.filter((argument) => MODES.has(argument));
 const SEALED_ENVIRONMENT = Object.freeze({
   PATH: `${dirname(process.execPath)}:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin`,
   HOME: '/',
-  TMPDIR: '/tmp',
+  TMPDIR: realpathSync('/tmp'),
   TZ: 'UTC',
   LC_ALL: 'C',
   CI: '1',

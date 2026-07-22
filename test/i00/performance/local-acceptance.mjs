@@ -59,6 +59,8 @@ const BROWSER_CAPTURE_PROVENANCE = 'IN_APP_BROWSER_MCP';
 const BROWSER_CAPTURE_COUNT = 146;
 const BROWSER_ROUTE_OBSERVATION_COUNT = 126;
 const BROWSER_ARTIFACT_COUNT = 194;
+const PERFORMANCE_FAILURE_TAIL_MAX_BYTES = 64 * 1024;
+const COMMAND_OUTPUT_TAILS = new WeakMap();
 const BROWSER_SUPERVISOR_PATH = '/api/product-integration/v1/supervisor';
 const BROWSER_CONSOLE_LIMIT = 1000;
 const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
@@ -430,6 +432,10 @@ export function parseOptions(argv) {
   });
 }
 
+export function realTemporaryRoot(candidate = os.tmpdir()) {
+  return realpathSync(candidate);
+}
+
 async function loadSealedCandidateEvidence(options, environment) {
   if (typeof options.candidateSha !== 'string' || !/^[0-9a-f]{40}$/.test(options.candidateSha)) {
     throw new Error('EXACT_CANDIDATE_SHA_REQUIRED_FOR_VALIDATE_ONLY');
@@ -497,7 +503,7 @@ async function loadSealedCandidateEvidence(options, environment) {
 }
 
 export async function renderCandidateReceiptFromWorkingSealEvidence(options) {
-  const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'i00-candidate-render-'));
+  const tempRoot = mkdtempSync(path.join(realTemporaryRoot(), 'i00-candidate-render-'));
   const environment = safeEnvironment(tempRoot);
   try {
     if (typeof options.candidateSha !== 'string' || !/^[0-9a-f]{40}$/u.test(options.candidateSha)) {
@@ -564,7 +570,7 @@ export async function renderCandidateReceiptFromWorkingSealEvidence(options) {
 }
 
 export async function validateCompleteEvidence(options) {
-  const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'i00-complete-validate-'));
+  const tempRoot = mkdtempSync(path.join(realTemporaryRoot(), 'i00-complete-validate-'));
   const environment = safeEnvironment(tempRoot);
   try {
     const evidence = await loadSealedCandidateEvidence(options, environment);
@@ -1287,6 +1293,44 @@ function parseCounts(text) {
   return counts;
 }
 
+function appendBoundedOutputTail(current, chunk, maximumBytes = PERFORMANCE_FAILURE_TAIL_MAX_BYTES) {
+  const combined = current.length === 0
+    ? Buffer.from(chunk)
+    : Buffer.concat([current, chunk], current.length + chunk.length);
+  return combined.length <= maximumBytes
+    ? combined
+    : combined.subarray(combined.length - maximumBytes);
+}
+
+function finalNonemptyLine(text) {
+  const lines = text.split(/\r?\n/u);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (lines[index].trim().length > 0) return lines[index];
+  }
+  return null;
+}
+
+export function readPerformanceReceiptAfterChild({
+  result,
+  runId,
+  performancePath,
+  outputTail = Buffer.alloc(0),
+  evidenceRoot = EVIDENCE_ROOT,
+}) {
+  if (result.passed !== true) {
+    const fallback = `LOCAL_PROXY_SOAK_CHILD_FAILED:EXIT_${result.exitCode ?? 'UNKNOWN'}:SIGNAL_${result.exitSignal ?? 'NONE'}`;
+    const captured = Buffer.isBuffer(outputTail) ? outputTail : Buffer.from(String(outputTail));
+    const bounded = captured.length > PERFORMANCE_FAILURE_TAIL_MAX_BYTES
+      ? captured.subarray(captured.length - PERFORMANCE_FAILURE_TAIL_MAX_BYTES)
+      : captured;
+    const diagnostic = bounded.length > 0 ? bounded : Buffer.from(`${fallback}\n`);
+    const finalLine = finalNonemptyLine(diagnostic.toString('utf8')) ?? fallback;
+    writeFileSync(path.join(evidenceRoot, `soak-failure-${runId}.log`), diagnostic, { mode: 0o600 });
+    throw new Error(finalLine);
+  }
+  return readFileSync(performancePath, 'utf8');
+}
+
 function runCommand({ id, command, cwd = ROOT, environment, timeoutMs = 3_600_000 }) {
   const [executable, ...args] = command;
   return new Promise((resolve) => {
@@ -1304,8 +1348,10 @@ function runCommand({ id, command, cwd = ROOT, environment, timeoutMs = 3_600_00
     let stdoutBytes = 0;
     let stderrBytes = 0;
     let overflow = false;
+    let outputTail = Buffer.alloc(0);
     const capture = (stream, digest, which) => stream.on('data', (chunk) => {
       digest.update(chunk);
+      outputTail = appendBoundedOutputTail(outputTail, chunk);
       if (which === 'stdout') stdoutBytes += chunk.length;
       else stderrBytes += chunk.length;
       if (stdoutBytes + stderrBytes <= MAX_OUTPUT_BYTES) {
@@ -1324,13 +1370,15 @@ function runCommand({ id, command, cwd = ROOT, environment, timeoutMs = 3_600_00
       }, 8_000).unref();
     }, timeoutMs);
     child.once('error', (error) => {
-      stderr += `COMMAND_START_ERROR:${error.code ?? error.name}`;
+      const message = `COMMAND_START_ERROR:${error.code ?? error.name}`;
+      stderr += message;
+      outputTail = appendBoundedOutputTail(outputTail, Buffer.from(message));
     });
     child.once('close', (code, signal) => {
       clearTimeout(timeout);
       const combined = `${stdout}\n${stderr}`;
       const findings = scanSecretText(combined).map((finding) => ({ artifact: id, ...finding }));
-      resolve(Object.freeze({
+      const result = Object.freeze({
         id,
         command,
         cwdRelative: path.relative(ROOT, cwd) || '.',
@@ -1348,7 +1396,9 @@ function runCommand({ id, command, cwd = ROOT, environment, timeoutMs = 3_600_00
         secretFindings: findings,
         outputOverflow: overflow,
         passed: code === 0 && signal === null && !timedOut && !overflow && findings.length === 0,
-      }));
+      });
+      COMMAND_OUTPUT_TAILS.set(result, outputTail);
+      resolve(result);
     });
   });
 }
@@ -4196,7 +4246,7 @@ async function runCompleteAcceptance(options) {
   const uvInput = validateUvExecutableInput(options.uv);
   if (options.qVenv === null) throw new Error('Q_VENV_REQUIRED_USE_EXPLICIT_Q_VENV');
   if (options.browserReceipt === null) throw new Error('BROWSER_RECEIPT_REQUIRED_FOR_COMPLETE_LOCAL_ACCEPTANCE');
-  const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'i00-complete-acceptance-'));
+  const tempRoot = mkdtempSync(path.join(realTemporaryRoot(), 'i00-complete-acceptance-'));
   const environment = prependUvToPath(safeEnvironment(tempRoot), uvInput.executablePath);
   const startedAt = new Date();
   const runId = `${startedAt.toISOString().replace(/[^0-9]/g, '').slice(0, 17)}-${process.pid}`;
@@ -4267,7 +4317,12 @@ async function runCompleteAcceptance(options) {
         if (plan.kind === 'PERFORMANCE') {
           const performanceName = `local-proxy-performance-${runId}.json`;
           const performancePath = path.join(EVIDENCE_ROOT, performanceName);
-          const performanceText = readFileSync(performancePath, 'utf8');
+          const performanceText = readPerformanceReceiptAfterChild({
+            result,
+            runId,
+            performancePath,
+            outputTail: COMMAND_OUTPUT_TAILS.get(result),
+          });
           const performanceDocument = JSON.parse(performanceText);
           const validation = validatePerformanceDocument(performanceDocument, {
             ...LIVE_PERFORMANCE_SOURCE_EXPECTATION,

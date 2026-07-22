@@ -282,14 +282,55 @@
         "integrity": { "$ref": "#/$defs/integrity" }
       }
     },
-    "managedInventoryEvidence": {
+    "serviceReadinessWaiver": {
       "type": "object", "additionalProperties": false,
-      "required": ["source", "componentId", "componentProjectionIndex"],
+      "required": ["id", "scope", "mode", "reason", "owner", "expiresAt", "status"],
+      "properties": {
+        "id": { "const": "READINESS-CLUSTER-001-Q-INFERENCE" },
+        "scope": { "const": "KEYLESS_PUBLIC_DATA_VALIDATE_ONLY" },
+        "mode": { "const": "VALIDATE_ONLY" },
+        "reason": { "const": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED" },
+        "owner": { "const": "cosmosgeek" },
+        "expiresAt": { "const": "2026-10-18T00:00:00Z" },
+        "status": { "enum": ["VALID", "EXPIRED"] }
+      }
+    },
+    "serviceReadinessDisposition": {
+      "type": "object", "additionalProperties": false,
+      "required": ["basis", "expected", "observed", "requiredForServiceReadiness", "excludedFromServiceReadiness", "waiver"],
+      "properties": {
+        "basis": { "enum": ["PUBLIC_DATA", "VALIDATE_ONLY_EXECUTOR", "PERSISTENCE", "MANAGED_LIFECYCLE"] },
+        "expected": { "const": true },
+        "observed": { "const": true },
+        "requiredForServiceReadiness": { "type": "boolean" },
+        "excludedFromServiceReadiness": { "type": "boolean" },
+        "waiver": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/serviceReadinessWaiver" }] }
+      }
+    },
+    "managedInventoryComponentEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "componentId", "componentProjectionIndex", "serviceReadiness"],
       "properties": {
         "source": { "const": "PRODUCT_RUNTIME_COMPONENT_PROJECTION" },
         "componentId": { "type": "string", "minLength": 3, "maxLength": 120 },
-        "componentProjectionIndex": { "type": "integer", "minimum": 0, "maximum": 13 }
+        "componentProjectionIndex": { "type": "integer", "minimum": 0, "maximum": 13 },
+        "serviceReadiness": { "$ref": "#/$defs/serviceReadinessDisposition" }
       }
+    },
+    "managedInventoryOwnerEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "ownerId", "truthLabel"],
+      "properties": {
+        "source": { "const": "PRODUCT_RUNTIME_OWNER_PROJECTION" },
+        "ownerId": { "const": "productIntegration.incident-router" },
+        "truthLabel": { "const": "BUILT_AND_TESTED" }
+      }
+    },
+    "managedInventoryEvidence": {
+      "oneOf": [
+        { "$ref": "#/$defs/managedInventoryComponentEvidence" },
+        { "$ref": "#/$defs/managedInventoryOwnerEvidence" }
+      ]
     },
     "managedInventoryEntry": {
       "type": "object", "additionalProperties": false,
@@ -390,7 +431,7 @@
         "restartControlRevision": { "type": ["string", "null"] },
         "managedInventory": { "$ref": "#/$defs/managedInventory" },
         "canonicalComponents": { "type": "array", "minItems": 14, "maxItems": 14, "items": { "$ref": "#/$defs/canonicalComponentEvidence" } },
-        "productControls": { "type": "array", "minItems": 4, "maxItems": 4, "items": { "$ref": "#/$defs/productControlEvidence" } },
+        "productControls": { "type": "array", "minItems": 8, "maxItems": 8, "items": { "$ref": "#/$defs/productControlEvidence" } },
         "canonicalRuntimeEvidenceValid": { "const": true },
         "opsProjectionValid": { "type": "boolean" },
         "bootRevisionProjectionValid": { "type": "boolean" },

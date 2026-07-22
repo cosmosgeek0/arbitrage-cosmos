@@ -25,6 +25,7 @@ import {
   ACCEPTANCE_SCHEMA_VERSION,
   CANONICAL_SYSTEM_COMPONENT_IDS,
   I00_MANAGED_COMPONENT_IDENTITIES,
+  PERFORMANCE_RUNTIME_CONTROL_IDS,
   PROTECTED_OWNER_DIRECTIVES,
   PRODUCT_RUNTIME_CONTROL_IDS,
   Q_DONOR_SHA,
@@ -39,7 +40,11 @@ import {
   verifyProtectedOwnerDirectives,
   writeImmutableJson,
 } from './contract.mjs';
-import { LIVE_PERFORMANCE_SOURCE_EXPECTATION, validatePerformanceDocument } from './local-proxy-soak.mjs';
+import {
+  LIVE_PERFORMANCE_SOURCE_EXPECTATION,
+  performanceServiceReadinessValid,
+  validatePerformanceDocument,
+} from './local-proxy-soak.mjs';
 import {
   EXPECTED_DONOR_ROWS,
   EXPECTED_EXCLUSIONS,
@@ -3623,6 +3628,9 @@ function candidateControlInventory(performanceReceipt, controlCatalog) {
     : [];
   const observedIds = Array.isArray(observedControls) ? observedControls.map((row) => row?.controlId) : [];
   const runtimeOnly = observedIds.filter((controlId) => !catalogRuntimeIds.includes(controlId));
+  const expectedRuntimeOnly = PERFORMANCE_RUNTIME_CONTROL_IDS.filter((controlId) => (
+    !PRODUCT_RUNTIME_CONTROL_IDS.includes(controlId)
+  ));
   return Object.freeze({
     declaredCatalog: structuredClone(controlCatalog),
     observedProductRuntime: Object.freeze({
@@ -3643,8 +3651,9 @@ function candidateControlInventory(performanceReceipt, controlCatalog) {
         : 0,
       runtimeOnlyCount: runtimeOnly.length,
       exact: catalogRuntimeIds.length === PRODUCT_RUNTIME_CONTROL_IDS.length
-        && runtimeOnly.length === 0
-        && PRODUCT_RUNTIME_CONTROL_IDS.every((controlId) => catalogRuntimeIds.includes(controlId)),
+        && PRODUCT_RUNTIME_CONTROL_IDS.every((controlId) => catalogRuntimeIds.includes(controlId))
+        && exactJson(observedIds, PERFORMANCE_RUNTIME_CONTROL_IDS)
+        && exactJson(runtimeOnly, expectedRuntimeOnly),
     }),
   });
 }
@@ -3834,9 +3843,9 @@ function candidateManagedInventoryShapeValid(value) {
     'referencedCanonicalComponentCount', 'observedCanonicalComponentCount', 'entries',
   ])) return false;
   if (inventory.schemaVersion !== 'i00-managed-inventory.v1'
-      || inventory.expectedIdentityCount !== 33 || inventory.mappedIdentityCount !== 14
-      || inventory.evidencePresentCount !== 14 || inventory.ownerGatedCount !== 13
-      || inventory.notConfiguredCount !== 3 || inventory.missingCount !== 3
+      || inventory.expectedIdentityCount !== 33 || inventory.mappedIdentityCount !== 15
+      || inventory.evidencePresentCount !== 15 || inventory.ownerGatedCount !== 13
+      || inventory.notConfiguredCount !== 2 || inventory.missingCount !== 3
       || inventory.canonicalComponentCount !== 14
       || inventory.referencedCanonicalComponentCount !== 14
       || inventory.observedCanonicalComponentCount !== 14
@@ -3852,10 +3861,24 @@ function candidateManagedInventoryShapeValid(value) {
     || !['EVIDENCE_PRESENT', 'OWNER_GATED', 'NOT_CONFIGURED', 'MISSING'].includes(entry.inventoryState)
     || (entry.inventoryState === 'EVIDENCE_PRESENT'
       ? entry.reasonCode !== null || !Array.isArray(entry.evidence)
-        || entry.evidence.length !== entry.canonicalComponentIds.length
-        || entry.evidence.some((evidence) => !hasExactKeys(evidence, [
-          'source', 'componentId', 'componentProjectionIndex',
-        ]))
+        || (entry.identity === 'notification-incident-router'
+          ? entry.owner !== 'PRODUCT_INTEGRATION_INCIDENT_ROUTER'
+            || entry.canonicalComponentIds.length !== 0
+            || entry.evidence.length !== 1
+            || !hasExactKeys(entry.evidence[0], ['source', 'ownerId', 'truthLabel'])
+            || entry.evidence[0].source !== 'PRODUCT_RUNTIME_OWNER_PROJECTION'
+            || entry.evidence[0].ownerId !== 'productIntegration.incident-router'
+            || entry.evidence[0].truthLabel !== 'BUILT_AND_TESTED'
+          : entry.evidence.length !== entry.canonicalComponentIds.length
+            || entry.evidence.some((evidence, index) => (
+              !hasExactKeys(evidence, [
+                'source', 'componentId', 'componentProjectionIndex', 'serviceReadiness',
+              ])
+              || evidence.source !== 'PRODUCT_RUNTIME_COMPONENT_PROJECTION'
+              || evidence.componentId !== entry.canonicalComponentIds[index]
+              || evidence.componentProjectionIndex !== CANONICAL_SYSTEM_COMPONENT_IDS.indexOf(evidence.componentId)
+              || !performanceServiceReadinessValid(evidence.componentId, evidence.serviceReadiness)
+            )))
       : entry.evidence !== null || typeof entry.reasonCode !== 'string' || entry.reasonCode.length === 0)
   ))) return false;
   return Array.isArray(value.canonicalComponents)
@@ -3885,9 +3908,9 @@ function candidateControlInventoryShapeValid(value) {
       || !hasExactKeys(observed.evidenceSource, [
         'route', 'performanceReceiptPath', 'performanceReceiptSha256', 'finalPhaseId', 'finalSnapshotLabel',
       ])
-      || observed.observedCount !== 4
-      || !Array.isArray(observed.controls) || observed.controls.length !== 4
-      || !exactJson(observed.controls.map((control) => control?.controlId), PRODUCT_RUNTIME_CONTROL_IDS)
+      || observed.observedCount !== PERFORMANCE_RUNTIME_CONTROL_IDS.length
+      || !Array.isArray(observed.controls) || observed.controls.length !== PERFORMANCE_RUNTIME_CONTROL_IDS.length
+      || !exactJson(observed.controls.map((control) => control?.controlId), PERFORMANCE_RUNTIME_CONTROL_IDS)
       || observed.controls.some((control) => !hasExactKeys(control, [
         'controlId', 'backendCommandId', 'wiringState', 'owner', 'authority', 'disabledReason',
       ]))) return false;
@@ -3896,7 +3919,7 @@ function candidateControlInventoryShapeValid(value) {
   ])
     && value.crosswalk.mappedRuntimeCount === 4
     && value.crosswalk.catalogOnlyBlockedCount === 9
-    && value.crosswalk.runtimeOnlyCount === 0
+    && value.crosswalk.runtimeOnlyCount === PERFORMANCE_RUNTIME_CONTROL_IDS.length - PRODUCT_RUNTIME_CONTROL_IDS.length
     && value.crosswalk.exact === true;
 }
 

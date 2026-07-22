@@ -26,8 +26,8 @@ import {
   I00_MANAGED_INVENTORY_EXPECTATIONS,
   I00_MANAGED_COMPONENT_IDENTITIES,
   LOCAL_PROXY_SLOS,
-  PRODUCT_RUNTIME_CONTROL_EXPECTATIONS,
-  PRODUCT_RUNTIME_CONTROL_IDS,
+  PERFORMANCE_RUNTIME_CONTROL_EXPECTATIONS,
+  PERFORMANCE_RUNTIME_CONTROL_IDS,
   PROTECTED_OWNER_DIRECTIVES,
   PROTECTED_OWNER_DIRECTIVE_LIVE_BRANCH,
   PROTECTED_OWNER_DIRECTIVE_LIVE_STATE,
@@ -460,40 +460,115 @@ function sameOrderedStrings(actual, expected) {
     && actual.every((value, index) => value === expected[index]);
 }
 
+export function performanceServiceReadinessValid(componentId, value) {
+  const expectedBasis = ['capital-supervision', 'multileg-risk', 'execution-coordinator-validate-only', 'reconciliation'].includes(componentId)
+    ? 'VALIDATE_ONLY_EXECUTOR'
+    : componentId === 'ledger-persistence'
+      ? 'PERSISTENCE'
+      : componentId === 'engine-supervisor'
+        ? 'MANAGED_LIFECYCLE'
+        : 'PUBLIC_DATA';
+  if (value === null || typeof value !== 'object' || Array.isArray(value)
+      || JSON.stringify(Object.keys(value).toSorted()) !== JSON.stringify([
+        'basis', 'excludedFromServiceReadiness', 'expected', 'observed',
+        'requiredForServiceReadiness', 'waiver',
+      ])) return false;
+  if (value.basis !== expectedBasis || value.expected !== true || value.observed !== true) return false;
+  if (componentId !== 'q-inference') {
+    return value.requiredForServiceReadiness === true
+      && value.excludedFromServiceReadiness === false
+      && value.waiver === null;
+  }
+  if (value.waiver === null) {
+    return value.requiredForServiceReadiness === true && value.excludedFromServiceReadiness === false;
+  }
+  const waiver = value.waiver;
+  const waiverValid = waiver !== null && typeof waiver === 'object' && !Array.isArray(waiver)
+    && JSON.stringify(Object.keys(waiver).toSorted()) === JSON.stringify([
+      'expiresAt', 'id', 'mode', 'owner', 'reason', 'scope', 'status',
+    ])
+    && waiver.id === 'READINESS-CLUSTER-001-Q-INFERENCE'
+    && waiver.scope === 'KEYLESS_PUBLIC_DATA_VALIDATE_ONLY'
+    && waiver.mode === 'VALIDATE_ONLY'
+    && waiver.reason === 'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED'
+    && waiver.owner === 'cosmosgeek'
+    && waiver.expiresAt === '2026-10-18T00:00:00Z'
+    && ['VALID', 'EXPIRED'].includes(waiver.status);
+  return waiverValid && (waiver.status === 'VALID'
+    ? value.requiredForServiceReadiness === false && value.excludedFromServiceReadiness === true
+    : value.requiredForServiceReadiness === true && value.excludedFromServiceReadiness === false);
+}
+
+const PERFORMANCE_MANAGED_INVENTORY_EXPECTATIONS = Object.freeze(
+  I00_MANAGED_INVENTORY_EXPECTATIONS.map((expected) => {
+    if (expected.identity === 'notification-incident-router') {
+      return Object.freeze({
+        identity: expected.identity,
+        owner: 'PRODUCT_INTEGRATION_INCIDENT_ROUTER',
+        canonicalComponentIds: Object.freeze([]),
+        inventoryState: 'EVIDENCE_PRESENT',
+        evidence: Object.freeze([Object.freeze({
+          source: 'PRODUCT_RUNTIME_OWNER_PROJECTION',
+          ownerId: 'productIntegration.incident-router',
+          truthLabel: 'BUILT_AND_TESTED',
+        })]),
+        reasonCode: null,
+      });
+    }
+    return Object.freeze({
+      identity: expected.identity,
+      owner: expected.owner,
+      canonicalComponentIds: expected.canonicalComponentIds,
+      inventoryState: expected.inventoryState,
+      evidence: null,
+      reasonCode: expected.reasonCode,
+    });
+  }),
+);
+
 function canonicalRuntimeEvidenceValid(managedInventory, canonicalComponents, productControls) {
   const entries = Array.isArray(managedInventory?.entries) ? managedInventory.entries : [];
   const countState = (state) => entries.filter((entry) => entry?.inventoryState === state).length;
+  const expectedCount = (state) => PERFORMANCE_MANAGED_INVENTORY_EXPECTATIONS
+    .filter((entry) => entry.inventoryState === state).length;
   const inventoryValid = managedInventory?.schemaVersion === 'i00-managed-inventory.v1'
-    && managedInventory?.expectedIdentityCount === 33
-    && managedInventory?.mappedIdentityCount === 14
-    && managedInventory?.evidencePresentCount === 14
-    && managedInventory?.ownerGatedCount === 13
-    && managedInventory?.notConfiguredCount === 3
-    && managedInventory?.missingCount === 3
-    && managedInventory?.canonicalComponentCount === 14
-    && managedInventory?.referencedCanonicalComponentCount === 14
-    && managedInventory?.observedCanonicalComponentCount === 14
+    && managedInventory?.expectedIdentityCount === PERFORMANCE_MANAGED_INVENTORY_EXPECTATIONS.length
+    && managedInventory?.mappedIdentityCount === expectedCount('EVIDENCE_PRESENT')
+    && managedInventory?.evidencePresentCount === expectedCount('EVIDENCE_PRESENT')
+    && managedInventory?.ownerGatedCount === expectedCount('OWNER_GATED')
+    && managedInventory?.notConfiguredCount === expectedCount('NOT_CONFIGURED')
+    && managedInventory?.missingCount === expectedCount('MISSING')
+    && managedInventory?.canonicalComponentCount === CANONICAL_SYSTEM_COMPONENT_IDS.length
+    && managedInventory?.referencedCanonicalComponentCount === CANONICAL_SYSTEM_COMPONENT_IDS.length
+    && managedInventory?.observedCanonicalComponentCount === CANONICAL_SYSTEM_COMPONENT_IDS.length
     && sameOrderedStrings(entries.map((entry) => entry?.identity), I00_MANAGED_COMPONENT_IDENTITIES)
     && entries.every((entry, index) => {
-      const expected = I00_MANAGED_INVENTORY_EXPECTATIONS[index];
-      const expectedEvidence = expected.canonicalComponentIds.length === 0 ? null : expected.canonicalComponentIds.map((componentId) => ({
-        source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION',
-        componentId,
-        componentProjectionIndex: CANONICAL_SYSTEM_COMPONENT_IDS.indexOf(componentId),
-      }));
+      const expected = PERFORMANCE_MANAGED_INVENTORY_EXPECTATIONS[index];
       return entry?.identity === expected.identity
         && entry.owner === expected.owner
         && JSON.stringify(entry.canonicalComponentIds) === JSON.stringify(expected.canonicalComponentIds)
         && entry.inventoryState === expected.inventoryState
         && entry.reasonCode === expected.reasonCode
-        && JSON.stringify(entry.evidence) === JSON.stringify(expectedEvidence);
+        && (expected.identity === 'notification-incident-router'
+          ? JSON.stringify(entry.evidence) === JSON.stringify(expected.evidence)
+          : expected.canonicalComponentIds.length === 0
+            ? entry.evidence === null
+            : Array.isArray(entry.evidence)
+              && entry.evidence.length === expected.canonicalComponentIds.length
+              && entry.evidence.every((evidence, evidenceIndex) => {
+                const componentId = expected.canonicalComponentIds[evidenceIndex];
+                return evidence?.source === 'PRODUCT_RUNTIME_COMPONENT_PROJECTION'
+                  && evidence.componentId === componentId
+                  && evidence.componentProjectionIndex === CANONICAL_SYSTEM_COMPONENT_IDS.indexOf(componentId)
+                  && performanceServiceReadinessValid(componentId, evidence.serviceReadiness);
+              }));
     })
     && managedInventory.evidencePresentCount === countState('EVIDENCE_PRESENT')
     && managedInventory.ownerGatedCount === countState('OWNER_GATED')
     && managedInventory.notConfiguredCount === countState('NOT_CONFIGURED')
     && managedInventory.missingCount === countState('MISSING')
     && managedInventory.evidencePresentCount + managedInventory.ownerGatedCount
-      + managedInventory.notConfiguredCount + managedInventory.missingCount === 33;
+      + managedInventory.notConfiguredCount + managedInventory.missingCount === PERFORMANCE_MANAGED_INVENTORY_EXPECTATIONS.length;
   const componentsValid = Array.isArray(canonicalComponents)
     && sameOrderedStrings(canonicalComponents.map((component) => component?.componentId), CANONICAL_SYSTEM_COMPONENT_IDS)
     && canonicalComponents.every((component, index) => (
@@ -509,9 +584,9 @@ function canonicalRuntimeEvidenceValid(managedInventory, canonicalComponents, pr
     'BACKEND_COMMAND_NOT_SUPPORTED', 'MANAGED_ROOT_RESTART_NOT_PROVEN',
   ]);
   const controlsValid = Array.isArray(productControls)
-    && sameOrderedStrings(productControls.map((control) => control?.controlId), PRODUCT_RUNTIME_CONTROL_IDS)
+    && sameOrderedStrings(productControls.map((control) => control?.controlId), PERFORMANCE_RUNTIME_CONTROL_IDS)
     && productControls.every((control, index) => {
-      const expected = PRODUCT_RUNTIME_CONTROL_EXPECTATIONS[index];
+      const expected = PERFORMANCE_RUNTIME_CONTROL_EXPECTATIONS[index];
       if (control?.backendCommandId !== expected.backendCommandId) return false;
       if (control.wiringState === 'WIRED_LIVE') {
         return control.owner === 'systemIntegration.canonical-control-service'

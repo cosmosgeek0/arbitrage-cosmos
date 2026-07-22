@@ -9,7 +9,7 @@ import {
   CANONICAL_SYSTEM_COMPONENT_IDS,
   CANONICAL_SYSTEM_COMPONENT_OWNERS,
   I00_MANAGED_INVENTORY_EXPECTATIONS,
-  PRODUCT_RUNTIME_CONTROL_EXPECTATIONS,
+  PERFORMANCE_RUNTIME_CONTROL_EXPECTATIONS,
   PROTECTED_OWNER_DIRECTIVES,
   Q_DONOR_SHA,
   Q_DONOR_TREE,
@@ -97,21 +97,51 @@ test('failed performance child writes a bounded diagnostic and preserves its fin
 });
 
 function managedInventoryFixture() {
-  const entries = I00_MANAGED_INVENTORY_EXPECTATIONS.map((expected) => ({
-    identity: expected.identity,
-    owner: expected.owner,
-    canonicalComponentIds: [...expected.canonicalComponentIds],
-    inventoryState: expected.inventoryState,
-    evidence: expected.canonicalComponentIds.length === 0 ? null : expected.canonicalComponentIds.map((componentId) => ({
-      source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION',
-      componentId,
-      componentProjectionIndex: CANONICAL_SYSTEM_COMPONENT_IDS.indexOf(componentId),
-    })),
-    reasonCode: expected.reasonCode,
-  }));
+  const serviceReadiness = (componentId) => ({
+    basis: ['capital-supervision', 'multileg-risk', 'execution-coordinator-validate-only', 'reconciliation'].includes(componentId)
+      ? 'VALIDATE_ONLY_EXECUTOR'
+      : componentId === 'ledger-persistence'
+        ? 'PERSISTENCE'
+        : componentId === 'engine-supervisor'
+          ? 'MANAGED_LIFECYCLE'
+          : 'PUBLIC_DATA',
+    expected: true,
+    observed: true,
+    requiredForServiceReadiness: true,
+    excludedFromServiceReadiness: false,
+    waiver: null,
+  });
+  const entries = I00_MANAGED_INVENTORY_EXPECTATIONS.map((expected) => (
+    expected.identity === 'notification-incident-router'
+      ? {
+        identity: expected.identity,
+        owner: 'PRODUCT_INTEGRATION_INCIDENT_ROUTER',
+        canonicalComponentIds: [],
+        inventoryState: 'EVIDENCE_PRESENT',
+        evidence: [{
+          source: 'PRODUCT_RUNTIME_OWNER_PROJECTION',
+          ownerId: 'productIntegration.incident-router',
+          truthLabel: 'BUILT_AND_TESTED',
+        }],
+        reasonCode: null,
+      }
+      : {
+        identity: expected.identity,
+        owner: expected.owner,
+        canonicalComponentIds: [...expected.canonicalComponentIds],
+        inventoryState: expected.inventoryState,
+        evidence: expected.canonicalComponentIds.length === 0 ? null : expected.canonicalComponentIds.map((componentId) => ({
+          source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION',
+          componentId,
+          componentProjectionIndex: CANONICAL_SYSTEM_COMPONENT_IDS.indexOf(componentId),
+          serviceReadiness: serviceReadiness(componentId),
+        })),
+        reasonCode: expected.reasonCode,
+      }
+  ));
   return {
-    schemaVersion: 'i00-managed-inventory.v1', expectedIdentityCount: 33, mappedIdentityCount: 14,
-    evidencePresentCount: 14, ownerGatedCount: 13, notConfiguredCount: 3, missingCount: 3,
+    schemaVersion: 'i00-managed-inventory.v1', expectedIdentityCount: 33, mappedIdentityCount: 15,
+    evidencePresentCount: 15, ownerGatedCount: 13, notConfiguredCount: 2, missingCount: 3,
     canonicalComponentCount: 14, referencedCanonicalComponentCount: 14, observedCanonicalComponentCount: 14,
     entries,
   };
@@ -128,7 +158,7 @@ function canonicalComponentsFixture() {
 }
 
 function productControlsFixture() {
-  return PRODUCT_RUNTIME_CONTROL_EXPECTATIONS.map((expected) => ({
+  return PERFORMANCE_RUNTIME_CONTROL_EXPECTATIONS.map((expected) => ({
     ...expected,
     wiringState: 'WIRED_LIVE',
     owner: 'systemIntegration.canonical-control-service',

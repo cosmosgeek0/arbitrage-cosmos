@@ -15,7 +15,7 @@ import {
   CANONICAL_SYSTEM_COMPONENT_OWNERS,
   I00_MANAGED_INVENTORY_EXPECTATIONS,
   LOCAL_PROXY_SLOS,
-  PRODUCT_RUNTIME_CONTROL_EXPECTATIONS,
+  PERFORMANCE_RUNTIME_CONTROL_EXPECTATIONS,
   PROTECTED_OWNER_DIRECTIVES,
   PROTECTED_OWNER_DIRECTIVE_BUNDLE_PATH,
   PROTECTED_OWNER_DIRECTIVE_PACKAGED_STATE,
@@ -365,26 +365,60 @@ function directEventLoopSummary(p99 = 12) {
   return { count: 997, min: 1, p50: 2, p95: 8, p99, max: p99 + 4, mean: 3 };
 }
 
+function serviceReadinessFixture(componentId) {
+  return {
+    basis: ['capital-supervision', 'multileg-risk', 'execution-coordinator-validate-only', 'reconciliation'].includes(componentId)
+      ? 'VALIDATE_ONLY_EXECUTOR'
+      : componentId === 'ledger-persistence'
+        ? 'PERSISTENCE'
+        : componentId === 'engine-supervisor'
+          ? 'MANAGED_LIFECYCLE'
+          : 'PUBLIC_DATA',
+    expected: true,
+    observed: true,
+    requiredForServiceReadiness: true,
+    excludedFromServiceReadiness: false,
+    waiver: null,
+  };
+}
+
 function managedInventoryFixture() {
-  const entries = I00_MANAGED_INVENTORY_EXPECTATIONS.map((expected) => ({
-    identity: expected.identity,
-    owner: expected.owner,
-    canonicalComponentIds: [...expected.canonicalComponentIds],
-    inventoryState: expected.inventoryState,
-    evidence: expected.canonicalComponentIds.length === 0 ? null : expected.canonicalComponentIds.map((componentId) => ({
-      source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION',
-      componentId,
-      componentProjectionIndex: CANONICAL_SYSTEM_COMPONENT_IDS.indexOf(componentId),
-    })),
-    reasonCode: expected.reasonCode,
-  }));
+  const entries = I00_MANAGED_INVENTORY_EXPECTATIONS.map((expected) => {
+    if (expected.identity === 'notification-incident-router') {
+      return {
+        identity: expected.identity,
+        owner: 'PRODUCT_INTEGRATION_INCIDENT_ROUTER',
+        canonicalComponentIds: [],
+        inventoryState: 'EVIDENCE_PRESENT',
+        evidence: [{
+          source: 'PRODUCT_RUNTIME_OWNER_PROJECTION',
+          ownerId: 'productIntegration.incident-router',
+          truthLabel: 'BUILT_AND_TESTED',
+        }],
+        reasonCode: null,
+      };
+    }
+    return {
+      identity: expected.identity,
+      owner: expected.owner,
+      canonicalComponentIds: [...expected.canonicalComponentIds],
+      inventoryState: expected.inventoryState,
+      evidence: expected.canonicalComponentIds.length === 0 ? null : expected.canonicalComponentIds.map((componentId) => ({
+        source: 'PRODUCT_RUNTIME_COMPONENT_PROJECTION',
+        componentId,
+        componentProjectionIndex: CANONICAL_SYSTEM_COMPONENT_IDS.indexOf(componentId),
+        serviceReadiness: serviceReadinessFixture(componentId),
+      })),
+      reasonCode: expected.reasonCode,
+    };
+  });
   return {
     schemaVersion: 'i00-managed-inventory.v1',
     expectedIdentityCount: 33,
-    mappedIdentityCount: 14,
-    evidencePresentCount: 14,
+    mappedIdentityCount: 15,
+    evidencePresentCount: 15,
     ownerGatedCount: 13,
-    notConfiguredCount: 3,
+    notConfiguredCount: 2,
     missingCount: 3,
     canonicalComponentCount: 14,
     referencedCanonicalComponentCount: 14,
@@ -404,7 +438,7 @@ function canonicalComponentsFixture() {
 }
 
 function productControlsFixture() {
-  return PRODUCT_RUNTIME_CONTROL_EXPECTATIONS.map((expected) => ({
+  return PERFORMANCE_RUNTIME_CONTROL_EXPECTATIONS.map((expected) => ({
     controlId: expected.controlId,
     backendCommandId: expected.backendCommandId,
     wiringState: 'WIRED_LIVE',
@@ -1430,6 +1464,24 @@ test('metric summaries and local proxy bounds use deterministic fail-closed clas
   assert.equal(aggregateSloStatus([], ['INVARIANT']), 'BLOCKED');
 });
 
+test('schema oneOf applies exactly one branch and retains sibling constraints', () => {
+  const schema = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['kind', 'proof'],
+    properties: {
+      kind: { enum: ['A', 'B'] },
+      proof: { const: true },
+    },
+    oneOf: [
+      { type: 'object', required: ['kind'], properties: { kind: { const: 'A' } } },
+      { type: 'object', required: ['kind'], properties: { kind: { const: 'B' } } },
+    ],
+  };
+  assert.equal(validateJsonSchema(schema, { kind: 'A', proof: true }).passed, true);
+  assert.equal(validateJsonSchema(schema, { kind: 'A' }).passed, false);
+});
+
 test('performance schema and semantics accept complete runtime evidence and reject false green', () => {
   const schema = JSON.parse(readFileSync(path.join(HERE, 'schema.v1.json'), 'utf8'));
   const valid = performanceDocument();
@@ -1447,6 +1499,42 @@ test('performance schema and semantics accept complete runtime evidence and reje
     validatePerformanceDocument(nanosecondPrecision, { headSha: HEAD, treeSha: TREE }).passed,
     true,
   );
+
+  const signedQWaiver = structuredClone(valid);
+  for (const phaseRow of signedQWaiver.phases) {
+    for (const snapshotRow of phaseRow.snapshots) {
+      const qReadiness = snapshotRow.managedInventory.entries
+        .find((entry) => entry.identity === 'q-inference').evidence[0].serviceReadiness;
+      qReadiness.requiredForServiceReadiness = false;
+      qReadiness.excludedFromServiceReadiness = true;
+      qReadiness.waiver = {
+        id: 'READINESS-CLUSTER-001-Q-INFERENCE',
+        scope: 'KEYLESS_PUBLIC_DATA_VALIDATE_ONLY',
+        mode: 'VALIDATE_ONLY',
+        reason: 'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED',
+        owner: 'cosmosgeek',
+        expiresAt: '2026-10-18T00:00:00Z',
+        status: 'VALID',
+      };
+    }
+  }
+  const signedQWaiverValidation = validatePerformanceDocument(signedQWaiver, { headSha: HEAD, treeSha: TREE });
+  assert.equal(signedQWaiverValidation.schemaValid, true);
+  assert.equal(signedQWaiverValidation.passed, true);
+
+  const expiredQWaiver = structuredClone(signedQWaiver);
+  for (const phaseRow of expiredQWaiver.phases) {
+    for (const snapshotRow of phaseRow.snapshots) {
+      const qReadiness = snapshotRow.managedInventory.entries
+        .find((entry) => entry.identity === 'q-inference').evidence[0].serviceReadiness;
+      qReadiness.requiredForServiceReadiness = true;
+      qReadiness.excludedFromServiceReadiness = false;
+      qReadiness.waiver.status = 'EXPIRED';
+    }
+  }
+  const expiredQWaiverValidation = validatePerformanceDocument(expiredQWaiver, { headSha: HEAD, treeSha: TREE });
+  assert.equal(expiredQWaiverValidation.schemaValid, true);
+  assert.equal(expiredQWaiverValidation.passed, true);
 
   const falseGreen = structuredClone(valid);
   falseGreen.phases[0].snapshots[0].tradeReadyStatus = 200;
@@ -1466,6 +1554,49 @@ test('performance schema and semantics accept complete runtime evidence and reje
   const baselineRejected = validatePerformanceDocument(invalidBaseline, { headSha: HEAD, treeSha: TREE });
   assert.equal(baselineRejected.passed, false);
   assert.ok(baselineRejected.semanticFailures.includes('PERFORMANCE_RUNTIME_TRUTH_INVALID'));
+
+  const staleInventory = structuredClone(valid);
+  for (const phaseRow of staleInventory.phases) {
+    for (const snapshotRow of phaseRow.snapshots) {
+      snapshotRow.managedInventory.mappedIdentityCount = 14;
+      snapshotRow.managedInventory.evidencePresentCount = 14;
+      snapshotRow.managedInventory.notConfiguredCount = 3;
+      const incident = snapshotRow.managedInventory.entries
+        .find((entry) => entry.identity === 'notification-incident-router');
+      incident.owner = 'NOTIFICATION_INCIDENT_ROUTER';
+      incident.inventoryState = 'NOT_CONFIGURED';
+      incident.evidence = null;
+      incident.reasonCode = 'INCIDENT_OWNER_NOT_CONFIGURED';
+    }
+  }
+  const staleInventoryRejected = validatePerformanceDocument(staleInventory, { headSha: HEAD, treeSha: TREE });
+  assert.equal(staleInventoryRejected.passed, false);
+  assert.ok(staleInventoryRejected.semanticFailures.includes('PERFORMANCE_RUNTIME_TRUTH_INVALID'));
+
+  const incompleteControls = structuredClone(valid);
+  for (const phaseRow of incompleteControls.phases) {
+    for (const snapshotRow of phaseRow.snapshots) snapshotRow.productControls = snapshotRow.productControls.slice(0, 4);
+  }
+  const incompleteControlsRejected = validatePerformanceDocument(incompleteControls, { headSha: HEAD, treeSha: TREE });
+  assert.equal(incompleteControlsRejected.passed, false);
+  assert.ok(incompleteControlsRejected.semanticFailures.includes('PERFORMANCE_RUNTIME_TRUTH_INVALID'));
+
+  const missingReadinessDisposition = structuredClone(valid);
+  delete missingReadinessDisposition.phases[0].snapshots[0]
+    .managedInventory.entries.find((entry) => entry.identity === 'spot-public-source')
+    .evidence[0].serviceReadiness;
+  const missingReadinessRejected = validatePerformanceDocument(missingReadinessDisposition, { headSha: HEAD, treeSha: TREE });
+  assert.equal(missingReadinessRejected.passed, false);
+  assert.equal(missingReadinessRejected.schemaValid, false);
+  assert.ok(missingReadinessRejected.semanticFailures.includes('PERFORMANCE_RUNTIME_TRUTH_INVALID'));
+
+  const malformedOwnerEvidence = structuredClone(valid);
+  malformedOwnerEvidence.phases[0].snapshots[0].managedInventory.entries
+    .find((entry) => entry.identity === 'notification-incident-router')
+    .evidence[0].componentId = 'engine-supervisor';
+  const malformedOwnerEvidenceRejected = validatePerformanceDocument(malformedOwnerEvidence, { headSha: HEAD, treeSha: TREE });
+  assert.equal(malformedOwnerEvidenceRejected.schemaValid, false);
+  assert.ok(malformedOwnerEvidenceRejected.semanticFailures.includes('PERFORMANCE_RUNTIME_TRUTH_INVALID'));
 
   const missingDirectEventLoop = structuredClone(valid);
   missingDirectEventLoop.phases[1].process.eventLoopP99Ms.count = 0;

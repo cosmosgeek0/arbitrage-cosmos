@@ -115,6 +115,23 @@ export const PRODUCT_RUNTIME_CONTROL_EXPECTATIONS = Object.freeze([
   Object.freeze({ controlId: 'component.engine-supervisor.restart', backendCommandId: 'RESTART_COMPONENT' }),
 ]);
 
+/**
+ * Exact unscoped control registry observed by the measured application.
+ * Candidate-receipt proof-catalog controls above remain a separate historical
+ * crosswalk; the performance gate must bind every current base registry row.
+ */
+export const PERFORMANCE_RUNTIME_CONTROL_EXPECTATIONS = Object.freeze([
+  ...PRODUCT_RUNTIME_CONTROL_EXPECTATIONS,
+  Object.freeze({ controlId: 'source.public-spot-source.lifecycle', backendCommandId: 'SET_PUBLIC_SOURCE_LIFECYCLE' }),
+  Object.freeze({ controlId: 'source.public-usdm-source.lifecycle', backendCommandId: 'SET_PUBLIC_SOURCE_LIFECYCLE' }),
+  Object.freeze({ controlId: 'strategy.basis.intake', backendCommandId: 'SET_BASIS_INTAKE' }),
+  Object.freeze({ controlId: 'strategy.volume.intake', backendCommandId: 'SET_VOLUME_INTAKE' }),
+]);
+
+export const PERFORMANCE_RUNTIME_CONTROL_IDS = Object.freeze(
+  PERFORMANCE_RUNTIME_CONTROL_EXPECTATIONS.map((entry) => entry.controlId),
+);
+
 export const PROTECTED_OWNER_DIRECTIVES = Object.freeze([
   Object.freeze({ path: 'I00_PRODUCT_ASSEMBLY_CONTROL_ROOM_AND_LIVE_BRINGUP.md', sha256: '9d7a36da6a2e6e7b3e905c73161b5e998a2f92416dd557e498ade3e73d5e5ef5' }),
   Object.freeze({ path: 'IP_CONTROL.md', sha256: '5e57bf1d019f761731857be7a1c46c5b06eb7f80db9709d5425bbea749fb7278' }),
@@ -427,6 +444,16 @@ function typeMatches(expected, value) {
 export function validateJsonSchema(rootSchema, value) {
   const errors = [];
   function visit(schema, current, pointer) {
+    if (Array.isArray(schema.oneOf)) {
+      const branchFailures = schema.oneOf.map((branch) => {
+        const start = errors.length;
+        visit(branch, current, pointer);
+        return errors.splice(start);
+      });
+      if (branchFailures.filter((failures) => failures.length === 0).length !== 1) {
+        errors.push(`${pointer}:ONE_OF`);
+      }
+    }
     if (schema.$ref) {
       const resolved = resolveSchemaReference(rootSchema, schema.$ref);
       if (!resolved) errors.push(`${pointer}:UNRESOLVED_REF:${schema.$ref}`);

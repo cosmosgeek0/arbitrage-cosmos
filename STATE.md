@@ -13,6 +13,12 @@
 - Acceptance uv-input correction (2026-07-22): complete-acceptance run mode now requires an explicit absolute `--uv` executable path with the platform uv basename, binds its resolved-path and binary SHA-256 provenance, and prepends only the explicit path's directory to the sealed child `PATH`; `docs/archive/i00-phase4/ACCEPTANCE-UV-INPUT-003_CORRECTION_RECEIPT.md` records the correction.
 - Acceptance soak diagnostic correction (2026-07-22): complete acceptance now derives temporary namespaces from physical filesystem paths, preserves a bounded performance-child output tail when that child does not emit a receipt, and reports the child's final non-empty line; `docs/archive/i00-phase4/ACCEPTANCE-SOAK-DIAG-004_CORRECTION_RECEIPT.md` records the correction.
 
+| item | expected | found | status |
+|---|---|---|---|
+| acceptance runtime evidence | current measured projection | 15 mapped identities; 14 canonical components; 8 controls | BUILT_AND_TESTED |
+| acceptance candidate projection | measured controls and catalog crosswalk | 8 controls; crosswalk 4/9/4 | BUILT_AND_TESTED |
+| correction receipt | current branch proof | `docs/archive/i00-phase4/ACCEPTANCE-SOAK-DIAG-004_CORRECTION_RECEIPT.md` | RECORDED |
+
 This file owns current product state. `ARCHITECTURE.md` Part II owns code authority, `MISSION.md` owns purpose, and `verification/product-truth-20260716/STATE.md` alone owns campaign status and next action.
 
 ## Source scope

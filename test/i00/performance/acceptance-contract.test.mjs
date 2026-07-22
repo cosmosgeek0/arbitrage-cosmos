@@ -411,6 +411,10 @@ function completeFixture() {
         },
       },
     },
+    uv: {
+      resolvedPathSha256: '9'.repeat(64),
+      binarySha256: 'a'.repeat(64),
+    },
     plan: ACCEPTANCE_PLAN.map((plan) => ({ ...plan })),
     steps,
     missingSteps: [],
@@ -457,7 +461,7 @@ test('exact Q donor archive preserves the complete accepted repository root', ()
   assert.ok(tamperedValidation.failures.includes(`Q_ARCHIVE_REQUIRED_ENTRY_HASH_MISMATCH:${tampered[0].path}`));
 });
 
-test('a failing current quant gate fails the complete acceptance chain', async () => {
+test('a current quant uv-lock failure fails the complete acceptance chain before later steps', async () => {
   const calls = [];
   const failed = await executeCurrentQuantGate({ PATH: '/usr/bin' }, async (request) => {
     calls.push(request);
@@ -468,6 +472,9 @@ test('a failing current quant gate fails the complete acceptance chain', async (
       exitSignal: null,
       timedOut: false,
       outputOverflow: false,
+      stderrBytes: 29,
+      stderrSha256: sha256('uv-lock:UV_EXECUTABLE_MISSING'),
+      parsedCounts: { uvLockFailures: [1] },
       passed: false,
     };
   });
@@ -540,6 +547,9 @@ test('validate-only requires an explicit exact candidate SHA', () => {
   assert.equal(parsed.sealSha, SEAL);
   const render = parseOptions(['--render-candidate-receipt', `--candidate-sha=${CANDIDATE}`, `--seal-sha=${SEAL}`]);
   assert.equal(render.mode, 'RENDER_CANDIDATE_RECEIPT');
+  const uvPath = path.join(os.tmpdir(), 'uv');
+  const run = parseOptions(['--run', `--uv=${uvPath}`]);
+  assert.equal(run.uv, uvPath);
   assert.throws(() => parseOptions(['--candidate-sha']), /MISSING_ARGUMENT_VALUE/);
 });
 
@@ -725,7 +735,7 @@ test('proof catalog is unbound in C, bound to exact C only in the sole-child sea
   assert.ok(validateProofCatalogSealBindingDocuments(forgedCatalog, forgedCatalogSeal, CANDIDATE).failures.includes('PROOF_CONTROL_CATALOG_CROSSWALK_INVALID'));
 });
 
-test('complete receipt binds all exact steps, candidate source, source freeze, Q, browser and performance evidence', () => {
+test('complete receipt binds all exact steps, candidate source, source freeze, Q, uv, browser and performance evidence', () => {
   const fixture = completeFixture();
   const validate = (document) => validateCompleteReceiptDocument(
     document,
@@ -757,6 +767,18 @@ test('complete receipt binds all exact steps, candidate source, source freeze, Q
   const qEnvironmentDrift = structuredClone(fixture.document);
   qEnvironmentDrift.qExactDonor.venv.integrity.pytestPluginPolicy.explicit.push('rogue.plugin');
   assert.ok(validate(qEnvironmentDrift).semanticFailures.includes('COMPLETE_RECEIPT_Q_PROVENANCE_INVALID'));
+
+  const missingUv = structuredClone(fixture.document);
+  delete missingUv.uv;
+  assert.ok(validate(missingUv).semanticFailures.includes('COMPLETE_RECEIPT_UV_PROVENANCE_INVALID'));
+
+  const malformedUv = structuredClone(fixture.document);
+  malformedUv.uv.resolvedPathSha256 = 'not-a-digest';
+  assert.ok(validate(malformedUv).semanticFailures.includes('COMPLETE_RECEIPT_UV_PROVENANCE_INVALID'));
+
+  const forgedUv = structuredClone(fixture.document);
+  forgedUv.uv.path = '/forged/uv';
+  assert.ok(validate(forgedUv).semanticFailures.includes('COMPLETE_RECEIPT_UV_PROVENANCE_INVALID'));
 
   const falseGreen = structuredClone(fixture.document);
   const qCurrentStep = falseGreen.steps.find((step) => step.id === 'q_current_gate');

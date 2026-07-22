@@ -363,7 +363,7 @@ export function validateCompleteAcceptanceReceipt({
   const receipt = readJson(receiptFile.absolute, 'complete local-acceptance receipt');
   requireExactKeys(receipt, [
     'schemaVersion', 'truthClass', 'runId', 'startedAtUtc', 'endedAtUtc', 'source',
-    'sourceFreeze', 'qExactDonor', 'plan', 'steps', 'missingSteps',
+    'sourceFreeze', 'qExactDonor', 'uv', 'plan', 'steps', 'missingSteps',
     'performanceReceipt', 'browserReceipt', 'externalBoundary', 'secretScan', 'passed',
   ], 'complete local-acceptance receipt');
   assert(receipt.schemaVersion === COMPLETE_ACCEPTANCE_SCHEMA
@@ -408,6 +408,9 @@ export function validateCompleteAcceptanceReceipt({
   assert(qIntegrity.pytestPluginPolicy.autoLoad === 'DISABLED'
     && exactJson(qIntegrity.pytestPluginPolicy.explicit, ['_hypothesis_pytestplugin', 'pytest_cov.plugin']),
   'complete acceptance Q pytest plugin policy is invalid');
+  requireExactKeys(receipt.uv, ['resolvedPathSha256', 'binarySha256'], 'complete acceptance uv');
+  assertSha256(receipt.uv.resolvedPathSha256, 'complete acceptance uv.resolvedPathSha256');
+  assertSha256(receipt.uv.binarySha256, 'complete acceptance uv.binarySha256');
   assertPlan(receipt, expectedSha);
   assert(Array.isArray(receipt.steps) && receipt.steps.length === PLAN.length, 'complete acceptance must contain exactly 10 measured step results');
   for (let index = 0; index < PLAN.length; index += 1) assertStep(receipt.steps[index], PLAN[index], receipt.plan[index], receiptStart, receiptEnd, expectedSha);

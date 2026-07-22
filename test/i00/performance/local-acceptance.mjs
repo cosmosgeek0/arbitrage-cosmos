@@ -2,6 +2,8 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
+  X_OK,
+  accessSync,
   lstatSync,
   mkdtempSync,
   mkdirSync,
@@ -362,6 +364,13 @@ export const ACCEPTANCE_PLAN = Object.freeze([
   Object.freeze({ id: 'diff_check', kind: 'COMMAND', command: Object.freeze(['git', 'diff', '--check']) }),
 ]);
 
+export const ACCEPTANCE_REQUIRED_INPUTS = Object.freeze([
+  'explicit --q-venv for --run',
+  'explicit --uv <absolute-path-to-uv> for --run',
+  'schema-valid local browser receipt',
+  'HEAD-bound source with only hash-pinned protected directives and immutable evidence untracked',
+]);
+
 export const Q_DONOR_ARCHIVE_ARGS = Object.freeze([
   'archive',
   '--format=tar',
@@ -400,7 +409,7 @@ export function parseOptions(argv) {
     values.set(key, next);
     index += 1;
   }
-  const known = new Set(['run', 'plan', 'validate-only', 'render-candidate-receipt', 'out', 'q-venv', 'browser-receipt', 'performance-receipt', 'complete-receipt', 'candidate-sha', 'seal-sha', 'performance-duration-seconds']);
+  const known = new Set(['run', 'plan', 'validate-only', 'render-candidate-receipt', 'out', 'q-venv', 'uv', 'browser-receipt', 'performance-receipt', 'complete-receipt', 'candidate-sha', 'seal-sha', 'performance-duration-seconds']);
   for (const key of values.keys()) if (!known.has(key)) throw new Error(`UNKNOWN_OPTION:${key}`);
   const selectedModes = ['run', 'plan', 'validate-only', 'render-candidate-receipt'].filter((key) => values.has(key));
   if (selectedModes.length > 1) throw new Error('EXACTLY_ONE_MODE_REQUIRED');
@@ -411,6 +420,7 @@ export function parseOptions(argv) {
           : 'PLAN',
     output: values.get('out') ?? null,
     qVenv: values.get('q-venv') ?? null,
+    uv: values.get('uv') ?? null,
     browserReceipt: values.get('browser-receipt') ?? null,
     performanceReceipt: values.get('performance-receipt') ?? null,
     completeReceipt: values.get('complete-receipt') ?? null,
@@ -1667,23 +1677,66 @@ async function inspectAcceptedQVenv({ quantRoot, resolvedVenv, environment }) {
   });
 }
 
-function resolveAcceptanceUvExecutable() {
-  const executableName = process.platform === 'win32' ? 'uv.exe' : 'uv';
-  const candidates = [
-    process.env.UV_BIN,
-    ...(process.env.PATH ?? '').split(path.delimiter).filter(Boolean).map((directory) => path.join(directory, executableName)),
-    path.join(os.homedir(), '.local', 'bin', executableName),
-  ];
-  for (const candidate of candidates) {
-    if (typeof candidate !== 'string' || candidate.length === 0) continue;
-    try {
-      const resolved = realpathSync(candidate);
-      if (statSync(resolved).isFile()) return resolved;
-    } catch {
-      // Continue through the bounded candidate list.
-    }
+export function validateUvExecutableInput(requested) {
+  if (requested === null || requested === undefined || requested === '') {
+    throw new Error('UV_REQUIRED_USE_EXPLICIT_UV');
   }
-  throw new Error('Q_CURRENT_UV_EXECUTABLE_MISSING');
+  if (typeof requested !== 'string' || requested.length > 4_096
+      || requested.includes('\0') || !path.isAbsolute(requested)) {
+    throw new Error('UV_PATH_MUST_BE_ABSOLUTE');
+  }
+  const executableName = process.platform === 'win32' ? 'uv.exe' : 'uv';
+  const executablePath = path.resolve(requested);
+  const executableDirectory = path.dirname(executablePath);
+  if (path.basename(executablePath) !== executableName) {
+    throw new Error('UV_EXECUTABLE_NAME_INVALID');
+  }
+  if (executableDirectory.includes(path.delimiter)) {
+    throw new Error('UV_EXECUTABLE_DIRECTORY_INVALID');
+  }
+  let resolvedPath;
+  try {
+    resolvedPath = realpathSync(executablePath);
+  } catch {
+    throw new Error('UV_EXECUTABLE_NOT_FOUND');
+  }
+  let info;
+  try {
+    info = statSync(resolvedPath);
+  } catch {
+    throw new Error('UV_EXECUTABLE_NOT_FOUND');
+  }
+  if (!info.isFile()) throw new Error('UV_EXECUTABLE_NOT_REGULAR_FILE');
+  try {
+    accessSync(resolvedPath, X_OK);
+  } catch {
+    throw new Error('UV_EXECUTABLE_NOT_EXECUTABLE');
+  }
+  let bytes;
+  try {
+    bytes = readFileSync(resolvedPath);
+  } catch {
+    throw new Error('UV_EXECUTABLE_READ_FAILED');
+  }
+  return Object.freeze({
+    executablePath,
+    resolvedPath,
+    provenance: Object.freeze({
+      resolvedPathSha256: sha256(resolvedPath),
+      binarySha256: sha256(bytes),
+    }),
+  });
+}
+
+export function prependUvToPath(environment, executablePath) {
+  const uvDirectory = path.dirname(executablePath);
+  const currentPath = typeof environment?.PATH === 'string' && environment.PATH.length > 0
+    ? environment.PATH
+    : '/usr/bin:/bin';
+  const nextPath = currentPath.split(path.delimiter)[0] === uvDirectory
+    ? currentPath
+    : `${uvDirectory}${path.delimiter}${currentPath}`;
+  return Object.freeze({ ...environment, PATH: nextPath });
 }
 
 export function executeCurrentQuantGate(environment, execute = runCommand) {
@@ -1726,9 +1779,7 @@ async function runQArchiveGate(tempRoot, qVenv, environment) {
   if (!statSync(path.join(currentVenv, 'bin/python'), { throwIfNoEntry: false })?.isFile()) {
     throw new Error('Q_CURRENT_VENV_PYTHON_MISSING');
   }
-  const current = await executeCurrentQuantGate(
-    safeEnvironment(tempRoot, { UV_BIN: resolveAcceptanceUvExecutable() }),
-  );
+  const current = await executeCurrentQuantGate(environment);
   return {
     provenance: { ...donor, venv: venvProvenance },
     steps: [current],
@@ -3367,6 +3418,7 @@ export function validateCompleteReceiptDocument(
   if (steps.some((step) => !completeStepMeasurementValid(step))) failures.push('COMPLETE_RECEIPT_STEP_MEASUREMENT_INVALID');
   if (steps.some((step, index) => !completeStepCommandValid(step, ACCEPTANCE_PLAN[index], expectedHead))) failures.push('COMPLETE_RECEIPT_STEP_COMMAND_INVALID');
   if (!Array.isArray(document.missingSteps) || document.missingSteps.length !== 0) failures.push('COMPLETE_RECEIPT_MISSING_STEPS');
+  if (!uvProvenanceValid(document.uv)) failures.push('COMPLETE_RECEIPT_UV_PROVENANCE_INVALID');
   if (document.qExactDonor?.donorSha !== Q_DONOR_SHA
       || document.qExactDonor?.donorTree !== Q_DONOR_TREE
       || document.qExactDonor?.receiptSha256 !== Q_RECEIPT_SHA256
@@ -3460,6 +3512,13 @@ function qVenvProvenanceValid(venv) {
     && integrity?.pipCheck?.passed === true
     && integrity?.pytestPluginPolicy?.autoLoad === 'DISABLED'
     && exactList(integrity?.pytestPluginPolicy?.explicit, ['_hypothesis_pytestplugin', 'pytest_cov.plugin']);
+}
+
+function uvProvenanceValid(uv) {
+  return isPlainRecord(uv)
+    && exactList(Object.keys(uv).toSorted(), ['binarySha256', 'resolvedPathSha256'])
+    && /^[0-9a-f]{64}$/u.test(uv.resolvedPathSha256 ?? '')
+    && /^[0-9a-f]{64}$/u.test(uv.binarySha256 ?? '');
 }
 
 function evidenceManifestShape(receipts) {
@@ -4134,10 +4193,11 @@ async function validateCompleteReceiptAtRevision(
 }
 
 async function runCompleteAcceptance(options) {
+  const uvInput = validateUvExecutableInput(options.uv);
   if (options.qVenv === null) throw new Error('Q_VENV_REQUIRED_USE_EXPLICIT_Q_VENV');
   if (options.browserReceipt === null) throw new Error('BROWSER_RECEIPT_REQUIRED_FOR_COMPLETE_LOCAL_ACCEPTANCE');
   const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'i00-complete-acceptance-'));
-  const environment = safeEnvironment(tempRoot);
+  const environment = prependUvToPath(safeEnvironment(tempRoot), uvInput.executablePath);
   const startedAt = new Date();
   const runId = `${startedAt.toISOString().replace(/[^0-9]/g, '').slice(0, 17)}-${process.pid}`;
   const identity = await sourceIdentity(environment);
@@ -4246,6 +4306,7 @@ async function runCompleteAcceptance(options) {
       endedAtUtc: new Date().toISOString(),
       source,
       sourceFreeze: { ...frozenSource, evidence: frozenEvidence, protectedOwnerDirectives: source.protectedOwnerDirectives },
+      uv: uvInput.provenance,
       qExactDonor: qProvenance,
       plan: ACCEPTANCE_PLAN,
       steps,
@@ -4276,7 +4337,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   Promise.resolve().then(async () => {
     const options = parseOptions(process.argv.slice(2));
     if (options.mode === 'PLAN') {
-      process.stdout.write(`${JSON.stringify({ schemaVersion: ACCEPTANCE_SCHEMA_VERSION, mode: 'PLAN_ONLY', exactQDonor: Q_DONOR_SHA, steps: ACCEPTANCE_PLAN, requires: ['explicit --q-venv for --run', 'schema-valid local browser receipt', 'HEAD-bound source with only hash-pinned protected directives and immutable evidence untracked'], externalActions: 'NONE' }, null, 2)}\n`);
+      process.stdout.write(`${JSON.stringify({ schemaVersion: ACCEPTANCE_SCHEMA_VERSION, mode: 'PLAN_ONLY', exactQDonor: Q_DONOR_SHA, steps: ACCEPTANCE_PLAN, requires: ACCEPTANCE_REQUIRED_INPUTS, externalActions: 'NONE' }, null, 2)}\n`);
       return;
     }
     if (options.mode === 'VALIDATE_ONLY') {

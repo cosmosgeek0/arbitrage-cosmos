@@ -40,10 +40,12 @@ import {
   Q_ARCHIVE_REQUIRED_FILES,
   canonicalQVenvManifestForHash,
   parseOptions,
+  prependUvToPath,
   validateBrowserArtifacts,
   validateBrowserDocument,
   validateQVenvManifest,
   validateQArchiveInventory,
+  validateUvExecutableInput,
 } from './local-acceptance.mjs';
 import {
   BASELINE_LIVE_COMPONENT_IDS,
@@ -1325,7 +1327,9 @@ test('local proxy event-loop SLO uses the worst of the three direct phase p99s',
 
 test('complete acceptance exposes explicit modes and each required layer exactly once', () => {
   assert.equal(parseOptions(['--plan']).mode, 'PLAN');
-  assert.equal(parseOptions(['--run', '--q-venv=/tmp/q', '--browser-receipt=evidence/browser.json']).mode, 'RUN');
+  const run = parseOptions(['--run', '--q-venv=/tmp/q', '--uv=/tmp/uv', '--browser-receipt=evidence/browser.json']);
+  assert.equal(run.mode, 'RUN');
+  assert.equal(run.uv, '/tmp/uv');
   assert.equal(parseOptions(['--validate-only', '--performance-receipt=evidence/perf.json', '--browser-receipt=evidence/browser.json']).mode, 'VALIDATE_ONLY');
   assert.throws(() => parseOptions(['--run', '--plan']), /EXACTLY_ONE_MODE_REQUIRED/);
   const ids = ACCEPTANCE_PLAN.map((step) => step.id);
@@ -1340,6 +1344,80 @@ test('complete acceptance exposes explicit modes and each required layer exactly
     id: 'q_current_gate', kind: 'Q_CURRENT', command: ['node', 'test/run-quant-gates.mjs'],
   });
   assert.ok(ACCEPTANCE_PLAN.find((step) => step.id === 'local_proxy_performance').command.includes('--run'));
+});
+
+test('complete acceptance validates explicit uv and prepends only its dirname to child PATH', () => {
+  const tempRoot = mkdtempSync(path.join(os.tmpdir(), 'i00-uv-input-'));
+  try {
+    const uvPath = path.join(tempRoot, process.platform === 'win32' ? 'uv.exe' : 'uv');
+    assert.throws(() => validateUvExecutableInput(null), /UV_REQUIRED_USE_EXPLICIT_UV/);
+    assert.throws(() => validateUvExecutableInput('relative/uv'), /UV_PATH_MUST_BE_ABSOLUTE/);
+    assert.throws(() => validateUvExecutableInput(uvPath), /UV_EXECUTABLE_NOT_FOUND/);
+    const directoryNamedUv = path.join(tempRoot, 'directory', process.platform === 'win32' ? 'uv.exe' : 'uv');
+    mkdirSync(directoryNamedUv, { recursive: true });
+    assert.throws(() => validateUvExecutableInput(directoryNamedUv), /UV_EXECUTABLE_NOT_REGULAR_FILE/);
+
+    const uvBytes = Buffer.from('#!/bin/sh\nexit 0\n', 'utf8');
+    writeFileSync(uvPath, uvBytes, { mode: 0o600 });
+    assert.throws(() => validateUvExecutableInput(uvPath), /UV_EXECUTABLE_NOT_EXECUTABLE/);
+    chmodSync(uvPath, 0o700);
+    const wrongName = path.join(tempRoot, 'not-uv');
+    writeFileSync(wrongName, uvBytes, { mode: 0o700 });
+    assert.throws(() => validateUvExecutableInput(wrongName), /UV_EXECUTABLE_NAME_INVALID/);
+
+    const validated = validateUvExecutableInput(uvPath);
+    assert.equal(validated.executablePath, path.resolve(uvPath));
+    assert.equal(path.basename(validated.resolvedPath), path.basename(uvPath));
+    assert.deepEqual(validated.provenance, {
+      resolvedPathSha256: sha256(validated.resolvedPath),
+      binarySha256: sha256(uvBytes),
+    });
+
+    const sealed = Object.freeze({
+      PATH: '/fixed-node:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+      HOME: '/',
+      TMPDIR: '/tmp',
+      TZ: 'UTC',
+      LC_ALL: 'C',
+      CI: '1',
+    });
+    const withUv = prependUvToPath(sealed, validated.executablePath);
+    assert.deepEqual(withUv, {
+      ...sealed,
+      PATH: `${path.dirname(validated.executablePath)}${path.delimiter}${sealed.PATH}`,
+    });
+    assert.deepEqual(prependUvToPath(withUv, validated.executablePath), withUv);
+    assert.equal('UV_BIN' in withUv, false);
+
+    if (process.platform !== 'win32') {
+      const lookupDirectory = path.join(tempRoot, 'lookup');
+      const targetDirectory = path.join(tempRoot, 'target');
+      mkdirSync(lookupDirectory);
+      mkdirSync(targetDirectory);
+      const target = path.join(targetDirectory, 'uv-target');
+      const neighbor = path.join(targetDirectory, 'uv');
+      writeFileSync(target, '#!/bin/sh\nexit 7\n', { mode: 0o700 });
+      writeFileSync(neighbor, '#!/bin/sh\nexit 8\n', { mode: 0o700 });
+      const link = path.join(lookupDirectory, 'uv');
+      symlinkSync(target, link);
+      const linked = validateUvExecutableInput(link);
+      const linkedEnvironment = prependUvToPath(sealed, linked.executablePath);
+      assert.equal(linkedEnvironment.PATH.split(path.delimiter)[0], lookupDirectory);
+      assert.equal(
+        validateUvExecutableInput(path.join(linkedEnvironment.PATH.split(path.delimiter)[0], 'uv')).resolvedPath,
+        linked.resolvedPath,
+      );
+      assert.notEqual(linked.resolvedPath, validateUvExecutableInput(neighbor).resolvedPath);
+
+      const invalidDirectory = path.join(tempRoot, `invalid${path.delimiter}directory`);
+      mkdirSync(invalidDirectory);
+      const invalidDirectoryUv = path.join(invalidDirectory, 'uv');
+      writeFileSync(invalidDirectoryUv, uvBytes, { mode: 0o700 });
+      assert.throws(() => validateUvExecutableInput(invalidDirectoryUv), /UV_EXECUTABLE_DIRECTORY_INVALID/);
+    }
+  } finally {
+    rmSync(tempRoot, { recursive: true, force: true });
+  }
 });
 
 test('metric summaries and local proxy bounds use deterministic fail-closed classifications', () => {

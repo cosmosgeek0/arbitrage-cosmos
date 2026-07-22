@@ -50,7 +50,7 @@ npm test                  # deterministic CI lane: typecheck, build, engines, sa
 npm run test:all          # full Node/TypeScript repository suite
 npm run test:i00:complete                    # print the bounded command/evidence plan only
 npm run test:i00:complete -- --plan          # explicitly print the bounded command/evidence plan only
-npm run test:i00:complete -- --run --q-venv /absolute/path/to/accepted-q-venv --browser-receipt test/i00/performance/evidence/browser/<browser-receipt>.json
+npm run test:i00:complete -- --run --uv /absolute/path/to/uv --q-venv /absolute/path/to/accepted-q-venv --browser-receipt test/i00/performance/evidence/browser/<browser-receipt>.json
 npm run test:i00:complete -- --validate-only --candidate-sha <candidate-commit> --seal-sha <sole-child-seal-commit> --performance-receipt test/i00/performance/evidence/<performance-receipt>.json --browser-receipt test/i00/performance/evidence/browser/<browser-receipt>.json --complete-receipt test/i00/performance/evidence/<complete-receipt>.json
 npm run test:integration  # boots the built app; live public-market gates
 npm run build             # server tsc + web vite production build
@@ -61,6 +61,8 @@ npm run smoke:public      # public-only, keyless source smoke
 npm run smoke:private-read # OWNER_GATED, data-only exit 2 in this integration boundary
 npm run smoke:signed-test  # OWNER_GATED, data-only exit 2 in this integration boundary
 ```
+
+Complete-acceptance run mode requires `--uv` to name an existing regular executable target by absolute `uv` path (`uv.exe` on Windows). Preflight rejects a missing, relative, wrong-name, non-regular, or non-executable input before any acceptance step. The complete receipt binds the resolved uv path and binary with separate SHA-256 provenance, and the runner prepends only the explicit path's directory to the sealed child `PATH`; every other sealed environment field remains unchanged.
 
 The stable operations entrypoints are `npm run backup`, `npm run restore:test`,
 `npm run release:preflight`, `npm run deploy:preflight`, and

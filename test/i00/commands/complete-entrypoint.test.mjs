@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import {
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import test from 'node:test';
@@ -7,7 +13,7 @@ import test from 'node:test';
 const ROOT = resolve(import.meta.dirname, '../../..');
 const ENTRYPOINT = resolve(ROOT, 'test/i00/complete-acceptance.mjs');
 
-function invoke(args) {
+function invoke(args, extraEnvironment = {}) {
   return spawnSync(process.execPath, [ENTRYPOINT, ...args], {
     cwd: ROOT,
     encoding: 'utf8',
@@ -19,8 +25,15 @@ function invoke(args) {
       TZ: 'UTC',
       LC_ALL: 'C',
       CI: '1',
+      ...extraEnvironment,
     },
   });
+}
+
+function executableFixture(root, name = process.platform === 'win32' ? 'uv.exe' : 'uv') {
+  const executable = resolve(root, name);
+  writeFileSync(executable, '#!/bin/sh\nexit 0\n', { mode: 0o700 });
+  return executable;
 }
 
 test('complete entrypoint delegates plan-only without running acceptance', () => {
@@ -29,6 +42,7 @@ test('complete entrypoint delegates plan-only without running acceptance', () =>
   const plan = JSON.parse(result.stdout);
   assert.equal(plan.mode, 'PLAN_ONLY');
   assert.equal(plan.externalActions, 'NONE');
+  assert.ok(plan.requires.includes('explicit --uv <absolute-path-to-uv> for --run'));
   const ids = plan.steps.map((step) => step.id);
   assert.equal(new Set(ids).size, ids.length);
   assert.equal(ids.filter((id) => id === 'root_test').length, 1);
@@ -67,6 +81,17 @@ test('complete entrypoint defaults to plan-only and never starts acceptance with
   );
 });
 
+test('complete entrypoint validates explicit uv only in run mode', () => {
+  const temp = mkdtempSync(resolve(tmpdir(), 'i00-entry-uv-plan-'));
+  try {
+    const result = invoke(['--plan', `--uv=${resolve(temp, 'absent')}`]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(JSON.parse(result.stdout).mode, 'PLAN_ONLY');
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
 test('complete entrypoint rejects conflicting modes before delegation', () => {
   const result = invoke(['--plan', '--validate-only']);
   assert.equal(result.status, 1);
@@ -80,12 +105,56 @@ test('validate-only with missing receipts fails quickly and never starts suites'
   assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, /(?:^|\s)npm test(?:\s|$)|test:all|pytest|ops\/tests\/run-all/);
 });
 
+test('complete entrypoint run mode rejects missing explicit uv without ambient fallback', () => {
+  const temp = mkdtempSync(resolve(tmpdir(), 'i00-entry-uv-missing-'));
+  try {
+    const ambientUv = executableFixture(temp);
+    const result = invoke(['--run'], { UV_BIN: ambientUv });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /UV/u);
+    assert.doesNotMatch(result.stderr, /Q_VENV_REQUIRED|BROWSER_RECEIPT_REQUIRED/u);
+    assert.equal(result.stdout, '');
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test('complete entrypoint run mode rejects an invalid explicit uv without ambient fallback', () => {
+  const temp = mkdtempSync(resolve(tmpdir(), 'i00-entry-uv-invalid-'));
+  try {
+    const ambientUv = executableFixture(temp, 'ambient-uv');
+    const invalidUv = resolve(temp, 'absent', process.platform === 'win32' ? 'uv.exe' : 'uv');
+    const result = invoke(['--run', `--uv=${invalidUv}`], { UV_BIN: ambientUv });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /UV/u);
+    assert.doesNotMatch(result.stderr, /Q_VENV_REQUIRED|BROWSER_RECEIPT_REQUIRED/u);
+    assert.equal(result.stdout, '');
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
+test('complete entrypoint passes an accepted explicit uv to the run delegate', () => {
+  const temp = mkdtempSync(resolve(tmpdir(), 'i00-entry-uv-pass-'));
+  try {
+    const explicitUv = executableFixture(temp);
+    const result = invoke(['--run', '--uv', explicitUv]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Q_VENV_REQUIRED/u);
+    assert.doesNotMatch(result.stderr, /UV_(?:INPUT|EXECUTABLE|PATH).*(?:INVALID|REQUIRED)/u);
+    assert.equal(result.stdout, '');
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+});
+
 test('complete entrypoint is delegation-only and shell-free', () => {
   const source = readFileSync(ENTRYPOINT, 'utf8');
   assert.match(source, /performance\/local-acceptance\.mjs/);
   assert.match(source, /shell:\s*false/);
-  assert.match(source, /executablePath\(process\.env\.UV_BIN\)/);
-  assert.match(source, /realpathSync\(candidate\)/);
+  assert.match(source, /validateUvExecutableInput\(explicitOptionValue\(supplied, 'uv'\)\)/);
+  assert.match(source, /prependUvToPath\(SEALED_ENVIRONMENT, uv\.executablePath\)/);
+  assert.doesNotMatch(source, /process\.env\.UV_BIN|userInfo|homedir|localUvExecutable/u);
   for (const forbidden of [
     'npm test', 'test:all', 'pytest', 'ops/tests/run-all.sh',
     'ops/tests/i00/run-all.sh', 'local-proxy-soak.mjs',

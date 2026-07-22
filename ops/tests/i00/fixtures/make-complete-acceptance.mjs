@@ -823,6 +823,10 @@ const receipt = {
       },
     },
   },
+  uv: {
+    resolvedPathSha256: SHA,
+    binarySha256: SHA,
+  },
   plan: plans,
   steps,
   missingSteps: [],

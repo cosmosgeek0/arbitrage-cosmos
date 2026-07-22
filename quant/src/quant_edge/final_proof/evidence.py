@@ -56,7 +56,7 @@ _ARTIFACTS: Final[tuple[_ArtifactSpec, ...]] = (
     _ArtifactSpec(
         "q10.model-campaign.v1",
         "quant/generated/q10/model_campaign.v1.json",
-        "aae92e3b128275748a21dfda5598916fb5e9215dade794a4ea5fce502f89688e",
+        "e976a97f3885182669c012b802edff3ef0a33f8c6c040d9d3a6b5a458d36ff6e",
         1_339,
         "application/json",
         "Q10ModelCampaignV1",
@@ -76,7 +76,7 @@ _ARTIFACTS: Final[tuple[_ArtifactSpec, ...]] = (
     _ArtifactSpec(
         "q10.model-golden.v1",
         "quant/fixtures/q10_model_golden_v1.json",
-        "19aef22e412f84bd6769422bc508a022409029dd1c933565a805b27777a28bf6",
+        "eda66eeb9afe2d849fa55631e3f6866c7f218429a22d51e5a2eae5a0079f2464",
         38_742,
         "application/json",
         "Q10ModelGoldenFixtureV1",
@@ -194,7 +194,7 @@ _ARTIFACTS: Final[tuple[_ArtifactSpec, ...]] = (
     _ArtifactSpec(
         "q15.registry-campaign.v1",
         "quant/generated/q15/registry_campaign.v1.json",
-        "7ab3d9a7e2a9ca8493e44e8fdfc1acb3035a9f39bd190cc5ec49996f8112c66e",
+        "c6f666597bfb8e19876ab84012a306afbe9448fb14f9507bcb7eb29630b65028",
         4_425,
         "application/json",
         "Q15RegistryCampaignV1",
@@ -223,7 +223,7 @@ _ARTIFACTS: Final[tuple[_ArtifactSpec, ...]] = (
     _ArtifactSpec(
         "q15.registry-cards.v1",
         "quant/generated/q15/registry_cards.v1.json",
-        "fd46cf3b454822ce17af0950000388f3e49a11afd79d6f6fba01be67e067b0bb",
+        "df7f8956858f3e95282a5f30f218065a06af0a6dab6b9eaf1eeac848c0375803",
         16_676,
         "application/json",
         "Q15RegistryCardsV1",
@@ -537,7 +537,7 @@ def _validate_q10(values: dict[str, dict[str, object]], receipt_raw: bytes) -> N
     _expect(campaign.get("seed"), "20260712", path="q10.campaign.seed")
     _expect(
         campaign.get("fixtureSha256"),
-        "19aef22e412f84bd6769422bc508a022409029dd1c933565a805b27777a28bf6",
+        "eda66eeb9afe2d849fa55631e3f6866c7f218429a22d51e5a2eae5a0079f2464",
         path="q10.campaign.fixtureSha256",
     )
     _expect(

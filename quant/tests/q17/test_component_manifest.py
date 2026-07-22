@@ -338,7 +338,7 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
             ],
             "currentFileCount": 9,
             "currentSourceSha256": (
-                "8024a05b37e0ab7fe990a528f36e8da322a45d24dbde5b1c7c1e8375056d420e"
+                "e6af382eff43065bd18a8c7cd10f208acfea0c754574647d7c5fa0a30bf72ca9"
             ),
             "historicalSourceSha256": (
                 "ccb0a8dd86e8b6548728d11bb3b28db29ce0e3e8e6d3288653375ef4d39af262"
@@ -356,7 +356,7 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
             ],
             "currentFileCount": 8,
             "currentSourceSha256": (
-                "67d9d840e7fd1d542e8f4f91b1fa2c9219aa7826bb1d45002f42b0cc15572e8d"
+                "f4e1ed59e26bd3508b152223a45cd4f876d0b2b4a439f6997a651899d0b22b7c"
             ),
             "historicalSourceSha256": (
                 "6c67b5bf2488e3b13e5c5fc72a2b613d0ed74fb00a14f635ab71444f7c6d321a"

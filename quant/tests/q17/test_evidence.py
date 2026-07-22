@@ -161,11 +161,11 @@ def test_projection_preserves_historical_acceptance_without_promoting_current_co
             "current": {
                 "q15.registry-campaign.v1": (
                     4_425,
-                    "7ab3d9a7e2a9ca8493e44e8fdfc1acb3035a9f39bd190cc5ec49996f8112c66e",
+                    "c6f666597bfb8e19876ab84012a306afbe9448fb14f9507bcb7eb29630b65028",
                 ),
                 "q15.registry-cards.v1": (
                     16_676,
-                    "fd46cf3b454822ce17af0950000388f3e49a11afd79d6f6fba01be67e067b0bb",
+                    "df7f8956858f3e95282a5f30f218065a06af0a6dab6b9eaf1eeac848c0375803",
                 ),
             },
         },

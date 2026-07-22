@@ -123,7 +123,7 @@ test('required-last L proof pins exact merge, parents, and authorized post-L top
     authorizedLaterMerges: PHASE2_GRAPH_BOUNDARY.authorizedLaterMerges,
     postLTopologyExact: true,
   });
-  assert.equal(proof.mergeWindow.authorizedLaterMerges.length, 43);
+  assert.equal(proof.mergeWindow.authorizedLaterMerges.length, 44);
   assert.equal(
     proof.mergeWindow.authorizedLaterMerges.at(-1),
     POST_L_TOPOLOGY_AUTHORITY.landing.commit,

@@ -63,7 +63,7 @@ const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
 const Q_ARCHIVE_EXTRACTION_TIMEOUT_MS = 120_000;
 const Q_PYPROJECT_SHA256 = 'a4d68e05b607e60a99fa3856ed8f8cd3addc80998c65ca6d458118745970ca81';
 const Q_UV_LOCK_SHA256 = '716a9d0208f449bba51cde7fd67f9c90206ab0724aeac86ba862e119be859d29';
-const Q_ACCEPTED_VENV_MANIFEST_SHA256 = 'ab78066bcbe7297d30c9bcd3699348e8daa82a44de64b743c11cd6b0a397fc7d';
+const Q_ACCEPTED_VENV_MANIFEST_SHA256 = 'b83ef8e8be73d5a98bae3309649531136890444edd81b71fe3b503feb6fdbc0e';
 const Q_ACCEPTED_PYTHON_VERSION = '3.13.14';
 const MANDATORY_BROWSER_ROUTES = Object.freeze([
   'dashboard', 'control-room', 'account', 'wallets', 'markets', 'detail', 'loans', 'execution',
@@ -1582,22 +1582,35 @@ async function verifyQDonorGit(environment) {
   });
 }
 
+export function canonicalQVenvManifestForHash(parsed) {
+  return Object.freeze({
+    implementation: parsed?.implementation,
+    pythonVersion: parsed?.pythonVersion,
+    versionInfo: parsed?.versionInfo,
+    distributions: Array.isArray(parsed?.distributions) ? parsed.distributions : [],
+  });
+}
+
 export function validateQVenvManifest(parsed, context, expected = Object.freeze({
   pythonVersion: Q_ACCEPTED_PYTHON_VERSION,
   manifestSha256: Q_ACCEPTED_VENV_MANIFEST_SHA256,
 })) {
   const failures = [];
-  const distributions = Array.isArray(parsed?.distributions) ? parsed.distributions : [];
+  const canonicalManifest = canonicalQVenvManifestForHash(parsed);
+  const distributions = canonicalManifest.distributions;
   if (parsed?.implementation !== 'CPython') failures.push('IMPLEMENTATION');
   if (parsed?.pythonVersion !== expected.pythonVersion || !exactList(parsed?.versionInfo, expected.pythonVersion.split('.').map(Number))) failures.push('PYTHON_VERSION');
-  if (context.resolvedPrefix !== context.resolvedVenv
+  if (typeof parsed?.prefix !== 'string' || parsed.prefix.length === 0
+      || typeof parsed?.basePrefix !== 'string' || parsed.basePrefix.length === 0
+      || typeof parsed?.executable !== 'string' || parsed.executable.length === 0
+      || context.resolvedPrefix !== context.resolvedVenv
       || context.resolvedExecutable !== context.pythonRealPath
       || parsed?.basePrefix === parsed?.prefix) failures.push('VENV_IDENTITY');
   if (distributions.length < 1
       || distributions.some((row) => !Array.isArray(row) || row.length !== 2 || typeof row[0] !== 'string' || typeof row[1] !== 'string')
       || new Set(distributions.map((row) => row[0])).size !== distributions.length
       || distributions.some((row, index) => index > 0 && distributions[index - 1][0].localeCompare(row[0], 'en') > 0)) failures.push('DISTRIBUTION_MANIFEST');
-  const manifestSha256 = sha256(JSON.stringify(parsed));
+  const manifestSha256 = sha256(JSON.stringify(canonicalManifest));
   if (manifestSha256 !== expected.manifestSha256) failures.push('MANIFEST_HASH');
   return Object.freeze({
     manifestSha256,

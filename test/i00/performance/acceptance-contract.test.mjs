@@ -398,7 +398,7 @@ function completeFixture() {
           pythonVersion: '3.13.14',
           pyprojectSha256: 'a4d68e05b607e60a99fa3856ed8f8cd3addc80998c65ca6d458118745970ca81',
           uvLockSha256: '716a9d0208f449bba51cde7fd67f9c90206ab0724aeac86ba862e119be859d29',
-          manifestSha256: 'ab78066bcbe7297d30c9bcd3699348e8daa82a44de64b743c11cd6b0a397fc7d',
+          manifestSha256: 'b83ef8e8be73d5a98bae3309649531136890444edd81b71fe3b503feb6fdbc0e',
           distributionCount: 17,
           pipCheck: {
             exitCode: 0,

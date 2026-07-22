@@ -18,8 +18,8 @@
 | Performance contract | PASS | Exit 0; 34 passed; 0 failed; `test/i00/performance/performance.test.mjs`. |
 | Entrypoint contract | PASS | Exit 0; 9 passed; 0 failed; `test/i00/commands/complete-entrypoint.test.mjs`. |
 | Ops receipt contract | PASS | Exit 0; 175 assertions; `ops/tests/i00/test-release-and-preflight.sh`. |
-| Root test | PENDING | `package.json` script `test`. |
-| Full matrix | PENDING | `package.json` script `test:all`. |
+| Root test | PASS | Exit 0; Product Assurance 802/802 behavior checks and 4/4 provenance checks; AI-Ops 456/456; `package.json` script `test`. |
+| Full matrix | PASS | Exit 0; canonical gate PASS; Quant 3,242 passed, 1 allowed platform skip, 0 failed; `package.json` script `test:all`. |
 | Documentation | UPDATED | `README.md`, `test/i00/performance/README.md`, and `STATE.md`. |
 | Historical evidence | UNCHANGED | No existing receipt or acceptance evidence file is edited. |
 | Gate posture | UNCHANGED | No acceptance gate, skip, waiver, authority boundary, private call, or money path is weakened. |

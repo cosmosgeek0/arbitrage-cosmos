@@ -30,6 +30,15 @@ PARAMS = engine.BoostParams(max_depth=3, n_estimators=40, learning_rate="0.1", m
 
 def test_boost_params_learning_rate_law() -> None:
     assert PARAMS.learning_rate_value() == 0.1
+    q10_profile = engine._q10_boost_common(PARAMS, None)
+    assert q10_profile["tree_method"] == "exact"
+    assert q10_profile["n_jobs"] == q10_profile["nthread"] == 1
+    assert q10_profile["base_score"] == 0.5
+    assert q10_profile["random_state"] == 7
+    assert q10_profile["seed_per_iteration"] is False
+    assert q10_profile["device"] == "cpu"
+    assert q10_profile["subsample"] == q10_profile["colsample_bytree"] == 1.0
+    assert engine._boost_common(PARAMS, None)["tree_method"] == "hist"
     with pytest.raises(ContractValueError, match="decimal string"):
         engine.BoostParams(3, 40, "fast", 2).learning_rate_value()
     with pytest.raises(ContractValueError, match=r"\(0, 1\]"):

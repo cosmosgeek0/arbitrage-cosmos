@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import sys
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -12,7 +13,6 @@ from quant_edge.lake.contracts import EvidencePosture as LakeEvidencePosture
 from quant_edge.lake.contracts import QualityState
 from quant_edge.regime.contracts import ObservationSeriesV1, ObservationV1
 from quant_edge.regime.page_hinkley import PageHinkleyConfigV1
-from quant_edge.registry_ops.artifacts import read_verified_artifact
 from quant_edge.registry_ops.bundle import (
     MergedQ15BundleV1,
     build_merged_q15_bundle,
@@ -27,6 +27,40 @@ from quant_edge.registry_ops.drift import evaluate_page_hinkley_drift
 from quant_edge.registry_ops.store import RegistryConflictError, ResearchRegistryStore
 
 FIXED_TIME_MS = 1_783_890_000_000
+_SYNTHETIC_REPORT_PATH = Path("quant/generated/q15/synthetic_promotion_report.v1.json")
+
+
+def _synthetic_promotion_report_bytes(
+    *,
+    q10_golden_sha256: str,
+    q14_golden_sha256: str,
+) -> bytes:
+    return canonical_json_bytes(
+        {
+            "baselineArtifactSha256": q10_golden_sha256,
+            "baselineModelId": "logistic:v1",
+            "challengerArtifactSha256": q10_golden_sha256,
+            "challengerModelId": "xgb_classifier:v1",
+            "posture": "SYNTHETIC_ONLY",
+            "q14FactoryReportSha256": q14_golden_sha256,
+            "reason": (
+                "State-machine and crash-consistency proof only; Q14 did not validate either "
+                "registered model."
+            ),
+            "schema": "Q15SyntheticPromotionReportV1",
+            "verdict": "SYNTHETIC_FIXTURE_PASS",
+            "version": 1,
+        }
+    )
+
+
+def _current_synthetic_promotion_report(repo_root: Path) -> bytes:
+    q10_golden = (repo_root / "quant/fixtures/q10_model_golden_v1.json").read_bytes()
+    q14_golden = (repo_root / "quant/generated/q14/q14_validation_golden_v1.json").read_bytes()
+    return _synthetic_promotion_report_bytes(
+        q10_golden_sha256=hashlib.sha256(q10_golden).hexdigest(),
+        q14_golden_sha256=hashlib.sha256(q14_golden).hexdigest(),
+    )
 
 
 def _register_bundle(
@@ -190,10 +224,15 @@ def build_campaign(
                 "transitionCount": store.transition_count(initial.slot_id),
                 "version": 1,
             }
-    synthetic = read_verified_artifact(
-        repo_root,
-        bundle.artifact("q15.synthetic-promotion-report.v1"),
+    synthetic = _synthetic_promotion_report_bytes(
+        q10_golden_sha256=bundle.q10_registration.artifact.sha256.hexdigest,
+        q14_golden_sha256=bundle.artifact("q14.validation-golden.v1").sha256.hexdigest,
     )
+    if (
+        hashlib.sha256(synthetic).hexdigest()
+        != bundle.artifact("q15.synthetic-promotion-report.v1").sha256.hexdigest
+    ):
+        raise ValueError("generated synthetic promotion report does not match its registry pin")
     return cards, campaign, synthetic
 
 
@@ -222,6 +261,11 @@ def render_markdown(campaign: dict[str, object]) -> str:
 def write_campaign(output_dir: Path, repo_root: Path, *, code_commit: str) -> None:
     if not isinstance(output_dir, Path) or not output_dir.is_absolute():
         raise ValueError("output_dir must be an absolute pathlib.Path")
+    synthetic = _current_synthetic_promotion_report(repo_root)
+    canonical_synthetic_path = repo_root / _SYNTHETIC_REPORT_PATH
+    if output_dir == canonical_synthetic_path.parent:
+        output_dir.mkdir(parents=True, exist_ok=True)
+        canonical_synthetic_path.write_bytes(synthetic)
     cards, campaign, synthetic = build_campaign(repo_root, code_commit=code_commit)
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "artifact_manifest.v1.json").write_bytes(

@@ -1,8 +1,8 @@
 # Q10 model battery campaign (synthetic only)
 
 - Seed: `20260712`
-- Battery SHA-256: `f742b90e4613a900aa09e869316045a2069b8007cff25dbfadae634e578ada8f`
-- Golden fixture SHA-256: `fa8b5dd28dc6753ae410296730bb21f09a1c19c3bb76785bc84b01944907fcbf`
+- Battery SHA-256: `7dffbf266ce21c152ba5fd36ce8147587fe3a00c776f400d96463c8992cef64c`
+- Golden fixture SHA-256: `19aef22e412f84bd6769422bc508a022409029dd1c933565a805b27777a28bf6`
 - Evidence posture: SYNTHETIC_ONLY — planted machinery truth, never market truth;
   no model here is predictive, validated or economically valuable.
 
@@ -22,19 +22,19 @@
 
 | Model | Role | Primary value | Winner |
 | --- | --- | --- | --- |
-| `quantile_linear:v1` | TRANSPARENT_BASELINE | 1180.824147789594 | — |
+| `quantile_linear:v1` | TRANSPARENT_BASELINE | 1180.824147789594 | **yes** |
 | `train_quantile_constant:v1` | CONTROL | 1251.570312500000 | — |
-| `xgb_quantile:v1` | BOOSTED_CHALLENGER | 1188.322331548358 | — |
-| `xgb_quantile_tuned:v1` | BOOSTED_CHALLENGER | 1126.784276103601 | **yes** |
+| `xgb_quantile:v1` | BOOSTED_CHALLENGER | 1429.572019191847 | — |
+| `xgb_quantile_tuned:v1` | BOOSTED_CHALLENGER | 1428.290257228616 | — |
 
 ### `net_edge_regression:v1` — primary `mse`
 
 | Model | Role | Primary value | Winner |
 | --- | --- | --- | --- |
-| `ols:v1` | TRANSPARENT_BASELINE | 11986555.932557070553 | **yes** |
+| `ols:v1` | TRANSPARENT_BASELINE | 11986555.932557074084 | **yes** |
 | `train_mean:v1` | CONTROL | 13515873.061225000000 | — |
-| `xgb_regressor:v1` | BOOSTED_CHALLENGER | 13690338.847560466480 | — |
-| `xgb_regressor_tuned:v1` | BOOSTED_CHALLENGER | 12039986.663485348873 | — |
+| `xgb_regressor:v1` | BOOSTED_CHALLENGER | 14172584.997423597948 | — |
+| `xgb_regressor_tuned:v1` | BOOSTED_CHALLENGER | 12070880.549135662950 | — |
 
 ### `transition_binary:v1` — primary `brier`
 
@@ -44,19 +44,20 @@
 | `logistic:v1` | TRANSPARENT_BASELINE | 0.268779972731 | — |
 | `no_trade_prevalence:v1` | CONTROL | 0.251337500000 | — |
 | `random_rank:v1` | CONTROL | 0.310899346642 | — |
-| `xgb_classifier:v1` | BOOSTED_CHALLENGER | 0.085698540952 | **yes** |
-| `xgb_classifier_tuned:v1` | BOOSTED_CHALLENGER | 0.088127669719 | — |
+| `xgb_classifier:v1` | BOOSTED_CHALLENGER | 0.090654100959 | **yes** |
+| `xgb_classifier_tuned:v1` | BOOSTED_CHALLENGER | 0.093007604256 | — |
 
 ## Honest challenger losses
 
+- `net_edge_quantiles:v1`: winner `quantile_linear:v1` (TRANSPARENT_BASELINE); losing boosted challengers: `xgb_quantile:v1`, `xgb_quantile_tuned:v1`
 - `net_edge_regression:v1`: winner `ols:v1` (TRANSPARENT_BASELINE); losing boosted challengers: `xgb_regressor:v1`, `xgb_regressor_tuned:v1`
 
 ## Bounded studies (all trials logged)
 
 | Study | Requested | Logged | Complete | Best trial |
 | --- | --- | --- | --- | --- |
-| `study_xgb_classifier:v1` | 12 | 12 | 12 | 4 |
-| `study_xgb_quantile:v1` | 12 | 12 | 12 | 7 |
+| `study_xgb_classifier:v1` | 12 | 12 | 12 | 10 |
+| `study_xgb_quantile:v1` | 12 | 12 | 12 | 10 |
 | `study_xgb_ranker:v1` | 12 | 12 | 12 | 0 |
 | `study_xgb_regressor:v1` | 12 | 12 | 12 | 10 |
 

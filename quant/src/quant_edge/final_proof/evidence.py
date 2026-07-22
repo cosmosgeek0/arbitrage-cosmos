@@ -56,8 +56,8 @@ _ARTIFACTS: Final[tuple[_ArtifactSpec, ...]] = (
     _ArtifactSpec(
         "q10.model-campaign.v1",
         "quant/generated/q10/model_campaign.v1.json",
-        "38167324fd83977ddfc55e256540acb9080e7ac1e9efd47536c73f2a4476b3f1",
-        1_135,
+        "aae92e3b128275748a21dfda5598916fb5e9215dade794a4ea5fce502f89688e",
+        1_339,
         "application/json",
         "Q10ModelCampaignV1",
         1,
@@ -76,8 +76,8 @@ _ARTIFACTS: Final[tuple[_ArtifactSpec, ...]] = (
     _ArtifactSpec(
         "q10.model-golden.v1",
         "quant/fixtures/q10_model_golden_v1.json",
-        "fa8b5dd28dc6753ae410296730bb21f09a1c19c3bb76785bc84b01944907fcbf",
-        38_697,
+        "19aef22e412f84bd6769422bc508a022409029dd1c933565a805b27777a28bf6",
+        38_742,
         "application/json",
         "Q10ModelGoldenFixtureV1",
         1,
@@ -194,7 +194,7 @@ _ARTIFACTS: Final[tuple[_ArtifactSpec, ...]] = (
     _ArtifactSpec(
         "q15.registry-campaign.v1",
         "quant/generated/q15/registry_campaign.v1.json",
-        "8f82c0bd951417c70634daae9410768335dfc16394d16938f7b0080739f66d88",
+        "7ab3d9a7e2a9ca8493e44e8fdfc1acb3035a9f39bd190cc5ec49996f8112c66e",
         4_425,
         "application/json",
         "Q15RegistryCampaignV1",
@@ -223,7 +223,7 @@ _ARTIFACTS: Final[tuple[_ArtifactSpec, ...]] = (
     _ArtifactSpec(
         "q15.registry-cards.v1",
         "quant/generated/q15/registry_cards.v1.json",
-        "f1c2d508680691328c9ae8fb4b2663ace69c2d0032d35d884fab5a859b886a08",
+        "fd46cf3b454822ce17af0950000388f3e49a11afd79d6f6fba01be67e067b0bb",
         16_676,
         "application/json",
         "Q15RegistryCardsV1",
@@ -537,14 +537,14 @@ def _validate_q10(values: dict[str, dict[str, object]], receipt_raw: bytes) -> N
     _expect(campaign.get("seed"), "20260712", path="q10.campaign.seed")
     _expect(
         campaign.get("fixtureSha256"),
-        "fa8b5dd28dc6753ae410296730bb21f09a1c19c3bb76785bc84b01944907fcbf",
+        "19aef22e412f84bd6769422bc508a022409029dd1c933565a805b27777a28bf6",
         path="q10.campaign.fixtureSha256",
     )
     _expect(
         campaign.get("winnersByTarget"),
         {
             "attention_rank:v1": "xgb_ranker:v1",
-            "net_edge_quantiles:v1": "xgb_quantile_tuned:v1",
+            "net_edge_quantiles:v1": "quantile_linear:v1",
             "net_edge_regression:v1": "ols:v1",
             "transition_binary:v1": "xgb_classifier:v1",
         },
@@ -554,12 +554,19 @@ def _validate_q10(values: dict[str, dict[str, object]], receipt_raw: bytes) -> N
         campaign.get("honestChallengerLosses"),
         [
             {
+                "losingChallengers": ["xgb_quantile:v1", "xgb_quantile_tuned:v1"],
+                "primaryMetric": "pinball_mean",
+                "targetId": "net_edge_quantiles:v1",
+                "winnerModelId": "quantile_linear:v1",
+                "winnerRole": "TRANSPARENT_BASELINE",
+            },
+            {
                 "losingChallengers": ["xgb_regressor:v1", "xgb_regressor_tuned:v1"],
                 "primaryMetric": "mse",
                 "targetId": "net_edge_regression:v1",
                 "winnerModelId": "ols:v1",
                 "winnerRole": "TRANSPARENT_BASELINE",
-            }
+            },
         ],
         path="q10.campaign.honestChallengerLosses",
     )
@@ -583,8 +590,8 @@ def _validate_q10(values: dict[str, dict[str, object]], receipt_raw: bytes) -> N
     _expect(
         observed_indices,
         {
-            "study_xgb_classifier:v1": 4,
-            "study_xgb_quantile:v1": 7,
+            "study_xgb_classifier:v1": 10,
+            "study_xgb_quantile:v1": 10,
             "study_xgb_ranker:v1": 0,
             "study_xgb_regressor:v1": 10,
         },
@@ -845,7 +852,7 @@ def _expected_projection() -> dict[str, object]:
                 "status": "UNAVAILABLE_REAL_EVIDENCE",
             },
             {
-                "artifactBestTrialIndex": 7,
+                "artifactBestTrialIndex": 10,
                 "claimId": "q10.quantile-best-trial-documentary-erratum",
                 "classification": "UNKNOWN",
                 "documentaryBestTrialIndex": 11,

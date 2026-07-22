@@ -78,7 +78,7 @@ def test_projector_verifies_exact_evidence_and_preserves_fail_closed_axes() -> N
         row for row in claims if row["claimId"] == "q10.quantile-best-trial-documentary-erratum"
     )
     assert erratum["status"] == "DOCUMENTARY_ERRATUM"
-    assert erratum["artifactBestTrialIndex"] == 7
+    assert erratum["artifactBestTrialIndex"] == 10
     assert erratum["documentaryBestTrialIndex"] == 11
     q14 = next(row for row in claims if row["claimId"] == "q14.synthetic-validation-factory")
     assert q14["status"] == "Q14_FIXTURE_COMPARISON_ONLY_NOT_Q10_OR_Q11_VALIDATION"
@@ -161,11 +161,11 @@ def test_projection_preserves_historical_acceptance_without_promoting_current_co
             "current": {
                 "q15.registry-campaign.v1": (
                     4_425,
-                    "8f82c0bd951417c70634daae9410768335dfc16394d16938f7b0080739f66d88",
+                    "7ab3d9a7e2a9ca8493e44e8fdfc1acb3035a9f39bd190cc5ec49996f8112c66e",
                 ),
                 "q15.registry-cards.v1": (
                     16_676,
-                    "f1c2d508680691328c9ae8fb4b2663ace69c2d0032d35d884fab5a859b886a08",
+                    "fd46cf3b454822ce17af0950000388f3e49a11afd79d6f6fba01be67e067b0bb",
                 ),
             },
         },

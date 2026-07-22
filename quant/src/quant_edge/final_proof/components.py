@@ -497,11 +497,19 @@ _POST_ACCEPTANCE_CORRECTIONS: Final[dict[str, _PostAcceptanceCorrectionSpec]] = 
             "quant/src/quant_edge/models",
             "src/quant_edge/models",
             11,
-            "2763fdc1d0428637bcd51387fbc806741c70032e6a0f1ded6c354b31a4cc01e2",
+            "809e7e7ddbbc94769887816e39fae6dc99bb0c944fa0fc24a6fcd6ccc1d0b22a",
         ),
-        None,
+        _ArtifactSpec(
+            "q10.cpu-invariant-model-campaign.v1",
+            "quant/generated/q10/model_campaign.v1.json",
+            1_339,
+            "aae92e3b128275748a21dfda5598916fb5e9215dade794a4ea5fce502f89688e",
+            "application/json",
+            "Q10ModelCampaignV1",
+            1,
+        ),
         (),
-        ("Q-070", "Q-080"),
+        ("Q-070", "Q-080", "Q10_CPU_INVARIANT_GENERATION"),
     ),
     "Q11": _PostAcceptanceCorrectionSpec(
         "REAL_GAP_Q11_PASSIVE_FILL_SURVIVAL",
@@ -579,13 +587,13 @@ _POST_ACCEPTANCE_CORRECTIONS: Final[dict[str, _PostAcceptanceCorrectionSpec]] = 
             "quant/src/quant_edge/registry_ops",
             "src/quant_edge/registry_ops",
             9,
-            "bcb4387564e541aaf87a6c6f624ca2db9f620fbf4f13cd86eefb860f5ced3472",
+            "8024a05b37e0ab7fe990a528f36e8da322a45d24dbde5b1c7c1e8375056d420e",
         ),
         _ArtifactSpec(
             "q15.final-hunt-registry-campaign.v1",
             "quant/generated/q15/registry_campaign.v1.json",
             4_425,
-            "8f82c0bd951417c70634daae9410768335dfc16394d16938f7b0080739f66d88",
+            "7ab3d9a7e2a9ca8493e44e8fdfc1acb3035a9f39bd190cc5ec49996f8112c66e",
             "application/json",
             "Q15RegistryCampaignV1",
             1,
@@ -597,6 +605,7 @@ _POST_ACCEPTANCE_CORRECTIONS: Final[dict[str, _PostAcceptanceCorrectionSpec]] = 
             "FINAL_HUNT_Q15_REGISTRY_EXACTNESS",
             "QUANT_HUNT_11",
             "QUANT_HUNT_21",
+            "Q15_REGENERATION_CASCADE_FROM_Q10_CURRENT_EVIDENCE",
         ),
     ),
     "Q16": _PostAcceptanceCorrectionSpec(
@@ -605,7 +614,7 @@ _POST_ACCEPTANCE_CORRECTIONS: Final[dict[str, _PostAcceptanceCorrectionSpec]] = 
             "quant/src/quant_edge/inference",
             "src/quant_edge/inference",
             8,
-            "f0e7cb1a828c1b94ab181e5703347990691c868861fe76bbfaa18f5454361890",
+            "67d9d840e7fd1d542e8f4f91b1fa2c9219aa7826bb1d45002f42b0cc15572e8d",
         ),
         None,
         (),
@@ -615,6 +624,7 @@ _POST_ACCEPTANCE_CORRECTIONS: Final[dict[str, _PostAcceptanceCorrectionSpec]] = 
             "QUANT_HUNT_20",
             "QUANT_HUNT_21",
             "Q16_REGENERATION_CASCADE_FROM_Q12_CURRENT_EVIDENCE",
+            "Q16_REGENERATION_CASCADE_FROM_Q10_CURRENT_EVIDENCE",
         ),
     ),
 }
@@ -1430,11 +1440,13 @@ def _phase_mapping(
         if post_acceptance_spec.current_primary_evidence is None:
             current_primary = primary_ref
         else:
-            current_primary, _ = _artifact_mapping(
+            current_primary, parsed_current_primary = _artifact_mapping(
                 repo_root,
                 root_before,
                 post_acceptance_spec.current_primary_evidence,
             )
+            if spec.phase == "Q10":
+                parsed_primary = parsed_current_primary
         if post_acceptance_spec.fix_commits:
             current_bytes_provenance: dict[str, object] = {
                 "correctionRefs": list(post_acceptance_spec.correction_refs),
@@ -1550,8 +1562,8 @@ def _require_q10_best_index(parsed: dict[str, object] | None) -> None:
         for item in summaries
         if isinstance(item, dict) and item.get("studyId") == "study_xgb_quantile:v1"
     ]
-    if len(quantile) != 1 or quantile[0].get("bestTrialIndex") != 7:
-        raise ComponentManifestError("Q10 accepted quantile best-index truth changed")
+    if len(quantile) != 1 or quantile[0].get("bestTrialIndex") != 10:
+        raise ComponentManifestError("Q10 current quantile best-index truth changed")
 
 
 def build_component_manifest(repo_root: Path) -> dict[str, object]:

@@ -134,6 +134,11 @@ def test_disposition_table_is_lawful_and_honest() -> None:
     boosted = by_id["14.3-01-xgboost-challengers"]
     assert boosted.disposition is BatteryDisposition.ADOPT
     assert len(boosted.implemented_ids) == 8
+    current_by_id = {
+        record.bullet_id: record for record in battery.Q10_CURRENT_BATTERY_DISPOSITIONS
+    }
+    assert "single-threaded hist" in boosted.reason
+    assert "single-threaded exact trees" in current_by_id[boosted.bullet_id].reason
     trials = by_id["14.3-06-record-all-trials"]
     assert set(trials.implemented_ids) == {
         "study_xgb_classifier:v1",

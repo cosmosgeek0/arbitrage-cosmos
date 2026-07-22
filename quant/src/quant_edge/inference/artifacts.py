@@ -282,8 +282,8 @@ EXPECTED_SHA256: Final[dict[str, str]] = {
     ),
     "q12.ensemble-golden.v1": "28d657a80b4c0328529c62e6dccf8631c2cb3574cc399ff27108b192677a942e",
     "q13.data-sufficiency.v1": "126e27674a99f18accfc21638cbb5bdb1d1bda0f563a03284a7e4ad75665365d",
-    "q15.registry-campaign.v1": "8f82c0bd951417c70634daae9410768335dfc16394d16938f7b0080739f66d88",
-    "q15.registry-cards.v1": "f1c2d508680691328c9ae8fb4b2663ace69c2d0032d35d884fab5a859b886a08",
+    "q15.registry-campaign.v1": "7ab3d9a7e2a9ca8493e44e8fdfc1acb3035a9f39bd190cc5ec49996f8112c66e",
+    "q15.registry-cards.v1": "fd46cf3b454822ce17af0950000388f3e49a11afd79d6f6fba01be67e067b0bb",
     "q16.dependency-lock.v1": "716a9d0208f449bba51cde7fd67f9c90206ab0724aeac86ba862e119be859d29",
 }
 

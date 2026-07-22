@@ -12,6 +12,7 @@ refit and replay the exact artifact without accepting caller declarations.
 from __future__ import annotations
 
 import hashlib
+import warnings
 from dataclasses import dataclass
 from itertools import pairwise
 from typing import Any
@@ -671,8 +672,6 @@ def logistic_scores(
     *,
     elastic_net: bool,
 ) -> tuple[float, ...]:
-    train_x, eval_x = _standardize(_matrix(rows, train), _matrix(rows, evaluate))
-    train_y = _vector(labels, train)
     if elastic_net:
         model = LogisticRegression(
             solver="saga",
@@ -685,6 +684,8 @@ def logistic_scores(
     else:
         model = LogisticRegression(solver="lbfgs", C=1.0, max_iter=2_000)
     with threadpool_limits(limits=1):
+        train_x, eval_x = _standardize(_matrix(rows, train), _matrix(rows, evaluate))
+        train_y = _vector(labels, train)
         model.fit(train_x, train_y)
         scores = model.predict_proba(eval_x)[:, 1]
     return _as_floats(np.asarray(scores, dtype=np.float64))
@@ -693,8 +694,8 @@ def logistic_scores(
 def linear_regression_values(
     rows: Rows, labels: Labels, train: range, evaluate: range
 ) -> tuple[float, ...]:
-    train_x, eval_x = _standardize(_matrix(rows, train), _matrix(rows, evaluate))
     with threadpool_limits(limits=1):
+        train_x, eval_x = _standardize(_matrix(rows, train), _matrix(rows, evaluate))
         model = LinearRegression()
         model.fit(train_x, _vector(labels, train))
         values = model.predict(eval_x)
@@ -709,14 +710,25 @@ def quantile_linear_values(
     *,
     quantiles: tuple[float, ...],
 ) -> tuple[tuple[float, ...], ...]:
-    train_x, eval_x = _standardize(_matrix(rows, train), _matrix(rows, evaluate))
-    train_y = _vector(labels, train)
     outputs: list[tuple[float, ...]] = []
     with threadpool_limits(limits=1):
-        for quantile in quantiles:
-            model = QuantileRegressor(quantile=quantile, alpha=0.0, solver="highs")
-            model.fit(train_x, train_y)
-            outputs.append(_as_floats(np.asarray(model.predict(eval_x), dtype=np.float64)))
+        train_x, eval_x = _standardize(_matrix(rows, train), _matrix(rows, evaluate))
+        train_y = _vector(labels, train)
+        with warnings.catch_warnings():
+            # SciPy reports native HiGHS controls as unknown before forwarding them verbatim.
+            warnings.filterwarnings(
+                "ignore",
+                message=r"Unrecognized options detected: \{'threads': 1\}",
+            )
+            for quantile in quantiles:
+                model = QuantileRegressor(
+                    quantile=quantile,
+                    alpha=0.0,
+                    solver="highs-ds",
+                    solver_options={"threads": 1},
+                )
+                model.fit(train_x, train_y)
+                outputs.append(_as_floats(np.asarray(model.predict(eval_x), dtype=np.float64)))
     return tuple(outputs)
 
 
@@ -743,6 +755,40 @@ def _boost_common(
     return common
 
 
+def _q10_boost_common(
+    params: BoostParams,
+    monotone: tuple[int, ...] | None,
+) -> dict[str, Any]:
+    """Pin the Q10 booster path without changing Q14's sealed histogram identity."""
+
+    common = _boost_common(params, monotone)
+    common.update(
+        {
+            "base_score": 0.5,
+            "nthread": 1,
+            "seed_per_iteration": False,
+            "tree_method": "exact",
+        }
+    )
+    return common
+
+
+def _q10_booster_predict(booster: Booster, evaluate_x: _FloatArray) -> _FloatArray:
+    """Use one explicit single-thread native prediction path for Q10."""
+
+    matrix = DMatrix(evaluate_x, nthread=1)
+    return np.asarray(booster.predict(matrix, strict_shape=True), dtype=np.float64)
+
+
+def _q10_single_output(values: _FloatArray) -> _FloatArray:
+    normalized = np.asarray(values, dtype=np.float64)
+    if normalized.ndim == 2 and normalized.shape[1] == 1:
+        normalized = normalized[:, 0]
+    if normalized.ndim != 1:
+        raise ContractValueError("Q10 prediction shape must be one value per row")
+    return normalized
+
+
 def xgb_classifier_scores(
     rows: Rows,
     labels: Labels,
@@ -752,11 +798,13 @@ def xgb_classifier_scores(
     params: BoostParams,
     monotone: tuple[int, ...] | None,
 ) -> tuple[float, ...]:
-    model = XGBClassifier(objective="binary:logistic", **_boost_common(params, monotone))
+    model = XGBClassifier(objective="binary:logistic", **_q10_boost_common(params, monotone))
     with threadpool_limits(limits=1):
         model.fit(_matrix(rows, train), _vector(labels, train))
-        scores = model.predict_proba(_matrix(rows, evaluate))[:, 1]
-    return _as_floats(np.asarray(scores, dtype=np.float64))
+        scores = _q10_single_output(
+            _q10_booster_predict(model.get_booster(), _matrix(rows, evaluate))
+        )
+    return _as_floats(scores)
 
 
 def xgb_regressor_values(
@@ -768,11 +816,13 @@ def xgb_regressor_values(
     params: BoostParams,
     monotone: tuple[int, ...] | None,
 ) -> tuple[float, ...]:
-    model = XGBRegressor(objective="reg:squarederror", **_boost_common(params, monotone))
+    model = XGBRegressor(objective="reg:squarederror", **_q10_boost_common(params, monotone))
     with threadpool_limits(limits=1):
         model.fit(_matrix(rows, train), _vector(labels, train))
-        values = model.predict(_matrix(rows, evaluate))
-    return _as_floats(np.asarray(values, dtype=np.float64))
+        values = _q10_single_output(
+            _q10_booster_predict(model.get_booster(), _matrix(rows, evaluate))
+        )
+    return _as_floats(values)
 
 
 def xgb_quantile_values(
@@ -785,14 +835,16 @@ def xgb_quantile_values(
     monotone: tuple[int, ...] | None,
     quantiles: tuple[float, ...],
 ) -> tuple[tuple[float, ...], ...]:
+    if len(quantiles) < 2:
+        raise ContractValueError("quantile prediction shape must match the requested levels")
     model = XGBRegressor(
         objective="reg:quantileerror",
         quantile_alpha=np.array(quantiles, dtype=np.float64),
-        **_boost_common(params, monotone),
+        **_q10_boost_common(params, monotone),
     )
     with threadpool_limits(limits=1):
         model.fit(_matrix(rows, train), _vector(labels, train))
-        values = np.asarray(model.predict(_matrix(rows, evaluate)), dtype=np.float64)
+        values = _q10_booster_predict(model.get_booster(), _matrix(rows, evaluate))
     if values.ndim != 2 or values.shape[1] != len(quantiles):
         raise ContractValueError("quantile prediction shape must match the requested levels")
     return tuple(_as_floats(values[:, column]) for column in range(values.shape[1]))
@@ -810,12 +862,14 @@ def xgb_ranker_scores(
 ) -> tuple[float, ...]:
     if len(train) % group_size != 0 or len(evaluate) % group_size != 0:
         raise ContractValueError("ranker slices must align to whole groups")
-    model = XGBRanker(objective="rank:pairwise", **_boost_common(params, monotone))
+    model = XGBRanker(objective="rank:pairwise", **_q10_boost_common(params, monotone))
     train_qid = np.arange(len(train)) // group_size
     with threadpool_limits(limits=1):
         model.fit(_matrix(rows, train), _vector(labels, train), qid=train_qid)
-        scores = model.predict(_matrix(rows, evaluate))
-    return _as_floats(np.asarray(scores, dtype=np.float64))
+        scores = _q10_single_output(
+            _q10_booster_predict(model.get_booster(), _matrix(rows, evaluate))
+        )
+    return _as_floats(scores)
 
 
 def isotonic_calibrate(

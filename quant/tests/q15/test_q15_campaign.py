@@ -7,6 +7,7 @@ from pathlib import Path
 
 from q15_fixtures import BASE_COMMIT, REPO_ROOT
 
+from quant_edge.canonical import parse_canonical_object
 from quant_edge.registry_ops.campaign import build_campaign, render_markdown
 
 COMMITTED = REPO_ROOT / "quant" / "generated" / "q15"
@@ -30,7 +31,10 @@ def test_campaign_records_exact_champion_demotion_and_mismatch() -> None:
     }
     assert campaign["transitionCount"] == 2
     assert cards["schema"] == "Q15RegistryCardsV1"
-    assert b"Q15SyntheticPromotionReportV1" in synthetic
+    synthetic_report = parse_canonical_object(synthetic)
+    assert synthetic_report["schema"] == "Q15SyntheticPromotionReportV1"
+    assert synthetic_report["baselineArtifactSha256"] == final["artifactSha256"]
+    assert synthetic_report["challengerArtifactSha256"] == final["artifactSha256"]
     markdown = render_markdown(campaign)
     assert "Challenger self-promoted by drift: `false`" in markdown
 

@@ -14,7 +14,7 @@ Q14-owned validation factory pieces are recorded ``WAITING_Q14``.
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from importlib import metadata
 from typing import Final
 
@@ -877,6 +877,20 @@ SECTION_14_BATTERY_DISPOSITIONS: Final[tuple[BatteryDispositionRecordV1, ...]] =
     ),
 )
 
+Q10_CURRENT_BATTERY_DISPOSITIONS: Final[tuple[BatteryDispositionRecordV1, ...]] = tuple(
+    replace(
+        record,
+        reason=(
+            "XGBoost is the Q01-selected booster: classifier, regressor, multi-quantile and "
+            "pairwise ranker, default and study-tuned, single-threaded exact trees with fixed "
+            "seeds and intercepts"
+        ),
+    )
+    if record.bullet_id == "14.3-01-xgboost-challengers"
+    else record
+    for record in SECTION_14_BATTERY_DISPOSITIONS
+)
+
 
 @dataclass(frozen=True, slots=True)
 class BatteryResultV1:
@@ -959,6 +973,6 @@ def run_battery(seed: int) -> BatteryResultV1:
         split=split,
         reports=reports,
         studies=studies,
-        dispositions=SECTION_14_BATTERY_DISPOSITIONS,
+        dispositions=Q10_CURRENT_BATTERY_DISPOSITIONS,
         frameworks=framework_versions(),
     )

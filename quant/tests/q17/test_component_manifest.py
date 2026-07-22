@@ -266,10 +266,10 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
         },
         10: {
             "correctionId": "REAL_GAP_Q10_DIAGNOSTICS_FOCUS_BUDGET",
-            "correctionRefs": ["Q-070", "Q-080"],
+            "correctionRefs": ["Q-070", "Q-080", "Q10_CPU_INVARIANT_GENERATION"],
             "currentFileCount": 11,
             "currentSourceSha256": (
-                "2763fdc1d0428637bcd51387fbc806741c70032e6a0f1ded6c354b31a4cc01e2"
+                "809e7e7ddbbc94769887816e39fae6dc99bb0c944fa0fc24a6fcd6ccc1d0b22a"
             ),
             "historicalSourceSha256": (
                 "7ffde23cbe6d07b6b9cef99aab27151e9069b5ffffd254e32f8f3586ebeefb7a"
@@ -334,10 +334,11 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
                 "FINAL_HUNT_Q15_REGISTRY_EXACTNESS",
                 "QUANT_HUNT_11",
                 "QUANT_HUNT_21",
+                "Q15_REGENERATION_CASCADE_FROM_Q10_CURRENT_EVIDENCE",
             ],
             "currentFileCount": 9,
             "currentSourceSha256": (
-                "bcb4387564e541aaf87a6c6f624ca2db9f620fbf4f13cd86eefb860f5ced3472"
+                "8024a05b37e0ab7fe990a528f36e8da322a45d24dbde5b1c7c1e8375056d420e"
             ),
             "historicalSourceSha256": (
                 "ccb0a8dd86e8b6548728d11bb3b28db29ce0e3e8e6d3288653375ef4d39af262"
@@ -351,10 +352,11 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
                 "QUANT_HUNT_20",
                 "QUANT_HUNT_21",
                 "Q16_REGENERATION_CASCADE_FROM_Q12_CURRENT_EVIDENCE",
+                "Q16_REGENERATION_CASCADE_FROM_Q10_CURRENT_EVIDENCE",
             ],
             "currentFileCount": 8,
             "currentSourceSha256": (
-                "f0e7cb1a828c1b94ab181e5703347990691c868861fe76bbfaa18f5454361890"
+                "67d9d840e7fd1d542e8f4f91b1fa2c9219aa7826bb1d45002f42b0cc15572e8d"
             ),
             "historicalSourceSha256": (
                 "6c67b5bf2488e3b13e5c5fc72a2b613d0ed74fb00a14f635ab71444f7c6d321a"
@@ -1097,7 +1099,7 @@ def test_source_root_and_q10_semantic_guards(tmp_path: Path) -> None:
         {
             "studySummaries": [
                 {"studyId": "other", "bestTrialIndex": 0},
-                {"studyId": "study_xgb_quantile:v1", "bestTrialIndex": 7},
+                {"studyId": "study_xgb_quantile:v1", "bestTrialIndex": 10},
             ]
         }
     )

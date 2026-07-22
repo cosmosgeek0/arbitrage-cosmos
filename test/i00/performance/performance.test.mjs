@@ -38,6 +38,7 @@ import {
 import {
   ACCEPTANCE_PLAN,
   Q_ARCHIVE_REQUIRED_FILES,
+  canonicalQVenvManifestForHash,
   parseOptions,
   validateBrowserArtifacts,
   validateBrowserDocument,
@@ -2041,19 +2042,64 @@ test('exact Q donor inventory rejects a hostile partial archive before pytest', 
   assert.ok(validation.failures.includes('Q_ARCHIVE_ENTRY_MISSING:EDGE_PROTOCOL_V1.md'));
 });
 
-test('Q venv manifest rejects interpreter, distribution, and plugin-environment drift', () => {
-  const fixture = {
+test('Q venv manifest hash is path-independent and rejects environment drift', () => {
+  const distributions = [['hypothesis', '6.156.6'], ['pytest', '9.1.1'], ['pytest-cov', '7.1.0']];
+  const fixtureA = {
     implementation: 'CPython', pythonVersion: '3.13.14', versionInfo: [3, 13, 14],
-    prefix: '/accepted/.venv', basePrefix: '/managed/python', executable: '/accepted/.venv/bin/python',
-    distributions: [['hypothesis', '6.156.6'], ['pytest', '9.1.1'], ['pytest-cov', '7.1.0']],
+    prefix: '/accepted/a/.venv', basePrefix: '/managed/python', executable: '/accepted/a/.venv/bin/python',
+    distributions,
   };
-  const expected = { pythonVersion: '3.13.14', manifestSha256: sha256(JSON.stringify(fixture)) };
-  const context = {
-    resolvedVenv: '/accepted/.venv', resolvedPrefix: '/accepted/.venv',
+  const fixtureB = {
+    ...fixtureA,
+    prefix: '/accepted/b/.venv', basePrefix: '/different/managed/python', executable: '/accepted/b/.venv/bin/python',
+  };
+  const expected = {
+    pythonVersion: '3.13.14',
+    manifestSha256: sha256(JSON.stringify({
+      implementation: 'CPython', pythonVersion: '3.13.14', versionInfo: [3, 13, 14], distributions,
+    })),
+  };
+  const contextA = {
+    resolvedVenv: '/accepted/a/.venv', resolvedPrefix: '/accepted/a/.venv',
     pythonRealPath: '/managed/python/bin/python3.13', resolvedExecutable: '/managed/python/bin/python3.13',
   };
-  assert.equal(validateQVenvManifest(fixture, context, expected).passed, true);
-  assert.equal(validateQVenvManifest({ ...fixture, pythonVersion: '3.13.13' }, context, expected).passed, false);
-  assert.equal(validateQVenvManifest({ ...fixture, distributions: [...fixture.distributions, ['rogue-plugin', '1.0.0']] }, context, expected).passed, false);
-  assert.equal(validateQVenvManifest(fixture, { ...context, resolvedPrefix: '/other/.venv' }, expected).passed, false);
+  const contextB = {
+    resolvedVenv: '/accepted/b/.venv', resolvedPrefix: '/accepted/b/.venv',
+    pythonRealPath: '/different/managed/python/bin/python3.13', resolvedExecutable: '/different/managed/python/bin/python3.13',
+  };
+  assert.deepEqual(Object.keys(canonicalQVenvManifestForHash(fixtureA)), [
+    'implementation', 'pythonVersion', 'versionInfo', 'distributions',
+  ]);
+  const validationA = validateQVenvManifest(fixtureA, contextA, expected);
+  const validationB = validateQVenvManifest(fixtureB, contextB, expected);
+  assert.equal(validationA.passed, true);
+  assert.equal(validationB.passed, true);
+  assert.equal(validationA.manifestSha256, validationB.manifestSha256);
+
+  const added = validateQVenvManifest({ ...fixtureA, distributions: [...distributions, ['rogue-plugin', '1.0.0']] }, contextA, expected);
+  const removed = validateQVenvManifest({ ...fixtureA, distributions: distributions.slice(0, -1) }, contextA, expected);
+  const versionChanged = validateQVenvManifest({
+    ...fixtureA,
+    distributions: distributions.map((row) => row[0] === 'pytest' ? [row[0], '9.1.2'] : row),
+  }, contextA, expected);
+  const pythonChanged = validateQVenvManifest({
+    ...fixtureA, pythonVersion: '3.13.13', versionInfo: [3, 13, 13],
+  }, contextA, expected);
+  assert.deepEqual(added.failures, ['MANIFEST_HASH']);
+  assert.deepEqual(removed.failures, ['MANIFEST_HASH']);
+  assert.deepEqual(versionChanged.failures, ['MANIFEST_HASH']);
+  assert.deepEqual(pythonChanged.failures, ['PYTHON_VERSION', 'MANIFEST_HASH']);
+
+  assert.deepEqual(
+    validateQVenvManifest(fixtureA, { ...contextA, resolvedPrefix: '/other/.venv' }, expected).failures,
+    ['VENV_IDENTITY'],
+  );
+  assert.deepEqual(
+    validateQVenvManifest(fixtureA, { ...contextA, resolvedExecutable: '/other/python' }, expected).failures,
+    ['VENV_IDENTITY'],
+  );
+  assert.deepEqual(
+    validateQVenvManifest({ ...fixtureA, basePrefix: fixtureA.prefix }, contextA, expected).failures,
+    ['VENV_IDENTITY'],
+  );
 });

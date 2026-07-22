@@ -21,8 +21,8 @@
 | Acceptance contract | PASS | Exit 0; 50 passed; 0 failed; 0 skipped; `npm run test:i00:acceptance-contract`. |
 | Release preflight | PASS | Exit 0; `ops/tests/i00/test-release-and-preflight.sh`. |
 | Root test pre-freeze | BLOCKED | Exit 1 on two attempts; the sealed-owner fallback correctly refused a dirty clone without protected owner input; the second attempt passed 146/146 terminal groups and 804/805 assurance checks. |
-| Root test | PENDING | `npm test`. |
-| Full matrix | PENDING | `npm run test:all`. |
+| Root test | PASS | Exit 0; 146/146 passed; 121 seconds; `npm test`. |
+| Full matrix | PASS | Exit 0; 14/14 mounted suites; Quant 3,242 passed, 1 platform skip, 0 failed; 866 seconds; `npm run test:all`. |
 | Historical evidence | UNCHANGED | No existing receipt or acceptance evidence file was edited. |
 | Gate posture | UNCHANGED | No acceptance gate, authority boundary, money path, private call, or protected owner input was weakened or changed. |
 | External effects | NONE | No push, deployment, provider mutation, private exchange call, or secret use. |

@@ -1,0 +1,26 @@
+name: q10-remint
+on:
+  push:
+    branches: [tmp-q10-land]
+jobs:
+  remint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version-file: .nvmrc }
+      - uses: actions/setup-python@v5
+        with: { python-version-file: quant/.python-version }
+      - uses: astral-sh/setup-uv@v5
+        with: { version: "0.11.28" }
+      - run: uv sync --project quant --locked --all-groups --all-extras --python 3.13.14
+      - run: |
+          cd quant
+          mkdir -p /tmp/mint1 /tmp/mint2
+          uv run --project . python scripts/q10_model_campaign.py /tmp/mint1
+          uv run --project . python scripts/q10_model_campaign.py /tmp/mint2
+          diff -rq /tmp/mint1 /tmp/mint2 && echo RUN_STABLE || echo RUN_UNSTABLE
+          diff -q /tmp/mint1/fixtures/q10_model_golden_v1.json fixtures/q10_model_golden_v1.json && echo MATCHES_MACOS_BYTES || echo DIFFERS_FROM_MACOS
+          grep -m1 'model name' /proc/cpuinfo || true
+      - uses: actions/upload-artifact@v4
+        with: { name: q10-linux-mint, path: /tmp/mint1 }

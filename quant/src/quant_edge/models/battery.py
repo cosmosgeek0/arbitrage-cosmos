@@ -46,7 +46,6 @@ from quant_edge.models.estimators import (
     raw_outputs,
 )
 from quant_edge.models.metrics import (
-    binary64_log_loss,
     brier_score,
     coverage_abs_error,
     crossing_fraction,
@@ -55,12 +54,16 @@ from quant_edge.models.metrics import (
     kendall_tau_a,
     mean_absolute_error,
     mean_squared_error,
+    model_output_log_loss,
     pinball_loss,
     pinball_mean,
     precision_at_k,
     recall_at_k,
 )
-from quant_edge.models.quantize import quantize_probability_vector, quantize_vector
+from quant_edge.models.quantize import (
+    quantize_model_probability_vector,
+    quantize_model_vector,
+)
 from quant_edge.models.split import InternalChronologicalSplitV1
 from quant_edge.models.studies import (
     ParamKind,
@@ -163,7 +166,7 @@ def _run_binary(
             battery_seed=seed,
             monotone=monotone,
         )
-        quantized = quantize_probability_vector(_score_vector(raw), field="trial score")
+        quantized = quantize_model_probability_vector(_score_vector(raw), field="trial score")
         return brier_score(quantized, valid_labels)
 
     study = run_bounded_study(
@@ -242,7 +245,9 @@ def _run_binary(
                 monotone=spec_monotone,
             )
         )
-        raw_test_quantized = quantize_probability_vector(raw_test, field=f"{spec.model_id} raw")
+        raw_test_quantized = quantize_model_probability_vector(
+            raw_test, field=f"{spec.model_id} raw"
+        )
         if calibrate:
             raw_valid = _score_vector(
                 raw_outputs(
@@ -256,14 +261,16 @@ def _run_binary(
                 )
             )
             calibrated = engine.isotonic_calibrate(raw_valid, valid_labels, raw_test)
-            final = quantize_probability_vector(calibrated, field=f"{spec.model_id} calibrated")
+            final = quantize_model_probability_vector(
+                calibrated, field=f"{spec.model_id} calibrated"
+            )
         else:
             final = raw_test_quantized
         metric_list = [
             brier_score(final, test_labels),
             exact_auc(final, test_labels),
             expected_calibration_error(final, test_labels),
-            binary64_log_loss(final, test_labels),
+            model_output_log_loss(final, test_labels),
         ]
         if calibrate:
             metric_list.append(
@@ -317,7 +324,7 @@ def _run_regression(
         raw = raw_outputs(
             spec, dataset, target, split, split.valid_indices, battery_seed=seed, monotone=monotone
         )
-        quantized = quantize_vector(_score_vector(raw), field="trial values")
+        quantized = quantize_model_vector(_score_vector(raw), field="trial values")
         return mean_squared_error(quantized, valid_labels)
 
     study = run_bounded_study(
@@ -373,7 +380,7 @@ def _run_regression(
                 monotone=spec_monotone,
             )
         )
-        final = quantize_vector(raw_test, field=f"{spec.model_id} values")
+        final = quantize_model_vector(raw_test, field=f"{spec.model_id} values")
         metric_list = [
             mean_absolute_error(final, test_labels),
             mean_squared_error(final, test_labels),
@@ -403,7 +410,7 @@ def _quantile_payload(
     raw: dict[str, tuple[float, ...]], *, field: str
 ) -> dict[str, tuple[FixedPointV1, ...]]:
     return {
-        f"q{level}": quantize_vector(raw[f"q{level}"], field=f"{field} q{level}")
+        f"q{level}": quantize_model_vector(raw[f"q{level}"], field=f"{field} q{level}")
         for level in QUANTILE_LEVELS
     }
 
@@ -540,7 +547,7 @@ def _run_rank(
         raw = raw_outputs(
             spec, dataset, target, split, split.valid_indices, battery_seed=seed, monotone=monotone
         )
-        scores = quantize_vector(_score_vector(raw), field="trial scores")
+        scores = quantize_model_vector(_score_vector(raw), field="trial scores")
         return precision_at_k(
             scores,
             valid_labels,
@@ -613,7 +620,7 @@ def _run_rank(
                 monotone=spec_monotone,
             )
         )
-        final = quantize_vector(raw_test, field=f"{spec.model_id} scores")
+        final = quantize_model_vector(raw_test, field=f"{spec.model_id} scores")
         metric_list = [
             precision_at_k(
                 final,

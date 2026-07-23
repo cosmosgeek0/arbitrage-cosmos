@@ -28,11 +28,13 @@ from quant_edge.models.metrics import (
     kendall_tau_a,
     mean_absolute_error,
     mean_squared_error,
+    model_output_log_loss,
     pinball_loss,
     pinball_mean,
     precision_at_k,
     recall_at_k,
 )
+from quant_edge.models.quantize import quantize_model_output
 
 S = FIXED_POINT_SCALE
 
@@ -339,6 +341,15 @@ def test_log_loss_matches_binary64_reference_and_clips() -> None:
     # both terms clip to one grid unit; the reference follows the same binary64 path
     reference = (-math.log(1 / S) - math.log(1.0 - (S - 1) / S)) / 2
     assert abs(clipped.value.mantissa / S - reference) < 1e-9
+
+
+def test_q10_campaign_log_loss_uses_model_output_serialization_policy() -> None:
+    predictions = (fp(0), fp(1))
+    labels = (1, 0)
+    reference = (-math.log(1 / S) - math.log(1.0 - (S - 1) / S)) / 2
+    value = model_output_log_loss(predictions, labels)
+    assert value.derivation is MetricDerivation.BINARY64
+    assert value.value == quantize_model_output(reference, field="reference")
 
 
 def test_mse_mae_exact() -> None:

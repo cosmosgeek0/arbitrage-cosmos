@@ -3,10 +3,12 @@
 Pure deterministic advisory research machinery: calibrated linear baselines,
 honest controls, the Q01-selected XGBoost challengers and bounded fully-logged
 Optuna studies over synthetic planted-structure datasets. Binary64 exists only
-inside the engine and dies at the single quantization boundary; every public
-numeric contract is exact. All proofs are honest SYNTHETIC fixtures; nothing
-here claims a model is predictive, validated or economically valuable, and the
-Q14-owned validation factory is recorded WAITING_Q14, never reimplemented.
+inside the engine and dies at an explicit quantization boundary; Q10 campaign
+publication first applies its fixed significant-digit vendor policy. Every
+public numeric contract is exact. All proofs are honest SYNTHETIC fixtures;
+nothing here claims a model is predictive, validated or economically valuable,
+and the Q14-owned validation factory is recorded WAITING_Q14, never
+reimplemented.
 """
 
 from quant_edge.models.contracts import (
@@ -26,7 +28,14 @@ from quant_edge.models.contracts import (
     prediction_digest,
 )
 from quant_edge.models.quantize import (
+    MODEL_OUTPUT_FORMAT_SPEC,
+    MODEL_OUTPUT_SIGNIFICANT_DIGITS,
+    canonical_model_output_text,
     quantize_binary64,
+    quantize_model_output,
+    quantize_model_probability,
+    quantize_model_probability_vector,
+    quantize_model_vector,
     quantize_probability,
     quantize_probability_vector,
     quantize_vector,
@@ -50,6 +59,8 @@ from quant_edge.models.synthetic import (
 
 __all__ = [
     "BATTERY_DATASET_ID",
+    "MODEL_OUTPUT_FORMAT_SPEC",
+    "MODEL_OUTPUT_SIGNIFICANT_DIGITS",
     "QUANTILE_LEVELS",
     "SPLIT_AUTHORITY",
     "TARGET_BINARY_ID",
@@ -74,10 +85,15 @@ __all__ = [
     "TargetKind",
     "battery_split",
     "build_battery_dataset",
+    "canonical_model_output_text",
     "disposition_table_digest",
     "make_comparison_report",
     "prediction_digest",
     "quantize_binary64",
+    "quantize_model_output",
+    "quantize_model_probability",
+    "quantize_model_probability_vector",
+    "quantize_model_vector",
     "quantize_probability",
     "quantize_probability_vector",
     "quantize_vector",

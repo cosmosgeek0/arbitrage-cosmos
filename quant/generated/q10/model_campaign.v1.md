@@ -1,8 +1,9 @@
 # Q10 model battery campaign (synthetic only)
 
 - Seed: `20260712`
-- Battery SHA-256: `356268dbff10f3557c254812e80814a557f60e78c86d31408224c9a6d0f872cc`
-- Golden fixture SHA-256: `eda66eeb9afe2d849fa55631e3f6866c7f218429a22d51e5a2eae5a0079f2464`
+- Battery SHA-256: `c176ccc728cdb2c32c4eb88cc8962591ee6bd68faa98e936d633a987d3b9f7d0`
+- Golden fixture SHA-256: `ac146ae7c958f51d5d03c6aab3dc55ca7215b34db88c3a2c31faf0fb051c1cb0`
+- Model-output serialization: `12` significant decimal digits (`z.12g`) before fixed-point and digest publication.
 - Evidence posture: SYNTHETIC_ONLY — planted machinery truth, never market truth;
   no model here is predictive, validated or economically valuable.
 
@@ -22,19 +23,19 @@
 
 | Model | Role | Primary value | Winner |
 | --- | --- | --- | --- |
-| `quantile_linear:v1` | TRANSPARENT_BASELINE | 1180.824147789594 | **yes** |
+| `quantile_linear:v1` | TRANSPARENT_BASELINE | 1180.824147789593 | **yes** |
 | `train_quantile_constant:v1` | CONTROL | 1251.570312500000 | — |
-| `xgb_quantile:v1` | BOOSTED_CHALLENGER | 1429.572019191847 | — |
-| `xgb_quantile_tuned:v1` | BOOSTED_CHALLENGER | 1428.290257228616 | — |
+| `xgb_quantile:v1` | BOOSTED_CHALLENGER | 1429.572019191845 | — |
+| `xgb_quantile_tuned:v1` | BOOSTED_CHALLENGER | 1428.290257228614 | — |
 
 ### `net_edge_regression:v1` — primary `mse`
 
 | Model | Role | Primary value | Winner |
 | --- | --- | --- | --- |
-| `ols:v1` | TRANSPARENT_BASELINE | 11986555.932557070553 | **yes** |
+| `ols:v1` | TRANSPARENT_BASELINE | 11986555.932557467899 | **yes** |
 | `train_mean:v1` | CONTROL | 13515873.061225000000 | — |
-| `xgb_regressor:v1` | BOOSTED_CHALLENGER | 14172584.997423597948 | — |
-| `xgb_regressor_tuned:v1` | BOOSTED_CHALLENGER | 12070880.549135662950 | — |
+| `xgb_regressor:v1` | BOOSTED_CHALLENGER | 14172584.997423519299 | — |
+| `xgb_regressor_tuned:v1` | BOOSTED_CHALLENGER | 12070880.549135354122 | — |
 
 ### `transition_binary:v1` — primary `brier`
 
@@ -45,7 +46,7 @@
 | `no_trade_prevalence:v1` | CONTROL | 0.251337500000 | — |
 | `random_rank:v1` | CONTROL | 0.310899346642 | — |
 | `xgb_classifier:v1` | BOOSTED_CHALLENGER | 0.090654100959 | **yes** |
-| `xgb_classifier_tuned:v1` | BOOSTED_CHALLENGER | 0.093007625764 | — |
+| `xgb_classifier_tuned:v1` | BOOSTED_CHALLENGER | 0.093007604256 | — |
 
 ## Honest challenger losses
 

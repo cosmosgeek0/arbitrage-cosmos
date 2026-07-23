@@ -19,6 +19,7 @@ from quant_edge.features.fixedpoint import (
     round_half_even,
 )
 from quant_edge.models.contracts import MetricDerivation, MetricDirection, MetricValueV1
+from quant_edge.models.quantize import quantize_model_output
 from quant_edge.models.synthetic import QUANTILE_LEVELS
 
 _PROB_ONE = FIXED_POINT_SCALE
@@ -132,25 +133,43 @@ def expected_calibration_error(
     return _exact_metric(name, total, MetricDirection.LOWER_IS_BETTER)
 
 
-def binary64_log_loss(
+def _binary64_log_loss_mean(
     predictions: tuple[FixedPointV1, ...], labels: tuple[int, ...]
-) -> MetricValueV1:
-    """Binary64 log loss over quantized probabilities, clip law: one grid unit."""
-
+) -> float:
     _require_probabilities(predictions, labels, field="log_loss")
     total = 0.0
     for prediction, label in zip(predictions, labels, strict=True):
         clipped = min(max(prediction.mantissa, 1), _PROB_ONE - 1)
         probability = clipped / _PROB_ONE
         total += -math.log(probability) if label == 1 else -math.log(1.0 - probability)
-    mean = total / len(labels)
-    exact = Fraction.from_float(mean)
+    return total / len(labels)
+
+
+def _binary64_log_loss_metric(value: FixedPointV1) -> MetricValueV1:
     return MetricValueV1(
         name="log_loss",
-        value=_fp_from_fraction(exact),
+        value=value,
         derivation=MetricDerivation.BINARY64,
         direction=MetricDirection.LOWER_IS_BETTER,
     )
+
+
+def binary64_log_loss(
+    predictions: tuple[FixedPointV1, ...], labels: tuple[int, ...]
+) -> MetricValueV1:
+    """Historical binary64 log loss, clip law: one fixed-point grid unit."""
+
+    mean = _binary64_log_loss_mean(predictions, labels)
+    return _binary64_log_loss_metric(_fp_from_fraction(Fraction.from_float(mean)))
+
+
+def model_output_log_loss(
+    predictions: tuple[FixedPointV1, ...], labels: tuple[int, ...]
+) -> MetricValueV1:
+    """Q10 campaign log loss under the 12-significant-digit publication policy."""
+
+    mean = _binary64_log_loss_mean(predictions, labels)
+    return _binary64_log_loss_metric(quantize_model_output(mean, field="log_loss"))
 
 
 def _value_difference(prediction: FixedPointV1, label: int) -> Fraction:

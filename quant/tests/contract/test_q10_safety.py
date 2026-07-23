@@ -133,6 +133,38 @@ def test_pure_contract_sources_never_construct_floats() -> None:
         assert "float(" not in source, path.name
 
 
+def test_campaign_battery_uses_only_the_vendor_invariant_model_output_boundary() -> None:
+    source = (MODELS_DIR / "battery.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    imported_names = {
+        alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+    }
+    called_names = {
+        node.func.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+    } | {
+        node.func.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+    }
+    assert {
+        "binary64_log_loss",
+        "quantize_binary64",
+        "quantize_probability",
+        "quantize_probability_vector",
+        "quantize_vector",
+    }.isdisjoint(imported_names | called_names)
+    assert {
+        "model_output_log_loss",
+        "quantize_model_probability_vector",
+        "quantize_model_vector",
+    } <= called_names
+
+
 def test_campaign_script_confines_timing_to_main() -> None:
     source = CAMPAIGN_SCRIPT.read_text(encoding="utf-8")
     lowered = source.lower()

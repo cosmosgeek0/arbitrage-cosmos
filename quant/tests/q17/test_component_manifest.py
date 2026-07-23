@@ -269,7 +269,7 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
             "correctionRefs": ["Q-070", "Q-080", "Q10_CPU_INVARIANT_GENERATION"],
             "currentFileCount": 11,
             "currentSourceSha256": (
-                "809e7e7ddbbc94769887816e39fae6dc99bb0c944fa0fc24a6fcd6ccc1d0b22a"
+                "83049cca8cbd2a3a3a74e1420c6b4e92d6bae73fc9649d68b547b08803f8ef43"
             ),
             "historicalSourceSha256": (
                 "7ffde23cbe6d07b6b9cef99aab27151e9069b5ffffd254e32f8f3586ebeefb7a"
@@ -338,7 +338,7 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
             ],
             "currentFileCount": 9,
             "currentSourceSha256": (
-                "e6af382eff43065bd18a8c7cd10f208acfea0c754574647d7c5fa0a30bf72ca9"
+                "6e46b66c02c10ff9a119abb1b010b45d2a893d67aefcc7d2800736456860ae6b"
             ),
             "historicalSourceSha256": (
                 "ccb0a8dd86e8b6548728d11bb3b28db29ce0e3e8e6d3288653375ef4d39af262"
@@ -356,7 +356,7 @@ def test_manifest_covers_every_phase_and_preserves_final_truth() -> None:
             ],
             "currentFileCount": 8,
             "currentSourceSha256": (
-                "f4e1ed59e26bd3508b152223a45cd4f876d0b2b4a439f6997a651899d0b22b7c"
+                "f957671921c21fec6dcbe95b1827a792fad8f9acf9eb2332b9245806bdb42f6c"
             ),
             "historicalSourceSha256": (
                 "6c67b5bf2488e3b13e5c5fc72a2b613d0ed74fb00a14f635ab71444f7c6d321a"

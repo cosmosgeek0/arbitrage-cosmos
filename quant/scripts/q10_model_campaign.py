@@ -29,6 +29,10 @@ from quant_edge.canonical import canonical_json_bytes
 from quant_edge.features.fixedpoint import FIXED_POINT_SCALE
 from quant_edge.models.battery import BATTERY_SEED, BatteryResultV1, run_battery
 from quant_edge.models.contracts import ModelRole
+from quant_edge.models.quantize import (
+    MODEL_OUTPUT_FORMAT_SPEC,
+    MODEL_OUTPUT_SIGNIFICANT_DIGITS,
+)
 
 
 def _decimal(mantissa: int) -> str:
@@ -117,6 +121,11 @@ def build_artifacts() -> tuple[bytes, bytes, bytes]:
         f"- Seed: `{BATTERY_SEED}`",
         f"- Battery SHA-256: `{result.content_digest.hexdigest}`",
         f"- Golden fixture SHA-256: `{hashlib.sha256(fixture_bytes).hexdigest()}`",
+        (
+            "- Model-output serialization: "
+            f"`{MODEL_OUTPUT_SIGNIFICANT_DIGITS}` significant decimal digits "
+            f"(`{MODEL_OUTPUT_FORMAT_SPEC}`) before fixed-point and digest publication."
+        ),
         "- Evidence posture: SYNTHETIC_ONLY — planted machinery truth, never market truth;",
         "  no model here is predictive, validated or economically valuable.",
         "",

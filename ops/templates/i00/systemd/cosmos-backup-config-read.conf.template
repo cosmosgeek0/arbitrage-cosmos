@@ -1,0 +1,4 @@
+# DEPLOY-DEFECTS-007: unit-scoped read identity for the two non-secret
+# configuration files named by the matching tmpfiles ACL template.
+[Service]
+SupplementaryGroups=cosmos-backup

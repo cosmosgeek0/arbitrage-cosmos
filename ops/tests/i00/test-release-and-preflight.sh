@@ -40,6 +40,10 @@ assert_failure_contains 'caller overrides are forbidden' node "$I00_ROOT/bin/ass
 INSTALLED_I00="$SIMULATION_ROOT/installed-i00"
 INSTALL_OUT="$("$I00_ROOT/bin/install-ops-bundle.sh" --release "$RELEASE" --destination "$INSTALLED_I00" --simulation --simulation-root "$SIMULATION_ROOT")"
 assert_contains "$INSTALL_OUT" OPS_BUNDLE_INSTALLED_NO_SERVICE_MUTATION
+note "DEPLOY-DEFECTS-007(3): installed root is immutable and searchable by service identities"
+INSTALLED_ROOT_MODE="$(stat -f '%Lp' "$INSTALLED_I00" 2>/dev/null || stat -c '%a' "$INSTALLED_I00")"
+assert_eq "$INSTALLED_ROOT_MODE" 511
+assert_eq "$(node -e 'const mode=Number.parseInt(process.argv[1],8);process.stdout.write(String((mode&0o222)===0&&(mode&0o111)===0o111))' "$INSTALLED_ROOT_MODE")" true
 assert_file "$INSTALLED_I00/bin/app-entrypoint.mjs"
 assert_file "$INSTALLED_I00/accepted-ops-live/bin/deploy.sh"
 assert_file "$INSTALLED_I00/install-receipt.json"

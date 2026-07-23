@@ -124,6 +124,12 @@ node --input-type=module -e '
 ' "$I00_ROOT/lib.mjs" "$STAGING" "$VALIDATION_JSON" \
   "$STAGED_L15_VERIFICATION" "$EXPECTED_I00_ENFORCEMENT_DIGEST"
 chmod -R a-w "$STAGING"
+# DEPLOY-DEFECTS-007: the private staging claim starts at 0700, so removing
+# every write bit would otherwise leave the installed root at 0500. Services
+# execute known immutable paths below this root; grant search only, never list
+# or write access. The invoking root owner and every frozen child stay
+# unchanged, and the immutable verifiers run again below.
+chmod go+x "$STAGING"
 node "$SCRIPT_DIR/verify-donor.mjs" --contract "$STAGING/donor-contract.json" \
   --amendment-contract "$STAGING/l15-amendment-contract.json" --contract-only >/dev/null
 node "$SCRIPT_DIR/verify-donor-root.mjs" --contract "$STAGING/donor-contract.json" \

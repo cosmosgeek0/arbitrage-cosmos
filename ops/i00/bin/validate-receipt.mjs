@@ -14,6 +14,7 @@ import { compileJsonSchemaFile } from '../json-schema.mjs';
 
 const RECEIPT_SCHEMAS = Object.freeze({
   RELEASE: 'release-receipt.schema.json',
+  RELEASE_SWITCH: 'release-switch-receipt.schema.json',
   DEPLOYMENT: 'deployment-receipt.schema.json',
   ROLLBACK: 'rollback-receipt.schema.json',
   BACKUP: 'backup-receipt.schema.json',
@@ -60,6 +61,20 @@ function requireChronology(value, label) {
   }
   if (Date.parse(value.recordedAtUtc) < Date.parse(value.completedAtUtc)) {
     fail(`${label} was recorded before it completed`);
+  }
+}
+
+function requireCanonicalChronology(value, label) {
+  requireChronology(value, label);
+  for (const field of ['startedAtUtc', 'completedAtUtc', 'recordedAtUtc']) {
+    const normalized = new Date(Date.parse(value[field])).toISOString().replace('.000Z', 'Z');
+    if (normalized !== value[field]) fail(`${label}.${field} is not one real canonical UTC instant`);
+  }
+}
+
+function requireCanonicalAbsolutePath(value, label) {
+  if (typeof value !== 'string' || value === '/' || !isAbsolute(value) || resolve(value) !== value) {
+    fail(`${label} must be one canonical non-root absolute path`);
   }
 }
 
@@ -181,6 +196,75 @@ function validateRollbackEvidence(value, documents) {
       || typeof authorization.authorizationId !== 'string' || authorization.authorizationId.length === 0) fail('rollback authorization evidence is semantically invalid');
 }
 
+function validateReleaseSwitch(value, args) {
+  if (!isFullSha(args['expected-sha'])) fail('--expected-sha must be a full Git SHA for RELEASE_SWITCH');
+  if (!/^[0-9a-f]{64}$/.test(args['expected-artifact-manifest-sha256'] ?? '')) {
+    fail('--expected-artifact-manifest-sha256 must be lowercase SHA-256 for RELEASE_SWITCH');
+  }
+  if (!/^[0-9a-f]{64}$/.test(args['expected-authorization-sha256'] ?? '')) {
+    fail('--expected-authorization-sha256 must be lowercase SHA-256 for RELEASE_SWITCH');
+  }
+  requireExactKeys(value, [
+    'schemaVersion', 'kind', 'releaseId', 'testedSha', 'deployedSha',
+    'artifactManifestSha256', 'authorizationSha256', 'recoveryTarget',
+    'firstHostEvidenceSha256', 'current', 'previous', 'service', 'postSwitchGate',
+    'donorExitCode', 'status', 'startedAtUtc', 'completedAtUtc', 'recordedAtUtc',
+  ], 'release-switch receipt');
+  const expectedSha = args['expected-sha'];
+  if (value.releaseId !== `i00-${expectedSha}` || value.testedSha !== expectedSha
+      || value.deployedSha !== expectedSha || value.status !== 'RELEASE_SWITCH_PROVED'
+      || value.donorExitCode !== 0) {
+    fail('release-switch receipt SHA/status is contradictory');
+  }
+  if (value.artifactManifestSha256 !== args['expected-artifact-manifest-sha256']
+      || value.authorizationSha256 !== args['expected-authorization-sha256']) {
+    fail('release-switch receipt provenance differs from the authorized inputs');
+  }
+  const firstHost = args['expected-recovery-target'] !== undefined;
+  if (firstHost) {
+    if (args['expected-recovery-target'] !== 'NO_PRIOR_RELEASE_FIRST_HOST'
+        || !/^[0-9a-f]{64}$/.test(args['expected-first-host-evidence-sha256'] ?? '')
+        || value.recoveryTarget !== args['expected-recovery-target']
+        || value.firstHostEvidenceSha256 !== args['expected-first-host-evidence-sha256']
+        || value.previous.state !== 'ABSENT' || value.previous.target !== null) {
+      fail('release-switch first-host evidence is contradictory');
+    }
+  } else if (args['expected-first-host-evidence-sha256'] !== undefined
+      || value.recoveryTarget !== null || value.firstHostEvidenceSha256 !== null
+      || value.previous.state !== 'PRESENT' || typeof value.previous.target !== 'string') {
+    fail('release-switch later-release evidence is contradictory');
+  }
+  requireCanonicalAbsolutePath(value.current.link, 'release-switch current.link');
+  requireCanonicalAbsolutePath(value.current.target, 'release-switch current.target');
+  requireCanonicalAbsolutePath(value.previous.link, 'release-switch previous.link');
+  if (value.previous.target !== null) {
+    requireCanonicalAbsolutePath(value.previous.target, 'release-switch previous.target');
+  }
+  const releaseRoot = value.current.target.slice(0, -value.current.releaseId.length);
+  if (value.current.releaseId !== value.releaseId
+      || value.current.target !== `${releaseRoot}${value.releaseId}`
+      || !releaseRoot.endsWith('/releases/')
+      || value.current.link !== `${releaseRoot.slice(0, -'releases/'.length)}current`
+      || value.previous.link !== `${releaseRoot.slice(0, -'releases/'.length)}previous`) {
+    fail('release-switch link identity is contradictory');
+  }
+  if (!firstHost) {
+    const previousReleaseId = value.previous.target.startsWith(releaseRoot)
+      ? value.previous.target.slice(releaseRoot.length) : '';
+    if (!/^i00-[0-9a-f]{40}$/.test(previousReleaseId)
+        || value.previous.target === value.current.target) {
+      fail('release-switch previous target is not one distinct direct release child');
+    }
+  }
+  if (value.service.unit !== 'cosmos-app.service' || value.service.state !== 'ACTIVE'
+      || value.postSwitchGate.base !== 'http://127.0.0.1:8080'
+      || JSON.stringify(value.postSwitchGate.paths) !== JSON.stringify(['/health/live', '/health/ready'])
+      || value.postSwitchGate.status !== 'PASS') {
+    fail('release-switch Gate-5 service/readiness evidence is invalid');
+  }
+  requireCanonicalChronology(value, 'release-switch receipt');
+}
+
 const args = parseArgs(process.argv.slice(2));
 if (!args.input || !args.kind) fail('--input and --kind are required');
 const value = readJson(args.input, 'operation receipt');
@@ -208,6 +292,9 @@ switch (args.kind) {
     sha('testedSha'); utc('recordedAtUtc');
     if (value.releaseId !== `i00-${value.testedSha}` || !/^[0-9a-f]{64}$/.test(value.artifactManifestSha256)) fail('release receipt identity/digest is invalid');
     if (!['ASSEMBLED_NOT_DEPLOYED', 'VALIDATED_NOT_DEPLOYED'].includes(value.status)) fail('release receipt cannot claim deployment');
+    break;
+  case 'RELEASE_SWITCH':
+    validateReleaseSwitch(value, args);
     break;
   case 'DEPLOYMENT':
     if (!isFullSha(args['expected-sha'])) fail('--expected-sha must be a full Git SHA for DEPLOYMENT');

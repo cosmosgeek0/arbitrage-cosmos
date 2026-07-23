@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmos.invalid/i00/release-switch-receipt.schema.json",
+  "title": "I00 Gate-5 release-switch receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "releaseId",
+    "testedSha",
+    "deployedSha",
+    "artifactManifestSha256",
+    "authorizationSha256",
+    "recoveryTarget",
+    "firstHostEvidenceSha256",
+    "current",
+    "previous",
+    "service",
+    "postSwitchGate",
+    "donorExitCode",
+    "status",
+    "startedAtUtc",
+    "completedAtUtc",
+    "recordedAtUtc"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "kind": {"const": "RELEASE_SWITCH"},
+    "releaseId": {"type": "string", "pattern": "^i00-[0-9a-f]{40}$"},
+    "testedSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "deployedSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "artifactManifestSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "authorizationSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "recoveryTarget": {
+      "oneOf": [
+        {"const": "NO_PRIOR_RELEASE_FIRST_HOST"},
+        {"type": "null"}
+      ]
+    },
+    "firstHostEvidenceSha256": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        {"type": "null"}
+      ]
+    },
+    "current": {"$ref": "#/$defs/current"},
+    "previous": {"$ref": "#/$defs/previous"},
+    "service": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["unit", "state"],
+      "properties": {
+        "unit": {"const": "cosmos-app.service"},
+        "state": {"const": "ACTIVE"}
+      }
+    },
+    "postSwitchGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base", "paths", "status"],
+      "properties": {
+        "base": {"const": "http://127.0.0.1:8080"},
+        "paths": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "string",
+            "enum": ["/health/live", "/health/ready"]
+          }
+        },
+        "status": {"const": "PASS"}
+      }
+    },
+    "donorExitCode": {"const": 0},
+    "status": {"const": "RELEASE_SWITCH_PROVED"},
+    "startedAtUtc": {"type": "string", "format": "date-time"},
+    "completedAtUtc": {"type": "string", "format": "date-time"},
+    "recordedAtUtc": {"type": "string", "format": "date-time"}
+  },
+  "$defs": {
+    "current": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["link", "target", "releaseId"],
+      "properties": {
+        "link": {"type": "string", "pattern": "^/"},
+        "target": {"type": "string", "pattern": "^/"},
+        "releaseId": {"type": "string", "pattern": "^i00-[0-9a-f]{40}$"}
+      }
+    },
+    "previous": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["link", "state", "target"],
+      "properties": {
+        "link": {"type": "string", "pattern": "^/"},
+        "state": {"enum": ["ABSENT", "PRESENT"]},
+        "target": {
+          "oneOf": [
+            {"type": "string", "pattern": "^/"},
+            {"type": "null"}
+          ]
+        }
+      }
+    }
+  }
+}

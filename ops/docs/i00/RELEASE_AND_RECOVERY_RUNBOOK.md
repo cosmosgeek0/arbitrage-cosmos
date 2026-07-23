@@ -57,6 +57,78 @@ external authorization described in `IP_OPS_ACTIVATION_REQUEST.md`.
    restart. Verify its install receipt before installing the I00 systemd
    templates.
 
+## First-host evidence and authorization order
+
+A first-host release is two distinct wrapper invocations. First run
+`release-switch.sh` with the exact recovery target and
+`--prepare-first-host-evidence`, but with no authorization, operator, result,
+or reconciliation receipt input. The wrapper produces and preflights one
+retained mode-0700 evidence directory, emits
+`FIRST_HOST_EVIDENCE_PREPARED`, and performs no donor deployment or service
+mutation.
+
+Only after that successful preparation may the owner create the release-switch
+authorization. It must bind the emitted `firstHostEvidenceSha256` and the other
+existing exact endpoints. The authorized switch then supplies the same
+directory through `--first-host-evidence-dir`; the wrapper revalidates its four
+mode-0600 files, live SQLite identity, clean host baseline, 300-second evidence
+age, and remaining 300-second lease before delegation. It never regenerates or
+substitutes first-host evidence during the authorized invocation.
+
+## Backup configuration read boundary
+
+Host preparation creates the system group `cosmos-backup` without adding the
+`cosmos` user to it globally. Install
+`ops/templates/i00/systemd/cosmos-backup-config-read.conf.template` as
+`/etc/systemd/system/cosmos-backup.service.d/10-config-read.conf` and
+`ops/templates/i00/tmpfiles/cosmos-backup-config-access.conf.template` as
+`/etc/tmpfiles.d/cosmos-backup-config-access.conf`. The service drop-in gives
+only `cosmos-backup.service` the supplementary group.
+
+Keep `/etc/cosmos` owned by `root:cosmos` with mode `0750`. Keep
+`cosmos-app.env`, `cosmos-backup.env`, and `cosmos-i00.env` owned by
+`root:cosmos` with mode `0640`. Keep the two non-secret files
+`cosmos-deploy.env` and `cosmos-watchdog.env` owned by `root:root` mode `0640`;
+the exact-path tmpfiles policy adds read-only access for `cosmos-backup` without
+changing those owner/group/mode values or granting other access. Apply it with
+`systemd-tmpfiles --create /etc/tmpfiles.d/cosmos-backup-config-access.conf`
+after both files exist and after every atomic replacement of either file.
+
+Apply this boundary in the following order, replacing `<validated-release>`
+with the canonical unpacked release path:
+
+```sh
+getent group cosmos-backup >/dev/null || groupadd --system cosmos-backup
+install -d -o root -g root -m 0755 /etc/systemd/system/cosmos-backup.service.d
+install -o root -g root -m 0644 <validated-release>/ops/templates/i00/systemd/cosmos-backup-config-read.conf.template /etc/systemd/system/cosmos-backup.service.d/10-config-read.conf
+install -o root -g root -m 0644 <validated-release>/ops/templates/i00/tmpfiles/cosmos-backup-config-access.conf.template /etc/tmpfiles.d/cosmos-backup-config-access.conf
+systemd-tmpfiles --create /etc/tmpfiles.d/cosmos-backup-config-access.conf
+systemctl daemon-reload
+```
+
+Before enabling the backup timer, require every readback below to match the
+sealed values. `SupplementaryGroups` must be exactly `cosmos-backup`; each ACL
+must contain only `user::rw-`, owning `group::r--`, named
+`group:cosmos-backup:r--`, `mask::r--`, and `other::---`; the two file
+owner/group/mode rows must remain `root root 640`. The final command must
+return `0`, proving that the `cosmos` account is not a global member of
+`cosmos-backup`.
+
+```sh
+systemctl show --property=SupplementaryGroups --value cosmos-backup.service
+getfacl --absolute-names --omit-header /etc/cosmos/cosmos-deploy.env /etc/cosmos/cosmos-watchdog.env
+stat --format='%U %G %a %n' /etc/cosmos/cosmos-deploy.env /etc/cosmos/cosmos-watchdog.env
+id cosmos >/dev/null && test "$(id -nG cosmos | tr ' ' '\n' | grep -Fxc cosmos-backup)" -eq 0
+```
+
+The `cosmos` account must not be added globally to `cosmos-backup`. Do not add a
+default, recursive, directory-wide, wildcard, provider, authorization,
+credential, or secret-file ACL. Credential-capable and other secret-bearing
+files remain `root:root` mode `0600` with no named backup ACL. A missing group,
+drop-in, exact ACL, or readable mandatory path blocks backup acceptance; it is
+never repaired by widening file or directory modes. A host rebuild or restore
+reinstalls this sealed permission contract before enabling the timer.
+
 ## Safe startup
 
 1. Confirm the current/previous links and ledger/schema readback.
@@ -105,6 +177,15 @@ directories `/var/lib/cosmos/{data,evidence,models,ops}` outside releases.
 Real release and rollback commands also require the exact evidence root, result
 receipt target, and reconciliation receipt target authorized under §20. They
 cannot return a proved success until the hashed semantic receipt validates.
+For a release, the wrapper's result target is the closed `RELEASE_SWITCH`
+receipt containing only Gate 5 facts: the exact release and manifest,
+authorization digest, conditional first-host evidence digest, current/previous
+link readback, active app unit, donor exit `0`, and the donor's loopback
+liveness/readiness gate. The separately pre-bound reconciliation target need
+not exist and is not read at Gate 5. Edge/Access, watchdog, backup, isolated
+restore, and reconciliation evidence are collected at their owning later
+gates; the unchanged closed `DEPLOYMENT` receipt requires all of them before
+final deployment acceptance.
 
 ## Backup and restore
 

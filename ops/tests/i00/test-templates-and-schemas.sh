@@ -8,7 +8,7 @@ while IFS= read -r file; do
   node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$file"
   JSON_COUNT=$((JSON_COUNT + 1))
 done < <(find "$REPO_ROOT/ops/templates/i00" "$I00_ROOT/schemas" -type f \( -name '*.json' -o -name '*.json.template' \) | LC_ALL=C sort)
-assert_eq "$JSON_COUNT" 15
+assert_eq "$JSON_COUNT" 16
 assert_failure node --input-type=module -e '
   import { pathToFileURL } from "node:url";
   const { compileJsonSchema } = await import(pathToFileURL(process.argv[1]));

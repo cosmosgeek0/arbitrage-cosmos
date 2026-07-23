@@ -1,0 +1,4 @@
+# DEPLOY-DEFECTS-007: exact-path, read-only ACLs for the backup archive.
+# No default, recursive, wildcard, credential, provider, or secret-file grant.
+a /etc/cosmos/cosmos-deploy.env - - - - user::rw-,group::r--,group:cosmos-backup:r--,mask::r--,other::---
+a /etc/cosmos/cosmos-watchdog.env - - - - user::rw-,group::r--,group:cosmos-backup:r--,mask::r--,other::---

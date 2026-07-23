@@ -30,6 +30,7 @@ AUTHORIZATION="" RESULT_RECEIPT="" RECONCILIATION_RECEIPT="" EVIDENCE_ROOT=""
 NOW="" SIMULATION_ROOT="" SIMULATION_PROBE="" SIMULATION_SYSTEMCTL_READBACK="" SIMULATION=0
 OPERATOR="" CONFIG_VERSION="" RISK_VERSION="" AUTHORIZATION_NONCE="" SERVER_PREVIEW_DIGEST=""
 RECOVERY_TARGET="" ACCOUNT="" TARGET_HOST="" TARGET_ENVIRONMENT="" BACKUP_RESERVE_BYTES=""
+FIRST_HOST_EVIDENCE_DIR="" PREPARE_FIRST_HOST_EVIDENCE=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --release) mark_seen "$1"; require_value "$1" "${2-}"; RELEASE="$2"; shift 2 ;;
@@ -43,6 +44,8 @@ while [ $# -gt 0 ]; do
     --target-host) mark_seen "$1"; require_value "$1" "${2-}"; TARGET_HOST="$2"; shift 2 ;;
     --environment) mark_seen "$1"; require_value "$1" "${2-}"; TARGET_ENVIRONMENT="$2"; shift 2 ;;
     --backup-reserve-bytes) mark_seen "$1"; require_value "$1" "${2-}"; BACKUP_RESERVE_BYTES="$2"; shift 2 ;;
+    --first-host-evidence-dir) mark_seen "$1"; require_value "$1" "${2-}"; FIRST_HOST_EVIDENCE_DIR="$2"; shift 2 ;;
+    --prepare-first-host-evidence) mark_seen "$1"; PREPARE_FIRST_HOST_EVIDENCE=1; shift ;;
     --authorization) mark_seen "$1"; require_value "$1" "${2-}"; AUTHORIZATION="$2"; shift 2 ;;
     --operator) mark_seen "$1"; require_value "$1" "${2-}"; OPERATOR="$2"; shift 2 ;;
     --config-version) mark_seen "$1"; require_value "$1" "${2-}"; CONFIG_VERSION="$2"; shift 2 ;;
@@ -81,11 +84,19 @@ if [ -n "$RECOVERY_TARGET" ]; then
     0*|*[!0-9]*) blocked "--backup-reserve-bytes must be a canonical non-negative integer" ;;
     *) : ;;
   esac
+  if [ "$PREPARE_FIRST_HOST_EVIDENCE" = 1 ]; then
+    [ -z "$FIRST_HOST_EVIDENCE_DIR" ] \
+      || blocked "prepare-first-host evidence rejects --first-host-evidence-dir"
+  else
+    [ -n "$FIRST_HOST_EVIDENCE_DIR" ] \
+      || blocked "first-host switch requires --first-host-evidence-dir"
+  fi
 else
   [ -n "$HOST" ] && [ -n "$SUPERVISOR" ] \
     || blocked "normal deploy requires --host and --supervisor"
   [ -z "$ACCOUNT" ] && [ -z "$TARGET_HOST" ] && [ -z "$TARGET_ENVIRONMENT" ] \
     && [ -z "$BACKUP_RESERVE_BYTES" ] && [ -z "$SIMULATION_SYSTEMCTL_READBACK" ] \
+    && [ -z "$FIRST_HOST_EVIDENCE_DIR" ] && [ "$PREPARE_FIRST_HOST_EVIDENCE" = 0 ] \
     || blocked "first-host owner inputs require the exact recovery target"
 fi
 [ -x "$DONOR_ROOT/bin/deploy.sh" ] || blocked "effective L15 deploy.sh is unavailable"
@@ -235,9 +246,14 @@ if [ "$SIMULATION" = 1 ]; then
   SIMULATION_PROBE="$(node "$SCRIPT_DIR/verify-simulation-command.mjs" --root "$SIMULATION_ROOT" --command "$SIMULATION_PROBE")"
   SQLITE="$(validate_simulation_executable "$SIMULATION_ROOT" "$SQLITE")"
   if [ "$FIRST_HOST" = 1 ]; then
-    [ -n "$SIMULATION_SYSTEMCTL_READBACK" ] \
-      || blocked "first-host simulation requires --simulation-systemctl-readback"
-    FIRST_HOST_SYSTEMCTL="$(validate_simulation_executable "$SIMULATION_ROOT" "$SIMULATION_SYSTEMCTL_READBACK")"
+    if [ "$PREPARE_FIRST_HOST_EVIDENCE" = 1 ]; then
+      [ -n "$SIMULATION_SYSTEMCTL_READBACK" ] \
+        || blocked "first-host evidence preparation simulation requires --simulation-systemctl-readback"
+      FIRST_HOST_SYSTEMCTL="$(validate_simulation_executable "$SIMULATION_ROOT" "$SIMULATION_SYSTEMCTL_READBACK")"
+    else
+      [ -z "$SIMULATION_SYSTEMCTL_READBACK" ] \
+        || blocked "first-host switch rejects preparation-only --simulation-systemctl-readback"
+    fi
   fi
   SANITIZED_DIR="$(mktemp -d "$SIMULATION_ROOT/i00-release-switch.XXXXXX")"
   chmod 700 "$SANITIZED_DIR"
@@ -249,29 +265,38 @@ if [ "$SIMULATION" = 1 ]; then
   mkdir -p "$SIMULATION_ROOT/home" "$SIMULATION_ROOT/tmp"
   EFFECTIVE_NOW="$NOW"
 else
-  [ -n "$AUTHORIZATION" ] && [ -n "$OPERATOR" ] && [ -n "$CONFIG_VERSION" ] && [ -n "$RISK_VERSION" ] \
-    && [ -n "$AUTHORIZATION_NONCE" ] && [ -n "$SERVER_PREVIEW_DIGEST" ] && [ -n "$RESULT_RECEIPT" ] \
-    && [ -n "$RECONCILIATION_RECEIPT" ] && [ -n "$EVIDENCE_ROOT" ] \
-    || blocked "real switch requires authorization, independent operator/revision/nonce/preview truth, and exact receipt targets"
   [ -z "$NOW" ] || blocked "real switch does not accept a caller clock"
   [ -z "$SIMULATION_ROOT" ] && [ -z "$SIMULATION_PROBE" ] && [ -z "$SIMULATION_SYSTEMCTL_READBACK" ] \
     || blocked "real switch rejects simulation-only inputs"
+  if [ "$PREPARE_FIRST_HOST_EVIDENCE" = 1 ]; then
+    [ -z "$AUTHORIZATION" ] && [ -z "$OPERATOR" ] && [ -z "$CONFIG_VERSION" ] \
+      && [ -z "$RISK_VERSION" ] && [ -z "$AUTHORIZATION_NONCE" ] && [ -z "$SERVER_PREVIEW_DIGEST" ] \
+      && [ -z "$RESULT_RECEIPT" ] && [ -z "$RECONCILIATION_RECEIPT" ] \
+      || blocked "prepare-first-host evidence rejects authorization and receipt inputs"
+  else
+    [ -n "$AUTHORIZATION" ] && [ -n "$OPERATOR" ] && [ -n "$CONFIG_VERSION" ] && [ -n "$RISK_VERSION" ] \
+      && [ -n "$AUTHORIZATION_NONCE" ] && [ -n "$SERVER_PREVIEW_DIGEST" ] && [ -n "$RESULT_RECEIPT" ] \
+      && [ -n "$RECONCILIATION_RECEIPT" ] && [ -n "$EVIDENCE_ROOT" ] \
+      || blocked "real switch requires authorization, independent operator/revision/nonce/preview truth, and exact receipt targets"
+  fi
   EFFECTIVE_NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   SANITIZED_DIR="$(mktemp -d "${TMPDIR:-/tmp}/i00-release-switch.XXXXXX")"
   chmod 700 "$SANITIZED_DIR"
   DELEGATE_ENV="$SANITIZED_DIR/deploy.env"
   if [ "$FIRST_HOST" = 1 ]; then
     node "$SCRIPT_DIR/sanitize-donor-env.mjs" --env "$ENV_FILE" --output "$DELEGATE_ENV" --profile deploy --require-first-host-no-current >/dev/null
-    FIRST_HOST_SYSTEMCTL=/usr/bin/systemctl
+    if [ "$PREPARE_FIRST_HOST_EVIDENCE" = 1 ]; then FIRST_HOST_SYSTEMCTL=/usr/bin/systemctl; fi
   else
     node "$SCRIPT_DIR/sanitize-donor-env.mjs" --env "$ENV_FILE" --output "$DELEGATE_ENV" --profile deploy >/dev/null
   fi
 fi
 
 FIRST_HOST_DIR=""
+FIRST_HOST_DIR_CREATED=0
 FIRST_HOST_EVIDENCE_RETAIN=0
 cleanup_delegate_env() {
-  if [ -n "${FIRST_HOST_DIR:-}" ] && [ "${FIRST_HOST_EVIDENCE_RETAIN:-0}" != 1 ]; then
+  if [ "${FIRST_HOST_DIR_CREATED:-0}" = 1 ] && [ -n "${FIRST_HOST_DIR:-}" ] \
+      && [ "${FIRST_HOST_EVIDENCE_RETAIN:-0}" != 1 ]; then
     rm -rf "$FIRST_HOST_DIR"
   fi
   if [ -n "${SANITIZED_DIR:-}" ]; then rm -rf "$SANITIZED_DIR"; fi
@@ -324,26 +349,53 @@ if (!safety.isWithinSimulationRoot(root, evidence)) {
 }
 NODE
   fi
-  FIRST_HOST_DIR="$(mktemp -d "$EVIDENCE_ROOT/first-host-readback.XXXXXX")"
-  chmod 700 "$FIRST_HOST_DIR"
-  node "$SCRIPT_DIR/first-host-readback.mjs" \
-    --env "$DELEGATE_ENV" --release "$RELEASE" --output-dir "$FIRST_HOST_DIR" \
-    --account "$ACCOUNT" --target-host "$TARGET_HOST" --environment "$TARGET_ENVIRONMENT" \
-    --backup-reserve-bytes "$BACKUP_RESERVE_BYTES" --sqlite "$SQLITE_PATH" \
-    --systemctl "$FIRST_HOST_SYSTEMCTL" --now "$EFFECTIVE_NOW" >/dev/null
-  FIRST_HOST_EVIDENCE_RETAIN=1
+  if [ "$PREPARE_FIRST_HOST_EVIDENCE" = 1 ]; then
+    FIRST_HOST_DIR="$(mktemp -d "$EVIDENCE_ROOT/first-host-readback.XXXXXX")"
+    FIRST_HOST_DIR_CREATED=1
+    chmod 700 "$FIRST_HOST_DIR"
+    node "$SCRIPT_DIR/first-host-readback.mjs" \
+      --env "$DELEGATE_ENV" --release "$RELEASE" --output-dir "$FIRST_HOST_DIR" \
+      --account "$ACCOUNT" --target-host "$TARGET_HOST" --environment "$TARGET_ENVIRONMENT" \
+      --backup-reserve-bytes "$BACKUP_RESERVE_BYTES" --sqlite "$SQLITE_PATH" \
+      --systemctl "$FIRST_HOST_SYSTEMCTL" --now "$EFFECTIVE_NOW" >/dev/null
+  else
+    FIRST_HOST_DIR="$(node --input-type=module - "$EVIDENCE_ROOT" "$FIRST_HOST_EVIDENCE_DIR" <<'NODE'
+import { lstatSync, realpathSync } from 'node:fs';
+import { basename, dirname, isAbsolute, resolve } from 'node:path';
+const [root, input] = process.argv.slice(2);
+const fail = (message) => { process.stderr.write(`I00_OPS_BLOCKED: ${message}\n`); process.exit(1); };
+if (!input || !isAbsolute(input) || resolve(input) !== input || dirname(input) !== root
+    || !/^first-host-readback\.[A-Za-z0-9]+$/.test(basename(input))) {
+  fail('--first-host-evidence-dir must be one canonical direct child of the evidence root');
+}
+let stat;
+try { stat = lstatSync(input); } catch (error) { fail(`prepared first-host evidence directory is unavailable: ${error.message}`); }
+if (stat.isSymbolicLink() || !stat.isDirectory() || (stat.mode & 0o777) !== 0o700 || realpathSync(input) !== input) {
+  fail('prepared first-host evidence directory must be one canonical mode-0700 real directory');
+}
+process.stdout.write(input);
+NODE
+)"
+    FIRST_HOST_EVIDENCE_RETAIN=1
+  fi
   HOST="$FIRST_HOST_DIR/host.json"
   SUPERVISOR="$FIRST_HOST_DIR/supervisor.json"
   FIRST_HOST_EVIDENCE="$FIRST_HOST_DIR/collected-evidence.json"
   PRODUCER_SQLITE="$FIRST_HOST_DIR/sqlite-readback.json"
   FIRST_HOST_EVIDENCE_SHA256="$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$FIRST_HOST_EVIDENCE")"
-  node - "$SQLITE_INITIAL" "$HOST" "$PRODUCER_SQLITE" "$FIRST_HOST_EVIDENCE_SHA256" "$EFFECTIVE_NOW" <<'NODE'
+  node - "$SQLITE_INITIAL" "$HOST" "$PRODUCER_SQLITE" "$FIRST_HOST_EVIDENCE_SHA256" \
+    "$ACCOUNT" "$TARGET_HOST" "$TARGET_ENVIRONMENT" "$BACKUP_RESERVE_BYTES" <<'NODE'
 const fs = require('fs');
 const expected = JSON.parse(process.argv[2]);
 const host = JSON.parse(fs.readFileSync(process.argv[3], 'utf8'));
 const producer = JSON.parse(fs.readFileSync(process.argv[4], 'utf8'));
 const evidenceSha = process.argv[5];
-const observedAtUtc = process.argv[6];
+const expectedOwner = {
+  account: process.argv[6],
+  targetHost: process.argv[7],
+  environment: process.argv[8],
+  backupReserveBytes: Number(process.argv[9]),
+};
 const fail = (message) => { process.stderr.write(`I00_OPS_BLOCKED: ${message}\n`); process.exit(1); };
 const exactKeys = (value, keys, label) => {
   if (!value || typeof value !== 'object' || Array.isArray(value)
@@ -352,9 +404,14 @@ const exactKeys = (value, keys, label) => {
 exactKeys(producer, ['schemaVersion','source','observedAtUtc','path','sha256','version','identity'], 'producer SQLite readback');
 exactKeys(producer.identity, ['device','inode','mode','size','mtimeNs','ctimeNs'], 'producer SQLite identity');
 if (producer.schemaVersion !== 1 || producer.source !== 'PINNED_SQLITE_EXECUTABLE_READBACK'
-    || producer.observedAtUtc !== observedAtUtc) fail('producer SQLite source or observation time is invalid');
+    || producer.observedAtUtc !== host.observedAtUtc) fail('producer SQLite source or observation time is invalid');
 if (host.sqliteVersion !== expected.version) fail('first-host host JSON SQLite version differs from live wrapper readback');
 if (host.evidenceSha256 !== evidenceSha) fail('first-host host JSON does not bind the retained collected evidence bytes');
+if (host.account !== expectedOwner.account || host.targetHost !== expectedOwner.targetHost
+    || host.environment !== expectedOwner.environment
+    || host.backupReserveBytes !== expectedOwner.backupReserveBytes) {
+  fail('prepared first-host evidence owner inputs differ from the switch request');
+}
 for (const key of ['path', 'sha256', 'version']) if (producer[key] !== expected[key]) fail(`producer SQLite ${key} differs from wrapper readback`);
 if (JSON.stringify(producer.identity) !== JSON.stringify(expected.identity)) fail('producer SQLite identity differs from wrapper readback');
 NODE
@@ -393,7 +450,43 @@ if [ "$FIRST_HOST" != 1 ]; then
 fi
 
 DELEGATE_ENV_SHA="$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$DELEGATE_ENV")"
+if [ "$PREPARE_FIRST_HOST_EVIDENCE" = 1 ]; then
+  node "$SCRIPT_DIR/preflight.mjs" \
+    --release "$RELEASE" --host "$HOST" --supervisor "$SUPERVISOR" --mode deploy \
+    --now "$EFFECTIVE_NOW" --max-host-age-sec 300 --max-supervisor-age-sec 300 \
+    --required-supervisor-window-sec 300 --recovery-target "$FIRST_HOST_SENTINEL" \
+    --first-host-evidence "$FIRST_HOST_EVIDENCE" --donor-env "$DELEGATE_ENV" >/dev/null
+  SQLITE_FINAL="$(inspect_sqlite "$SQLITE_PATH")"
+  [ "$SQLITE_FINAL" = "$SQLITE_INITIAL" ] \
+    || blocked "SQLite executable identity changed during first-host evidence preparation"
+  [ "$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$DELEGATE_ENV")" = "$DELEGATE_ENV_SHA" ] \
+    || blocked "sanitized donor env changed during first-host evidence preparation"
+  [ "$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$FIRST_HOST_EVIDENCE")" = "$FIRST_HOST_EVIDENCE_SHA256" ] \
+    || blocked "first-host evidence changed during preparation validation"
+  [ "$(node - "$FIRST_HOST_DIR" <<'NODE'
+const fs=require('fs'),c=require('crypto'),p=require('path');
+const dir=process.argv[2], names=['collected-evidence.json','host.json','sqlite-readback.json','supervisor.json'], result={};
+if (JSON.stringify(fs.readdirSync(dir).sort())!==JSON.stringify(names)) process.exit(1);
+for (const name of names) { const file=p.join(dir,name),stat=fs.lstatSync(file,{bigint:true}); if(stat.isSymbolicLink()||!stat.isFile()||(stat.mode&0o777n)!==0o600n||fs.realpathSync(file)!==file) process.exit(1); result[name]={sha256:c.createHash('sha256').update(fs.readFileSync(file)).digest('hex'),device:stat.dev.toString(),inode:stat.ino.toString(),size:stat.size.toString(),mtimeNs:stat.mtimeNs.toString(),ctimeNs:stat.ctimeNs.toString()}; }
+process.stdout.write(JSON.stringify(result));
+NODE
+)" = "$FIRST_HOST_BUNDLE_IDENTITY" ] || blocked "prepared first-host evidence bundle changed during validation"
+  FIRST_HOST_EVIDENCE_RETAIN=1
+  node - "$FIRST_HOST_DIR" "$FIRST_HOST_EVIDENCE_SHA256" <<'NODE'
+const [evidenceDir, firstHostEvidenceSha256] = process.argv.slice(2);
+process.stdout.write(`${JSON.stringify({
+  status: 'FIRST_HOST_EVIDENCE_PREPARED',
+  evidenceDir,
+  firstHostEvidenceSha256,
+})}\n`);
+NODE
+  cleanup_delegate_env
+  trap - EXIT
+  exit 0
+fi
+
 AUTHORIZATION_IDENTITY=""
+AUTHORIZATION_SHA256=""
 if [ "$SIMULATION" != 1 ]; then
   MANIFEST_SHA="$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$RELEASE/artifact-manifest.json")"
   TRUSTED_BUILD_KEY_SHA="$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "${I00_TRUSTED_BUILD_PUBLIC_KEY:?trusted build public key is required}")"
@@ -423,11 +516,16 @@ if [ "$SIMULATION" != 1 ]; then
   node "$SCRIPT_DIR/validate-authorization.mjs" "${AUTH_BASE[@]}" "${AUTH_ENDPOINTS[@]}" >/dev/null
   [ "$(capture_authorization_identity "$AUTHORIZATION")" = "$AUTHORIZATION_IDENTITY" ] \
     || blocked "authorization changed during validation"
+  AUTHORIZATION_SHA256="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).sha256)' "$AUTHORIZATION_IDENTITY")"
+  node "$SCRIPT_DIR/record-release-switch-receipt.mjs" \
+    --check-only --output "$RESULT_RECEIPT" >/dev/null
 fi
 
-PREFLIGHT_ARGS=(--release "$RELEASE" --host "$HOST" --supervisor "$SUPERVISOR" --mode deploy --now "$EFFECTIVE_NOW" --max-host-age-sec 120 --max-supervisor-age-sec 30 --required-supervisor-window-sec 300)
 if [ "$FIRST_HOST" = 1 ]; then
+  PREFLIGHT_ARGS=(--release "$RELEASE" --host "$HOST" --supervisor "$SUPERVISOR" --mode deploy --now "$EFFECTIVE_NOW" --max-host-age-sec 300 --max-supervisor-age-sec 300 --required-supervisor-window-sec 300)
   PREFLIGHT_ARGS+=(--recovery-target "$FIRST_HOST_SENTINEL" --first-host-evidence "$FIRST_HOST_EVIDENCE" --donor-env "$DELEGATE_ENV")
+else
+  PREFLIGHT_ARGS=(--release "$RELEASE" --host "$HOST" --supervisor "$SUPERVISOR" --mode deploy --now "$EFFECTIVE_NOW" --max-host-age-sec 120 --max-supervisor-age-sec 30 --required-supervisor-window-sec 300)
 fi
 node "$SCRIPT_DIR/preflight.mjs" "${PREFLIGHT_ARGS[@]}" >/dev/null
 
@@ -445,7 +543,7 @@ if (JSON.stringify(fs.readdirSync(dir).sort())!==JSON.stringify(names)) process.
 for (const name of names) { const file=p.join(dir,name),stat=fs.lstatSync(file,{bigint:true}); if(stat.isSymbolicLink()||!stat.isFile()||(stat.mode&0o777n)!==0o600n||fs.realpathSync(file)!==file) process.exit(1); result[name]={sha256:c.createHash('sha256').update(fs.readFileSync(file)).digest('hex'),device:stat.dev.toString(),inode:stat.ino.toString(),size:stat.size.toString(),mtimeNs:stat.mtimeNs.toString(),ctimeNs:stat.ctimeNs.toString()}; }
 process.stdout.write(JSON.stringify(result));
 NODE
-)" = "$FIRST_HOST_BUNDLE_IDENTITY" ] || blocked "first-host evidence bundle changed after preflight"
+)" = "$FIRST_HOST_BUNDLE_IDENTITY" ] || blocked "prepared first-host evidence bundle changed after preflight"
 fi
 if [ "$SIMULATION" != 1 ]; then
   [ "$(capture_authorization_identity "$AUTHORIZATION")" = "$AUTHORIZATION_IDENTITY" ] \
@@ -460,6 +558,7 @@ fi
 
 SAFE_PATH="/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 NODE_BIN="$(command -v node)"
+SWITCH_STARTED_AT_UTC="$EFFECTIVE_NOW"
 set +e
 if [ "$SIMULATION" = 1 ]; then
   env -i PATH="$SAFE_PATH" HOME="$SIMULATION_ROOT/home" TMPDIR="$SIMULATION_ROOT/tmp" NODE="$NODE_BIN" \
@@ -472,30 +571,37 @@ fi
 RESULT=$?
 set -e
 if [ "$RESULT" = 0 ] && [ "$SIMULATION" != 1 ]; then
-  [ -f "$RECONCILIATION_RECEIPT" ] || { printf 'I00_OPS_BLOCKED: post-switch reconciliation receipt is missing\n' >&2; RESULT=1; }
-  if [ "$RESULT" = 0 ]; then
-    node "$SCRIPT_DIR/validate-receipt.mjs" --input "$RESULT_RECEIPT" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT" --expected-sha "$CANDIDATE_SHA" >/dev/null || RESULT=1
+  RECEIPT_ARGS=(
+    --output "$RESULT_RECEIPT"
+    --release "$RELEASE"
+    --env "$DELEGATE_ENV"
+    --authorization-sha256 "$AUTHORIZATION_SHA256"
+    --artifact-manifest-sha256 "$MANIFEST_SHA"
+    --systemctl /usr/bin/systemctl
+    --curl /usr/bin/curl
+    --donor-exit-code "$RESULT"
+    --started-at-utc "$SWITCH_STARTED_AT_UTC"
+  )
+  VALIDATE_RECEIPT_ARGS=(
+    --input "$RESULT_RECEIPT"
+    --kind RELEASE_SWITCH
+    --expected-sha "$CANDIDATE_SHA"
+    --expected-artifact-manifest-sha256 "$MANIFEST_SHA"
+    --expected-authorization-sha256 "$AUTHORIZATION_SHA256"
+  )
+  if [ "$FIRST_HOST" = 1 ]; then
+    RECEIPT_ARGS+=(
+      --recovery-target "$FIRST_HOST_SENTINEL"
+      --first-host-evidence-sha256 "$FIRST_HOST_EVIDENCE_SHA256"
+    )
+    VALIDATE_RECEIPT_ARGS+=(
+      --expected-recovery-target "$FIRST_HOST_SENTINEL"
+      --expected-first-host-evidence-sha256 "$FIRST_HOST_EVIDENCE_SHA256"
+    )
   fi
+  node "$SCRIPT_DIR/record-release-switch-receipt.mjs" "${RECEIPT_ARGS[@]}" >/dev/null || RESULT=1
   if [ "$RESULT" = 0 ]; then
-    node - "$RESULT_RECEIPT" "$EVIDENCE_ROOT" "$AUTHORIZATION_IDENTITY" <<'NODE' || RESULT=1
-const fs=require('fs'),c=require('crypto'),path=require('path');
-const receipt=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
-const root=fs.realpathSync(process.argv[3]);
-const expected=JSON.parse(process.argv[4]);
-const ref=receipt?.evidence?.authorization;
-const fail=(message)=>{process.stderr.write(`I00_OPS_BLOCKED: ${message}\n`);process.exit(1);};
-if (!ref || typeof ref.path !== 'string' || typeof ref.sha256 !== 'string') fail('deployment receipt lacks exact authorization evidence');
-const segments=ref.path.split('/');
-if (path.isAbsolute(ref.path) || segments.some((part)=>!part||part==='.'||part==='..')) fail('receipt authorization evidence path is unsafe');
-let cursor=root;
-for (const segment of segments) { cursor=path.resolve(cursor,segment); const stat=fs.lstatSync(cursor); if (stat.isSymbolicLink()) fail('receipt authorization evidence traverses a symlink'); }
-const actualPath=fs.realpathSync(cursor);
-const actualSha=c.createHash('sha256').update(fs.readFileSync(actualPath)).digest('hex');
-const validatedSha=c.createHash('sha256').update(fs.readFileSync(expected.path)).digest('hex');
-if (actualPath!==expected.path || actualSha!==expected.sha256 || ref.sha256!==expected.sha256 || validatedSha!==expected.sha256) {
-  fail('deployment receipt authorization evidence is not the exact authorization file already validated');
-}
-NODE
+    node "$SCRIPT_DIR/validate-receipt.mjs" "${VALIDATE_RECEIPT_ARGS[@]}" >/dev/null || RESULT=1
   fi
 fi
 cleanup_delegate_env

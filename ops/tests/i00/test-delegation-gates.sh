@@ -99,12 +99,13 @@ ENV
 
 COMMON_ENV=(env SYSTEMCTL="$FAKE_ROOT/systemctl.sh" CURL="$FAKE_ROOT/curl.sh")
 SWITCH_COMMON=(--env-file "$TEST_TMP/env" --runtime-env "$TEST_TMP/runtime.env" --host "$TEST_TMP/host.json" --supervisor "$TEST_TMP/supervisor.json" --sqlite "$FAKE_ROOT/sqlite-safe.sh" --simulation --simulation-root "$SIMULATION_ROOT" --simulation-probe "$FAKE_ROOT/probe.sh" --now 2026-07-13T00:01:00Z)
-FIRST_HOST_COMMON=(--env-file "$TEST_TMP/env" --runtime-env "$TEST_TMP/runtime.env" --sqlite "$FAKE_ROOT/sqlite-safe.sh" --recovery-target NO_PRIOR_RELEASE_FIRST_HOST --account simulation-account --target-host fixture-host.internal --environment simulation --backup-reserve-bytes 1 --evidence-root "$SIMULATION_ROOT/evidence" --simulation --simulation-root "$SIMULATION_ROOT" --simulation-probe "$FAKE_ROOT/probe.sh" --simulation-systemctl-readback "$FAKE_ROOT/systemctl-inactive.sh" --now 2026-07-13T00:01:00Z)
+FIRST_HOST_BASE=(--env-file "$TEST_TMP/env" --runtime-env "$TEST_TMP/runtime.env" --sqlite "$FAKE_ROOT/sqlite-safe.sh" --recovery-target NO_PRIOR_RELEASE_FIRST_HOST --account simulation-account --target-host fixture-host.internal --environment simulation --backup-reserve-bytes 1 --evidence-root "$SIMULATION_ROOT/evidence" --simulation --simulation-root "$SIMULATION_ROOT" --simulation-probe "$FAKE_ROOT/probe.sh")
+FIRST_HOST_PREPARE=("${FIRST_HOST_BASE[@]}" --prepare-first-host-evidence --simulation-systemctl-readback "$FAKE_ROOT/systemctl-inactive.sh" --now 2026-07-13T00:01:00Z)
 
 note "the first-host wrapper interface is mutually exclusive and exact"
 assert_failure_contains 'rejects caller-supplied --host and --supervisor' \
-  "${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${FIRST_HOST_COMMON[@]}" --host "$TEST_TMP/host.json"
-WRONG_TARGET_COMMON=("${FIRST_HOST_COMMON[@]}")
+  "${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${FIRST_HOST_PREPARE[@]}" --host "$TEST_TMP/host.json"
+WRONG_TARGET_COMMON=("${FIRST_HOST_PREPARE[@]}")
 for index in "${!WRONG_TARGET_COMMON[@]}"; do
   if [ "${WRONG_TARGET_COMMON[$index]}" = --recovery-target ]; then WRONG_TARGET_COMMON[$((index + 1))]=FIRST_HOST; fi
 done
@@ -114,9 +115,17 @@ assert_failure_contains 'normal deploy requires --host and --supervisor' \
   "${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" \
   --env-file "$TEST_TMP/env" --runtime-env "$TEST_TMP/runtime.env" --sqlite "$FAKE_ROOT/sqlite-safe.sh"
 assert_failure_contains 'duplicate singleton argument --sqlite' \
-  "${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${FIRST_HOST_COMMON[@]}" --sqlite "$FAKE_ROOT/sqlite-safe.sh"
+  "${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${FIRST_HOST_PREPARE[@]}" --sqlite "$FAKE_ROOT/sqlite-safe.sh"
+assert_failure_contains 'first-host switch requires --first-host-evidence-dir' \
+  "${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${FIRST_HOST_BASE[@]}" --now 2026-07-13T00:01:00Z
+assert_failure_contains 'prepare-first-host evidence rejects --first-host-evidence-dir' \
+  "${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${FIRST_HOST_PREPARE[@]}" \
+  --first-host-evidence-dir "$SIMULATION_ROOT/evidence/not-used"
+assert_failure_contains 'simulation rejects production authorization and receipt inputs' \
+  "${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${FIRST_HOST_PREPARE[@]}" \
+  --result-receipt "$SIMULATION_ROOT/evidence/not-used.json"
 for invalid_reserve in 01 1x not-a-number; do
-  INVALID_RESERVE_COMMON=("${FIRST_HOST_COMMON[@]}")
+  INVALID_RESERVE_COMMON=("${FIRST_HOST_PREPARE[@]}")
   for index in "${!INVALID_RESERVE_COMMON[@]}"; do
     if [ "${INVALID_RESERVE_COMMON[$index]}" = --backup-reserve-bytes ]; then
       INVALID_RESERVE_COMMON[$((index + 1))]="$invalid_reserve"
@@ -126,20 +135,50 @@ for invalid_reserve in 01 1x not-a-number; do
     "${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${INVALID_RESERVE_COMMON[@]}"
 done
 
-note "installed I00 wrapper derives an honest clean first-host readback and deploys without synthetic canonical JSON"
-"${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${FIRST_HOST_COMMON[@]}"
-assert_eq "$(readlink "$SIMULATION_ROOT/target/current")" "$SIMULATION_ROOT/target/releases/i00-$SHA_A"
+note "first-host evidence is prepared and validated without mutation before authorization binding"
+PREPARED_JSON="$("${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${FIRST_HOST_PREPARE[@]}")"
+assert_eq "$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).status)' "$PREPARED_JSON")" FIRST_HOST_EVIDENCE_PREPARED
+FIRST_HOST_BUNDLE="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).evidenceDir)' "$PREPARED_JSON")"
+FIRST_HOST_EVIDENCE_SHA="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).firstHostEvidenceSha256)' "$PREPARED_JSON")"
+assert_not_file "$SIMULATION_ROOT/target/current"
 assert_not_file "$SIMULATION_ROOT/target/previous"
-assert_contains "$(cat "$SIMULATION_ROOT/systemctl.log")" 'restart cosmos-app.service'
-FIRST_HOST_BUNDLE="$(find "$SIMULATION_ROOT/evidence" -mindepth 1 -maxdepth 1 -type d | head -n 1)"
 assert_file "$FIRST_HOST_BUNDLE/host.json"
 assert_file "$FIRST_HOST_BUNDLE/supervisor.json"
 assert_file "$FIRST_HOST_BUNDLE/collected-evidence.json"
 assert_file "$FIRST_HOST_BUNDLE/sqlite-readback.json"
+assert_eq "$FIRST_HOST_EVIDENCE_SHA" \
+  "$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$FIRST_HOST_BUNDLE/collected-evidence.json")"
+
+FIRST_HOST_SWITCH=("${FIRST_HOST_BASE[@]}" --first-host-evidence-dir "$FIRST_HOST_BUNDLE" --now 2026-07-13T00:04:00Z)
+STALE_FIRST_HOST_SWITCH=("${FIRST_HOST_BASE[@]}" --first-host-evidence-dir "$FIRST_HOST_BUNDLE" --now 2026-07-13T00:06:01Z)
+TAMPERED_FIRST_HOST_BUNDLE="$SIMULATION_ROOT/evidence/first-host-readback.TAMPER"
+cp -R "$FIRST_HOST_BUNDLE" "$TAMPERED_FIRST_HOST_BUNDLE"
+chmod 700 "$TAMPERED_FIRST_HOST_BUNDLE"
+printf ' ' >> "$TAMPERED_FIRST_HOST_BUNDLE/collected-evidence.json"
+TAMPERED_FIRST_HOST_SWITCH=("${FIRST_HOST_BASE[@]}" --first-host-evidence-dir "$TAMPERED_FIRST_HOST_BUNDLE" --now 2026-07-13T00:04:00Z)
+SYSTEMCTL_BEFORE_TAMPER="$(wc -l < "$SIMULATION_ROOT/systemctl.log" | tr -d ' ')"
+assert_failure_contains 'does not bind the retained collected evidence bytes' \
+  "${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${TAMPERED_FIRST_HOST_SWITCH[@]}"
+assert_eq "$(wc -l < "$SIMULATION_ROOT/systemctl.log" | tr -d ' ')" "$SYSTEMCTL_BEFORE_TAMPER"
+assert_not_file "$SIMULATION_ROOT/target/current"
+
+SYSTEMCTL_BEFORE_STALE="$(wc -l < "$SIMULATION_ROOT/systemctl.log" | tr -d ' ')"
+assert_failure_contains 'host preflight is stale or future-dated' \
+  "${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${STALE_FIRST_HOST_SWITCH[@]}"
+assert_eq "$(wc -l < "$SIMULATION_ROOT/systemctl.log" | tr -d ' ')" "$SYSTEMCTL_BEFORE_STALE"
+assert_not_file "$SIMULATION_ROOT/target/current"
+
+note "installed I00 wrapper consumes the prepared evidence without invoking the producer"
+EVIDENCE_DIR_COUNT="$(find "$SIMULATION_ROOT/evidence" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"
+"${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${FIRST_HOST_SWITCH[@]}"
+assert_eq "$(find "$SIMULATION_ROOT/evidence" -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')" "$EVIDENCE_DIR_COUNT"
+assert_eq "$(readlink "$SIMULATION_ROOT/target/current")" "$SIMULATION_ROOT/target/releases/i00-$SHA_A"
+assert_not_file "$SIMULATION_ROOT/target/previous"
+assert_contains "$(cat "$SIMULATION_ROOT/systemctl.log")" 'restart cosmos-app.service'
 
 note "a second first-host request refuses and leaves the established current release unchanged"
 CURRENT_BEFORE_SECOND_FIRST_HOST="$(readlink "$SIMULATION_ROOT/target/current")"
-assert_failure "${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${FIRST_HOST_COMMON[@]}"
+assert_failure "${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${FIRST_HOST_SWITCH[@]}"
 assert_eq "$(readlink "$SIMULATION_ROOT/target/current")" "$CURRENT_BEFORE_SECOND_FIRST_HOST"
 assert_not_file "$SIMULATION_ROOT/target/previous"
 
@@ -256,7 +295,9 @@ for binding in 'backup-reserve-bytes:' 'sqlite-path:' 'sqlite-sha256:' 'sqlite-v
   'sqlite-identity:' 'recovery-target:' 'first-host-evidence-sha256:' 'donor-env-sha256:'; do
   assert_contains "$WRAPPER_SOURCE" "$binding"
 done
-assert_contains "$WRAPPER_SOURCE" 'deployment receipt authorization evidence is not the exact authorization file already validated'
+assert_contains "$WRAPPER_SOURCE" '--kind RELEASE_SWITCH'
+assert_contains "$WRAPPER_SOURCE" '--expected-authorization-sha256'
+assert_contains "$WRAPPER_SOURCE" '--check-only --output "$RESULT_RECEIPT"'
 
 note "a deterministic post-preflight race is refused by the donor under the shared lock before mutation"
 RACE_TARGET="$SIMULATION_ROOT/race-target"
@@ -283,7 +324,12 @@ ALERT_CMD=
 FROZEN_MARKER=$RACE_OPS/deploy-frozen.json
 MONEY_READY_MARKER=$RACE_OPS/money-ready
 EOF
-RACE_FIRST_HOST=(--env-file "$TEST_TMP/race.env" --runtime-env "$TEST_TMP/runtime.env" --sqlite "$FAKE_ROOT/sqlite-safe.sh" --recovery-target NO_PRIOR_RELEASE_FIRST_HOST --account simulation-account --target-host fixture-host.internal --environment simulation --backup-reserve-bytes 1000 --evidence-root "$RACE_EVIDENCE" --simulation --simulation-root "$SIMULATION_ROOT" --simulation-probe "$FAKE_ROOT/probe.sh" --simulation-systemctl-readback "$FAKE_ROOT/systemctl-inactive.sh" --now 2026-07-13T00:01:00Z)
+RACE_FIRST_HOST_BASE=(--env-file "$TEST_TMP/race.env" --runtime-env "$TEST_TMP/runtime.env" --sqlite "$FAKE_ROOT/sqlite-safe.sh" --recovery-target NO_PRIOR_RELEASE_FIRST_HOST --account simulation-account --target-host fixture-host.internal --environment simulation --backup-reserve-bytes 1000 --evidence-root "$RACE_EVIDENCE" --simulation --simulation-root "$SIMULATION_ROOT" --simulation-probe "$FAKE_ROOT/probe.sh")
+RACE_PREPARED_JSON="$("${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" \
+  "${RACE_FIRST_HOST_BASE[@]}" --prepare-first-host-evidence \
+  --simulation-systemctl-readback "$FAKE_ROOT/systemctl-inactive.sh" --now 2026-07-13T00:01:00Z)"
+RACE_FIRST_HOST_BUNDLE="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).evidenceDir)' "$RACE_PREPARED_JSON")"
+RACE_FIRST_HOST=("${RACE_FIRST_HOST_BASE[@]}" --first-host-evidence-dir "$RACE_FIRST_HOST_BUNDLE" --now 2026-07-13T00:04:00Z)
 BARRIER_DIR="$SIMULATION_ROOT/barrier-bin"
 RACE_READY="$SIMULATION_ROOT/race-preflight-ready"
 RACE_CONTINUE="$SIMULATION_ROOT/race-preflight-continue"
@@ -366,7 +412,11 @@ assert_not_file "$SIMULATION_ROOT/target"
 assert_not_file "$SIMULATION_ROOT/data"
 assert_not_file "$SIMULATION_ROOT/ops-state"
 
-"${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${FIRST_HOST_COMMON[@]}"
+CONTAINMENT_PREPARED_JSON="$("${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" \
+  --release "$RELEASE_A" "${FIRST_HOST_PREPARE[@]}")"
+CONTAINMENT_PREPARED_BUNDLE="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).evidenceDir)' "$CONTAINMENT_PREPARED_JSON")"
+CONTAINMENT_FIRST_HOST_SWITCH=("${FIRST_HOST_BASE[@]}" --first-host-evidence-dir "$CONTAINMENT_PREPARED_BUNDLE" --now 2026-07-13T00:04:00Z)
+"${COMMON_ENV[@]}" "$INSTALLED_I00/bin/release-switch.sh" --release "$RELEASE_A" "${CONTAINMENT_FIRST_HOST_SWITCH[@]}"
 assert_eq "$(readlink "$SIMULATION_ROOT/target/current")" "$SIMULATION_ROOT/target/releases/i00-$SHA_A"
 [ ! -e "$SIMULATION_ROOT/target/previous" ] && [ ! -L "$SIMULATION_ROOT/target/previous" ] \
   || fail_test "containment reinstall invented previous"

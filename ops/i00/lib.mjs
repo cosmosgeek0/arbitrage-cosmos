@@ -155,7 +155,14 @@ export const RELEASE_KEYS = Object.freeze([
 // second copy would re-create the divergence this closes. Deeper provenance
 // (build-attestation verification, compiled-ledger compatibility) stays in
 // validate-release.mjs.
-export function verifyArtifactManifest(root, preloadedRelease = null) {
+export function verifyArtifactManifest(
+  root,
+  preloadedRelease = null,
+  { installedImmutable = false } = {},
+) {
+  if (typeof installedImmutable !== 'boolean') {
+    fail('artifact manifest installed-immutable option must be boolean');
+  }
   const release = preloadedRelease ?? readJson(resolve(root, 'release.json'), 'release.json');
   requireExactKeys(release, RELEASE_KEYS, 'release.json');
   const manifestPath = resolve(root, 'artifact-manifest.json');
@@ -200,7 +207,9 @@ export function verifyArtifactManifest(root, preloadedRelease = null) {
   }
   for (const file of actualFiles) {
     const entry = manifest.files.find((candidate) => candidate.path === file);
-    if (sha256File(resolve(root, file)) !== entry.sha256 || (lstatSync(resolve(root, file)).mode & 0o777) !== entry.mode) {
+    const expectedMode = installedImmutable ? entry.mode & ~0o222 : entry.mode;
+    if (sha256File(resolve(root, file)) !== entry.sha256
+        || (lstatSync(resolve(root, file)).mode & 0o777) !== expectedMode) {
       fail(`artifact digest/mode mismatch: ${file}`);
     }
   }

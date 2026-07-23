@@ -1,9 +1,10 @@
-# Part 4 #1: the watchdog writes alerts.jsonl one directory down
-# (/var/lib/cosmos/ops/watchdog/), which the single-level glob missed - an
-# unrotated alert log growing one line per minute forever.
+# Part 4 #1 / DEPLOY-DEFECTS-007: retain the top-level cosmos rotation
+# contract. The watchdog is a confined root service and writes alerts.jsonl
+# one directory down, so its exact path has a distinct root rotation identity.
+# Both replacement files retain owner-only access.
 # Install as /etc/logrotate.d/cosmos-ops (no installer places this file;
 # copy it during host bootstrap).
-/var/lib/cosmos/ops/*.jsonl /var/lib/cosmos/ops/*/*.jsonl {
+/var/lib/cosmos/ops/*.jsonl {
     daily
     maxsize 10M
     rotate 14
@@ -13,4 +14,16 @@
     delaycompress
     su cosmos cosmos
     create 0600 cosmos cosmos
+}
+
+/var/lib/cosmos/ops/watchdog/alerts.jsonl {
+    daily
+    maxsize 10M
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    su root root
+    create 0600 root root
 }

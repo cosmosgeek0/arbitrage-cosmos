@@ -22,6 +22,7 @@
 | immutable ops execution | root-owned, non-writable, service-traversable install | exit `1`; `/private/tmp/deploy-defects-007-red-bundle-mode.log` | installed root mode `0511`; `177` assertions; `/private/tmp/deploy-defects-007-green-bundle-mode.log` | PASS |
 | backup coverage | backup-unit-only read on mandated non-secret configuration | exit `1`; `/private/tmp/deploy-defects-007-red-backup-access.log` | exact two-path ACL and unit drop-in; `14` assertions; `/private/tmp/deploy-defects-007-green-backup-access.log` | PASS |
 | watchdog rotation | outside the four-row authorization | unchanged | unchanged | OUT_OF_SCOPE_BLOCKED |
+| watchdog rotation — director extension | rotation identity and replacement ownership match the root writer; top-level cosmos contract and owner-only mode retained | exit `1`; `/private/tmp/deploy-defects-007-red-watchdog-rotation.log` | exact root/root stanza; `8` assertions; `/private/tmp/deploy-defects-007-green-watchdog-rotation.log` | PASS |
 
 ## Base-red evidence
 

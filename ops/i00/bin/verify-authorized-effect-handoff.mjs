@@ -1308,33 +1308,33 @@ function classDerivedArgv(document, risk) {
   const bootstrap = document.delegatedBootstrap === 'NONE'
     ? `${primaryParentPrelude()}\nsource /proc/self/fd/11`
     : `${primaryParentPrelude()}\nsource /proc/self/fd/13; source /proc/self/fd/11`;
-  return Object.freeze({
-    OPS_BUNDLE_INSTALL: [
+  const derivedArgvBuilders = Object.freeze({
+    OPS_BUNDLE_INSTALL: () => [
       '-p', '-c', bootstrap, document.delegatedScript.path, '--authorized-effect',
       '--release', endpoint(action, 'release-path'),
       '--destination', endpoint(action, 'destination'),
     ],
-    SERVICE_RELEASE_SWITCH: [
+    SERVICE_RELEASE_SWITCH: () => [
       '-p', '-c', bootstrap, document.delegatedScript.path,
       '--i00-effect-environment-fd', '12',
       '--release', endpoint(action, 'release-path'),
     ],
-    SERVICE_ROLLBACK: [
+    SERVICE_ROLLBACK: () => [
       '-p', '-c', bootstrap, document.delegatedScript.path,
       '--i00-effect-environment-fd', '12',
       '--to', endpoint(action, 'release-id'),
     ],
-    BACKUP_CREATE: [
+    BACKUP_CREATE: () => [
       '-p', '-c', bootstrap, document.delegatedScript.path,
       '--i00-effect-environment-fd', '12',
     ],
-    ISOLATED_RESTORE: [
+    ISOLATED_RESTORE: () => [
       '-p', '-c', bootstrap, document.delegatedScript.path,
       '--i00-effect-environment-fd', '12',
       '--backup', endpoint(action, 'backup-path'),
       '--target', endpoint(action, 'isolated-target'),
     ],
-    SECRET_MATERIALIZATION: [
+    SECRET_MATERIALIZATION: () => [
       script, '--authorized-effect',
       '--config-fd', '12',
       '--output-parent-fd', '15',
@@ -1347,7 +1347,11 @@ function classDerivedArgv(document, risk) {
           ]
         : []),
     ],
-  }[actionClass]);
+  });
+  const buildDerivedArgv = derivedArgvBuilders[actionClass];
+  assert(typeof buildDerivedArgv === 'function',
+    'authorized effect class has no delegated argv builder');
+  return Object.freeze(buildDerivedArgv());
 }
 
 function automaticRollbackDerivedArgv(document) {

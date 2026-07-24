@@ -19,6 +19,63 @@ BACKUP_WRAPPER="$REPO_ROOT/ops/i00/bin/backup-verify.sh"
 RESTORE_WRAPPER="$REPO_ROOT/ops/i00/bin/restore-drill-verify.sh"
 ROLLBACK_WRAPPER="$REPO_ROOT/ops/i00/bin/rollback-switch.sh"
 OUTCOME_RECORDER="$REPO_ROOT/ops/i00/bin/record-authorized-action-outcome.mjs"
+RUN_ALL="$REPO_ROOT/ops/tests/i00/run-all.sh"
+HISTORICAL_WATCHDOG="$REPO_ROOT/ops/tests/i00/test-r3-d-watchdog-007.sh"
+HISTORICAL_BACKUP="$REPO_ROOT/ops/tests/i00/test-r3-d-backup-008.sh"
+WATCHDOG_SUCCESSOR="$REPO_ROOT/ops/tests/i00/df32-r3-watchdog-successor.sh"
+BACKUP_SUCCESSOR="$REPO_ROOT/ops/tests/i00/df32-r3-backup-successor.sh"
+HISTORICAL_WATCHDOG_SHA256=00aa0d94baddfd7827ff0d21ee34de1c95e0df079f29c8ce28f838d1434ed3e7
+HISTORICAL_BACKUP_SHA256=13a8ed59b53bb4e02e80f9367de05c469f6998b501d1aad451ae23f3cf800091
+
+sha256_file() {
+  "$NODE" -e '
+    const crypto = require("node:crypto");
+    const fs = require("node:fs");
+    process.stdout.write(
+      crypto.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"),
+    );
+  ' "$1"
+}
+
+run_successor_suite() {
+  local suite="$1" log="$TEST_TMP/$(basename "$1").log" rc footer
+  [ -f "$suite" ] && [ -x "$suite" ] \
+    || fail_test "R3 successor is not one executable regular file: $suite"
+  pass_assertion
+  set +e
+  bash "$suite" >"$log" 2>&1
+  rc=$?
+  set -e
+  [ "$rc" -eq 0 ] || fail_test "R3 successor failed: $suite"
+  pass_assertion
+  footer="$(
+    sed -n 's/^OK (\([0-9][0-9]*\) assertions)$/\1/p' "$log" | tail -1
+  )"
+  [ -n "$footer" ] && [ "$footer" -gt 0 ] \
+    || fail_test "R3 successor omitted its positive assertion footer: $suite"
+  pass_assertion
+  ASSERTIONS=$((ASSERTIONS + footer))
+}
+
+note "historical R3 regression paths retain their sealed base bytes"
+assert_eq "$(sha256_file "$HISTORICAL_WATCHDOG")" \
+  "$HISTORICAL_WATCHDOG_SHA256"
+assert_eq "$(sha256_file "$HISTORICAL_BACKUP")" \
+  "$HISTORICAL_BACKUP_SHA256"
+
+note "current-runtime R3 successors execute with positive assertion footers"
+run_successor_suite "$WATCHDOG_SUCCESSOR"
+run_successor_suite "$BACKUP_SUCCESSOR"
+
+RUN_ALL_SOURCE="$(cat "$RUN_ALL")"
+note "the aggregate routes exactly the immutable R3 paths through this driver"
+assert_contains "$RUN_ALL_SOURCE" \
+  'ROUTING_DRIVER=test-deploy-portability-008-l15-bytes.sh'
+assert_contains "$RUN_ALL_SOURCE" \
+  'test-r3-d-backup-008.sh|test-r3-d-watchdog-007.sh)'
+assert_contains "$RUN_ALL_SOURCE" \
+  'immutable-byte and current-runtime verification delegated to $ROUTING_DRIVER'
+assert_contains "$RUN_ALL_SOURCE" 'if [ "$ROUTED" -ne 2 ]; then'
 
 COMMON_SOURCE="$(cat "$COMMON")"
 DEPLOY_SOURCE="$(cat "$DEPLOY")"

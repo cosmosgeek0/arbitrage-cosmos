@@ -249,7 +249,7 @@ const exact = (object, keys) => {
 exact(value, [
   'status', 'role', 'actionClass', 'command', 'environment', 'bootstrap',
   'directory', 'executables', 'helperPolicy', 'automaticRollback', 'hashPolicy',
-  'writeRoots', 'readRoots', 'observedRoots',
+  'writeRoots', 'readRoots', 'observedRoots', 'claimKey', 'effectOutput',
 ]);
 exact(value.environment, ['kind', 'fd']);
 exact(value.bootstrap, ['kind', 'fd']);
@@ -261,9 +261,11 @@ exact(value.readRoots, ['releaseSource']);
 exact(value.readRoots.releaseSource, ['fd', 'path', 'identity', 'treeSha256']);
 exact(value.observedRoots, []);
 exact(value.automaticRollback, []);
+exact(value.effectOutput, []);
 if (value.status !== 'AUTHORIZED_EFFECT_HANDOFF_VERIFIED'
     || value.role !== 'PRIMARY_EFFECT'
     || value.actionClass !== 'OPS_BUNDLE_INSTALL'
+    || !/^[0-9a-f]{64}$/.test(value.claimKey)
     || value.command !== 'install-ops-bundle'
     || value.environment.kind !== 'NONE' || value.environment.fd !== 'NONE'
     || value.bootstrap.kind !== 'NONE' || value.bootstrap.fd !== 'NONE'

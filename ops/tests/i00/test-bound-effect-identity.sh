@@ -117,6 +117,74 @@ for (const [actionClass, expected] of Object.entries(cases)) {
 }
 NODE
 
+note "verifier class argv reconstruction resolves only the selected class endpoints"
+assert_success node --input-type=module - "$VERIFIER" <<'NODE'
+import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
+import { createRequire } from 'node:module';
+
+const source = readFileSync(process.argv[2], 'utf8');
+const require = createRequire(import.meta.url);
+const { parse } = require('@babel/parser');
+const program = parse(source, { sourceType: 'module' }).program;
+const declaration = program.body.find((node) => (
+  node.type === 'FunctionDeclaration' && node.id?.name === 'classDerivedArgv'
+));
+if (declaration === undefined) process.exit(1);
+const functionSource = source.slice(declaration.start, declaration.end);
+const classDerivedArgv = new Function(
+  'Object',
+  'endpoint',
+  'basename',
+  'primaryParentPrelude',
+  'assert',
+  `${functionSource}\nreturn classDerivedArgv;`,
+)(
+  Object,
+  (action, prefix) => action.query(prefix),
+  basename,
+  () => 'parent-prelude',
+  (condition, message) => {
+    if (!condition) throw new Error(message);
+  },
+);
+const cases = Object.freeze({
+  OPS_BUNDLE_INSTALL: ['release-path', 'destination'],
+  SERVICE_RELEASE_SWITCH: ['release-path'],
+  SERVICE_ROLLBACK: ['release-id'],
+  BACKUP_CREATE: [],
+  ISOLATED_RESTORE: ['backup-path', 'isolated-target'],
+  SECRET_MATERIALIZATION: ['credential-output-path'],
+});
+for (const [actionClass, expected] of Object.entries(cases)) {
+  const queried = [];
+  const action = Object.freeze({
+    query: (prefix) => {
+      queried.push(prefix);
+      return `/fixture/${prefix}`;
+    },
+  });
+  const derived = classDerivedArgv(
+    Object.freeze({
+      actionClass,
+      delegatedBootstrap: 'NONE',
+      delegatedScript: Object.freeze({ path: '/fixture/effect-script' }),
+    }),
+    Object.freeze({
+      action,
+      artifactPolicy: Object.freeze({
+        rootMode: 'TEST',
+        proofRoot: '/fixture/proof',
+      }),
+    }),
+  );
+  if (!Object.isFrozen(derived)
+      || JSON.stringify(queried) !== JSON.stringify(expected)) {
+    process.exit(1);
+  }
+}
+NODE
+
 note "unused effect slots inherit one exact closed null capability"
 assert_success node --input-type=module - "$RUNNER" <<'NODE'
 import { spawnSync } from 'node:child_process';

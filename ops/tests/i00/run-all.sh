@@ -6,7 +6,18 @@ PASS=0
 FAIL=0
 ASSERTIONS=0
 FAILED=""
+ROUTED=0
+ROUTING_DRIVER=test-deploy-portability-008-l15-bytes.sh
 for test_file in test-*.sh; do
+  case "$test_file" in
+    test-r3-d-backup-008.sh|test-r3-d-watchdog-007.sh)
+      ROUTED=$((ROUTED + 1))
+      printf '=== %s\n' "$test_file"
+      printf '%s\n' \
+        "--- ROUTED $test_file (immutable-byte and current-runtime verification delegated to $ROUTING_DRIVER)"
+      continue
+      ;;
+  esac
   printf '=== %s\n' "$test_file"
   LOG="$(mktemp "${TMPDIR:-/tmp}/i00-test-log.XXXXXX")"
   if bash "$test_file" >"$LOG" 2>&1; then
@@ -31,6 +42,12 @@ for test_file in test-*.sh; do
   rm -f "$LOG"
 done
 
-printf '\nIP-OPS I00 summary: %s passed, %s failed, %s additive assertions%s\n' \
-  "$PASS" "$FAIL" "$ASSERTIONS" "${FAILED:+ (${FAILED# })}"
+if [ "$ROUTED" -ne 2 ]; then
+  FAIL=$((FAIL + 1))
+  FAILED="$FAILED historical-r3-routing"
+fi
+
+printf '\nIP-OPS I00 summary: %s passed, %s failed, %s additive assertions; %s immutable historical regressions routed through %s%s\n' \
+  "$PASS" "$FAIL" "$ASSERTIONS" "$ROUTED" "$ROUTING_DRIVER" \
+  "${FAILED:+ (${FAILED# })}"
 [ "$FAIL" -eq 0 ]

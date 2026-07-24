@@ -6,9 +6,6 @@ BIN="$REPO_ROOT/ops/live/bin"
 FIXTURES="$REPO_ROOT/ops/tests/fixtures"
 WATCHDOG="$BIN/watchdog.sh"
 COMMON="$BIN/common.sh"
-NODE="$(node -e 'process.stdout.write(require("fs").realpathSync(process.execPath))')"
-export NODE
-hash -p "$NODE" node
 OWNER_PIDS=""
 
 cleanup_watchdog_test() {
@@ -43,8 +40,8 @@ assert_process_gone() {
 
 export OPS_STATE_DIR="$TEST_TMP/ops"
 export DEPLOY_LOCK="$OPS_STATE_DIR/locks/deploy.lock"
-export APP_UNIT=df32-fixture-app.service
-export TUNNEL_UNIT=df32-fixture-tunnel.service
+export APP_UNIT=cosmos-app.service
+export TUNNEL_UNIT=cloudflared.service
 export SYSTEMCTL="$FIXTURES/mock-systemctl.sh"
 export MOCK_SYSTEMCTL_LOG="$TEST_TMP/systemctl.log"
 export MOCK_ACTIVE_UNITS="$TEST_TMP/active-units"
@@ -243,8 +240,6 @@ assert_eq "$(lock_reason)" ORPHANED_MUTATION_GUARD
 assert_contains "$(cat "$MOCK_ALERT_LOG")" 'critical DEPLOY_LOCK_MALFORMED'
 assert_checks_continued
 export LOCK_OWNER_GRACE_SEC=1
-rm -rf "${DEPLOY_LOCK}.mutation"
-mkdir -p "${DEPLOY_LOCK}.mutation"
 assert_failure bash -c '
   set -eu
   . "$1"
@@ -540,11 +535,10 @@ chmod 700 "$HANGING_ALERT"
 export ALERT_CMD="$HANGING_ALERT"
 export ALERT_TIMEOUT_SEC=1
 export HANG_CHILD_PID_FILE="$TEST_TMP/hanging-alert-child.pid"
-STARTED_AT_MS="$("$NODE" -e 'process.stdout.write(String(Date.now()))')"
+STARTED_AT="$(date -u +%s)"
 run_watchdog
-ELAPSED_MS=$(( $("$NODE" -e 'process.stdout.write(String(Date.now()))') - STARTED_AT_MS ))
-[ "$ELAPSED_MS" -le 6000 ] \
-  || fail_test "hanging alert hook exceeded its bounded watchdog allowance"
+ELAPSED=$(( $(date -u +%s) - STARTED_AT ))
+[ "$ELAPSED" -le 3 ] || fail_test "hanging alert hook blocked watchdog for ${ELAPSED}s"
 pass_assertion
 assert_eq "$(lock_state)" DEAD
 assert_contains "$(cat "$WATCHDOG_STATE_DIR/alerts.jsonl")" '"code":"DEPLOY_LOCK_DEAD"'

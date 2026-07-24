@@ -132,14 +132,32 @@ const FINDING_TEST_CHANGES = Object.freeze({
   ]),
 });
 const FINDING_TESTS = Object.freeze({
-  'R3-D-WATCHDOG-007': 'ops/tests/i00/test-r3-d-watchdog-007.sh',
-  'R3-D-BACKUP-008': 'ops/tests/i00/test-r3-d-backup-008.sh',
-  'CS-03': 'ops/tests/i00/test-cs-03-public-source-admission.sh',
-  'RB-27': 'ops/tests/i00/test-rb-27-latency-deadlines.sh',
-  'FIX-031-CS-06': 'ops/tests/i00/test-fix-031-cs-06-l15-bytes.sh',
-  'DEPLOY-READINESS-001': 'ops/tests/i00/test-deploy-readiness-001-l15-bytes.sh',
-  'FIRST-HOST-001': 'ops/tests/i00/test-first-host-001-l15-bytes.sh',
-  'DEPLOY-PORTABILITY-008': 'ops/tests/i00/test-deploy-portability-008-l15-bytes.sh',
+  'R3-D-WATCHDOG-007': Object.freeze([
+    'ops/tests/i00/test-r3-d-watchdog-007.sh',
+  ]),
+  'R3-D-BACKUP-008': Object.freeze([
+    'ops/tests/i00/test-r3-d-backup-008.sh',
+  ]),
+  'CS-03': Object.freeze([
+    'ops/tests/i00/test-cs-03-public-source-admission.sh',
+  ]),
+  'RB-27': Object.freeze([
+    'ops/tests/i00/test-rb-27-latency-deadlines.sh',
+  ]),
+  'FIX-031-CS-06': Object.freeze([
+    'ops/tests/i00/test-fix-031-cs-06-l15-bytes.sh',
+  ]),
+  'DEPLOY-READINESS-001': Object.freeze([
+    'ops/tests/i00/test-deploy-readiness-001-l15-bytes.sh',
+  ]),
+  'FIRST-HOST-001': Object.freeze([
+    'ops/tests/i00/test-first-host-001-l15-bytes.sh',
+  ]),
+  'DEPLOY-PORTABILITY-008': Object.freeze([
+    'ops/tests/i00/test-deploy-portability-008-l15-bytes.sh',
+    'ops/tests/i00/df32-r3-watchdog-successor.sh',
+    'ops/tests/i00/df32-r3-backup-successor.sh',
+  ]),
 });
 const FINDING_RECEIPT_PATHS = Object.freeze({
   'R3-D-WATCHDOG-007': 'docs/archive/i00-phase4/R3-D-WATCHDOG-007_CORRECTION_RECEIPT.md',
@@ -276,18 +294,26 @@ function validateAmendment(
   if (amendment.correctionReceipt.path !== FINDING_RECEIPT_PATHS[expectedId]) {
     fail(`${label}.correctionReceipt.path is not canonical`);
   }
-  if (!Array.isArray(amendment.regressionTests) || amendment.regressionTests.length !== 1) {
-    fail(`${label}.regressionTests must bind one focused additive test`);
+  const expectedRegressionTests = FINDING_TESTS[expectedId];
+  if (!Array.isArray(amendment.regressionTests)
+      || amendment.regressionTests.length !== expectedRegressionTests.length) {
+    fail(`${label}.regressionTests must bind the exact focused additive tests`);
   }
-  validateBoundFile(
-    amendment.regressionTests[0],
-    `${label}.regressionTests[0]`,
-    'ops/tests/i00/',
-    requiresBoundFileMode,
-  );
-  if (amendment.regressionTests[0].path !== FINDING_TESTS[expectedId]) {
-    fail(`${label}.regressionTests[0].path is not the finding-owned regression`);
-  }
+  const seenRegressionTests = new Set();
+  amendment.regressionTests.forEach((test, testIndex) => {
+    const testLabel = `${label}.regressionTests[${testIndex}]`;
+    validateBoundFile(
+      test,
+      testLabel,
+      'ops/tests/i00/',
+      requiresBoundFileMode,
+    );
+    if (test.path !== expectedRegressionTests[testIndex]
+        || seenRegressionTests.has(test.path)) {
+      fail(`${testLabel}.path is not the exact finding-owned regression`);
+    }
+    seenRegressionTests.add(test.path);
+  });
 }
 
 export function loadL15AmendmentContract(

@@ -658,10 +658,13 @@ assert_contains "$SECRETS_SOURCE" 'Array.from({ length: 51 }, (_, index) => inde
 assert_contains "$SECRETS_SOURCE" 'const stdio = Array.from({ length: 54 }, () => '\''ignore'\'')'
 assert_contains "$SECRETS_SOURCE" "const RETAINED_SECRET_EFFECT_FDS = new Set([12, 15, 32])"
 assert_contains "$SECRETS_SOURCE" "result.hashPolicy !== 'NONE'"
-assert_contains "$SECRETS_SOURCE" 'Object.keys(result.writeRoots).length !== 0'
-assert_contains "$SECRETS_SOURCE" 'Object.keys(result.readRoots).length !== 0'
-assert_contains "$SECRETS_SOURCE" 'Object.keys(result.observedRoots).length !== 0'
-assert_contains "$SECRETS_SOURCE" 'Object.keys(result.automaticRollback).length !== 0'
+for label in \
+  'authorized secret effect write roots' \
+  'authorized secret effect read roots' \
+  'authorized secret effect observed roots' \
+  'authorized secret effect automatic rollback'; do
+  assert_contains "$SECRETS_SOURCE" "$label"
+done
 assert_contains "$SECRETS_SOURCE" 'authorized TEST provider requires the exact descriptor-only config and output contract'
 assert_contains "$SECRETS_SOURCE" 'authorized provider does not accept an AWS_CLI override'
 assert_contains "$SECRETS_SOURCE" "'--region', config.region, '--version-id', config.secretVersionId"
@@ -724,6 +727,101 @@ const directHostile = source.replace(
 );
 if (directHostile === source || acceptsExactProjection(directHostile)) process.exit(1);
 NODE
+
+note "authorized effect handoff result binds one claim and no secret-class output"
+assert_success node --input-type=module - "$I00_ROOT/bin/secrets-provider.mjs" <<'NODE'
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+
+const source = readFileSync(process.argv[2], 'utf8');
+const require = createRequire(import.meta.url);
+const { parse } = require('@babel/parser');
+const program = parse(source, { sourceType: 'module' }).program;
+const declaration = program.body.find((node) => (
+  node.type === 'FunctionDeclaration'
+    && node.id?.name === 'validateAuthorizedEffectHandoffResult'
+));
+if (declaration === undefined) process.exit(1);
+const functionSource = source.slice(declaration.start, declaration.end);
+const fail = (message) => {
+  throw new Error(message);
+};
+const requireExactKeys = (value, expected, label) => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    fail(`${label} must be one object`);
+  }
+  const actual = Object.keys(value).sort();
+  const sortedExpected = [...expected].sort();
+  if (actual.length !== sortedExpected.length
+      || !actual.every((key, index) => key === sortedExpected[index])) {
+    fail(`${label} has an unexpected field set`);
+  }
+};
+const validate = new Function(
+  'requireExactKeys',
+  'fail',
+  `${functionSource}\nreturn validateAuthorizedEffectHandoffResult;`,
+)(requireExactKeys, fail);
+const exact = Object.freeze({
+  status: 'AUTHORIZED_EFFECT_HANDOFF_VERIFIED',
+  role: 'PRIMARY_EFFECT',
+  actionClass: 'SECRET_MATERIALIZATION',
+  claimKey: 'a'.repeat(64),
+  command: 'secrets-provider',
+  environment: Object.freeze({ kind: 'PROVIDER_CONFIG', fd: '/proc/self/fd/12' }),
+  bootstrap: Object.freeze({ kind: 'VERIFIER_SOURCE', fd: '/proc/self/fd/13' }),
+  directory: Object.freeze({
+    kind: 'CREDENTIAL_OUTPUT_PARENT',
+    fd: '/proc/self/fd/15',
+  }),
+  executables: Object.freeze({ aws: '/proc/self/fd/32' }),
+  writeRoots: Object.freeze({}),
+  readRoots: Object.freeze({}),
+  observedRoots: Object.freeze({}),
+  helperPolicy: 'NONE',
+  automaticRollback: Object.freeze({}),
+  effectOutput: Object.freeze({}),
+  hashPolicy: 'NONE',
+});
+validate(exact);
+const missingClaim = { ...exact };
+delete missingClaim.claimKey;
+const missingOutput = { ...exact };
+delete missingOutput.effectOutput;
+for (const hostile of [
+  missingClaim,
+  missingOutput,
+  { ...exact, claimKey: 'a'.repeat(63) },
+  { ...exact, claimKey: 'A'.repeat(64) },
+  { ...exact, effectOutput: { fd: '/proc/self/fd/53' } },
+  { ...exact, effectOutput: [] },
+]) {
+  let rejected = false;
+  try {
+    validate(hostile);
+  } catch {
+    rejected = true;
+  }
+  if (!rejected) process.exit(1);
+}
+for (const field of [
+  'writeRoots',
+  'readRoots',
+  'observedRoots',
+  'automaticRollback',
+]) {
+  for (const value of [[], 'NONE', null, { unexpected: true }]) {
+    let rejected = false;
+    try {
+      validate({ ...exact, [field]: value });
+    } catch {
+      rejected = true;
+    }
+    if (!rejected) process.exit(1);
+  }
+}
+NODE
+
 assert_contains "$SECRETS_SOURCE" "AWS_CONFIG_FILE: '/dev/null'"
 assert_contains "$SECRETS_SOURCE" 'TMPDIR: simulationTmp'
 assert_contains "$SECRETS_SOURCE" 'SYSTEM provider rejects named config and output inputs'

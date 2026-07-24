@@ -610,6 +610,71 @@ function validateCallerIdentity(stdout, instanceRoleArn, secretAccount) {
   }
 }
 
+function validateAuthorizedEffectHandoffResult(result) {
+  requireExactKeys(
+    result,
+    [
+      'status', 'role', 'actionClass', 'claimKey', 'command', 'environment',
+      'bootstrap', 'directory', 'executables', 'writeRoots', 'readRoots',
+      'observedRoots', 'helperPolicy', 'automaticRollback', 'effectOutput',
+      'hashPolicy',
+    ],
+    'authorized secret effect handoff result',
+  );
+  if (result.status !== 'AUTHORIZED_EFFECT_HANDOFF_VERIFIED'
+      || result.role !== 'PRIMARY_EFFECT'
+      || result.actionClass !== 'SECRET_MATERIALIZATION'
+      || typeof result.claimKey !== 'string'
+      || !/^[a-f0-9]{64}$/u.test(result.claimKey)
+      || result.command !== 'secrets-provider') {
+    fail('authorized secret effect handoff result differed from the exact class');
+  }
+  requireExactKeys(
+    result.environment,
+    ['kind', 'fd'],
+    'authorized secret effect environment capability',
+  );
+  requireExactKeys(
+    result.bootstrap,
+    ['kind', 'fd'],
+    'authorized secret effect bootstrap capability',
+  );
+  requireExactKeys(
+    result.directory,
+    ['kind', 'fd'],
+    'authorized secret effect directory capability',
+  );
+  requireExactKeys(
+    result.executables,
+    ['aws'],
+    'authorized secret effect executable capabilities',
+  );
+  requireExactKeys(
+    result.effectOutput,
+    [],
+    'authorized secret effect output capability',
+  );
+  for (const [value, label] of [
+    [result.writeRoots, 'authorized secret effect write roots'],
+    [result.readRoots, 'authorized secret effect read roots'],
+    [result.observedRoots, 'authorized secret effect observed roots'],
+    [result.automaticRollback, 'authorized secret effect automatic rollback'],
+  ]) {
+    requireExactKeys(value, [], label);
+  }
+  if (result.environment.kind !== 'PROVIDER_CONFIG'
+      || result.environment.fd !== '/proc/self/fd/12'
+      || result.bootstrap.kind !== 'VERIFIER_SOURCE'
+      || result.bootstrap.fd !== '/proc/self/fd/13'
+      || result.directory.kind !== 'CREDENTIAL_OUTPUT_PARENT'
+      || result.directory.fd !== '/proc/self/fd/15'
+      || result.executables.aws !== '/proc/self/fd/32'
+      || result.helperPolicy !== 'NONE'
+      || result.hashPolicy !== 'NONE') {
+    fail('authorized secret effect capabilities differed from the exact class');
+  }
+}
+
 function verifyAuthorizedEffectHandoff() {
   if (process.platform !== 'linux') {
     fail('authorized secret effect handoff requires Linux');
@@ -674,56 +739,7 @@ function verifyAuthorizedEffectHandoff() {
   } catch {
     fail('authorized secret effect handoff result was malformed');
   }
-  requireExactKeys(
-    result,
-    [
-      'status', 'role', 'actionClass', 'command', 'environment', 'bootstrap',
-      'directory', 'executables', 'writeRoots', 'readRoots', 'observedRoots',
-      'helperPolicy', 'automaticRollback', 'hashPolicy',
-    ],
-    'authorized secret effect handoff result',
-  );
-  if (result.status !== 'AUTHORIZED_EFFECT_HANDOFF_VERIFIED'
-      || result.role !== 'PRIMARY_EFFECT'
-      || result.actionClass !== 'SECRET_MATERIALIZATION'
-      || result.command !== 'secrets-provider') {
-    fail('authorized secret effect handoff result differed from the exact class');
-  }
-  requireExactKeys(
-    result.environment,
-    ['kind', 'fd'],
-    'authorized secret effect environment capability',
-  );
-  requireExactKeys(
-    result.bootstrap,
-    ['kind', 'fd'],
-    'authorized secret effect bootstrap capability',
-  );
-  requireExactKeys(
-    result.directory,
-    ['kind', 'fd'],
-    'authorized secret effect directory capability',
-  );
-  requireExactKeys(
-    result.executables,
-    ['aws'],
-    'authorized secret effect executable capabilities',
-  );
-  if (result.environment.kind !== 'PROVIDER_CONFIG'
-      || result.environment.fd !== '/proc/self/fd/12'
-      || result.bootstrap.kind !== 'VERIFIER_SOURCE'
-      || result.bootstrap.fd !== '/proc/self/fd/13'
-      || result.directory.kind !== 'CREDENTIAL_OUTPUT_PARENT'
-      || result.directory.fd !== '/proc/self/fd/15'
-      || result.executables.aws !== '/proc/self/fd/32'
-      || Object.keys(result.writeRoots).length !== 0
-      || Object.keys(result.readRoots).length !== 0
-      || Object.keys(result.observedRoots).length !== 0
-      || result.helperPolicy !== 'NONE'
-      || result.hashPolicy !== 'NONE'
-      || Object.keys(result.automaticRollback).length !== 0) {
-    fail('authorized secret effect capabilities differed from the exact class');
-  }
+  validateAuthorizedEffectHandoffResult(result);
   for (const descriptor of AUTHORIZED_EFFECT_FDS) {
     if (RETAINED_SECRET_EFFECT_FDS.has(descriptor)) {
       retainedAuthorizedEffectDescriptors.add(descriptor);

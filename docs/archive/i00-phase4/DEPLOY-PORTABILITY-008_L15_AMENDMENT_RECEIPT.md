@@ -13,9 +13,15 @@
 | donor-owned test transition | bounded replacements only | 8 paths | PASS |
 | runtime API proof | local authorized-effect harness | 8 assertions | PASS |
 | class isolation | only selected action resolves endpoint argv | lazy builder | PASS |
+| verifier class isolation | only selected class derives action argv | focused proof | PASS |
+| provider result contract | exact claim key and empty effect output retained | focused proof | PASS |
+| provider empty maps | plain-object empty capability maps only | focused proof | PASS |
+| install wrapper projection | exact claim key and empty effect output retained | `ops/i00/bin/install-ops-bundle.sh` | FIXED |
 | verifier declaration order | lexical binding initialized before read | focused proof | PASS |
 | null-capability Linux contract | unused effect FDs bind fixed null; provider closes through fd53 | bound and closed | PASS |
-| focused byte proof | final descriptor and policy regression | 80 assertions | PASS |
+| historical R3 regressions | sealed-base bytes and modes retained at original paths | 2 paths | PASS |
+| R3 successor routing | non-glob current-runtime suites invoked by DF-32 driver | 2 suites | PASS |
+| focused byte proof | final descriptor, policy, and successor regressions | 388 assertions | PASS |
 | backup publication output | one bounded canonical claim plus EOF | descriptor-bound | PASS |
 | sanitizer proof | hostile environment matrix | 143 assertions | PASS |
 | direct deploy proof | contained donor suite | 158 assertions | PASS |

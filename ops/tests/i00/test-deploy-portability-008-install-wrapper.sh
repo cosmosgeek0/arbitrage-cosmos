@@ -50,6 +50,9 @@ for token in \
   '"$release_cap/ops/live/."' \
   'readRoots.releaseSource' \
   'treeSha256' \
+  "'claimKey', 'effectOutput'" \
+  'exact(value.effectOutput, []);' \
+  '!/^[0-9a-f]{64}$/.test(value.claimKey)' \
   'trap cleanup_authorized_staging EXIT' \
   '/proc/self/fd/30 -T --'; do
   assert_contains "$AUTHORIZED_SOURCE" "$token"

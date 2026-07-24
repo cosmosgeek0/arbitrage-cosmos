@@ -33,6 +33,15 @@ note() { echo "  - $*"; }
 # Core ops suites source this helper before the donor common library. Bind the
 # exact canonical Node executable once so common.sh never falls back to
 # host-specific command paths or re-resolves an ambient `node` name.
+# Prefer the production fixed interpreter when it exists, exactly as
+# ops/tests/i00/helpers.sh already does. Without this the generic harness
+# exports the ambient PATH Node, and common.sh then makes that single
+# inherited path the ONLY guard candidate - so a hosted runner's tool-cache
+# Node (whose ancestors carry group-write) aborts every suite at source time
+# while a perfectly good /usr/bin/node sits unused.
+if [ -f /usr/bin/node ] && [ ! -L /usr/bin/node ] && [ -x /usr/bin/node ]; then
+  export NODE=/usr/bin/node
+else
 _OPS_TEST_NODE="$(
   unset NODE_OPTIONS NODE_PATH NODE_REPL_EXTERNAL_MODULE NODE_ICU_DATA \
     NODE_EXTRA_CA_CERTS NODE_V8_COVERAGE NODE_DEBUG NODE_DEBUG_NATIVE \
@@ -52,6 +61,7 @@ esac
   || fail "trusted Node executable is not one canonical executable file"
 export NODE="$_OPS_TEST_NODE"
 unset _OPS_TEST_NODE
+fi
 
 assert_eq() { # got expected label
   ASSERTIONS=$((ASSERTIONS + 1))

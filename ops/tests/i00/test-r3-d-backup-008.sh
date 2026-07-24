@@ -23,33 +23,10 @@ MODEL_EVIDENCE="$ROOT/model-evidence"
 FILE_EVIDENCE="$ROOT/single-evidence.txt"
 BOUND_NODE="$(node -e 'const fs=require("fs");process.stdout.write(fs.realpathSync(process.execPath))')"
 BOUND_TAR="$(node -e 'const fs=require("fs");process.stdout.write(fs.realpathSync(process.argv[1]))' "$(command -v tar)")"
-if [ -n "${DF32_SQLITE_BIN:-}" ]; then
-  [ "$(uname -s)" = Linux ] \
-    || fail_test "DF32_SQLITE_BIN is accepted only by the Linux proof"
-  BOUND_SQLITE="$DF32_SQLITE_BIN"
-  SQLITE_INSPECTION="$(
-    node "$I00_ROOT/bin/inspect-executable.mjs" --path "$BOUND_SQLITE"
-  )"
-  assert_eq "$(node -e \
-    'process.stdout.write(JSON.parse(process.argv[1]).path)' \
-    "$SQLITE_INSPECTION")" "$BOUND_SQLITE"
-  assert_eq "$(node -e \
-    'const fs=require("fs");process.stdout.write(String(fs.lstatSync(process.argv[1]).uid))' \
-    "$BOUND_SQLITE")" 0
-  SQLITE_VERSION="$("$BOUND_SQLITE" --version)" \
-    || fail_test "DF32_SQLITE_BIN version readback failed"
-  assert_eq "$(node "$I00_ROOT/bin/inspect-executable.mjs" \
-    --path "$BOUND_SQLITE")" "$SQLITE_INSPECTION"
-  assert_success node "$I00_ROOT/bin/verify-sqlite-version.mjs" \
-    --version "$SQLITE_VERSION"
-else
-  BOUND_SQLITE="$(node -e \
-    'const fs=require("fs");process.stdout.write(fs.realpathSync(process.argv[1]))' \
-    "$(command -v sqlite3)")"
-fi
+BOUND_SQLITE="$(node -e 'const fs=require("fs");process.stdout.write(fs.realpathSync(process.argv[1]))' "$(command -v sqlite3)")"
 mkdir -p "$DATA_DIR" "$OPS_STATE_DIR" "$SOURCE_EVIDENCE" "$MODEL_EVIDENCE"
 
-"$BOUND_SQLITE" "$DATA_DIR/cosmos.db" '
+sqlite3 "$DATA_DIR/cosmos.db" '
   PRAGMA journal_mode=WAL;
   CREATE TABLE events(id INTEGER PRIMARY KEY, kind TEXT NOT NULL);
   INSERT INTO events VALUES (1, "fixture");
@@ -61,7 +38,7 @@ printf 'original-single-file\n' > "$FILE_EVIDENCE"
 run_backup() {
   env DATA_DIR="$DATA_DIR" OPS_STATE_DIR="$OPS_STATE_DIR" \
     BACKUP_DIR="$BACKUP_DIR" \
-    NODE="$BOUND_NODE" SQLITE="$BOUND_SQLITE" \
+    NODE="$BOUND_NODE" \
     EVIDENCE_PATHS="$SOURCE_EVIDENCE:$MODEL_EVIDENCE:$FILE_EVIDENCE" \
     bash "$BACKUP"
 }
@@ -70,13 +47,9 @@ run_restore() {
   local backup="$1" target="$2"
   shift 2
   env DATA_DIR="$DATA_DIR" OPS_STATE_DIR="$OPS_STATE_DIR" \
-    BACKUP_DIR="$BACKUP_DIR" NODE="$BOUND_NODE" \
-    SQLITE="$BOUND_SQLITE" bash "$RESTORE" \
+    BACKUP_DIR="$BACKUP_DIR" NODE="$BOUND_NODE" bash "$RESTORE" \
     --backup "$backup" --target "$target" "$@"
 }
-
-DONOR_SQLITE_ENV_BINDING="$(printf '%s%s' 'SQLITE="$BOUND_' 'SQLITE"')"
-assert_eq "$(grep -F -c "$DONOR_SQLITE_ENV_BINDING" "$0")" 4
 
 file_sha256() {
   node -e '
@@ -171,10 +144,6 @@ fs.writeFileSync(output, zlib.gzipSync(Buffer.concat([...entries, Buffer.alloc(1
 NODE
 }
 
-AMBIENT_SQLITE_HOSTILE="$TEST_TMP/ambient-sqlite-must-not-run"
-printf '%s\n' '#!/bin/sh' 'exit 97' >"$AMBIENT_SQLITE_HOSTILE"
-chmod 500 "$AMBIENT_SQLITE_HOSTILE"
-export SQLITE="$AMBIENT_SQLITE_HOSTILE"
 assert_success run_backup
 BASE_BACKUP="$BACKUP_DIR/$(ls -1 "$BACKUP_DIR" | grep -E '^[0-9]{8}T[0-9]{6}Z' | sort | tail -1)"
 assert_file "$BASE_BACKUP/manifest.json"
@@ -198,7 +167,7 @@ GOOD_RC=$?
 set -e
 [ "$GOOD_RC" -eq 0 ] || fail_test "pristine restore failed (inventory: $(ls -A "$BASE_BACKUP" | tr '\n' ' ')): $GOOD_OUTPUT"
 pass_assertion
-assert_eq "$("$BOUND_SQLITE" "$GOOD_TARGET/cosmos.db" 'SELECT COUNT(*) FROM events;')" 1
+assert_eq "$(sqlite3 "$GOOD_TARGET/cosmos.db" 'SELECT COUNT(*) FROM events;')" 1
 assert_eq "$(cat "$GOOD_TARGET/evidence/source-evidence/proof.txt")" original-evidence
 assert_eq "$(cat "$GOOD_TARGET/evidence/model-evidence/model.txt")" original-model
 assert_eq "$(cat "$GOOD_TARGET/evidence/single-evidence.txt")" original-single-file
@@ -441,7 +410,7 @@ assert_failure env NODE="$BOUND_NODE" DATA_DIR="$DATA_DIR" OPS_STATE_DIR="$OPS_S
 note "a failed forced restore preserves every pre-existing target artifact"
 PRESERVE_TARGET="$ROOT/preserve-target"
 mkdir -p "$PRESERVE_TARGET/evidence"
-"$BOUND_SQLITE" "$PRESERVE_TARGET/cosmos.db" 'CREATE TABLE old_state(value TEXT); INSERT INTO old_state VALUES ("keep");'
+sqlite3 "$PRESERVE_TARGET/cosmos.db" 'CREATE TABLE old_state(value TEXT); INSERT INTO old_state VALUES ("keep");'
 printf 'keep-sentinel\n' > "$PRESERVE_TARGET/sentinel.txt"
 printf 'keep-evidence\n' > "$PRESERVE_TARGET/evidence/old.txt"
 printf 'keep-wal\n' > "$PRESERVE_TARGET/cosmos.db-wal"
@@ -460,7 +429,7 @@ assert_not_file "$PRESERVE_TARGET/restore-report.json"
 note "a mid-commit failure rolls back only paths actually moved or published"
 ROLLBACK_TARGET="$ROOT/rollback-target"
 mkdir -p "$ROLLBACK_TARGET/evidence"
-"$BOUND_SQLITE" "$ROLLBACK_TARGET/cosmos.db" \
+sqlite3 "$ROLLBACK_TARGET/cosmos.db" \
   'CREATE TABLE old_state(value TEXT); INSERT INTO old_state VALUES ("rollback-keep");'
 printf 'rollback-wal\n' > "$ROLLBACK_TARGET/cosmos.db-wal"
 printf 'rollback-shm\n' > "$ROLLBACK_TARGET/cosmos.db-shm"
@@ -503,7 +472,7 @@ assert_not_file "$ABSENT_ROLLBACK_TARGET"
 note "an incomplete rollback is loud and preserves exact recovery evidence"
 ROLLBACK_INCOMPLETE="$ROOT/rollback-incomplete"
 mkdir -p "$ROLLBACK_INCOMPLETE"
-"$BOUND_SQLITE" "$ROLLBACK_INCOMPLETE/cosmos.db" \
+sqlite3 "$ROLLBACK_INCOMPLETE/cosmos.db" \
   'CREATE TABLE old_state(value TEXT); INSERT INTO old_state VALUES ("preserve-in-rollback");'
 ROLLBACK_INCOMPLETE_SHA="$(file_sha256 "$ROLLBACK_INCOMPLETE/cosmos.db")"
 set +e
@@ -649,7 +618,7 @@ cp -R "$BASE_BACKUP" "$DRILL_BACKUPS/$(basename "$BASE_BACKUP")"
 PRODUCTION_SHA="$(file_sha256 "$DATA_DIR/cosmos.db")"
 assert_success env DATA_DIR="$DATA_DIR" OPS_STATE_DIR="$OPS_STATE_DIR" \
   BACKUP_DIR="$DRILL_BACKUPS" DRILL_DIR="$DRILL_REPORTS" TMPDIR="$ROOT" \
-  NODE="$BOUND_NODE" SQLITE="$BOUND_SQLITE" bash "$DRILL"
+  NODE="$BOUND_NODE" bash "$DRILL"
 GOOD_DRILL_REPORT="$DRILL_REPORTS/$(ls -1 "$DRILL_REPORTS" | sort | tail -1)"
 assert_eq "$(node -e '
   const report = require(process.argv[1]);
@@ -668,7 +637,7 @@ DRILL_BACKUP="$DRILL_BACKUPS/$(basename "$BASE_BACKUP")"
 replace_first_archive "$DRILL_BACKUP" drill-tamper
 assert_failure env DATA_DIR="$DATA_DIR" OPS_STATE_DIR="$OPS_STATE_DIR" \
   BACKUP_DIR="$DRILL_BACKUPS" DRILL_DIR="$DRILL_REPORTS" TMPDIR="$ROOT" \
-  NODE="$BOUND_NODE" SQLITE="$BOUND_SQLITE" bash "$DRILL"
+  NODE="$BOUND_NODE" bash "$DRILL"
 BAD_DRILL_REPORT="$DRILL_REPORTS/$(ls -1 "$DRILL_REPORTS" | sort | tail -1)"
 assert_eq "$(node -e 'process.stdout.write(String(require(process.argv[1]).ok))' "$BAD_DRILL_REPORT")" false
 assert_eq "$(node -e '

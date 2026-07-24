@@ -5,6 +5,8 @@ if [ "$(uname -s)" = Linux ] \
     && [ "${DF32_ACTUAL_EFFECTS:-0}" = 1 ] \
     && [ "$(id -u)" = 0 ] \
     && [ "${DF32_EFFECT_REEXECED:-0}" != 1 ]; then
+  [ -n "${DF32_SQLITE_BIN:-}" ] \
+    || { printf 'NOT OK: actual effect proof requires DF32_SQLITE_BIN\n' >&2; exit 1; }
   [ -x /usr/bin/setpriv ] \
     || { printf 'NOT OK: actual effect proof requires /usr/bin/setpriv\n' >&2; exit 1; }
   EFFECT_TEST_UID="$(id -u cosmos 2>/dev/null)" \
@@ -17,9 +19,10 @@ if [ "$(uname -s)" = Linux ] \
     --reuid="$EFFECT_TEST_UID" --regid="$EFFECT_TEST_GID" \
     --clear-groups --inh-caps=-all --bounding-set=-all --nnp \
     /usr/bin/env -i \
-    PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin \
+    PATH=/usr/bin:/bin:/usr/sbin:/sbin \
     HOME=/tmp TMPDIR=/tmp \
     DF32_ACTUAL_EFFECTS=1 DF32_EFFECT_REEXECED=1 \
+    DF32_SQLITE_BIN="$DF32_SQLITE_BIN" \
     /bin/bash "$TEST_SELF"
 fi
 . "$(dirname "$TEST_SELF")/helpers.sh"
@@ -31,6 +34,16 @@ PREVIEW_PRODUCER="$I00_ROOT/bin/produce-deployment-action-preview.mjs"
 OUTCOME_RECORDER="$I00_ROOT/bin/record-authorized-action-outcome.mjs"
 FIXTURE_CONTRACT="$I00_ROOT/deployment-authorization-contract.mjs"
 HOSTILE_CHAIN_FIXTURE="$TEST_DIR/fixtures/make-backup-effect-hostile-chain.mjs"
+
+EFFECT_TEST_SOURCE="$(cat "$TEST_SELF")"
+assert_contains "$EFFECT_TEST_SOURCE" \
+  'DF32_SQLITE_BIN="$DF32_SQLITE_BIN"'
+GLOBAL_SQLITE_SHADOW_PREFIX="$(printf '%s%s' 'PATH=/usr/' 'local/bin:')"
+if printf '%s' "$EFFECT_TEST_SOURCE" \
+    | grep -F "$GLOBAL_SQLITE_SHADOW_PREFIX" >/dev/null; then
+  fail_test "actual effect proof globally shadows distro commands"
+fi
+pass_assertion
 
 note "backup and restore wrappers retain one authorization-bound effect chain"
 for wrapper in "$BACKUP_WRAPPER" "$RESTORE_WRAPPER"; do
@@ -113,6 +126,23 @@ fi
 
 note "actual Linux producers drive backup and isolated restore through the real runner"
 [ -e /proc/self/fd ] || fail_test "actual effect proof requires procfs descriptors"
+[ -n "${DF32_SQLITE_BIN:-}" ] \
+  || fail_test "actual effect proof requires DF32_SQLITE_BIN"
+DF32_SQLITE_INSPECTION="$(
+  node "$I00_ROOT/bin/inspect-executable.mjs" --path "$DF32_SQLITE_BIN"
+)"
+assert_eq "$(node -e \
+  'process.stdout.write(JSON.parse(process.argv[1]).path)' \
+  "$DF32_SQLITE_INSPECTION")" "$DF32_SQLITE_BIN"
+assert_eq "$(node -e \
+  'const fs=require("fs");process.stdout.write(String(fs.lstatSync(process.argv[1]).uid))' \
+  "$DF32_SQLITE_BIN")" 0
+DF32_SQLITE_VERSION="$("$DF32_SQLITE_BIN" --version)" \
+  || fail_test "DF32_SQLITE_BIN version readback failed"
+assert_eq "$(node "$I00_ROOT/bin/inspect-executable.mjs" \
+  --path "$DF32_SQLITE_BIN")" "$DF32_SQLITE_INSPECTION"
+assert_success node "$I00_ROOT/bin/verify-sqlite-version.mjs" \
+  --version "$DF32_SQLITE_VERSION"
 
 REAL_TMP="$(node -e 'const fs=require("fs");process.stdout.write(fs.realpathSync("/tmp"))')"
 SIMULATION_ROOT="$(node "$I00_ROOT/bin/create-simulation-root.mjs" \
@@ -171,7 +201,7 @@ copy_command tar /usr/bin/tar /bin/tar
 copy_command gzip /usr/bin/gzip /bin/gzip
 copy_command sha256sum /usr/bin/sha256sum /bin/sha256sum
 copy_command setpriv /usr/bin/setpriv /bin/setpriv
-copy_command sqlite3 /usr/bin/sqlite3 /bin/sqlite3 /usr/local/bin/sqlite3
+copy_command sqlite3 "$DF32_SQLITE_BIN"
 
 EFFECT_UID="$(id -u)"
 EFFECT_GID="$(id -g)"

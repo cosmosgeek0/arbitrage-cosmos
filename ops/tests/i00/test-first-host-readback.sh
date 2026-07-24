@@ -644,7 +644,33 @@ assert_failure_contains '--now is accepted only with --simulation-clock' \
   --backup-reserve-bytes 4096 --sqlite "$TOOLS/sqlite-safe" --systemctl "$TOOLS/systemctl-inactive" \
   --now 2099-01-01T00:00:00Z
 
-if [ "$(id -u)" -eq 0 ] && [ -x /usr/bin/sqlite3 ]; then
+STAGING_FIRST_HOST_SQLITE="${DF32_SQLITE_BIN:-/usr/bin/sqlite3}"
+if [ "$(uname -s)" = Linux ] && [ "$(id -u)" -eq 0 ] \
+    && [ -n "${DF32_SQLITE_BIN:-}" ]; then
+  [ -f "$DF32_SQLITE_BIN" ] && [ ! -L "$DF32_SQLITE_BIN" ] \
+    && [ -x "$DF32_SQLITE_BIN" ] \
+    || fail_test "DF32_SQLITE_BIN must be one executable regular file"
+fi
+if [ "$(uname -s)" = Linux ] && [ "$(id -u)" -eq 0 ] \
+    && [ -x "$STAGING_FIRST_HOST_SQLITE" ]; then
+  if [ -n "${DF32_SQLITE_BIN:-}" ]; then
+    STAGING_SQLITE_INSPECTION="$(
+      node "$I00_ROOT/bin/inspect-executable.mjs" \
+        --path "$STAGING_FIRST_HOST_SQLITE"
+    )"
+    assert_eq "$(node -e \
+      'process.stdout.write(JSON.parse(process.argv[1]).path)' \
+      "$STAGING_SQLITE_INSPECTION")" "$DF32_SQLITE_BIN"
+    assert_eq "$(node -e \
+      'const fs=require("fs");process.stdout.write(String(fs.lstatSync(process.argv[1]).uid))' \
+      "$DF32_SQLITE_BIN")" 0
+    STAGING_SQLITE_VERSION="$("$DF32_SQLITE_BIN" --version)" \
+      || fail_test "DF32_SQLITE_BIN version readback failed"
+    assert_eq "$(node "$I00_ROOT/bin/inspect-executable.mjs" \
+      --path "$DF32_SQLITE_BIN")" "$STAGING_SQLITE_INSPECTION"
+    assert_success node "$I00_ROOT/bin/verify-sqlite-version.mjs" \
+      --version "$STAGING_SQLITE_VERSION"
+  fi
   note "root Linux proves first-host STAGING from one private offline unit root"
   for offset in $(seq 40 72); do
     candidate="$(printf '/var/tmp/cosmos-df32-proof-%04x' "$((($$ + offset) & 65535))")"
@@ -702,7 +728,7 @@ ENV
     --target-host "cosmos-df32-proof-${STAGING_FIRST_HOST_SUFFIX}.internal" \
     --environment "isolated-staging-${STAGING_FIRST_HOST_SUFFIX}" \
     --backup-reserve-bytes 4096 \
-    --sqlite /usr/bin/sqlite3 \
+    --sqlite "$STAGING_FIRST_HOST_SQLITE" \
     --offline-unit-root "$STAGING_FIRST_HOST_OFFLINE_ROOT" >/dev/null
   STAGING_UNIT_JSON="$(node -e \
     'process.stdout.write(JSON.stringify(require(process.argv[1]).baseline.unit))' \
@@ -741,7 +767,7 @@ ENV
     --target-host "cosmos-df32-proof-${STAGING_FIRST_HOST_SUFFIX}.internal" \
     --environment "isolated-staging-${STAGING_FIRST_HOST_SUFFIX}" \
     --backup-reserve-bytes 4096 \
-    --sqlite /usr/bin/sqlite3 \
+    --sqlite "$STAGING_FIRST_HOST_SQLITE" \
     --systemctl /usr/bin/systemctl \
     --offline-unit-root "$STAGING_FIRST_HOST_OFFLINE_ROOT"
   rmdir "$STAGING_SECOND_OUTPUT"

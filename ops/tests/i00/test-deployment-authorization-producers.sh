@@ -35,6 +35,7 @@ RISK_PRODUCER="$I00_ROOT/bin/produce-deployment-risk-version.mjs"
 PREVIEW_PRODUCER="$I00_ROOT/bin/produce-deployment-action-preview.mjs"
 AUTH_VALIDATOR="$I00_ROOT/bin/validate-authorization.mjs"
 EXECUTABLE_INSPECTOR="$I00_ROOT/bin/inspect-executable.mjs"
+SQLITE_VERSION_VERIFIER="$I00_ROOT/bin/verify-sqlite-version.mjs"
 OUTCOME_RECORDER="$I00_ROOT/bin/record-authorized-action-outcome.mjs"
 BACKUP_INSPECTOR="$I00_ROOT/bin/inspect-backup-source.mjs"
 FIXED_GATE_LAUNCHER="$I00_ROOT/bin/run-fixed-node-gate.sh"
@@ -54,6 +55,7 @@ ACTUAL_POSITIVE_CLASSES=(
   ISOLATED_RESTORE
 )
 ACTUAL_PROOF_PORT=8080
+ACTUAL_PROOF_START_LEAD_SECONDS=600
 FIXTURE_TARGET_SHA=0123456789abcdef0123456789abcdef01234567
 FIXTURE_CURRENT_SHA=1111111111111111111111111111111111111111
 FIXTURE_TARGET_RELEASE=""
@@ -78,18 +80,74 @@ fi
 node() {
   "$CANONICAL_NODE" "$@"
 }
-FIXED_SQLITE=""
-for candidate in /usr/bin/sqlite3 /bin/sqlite3 /usr/local/bin/sqlite3 /opt/homebrew/bin/sqlite3; do
-  if [ -f "$candidate" ] && [ ! -L "$candidate" ] && [ -x "$candidate" ]; then
-    FIXED_SQLITE="$candidate"
-    break
+
+select_fixed_sqlite_path() {
+  local explicit="$1" candidate
+  shift
+  if [ -n "$explicit" ]; then
+    printf '%s\n' "$explicit"
+    return 0
   fi
-done
+  for candidate in "$@"; do
+    if [ -f "$candidate" ] && [ ! -L "$candidate" ] && [ -x "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+SQLITE_SELECTION_REGRESSION_ROOT="$TEST_TMP/sqlite-selection"
+SQLITE_SELECTION_PRIVATE="$SQLITE_SELECTION_REGRESSION_ROOT/private/sqlite3"
+SQLITE_SELECTION_DISTRO="$SQLITE_SELECTION_REGRESSION_ROOT/distro/sqlite3"
+mkdir -p "$(dirname "$SQLITE_SELECTION_PRIVATE")" \
+  "$(dirname "$SQLITE_SELECTION_DISTRO")"
+printf '%s\n' '#!/bin/sh' "printf '3.53.3 private fixture\\n'" \
+  >"$SQLITE_SELECTION_PRIVATE"
+printf '%s\n' '#!/bin/sh' "printf '3.45.1 distro fixture\\n'" \
+  >"$SQLITE_SELECTION_DISTRO"
+chmod 500 "$SQLITE_SELECTION_PRIVATE" "$SQLITE_SELECTION_DISTRO"
+assert_eq "$(
+  select_fixed_sqlite_path \
+    "$SQLITE_SELECTION_PRIVATE" "$SQLITE_SELECTION_DISTRO"
+)" "$SQLITE_SELECTION_PRIVATE"
+assert_success node "$SQLITE_VERSION_VERIFIER" \
+  --version "$("$SQLITE_SELECTION_PRIVATE" --version)"
+assert_failure node "$SQLITE_VERSION_VERIFIER" \
+  --version "$("$SQLITE_SELECTION_DISTRO" --version)"
+
+FIXED_SQLITE="$(
+  select_fixed_sqlite_path "${DF32_SQLITE_BIN:-}" \
+    /usr/bin/sqlite3 /bin/sqlite3 /usr/local/bin/sqlite3 \
+    /opt/homebrew/bin/sqlite3
+)" || FIXED_SQLITE=""
 [ -n "$FIXED_SQLITE" ] || fail_test "producer proof requires SQLite at one fixed candidate path"
+if [ -n "${DF32_SQLITE_BIN:-}" ]; then
+  [ "$(uname -s)" = Linux ] && [ "$(id -u)" -eq 0 ] \
+    || fail_test "DF32_SQLITE_BIN is accepted only by the root Linux proof"
+  [ "$FIXED_SQLITE" = "$DF32_SQLITE_BIN" ] \
+    || fail_test "DF32_SQLITE_BIN selection changed"
+  [ "$(node -e \
+    'const fs=require("fs");process.stdout.write(String(fs.lstatSync(process.argv[1]).uid))' \
+    "$FIXED_SQLITE")" = 0 ] \
+    || fail_test "DF32_SQLITE_BIN must be root-owned"
+fi
+FIXED_SQLITE_INSPECTION="$(node "$EXECUTABLE_INSPECTOR" --path "$FIXED_SQLITE")"
+[ "$(node -e \
+  'process.stdout.write(JSON.parse(process.argv[1]).path)' \
+  "$FIXED_SQLITE_INSPECTION")" = "$FIXED_SQLITE" ] \
+  || fail_test "fixed SQLite canonical path changed"
 FIXED_SQLITE_VERSION_OUTPUT="$("$FIXED_SQLITE" --version)" \
   || fail_test "fixed SQLite version readback failed"
 FIXED_SQLITE_VERSION="${FIXED_SQLITE_VERSION_OUTPUT%%[[:space:]]*}"
-FIXED_SQLITE_INSPECTION="$(node "$EXECUTABLE_INSPECTOR" --path "$FIXED_SQLITE")"
+[ "$(node "$EXECUTABLE_INSPECTOR" --path "$FIXED_SQLITE")" \
+  = "$FIXED_SQLITE_INSPECTION" ] \
+  || fail_test "fixed SQLite identity changed around version readback"
+if [ -n "${DF32_SQLITE_BIN:-}" ]; then
+  node "$SQLITE_VERSION_VERIFIER" \
+    --version "$FIXED_SQLITE_VERSION_OUTPUT" >/dev/null \
+    || fail_test "DF32_SQLITE_BIN does not have an accepted WAL-reset-safe version"
+fi
 FIXED_SQLITE_SHA256="$(node -e \
   'process.stdout.write(JSON.parse(process.argv[1]).sha256)' \
   "$FIXED_SQLITE_INSPECTION")"
@@ -124,10 +182,25 @@ assert_eq "$OWNER_REGRESSION_HOST" cosmos-df32-proof-abcd.internal
 assert_eq "$OWNER_REGRESSION_ENVIRONMENT" isolated-staging-abcd
 assert_failure actual_proof_owner_values abcG
 assert_eq "$ACTUAL_PROOF_PORT" 8080
+assert_eq "$ACTUAL_PROOF_START_LEAD_SECONDS" 600
 ACTUAL_PROOF_TEST_SOURCE="$(cat "$0")"
 assert_contains "$ACTUAL_PROOF_TEST_SOURCE" '`PORT=${appPort}`'
 assert_contains "$ACTUAL_PROOF_TEST_SOURCE" \
   '`HEALTH_BASE=http://127.0.0.1:${appPort}`'
+ACTUAL_STAGING_SYSTEMCTL_ASSIGNMENT="$(printf '%s%s' \
+  'APP_UNIT_STAGING_SYSTEMCTL="$DF32_STAGING_ROOT/tools/' 'systemctl"')"
+ACTUAL_STAGING_SYSTEMCTL_ARG="$(printf '%s%s' \
+  '--systemctl "$APP_UNIT_STAGING_' 'SYSTEMCTL"')"
+ACTUAL_STAGING_SYSTEMCTL_ENDPOINT="$(printf '%s%s' \
+  '"systemctl-path:$APP_UNIT_STAGING_' 'SYSTEMCTL"')"
+ACTUAL_START_LEAD_CONVERSION="$(printf '%s%s' \
+  'Number(startLead' 'Seconds) * 1000')"
+assert_contains "$ACTUAL_PROOF_TEST_SOURCE" "$ACTUAL_STAGING_SYSTEMCTL_ASSIGNMENT"
+assert_eq "$(printf '%s' "$ACTUAL_PROOF_TEST_SOURCE" \
+  | grep -F -- "$ACTUAL_STAGING_SYSTEMCTL_ARG" \
+  | wc -l | tr -d '[:space:]')" 2
+assert_contains "$ACTUAL_PROOF_TEST_SOURCE" "$ACTUAL_STAGING_SYSTEMCTL_ENDPOINT"
+assert_contains "$ACTUAL_PROOF_TEST_SOURCE" "$ACTUAL_START_LEAD_CONVERSION"
 if printf '%s' "$ACTUAL_PROOF_TEST_SOURCE" | grep -F "'PORT=86""01'" >/dev/null; then
   fail_test "actual proof runtime retains the superseded origin port"
 fi
@@ -406,9 +479,9 @@ set_actual_validator_args() {
         "sqlite-path:$SQLITE_BIN"
         "sqlite-sha256:$SQLITE_SHA256"
         "sqlite-version:$SQLITE_VERSION"
-        "systemctl-identity:$SYSTEMCTL_IDENTITY"
-        "systemctl-path:$SYSTEMCTL_BIN"
-        "systemctl-sha256:$SYSTEMCTL_SHA256"
+        "systemctl-identity:$APP_UNIT_STAGING_SYSTEMCTL_IDENTITY"
+        "systemctl-path:$APP_UNIT_STAGING_SYSTEMCTL"
+        "systemctl-sha256:$APP_UNIT_STAGING_SYSTEMCTL_SHA256"
         "trusted-builder-public-key-sha256:$trust_sha"
       )
       ;;
@@ -2396,8 +2469,6 @@ NODE
     <<<"$(inspect_actual_executable "$(producer_fixed_command node)")"
   IFS=$'\t' read -r ENV_BIN ENV_SHA256 ENV_IDENTITY \
     <<<"$(inspect_actual_executable "$(producer_fixed_command env)")"
-  IFS=$'\t' read -r SYSTEMCTL_BIN SYSTEMCTL_SHA256 SYSTEMCTL_IDENTITY \
-    <<<"$(inspect_actual_executable "$(producer_fixed_command systemctl)")"
   IFS=$'\t' read -r SYSTEMD_ANALYZE_BIN SYSTEMD_ANALYZE_SHA256 SYSTEMD_ANALYZE_IDENTITY \
     <<<"$(inspect_actual_executable "$(producer_fixed_command systemd-analyze)")"
   IFS=$'\t' read -r CURL_BIN CURL_SHA256 CURL_IDENTITY \
@@ -2472,14 +2543,19 @@ NODE
   BACKUP_IDENTITY="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).endpointIdentity)' "$BACKUP_INSPECTION")"
   node --input-type=module - \
     "$CONTRACT" "$DF32_RELEASE" "$ACTUAL_ROOT" "$PROOF_ROOT" \
-    "$SQLITE_BIN" "$DF32_APP_UNIT" "$ACTUAL_PROOF_PORT" <<'NODE'
+    "$SQLITE_BIN" "$DF32_APP_UNIT" "$ACTUAL_PROOF_PORT" \
+    "$ACTUAL_PROOF_START_LEAD_SECONDS" <<'NODE'
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 const [
   contractPath, releaseInput, rootInput, proofInput, sqliteInput, appUnit, appPort,
+  startLeadSeconds,
 ] = process.argv.slice(2);
-if (appPort !== '8080') process.exit(2);
+const startLeadMs = Number(startLeadSeconds) * 1000;
+if (appPort !== '8080'
+    || !Number.isSafeInteger(startLeadMs)
+    || startLeadMs < 600_000) process.exit(2);
 const { canonicalJsonBytes } = await import(pathToFileURL(resolve(contractPath)).href);
 const releaseRoot = realpathSync(releaseInput);
 const root = realpathSync(rootInput);
@@ -2527,7 +2603,9 @@ writeFileSync(resolve(root, 'backup.env'), [
   '',
 ].join('\n'), { mode: 0o600 });
 const now = Date.now();
-const startsAtUtc = new Date(Math.ceil(now / 1000) * 1000 + 60_000).toISOString().replace('.000Z', 'Z');
+const startsAtUtc = new Date(
+  Math.ceil(now / 1000) * 1000 + startLeadMs,
+).toISOString().replace('.000Z', 'Z');
 const expiresAtUtc = new Date(Math.ceil(now / 1000) * 1000 + 3_300_000).toISOString().replace('.000Z', 'Z');
 const common = {
   schemaVersion: 1,
@@ -2598,6 +2676,28 @@ NODE
     "EnvironmentFile=$STAGING_RUNTIME_ROOT/cosmos-app.env" \
     >"$APP_UNIT_PROOF_DROP_IN"
   chmod 400 "$APP_UNIT_PROOF_DROP_IN"
+  APP_UNIT_STAGING_SYSTEMCTL="$DF32_STAGING_ROOT/tools/systemctl"
+  APP_UNIT_STAGING_STATE="$STAGING_RUNTIME_ROOT/systemctl-state"
+  mkdir "$DF32_STAGING_ROOT/tools"
+  chmod 700 "$DF32_STAGING_ROOT/tools"
+  printf 'inactive\n' >"$APP_UNIT_STAGING_STATE"
+  {
+    printf '%s\n' '#!/bin/sh' 'set -eu'
+    printf '[ "$#" -eq 2 ] && [ "$1" = is-active ] && [ "$2" = %s ] || exit 91\n' \
+      "$DF32_APP_UNIT"
+    printf 'state="$(/bin/cat %s)"\n' "$APP_UNIT_STAGING_STATE"
+    printf '%s\n' \
+      '[ "$state" = inactive ] || exit 92' \
+      "printf 'inactive\\n'" \
+      'exit 3'
+  } >"$APP_UNIT_STAGING_SYSTEMCTL"
+  chmod 600 "$APP_UNIT_STAGING_STATE"
+  chmod 500 "$APP_UNIT_STAGING_SYSTEMCTL"
+  IFS=$'\t' read -r APP_UNIT_STAGING_SYSTEMCTL_PATH \
+    APP_UNIT_STAGING_SYSTEMCTL_SHA256 APP_UNIT_STAGING_SYSTEMCTL_IDENTITY \
+    <<<"$(inspect_actual_executable "$APP_UNIT_STAGING_SYSTEMCTL")"
+  [ "$APP_UNIT_STAGING_SYSTEMCTL_PATH" = "$APP_UNIT_STAGING_SYSTEMCTL" ] \
+    || fail_test "staging systemctl canonical path changed"
   FIRST_HOST_ENV="$STAGING_SANITIZED_ROOT/deploy.env"
   node "$I00_ROOT/bin/sanitize-donor-env.mjs" \
     --env "$ACTUAL_ROOT/deploy.env" \
@@ -2608,7 +2708,7 @@ NODE
     --node "$NODE_BIN" \
     --bash "$BASH_BIN" \
     --env-bin "$ENV_BIN" \
-    --systemctl "$SYSTEMCTL_BIN" \
+    --systemctl "$APP_UNIT_STAGING_SYSTEMCTL" \
     --curl "$CURL_BIN" \
     --require-effect-bindings \
     --require-first-host-no-current \
@@ -2634,7 +2734,7 @@ NODE
     --require-hash \
     >"$ACTUAL_ROOT/backup-sanitize.out"
   APP_UNIT_INSPECTION="$(run_fixed_gate inspect-app-unit.mjs \
-    --systemctl "$SYSTEMCTL_BIN" \
+    --systemctl "$APP_UNIT_STAGING_SYSTEMCTL" \
     --unit "$DF32_APP_UNIT" \
     --node "$NODE_BIN" \
     --env "$ENV_BIN" \

@@ -90,6 +90,8 @@ const ENDPOINT_IDENTITY =
   /^device=[0-9]+,inode=[0-9]+,mode=[0-7]+,size=[0-9]+,mtimeNs=-?[0-9]+,ctimeNs=-?[0-9]+$/u;
 const EXACT_UTC_SECONDS = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u;
 const DIGEST = /^[0-9a-f]{64}$/u;
+const MAX_BOUND_FILE_BYTES = 1024n * 1024n * 1024n;
+const MAX_OPEN_FILE_BYTES = 128n * 1024n * 1024n * 1024n;
 const BACKUP_OUTPUT_MAX_BYTES = 4_096;
 const BACKUP_OUTPUT_FD = 53;
 const BACKUP_NAME = /^[0-9]{8}T[0-9]{6}Z(?:-[1-9][0-9]*)?$/u;
@@ -425,7 +427,7 @@ function inspectBoundFile(
   const invokingUid = typeof process.geteuid === 'function'
     ? BigInt(process.geteuid()) : null;
   if (!before?.isFile() || before.isSymbolicLink() || before.nlink !== 1n
-      || before.size <= 0n || before.size > 1024n * 1024n * 1024n
+      || before.size <= 0n || before.size > MAX_BOUND_FILE_BYTES
       || (before.mode & 0o022n) !== 0n
       || (before.mode & 0o7000n) !== 0n
       || (executable && (before.mode & 0o111n) === 0n)
@@ -440,7 +442,13 @@ function inspectBoundFile(
     if (!fields.every((key) => openedBefore[key] === before[key])) {
       reject(`${label} changed before hashing`);
     }
-    const sha256 = createHash('sha256').update(readFileSync(descriptor)).digest('hex');
+    const sha256 = hashOpenFile(
+      descriptor,
+      openedBefore.size,
+      label,
+      MAX_BOUND_FILE_BYTES,
+      reject,
+    );
     const openedAfter = fstatSync(descriptor, { bigint: true });
     const after = lstatSync(path, { bigint: true, throwIfNoEntry: false });
     if (!after || !fields.every((key) => (
@@ -1008,8 +1016,10 @@ function openBoundDescriptor(binding, label, {
       && (!executable || (stat.mode & 0o111n) !== 0n)
       && endpointFileIdentity(stat) === inspected.identity,
     `${label} inherited descriptor identity differs from the authorization binding`);
-    const bytes = positionalRead(descriptor, Number(stat.size), label);
-    assert(createHash('sha256').update(bytes).digest('hex') === inspected.sha256,
+    const sha256 = hashOpenFile(descriptor, stat.size, label, MAX_BOUND_FILE_BYTES);
+    const after = fstatSync(descriptor, { bigint: true });
+    assert(endpointFileIdentity(after) === inspected.identity
+      && sha256 === inspected.sha256,
       `${label} inherited descriptor digest differs from the authorization binding`);
     return Object.freeze({ descriptor, executable, ...inspected });
   } catch (error) {
@@ -1019,13 +1029,20 @@ function openBoundDescriptor(binding, label, {
 }
 
 function recheckBoundDescriptor(held, label, rootAncestorChain) {
-  const stat = fstatSync(held.descriptor, { bigint: true });
-  assert(stat.isFile() && stat.nlink === 1n
-    && (!held.executable || (stat.mode & 0o111n) !== 0n)
-    && endpointFileIdentity(stat) === held.identity,
+  const before = fstatSync(held.descriptor, { bigint: true });
+  assert(before.isFile() && before.nlink === 1n
+    && (!held.executable || (before.mode & 0o111n) !== 0n)
+    && endpointFileIdentity(before) === held.identity,
   `${label} inherited descriptor identity changed`);
-  const bytes = positionalRead(held.descriptor, Number(stat.size), label);
-  assert(createHash('sha256').update(bytes).digest('hex') === held.sha256,
+  const sha256 = hashOpenFile(
+    held.descriptor,
+    before.size,
+    label,
+    MAX_BOUND_FILE_BYTES,
+  );
+  const after = fstatSync(held.descriptor, { bigint: true });
+  assert(endpointFileIdentity(after) === held.identity
+    && sha256 === held.sha256,
     `${label} inherited descriptor digest changed`);
   inspectBoundFile(held.path, label, {
     executable: held.executable,
@@ -1188,18 +1205,31 @@ function readRootIdentity(stat, expectedIdentity) {
   blocked('read root identity binding has an unsupported shape');
 }
 
-function hashOpenFile(descriptor, size, label) {
-  assert(size >= 0n && size <= 128n * 1024n * 1024n * 1024n,
-    `${label} size is outside the supported range`);
+function hashOpenFile(
+  descriptor,
+  size,
+  label,
+  maximum = MAX_OPEN_FILE_BYTES,
+  reject = blocked,
+) {
+  if (!(typeof size === 'bigint'
+    && typeof maximum === 'bigint'
+    && maximum > 0n
+    && size >= 0n
+    && size <= maximum)) {
+    reject(`${label} size is outside the supported range`);
+  }
   const numericSize = Number(size);
-  assert(Number.isSafeInteger(numericSize), `${label} size is not safely readable`);
+  if (!Number.isSafeInteger(numericSize)) {
+    reject(`${label} size is not safely readable`);
+  }
   const hash = createHash('sha256');
   const buffer = Buffer.alloc(64 * 1024);
   let offset = 0;
   while (offset < numericSize) {
     const wanted = Math.min(buffer.length, numericSize - offset);
     const count = readSync(descriptor, buffer, 0, wanted, offset);
-    assert(count > 0, `${label} ended before its retained size`);
+    if (count <= 0) reject(`${label} ended before its retained size`);
     hash.update(buffer.subarray(0, count));
     offset += count;
   }

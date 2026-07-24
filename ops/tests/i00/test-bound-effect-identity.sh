@@ -36,6 +36,240 @@ assert_failure_contains 'effect runner control arguments are invalid' \
   --authorization-consumption "$TEST_TMP/consumption.json" \
   -- /bin/false
 
+note "bound executable descriptors stream large files and retain exact identity"
+assert_success node --input-type=module - "$RUNNER" "$TEST_TMP" <<'NODE'
+import { createHash } from 'node:crypto';
+import {
+  chmodSync,
+  closeSync,
+  constants,
+  fstatSync,
+  fsyncSync,
+  ftruncateSync,
+  lstatSync,
+  openSync,
+  readFileSync,
+  readSync,
+  realpathSync,
+  renameSync,
+  writeSync,
+} from 'node:fs';
+import {
+  dirname, isAbsolute, resolve,
+} from 'node:path';
+import { createRequire } from 'node:module';
+
+const [runnerPath, temporaryRoot] = process.argv.slice(2);
+const source = readFileSync(runnerPath, 'utf8');
+const require = createRequire(import.meta.url);
+const { parse } = require('@babel/parser');
+const program = parse(source, { sourceType: 'module' }).program;
+const extractFunction = (name) => {
+  const declaration = program.body.find((node) => (
+    node.type === 'FunctionDeclaration' && node.id?.name === name
+  ));
+  if (declaration === undefined) throw new Error(`missing function ${name}`);
+  return source.slice(declaration.start, declaration.end);
+};
+const functionNames = [
+  'sameJson',
+  'statIdentity',
+  'endpointFileIdentity',
+  'inspectTrustedAncestorChain',
+  'hashOpenFile',
+  'inspectBoundFile',
+  'openBoundDescriptor',
+  'recheckBoundDescriptor',
+  'positionalRead',
+];
+const bodies = functionNames.map(extractFunction).join('\n');
+const MAX_BOUND_FILE_BYTES = 1024n * 1024n * 1024n;
+const MAX_OPEN_FILE_BYTES = 128n * 1024n * 1024n * 1024n;
+const blocked = (message) => { throw new Error(message); };
+const assert = (condition, message) => {
+  if (!condition) blocked(message);
+};
+const build = new Function(
+  'Buffer',
+  'BigInt',
+  'Math',
+  'Number',
+  'Object',
+  'process',
+  'createHash',
+  'chmodSync',
+  'closeSync',
+  'constants',
+  'fstatSync',
+  'lstatSync',
+  'openSync',
+  'readSync',
+  'realpathSync',
+  'dirname',
+  'isAbsolute',
+  'resolve',
+  'assert',
+  'blocked',
+  'MAX_BOUND_FILE_BYTES',
+  'MAX_OPEN_FILE_BYTES',
+  `${bodies}\nreturn {
+    hashOpenFile,
+    inspectBoundFile,
+    openBoundDescriptor,
+    positionalRead,
+    recheckBoundDescriptor,
+  };`,
+);
+const {
+  hashOpenFile,
+  inspectBoundFile,
+  openBoundDescriptor,
+  positionalRead,
+  recheckBoundDescriptor,
+} = build(
+  Buffer,
+  BigInt,
+  Math,
+  Number,
+  Object,
+  process,
+  createHash,
+  chmodSync,
+  closeSync,
+  constants,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readSync,
+  realpathSync,
+  dirname,
+  isAbsolute,
+  resolve,
+  assert,
+  blocked,
+  MAX_BOUND_FILE_BYTES,
+  MAX_OPEN_FILE_BYTES,
+);
+if (!source.includes('MAX_BOUND_FILE_BYTES')
+    || !source.includes(
+      'hashOpenFile(descriptor, stat.size, label, MAX_BOUND_FILE_BYTES)',
+    )
+    || source.includes(
+      "createHash('sha256').update(readFileSync(descriptor)).digest('hex')",
+    )) {
+  process.exit(1);
+}
+
+const makeSparseExecutable = (name, size) => {
+  const path = resolve(temporaryRoot, name);
+  const descriptor = openSync(
+    path,
+    constants.O_CREAT | constants.O_EXCL | constants.O_RDWR,
+    0o700,
+  );
+  try {
+    ftruncateSync(descriptor, size);
+    fsyncSync(descriptor);
+  } finally {
+    closeSync(descriptor);
+  }
+  chmodSync(path, 0o700);
+  return path;
+};
+const inspect = (path) => inspectBoundFile(
+  path,
+  'test executable',
+  {
+    executable: true,
+    rootAncestorChain: false,
+    reject: blocked,
+  },
+);
+const largeSize = (2 * 1024 * 1024) + 17;
+const large = makeSparseExecutable('large-executable', largeSize);
+const largeDescriptor = openSync(large, constants.O_RDONLY);
+try {
+  const expected = createHash('sha256');
+  const zeroes = Buffer.alloc(64 * 1024);
+  let remaining = largeSize;
+  while (remaining > 0) {
+    const count = Math.min(remaining, zeroes.length);
+    expected.update(zeroes.subarray(0, count));
+    remaining -= count;
+  }
+  if (hashOpenFile(
+    largeDescriptor,
+    BigInt(largeSize),
+    'large executable',
+    MAX_BOUND_FILE_BYTES,
+  ) !== expected.digest('hex')) {
+    process.exit(1);
+  }
+} finally {
+  closeSync(largeDescriptor);
+}
+let held = openBoundDescriptor(
+  inspect(large),
+  'test executable',
+  { executable: true, rootAncestorChain: false },
+);
+recheckBoundDescriptor(held, 'test executable', false);
+const mutator = openSync(large, constants.O_WRONLY);
+try {
+  writeSync(mutator, Buffer.from([1]), 0, 1, 0);
+  fsyncSync(mutator);
+} finally {
+  closeSync(mutator);
+}
+let rejectedMutation = false;
+try {
+  recheckBoundDescriptor(held, 'test executable', false);
+} catch {
+  rejectedMutation = true;
+}
+closeSync(held.descriptor);
+if (!rejectedMutation) process.exit(1);
+
+const replacement = makeSparseExecutable('replacement-executable', largeSize);
+held = openBoundDescriptor(
+  inspect(replacement),
+  'replacement executable',
+  { executable: true, rootAncestorChain: false },
+);
+renameSync(replacement, `${replacement}.retained`);
+makeSparseExecutable('replacement-executable', largeSize);
+let rejectedReplacement = false;
+try {
+  recheckBoundDescriptor(held, 'replacement executable', false);
+} catch {
+  rejectedReplacement = true;
+}
+closeSync(held.descriptor);
+if (!rejectedReplacement) process.exit(1);
+
+const overLimit = makeSparseExecutable(
+  'over-limit-executable',
+  Number(MAX_BOUND_FILE_BYTES + 1n),
+);
+let rejectedOverLimit = false;
+try {
+  inspect(overLimit);
+} catch {
+  rejectedOverLimit = true;
+}
+if (!rejectedOverLimit) process.exit(1);
+const positionalDescriptor = openSync(large, constants.O_RDONLY);
+let retainedSmallDocumentLimit = false;
+try {
+  positionalRead(positionalDescriptor, largeSize, 'large document');
+} catch {
+  retainedSmallDocumentLimit = true;
+} finally {
+  closeSync(positionalDescriptor);
+}
+if (!retainedSmallDocumentLimit) process.exit(1);
+NODE
+
 note "every effect wrapper refuses a non-Linux host before one-time consumption"
 assert_success node --input-type=module - \
   "$I00_ROOT/bin/release-switch.sh" \

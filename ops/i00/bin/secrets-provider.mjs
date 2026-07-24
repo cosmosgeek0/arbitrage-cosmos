@@ -43,6 +43,12 @@ const AUTHORIZED_EFFECT_DESCRIPTOR_LOCATORS = Object.freeze({
   I00_AUTHORIZED_EFFECT_DIRECTORY_FD: 15,
   I00_EFFECT_EXEC_AWS_FD: 32,
 });
+const AUTHORIZED_EFFECT_BOOTSTRAP_LOCATORS = Object.freeze([
+  'I00_AUTHORIZED_EFFECT_ROOT_MODE',
+  'I00_AUTHORIZED_EFFECT_RUNNER_PATH',
+  'I00_AUTHORIZED_EFFECT_RUNNER_NODE_PATH',
+  'I00_AUTHORIZED_EFFECT_PROGRAM_PATH',
+]);
 const AUTHORIZED_EFFECT_FDS = Object.freeze(
   Array.from({ length: 50 }, (_, index) => index + 3),
 );
@@ -626,6 +632,14 @@ function verifyAuthorizedEffectHandoff() {
       fail(`authorized secret effect descriptor ${descriptor} is unavailable`);
     }
   }
+  const bootstrapEntries = AUTHORIZED_EFFECT_BOOTSTRAP_LOCATORS.map((name) => {
+    const value = process.env[name];
+    if (typeof value !== 'string' || value.length === 0 || value.length > 4_096
+        || /[\u0000\r\n]/u.test(value)) {
+      fail(`authorized secret effect bootstrap locator ${name} is invalid`);
+    }
+    return [name, value];
+  });
   const stdio = Array.from({ length: 53 }, () => 'ignore');
   stdio[0] = 'ignore';
   stdio[1] = 'pipe';
@@ -638,6 +652,7 @@ function verifyAuthorizedEffectHandoff() {
     ...Object.fromEntries(descriptorEntries.map(
       ([name, descriptor]) => [name, String(descriptor)],
     )),
+    ...Object.fromEntries(bootstrapEntries),
   };
   const verified = spawnSync('/proc/self/fd/14', [
     '/proc/self/fd/13',

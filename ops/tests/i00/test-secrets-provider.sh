@@ -671,6 +671,59 @@ assert_contains "$SECRETS_SOURCE" "readAuthorizedProviderConfig(rawConfig, 12)"
 assert_contains "$SECRETS_SOURCE" "outputParentDescriptor = 15"
 assert_contains "$SECRETS_SOURCE" "spawnSync('/proc/self/fd/14'"
 assert_contains "$SECRETS_SOURCE" "'/proc/self/fd/13'"
+note "authorized verifier receives only the exact bootstrap locator projection"
+assert_success node --input-type=module - "$I00_ROOT/bin/secrets-provider.mjs" <<'NODE'
+import { readFileSync } from 'node:fs';
+
+const source = readFileSync(process.argv[2], 'utf8');
+const expected = [
+  'I00_AUTHORIZED_EFFECT_ROOT_MODE',
+  'I00_AUTHORIZED_EFFECT_RUNNER_PATH',
+  'I00_AUTHORIZED_EFFECT_RUNNER_NODE_PATH',
+  'I00_AUTHORIZED_EFFECT_PROGRAM_PATH',
+];
+const acceptsExactProjection = (candidate) => {
+  const declaration = candidate.match(
+    /const AUTHORIZED_EFFECT_BOOTSTRAP_LOCATORS = Object\.freeze\(\[([\s\S]*?)\]\);/u,
+  );
+  if (declaration === null) return false;
+  const declared = [...declaration[1].matchAll(/'([^']+)'/gu)]
+    .map((match) => match[1]);
+  if (JSON.stringify(declared) !== JSON.stringify(expected)) return false;
+  const constructorStart = candidate.indexOf('const verifierEnvironment = {');
+  const constructorEnd = candidate.indexOf(
+    "const verified = spawnSync('/proc/self/fd/14'",
+    constructorStart,
+  );
+  if (constructorStart < 0 || constructorEnd < 0) return false;
+  const constructor = candidate.slice(constructorStart, constructorEnd).trimEnd();
+  return constructor === [
+    'const verifierEnvironment = {',
+    '    ...closedLocalEnvironment,',
+    '    ...Object.fromEntries(descriptorEntries.map(',
+    '      ([name, descriptor]) => [name, String(descriptor)],',
+    '    )),',
+    '    ...Object.fromEntries(bootstrapEntries),',
+    '  };',
+  ].join('\n');
+};
+if (!acceptsExactProjection(source)) process.exit(1);
+for (const omitted of expected) {
+  const hostile = source.replace(`  '${omitted}',\n`, '');
+  if (hostile === source || acceptsExactProjection(hostile)) process.exit(1);
+}
+const hostile = source.replace(
+  "  'I00_AUTHORIZED_EFFECT_PROGRAM_PATH',\n",
+  "  'I00_AUTHORIZED_EFFECT_PROGRAM_PATH',\n  'NODE_OPTIONS',\n",
+);
+if (hostile === source || acceptsExactProjection(hostile)) process.exit(1);
+const directHostile = source.replace(
+  '    ...closedLocalEnvironment,\n',
+  '    ...closedLocalEnvironment,\n'
+    + '    NODE_OPTIONS: process.env.NODE_OPTIONS,\n',
+);
+if (directHostile === source || acceptsExactProjection(directHostile)) process.exit(1);
+NODE
 assert_contains "$SECRETS_SOURCE" "AWS_CONFIG_FILE: '/dev/null'"
 assert_contains "$SECRETS_SOURCE" 'TMPDIR: simulationTmp'
 assert_contains "$SECRETS_SOURCE" 'SYSTEM provider rejects named config and output inputs'

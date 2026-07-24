@@ -538,7 +538,8 @@ mkdir "$HOSTILE_SCRIPT_ROOT"
 chmod 700 "$HOSTILE_SCRIPT_ROOT"
 
 write_hostile_backup_script() {
-  local scenario="$1" output="$HOSTILE_SCRIPT_ROOT/$scenario.sh"
+  local scenario="$1"
+  local output="$HOSTILE_SCRIPT_ROOT/$scenario.sh"
   "$BOUND_NODE" - "$output" <<'NODE'
 const fs = require('node:fs');
 const output = process.argv[2];

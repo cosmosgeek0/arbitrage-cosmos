@@ -53,6 +53,7 @@ ACTUAL_POSITIVE_CLASSES=(
   BACKUP_CREATE
   ISOLATED_RESTORE
 )
+ACTUAL_PROOF_PORT=8080
 FIXTURE_TARGET_SHA=0123456789abcdef0123456789abcdef01234567
 FIXTURE_CURRENT_SHA=1111111111111111111111111111111111111111
 FIXTURE_TARGET_RELEASE=""
@@ -96,6 +97,13 @@ FIXED_SQLITE_IDENTITY="$(node -e \
   'process.stdout.write(JSON.parse(process.argv[1]).endpointIdentity)' \
   "$FIXED_SQLITE_INSPECTION")"
 
+actual_proof_owner_values() {
+  local suffix="$1"
+  [[ "$suffix" =~ ^[0-9a-f]{4}$ ]] || return 1
+  printf 'cosmos-df32-proof-%s.internal\tisolated-staging-%s\n' \
+    "$suffix" "$suffix"
+}
+
 case "${DF32_ACTUAL_ONLY:-0}" in
   0|1) ;;
   *) fail_test "DF32_ACTUAL_ONLY must be exactly 0 or 1" ;;
@@ -110,6 +118,20 @@ fi
 if [ "${DF32_RUNTIME_FOCUSED:-0}" = 1 ]; then
   CLASSES=(SECRET_MATERIALIZATION)
 fi
+IFS=$'\t' read -r OWNER_REGRESSION_HOST OWNER_REGRESSION_ENVIRONMENT \
+  <<<"$(actual_proof_owner_values abcd)"
+assert_eq "$OWNER_REGRESSION_HOST" cosmos-df32-proof-abcd.internal
+assert_eq "$OWNER_REGRESSION_ENVIRONMENT" isolated-staging-abcd
+assert_failure actual_proof_owner_values abcG
+assert_eq "$ACTUAL_PROOF_PORT" 8080
+ACTUAL_PROOF_TEST_SOURCE="$(cat "$0")"
+assert_contains "$ACTUAL_PROOF_TEST_SOURCE" '`PORT=${appPort}`'
+assert_contains "$ACTUAL_PROOF_TEST_SOURCE" \
+  '`HEALTH_BASE=http://127.0.0.1:${appPort}`'
+if printf '%s' "$ACTUAL_PROOF_TEST_SOURCE" | grep -F "'PORT=86""01'" >/dev/null; then
+  fail_test "actual proof runtime retains the superseded origin port"
+fi
+pass_assertion
 if [ "${DF32_ACTUAL_ONLY:-0}" = 1 ]; then
   [ "$(uname -s)" = Linux ] || fail_test "actual-only acceptance requires Linux"
   [ -n "${DF32_RELEASE:-}" ] && [ -n "${DF32_TRUST_KEY:-}" ] \
@@ -266,6 +288,7 @@ set_actual_validator_args() {
   local root action_class request auth risk preview claims
   local command scope product credential_type permission maximum_effect expected_sha config_version
   local release_root trust_key manifest_sha trust_sha donor_env_sha first_host_evidence_sha
+  local endpoint_inventory endpoint
   local -a expected_endpoints donor_endpoints
   root="$1"
   action_class="$2"
@@ -337,10 +360,10 @@ set_actual_validator_args() {
         "artifact-manifest-sha256:$manifest_sha"
         "app-unit-authority-closure-sha256:$APP_UNIT_AUTHORITY_CLOSURE_SHA256"
         "app-unit-binding-sha256:$APP_UNIT_BINDING_SHA256"
-        "app-unit-drop-in-state:NONE"
+        "app-unit-drop-in-state:EXACT_STAGING_PROOF"
         "app-unit-environment-file-identity:$APP_UNIT_RUNTIME_ENV_IDENTITY"
         "app-unit-environment-file-optional:no"
-        "app-unit-environment-file-path:$ACTUAL_ROOT/runtime.env"
+        "app-unit-environment-file-path:$STAGING_RUNTIME_ROOT/cosmos-app.env"
         "app-unit-environment-file-sha256:$APP_UNIT_RUNTIME_ENV_SHA256"
         "app-unit-exec-start-env-path:$ENV_BIN"
         "app-unit-exec-start-node-path:$NODE_BIN"
@@ -351,7 +374,7 @@ set_actual_validator_args() {
         "app-unit-group:cosmos"
         "app-unit-name:$DF32_APP_UNIT"
         "app-unit-namespace-remap-state:NONE"
-        "app-unit-need-daemon-reload:no"
+        "app-unit-need-daemon-reload:not-applicable-offline"
         "app-unit-staging-root:$DF32_STAGING_ROOT"
         "app-unit-unset-environment-sha256:$APP_UNIT_UNSET_ENVIRONMENT_SHA256"
         "app-unit-user:cosmos"
@@ -370,9 +393,9 @@ set_actual_validator_args() {
         "env-path:$ENV_BIN"
         "env-sha256:$ENV_SHA256"
         "first-host-account:$DF32_TARGET_ACCOUNT"
-        "first-host-environment:isolated-staging"
+        "first-host-environment:$ACTUAL_PROOF_ENVIRONMENT"
         "first-host-evidence-sha256:$first_host_evidence_sha"
-        "first-host-target-host:$DF32_TARGET_HOST"
+        "first-host-target-host:$ACTUAL_PROOF_HOST"
         "node-identity:$NODE_IDENTITY"
         "node-path:$NODE_BIN"
         "node-sha256:$NODE_SHA256"
@@ -463,6 +486,29 @@ set_actual_validator_args() {
       fail_test "actual-input class is not a Block 25 positive gate: $action_class"
       ;;
   esac
+  endpoint_inventory="$(node - "$risk" "$preview" "${expected_endpoints[@]}" <<'NODE'
+const fs = require('node:fs');
+const [riskPath, previewPath, ...independent] = process.argv.slice(2);
+const risk = JSON.parse(fs.readFileSync(riskPath, 'utf8'));
+const preview = JSON.parse(fs.readFileSync(previewPath, 'utf8'));
+const riskEndpoints = risk?.action?.allowedEndpoints;
+const previewEndpoints = preview?.action?.allowedEndpoints;
+if (!Array.isArray(riskEndpoints) || riskEndpoints.length === 0
+    || JSON.stringify(previewEndpoints) !== JSON.stringify(riskEndpoints)
+    || independent.some((endpoint) => !riskEndpoints.includes(endpoint))
+    || riskEndpoints.some((endpoint) => (
+      typeof endpoint !== 'string' || endpoint.includes('\n')
+    ))) {
+  process.exit(2);
+}
+process.stdout.write(riskEndpoints.join('\n'));
+NODE
+)" || fail_test "actual validator endpoint inventory differs from independent bindings"
+  expected_endpoints=()
+  while IFS= read -r endpoint; do
+    [ -n "$endpoint" ] || fail_test "actual validator endpoint inventory contains an empty row"
+    expected_endpoints+=("$endpoint")
+  done <<<"$endpoint_inventory"
   assert_success node - "$request" <<'NODE'
 const fs = require('node:fs');
 const request = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
@@ -483,8 +529,8 @@ NODE
     --deployment-risk "$risk"
     --action-preview "$preview"
     --consumption-root "$claims"
-    --expected-host "$DF32_TARGET_HOST"
-    --expected-environment isolated-staging
+    --expected-host "$ACTUAL_PROOF_HOST"
+    --expected-environment "$ACTUAL_PROOF_ENVIRONMENT"
     --expected-scope "$scope"
     --expected-account "$DF32_TARGET_ACCOUNT"
     --expected-product "$product"
@@ -799,6 +845,160 @@ write_fixture_app_drop_in() {
   chmod 400 "$root/systemd/cosmos-app.service.d/90-cosmos-app.conf"
 }
 
+assert_endpoint_family_inventory() {
+  node - "$1" "$2" <<'NODE'
+const fs = require('node:fs');
+const [riskPath, actionClass] = process.argv.slice(2);
+const risk = JSON.parse(fs.readFileSync(riskPath, 'utf8'));
+const familyList = (value) => value.trim().split(/\s+/u).sort();
+const expected = {
+  OPS_BUNDLE_INSTALL: familyList(`
+    artifact-manifest-sha256 bash-identity bash-path bash-sha256
+    chmod-identity chmod-path chmod-sha256 completion-reserve-seconds
+    cp-identity cp-path cp-sha256 destination destination-parent-identity
+    destination-parent-path effect-common-identity effect-common-path
+    effect-common-sha256 effect-finish-evidence effect-gid
+    effect-program-identity effect-program-path effect-program-sha256
+    effect-script-identity effect-script-path effect-script-sha256
+    effect-start-evidence effect-uid mkdir-identity mkdir-path mkdir-sha256
+    mv-identity mv-path mv-sha256 node-identity node-path node-sha256
+    receipt-publication-reserve-seconds release-identity release-path
+    release-sha release-tree-sha256 rm-identity rm-path rm-sha256
+    trusted-builder-public-key-sha256
+  `),
+  SERVICE_RELEASE_SWITCH: familyList(`
+    alert-helper-argv-shape alert-helper-identity alert-helper-path
+    alert-helper-sha256 alert-helper-timeout-ms
+    app-unit-authority-closure-sha256 app-unit-binding-sha256
+    app-unit-drop-in-state app-unit-effect-reachability
+    app-unit-environment-file-identity app-unit-environment-file-optional
+    app-unit-environment-file-path app-unit-environment-file-sha256
+    app-unit-exec-start-env-path app-unit-exec-start-node-path
+    app-unit-exec-start-sha256 app-unit-fragment-identity
+    app-unit-fragment-path app-unit-fragment-sha256
+    app-unit-fragment-source-identity app-unit-fragment-source-path
+    app-unit-fragment-source-sha256 app-unit-group app-unit-inspection-mode
+    app-unit-name app-unit-namespace-remap-state app-unit-need-daemon-reload
+    app-unit-offline-unit-root app-unit-proof-absent-sentinel
+    app-unit-proof-drop-in-identity app-unit-proof-drop-in-owner
+    app-unit-proof-drop-in-path app-unit-proof-drop-in-runtime-link-identity
+    app-unit-proof-drop-in-runtime-link-path app-unit-proof-drop-in-sha256
+    app-unit-staging-root app-unit-unset-environment-sha256 app-unit-user
+    app-unit-working-directory artifact-manifest-sha256 backup-reserve-bytes
+    bash-identity bash-path bash-sha256 completion-reserve-seconds
+    cosmos-root-identity cosmos-root-path curl-identity curl-path curl-sha256
+    current-link-parent-identity current-link-parent-path data-dir
+    data-dir-identity data-dir-path donor-contract-sha256 donor-env-sha256
+    effect-common-identity effect-common-path effect-common-sha256
+    effect-environment-fd-token effect-environment-sha256
+    effect-environment-source-path effect-finish-evidence effect-gid
+    effect-program-identity effect-program-path effect-program-sha256
+    effect-script-identity effect-script-path effect-script-sha256
+    effect-start-evidence effect-uid effective-donor-identity
+    effective-donor-root effective-donor-tree-sha256 env-identity env-path
+    env-sha256 exposure-helper-argv-shape exposure-helper-identity
+    exposure-helper-path exposure-helper-sha256 exposure-helper-timeout-ms
+    gate-timeout-sec http-timeout-sec l15-amendment-contract-sha256
+    lock-timeout-sec node-identity node-path node-sha256
+    ops-readback-timeout-ms ops-readback-url ops-state-dir-identity
+    ops-state-dir-path previous-link-parent-identity previous-link-parent-path
+    receipt-publication-reserve-seconds release-identity release-path
+    release-sha release-tree-sha256 releases-dir-identity releases-dir-path
+    sqlite-identity sqlite-path sqlite-sha256 sqlite-version
+    systemctl-identity systemctl-path systemctl-sha256
+    systemd-analyze-identity systemd-analyze-path systemd-analyze-sha256
+    trusted-builder-public-key-sha256
+  `),
+  BACKUP_CREATE: familyList(`
+    backup-dir backup-dir-identity bash-identity bash-path bash-sha256
+    completion-reserve-seconds data-dir data-dir-identity data-dir-path
+    donor-contract-sha256 donor-env-sha256 effect-common-identity
+    effect-common-path effect-common-sha256 effect-environment-fd-token
+    effect-environment-sha256 effect-environment-source-path
+    effect-finish-evidence effect-gid effect-group effect-program-identity
+    effect-program-path effect-program-sha256 effect-script-identity
+    effect-script-path effect-script-sha256 effect-start-evidence effect-uid
+    effect-unit-identity effect-unit-path effect-unit-sha256 effect-user
+    effective-donor-identity effective-donor-root
+    effective-donor-tree-sha256 env-identity env-path env-sha256
+    getent-identity getent-path getent-sha256 gzip-argv-shape gzip-fd-token
+    gzip-identity gzip-path gzip-sha256 hash-identity hash-path hash-sha256
+    id-identity id-path id-sha256 l15-amendment-contract-sha256
+    node-identity node-path node-sha256 ops-state-dir-identity
+    ops-state-dir-path receipt-publication-reserve-seconds setpriv-identity
+    setpriv-path setpriv-sha256 sqlite-identity sqlite-path sqlite-sha256
+    tar-identity tar-path tar-sha256
+  `),
+  ISOLATED_RESTORE: familyList(`
+    backup-archive-count backup-created-at-utc backup-data-schema
+    backup-database-sha256 backup-dir backup-dir-identity backup-events-count
+    backup-identity backup-manifest-sha256 backup-max-age-hours backup-path
+    backup-tree-sha256 bash-identity bash-path bash-sha256
+    completion-reserve-seconds data-dir data-dir-identity data-dir-path
+    donor-contract-sha256 donor-env-sha256 effect-common-identity
+    effect-common-path effect-common-sha256 effect-environment-fd-token
+    effect-environment-sha256 effect-environment-source-path
+    effect-finish-evidence effect-gid effect-group effect-program-identity
+    effect-program-path effect-program-sha256 effect-script-identity
+    effect-script-path effect-script-sha256 effect-start-evidence effect-uid
+    effect-unit-identity effect-unit-path effect-unit-sha256 effect-user
+    effective-donor-identity effective-donor-root
+    effective-donor-tree-sha256 env-identity env-path env-sha256
+    getent-identity getent-path getent-sha256 gzip-argv-shape gzip-fd-token
+    gzip-identity gzip-path gzip-sha256 hash-identity hash-path hash-sha256
+    id-identity id-path id-sha256 isolated-target
+    isolated-target-parent-identity isolated-target-parent-path
+    l15-amendment-contract-sha256 node-identity node-path node-sha256
+    receipt-publication-reserve-seconds setpriv-identity setpriv-path
+    setpriv-sha256 sqlite-identity sqlite-path sqlite-sha256
+    tar-identity tar-path tar-sha256
+  `),
+};
+if (!Object.hasOwn(expected, actionClass)) process.exit(2);
+const endpoints = risk?.action?.allowedEndpoints;
+if (!Array.isArray(endpoints) || endpoints.length === 0) process.exit(2);
+const families = endpoints.map((endpoint) => {
+  if (typeof endpoint !== 'string') process.exit(2);
+  const split = endpoint.indexOf(':');
+  if (split < 1) process.exit(2);
+  const family = endpoint.slice(0, split);
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(family)) process.exit(2);
+  return family;
+}).sort();
+if (new Set(families).size !== families.length) process.exit(2);
+if (actionClass === 'SERVICE_RELEASE_SWITCH') {
+  const firstHostOnly = familyList(`
+    first-host-account first-host-environment first-host-evidence-sha256
+    first-host-target-host recovery-target
+  `);
+  const laterOnly = new Set(familyList(`
+    automatic-rollback-script-identity automatic-rollback-script-path
+    automatic-rollback-script-sha256 current-artifact-manifest-sha256
+    current-release-identity current-release-path current-release-sha
+    current-release-tree-sha256 rollback-evidence-root
+    rollback-evidence-root-identity
+  `));
+  const firstHost = families.includes('first-host-account');
+  if (firstHost) {
+    expected[actionClass] = [
+      ...expected[actionClass].filter((family) => !laterOnly.has(family)),
+      ...firstHostOnly,
+    ].sort();
+  } else {
+    expected[actionClass] = [
+      ...expected[actionClass],
+      ...laterOnly,
+    ].sort();
+  }
+}
+if (JSON.stringify(families) !== JSON.stringify(expected[actionClass])) {
+  process.exit(2);
+}
+NODE
+  [ "$?" -eq 0 ] || return 1
+  pass_assertion
+}
+
 produce_class() {
   local root="$1" action_class="$2"
   local nonce request risk preview authorization risk_now
@@ -869,6 +1069,11 @@ produce_class() {
     *) fail_test "unsupported producer fixture class $action_class" ;;
   esac
   node "$RISK_PRODUCER" "${risk_args[@]}" >"$root/authorization/$action_class.risk.out"
+  case "$action_class" in
+    OPS_BUNDLE_INSTALL|SERVICE_RELEASE_SWITCH|BACKUP_CREATE|ISOLATED_RESTORE)
+      assert_endpoint_family_inventory "$risk" "$action_class"
+      ;;
+  esac
   if [ "$action_class" = SERVICE_RELEASE_SWITCH ] || [ "$action_class" = SERVICE_ROLLBACK ]; then
     assert_success node - "$risk" <<'NODE'
 const fs = require('node:fs');
@@ -1089,6 +1294,31 @@ for action_class in "${CLASSES[@]}"; do
   assert_eq "$(find "$PROOF_ROOT/consumption" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d ' ')" \
     "$EXPECTED_CONSUMPTION_COUNT"
 done
+
+if [ "${DF32_RUNTIME_FOCUSED:-0}" != 1 ]; then
+  note "actual endpoint-family inventory rejects omissions and additions"
+  ENDPOINT_INVENTORY_MISSING="$PROOF_ROOT/authorization/OPS_BUNDLE_INSTALL.inventory-missing.json"
+  ENDPOINT_INVENTORY_EXTRA="$PROOF_ROOT/authorization/OPS_BUNDLE_INSTALL.inventory-extra.json"
+  node - "$PROOF_ROOT/authorization/OPS_BUNDLE_INSTALL.risk.json" \
+    "$ENDPOINT_INVENTORY_MISSING" "$ENDPOINT_INVENTORY_EXTRA" <<'NODE'
+const fs = require('node:fs');
+const [source, missingPath, extraPath] = process.argv.slice(2);
+const original = JSON.parse(fs.readFileSync(source, 'utf8'));
+const missing = structuredClone(original);
+missing.action.allowedEndpoints = missing.action.allowedEndpoints.slice(1);
+const extra = structuredClone(original);
+extra.action.allowedEndpoints = [
+  ...extra.action.allowedEndpoints,
+  'unexpected-endpoint-family:FORBIDDEN',
+].sort();
+fs.writeFileSync(missingPath, `${JSON.stringify(missing, null, 2)}\n`, { mode: 0o600 });
+fs.writeFileSync(extraPath, `${JSON.stringify(extra, null, 2)}\n`, { mode: 0o600 });
+NODE
+  assert_failure assert_endpoint_family_inventory \
+    "$ENDPOINT_INVENTORY_MISSING" OPS_BUNDLE_INSTALL
+  assert_failure assert_endpoint_family_inventory \
+    "$ENDPOINT_INVENTORY_EXTRA" OPS_BUNDLE_INSTALL
+fi
 
 if [ "${DF32_RUNTIME_FOCUSED:-0}" != 1 ]; then
 note "release and rollback producers reject a current-release runtime for the target effect"
@@ -1996,6 +2226,10 @@ if [ -n "${DF32_RELEASE:-}" ] || [ -n "${DF32_TRUST_KEY:-}" ]; then
   DF32_PROOF_SUFFIX="${BASH_REMATCH[1]}"
   [ "$DF32_APP_UNIT" = "cosmos-df32-proof-$DF32_PROOF_SUFFIX.service" ] \
     || fail_test "DF32_APP_UNIT must match the exact proof-root suffix"
+  IFS=$'\t' read -r ACTUAL_PROOF_HOST ACTUAL_PROOF_ENVIRONMENT \
+    <<<"$(actual_proof_owner_values "$DF32_PROOF_SUFFIX")"
+  [ -n "$ACTUAL_PROOF_HOST" ] && [ -n "$ACTUAL_PROOF_ENVIRONMENT" ] \
+    || fail_test "actual proof owner binding is unavailable"
   case "$I00_ROOT" in
     "$DF32_STAGING_ROOT"/*) ;;
     *) fail_test "actual Linux proof tooling must be inside the isolated staging root" ;;
@@ -2194,19 +2428,18 @@ NODE
   STAGING_SANITIZED_ROOT="$PROOF_ROOT/sanitized"
   STAGING_FIRST_HOST_EVIDENCE_ROOT="$PROOF_ROOT/first-host-evidence"
   STAGING_FIRST_HOST_OFFLINE_ROOT="$PROOF_ROOT/first-host-offline-systemd"
-  STAGING_TOOL_ROOT="$PROOF_ROOT/tools"
   STAGING_INSTALL_ROOT="$PROOF_ROOT/install"
   mkdir -p "$STAGING_BACKUP_ROOT/exact" "$STAGING_DATA_ROOT" "$STAGING_RUNTIME_ROOT" \
     "$STAGING_EVIDENCE_DATA_ROOT" "$STAGING_MODEL_ROOT" "$STAGING_OPS_STATE_ROOT" \
     "$STAGING_COSMOS_ROOT/releases" "$STAGING_SANITIZED_ROOT" \
     "$STAGING_FIRST_HOST_EVIDENCE_ROOT" "$STAGING_FIRST_HOST_OFFLINE_ROOT" \
-    "$STAGING_TOOL_ROOT" "$STAGING_INSTALL_ROOT"
+    "$STAGING_INSTALL_ROOT"
   chmod 700 "$STAGING_BACKUP_ROOT" "$STAGING_BACKUP_ROOT/exact" \
     "$STAGING_DATA_ROOT" "$STAGING_RUNTIME_ROOT" "$STAGING_EVIDENCE_DATA_ROOT" \
     "$STAGING_MODEL_ROOT" "$STAGING_OPS_STATE_ROOT" "$STAGING_COSMOS_ROOT" \
     "$STAGING_COSMOS_ROOT/releases" "$STAGING_SANITIZED_ROOT" \
     "$STAGING_FIRST_HOST_EVIDENCE_ROOT" "$STAGING_FIRST_HOST_OFFLINE_ROOT" \
-    "$STAGING_TOOL_ROOT" "$STAGING_INSTALL_ROOT"
+    "$STAGING_INSTALL_ROOT"
   ALTERNATE_CALLER_BASH="$PROOF_ROOT/alternate-caller-bash"
   cp "$BASH_BIN" "$ALTERNATE_CALLER_BASH"
   chmod 500 "$ALTERNATE_CALLER_BASH"
@@ -2239,13 +2472,14 @@ NODE
   BACKUP_IDENTITY="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).endpointIdentity)' "$BACKUP_INSPECTION")"
   node --input-type=module - \
     "$CONTRACT" "$DF32_RELEASE" "$ACTUAL_ROOT" "$PROOF_ROOT" \
-    "$SQLITE_BIN" "$DF32_APP_UNIT" <<'NODE'
+    "$SQLITE_BIN" "$DF32_APP_UNIT" "$ACTUAL_PROOF_PORT" <<'NODE'
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 const [
-  contractPath, releaseInput, rootInput, proofInput, sqliteInput, appUnit,
+  contractPath, releaseInput, rootInput, proofInput, sqliteInput, appUnit, appPort,
 ] = process.argv.slice(2);
+if (appPort !== '8080') process.exit(2);
 const { canonicalJsonBytes } = await import(pathToFileURL(resolve(contractPath)).href);
 const releaseRoot = realpathSync(releaseInput);
 const root = realpathSync(rootInput);
@@ -2254,7 +2488,7 @@ const sqlite = realpathSync(sqliteInput);
 const release = JSON.parse(readFileSync(resolve(releaseRoot, 'release.json'), 'utf8'));
 writeFileSync(resolve(proofRoot, 'runtime', 'cosmos-app.env'), [
   'HOST=127.0.0.1',
-  'PORT=8601',
+  `PORT=${appPort}`,
   `DATA_DIR=${resolve(proofRoot, 'data')}`,
   `EVIDENCE_DIR=${resolve(proofRoot, 'evidence-data')}`,
   `MODEL_DIR=${resolve(proofRoot, 'models')}`,
@@ -2277,8 +2511,11 @@ writeFileSync(resolve(root, 'deploy.env'), [
   `DATA_DIR=${resolve(proofRoot, 'data')}`,
   `OPS_STATE_DIR=${resolve(proofRoot, 'ops-state')}`,
   `APP_UNIT=${appUnit}`,
-  'HEALTH_BASE=http://127.0.0.1:8601',
-  'ALERT_CMD=/usr/bin/false',
+  `HEALTH_BASE=http://127.0.0.1:${appPort}`,
+  'GATE_TIMEOUT_SEC=60',
+  'HTTP_TIMEOUT_SEC=5',
+  'LOCK_TIMEOUT_SEC=30',
+  'I00_OPS_READBACK_TIMEOUT_MS=750',
   '',
 ].join('\n'), { mode: 0o600 });
 writeFileSync(resolve(root, 'backup.env'), [
@@ -2361,19 +2598,6 @@ NODE
     "EnvironmentFile=$STAGING_RUNTIME_ROOT/cosmos-app.env" \
     >"$APP_UNIT_PROOF_DROP_IN"
   chmod 400 "$APP_UNIT_PROOF_DROP_IN"
-  APP_UNIT_STAGING_SYSTEMCTL="$STAGING_TOOL_ROOT/systemctl"
-  APP_UNIT_STAGING_STATE="$STAGING_RUNTIME_ROOT/systemctl-state"
-  printf 'inactive\n' >"$APP_UNIT_STAGING_STATE"
-  {
-    printf '%s\n' '#!/bin/sh' 'set -eu'
-    printf '[ "$#" -eq 2 ] && [ "$1" = is-active ] && [ "$2" = %s ] || exit 91\n' \
-      "$DF32_APP_UNIT"
-    printf 'state="$(/bin/cat %s)"\n' "$APP_UNIT_STAGING_STATE"
-    printf '%s\n' '[ "$state" = inactive ] || exit 92' "printf 'inactive\\n'" 'exit 3'
-  } >"$APP_UNIT_STAGING_SYSTEMCTL"
-  chmod 600 "$APP_UNIT_STAGING_STATE"
-  chmod 500 "$APP_UNIT_STAGING_SYSTEMCTL"
-
   FIRST_HOST_ENV="$STAGING_SANITIZED_ROOT/deploy.env"
   node "$I00_ROOT/bin/sanitize-donor-env.mjs" \
     --env "$ACTUAL_ROOT/deploy.env" \
@@ -2384,7 +2608,7 @@ NODE
     --node "$NODE_BIN" \
     --bash "$BASH_BIN" \
     --env-bin "$ENV_BIN" \
-    --systemctl "$APP_UNIT_STAGING_SYSTEMCTL" \
+    --systemctl "$SYSTEMCTL_BIN" \
     --curl "$CURL_BIN" \
     --require-effect-bindings \
     --require-first-host-no-current \
@@ -2410,7 +2634,7 @@ NODE
     --require-hash \
     >"$ACTUAL_ROOT/backup-sanitize.out"
   APP_UNIT_INSPECTION="$(run_fixed_gate inspect-app-unit.mjs \
-    --systemctl "$APP_UNIT_STAGING_SYSTEMCTL" \
+    --systemctl "$SYSTEMCTL_BIN" \
     --unit "$DF32_APP_UNIT" \
     --node "$NODE_BIN" \
     --env "$ENV_BIN" \
@@ -2448,8 +2672,8 @@ NODE
     --provenance-mode STAGING \
     --provenance-root "$DF32_STAGING_ROOT" \
     --account "$DF32_TARGET_ACCOUNT" \
-    --target-host "cosmos-df32-proof-$DF32_PROOF_SUFFIX.internal" \
-    --environment "isolated-staging-$DF32_PROOF_SUFFIX" \
+    --target-host "$ACTUAL_PROOF_HOST" \
+    --environment "$ACTUAL_PROOF_ENVIRONMENT" \
     --backup-reserve-bytes 4096 \
     --sqlite "$SQLITE_BIN" \
     --offline-unit-root "$STAGING_FIRST_HOST_OFFLINE_ROOT" \
@@ -2575,6 +2799,8 @@ NODE
       "${ACTUAL_RISK_ARGS[@]}" \
       --output "$PROOF_ROOT/authorization/$action_class.risk.json" \
       >"$ACTUAL_ROOT/$action_class.risk.out"
+    assert_endpoint_family_inventory \
+      "$PROOF_ROOT/authorization/$action_class.risk.json" "$action_class"
     run_fixed_gate produce-deployment-action-preview.mjs \
       --deployment-risk "$PROOF_ROOT/authorization/$action_class.risk.json" \
       --consumption-root "$PROOF_ROOT/consumption" \

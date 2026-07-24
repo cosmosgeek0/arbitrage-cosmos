@@ -11,6 +11,8 @@ const {
   PINNED_LEGACY_VALIDATION_ONLY,
   PINNED_LEGACY_VALIDATION_TUPLE,
   classifyValidatorCohort,
+  pinnedLegacyL15ContractCompatibility,
+  provePinnedLegacyValidatorCohort,
   selectExpectedL15AmendmentContractSha256,
 } = await import(pathToFileURL(process.argv[2]).href);
 let assertions = 0;
@@ -23,11 +25,24 @@ check(classifyValidatorCohort({
   trustedI00EnforcementTreeDigestSha256: currentDigest,
   releaseI00EnforcementTreeDigestSha256: currentDigest,
 }) === EXACT_TRUSTED_COHORT);
+check(provePinnedLegacyValidatorCohort({
+  trustedI00EnforcementTreeDigestSha256: currentDigest,
+  releaseI00EnforcementTreeDigestSha256: currentDigest,
+}) === null);
 const legacy = {
   trustedI00EnforcementTreeDigestSha256: currentDigest,
   ...PINNED_LEGACY_VALIDATION_TUPLE,
 };
 check(classifyValidatorCohort(legacy) === PINNED_LEGACY_VALIDATION_ONLY);
+const legacyProof = provePinnedLegacyValidatorCohort(legacy);
+check(legacyProof !== null && Object.isFrozen(legacyProof));
+const legacyL15Compatibility = pinnedLegacyL15ContractCompatibility(legacyProof);
+check(legacyL15Compatibility !== null && Object.isFrozen(legacyL15Compatibility));
+check(legacyL15Compatibility.amendmentContractSha256
+  === PINNED_LEGACY_AMENDMENT_CONTRACT_SHA256);
+check(legacyL15Compatibility.requiresAuthorizedEffectRuntime === false);
+check(legacyL15Compatibility.requiresBoundFileMode === false);
+check(pinnedLegacyL15ContractCompatibility({}) === null);
 for (const [key, value] of Object.entries(PINNED_LEGACY_VALIDATION_TUPLE)) {
   const replacement = value.length === 40 ? 'e'.repeat(40) : 'e'.repeat(64);
   check(classifyValidatorCohort({ ...legacy, [key]: replacement }) === null);
@@ -67,13 +82,18 @@ check(selectExpectedL15AmendmentContractSha256(
 process.stdout.write(String(assertions));
 NODE
 )"
-assert_eq "$COUNT" 20
+assert_eq "$COUNT" 27
 
 note "legacy bridge is validation-only and cannot be selected by caller input"
 SOURCE="$(cat "$I00_ROOT/bin/validate-release.mjs")"
 assert_contains "$SOURCE" "classifyValidatorCohort"
+assert_contains "$SOURCE" "provePinnedLegacyValidatorCohort"
 assert_contains "$SOURCE" "selectExpectedL15AmendmentContractSha256"
 assert_contains "$SOURCE" "validation-only legacy cohort compatibility cannot authorize a release effect"
+L15_SOURCE="$(cat "$I00_ROOT/l15-amendment.mjs")"
+assert_contains "$L15_SOURCE" "pinnedLegacyL15ContractCompatibility"
+assert_contains "$L15_SOURCE" "requiresAuthorizedEffectRuntime"
+assert_contains "$L15_SOURCE" "requiresBoundFileMode"
 if printf '%s' "$SOURCE" | grep -Eq -- '--(allow-legacy|cohort-mode|compatibility-mode)'; then
   fail_test "validator exposes a caller-selectable legacy bridge"
 fi

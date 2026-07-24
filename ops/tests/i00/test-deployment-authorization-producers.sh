@@ -11,15 +11,20 @@ if [ "$(/usr/bin/uname -s)" = Linux ] \
   node() {
     /usr/bin/node "$@"
   }
-  case "${DF32_STAGING_ROOT:-}" in
-    /var/tmp/cosmos-df32-proof-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
-    *)
-      printf 'NOT OK: Linux proof bootstrap requires one exact staging root\n' >&2
-      exit 1
-      ;;
-  esac
-  I00_TEST_TMP_OVERRIDE="$DF32_STAGING_ROOT/test-tmp"
-  export I00_TEST_TMP_OVERRIDE
+  if [ "${DF32_ACTUAL_ONLY:-0}" = 1 ]; then
+    case "${DF32_STAGING_ROOT:-}" in
+      /var/tmp/cosmos-df32-proof-[0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
+      *)
+        printf 'NOT OK: Linux actual proof bootstrap requires one exact staging root\n' >&2
+        exit 1
+        ;;
+    esac
+    I00_TEST_TMP_OVERRIDE="$DF32_STAGING_ROOT/test-tmp"
+    export I00_TEST_TMP_OVERRIDE
+  elif [ -n "${DF32_STAGING_ROOT:-}" ]; then
+    printf 'NOT OK: Linux runtime fixture proof rejects a staging-root claim\n' >&2
+    exit 1
+  fi
 fi
 
 . "$(dirname "$0")/helpers.sh"
@@ -1464,10 +1469,20 @@ const replacement = process.env.DF32_NODE_MUTATION_REPLACEMENT;
 const claimRoot = process.env.DF32_NODE_MUTATION_CLAIM_ROOT;
 const originalOpenSync = fs.openSync;
 let mutated = false;
+function targetsClaimRoot(path) {
+  if (typeof path !== 'string') return false;
+  if (path.startsWith(`${claimRoot}/`)) return true;
+  const anchored = /^\/proc\/self\/fd\/([0-9]+)\/[^/]+$/u.exec(path);
+  if (anchored === null) return false;
+  try {
+    return fs.realpathSync(`/proc/self/fd/${anchored[1]}`) === fs.realpathSync(claimRoot);
+  } catch {
+    return false;
+  }
+}
 fs.openSync = function guardedOpenSync(path, flags, ...rest) {
   if (!mutated
-      && typeof path === 'string'
-      && path.startsWith(`${claimRoot}/`)
+      && targetsClaimRoot(path)
       && (Number(flags) & fs.constants.O_CREAT) !== 0
       && (Number(flags) & fs.constants.O_EXCL) !== 0) {
     mutated = true;
@@ -2042,10 +2057,22 @@ NODE
   set -e
   [ "$SEALED_BASELINE_RC" -ne 0 ] \
     || fail_test "sealed baseline validator unexpectedly accepted the host-portable receipt"
-  grep -Eq 'canonical complete acceptance validation failed: .*COMPLETE_RECEIPT_(PLAN|STEP_COMMAND)_INVALID' \
-    "$PROOF_ROOT/sealed-baseline-validator.err" \
-    || fail_test "sealed baseline validator did not expose the known host-portability rejection"
-  BASELINE_RED_STATUS=KNOWN_HOST_PORTABILITY_REJECTION
+  if grep -Eq \
+      'canonical complete acceptance validation failed: .*COMPLETE_RECEIPT_(PLAN|STEP_COMMAND)_INVALID' \
+      "$PROOF_ROOT/sealed-baseline-validator.err"; then
+    BASELINE_RED_STATUS=KNOWN_HOST_PORTABILITY_REJECTION
+  elif grep -F \
+      'L15 amendment contract.authorizedEffectRuntime is required' \
+      "$PROOF_ROOT/sealed-baseline-validator.err" >/dev/null; then
+    node - "$DF32_RELEASE/ops/i00/l15-amendment-contract.json" <<'NODE'
+const fs = require('node:fs');
+const value = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
+if (Object.hasOwn(value, 'authorizedEffectRuntime')) process.exit(1);
+NODE
+    BASELINE_RED_STATUS=KNOWN_PRE_DF32_L15_RUNTIME_BINDING_REJECTION
+  else
+    fail_test "sealed baseline validator did not expose one exact corrected DF32 rejection"
+  fi
   ACCEPTED_DONOR_ROOT="$I00_ROOT/accepted-ops-live"
   [ ! -e "$ACCEPTED_DONOR_ROOT" ] \
     || fail_test "isolated tooling archive already contains an accepted donor root"
@@ -2421,8 +2448,8 @@ NODE
     --provenance-mode STAGING \
     --provenance-root "$DF32_STAGING_ROOT" \
     --account "$DF32_TARGET_ACCOUNT" \
-    --target-host "$DF32_TARGET_HOST" \
-    --environment isolated-staging \
+    --target-host "cosmos-df32-proof-$DF32_PROOF_SUFFIX.internal" \
+    --environment "isolated-staging-$DF32_PROOF_SUFFIX" \
     --backup-reserve-bytes 4096 \
     --sqlite "$SQLITE_BIN" \
     --offline-unit-root "$STAGING_FIRST_HOST_OFFLINE_ROOT" \

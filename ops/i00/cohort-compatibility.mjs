@@ -5,6 +5,15 @@ export const EXACT_TRUSTED_COHORT = 'EXACT_TRUSTED_COHORT';
 export const PINNED_LEGACY_VALIDATION_ONLY = 'PINNED_LEGACY_VALIDATION_ONLY';
 export const PINNED_LEGACY_AMENDMENT_CONTRACT_SHA256 = 'd60fdff586c1af91bfd92727ba49403bc0fd57210c4e76f1f5ee99391ee52581';
 
+const PINNED_LEGACY_L15_COMPATIBILITY = Object.freeze({
+  amendmentContractSha256: PINNED_LEGACY_AMENDMENT_CONTRACT_SHA256,
+  requiresAuthorizedEffectRuntime: false,
+  requiresBoundFileMode: false,
+});
+// The generic L15 loader cannot enable this shape with a caller-supplied flag.
+// Only an exact pinned release tuple mints an object retained by this module.
+const PINNED_LEGACY_PROOFS = new WeakSet();
+
 const PINNED_LEGACY = Object.freeze({
   testedSha: 'cff3440a99ec004c0a6b66cf98ff04cdc0a921a0',
   sourceTree: '775b17b8ca2a1642b63a5487213428f912b36926',
@@ -64,6 +73,21 @@ export function classifyValidatorCohort({
     signatureSha256,
     publicKeySha256,
   }) ? PINNED_LEGACY_VALIDATION_ONLY : null;
+}
+
+export function provePinnedLegacyValidatorCohort(candidate) {
+  if (classifyValidatorCohort(candidate) !== PINNED_LEGACY_VALIDATION_ONLY) return null;
+  const proof = Object.freeze({});
+  PINNED_LEGACY_PROOFS.add(proof);
+  return proof;
+}
+
+export function pinnedLegacyL15ContractCompatibility(proof) {
+  return proof !== null
+    && typeof proof === 'object'
+    && PINNED_LEGACY_PROOFS.has(proof)
+    ? PINNED_LEGACY_L15_COMPATIBILITY
+    : null;
 }
 
 export function selectExpectedL15AmendmentContractSha256(

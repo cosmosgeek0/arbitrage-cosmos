@@ -428,7 +428,8 @@ wait_for_start() {
 }
 
 wrapper_common_args() {
-  local action_class="$1" authorization="$AUTH_ROOT/$action_class.authorization.json"
+  local action_class="$1"
+  local authorization="$AUTH_ROOT/$action_class.authorization.json"
   local preview="$AUTH_ROOT/$action_class.preview.json"
   COMMON_WRAPPER_ARGS=(
     --authorization "$authorization"

@@ -3,6 +3,7 @@ import { dirname, isAbsolute, resolve } from 'node:path';
 import {
   fail, listRegularFiles, readJson, requireExactKeys, sha256File, treeDigest,
 } from './lib.mjs';
+import { pinnedLegacyL15ContractCompatibility } from './cohort-compatibility.mjs';
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
 const GIT_OBJECT_RE = /^[0-9a-f]{40}$/;
@@ -172,15 +173,28 @@ function assertExactValue(actual, expected, label) {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) fail(`${label} does not match immutable L15 provenance`);
 }
 
-function validateBoundFile(value, label, pathPrefix) {
-  requireExactKeys(value, ['path', 'mode', 'gitBlob', 'sha256'], label);
+function validateBoundFile(value, label, pathPrefix, requiresMode) {
+  requireExactKeys(
+    value,
+    requiresMode ? ['path', 'mode', 'gitBlob', 'sha256'] : ['path', 'gitBlob', 'sha256'],
+    label,
+  );
   assertSafePath(value.path, `${label}.path`, pathPrefix);
-  if (!GIT_MODES.has(value.mode)) fail(`${label}.mode is not a supported regular-file Git mode`);
+  if (requiresMode && !GIT_MODES.has(value.mode)) {
+    fail(`${label}.mode is not a supported regular-file Git mode`);
+  }
   assertGitObject(value.gitBlob, `${label}.gitBlob`);
   assertSha256(value.sha256, `${label}.sha256`);
 }
 
-function validateAmendment(contract, amendment, index, priorTree, priorDigest) {
+function validateAmendment(
+  contract,
+  amendment,
+  index,
+  priorTree,
+  priorDigest,
+  requiresBoundFileMode,
+) {
   // Paths must be unique within one amendment. Across amendments, re-correcting
   // a file is legal: every changed file's before-blob is verified against the
   // preceding exact effective tree in Git, so the chain still binds every byte.
@@ -253,29 +267,56 @@ function validateAmendment(contract, amendment, index, priorTree, priorDigest) {
       fail(`${fileLabel} does not bind distinct before and after bytes`);
     }
   });
-  validateBoundFile(amendment.correctionReceipt, `${label}.correctionReceipt`, 'docs/archive/i00-phase4/');
+  validateBoundFile(
+    amendment.correctionReceipt,
+    `${label}.correctionReceipt`,
+    'docs/archive/i00-phase4/',
+    requiresBoundFileMode,
+  );
   if (amendment.correctionReceipt.path !== FINDING_RECEIPT_PATHS[expectedId]) {
     fail(`${label}.correctionReceipt.path is not canonical`);
   }
   if (!Array.isArray(amendment.regressionTests) || amendment.regressionTests.length !== 1) {
     fail(`${label}.regressionTests must bind one focused additive test`);
   }
-  validateBoundFile(amendment.regressionTests[0], `${label}.regressionTests[0]`, 'ops/tests/i00/');
+  validateBoundFile(
+    amendment.regressionTests[0],
+    `${label}.regressionTests[0]`,
+    'ops/tests/i00/',
+    requiresBoundFileMode,
+  );
   if (amendment.regressionTests[0].path !== FINDING_TESTS[expectedId]) {
     fail(`${label}.regressionTests[0].path is not the finding-owned regression`);
   }
 }
 
-export function loadL15AmendmentContract(contractPath, expectedSha256) {
+export function loadL15AmendmentContract(
+  contractPath,
+  expectedSha256,
+  { pinnedLegacyValidatorCohortProof = null } = {},
+) {
   assertSha256(expectedSha256, 'embedded L15 amendment contract hash');
+  const legacyCompatibility = pinnedLegacyL15ContractCompatibility(
+    pinnedLegacyValidatorCohortProof,
+  );
+  if (pinnedLegacyValidatorCohortProof !== null && legacyCompatibility === null) {
+    fail('L15 legacy contract compatibility proof is invalid');
+  }
+  if (legacyCompatibility !== null
+      && expectedSha256 !== legacyCompatibility.amendmentContractSha256) {
+    fail('L15 legacy contract compatibility does not bind the expected contract');
+  }
   if (sha256File(contractPath) !== expectedSha256) {
     fail('embedded L15 amendment contract does not match the exact accepted correction contract');
   }
   const contract = readJson(contractPath, 'L15 amendment contract');
-  requireExactKeys(contract, [
+  const contractKeys = [
     'schemaVersion', 'contractId', 'immutableDonor', 'amendments', 'effectiveLive',
-    'authorizedEffectRuntime',
-  ], 'L15 amendment contract');
+  ];
+  if (legacyCompatibility?.requiresAuthorizedEffectRuntime !== false) {
+    contractKeys.push('authorizedEffectRuntime');
+  }
+  requireExactKeys(contract, contractKeys, 'L15 amendment contract');
   if (contract.schemaVersion !== 1
       || contract.contractId !== 'i00-l15-post-integration-amendments.v1') {
     fail('L15 amendment contract identity is invalid');
@@ -289,32 +330,34 @@ export function loadL15AmendmentContract(contractPath, expectedSha256) {
     'path', 'gitBlob', 'sha256',
   ], 'L15 amendment contract.immutableDonor.acceptedReceipt');
   assertExactValue(contract.immutableDonor, IMMUTABLE_DONOR, 'L15 immutable donor anchor');
-  requireExactKeys(contract.authorizedEffectRuntime, [
-    'nodePath', 'runnerPath', 'runnerSha256', 'verifierPath', 'verifierSha256',
-  ], 'L15 amendment contract.authorizedEffectRuntime');
-  if (contract.authorizedEffectRuntime.nodePath !== AUTHORIZED_EFFECT_RUNTIME.nodePath
-      || contract.authorizedEffectRuntime.runnerPath !== AUTHORIZED_EFFECT_RUNTIME.runnerPath
-      || contract.authorizedEffectRuntime.verifierPath !== AUTHORIZED_EFFECT_RUNTIME.verifierPath) {
-    fail('L15 authorized effect runtime paths do not match the closed trust anchors');
+  if (legacyCompatibility?.requiresAuthorizedEffectRuntime !== false) {
+    requireExactKeys(contract.authorizedEffectRuntime, [
+      'nodePath', 'runnerPath', 'runnerSha256', 'verifierPath', 'verifierSha256',
+    ], 'L15 amendment contract.authorizedEffectRuntime');
+    if (contract.authorizedEffectRuntime.nodePath !== AUTHORIZED_EFFECT_RUNTIME.nodePath
+        || contract.authorizedEffectRuntime.runnerPath !== AUTHORIZED_EFFECT_RUNTIME.runnerPath
+        || contract.authorizedEffectRuntime.verifierPath !== AUTHORIZED_EFFECT_RUNTIME.verifierPath) {
+      fail('L15 authorized effect runtime paths do not match the closed trust anchors');
+    }
+    assertSafePath(
+      contract.authorizedEffectRuntime.runnerPath,
+      'L15 amendment contract.authorizedEffectRuntime.runnerPath',
+      'ops/i00/bin/',
+    );
+    assertSafePath(
+      contract.authorizedEffectRuntime.verifierPath,
+      'L15 amendment contract.authorizedEffectRuntime.verifierPath',
+      'ops/i00/bin/',
+    );
+    assertSha256(
+      contract.authorizedEffectRuntime.runnerSha256,
+      'L15 amendment contract.authorizedEffectRuntime.runnerSha256',
+    );
+    assertSha256(
+      contract.authorizedEffectRuntime.verifierSha256,
+      'L15 amendment contract.authorizedEffectRuntime.verifierSha256',
+    );
   }
-  assertSafePath(
-    contract.authorizedEffectRuntime.runnerPath,
-    'L15 amendment contract.authorizedEffectRuntime.runnerPath',
-    'ops/i00/bin/',
-  );
-  assertSafePath(
-    contract.authorizedEffectRuntime.verifierPath,
-    'L15 amendment contract.authorizedEffectRuntime.verifierPath',
-    'ops/i00/bin/',
-  );
-  assertSha256(
-    contract.authorizedEffectRuntime.runnerSha256,
-    'L15 amendment contract.authorizedEffectRuntime.runnerSha256',
-  );
-  assertSha256(
-    contract.authorizedEffectRuntime.verifierSha256,
-    'L15 amendment contract.authorizedEffectRuntime.verifierSha256',
-  );
   if (!Array.isArray(contract.amendments) || contract.amendments.length < 1
       || contract.amendments.length > FINDING_ORDER.length) {
     fail('L15 amendment contract must contain a nonempty closed correction prefix');
@@ -322,7 +365,14 @@ export function loadL15AmendmentContract(contractPath, expectedSha256) {
   let priorTree = IMMUTABLE_DONOR.acceptedLiveTree;
   let priorDigest = IMMUTABLE_DONOR.acceptedLiveRootDigestSha256;
   contract.amendments.forEach((amendment, index) => {
-    validateAmendment(contract, amendment, index, priorTree, priorDigest);
+    validateAmendment(
+      contract,
+      amendment,
+      index,
+      priorTree,
+      priorDigest,
+      legacyCompatibility?.requiresBoundFileMode !== false,
+    );
     priorTree = amendment.effectiveLiveTree;
     priorDigest = amendment.effectiveRootDigestSha256;
   });

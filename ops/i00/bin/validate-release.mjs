@@ -17,6 +17,7 @@ import { validateCanonicalAcceptanceEvidence } from '../canonical-acceptance-val
 import {
   classifyValidatorCohort,
   EXACT_TRUSTED_COHORT,
+  provePinnedLegacyValidatorCohort,
   selectExpectedL15AmendmentContractSha256,
 } from '../cohort-compatibility.mjs';
 import { assertReleaseMatchesCompiledLedger } from '../ledger-compatibility.mjs';
@@ -153,7 +154,7 @@ const trustedI00EnforcementTreeDigestSha256 = typedTreeDigest(trustedI00Root, {
   excludeTopLevel: ['accepted-ops-live', 'install-receipt.json'],
 });
 const releaseI00EnforcementTreeDigestSha256 = typedTreeDigest(resolve(root, 'ops/i00'));
-const validatorCohortMode = classifyValidatorCohort({
+const validatorCohortFacts = {
   trustedI00EnforcementTreeDigestSha256,
   releaseI00EnforcementTreeDigestSha256,
   testedSha: release.testedSha,
@@ -165,7 +166,8 @@ const validatorCohortMode = classifyValidatorCohort({
   attestationSha256: release.buildAttestation?.attestationSha256,
   signatureSha256: release.buildAttestation?.signatureSha256,
   publicKeySha256: release.buildAttestation?.publicKeySha256,
-});
+};
+const validatorCohortMode = classifyValidatorCohort(validatorCohortFacts);
 if (validatorCohortMode === null) {
   fail('release ops/i00 enforcement cohort differs from the trusted validator cohort');
 }
@@ -179,9 +181,13 @@ const expectedL15AmendmentContractSha256 = selectExpectedL15AmendmentContractSha
 if (expectedL15AmendmentContractSha256 === null) {
   fail('validator cohort has no exact L15 amendment-contract binding');
 }
+const pinnedLegacyValidatorCohortProof = provePinnedLegacyValidatorCohort(
+  validatorCohortFacts,
+);
 const loadedL15Contract = loadL15AmendmentContract(
   resolve(root, 'ops/i00/l15-amendment-contract.json'),
   expectedL15AmendmentContractSha256,
+  { pinnedLegacyValidatorCohortProof },
 );
 const l15Verification = verifyEffectiveL15Root({
   root: resolve(root, 'ops/live'),

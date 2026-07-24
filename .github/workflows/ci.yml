@@ -73,6 +73,23 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Mirror production fixed interpreter
+        # The I00 fixed-interpreter control requires a real, root-owned,
+        # non-symlink /usr/bin/node. The deployment target satisfies it
+        # (measured: root:root 0755, v22.23.1); hosted runners place Node in
+        # the tool cache instead. Copy — never symlink, the guard rejects
+        # links — so the control's preconditions exist and the control can be
+        # exercised. This provisions the environment; it does not relax a check.
+        run: |
+          set -euo pipefail
+          node_path="$(command -v node)"
+          test -n "$node_path"
+          sudo cp -f "$node_path" /usr/bin/node
+          sudo chown root:root /usr/bin/node
+          sudo chmod 0755 /usr/bin/node
+          test -f /usr/bin/node && test ! -L /usr/bin/node && test -x /usr/bin/node
+          /usr/bin/node --version
+
       - name: Run generic local operations proofs
         run: bash ops/tests/run-all.sh
 

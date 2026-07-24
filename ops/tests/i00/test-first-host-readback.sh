@@ -180,8 +180,10 @@ PRODUCER="$I00_ROOT/bin/first-host-readback.mjs"
 SANITIZER="$I00_ROOT/bin/sanitize-donor-env.mjs"
 
 portable_mode() {
-  if stat -f '%Lp' "$1" >/dev/null 2>&1; then stat -f '%Lp' "$1"
-  else stat -c '%a' "$1"
+  # GNU first: on GNU coreutils `stat -f` SUCCEEDS as a filesystem query, so a
+  # BSD-first probe never falls through and returns filesystem info, not a mode.
+  if stat -c '%a' "$1" >/dev/null 2>&1; then stat -c '%a' "$1"
+  else stat -f '%Lp' "$1"
   fi
 }
 

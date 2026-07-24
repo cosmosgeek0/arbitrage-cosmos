@@ -16,7 +16,7 @@ case "$CREATED" in
   "$ATTACKER_TMP"/*) fail_test "private temporary root honored inherited TMPDIR" ;;
 esac
 assert_eq "$(node -e 'const fs=require("fs");process.stdout.write(fs.realpathSync(process.argv[1]))' "$CREATED")" "$CREATED"
-assert_eq "$(stat -f '%Lp' "$CREATED" 2>/dev/null || stat -c '%a' "$CREATED")" 700
+assert_eq "$(stat -c '%a' "$CREATED" 2>/dev/null || stat -f '%Lp' "$CREATED")" 700
 
 note "marked roots use fixed physical /tmp despite hostile TMPDIR"
 SIMULATION_BASE="$(TMPDIR="$ATTACKER_TMP" node "$CREATE_SIMULATION_ROOT" \
@@ -34,7 +34,7 @@ case "$SIMULATION_CREATED" in
   "$SIMULATION_BASE"/*) ASSERTIONS=$((ASSERTIONS + 1)) ;;
   *) fail_test "simulation private temporary root escaped its explicit base" ;;
 esac
-assert_eq "$(stat -f '%Lp' "$SIMULATION_CREATED" 2>/dev/null || stat -c '%a' "$SIMULATION_CREATED")" 700
+assert_eq "$(stat -c '%a' "$SIMULATION_CREATED" 2>/dev/null || stat -f '%Lp' "$SIMULATION_CREATED")" 700
 chmod 755 "$SIMULATION_BASE"
 assert_failure node "$TOOL" --base "$SIMULATION_BASE" --prefix i00-df32-refused.
 chmod 700 "$SIMULATION_BASE"

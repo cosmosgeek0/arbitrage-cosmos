@@ -13,6 +13,7 @@
 | donor-owned test transition | bounded replacements only | 8 paths | PASS |
 | runtime API proof | local authorized-effect harness | 8 assertions | PASS |
 | class isolation | only selected action resolves endpoint argv | lazy builder | PASS |
+| verifier declaration order | lexical binding initialized before read | focused proof | PASS |
 | null-capability Linux contract | unused effect FDs bind fixed null; provider closes through fd53 | bound and closed | PASS |
 | focused byte proof | final descriptor and policy regression | 80 assertions | PASS |
 | backup publication output | one bounded canonical claim plus EOF | descriptor-bound | PASS |

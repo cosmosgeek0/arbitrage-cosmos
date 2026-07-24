@@ -10,6 +10,17 @@ PRODUCER_TEST="$TEST_DIR/test-deployment-authorization-producers.sh"
 note "runner and verifier expose one exact four-document API"
 assert_success node --check "$RUNNER"
 assert_success node --check "$VERIFIER"
+assert_success node --input-type=module - "$VERIFIER" <<'NODE'
+import { readFileSync } from 'node:fs';
+
+const source = readFileSync(process.argv[2], 'utf8');
+const declaration = 'let automaticHandoffDocument = null;';
+const declarationIndex = source.indexOf(declaration);
+if (declarationIndex < 0
+    || source.slice(0, declarationIndex).includes('automaticHandoffDocument')) {
+  process.exit(1);
+}
+NODE
 assert_success node --input-type=module - "$RUNNER" <<'NODE'
 import { readFileSync } from 'node:fs';
 const source = readFileSync(process.argv[2], 'utf8');

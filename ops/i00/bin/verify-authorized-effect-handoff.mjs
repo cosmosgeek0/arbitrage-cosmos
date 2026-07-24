@@ -1760,11 +1760,6 @@ try {
       requireReadRoot(root, effectUid, `${root.name} read root`);
     }
   }
-  if (automaticHandoffDocument !== null && !AUTOMATIC_ROLLBACK_ROLE) {
-    for (const root of automaticHandoffDocument.readRoots) {
-      requireReadRoot(root, effectUid, `${root.name} read root`);
-    }
-  }
   for (const root of document.observedRoots) {
     const prefix = root.name === 'backupDir' ? 'backup-dir' : 'data-dir';
     assert(root.path === endpointPathForDirectoryPrefix(risk.action, prefix)

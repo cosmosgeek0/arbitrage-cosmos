@@ -626,7 +626,7 @@ prepare_fixture_inputs() {
   mkdir -p "$root/authorization" "$root/consumption" "$root/receipts" \
     "$root/effects" \
     "$root/bin" "$root/data" "$root/backups/exact" "$root/evidence" \
-    "$root/models" "$root/ops-state" "$root/cosmos/releases" "$root/runtime" \
+    "$root/models" "$root/ops-state" "$root/cosmos/releases" "$root/runtime" "$root/tmp" \
     "$root/config" "$root/credentials" "$root/install" \
     "$root/rollback-evidence" "$root/systemd/cosmos-app.service.d" \
     "$root/runtime-systemd/cosmos-app.service.d"
@@ -634,7 +634,8 @@ prepare_fixture_inputs() {
     "$root/effects" \
     "$root/bin" "$root/data" "$root/backups" "$root/backups/exact" \
     "$root/evidence" "$root/models" "$root/ops-state" "$root/cosmos" \
-    "$root/cosmos/releases" "$root/runtime" "$root/rollback-evidence" "$root/systemd" \
+    "$root/cosmos/releases" "$root/runtime" "$root/tmp" \
+    "$root/rollback-evidence" "$root/systemd" \
     "$root/config" "$root/credentials" "$root/install" \
     "$root/systemd/cosmos-app.service.d" "$root/runtime-systemd" \
     "$root/runtime-systemd/cosmos-app.service.d"
@@ -2808,6 +2809,27 @@ NODE
     --output "$PROOF_ROOT/authorization/stale-offline-unit.risk.json"
   assert_not_file "$PROOF_ROOT/authorization/stale-offline-unit.risk.json"
   rm "$STAGING_FIRST_HOST_OFFLINE_ROOT/$DF32_APP_UNIT"
+  rm \
+    "$FIRST_HOST_DIR/collected-evidence.json" \
+    "$FIRST_HOST_DIR/host.json" \
+    "$FIRST_HOST_DIR/sqlite-readback.json" \
+    "$FIRST_HOST_DIR/supervisor.json"
+  node "$I00_ROOT/bin/first-host-readback.mjs" \
+    --env "$FIRST_HOST_ENV" \
+    --release "$DF32_RELEASE" \
+    --output-dir "$FIRST_HOST_DIR" \
+    --evidence-root "$STAGING_FIRST_HOST_EVIDENCE_ROOT" \
+    --provenance-mode STAGING \
+    --provenance-root "$DF32_STAGING_ROOT" \
+    --account "$DF32_TARGET_ACCOUNT" \
+    --target-host "$ACTUAL_PROOF_HOST" \
+    --environment "$ACTUAL_PROOF_ENVIRONMENT" \
+    --backup-reserve-bytes 4096 \
+    --sqlite "$SQLITE_BIN" \
+    --offline-unit-root "$STAGING_FIRST_HOST_OFFLINE_ROOT" \
+    >"$ACTUAL_ROOT/first-host-readback-refreshed.out"
+  assert_eq "$(json_value "$ACTUAL_ROOT/first-host-readback-refreshed.out" status)" \
+    FIRST_HOST_READBACK_CREATED
   FIRST_HOST_ORIGINAL="$ACTUAL_ROOT/first-host-original"
   mkdir "$FIRST_HOST_ORIGINAL"
   chmod 700 "$FIRST_HOST_ORIGINAL"

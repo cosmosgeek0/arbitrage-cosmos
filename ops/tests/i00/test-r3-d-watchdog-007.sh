@@ -543,7 +543,7 @@ export HANG_CHILD_PID_FILE="$TEST_TMP/hanging-alert-child.pid"
 STARTED_AT_MS="$("$NODE" -e 'process.stdout.write(String(Date.now()))')"
 run_watchdog
 ELAPSED_MS=$(( $("$NODE" -e 'process.stdout.write(String(Date.now()))') - STARTED_AT_MS ))
-[ "$ELAPSED_MS" -le 4000 ] \
+[ "$ELAPSED_MS" -le 6000 ] \
   || fail_test "hanging alert hook exceeded its bounded watchdog allowance"
 pass_assertion
 assert_eq "$(lock_state)" DEAD

@@ -654,8 +654,8 @@ SECRETS_SOURCE="$(cat "$I00_ROOT/bin/secrets-provider.mjs")"
 SECRET_WRAPPER_SOURCE="$(cat "$I00_ROOT/bin/secret-materialization.mjs")"
 assert_eq "$(grep -c 'validate-authorization\\.mjs' "$I00_ROOT/bin/secrets-provider.mjs" || true)" 0
 assert_eq "$(grep -c 'record-authorized-action-outcome\\.mjs' "$I00_ROOT/bin/secrets-provider.mjs" || true)" 0
-assert_contains "$SECRETS_SOURCE" 'Array.from({ length: 50 }, (_, index) => index + 3)'
-assert_contains "$SECRETS_SOURCE" 'const stdio = Array.from({ length: 53 }, () => '\''ignore'\'')'
+assert_contains "$SECRETS_SOURCE" 'Array.from({ length: 51 }, (_, index) => index + 3)'
+assert_contains "$SECRETS_SOURCE" 'const stdio = Array.from({ length: 54 }, () => '\''ignore'\'')'
 assert_contains "$SECRETS_SOURCE" "const RETAINED_SECRET_EFFECT_FDS = new Set([12, 15, 32])"
 assert_contains "$SECRETS_SOURCE" "result.hashPolicy !== 'NONE'"
 assert_contains "$SECRETS_SOURCE" 'Object.keys(result.writeRoots).length !== 0'

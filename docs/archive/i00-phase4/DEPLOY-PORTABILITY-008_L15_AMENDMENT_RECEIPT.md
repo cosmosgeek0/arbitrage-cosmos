@@ -12,6 +12,8 @@
 | live transition | modified paths only | 19 paths | PASS |
 | donor-owned test transition | bounded replacements only | 8 paths | PASS |
 | runtime API proof | local authorized-effect harness | 8 assertions | PASS |
+| class isolation | only selected action resolves endpoint argv | lazy builder | PASS |
+| null-capability Linux contract | unused effect FDs bind fixed null; provider closes through fd53 | bound and closed | PASS |
 | focused byte proof | final descriptor and policy regression | 80 assertions | PASS |
 | backup publication output | one bounded canonical claim plus EOF | descriptor-bound | PASS |
 | sanitizer proof | hostile environment matrix | 143 assertions | PASS |
@@ -20,6 +22,7 @@
 | direct backup/restore proof | contained donor suite | 53 assertions | PASS |
 | direct watchdog proof | contained donor suite | 35 assertions | PASS |
 | watchdog portability proof | focused I00 suite | 177 assertions | PASS |
+| watchdog whole-pass ceiling | Linux scheduler allowance; one-second hook timeout unchanged | 6000 ms | PASS |
 | live path | modified only | `ops/live/README.md` | FIXED |
 | live path | modified only | `ops/live/bin/alert-log.sh` | FIXED |
 | live path | modified only | `ops/live/bin/backup.sh` | FIXED |

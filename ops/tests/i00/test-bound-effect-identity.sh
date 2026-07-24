@@ -36,6 +36,211 @@ assert_failure_contains 'effect runner control arguments are invalid' \
   --authorization-consumption "$TEST_TMP/consumption.json" \
   -- /bin/false
 
+note "class argv construction resolves only the selected class endpoints"
+assert_success node --input-type=module - "$RUNNER" <<'NODE'
+import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
+import { createRequire } from 'node:module';
+
+const source = readFileSync(process.argv[2], 'utf8');
+const require = createRequire(import.meta.url);
+const { parse } = require('@babel/parser');
+const program = parse(source, { sourceType: 'module' }).program;
+const declaration = (name) => program.body.find((node) => (
+  node.type === 'VariableDeclaration'
+    && node.declarations.some((entry) => entry.id?.name === name)
+));
+const first = declaration('scriptToken');
+const last = declaration('delegatedForChild');
+if (first === undefined || last === undefined || first.start >= last.end) process.exit(1);
+const body = source.slice(first.start, last.end);
+const build = new Function(
+  'Object',
+  'actionClass',
+  'action',
+  'endpoint',
+  'risk',
+  'delegatedScript',
+  'delegatedBootstrapDescriptor',
+  'primaryParentPrelude',
+  'basename',
+  `${body}\nreturn { delegatedForChildBuilders, delegatedForChild };`,
+);
+const cases = Object.freeze({
+  OPS_BUNDLE_INSTALL: ['release-path', 'destination'],
+  SERVICE_RELEASE_SWITCH: ['release-path'],
+  SERVICE_ROLLBACK: ['release-id'],
+  BACKUP_CREATE: [],
+  ISOLATED_RESTORE: ['backup-path', 'isolated-target'],
+  SECRET_MATERIALIZATION: ['credential-output-path'],
+});
+for (const [actionClass, expected] of Object.entries(cases)) {
+  const queried = [];
+  const action = Object.freeze({});
+  const endpoint = (candidate, prefix) => {
+    if (candidate !== action) process.exit(1);
+    queried.push(prefix);
+    return `/fixture/${prefix}`;
+  };
+  const { delegatedForChildBuilders, delegatedForChild } = build(
+    Object,
+    actionClass,
+    action,
+    endpoint,
+    Object.freeze({
+      artifactPolicy: Object.freeze({
+        rootMode: 'TEST',
+        proofRoot: '/fixture/proof',
+      }),
+    }),
+    Object.freeze({ path: '/fixture/effect-script' }),
+    null,
+    () => 'parent-prelude',
+    basename,
+  );
+  if (!Object.isFrozen(delegatedForChildBuilders)
+      || !Object.isFrozen(delegatedForChild)
+      || JSON.stringify(queried) !== JSON.stringify(expected)) {
+    process.exit(1);
+  }
+}
+NODE
+
+note "unused effect slots inherit one exact closed null capability"
+assert_success node --input-type=module - "$RUNNER" <<'NODE'
+import { spawnSync } from 'node:child_process';
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+} from 'node:fs';
+import { createRequire } from 'node:module';
+
+const source = readFileSync(process.argv[2], 'utf8');
+const require = createRequire(import.meta.url);
+const { parse } = require('@babel/parser');
+const program = parse(source, { sourceType: 'module' }).program;
+const declaration = program.body.find((node) => (
+  node.type === 'FunctionDeclaration'
+    && node.id?.name === 'openFixedNullCapability'
+));
+if (declaration === undefined) process.exit(1);
+const functionSource = source.slice(declaration.start, declaration.end);
+const makeOpener = (
+  candidateLstatSync,
+  candidateRealpathSync,
+  candidateOpenSync,
+  candidateFstatSync,
+  candidateCloseSync,
+) => new Function(
+  'constants',
+  'lstatSync',
+  'realpathSync',
+  'openSync',
+  'fstatSync',
+  'closeSync',
+  'assert',
+  `${functionSource}\nreturn openFixedNullCapability;`,
+)(
+  constants,
+  candidateLstatSync,
+  candidateRealpathSync,
+  candidateOpenSync,
+  candidateFstatSync,
+  candidateCloseSync,
+  (condition, message) => {
+    if (!condition) throw new Error(message);
+  },
+);
+const spawnBoundaryStart = source.indexOf(
+  'fixedNullCapabilityDescriptor = openFixedNullCapability();',
+);
+const spawnBoundaryEnd = source.indexOf(
+  "child = spawn('/proc/self/fd/14'",
+  spawnBoundaryStart,
+);
+if (spawnBoundaryStart < 0 || spawnBoundaryEnd < 0
+    || source.slice(spawnBoundaryStart, spawnBoundaryEnd).includes("'ignore'")
+    || !source.includes('&& fixedNullCapabilityClosed\n')) {
+  process.exit(1);
+}
+
+const openFixedNullCapability = makeOpener(
+  lstatSync,
+  realpathSync,
+  openSync,
+  fstatSync,
+  closeSync,
+);
+const descriptor = openFixedNullCapability();
+try {
+  const stat = fstatSync(descriptor, { bigint: true });
+  const named = lstatSync('/dev/null', { bigint: true });
+  const fields = ['dev', 'ino', 'rdev', 'mode', 'nlink', 'uid', 'gid'];
+  if (!stat.isCharacterDevice()
+      || !fields.every((field) => stat[field] === named[field])) {
+    process.exit(1);
+  }
+  if (process.platform === 'linux') {
+    const childSource = String.raw`
+      const { readlinkSync } = require('node:fs');
+      for (const descriptor of [34, 53]) {
+        if (readlinkSync('/proc/self/fd/' + descriptor) !== '/dev/null') process.exit(1);
+      }
+    `;
+    const stdio = Array.from(
+      { length: 54 },
+      (_, index) => index < 3 ? 'ignore' : descriptor,
+    );
+    const child = spawnSync(process.execPath, ['-e', childSource], { stdio });
+    if (child.error || child.signal || child.status !== 0) process.exit(1);
+  }
+} finally {
+  closeSync(descriptor);
+}
+let closed = false;
+try {
+  fstatSync(descriptor);
+} catch (error) {
+  closed = error?.code === 'EBADF';
+}
+if (!closed) process.exit(1);
+
+const statFixture = Object.freeze({
+  dev: 1n,
+  ino: 2n,
+  rdev: 3n,
+  mode: 0o20666n,
+  nlink: 1n,
+  uid: 0n,
+  gid: 0n,
+  isCharacterDevice: () => true,
+  isSymbolicLink: () => false,
+});
+const closedAfterRejectedIdentity = [];
+const hostileOpener = makeOpener(
+  () => statFixture,
+  () => '/dev/null',
+  () => 91,
+  () => Object.freeze({ ...statFixture, ino: 4n }),
+  (value) => closedAfterRejectedIdentity.push(value),
+);
+let rejectedIdentity = false;
+try {
+  hostileOpener();
+} catch {
+  rejectedIdentity = true;
+}
+if (!rejectedIdentity
+    || JSON.stringify(closedAfterRejectedIdentity) !== JSON.stringify([91])) {
+  process.exit(1);
+}
+NODE
+
 note "bound executable descriptors stream large files and retain exact identity"
 assert_success node --input-type=module - "$RUNNER" "$TEST_TMP" <<'NODE'
 import { createHash } from 'node:crypto';

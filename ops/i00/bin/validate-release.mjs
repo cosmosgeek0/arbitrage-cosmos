@@ -26,7 +26,7 @@ import {
   expectedBuildAttestation, verifyBuildAttestation,
 } from './verify-build-attestation.mjs';
 
-const EXPECTED_AMENDMENT_CONTRACT_SHA256 = '933eadb67fcd975c3b79cc0b648141d008ebdd97cc781a5d0572c0998ab9b443';
+const EXPECTED_AMENDMENT_CONTRACT_SHA256 = '17703f258739031288df06052377199c989e8228a9fe85d97e16a8bfc8a2f079';
 const args = parseArgs(
   process.argv.slice(2),
   new Set(['allow-simulation', 'require-exact-cohort', 'installed-immutable']),

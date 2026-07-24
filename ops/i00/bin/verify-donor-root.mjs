@@ -6,7 +6,7 @@ import { fail, parseArgs, readJson, sha256File } from '../lib.mjs';
 import { loadL15AmendmentContract, verifyEffectiveL15Root } from '../l15-amendment.mjs';
 
 const EXPECTED_DONOR_CONTRACT_SHA256 = '078cc2a3d8bc79026f1de6985284856794e53ba34ffd7fda5d1140e46e31a1b3';
-const EXPECTED_AMENDMENT_CONTRACT_SHA256 = '933eadb67fcd975c3b79cc0b648141d008ebdd97cc781a5d0572c0998ab9b443';
+const EXPECTED_AMENDMENT_CONTRACT_SHA256 = '17703f258739031288df06052377199c989e8228a9fe85d97e16a8bfc8a2f079';
 
 function requireExactRawCanonicalPath(value, label, kind) {
   if (typeof value !== 'string' || value.length === 0 || value.length > 4_096

@@ -20,7 +20,7 @@
   "authorizedEffectRuntime": {
     "nodePath": "/usr/bin/node",
     "runnerPath": "ops/i00/bin/run-bound-effect.mjs",
-    "runnerSha256": "22698cd9688c229374df80ec2c99c6600a729c4b61531d109f70c1de0332cfdf",
+    "runnerSha256": "e82c2799943f81160080cddbbdd84b06c39549f6432e4a866705bc90ecb11593",
     "verifierPath": "ops/i00/bin/verify-authorized-effect-handoff.mjs",
     "verifierSha256": "b5bc19b46949bc3ece12ea1f289ce66aaf638737c1db2a45f5726b6a67a4fe8d"
   },
@@ -59,8 +59,8 @@
       "regressionTests": [
         {
           "path": "ops/tests/i00/test-r3-d-watchdog-007.sh",
-          "gitBlob": "b1b768e8895ebdead20ef60cac8e1a2f04e2e24c",
-          "sha256": "ee06e3a6e3fc314e56fa3692eace0af12d9b88e4560cca541c2fe79f42515913",
+          "gitBlob": "fd424ce4a3008d2ec6b76c0cf90dc91d0fbe4a8e",
+          "sha256": "04c65d1ac1bf7b110dcc2bd9310f41baa226f60052c772163e230a907178a16b",
           "mode": "100755"
         }
       ]
@@ -649,8 +649,8 @@
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/DEPLOY-PORTABILITY-008_L15_AMENDMENT_RECEIPT.md",
         "mode": "100644",
-        "gitBlob": "8cf0e80ab3cb78897992e75c3978ff9290b42381",
-        "sha256": "3be2187252e13cafd9be77aa2b79348babc203cf8a1d12b19422d5450c03d9a6"
+        "gitBlob": "b90e7ce649bc670fbe9d9e460f054f2cc73a7f1a",
+        "sha256": "0d4adc3d955cb548589817775c9947fa0a9cb318dc6bad0c677cc53eb6ea01fe"
       },
       "regressionTests": [
         {

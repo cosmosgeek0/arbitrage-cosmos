@@ -50,7 +50,7 @@ const AUTHORIZED_EFFECT_BOOTSTRAP_LOCATORS = Object.freeze([
   'I00_AUTHORIZED_EFFECT_PROGRAM_PATH',
 ]);
 const AUTHORIZED_EFFECT_FDS = Object.freeze(
-  Array.from({ length: 50 }, (_, index) => index + 3),
+  Array.from({ length: 51 }, (_, index) => index + 3),
 );
 const RETAINED_SECRET_EFFECT_FDS = new Set([12, 15, 32]);
 const PROTECTED_MUTATION_ROOTS = Object.freeze([
@@ -640,7 +640,7 @@ function verifyAuthorizedEffectHandoff() {
     }
     return [name, value];
   });
-  const stdio = Array.from({ length: 53 }, () => 'ignore');
+  const stdio = Array.from({ length: 54 }, () => 'ignore');
   stdio[0] = 'ignore';
   stdio[1] = 'pipe';
   stdio[2] = 'pipe';

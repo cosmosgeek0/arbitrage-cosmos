@@ -803,6 +803,43 @@ function createAnonymousHandoff(bytes, temporaryParent) {
   }
 }
 
+function openFixedNullCapability() {
+  const path = '/dev/null';
+  let descriptor;
+  try {
+    const namedBefore = lstatSync(path, { bigint: true, throwIfNoEntry: false });
+    assert(namedBefore?.isCharacterDevice() && !namedBefore.isSymbolicLink()
+      && namedBefore.nlink === 1n
+      && namedBefore.uid === 0n && namedBefore.gid === 0n
+      && (namedBefore.mode & 0o7777n) === 0o666n
+      && realpathSync(path) === path,
+    'fixed null capability path is invalid');
+    descriptor = openSync(
+      path,
+      constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+    );
+    const opened = fstatSync(descriptor, { bigint: true });
+    const namedAfter = lstatSync(path, { bigint: true, throwIfNoEntry: false });
+    const fields = ['dev', 'ino', 'rdev', 'mode', 'nlink', 'uid', 'gid'];
+    assert(opened.isCharacterDevice() && namedAfter?.isCharacterDevice()
+      && !namedAfter.isSymbolicLink()
+      && fields.every((field) => (
+        opened[field] === namedBefore[field]
+          && namedAfter[field] === opened[field]
+      ))
+      && realpathSync(path) === path,
+    'fixed null capability identity changed while opening');
+    return descriptor;
+  } catch (error) {
+    if (descriptor !== undefined) {
+      try {
+        closeSync(descriptor);
+      } catch {}
+    }
+    throw error;
+  }
+}
+
 function createEffectTemporaryDirectory(policy, claimKey, uid, gid) {
   const parent = policy.rootMode === 'SYSTEM'
     ? '/tmp'
@@ -2037,34 +2074,34 @@ const parentPrelude = primaryParentPrelude();
 const bashBootstrap = delegatedBootstrapDescriptor === null
   ? `${parentPrelude}\nsource /proc/self/fd/11`
   : `${parentPrelude}\nsource /proc/self/fd/13; source /proc/self/fd/11`;
-const delegatedForChild = Object.freeze({
-  OPS_BUNDLE_INSTALL: [
+const delegatedForChildBuilders = Object.freeze({
+  OPS_BUNDLE_INSTALL: () => [
     '-p', '-c', bashBootstrap, delegatedScript.path,
     '--authorized-effect',
     '--release', endpoint(action, 'release-path'),
     '--destination', endpoint(action, 'destination'),
   ],
-  SERVICE_RELEASE_SWITCH: [
+  SERVICE_RELEASE_SWITCH: () => [
     '-p', '-c', bashBootstrap, delegatedScript.path,
     '--i00-effect-environment-fd', '12',
     '--release', endpoint(action, 'release-path'),
   ],
-  SERVICE_ROLLBACK: [
+  SERVICE_ROLLBACK: () => [
     '-p', '-c', bashBootstrap, delegatedScript.path,
     '--i00-effect-environment-fd', '12',
     '--to', endpoint(action, 'release-id'),
   ],
-  BACKUP_CREATE: [
+  BACKUP_CREATE: () => [
     '-p', '-c', bashBootstrap, delegatedScript.path,
     '--i00-effect-environment-fd', '12',
   ],
-  ISOLATED_RESTORE: [
+  ISOLATED_RESTORE: () => [
     '-p', '-c', bashBootstrap, delegatedScript.path,
     '--i00-effect-environment-fd', '12',
     '--backup', endpoint(action, 'backup-path'),
     '--target', endpoint(action, 'isolated-target'),
   ],
-  SECRET_MATERIALIZATION: [
+  SECRET_MATERIALIZATION: () => [
     scriptToken,
     '--authorized-effect',
     '--config-fd', '12',
@@ -2078,7 +2115,10 @@ const delegatedForChild = Object.freeze({
         ]
       : []),
   ],
-}[actionClass]);
+});
+const delegatedForChild = Object.freeze(
+  delegatedForChildBuilders[actionClass](),
+);
 assert(actionClass !== 'SECRET_MATERIALIZATION'
   || risk.artifactPolicy.rootMode !== 'STAGING',
 'STAGING secret materialization is evidence-only and cannot execute');
@@ -2635,6 +2675,8 @@ let effectOutputBytes = Buffer.alloc(0);
 let effectOutputOverflow = false;
 let automaticRollbackAckBytes = '';
 let automaticRollbackAckOverflow = false;
+let fixedNullCapabilityDescriptor;
+let fixedNullCapabilityClosed = true;
 try {
   const childEnv = {
     HOME: '/',
@@ -2682,6 +2724,8 @@ try {
   for (const root of [...readRoots, ...automaticRollbackReadRoots]) {
     childEnv[readRootLocator(root.name)] = String(root.fd);
   }
+  fixedNullCapabilityDescriptor = openFixedNullCapability();
+  fixedNullCapabilityClosed = false;
   const childStdio = [
     'inherit',
     'inherit',
@@ -2696,36 +2740,42 @@ try {
     startEvidenceDescriptor,
     delegatedScript.descriptor,
     delegatedEnvironmentDescriptor === null
-      ? 'ignore'
+      ? fixedNullCapabilityDescriptor
       : delegatedEnvironmentDescriptor.descriptor,
     delegatedBootstrapDescriptor === null
-      ? 'ignore'
+      ? fixedNullCapabilityDescriptor
       : delegatedBootstrapDescriptor.descriptor,
     program.descriptor,
     effectDirectory.descriptor,
   ];
   for (let descriptor = 16; descriptor <= 34; descriptor += 1) {
     const executable = effectExecutables.find((entry) => entry.fd === descriptor);
-    childStdio[descriptor] = executable?.held.descriptor ?? 'ignore';
+    childStdio[descriptor] =
+      executable?.held.descriptor ?? fixedNullCapabilityDescriptor;
   }
-  childStdio[35] = automaticRollbackDescriptor?.descriptor ?? 'ignore';
-  childStdio[36] = automaticRollbackHandoffDescriptor ?? 'ignore';
-  childStdio[37] = automaticRollbackHandoffDescriptor === null ? 'ignore' : 'pipe';
+  childStdio[35] =
+    automaticRollbackDescriptor?.descriptor ?? fixedNullCapabilityDescriptor;
+  childStdio[36] =
+    automaticRollbackHandoffDescriptor ?? fixedNullCapabilityDescriptor;
+  childStdio[37] = automaticRollbackHandoffDescriptor === null
+    ? fixedNullCapabilityDescriptor
+    : 'pipe';
   childStdio[38] = actionClass === 'SECRET_MATERIALIZATION'
-    ? 'ignore'
+    ? fixedNullCapabilityDescriptor
     : verifierSourceDescriptor.descriptor;
   childStdio[39] = effectExecutables
-    .find((entry) => entry.fd === 39)?.held.descriptor ?? 'ignore';
+    .find((entry) => entry.fd === 39)?.held.descriptor
+      ?? fixedNullCapabilityDescriptor;
   for (let descriptor = 40; descriptor <= 52; descriptor += 1) {
     childStdio[descriptor] = writeRoots
       .find((entry) => entry.fd === descriptor)?.held.descriptor
       ?? [...readRoots, ...automaticRollbackReadRoots]
         .find((entry) => entry.fd === descriptor)?.held.descriptor
-      ?? 'ignore';
+      ?? fixedNullCapabilityDescriptor;
   }
   childStdio[BACKUP_OUTPUT_FD] = actionClass === 'BACKUP_CREATE'
     ? 'pipe'
-    : 'ignore';
+    : fixedNullCapabilityDescriptor;
   child = spawn('/proc/self/fd/14', delegatedForChild, {
     argv0: program.path,
     detached: true,
@@ -2764,6 +2814,16 @@ try {
   }
 } catch {
   child = null;
+} finally {
+  if (fixedNullCapabilityDescriptor !== undefined) {
+    try {
+      closeSync(fixedNullCapabilityDescriptor);
+      fixedNullCapabilityClosed = true;
+    } catch {
+      fixedNullCapabilityClosed = false;
+    }
+    fixedNullCapabilityDescriptor = undefined;
+  }
 }
 closeSync(handoffDescriptor);
 handoffDescriptor = undefined;
@@ -3038,6 +3098,7 @@ const success = result.error === null
   && automaticRollbackAckValid
   && !automaticRollbackAcknowledged
   && effectDirectoryFinalized
+  && fixedNullCapabilityClosed
   && programRemainedBound
   && chainRemainedBound
   && (actionClass !== 'BACKUP_CREATE' || effectOutput.status === 'BOUND')

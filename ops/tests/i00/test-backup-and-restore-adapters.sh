@@ -230,7 +230,7 @@ DONOR_ROOT="$SIMULATION_ROOT/donor/ops/live"
 chmod -R a-w "$DONOR_ROOT"
 
 "$BOUND_SQLITE" "$DATA_ROOT/cosmos.db" \
-  'PRAGMA journal_mode=WAL; CREATE TABLE events(id INTEGER PRIMARY KEY, payload TEXT); INSERT INTO events(payload) VALUES ("fixture-a"),("fixture-b");'
+  "PRAGMA journal_mode=WAL; CREATE TABLE events(id INTEGER PRIMARY KEY, payload TEXT); INSERT INTO events(payload) VALUES ('fixture-a'),('fixture-b');"
 chmod 600 "$DATA_ROOT/cosmos.db"
 if [ "$(id -u)" = 0 ]; then
   chown -R "$EFFECT_UID:$EFFECT_GID" \

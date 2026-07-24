@@ -10,7 +10,7 @@
 | effective root digest | canonical final donor tree | contract binding | PASS |
 | effective inventory | unchanged regular-file set | 31 files | PASS |
 | live transition | modified paths only | 19 paths | PASS |
-| donor-owned test transition | bounded replacements only | 6 paths | PASS |
+| donor-owned test transition | bounded replacements only | 8 paths | PASS |
 | runtime API proof | local authorized-effect harness | 8 assertions | PASS |
 | focused byte proof | final descriptor and policy regression | 80 assertions | PASS |
 | backup publication output | one bounded canonical claim plus EOF | descriptor-bound | PASS |
@@ -42,7 +42,9 @@
 | donor test path | modified only | `ops/tests/helpers.sh` | FIXED |
 | donor test path | modified only | `ops/tests/test-backup-restore.sh` | FIXED |
 | donor test path | modified only | `ops/tests/test-deploy.sh` | FIXED |
+| donor test path | modified only | `ops/tests/test-restore-drill.sh` | FIXED |
 | donor test path | modified only | `ops/tests/test-rollback.sh` | FIXED |
+| donor test path | modified only | `ops/tests/test-secret-scanner.sh` | FIXED |
 | donor test path | modified only | `ops/tests/test-systemd-units.sh` | FIXED |
 | donor test path | modified only | `ops/tests/test-watchdog.sh` | FIXED |
 | additive regression | exact final byte proof | `ops/tests/i00/test-deploy-portability-008-l15-bytes.sh` | PASS |

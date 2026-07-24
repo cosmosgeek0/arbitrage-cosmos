@@ -223,8 +223,14 @@ sed "s#^BACKUP_DIR=.*#BACKUP_DIR=$RUNTIME_PATH_ROOT/data/nested-backups#" \
   "$TEST_TMP/runtime.env" > "$TEST_TMP/runtime-nested-root.env"
 assert_failure_contains 'distinct and non-nested' \
   node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/runtime-nested-root.env"
-sed 's#^DATA_DIR_LOGICAL_LEASE_ROOT=.*#DATA_DIR_LOGICAL_LEASE_ROOT=/var/lib/cosmos/data/leases#' "$TEST_TMP/runtime.env" > "$TEST_TMP/nested-lease-root.env"
-assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/nested-lease-root.env"
+# The lease root must actually NEST inside DATA_DIR for the nesting rule to be
+# the thing under test. The previous fixture used a fixed /var/lib/... path that
+# never overlapped this fixture's DATA_DIR, so on macOS it failed only because
+# /var is a symlink (the unrelated physical-path rule, which keeps its own
+# coverage above) and on a real-/var platform it did not fail at all.
+sed "s#^DATA_DIR_LOGICAL_LEASE_ROOT=.*#DATA_DIR_LOGICAL_LEASE_ROOT=$RUNTIME_PATH_ROOT/data/leases#" "$TEST_TMP/runtime.env" > "$TEST_TMP/nested-lease-root.env"
+assert_failure_contains 'must not nest' \
+  node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/nested-lease-root.env"
 sed 's#^DATA_DIR_LOGICAL_LEASE_ROOT=.*#DATA_DIR_LOGICAL_LEASE_ROOT=relative/leases#' "$TEST_TMP/runtime.env" > "$TEST_TMP/relative-lease-root.env"
 assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/relative-lease-root.env"
 

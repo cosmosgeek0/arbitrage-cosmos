@@ -60,3 +60,27 @@
 | additive regression | exact final byte proof | `ops/tests/i00/test-deploy-portability-008-l15-bytes.sh` | PASS |
 | amendment contract | byte, tree, and runtime binding | `ops/i00/l15-amendment-contract.json` | BOUND |
 | final Linux proof | separate final receipt | `docs/archive/i00-phase4/DEPLOY-PORTABILITY-008_CORRECTION_RECEIPT.md` | DEFERRED |
+
+## Re-correction 2026-07-25 — usr-merge canonicality of the built-in Bash default
+
+Authorized by the acting director (MSG-20) as a §2.4 mechanism correction. Recorded as a
+RE-CORRECTION of this same finding via the per-amendment seen-paths law rather than a new
+finding, because `FINDING_ORDER` is a closed eight-entry list and `ops/live/bin/common.sh`
+is already a corrected path of DEPLOY-PORTABILITY-008. No new finding id was minted.
+
+| item | expected | found | status |
+|---|---|---|---|
+| defect | built-in default survives its own canonicality assert | `I00_BASH=/bin/bash` then `[ "$canonical" = "$I00_BASH" ]` | RED |
+| platform | deployment target shape | Ubuntu 24.04 is usr-merged; `/bin` is a symlink; `readlink -f /bin/bash` = `/usr/bin/bash` | MEASURED ON TARGET |
+| blast radius | which entry points abort | `ops/live/bin/deploy.sh`, `ops/live/bin/rollback.sh`, `ops/live/bin/restore-drill.sh` — all three call `configure_i00_bash` | RUNTIME FAILURE |
+| production exposure | does an env file supply the value | `ops/templates/i00/**` never sets `I00_BASH`, so production takes the built-in default | EXPOSED |
+| masking | why it had not been seen | the guard-Node bootstrap aborted earlier in the same sourcing path | EXPLAINED |
+| correction | canonicalize the DEFAULT at assignment only | `realpathSync('/bin/bash')` before the assert | FIXED |
+| assert preserved | supplied values must still already be canonical | assert byte-identical; env-file branch untouched | UNCHANGED |
+| class sweep | every other hardcoded `/bin/*` or `/sbin/*` default in `ops/live/**` | one hit only (this one) | COMPLETE |
+| class sweep | `I00_ENV=/usr/bin/env` | `/usr/bin` is a real directory on both shapes; `readlink -f /usr/bin/env` = itself on the target | CLEAN |
+| class sweep | remaining realpath-equality asserts in `ops/live/bin/common.sh` | all operate on caller-supplied or discovered paths, none on a hardcoded default | CLEAN |
+| additive regression | default canonicalizes; assert still rejects non-canonical supplied values | `ops/tests/i00/test-deploy-portability-008-bash-canonicality.sh` | PASS (7 assertions) |
+| donor test path | modified only | `ops/tests/helpers.sh` re-corrected for the fixed-interpreter preference | FIXED |
+| amendment contract | effective tree, root digest, and file binding re-chained | `ops/i00/l15-amendment-contract.json` | BOUND |
+| contract pin | repinned in every consumer | five consumers under `ops/i00/bin/` | REPINNED |

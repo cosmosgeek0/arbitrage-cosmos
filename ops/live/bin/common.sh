@@ -1646,7 +1646,17 @@ configure_i00_bash() {
       || die_code 1 "authorized Bash/env programs differ from verified descriptors"
     return 0
   elif [ "$_I00_BASH_FROM_ENV_FILE" != 1 ]; then
-    I00_BASH=/bin/bash
+    # usr-merged distributions (Ubuntu 24.04 among them) ship /bin as a
+    # symlink to usr/bin, so the literal /bin/bash is NOT canonical there and
+    # the strict assert below would reject this module's own built-in default.
+    # Canonicalize the DEFAULT only. Values supplied through an env file are
+    # deliberately left untouched: they must already be canonical, exactly as
+    # before, and are still rejected by the identical assert if they are not.
+    I00_BASH="$(i00_guard_node -e '
+      const fs = require("fs");
+      process.stdout.write(fs.realpathSync(process.argv[1]));
+    ' /bin/bash)" \
+      || die_code 1 "default Bash program cannot be canonicalized"
   fi
   if [ "$_I00_ENV_FROM_ENV_FILE" != 1 ]; then
     I00_ENV=/usr/bin/env

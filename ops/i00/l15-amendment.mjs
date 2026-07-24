@@ -157,6 +157,7 @@ const FINDING_TESTS = Object.freeze({
     'ops/tests/i00/test-deploy-portability-008-l15-bytes.sh',
     'ops/tests/i00/df32-r3-watchdog-successor.sh',
     'ops/tests/i00/df32-r3-backup-successor.sh',
+    'ops/tests/i00/test-deploy-portability-008-bash-canonicality.sh',
   ]),
 });
 const FINDING_RECEIPT_PATHS = Object.freeze({

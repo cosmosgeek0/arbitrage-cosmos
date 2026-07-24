@@ -423,9 +423,9 @@
     {
       "findingId": "DEPLOY-PORTABILITY-008",
       "baseLiveTree": "a90d108fe7614a00de87e6280089fe0201c8dc3d",
-      "effectiveLiveTree": "e7ff70a057990121c8d5d9ce10964c8862b6a2c6",
+      "effectiveLiveTree": "ac9b359ed58e4b3f4b54b2f7e15f4d0eabc2844f",
       "baseRootDigestSha256": "c37e5a80b9591a31ff41af7e07f66bb75a99d13f2d6e6edbcb8726dae7243cc0",
-      "effectiveRootDigestSha256": "5a86bb6b38fd5b8a97322481f52a0e00098946b32bbd40569e4382aae8597ac5",
+      "effectiveRootDigestSha256": "7969c01db666c8f9cf6f1d2a5d6fb77248cf004ae63bde0854bfe323b3d15b23",
       "changedFiles": [
         {
           "path": "ops/live/README.md",
@@ -456,8 +456,8 @@
           "mode": "100755",
           "beforeGitBlob": "73f5b58317b56b662c0488ae7cfee793f71e027c",
           "beforeSha256": "2da2ffd952daf2480bde91280f422e5d86d45c471515c390f0592923c52c09b6",
-          "afterGitBlob": "82d3dd57f6815f483eafb5deb5b14afdf686648b",
-          "afterSha256": "a04949f4937dc9d76a58cf9aad58b7cdd3457ecb61f2540d7dbd4b1dc51d87a6"
+          "afterGitBlob": "dd7a1d918496ceee26fdb0ddd20fef14c1219262",
+          "afterSha256": "e2235fdbd7a89adbe358c622697d9a57a7051fa4a7eb9bf2438feb5d28c385ba"
         },
         {
           "path": "ops/live/bin/deploy.sh",
@@ -586,8 +586,8 @@
           "mode": "100755",
           "beforeGitBlob": "acc06258e6178d3f8f0253abfc5f1571b8970be6",
           "beforeSha256": "6f23aa5e7e770e4850038f7a228e33fe4e05ad44a3f7c75a7622fbcbd1b6b9bb",
-          "afterGitBlob": "69492c838a5474e62fe642fee895fbaa98e1ec9f",
-          "afterSha256": "113fd38a072b4227316e2a06c68c7b368e1ace4a8fbd21cde6c232202a7f6f26"
+          "afterGitBlob": "d08d6ee37bcf0269596ed61ad87b1505c3053569",
+          "afterSha256": "b0f29eebb93cac8bd3dc87f5318045ba7b8bb1925514436c670d6338011708e2"
         },
         {
           "path": "ops/tests/test-backup-restore.sh",
@@ -649,8 +649,8 @@
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/DEPLOY-PORTABILITY-008_L15_AMENDMENT_RECEIPT.md",
         "mode": "100644",
-        "gitBlob": "52c0b298b1d9163c0617a72466fd9a8b06137d08",
-        "sha256": "6f8492e7cf6e53101ba8d0991c4337387ae6ad5e12365b8cfdc7bd11aef89d60"
+        "gitBlob": "ee970c1cefc88690de23d7df47838334516c472f",
+        "sha256": "ad9a944867cee676162e2ec3c6b46c9898b064fe15857f5281350698b0746456"
       },
       "regressionTests": [
         {
@@ -670,13 +670,19 @@
           "mode": "100755",
           "gitBlob": "be3c772dc48cc2be480d8a827852a0942f5778bb",
           "sha256": "05e3466348c78d9f59f842dc542b27bad0afcc353400fe328c531e04d53890b0"
+        },
+        {
+          "path": "ops/tests/i00/test-deploy-portability-008-bash-canonicality.sh",
+          "mode": "100755",
+          "gitBlob": "1360c83bf4511e7a437ce98203a998d995834a4c",
+          "sha256": "440d4856761d72e358d91aea8ed5a19ef66f7da7e3fb1346ae22de5e822d433e"
         }
       ]
     }
   ],
   "effectiveLive": {
-    "tree": "e7ff70a057990121c8d5d9ce10964c8862b6a2c6",
-    "rootDigestSha256": "5a86bb6b38fd5b8a97322481f52a0e00098946b32bbd40569e4382aae8597ac5",
+    "tree": "ac9b359ed58e4b3f4b54b2f7e15f4d0eabc2844f",
+    "rootDigestSha256": "7969c01db666c8f9cf6f1d2a5d6fb77248cf004ae63bde0854bfe323b3d15b23",
     "fileCount": 31,
     "files": [
       {
@@ -730,8 +736,8 @@
       {
         "path": "bin/common.sh",
         "mode": "100755",
-        "gitBlob": "82d3dd57f6815f483eafb5deb5b14afdf686648b",
-        "sha256": "a04949f4937dc9d76a58cf9aad58b7cdd3457ecb61f2540d7dbd4b1dc51d87a6"
+        "gitBlob": "dd7a1d918496ceee26fdb0ddd20fef14c1219262",
+        "sha256": "e2235fdbd7a89adbe358c622697d9a57a7051fa4a7eb9bf2438feb5d28c385ba"
       },
       {
         "path": "bin/deploy.sh",

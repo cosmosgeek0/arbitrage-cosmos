@@ -2,6 +2,21 @@
 set -euo pipefail
 
 if [ "${1:-}" = "${VALIDATE_RELEASE_PATH:?}" ]; then
+  if [ "${MUTATION_KIND:?}" = assert-canonical-release ]; then
+    PREVIOUS=""
+    OBSERVED_RELEASE=""
+    for ARGUMENT in "$@"; do
+      if [ "$PREVIOUS" = "--release" ]; then
+        OBSERVED_RELEASE="$ARGUMENT"
+        break
+      fi
+      PREVIOUS="$ARGUMENT"
+    done
+    [ -n "$OBSERVED_RELEASE" ] \
+      && [ "$OBSERVED_RELEASE" = "${EXPECTED_CANONICAL_RELEASE:?}" ] \
+      || exit 95
+    exec "${REAL_NODE:?}" "$@"
+  fi
   "${REAL_NODE:?}" "$@"
   if [ ! -e "${MUTATION_FLAG:?}" ]; then
     if [ "${MUTATION_KIND:?}" = precreated-staging-symlink ]; then

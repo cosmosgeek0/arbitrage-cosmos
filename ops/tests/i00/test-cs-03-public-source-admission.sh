@@ -49,7 +49,7 @@ export CURRENT_LINK="$COSMOS_ROOT/current"
 export PREVIOUS_LINK="$COSMOS_ROOT/previous"
 export DATA_DIR="$SANDBOX/data"
 export OPS_STATE_DIR="$SANDBOX/ops"
-export APP_UNIT=cosmos-app.service
+export APP_UNIT=df32-fixture-app.service
 APP_PORT="$(pick_port)"
 export PROBE_PORT="$(pick_port)"
 export HEALTH_BASE="http://127.0.0.1:$APP_PORT"
@@ -62,7 +62,7 @@ export MOCK_SYSTEMCTL_LOG="$SANDBOX/systemctl.log"
 : > "$MOCK_SYSTEMCTL_LOG"
 export EXPOSURE_CMD="printf NONE"
 export PROBE_CAPTURE="$SANDBOX/probe-env.txt"
-export PROBE_CMD='printf "%s|%s\n" "${I00_PUBLIC_SOURCE_STARTUP_EGRESS-}" "${I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES-unset}" > "$PROBE_CAPTURE"; BEHAVIOR_FILE="$RELEASE_DIR/probe-behavior.env" PORT="$PROBE_PORT" exec node '"$FIXTURES"'/fake-app.mjs'
+export PROBE_CMD='printf "%s|%s\n" "${I00_PUBLIC_SOURCE_STARTUP_EGRESS-}" "${I00_DETERMINISTIC_OFFLINE_PUBLIC_SOURCES-unset}" > "'"$PROBE_CAPTURE"'"; BEHAVIOR_FILE="$RELEASE_DIR/probe-behavior.env" PORT="$PROBE_PORT" exec node '"$FIXTURES"'/fake-app.mjs'
 
 start_fake_app "$APP_PORT" "$CURRENT_LINK/runtime-behavior.env" >/dev/null
 bash "$FIXTURES/make-release.sh" "$SANDBOX/release-a" rel-cs03-a 1 false

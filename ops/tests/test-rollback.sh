@@ -10,7 +10,7 @@ export CURRENT_LINK="$COSMOS_ROOT/current"
 export PREVIOUS_LINK="$COSMOS_ROOT/previous"
 export DATA_DIR="$SANDBOX/data"
 export OPS_STATE_DIR="$SANDBOX/ops"
-export APP_UNIT=cosmos-app.service
+export APP_UNIT=df32-fixture-app.service
 APP_PORT="$(pick_port)"
 PROBE_PORT="$(pick_port)"
 export PROBE_PORT

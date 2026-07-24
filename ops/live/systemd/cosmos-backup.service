@@ -1,11 +1,14 @@
 # ops/live/systemd/cosmos-backup.service — one application-consistent backup.
 #
-# Fired by cosmos-backup.timer. Runs as the cosmos user: it needs read
-# access to the state store and write access to the backup directory,
-# nothing more.
+# Historical timer target retained for byte/audit continuity. The unit is
+# dormant until a separately ratified scheduled-action class exists.
 
 [Unit]
 Description=Cosmos application-consistent state store backup
+# No ratified timer/manual action class exists. Keep the historical unit bytes
+# for audit compatibility, but make activation impossible.
+ConditionPathExists=!/
+RefuseManualStart=yes
 
 [Service]
 Type=oneshot

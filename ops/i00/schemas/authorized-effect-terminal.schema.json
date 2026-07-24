@@ -1,0 +1,412 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmosgeek.org/schemas/i00/authorized-effect-terminal.v1.json",
+  "title": "I00 authorized effect terminal evidence",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "status",
+    "actionClass",
+    "authorizationId",
+    "claimKey",
+    "consumptionSha256",
+    "riskVersion",
+    "serverPreviewDigest",
+    "effectUid",
+    "effectGid",
+    "program",
+    "verifier",
+    "delegatedScript",
+    "delegatedBootstrap",
+    "delegatedEnvironment",
+    "effectExecutables",
+    "delegatedArgv",
+    "effectDirectory",
+    "helperPolicy",
+    "automaticRollback",
+    "writeRoots",
+    "readRoots",
+    "observedRoots",
+    "effectOutputPolicy",
+    "authorizationExpiresAtUtc",
+    "evidenceValidUntilUtc",
+    "receiptPublicationReserveSeconds",
+    "startEvidencePath",
+    "finishEvidencePath",
+    "effectStartedAtUtc",
+    "effectFinishedAtUtc",
+    "startEvidenceSha256",
+    "exitCode",
+    "signal",
+    "forced",
+    "timedOut",
+    "automaticRollbackAcknowledged",
+    "automaticRollbackHandoffSha256",
+    "programBindingRetained",
+    "effectMayHaveMutated",
+    "successRecorderEligible"
+    ,"effectOutput"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "kind": { "type": "string", "const": "AUTHORIZED_EFFECT_TERMINAL" },
+    "status": {
+      "type": "string",
+      "enum": [
+        "AUTHORIZED_EFFECT_COMPLETED",
+        "AUTHORIZED_EFFECT_TERMINATED"
+      ]
+    },
+    "actionClass": { "type": "string", "minLength": 1 },
+    "authorizationId": { "type": "string", "minLength": 1 },
+    "claimKey": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "consumptionSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "riskVersion": {
+      "type": "string",
+      "pattern": "^i00-deployment-risk-v1:sha256:[0-9a-f]{64}$"
+    },
+    "serverPreviewDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "effectUid": { "type": "string", "pattern": "^(?:0|[1-9][0-9]*)$" },
+    "effectGid": { "type": "string", "pattern": "^(?:0|[1-9][0-9]*)$" },
+    "program": { "$ref": "#/$defs/fileBinding" },
+    "verifier": { "$ref": "#/$defs/fileBinding" },
+    "delegatedScript": { "$ref": "#/$defs/fileBinding" },
+    "delegatedBootstrap": {
+      "oneOf": [
+        { "type": "string", "const": "NONE" },
+        { "$ref": "#/$defs/typedFileBinding" }
+      ]
+    },
+    "delegatedEnvironment": {
+      "oneOf": [
+        { "type": "string", "const": "NONE" },
+        { "$ref": "#/$defs/typedFileBinding" }
+      ]
+    },
+    "effectExecutables": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/executableCapability" }
+    },
+    "delegatedArgv": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "effectDirectory": {
+      "type": "object",
+      "required": ["kind", "path", "identity"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["CLAIM_TEMPORARY_DIRECTORY", "CREDENTIAL_OUTPUT_PARENT"]
+        },
+        "path": { "type": "string", "pattern": "^/" },
+        "identity": {
+          "type": "string",
+          "pattern": "^device=[0-9]+,inode=[0-9]+,mode=[0-7]+,uid=[0-9]+,gid=[0-9]+$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "helperPolicy": {
+      "oneOf": [
+        { "type": "string", "const": "NONE" },
+        { "$ref": "#/$defs/helperPolicy" }
+      ]
+    },
+    "automaticRollback": {
+      "oneOf": [
+        { "$ref": "#/$defs/emptyObject" },
+        { "$ref": "#/$defs/automaticRollback" }
+      ]
+    },
+    "writeRoots": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/writeRoot" }
+    },
+    "readRoots": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/readRoot" }
+    },
+    "observedRoots": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/observedRoot" }
+    },
+    "effectOutputPolicy": {
+      "oneOf": [
+        { "$ref": "#/$defs/emptyObject" },
+        { "$ref": "#/$defs/effectOutputPolicy" }
+      ]
+    },
+    "authorizationExpiresAtUtc": { "type": "string", "format": "date-time" },
+    "evidenceValidUntilUtc": { "type": "string", "format": "date-time" },
+    "receiptPublicationReserveSeconds": { "type": "integer" },
+    "startEvidencePath": { "type": "string", "pattern": "^/" },
+    "finishEvidencePath": { "type": "string", "pattern": "^/" },
+    "effectStartedAtUtc": { "type": "string", "format": "date-time" },
+    "effectFinishedAtUtc": { "type": "string", "format": "date-time" },
+    "startEvidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "exitCode": { "type": ["integer", "null"] },
+    "signal": { "type": ["string", "null"] },
+    "forced": { "type": "boolean" },
+    "timedOut": { "type": "boolean" },
+    "automaticRollbackAcknowledged": { "type": "boolean" },
+    "automaticRollbackHandoffSha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "programBindingRetained": { "type": "boolean" },
+    "effectMayHaveMutated": { "type": "boolean" },
+    "successRecorderEligible": { "type": "boolean" }
+    ,"effectOutput": { "$ref": "#/$defs/effectOutputResult" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "emptyObject": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "effectOutputPolicy": {
+      "type": "object",
+      "required": ["status", "fd", "schemaVersion", "kind", "maxBytes"],
+      "properties": {
+        "status": { "type": "string", "const": "ARMED" },
+        "fd": { "type": "integer", "const": 53 },
+        "schemaVersion": { "type": "integer", "const": 1 },
+        "kind": { "type": "string", "const": "I00_AUTHORIZED_EFFECT_OUTPUT" },
+        "maxBytes": { "type": "integer", "const": 4096 }
+      },
+      "additionalProperties": false
+    },
+    "effectOutputResult": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "outputEvidencePath",
+            "outputEvidenceSha256",
+            "writeRootName",
+            "outputPath",
+            "outputRelativePath",
+            "outputIdentity",
+            "outputTreeSha256",
+            "receiptRelativePath",
+            "receiptSha256",
+            "databaseSha256",
+            "databaseBytes",
+            "beforeInventorySha256",
+            "afterInventorySha256"
+          ],
+          "properties": {
+            "status": { "type": "string", "const": "BOUND" },
+            "outputEvidencePath": { "type": "string", "pattern": "^/" },
+            "outputEvidenceSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "writeRootName": { "type": "string", "const": "backupDir" },
+            "outputPath": { "type": "string", "pattern": "^/" },
+            "outputRelativePath": {
+              "type": "string",
+              "pattern": "^[0-9]{8}T[0-9]{6}Z(?:-[1-9][0-9]*)?$"
+            },
+            "outputIdentity": {
+              "type": "string",
+              "pattern": "^device=[0-9]+,inode=[0-9]+,mode=[0-7]+,uid=[0-9]+,gid=[0-9]+$"
+            },
+            "outputTreeSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "receiptRelativePath": {
+              "type": "string",
+              "pattern": "^[0-9]{8}T[0-9]{6}Z(?:-[1-9][0-9]*)?/manifest[.]json$"
+            },
+            "receiptSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "databaseSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "databaseBytes": {
+              "type": "integer"
+            },
+            "beforeInventorySha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "afterInventorySha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["NOT_APPLICABLE", "MISSING", "INVALID", "AMBIGUOUS"]
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "fileBinding": {
+      "type": "object",
+      "required": ["path", "sha256", "identity"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^/" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "identity": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "typedFileBinding": {
+      "type": "object",
+      "required": ["kind", "binding"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["COMMON_SHELL", "VERIFIER_SOURCE", "SANITIZED_ENV", "PROVIDER_CONFIG"]
+        },
+        "binding": { "$ref": "#/$defs/fileBinding" }
+      },
+      "additionalProperties": false
+    },
+    "executableCapability": {
+      "type": "object",
+      "required": ["name", "fd", "binding"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "alert", "aws", "bash", "chmod", "cp", "curl", "env", "exposure",
+            "getent", "gzip", "hash", "id", "mkdir", "mv", "node", "rm", "setpriv",
+            "sqlite", "systemctl", "tar"
+          ]
+        },
+        "fd": { "type": "integer" },
+        "binding": { "$ref": "#/$defs/fileBinding" }
+      },
+      "additionalProperties": false
+    },
+    "helperPolicy": {
+      "type": "object",
+      "required": ["exposure", "alert"],
+      "properties": {
+        "exposure": {
+          "type": "object",
+          "required": ["program", "script", "argvShape", "timeoutMs"],
+          "properties": {
+            "program": { "type": "string", "const": "node" },
+            "script": { "type": "string", "const": "exposure" },
+            "argvShape": { "type": "string", "const": "NO_ARGS" },
+            "timeoutMs": { "type": "integer", "const": 3000 }
+          },
+          "additionalProperties": false
+        },
+        "alert": {
+          "type": "object",
+          "required": ["program", "script", "argvShape", "timeoutMs"],
+          "properties": {
+            "program": { "type": "string", "const": "bash" },
+            "script": { "type": "string", "const": "alert" },
+            "argvShape": { "type": "string", "const": "SEVERITY_CODE_MESSAGE" },
+            "timeoutMs": { "type": "integer", "const": 5000 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "automaticRollback": {
+      "type": "object",
+      "required": [
+        "status", "handoffNonce", "script", "delegatedArgv", "recovery",
+        "scriptFd", "handoffFd", "acknowledgementFd"
+      ],
+      "properties": {
+        "status": { "type": "string", "const": "ARMED" },
+        "handoffNonce": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "script": { "$ref": "#/$defs/fileBinding" },
+        "delegatedArgv": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "recovery": { "type": "string", "minLength": 1 },
+        "scriptFd": { "type": "integer", "const": 35 },
+        "handoffFd": { "type": "integer", "const": 36 },
+        "acknowledgementFd": { "type": "integer", "const": 37 }
+      },
+      "additionalProperties": false
+    },
+    "writeRoot": {
+      "type": "object",
+      "required": ["name", "fd", "path", "identity"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "destinationParent", "cosmosRoot", "releasesDir",
+            "currentLinkParent", "previousLinkParent", "opsStateDir",
+            "backupDir", "isolatedTargetParent", "rollbackEvidenceRoot", "dataDir"
+          ]
+        },
+        "fd": { "type": "integer" },
+        "path": { "type": "string", "pattern": "^/" },
+        "identity": {
+          "type": "string",
+          "pattern": "^device=[0-9]+,inode=[0-9]+,mode=[0-7]+,uid=[0-9]+,gid=[0-9]+$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "observedRoot": {
+      "type": "object",
+      "required": ["name", "path", "identity"],
+      "properties": {
+        "name": { "type": "string", "enum": ["dataDir", "backupDir"] },
+        "path": { "type": "string", "pattern": "^/" },
+        "identity": {
+          "type": "string",
+          "pattern": "^device=[0-9]+,inode=[0-9]+,mode=[0-7]+,uid=[0-9]+,gid=[0-9]+$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "readRoot": {
+      "type": "object",
+      "required": ["name", "fd", "path", "identity", "treeSha256"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "enum": [
+            "dataDir", "backupSource", "releaseSource", "automaticRollbackSource"
+          ]
+        },
+        "fd": { "type": "integer" },
+        "path": { "type": "string", "pattern": "^/" },
+        "identity": { "type": "string", "minLength": 1 },
+        "treeSha256": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

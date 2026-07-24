@@ -1,7 +1,9 @@
-# ops/live/systemd/cosmos-watchdog.timer — fires the external watchdog.
+# ops/live/systemd/cosmos-watchdog.timer — dormant one-minute cadence template.
 
 [Unit]
 Description=Run the cosmos external watchdog every minute
+ConditionPathExists=!/
+RefuseManualStart=yes
 
 [Timer]
 OnBootSec=2min

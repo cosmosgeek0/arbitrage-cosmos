@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmosgeek.org/schemas/i00/authorization-consumption.v1.json",
+  "title": "I00 authorization consumption",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "status",
+    "claimKey",
+    "authorizationId",
+    "actionClass",
+    "nonce",
+    "riskVersion",
+    "serverPreviewDigest",
+    "rootMode",
+    "consumptionRoot",
+    "consumptionRootIdentity",
+    "evidenceValidUntilUtc",
+    "authorizationSha256",
+    "riskDocumentSha256",
+    "previewDocumentSha256",
+    "consumedAtUtc"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "kind": { "type": "string", "const": "AUTHORIZATION_CONSUMPTION" },
+    "status": { "type": "string", "const": "AUTHORIZATION_CONSUMED" },
+    "claimKey": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "authorizationId": { "type": "string", "minLength": 1 },
+    "actionClass": { "type": "string", "minLength": 1 },
+    "nonce": { "type": "string", "pattern": "^(?:[0-9a-f]{2}){16,64}$" },
+    "riskVersion": {
+      "type": "string",
+      "pattern": "^i00-deployment-risk-v1:sha256:[0-9a-f]{64}$"
+    },
+    "serverPreviewDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "rootMode": { "type": "string", "enum": ["SYSTEM", "STAGING", "TEST"] },
+    "consumptionRoot": { "type": "string", "pattern": "^/" },
+    "consumptionRootIdentity": { "type": "string", "minLength": 1 },
+    "evidenceValidUntilUtc": { "type": "string", "format": "date-time" },
+    "authorizationSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "riskDocumentSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "previewDocumentSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "consumedAtUtc": { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

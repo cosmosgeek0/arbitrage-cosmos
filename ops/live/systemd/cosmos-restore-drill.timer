@@ -1,7 +1,9 @@
-# ops/live/systemd/cosmos-restore-drill.timer — weekly isolated restore test.
+# ops/live/systemd/cosmos-restore-drill.timer — dormant weekly-cadence template.
 
 [Unit]
 Description=Run the cosmos isolated restore drill weekly
+ConditionPathExists=!/
+RefuseManualStart=yes
 
 [Timer]
 OnCalendar=weekly

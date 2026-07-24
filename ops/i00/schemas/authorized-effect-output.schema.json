@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmosgeek.org/schemas/i00/authorized-effect-output.v1.json",
+  "title": "I00 authorized effect output",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "status",
+    "actionClass",
+    "claimKey",
+    "writeRootName",
+    "outputRelativePath",
+    "receiptRelativePath"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "kind": { "type": "string", "const": "I00_AUTHORIZED_EFFECT_OUTPUT" },
+    "status": { "type": "string", "const": "OUTPUT_REPORTED" },
+    "actionClass": { "type": "string", "const": "BACKUP_CREATE" },
+    "claimKey": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "writeRootName": { "type": "string", "const": "backupDir" },
+    "outputRelativePath": {
+      "type": "string",
+      "pattern": "^[0-9]{8}T[0-9]{6}Z(?:-[1-9][0-9]*)?$"
+    },
+    "receiptRelativePath": {
+      "type": "string",
+      "pattern": "^[0-9]{8}T[0-9]{6}Z(?:-[1-9][0-9]*)?/manifest[.]json$"
+    }
+  },
+  "additionalProperties": false
+}

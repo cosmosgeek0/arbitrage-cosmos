@@ -1,14 +1,11 @@
-#!/usr/bin/env bash
+#!/bin/bash -p
 # ops/live/bin/restore.sh — restore a backup into an explicit target directory.
 #
 # §24.2: periodic restore tests run against an ISOLATED copy, never the
-# production state store. This script therefore refuses the live DATA_DIR
-# unless three independent things are all true:
-#   1. the operator passed --allow-production;
-#   2. the environment carries RESTORE_CONFIRM=RESTORE_PRODUCTION;
-#   3. the app unit is NOT active (checked via $SYSTEMCTL).
-# Routine restore verification should use restore-drill.sh, which always
-# restores into a throwaway directory.
+# production state store. DF-32 removes the legacy production-restore bypass:
+# every target inside DATA_DIR is unconditionally unavailable. The retained
+# --allow-production argument fails closed so old operator invocations cannot
+# silently acquire a different meaning.
 #
 # Backup integrity is verified from a private, stable snapshot BEFORE anything
 # is written to the target. The manifest must declare the exact backup
@@ -25,17 +22,48 @@
 #   0 restored;  1 bad arguments/backup/target;  2 production-path refusal
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+unset BASH_ENV ENV CDPATH GLOBIGNORE
+case "$0" in
+  /*) _I00_SCRIPT_PATH="$0" ;;
+  */*) _I00_SCRIPT_PATH="$PWD/$0" ;;
+  *) printf '%s\n' "restore.sh requires an explicit script path" >&2; exit 1 ;;
+esac
+SCRIPT_DIR="${_I00_SCRIPT_PATH%/*}"
+[ "$SCRIPT_DIR" != "$_I00_SCRIPT_PATH" ] || SCRIPT_DIR=/
+SCRIPT_DIR="$(cd -P -- "$SCRIPT_DIR" && pwd -P)" \
+  || { printf '%s\n' "restore.sh cannot bind its script directory" >&2; exit 1; }
+unset _I00_SCRIPT_PATH
+readonly SCRIPT_DIR
+PATH=/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin
+export PATH
+readonly PATH
 # shellcheck source=common.sh
-. "$SCRIPT_DIR/common.sh"
+if [ "${_I00_AUTHORIZED_COMMON_READY:-0}" != 1 ]; then
+  . "$SCRIPT_DIR/common.sh"
+fi
+type require_i00_effect_class >/dev/null 2>&1 \
+  || { printf '%s\n' 'FATAL: restore.sh common bootstrap is unavailable' >&2; exit 1; }
 OPS_LOG_TAG=cosmos-restore
 
-BACKUP_ARG="" TARGET="" ENV_FILE="" ALLOW_PRODUCTION=0 FORCE=0
+BACKUP_ARG="" TARGET="" ENV_FILE="" ENV_DESCRIPTOR="" ALLOW_PRODUCTION=0 FORCE=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --backup) BACKUP_ARG="${2:?--backup needs a value}"; shift 2 ;;
     --target) TARGET="${2:?--target needs a value}"; shift 2 ;;
-    --env-file) ENV_FILE="${2:?--env-file needs a value}"; shift 2 ;;
+    --env-file)
+      [ -z "$ENV_FILE" ] && [ -z "$ENV_DESCRIPTOR" ] \
+        || die_code 1 "named and descriptor environments are exclusive and single-use"
+      ENV_FILE="${2:?--env-file needs a value}"
+      shift 2
+      ;;
+    --i00-effect-environment-fd)
+      [ -z "$ENV_FILE" ] && [ -z "$ENV_DESCRIPTOR" ] \
+        || die_code 1 "named and descriptor environments are exclusive and single-use"
+      [ "${2:-}" = 12 ] || die_code 1 "effect environment descriptor must be 12"
+      ENV_DESCRIPTOR=12
+      ENV_FILE=/proc/self/fd/12
+      shift 2
+      ;;
     --allow-production) ALLOW_PRODUCTION=1; shift ;;
     --force) FORCE=1; shift ;;
     -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
@@ -45,23 +73,140 @@ done
 [ -n "$BACKUP_ARG" ] || die_code 1 "--backup is required (id, directory, or 'latest')"
 [ -n "$TARGET" ] || die_code 1 "--target is required (explicit directory; no default)"
 
+if [ "$_I00_AUTHORIZED_EFFECT_PRESENT" = 1 ]; then
+  require_i00_effect_class ISOLATED_RESTORE
+fi
+require_i00_effect_env_file_binding "$ENV_FILE"
 load_env_file "$ENV_FILE"
 cosmos_layout_defaults
 : "${BACKUP_DIR:=/var/backups/cosmos}"
-require_cmd "$NODE" "$SQLITE" tar
+BACKUP_DIR="$(exact_existing_directory_path "$BACKUP_DIR")" \
+  || die_code 1 "backup root must be one exact raw canonical non-symlink directory"
+DATA_DIR="$(exact_existing_directory_path "$DATA_DIR")" \
+  || die_code 1 "DATA_DIR must be one exact raw canonical non-symlink directory"
+
+# Caller-selected restore endpoints must already use their exact lexical and
+# physical spelling. Missing leaves are projected through the deepest existing
+# ancestor by canonical_path; dot traversal or a symlink-parent alias changes
+# that spelling and is refused rather than silently normalized.
+exact_restore_endpoint() {
+  local raw_endpoint lexical_endpoint physical_endpoint
+  raw_endpoint="$1"
+  case "$raw_endpoint" in
+    /*) ;;
+    *) return 1 ;;
+  esac
+  lexical_endpoint="$(i00_guard_node -e '
+    const path = require("node:path");
+    process.stdout.write(path.resolve(process.argv[1]));
+  ' "$raw_endpoint")" || return 1
+  [ "$lexical_endpoint" = "$raw_endpoint" ] || return 1
+  physical_endpoint="$(canonical_path "$raw_endpoint")" || return 1
+  [ "$physical_endpoint" = "$raw_endpoint" ] || return 1
+  printf '%s\n' "$physical_endpoint"
+}
+TARGET_CANON="$(exact_restore_endpoint "$TARGET")" \
+  || die_code 1 "restore target must be one exact raw and physical canonical absolute path"
+TARGET_PARENT="$(path_dirname "$TARGET_CANON")"
+if [ "$_I00_AUTHORIZED_EFFECT_PRESENT" = 1 ]; then
+  TARGET_PARENT="$(exact_existing_directory_path "$TARGET_PARENT")" \
+    || die_code 1 "restore target parent must be one exact raw canonical non-symlink directory"
+else
+  TARGET_PARENT="$(exact_raw_canonical_path "$TARGET_PARENT")" \
+    || die_code 1 "restore target parent must be one exact raw canonical absolute path"
+fi
+if [ "$_I00_AUTHORIZED_EFFECT_PRESENT" = 1 ]; then
+  require_all_authorized_write_root_bindings
+  require_authorized_write_root_binding isolatedTargetParent "$TARGET_PARENT"
+  require_authorized_observed_root_binding dataDir "$DATA_DIR"
+  require_authorized_observed_root_binding backupDir "$BACKUP_DIR"
+fi
+TARGET_EFFECT_PARENT="$(authorized_write_effect_path \
+  isolatedTargetParent "$TARGET_PARENT")"
+TARGET_EFFECT_CANON="$TARGET_EFFECT_PARENT/$(path_basename "$TARGET_CANON")"
+
+if path_effectively_within "$DATA_DIR" /var/lib/cosmos/data; then
+  require_i00_effect_class ISOLATED_RESTORE
+fi
+
+if i00_effect_class_is ISOLATED_RESTORE; then
+  [ "$NODE" = "$_I00_EFFECT_NODE" ] \
+    || die_code 1 "ISOLATED_RESTORE NODE must match the bound guard interpreter"
+  TAR_BIN="${TAR:-}"
+  GZIP_BIN="${GZIP:-}"
+  [ "$TAR_BIN" = /proc/self/fd/22 ] \
+    && [ "$GZIP_BIN" = /proc/self/fd/39 ] \
+    || die_code 1 "ISOLATED_RESTORE tar/gzip descriptors are invalid"
+  require_trusted_effect_executable "$TAR_BIN" TAR
+  require_trusted_effect_executable "$GZIP_BIN" GZIP
+else
+  TAR_BIN="$(command -v "${TAR:-tar}")" \
+    || die_code 1 "required command missing: ${TAR:-tar}"
+  TAR_BIN="$(i00_guard_node -e \
+    'const fs=require("fs");process.stdout.write(fs.realpathSync.native(process.argv[1]))' \
+    "$TAR_BIN")" \
+    || die_code 1 "staging TAR cannot be canonicalized"
+  GZIP_BIN=NONE
+fi
+require_cmd "$SQLITE" "$TAR_BIN"
+if i00_effect_class_is ISOLATED_RESTORE; then
+  require_cmd "$GZIP_BIN"
+fi
+
+# An isolated restore target is never allowed to intersect a fixed production
+# tree, regardless of an overridable DATA_DIR. The shared guard resolves raw
+# components through the deepest existing ancestor with its captured,
+# identity-bound interpreter before comparing the complete protected union.
+if path_effectively_intersects_protected_union "$TARGET_CANON"; then
+  die_code 2 "isolated restore target intersects a fixed production root"
+fi
+if [ "${COSMOS_RESTORE_TEST_MODE:-0}" = 1 ]; then
+  for restore_marker in \
+    "${RESTORE_TEST_STAGE_READY_MARKER:-}" \
+    "${RESTORE_TEST_STAGE_CONTINUE_MARKER:-}"
+  do
+    [ -z "$restore_marker" ] \
+      || ! path_effectively_intersects_protected_union "$restore_marker" \
+      || die_code 1 "restore test marker intersects a fixed production root"
+  done
+fi
 
 # --- resolve the backup ---------------------------------------------------------
-if [ "$BACKUP_ARG" = "latest" ]; then
-  latest="$(ls -1 "$BACKUP_DIR" 2>/dev/null | grep -E '^[0-9]{8}T[0-9]{6}Z' | sort | tail -1 || true)"
-  [ -n "$latest" ] || die_code 1 "no completed backup found in $BACKUP_DIR"
-  BACKUP_PATH="$BACKUP_DIR/$latest"
-elif [ -d "$BACKUP_ARG" ]; then
-  BACKUP_PATH="$BACKUP_ARG"
-else
-  BACKUP_PATH="$BACKUP_DIR/$BACKUP_ARG"
+if [ "$_I00_AUTHORIZED_EFFECT_PRESENT" = 1 ]; then
+  case "$BACKUP_ARG" in
+    /*) ;;
+    *) die_code 1 "authorized restore requires one risk-bound named backup path" ;;
+  esac
 fi
-[ -e "$BACKUP_PATH/manifest.json" ] || die_code 1 "not a completed backup (no manifest.json): $BACKUP_PATH"
-[ -e "$BACKUP_PATH/cosmos.db" ] || die_code 1 "backup has no cosmos.db: $BACKUP_PATH"
+case "$BACKUP_ARG" in
+  latest)
+    latest="$(completed_backup_inventory latest "$BACKUP_DIR")" \
+      || die_code 1 "completed backup inventory is unsafe"
+    [ -n "$latest" ] || die_code 1 "no completed backup found in $BACKUP_DIR"
+    BACKUP_PATH="$BACKUP_DIR/$latest"
+    ;;
+  /*)
+    BACKUP_PATH="$BACKUP_ARG"
+    ;;
+  ""|.*|*[!A-Za-z0-9._-]*)
+    die_code 1 "backup selector must be 'latest', one safe backup id, or one exact absolute path"
+    ;;
+  *)
+    BACKUP_PATH="$BACKUP_DIR/$BACKUP_ARG"
+    ;;
+esac
+BACKUP_CANON="$(exact_restore_endpoint "$BACKUP_PATH")" \
+  || die_code 1 "selected backup must be one exact raw and physical canonical absolute path"
+[ -d "$BACKUP_CANON" ] || die_code 1 "selected backup is not one canonical directory"
+BACKUP_PATH="$BACKUP_CANON"
+if [ "$_I00_AUTHORIZED_EFFECT_PRESENT" = 1 ]; then
+  require_authorized_read_root_binding backupSource "$BACKUP_CANON"
+fi
+BACKUP_EFFECT_PATH="$(authorized_read_effect_path backupSource "$BACKUP_CANON")"
+[ -e "$BACKUP_EFFECT_PATH/manifest.json" ] \
+  || die_code 1 "not a completed backup (no manifest.json): $BACKUP_PATH"
+[ -e "$BACKUP_EFFECT_PATH/cosmos.db" ] \
+  || die_code 1 "backup has no cosmos.db: $BACKUP_PATH"
 
 # --- production-path guard ------------------------------------------------------
 # realpath(3) requires the full leaf to exist. For a new restore target, peel
@@ -70,78 +215,38 @@ fi
 # Do not call path.resolve() first: lexical collapse of `alias/../child` does
 # not match kernel traversal when alias is a symlink.
 canonical_restore_path() {
-  "$NODE" - "$1" <<'NODE'
-const fs = require('node:fs');
-const path = require('node:path');
-const input = process.argv[2];
-try {
-  if (typeof input !== 'string' || input.length === 0 || /[\0-\x1f\x7f]/.test(input)) {
-    throw new Error('path is empty or contains control bytes');
-  }
-  const absolute = path.isAbsolute(input) ? input : `${process.cwd()}${path.sep}${input}`;
-  const suffix = [];
-  let ancestor = absolute;
-  for (;;) {
-    try {
-      fs.lstatSync(ancestor);
-      break;
-    } catch (error) {
-      if (error?.code !== 'ENOENT' && error?.code !== 'ENOTDIR') throw error;
-      const parent = path.dirname(ancestor);
-      if (parent === ancestor) throw error;
-      const component = path.basename(ancestor);
-      if (component.length === 0 || component === '.' || component === '..') {
-        throw new Error('missing path suffix contains dot traversal');
-      }
-      suffix.unshift(component);
-      ancestor = parent;
-    }
-  }
-  const resolvedAncestor = fs.realpathSync.native(ancestor);
-  if (suffix.length > 0 && !fs.statSync(resolvedAncestor).isDirectory()) {
-    throw new Error('deepest existing ancestor is not a directory');
-  }
-  process.stdout.write(path.join(resolvedAncestor, ...suffix));
-} catch (error) {
-  process.stderr.write(`cannot safely canonicalize restore path: ${error?.code ?? error?.message ?? 'UNKNOWN'}\n`);
-  process.exit(1);
+  canonical_path "$1"
 }
-NODE
-}
-if ! TARGET_CANON="$(canonical_restore_path "$TARGET")"; then
-  die_code 1 "cannot safely resolve restore target: $TARGET"
-fi
-if ! DATA_CANON="$(canonical_restore_path "$DATA_DIR")"; then
-  die_code 1 "cannot safely resolve DATA_DIR: $DATA_DIR"
-fi
+DATA_CANON="$DATA_DIR"
 IS_PRODUCTION=0
 case "$TARGET_CANON" in
   "$DATA_CANON"|"$DATA_CANON"/*) IS_PRODUCTION=1 ;;
 esac
+if path_is_within "$DATA_CANON" /var/lib/cosmos/data; then
+  require_i00_effect_class ISOLATED_RESTORE
+fi
 if [ "$IS_PRODUCTION" = 1 ]; then
-  [ "$ALLOW_PRODUCTION" = 1 ] \
-    || die_code 2 "refusing to restore into the live state store ($DATA_CANON); use restore-drill.sh for verification, or pass --allow-production for incident recovery"
-  [ "${RESTORE_CONFIRM:-}" = "RESTORE_PRODUCTION" ] \
-    || die_code 2 "production restore additionally requires RESTORE_CONFIRM=RESTORE_PRODUCTION in the environment"
-  set +e
-  "$SYSTEMCTL" is-active "$APP_UNIT" >/dev/null 2>&1
-  SYSTEMCTL_RC=$?
-  set -e
-  case "$SYSTEMCTL_RC" in
-    0) die_code 2 "refusing production restore: $APP_UNIT is active; stop it first" ;;
-    3) ;;
-    *) die_code 2 "refusing production restore: cannot prove $APP_UNIT inactive (systemctl rc=$SYSTEMCTL_RC)" ;;
-  esac
-  ops_log "production restore authorized (flag + confirm + $APP_UNIT inactive)"
+  die_code 2 "production restore is unavailable; ISOLATED_RESTORE cannot target DATA_DIR"
+fi
+if [ "$IS_PRODUCTION" != 1 ] && [ "$ALLOW_PRODUCTION" = 1 ]; then
+  die_code 2 "--allow-production is unavailable"
 fi
 
 # Canonical target state is checked without creating it. All validation below
 # must be side-effect free with respect to this path.
 TARGET="$TARGET_CANON"
-if [ -e "$TARGET" ] && [ ! -d "$TARGET" ]; then
+if [ -e "$TARGET_EFFECT_CANON" ] && [ ! -d "$TARGET_EFFECT_CANON" ]; then
   die_code 1 "target exists and is not a directory: $TARGET"
 fi
-if [ -d "$TARGET" ] && [ -n "$(ls -A "$TARGET" 2>/dev/null)" ] && [ "$FORCE" != 1 ]; then
+TARGET_NONEMPTY=0
+if [ -d "$TARGET_EFFECT_CANON" ]; then
+  TARGET_NONEMPTY="$(i00_guard_node -e '
+    const fs = require("fs");
+    process.stdout.write(fs.readdirSync(process.argv[1]).length > 0 ? "1" : "0");
+  ' "$TARGET_EFFECT_CANON")" \
+    || die_code 1 "cannot inspect restore target inventory safely"
+fi
+if [ "$TARGET_NONEMPTY" = 1 ] && [ "$FORCE" != 1 ]; then
   die_code 1 "target is not empty: $TARGET (pass --force to overwrite)"
 fi
 
@@ -151,7 +256,12 @@ SNAPSHOT=""
 cleanup_restore() {
   rc=$?
   trap - EXIT
-  rm -rf "$SNAPSHOT" 2>/dev/null || true
+  if [ -n "$SNAPSHOT" ]; then
+    i00_guard_node -e '
+      const fs = require("fs");
+      fs.rmSync(process.argv[1], { recursive: true, force: true });
+    ' "$SNAPSHOT" 2>/dev/null || true
+  fi
   exit "$rc"
 }
 trap cleanup_restore EXIT
@@ -159,9 +269,6 @@ trap cleanup_restore EXIT
 # A private snapshot must not itself mutate the live store, selected backup,
 # or restore target. Resolve TMPDIR before mktemp and reject aliases into any
 # protected tree.
-if ! BACKUP_CANON="$(canonical_restore_path "$BACKUP_PATH")" || [ ! -d "$BACKUP_CANON" ]; then
-  die_code 1 "cannot safely resolve backup directory: $BACKUP_PATH"
-fi
 # The restore target and selected backup must be disjoint in both directions.
 # Otherwise a forced restore could publish into the immutable input it just
 # verified, or could replace an ancestor that still contains that input.
@@ -179,23 +286,36 @@ TEMP_ROOT="${TMPDIR:-/tmp}"
 if ! TEMP_CANON="$(canonical_restore_path "$TEMP_ROOT")" || [ ! -d "$TEMP_CANON" ]; then
   die_code 1 "cannot safely resolve TMPDIR: $TEMP_ROOT"
 fi
+if path_effectively_intersects_protected_union "$TEMP_CANON"; then
+  die_code 1 "refusing TMPDIR that intersects a fixed production root"
+fi
 case "$TEMP_CANON" in
   "$DATA_CANON"|"$DATA_CANON"/*|"$TARGET_CANON"|"$TARGET_CANON"/*|"$BACKUP_CANON"|"$BACKUP_CANON"/*)
     die_code 1 "refusing unsafe TMPDIR inside DATA_DIR, target, or backup: $TEMP_CANON"
     ;;
 esac
 
-SNAPSHOT="$(mktemp -d "$TEMP_CANON/cosmos-restore.XXXXXX")" \
+SNAPSHOT="$(i00_guard_node -e '
+  const fs = require("fs"), path = require("path");
+  const directory = fs.mkdtempSync(path.join(process.argv[1], "cosmos-restore."));
+  fs.chmodSync(directory, 0o700);
+  process.stdout.write(directory);
+' "$TEMP_CANON")" \
   || die_code 1 "cannot create private restore snapshot"
-chmod 700 "$SNAPSHOT"
-mkdir "$SNAPSHOT/evidence"
-chmod 700 "$SNAPSHOT/evidence"
+if path_effectively_intersects_protected_union "$SNAPSHOT"; then
+  die_code 1 "refusing restore snapshot that intersects a fixed production root"
+fi
+i00_guard_node -e '
+  require("fs").mkdirSync(process.argv[1], { mode: 0o700 });
+' "$SNAPSHOT/evidence" \
+  || die_code 1 "cannot create private restore evidence directory"
 
 # Copy the manifest and every declared payload through held descriptors. The
 # source pathname must still name the same regular, single-link inode after
 # the copy, and the directory inventory/identity must remain stable. Restore
 # never consumes the mutable backup directory again after this step.
-if ! (cd -P -- "$BACKUP_PATH" && "$NODE" - "$SNAPSHOT" <<'NODE'
+require_authorized_read_root_binding backupSource "$BACKUP_CANON"
+if ! (cd -P -- "$BACKUP_EFFECT_PATH" && i00_guard_node - "$SNAPSHOT" <<'NODE'
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -402,6 +522,8 @@ NODE
 ); then
   die_code 1 "backup integrity FAILED: unstable, unsafe, or manifest-inconsistent backup at $BACKUP_PATH"
 fi
+require_authorized_observed_root_binding backupDir "$BACKUP_DIR"
+require_authorized_read_root_binding backupSource "$BACKUP_CANON"
 
 BACKUP_ID="$(json_get "$SNAPSHOT/plan.json" backupId)" \
   || die_code 1 "private restore plan has no backupId"
@@ -416,7 +538,7 @@ DECLARED_EVENTS_COUNT="$(json_get "$SNAPSHOT/plan.json" eventsCount)" \
   || die_code 1 "private restore plan has no eventsCount"
 [ "$DECLARED_EVENTS_COUNT" = -1 ] || [ "$EVENTS_COUNT" = "$DECLARED_EVENTS_COUNT" ] \
   || die_code 1 "backup integrity FAILED: manifest eventsCount=$DECLARED_EVENTS_COUNT, database eventsCount=$EVENTS_COUNT"
-RESTORED_EVIDENCE="$("$NODE" -e \
+RESTORED_EVIDENCE="$(i00_guard_node -e \
   'process.stdout.write(String(require(process.argv[1]).archives.length))' \
   "$SNAPSHOT/plan.json")"
 
@@ -425,13 +547,16 @@ RESTORED_EVIDENCE="$("$NODE" -e \
 # ceilings. Every archive in the cohort is fully preflighted before any archive
 # is extracted. The logical inventory is then compared exactly with the
 # normalized extracted inventory, including type and regular-file size.
-TAR_BIN="$(command -v tar)"
-if ! "$NODE" - "$SNAPSHOT" "$TAR_BIN" <<'NODE'
+if ! i00_guard_node - "$SNAPSHOT" "$TAR_BIN" "$GZIP_BIN" <<'NODE'
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const [snapshot, tarBin] = process.argv.slice(2);
+const [snapshot, tarBin, gzipBin] = process.argv.slice(2);
+const descriptorCompression = gzipBin === '/proc/self/fd/39';
+if (gzipBin !== 'NONE' && !descriptorCompression) {
+  throw new Error('restore gzip capability is invalid');
+}
 const plan = JSON.parse(fs.readFileSync(path.join(snapshot, 'plan.json'), 'utf8'));
 const HARD = Object.freeze({
   listBytes: 32 * 1024 * 1024,
@@ -467,7 +592,11 @@ const limits = Object.freeze({
   extractTimeoutMs: tightenedLimit('RESTORE_TAR_EXTRACT_TIMEOUT_MS', HARD.extractTimeoutMs),
 });
 const tarEnv = {
-  ...process.env,
+  ...(descriptorCompression ? {
+    HOME: '/',
+    PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
+    TZ: 'UTC',
+  } : process.env),
   COPYFILE_DISABLE: '1',
   // C.UTF-8 keeps tar's metadata grammar deterministic without backslash-
   // escaping Unicode names; escaped display text cannot prove byte identity.
@@ -477,8 +606,16 @@ const tarEnv = {
 };
 
 function runTar(args, timeout, maxBuffer, label) {
+  const stdio = ['ignore', 'pipe', 'pipe'];
+  if (descriptorCompression) {
+    for (let descriptor = 3; descriptor <= 39; descriptor += 1) {
+      stdio[descriptor] = 'ignore';
+    }
+    stdio[22] = 22;
+    stdio[39] = 39;
+  }
   const result = spawnSync(tarBin, args, {
-    encoding: 'buffer', env: tarEnv, maxBuffer, timeout, windowsHide: true,
+    encoding: 'buffer', env: tarEnv, maxBuffer, stdio, timeout, windowsHide: true,
   });
   if (result.error || result.status !== 0 || result.signal) {
     const reason = result.error?.code ?? result.signal ?? `rc=${result.status}`;
@@ -561,11 +698,22 @@ for (let index = 0; index < plan.archives.length; index += 1) {
     fail(`${archive.archive} changed after the immutable snapshot`);
   }
   const names = utf8Lines(runTar(
-    ['-tzf', archivePath], limits.listTimeoutMs, HARD.listBytes,
+    [
+      ...(descriptorCompression ? ['--use-compress-program=/proc/self/fd/39'] : []),
+      descriptorCompression ? '-tf' : '-tzf',
+      archivePath,
+    ],
+    limits.listTimeoutMs, HARD.listBytes,
     `name listing for ${archive.archive}`,
   ), `name listing for ${archive.archive}`);
   const verbose = utf8Lines(runTar(
-    ['--numeric-owner', '-tvzf', archivePath], limits.listTimeoutMs, HARD.listBytes,
+    [
+      ...(descriptorCompression ? ['--use-compress-program=/proc/self/fd/39'] : []),
+      '--numeric-owner',
+      descriptorCompression ? '-tvf' : '-tvzf',
+      archivePath,
+    ],
+    limits.listTimeoutMs, HARD.listBytes,
     `type listing for ${archive.archive}`,
   ), `type listing for ${archive.archive}`);
   if (names.length !== verbose.length || names.length === 0
@@ -613,8 +761,9 @@ for (let index = 0; index < preflighted.length; index += 1) {
   const extractRoot = path.join(snapshot, `extract-${index + 1}`);
   fs.mkdirSync(extractRoot, { mode: 0o700 });
   runTar([
+    ...(descriptorCompression ? ['--use-compress-program=/proc/self/fd/39'] : []),
     '--no-same-owner', '--no-same-permissions', '--no-xattrs', '--no-acls',
-    '-xzf', archive.archivePath, '-C', extractRoot,
+    descriptorCompression ? '-xf' : '-xzf', archive.archivePath, '-C', extractRoot,
   ], limits.extractTimeoutMs, HARD.errorBytes, `extraction for ${archive.archive}`);
 
   const topLevel = fs.readdirSync(extractRoot);
@@ -664,9 +813,15 @@ then
 fi
 
 # --- publish only the verified staging tree ------------------------------------
+if [ "$_I00_AUTHORIZED_EFFECT_PRESENT" != 1 ]; then
+  fs_mkdir_p "$TARGET_PARENT"
+  TARGET_PARENT="$(exact_existing_directory_path "$TARGET_PARENT")" \
+    || die_code 1 "restore target parent could not be created safely"
+fi
 PROD_BOOL=false
 [ "$IS_PRODUCTION" = 1 ] && PROD_BOOL=true
-if ! "$NODE" - "$SNAPSHOT" "$TARGET_CANON" "$DATA_CANON" "$FORCE" \
+if ! i00_guard_node - "$SNAPSHOT" "$TARGET_CANON" "$TARGET_EFFECT_CANON" \
+    "$DATA_CANON" "$FORCE" \
     "$IS_PRODUCTION" "$(now_utc)" "$BACKUP_ID" "$WANT_SHA" \
     "$WANT_BYTES" "$DECLARED_EVENTS_COUNT" "$EVENTS_COUNT" "$RESTORED_EVIDENCE" <<'NODE'
 const crypto = require('node:crypto');
@@ -674,7 +829,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const [
-  snapshot, target, dataDir, forceRaw, productionRaw, timestamp, backupId,
+  snapshot, target, targetEffect, dataDir, forceRaw, productionRaw, timestamp, backupId,
   dbSha256, dbBytesRaw, declaredEventsRaw, eventsRaw, evidenceRaw,
 ] = process.argv.slice(2);
 const force = forceRaw === '1';
@@ -991,38 +1146,31 @@ function assertNamedDirectory(expected, held, label) {
 }
 const createdTargetDirectories = [];
 function enterTarget() {
-  const missing = [];
-  let ancestor = target;
-  for (;;) {
-    try {
-      directoryIdentity(ancestor);
-      break;
-    } catch (error) {
-      if (error?.code !== 'ENOENT') throw error;
-      const component = path.basename(ancestor);
-      if (!component || component === '.' || component === '..') fail('unsafe missing target suffix');
-      missing.unshift(component);
-      const parent = path.dirname(ancestor);
-      if (parent === ancestor) throw error;
-      ancestor = parent;
-    }
+  const namedParent = path.dirname(target);
+  const effectParent = path.dirname(targetEffect);
+  const component = path.basename(target);
+  if (!component || component === '.' || component === '..'
+      || path.basename(targetEffect) !== component) {
+    fail('isolated target differs from its bound parent capability');
   }
-  process.chdir(ancestor);
-  let held = directoryIdentity('.');
-  assertNamedDirectory(ancestor, held, 'target ancestor binding');
-  let expected = ancestor;
-  for (const component of missing) {
-    if (exists(component)) fail('target suffix appeared during its exclusive claim');
+  process.chdir(effectParent);
+  const heldParent = directoryIdentity('.');
+  assertNamedDirectory(namedParent, heldParent, 'target parent capability binding');
+  if (exists(component)) {
+    process.chdir(component);
+  } else {
     fs.mkdirSync(component, { mode: 0o700 });
     process.chdir(component);
-    held = directoryIdentity('.');
-    expected = path.join(expected, component);
-    assertNamedDirectory(expected, held, 'created target binding');
-    createdTargetDirectories.push({ path: expected, identity: held });
+    const created = directoryIdentity('.');
+    assertNamedDirectory(target, created, 'created target binding');
+    createdTargetDirectories.push({
+      path: target,
+      component,
+      identity: created,
+    });
   }
-  if (missing.length === 0) {
-    assertNamedDirectory(target, held, 'existing target binding');
-  }
+  const held = directoryIdentity('.');
+  assertNamedDirectory(target, held, 'isolated target binding');
   return held;
 }
 
@@ -1306,19 +1454,19 @@ if (!commitComplete) {
     }
   }
   if (recoveryErrors.length === 0 && createdTargetDirectories.length > 0) {
-    process.chdir(path.parse(target).root);
+    process.chdir(path.dirname(targetEffect));
     for (const created of [...createdTargetDirectories].reverse()) {
       try {
-        if (!exists(created.path)) continue;
-        if (!sameIdentity(statIdentity(created.path), created.identity)) {
+        if (!exists(created.component)) continue;
+        if (!sameIdentity(statIdentity(created.component), created.identity)) {
           recoveryErrors.push(`cannot remove created target directory ${created.path}: identity changed`);
           break;
         }
-        if (fs.readdirSync(created.path).length !== 0) {
+        if (fs.readdirSync(created.component).length !== 0) {
           recoveryErrors.push(`cannot remove created target directory ${created.path}: directory is not empty`);
           break;
         }
-        fs.rmdirSync(created.path);
+        fs.rmdirSync(created.component);
       } catch (error) {
         recoveryErrors.push(`cannot remove created target directory ${created.path}: ${error?.code ?? error?.message}`);
         break;
@@ -1336,5 +1484,9 @@ then
   die_code 1 "restore publication FAILED; inspect rollback evidence in the target if reported"
 fi
 
+require_all_authorized_write_root_bindings
+require_authorized_observed_root_binding dataDir "$DATA_DIR"
+require_authorized_observed_root_binding backupDir "$BACKUP_DIR"
+require_authorized_read_root_binding backupSource "$BACKUP_CANON"
 ops_log "restore of $BACKUP_ID into $TARGET_CANON complete (events=$EVENTS_COUNT)"
 exit 0

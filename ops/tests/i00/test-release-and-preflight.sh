@@ -3,7 +3,8 @@ set -euo pipefail
 . "$(dirname "$0")/helpers.sh"
 
 SHA=0123456789abcdef0123456789abcdef01234567
-REAL_TMP="$(node -e 'const fs=require("fs"),os=require("os");process.stdout.write(fs.realpathSync(os.tmpdir()))')"
+REAL_TMP="$(node -e 'process.stdout.write(require("fs").realpathSync("/tmp"))')"
+REAL_NODE="$(node -e 'process.stdout.write(require("fs").realpathSync(process.execPath))')"
 SIMULATION_ROOT="$(node "$I00_ROOT/bin/create-simulation-root.mjs" --root "$REAL_TMP/ip-ops-i00-sim-install-$$")"
 cleanup_release_test() {
   local rc=$?
@@ -15,6 +16,124 @@ cleanup_release_test() {
 trap cleanup_release_test EXIT
 note "assemble SHA-keyed immutable release from tested inputs"
 RELEASE="$(assemble_fixture_release "$TEST_TMP/release" "$SHA")"
+MALICIOUS_GIT_BIN="$TEST_TMP/malicious-git-bin"
+GIT_INVOCATION_MARKER="$TEST_TMP/ambient-git-invoked"
+mkdir "$MALICIOUS_GIT_BIN"
+printf '%s\n' '#!/bin/sh' \
+  'printf "ambient Git invoked\n" > "${GIT_INVOCATION_MARKER:?}"' \
+  'exit 97' > "$MALICIOUS_GIT_BIN/git"
+chmod 700 "$MALICIOUS_GIT_BIN/git"
+note "simulation assembly stays Git-free and production source binding has no ambient Git path"
+SIMULATION_NO_GIT_OUT="$(env PATH="$MALICIOUS_GIT_BIN:$PATH" \
+  GIT_INVOCATION_MARKER="$GIT_INVOCATION_MARKER" \
+  "$REAL_NODE" "$I00_ROOT/bin/assemble-release.mjs" \
+  --source-root "$TEST_TMP/release/source" \
+  --runtime-deps "$TEST_TMP/release/deps" \
+  --output-root "$TEST_TMP/release/no-git-releases" \
+  --tested-sha "$SHA" \
+  --tested-receipt "$TEST_TMP/release/tested.json" \
+  --built-at-utc 2026-07-13T00:00:00Z \
+  --config-revision config-fixture \
+  --model-revision UNAVAILABLE \
+  --simulation-source)"
+assert_contains "$SIMULATION_NO_GIT_OUT" '"gitExecutable":null'
+assert_not_file "$GIT_INVOCATION_MARKER"
+ASSEMBLER_SOURCE="$(<"$I00_ROOT/bin/assemble-release.mjs")"
+assert_contains "$ASSEMBLER_SOURCE" 'requireSameGitExecutable'
+assert_contains "$ASSEMBLER_SOURCE" 'env: GIT_ENV'
+assert_contains "$(<"$I00_ROOT/complete-acceptance-receipt.mjs")" 'candidate source-freeze requires one bound Git runner'
+assert_contains "$(<"$I00_ROOT/bin/run-fixed-node-gate.sh")" \
+  'app-entrypoint.mjs|assemble-release.mjs|create-private-temp.mjs'
+if grep -F "execFileSync('git'" "$I00_ROOT/bin/assemble-release.mjs" \
+    "$I00_ROOT/complete-acceptance-receipt.mjs" >/dev/null; then
+  fail_test "release assembly retains ambient Git execution"
+fi
+pass_assertion
+
+raw_path_assembly() {
+  local source_root="$1" runtime_deps="$2" output_root="$3" tested_receipt="$4"
+  shift 4
+  node "$I00_ROOT/bin/assemble-release.mjs" \
+    --source-root "$source_root" \
+    --runtime-deps "$runtime_deps" \
+    --output-root "$output_root" \
+    --tested-sha "$SHA" \
+    --tested-receipt "$tested_receipt" \
+    --built-at-utc 2026-07-13T00:00:00Z \
+    --config-revision config-fixture \
+    --model-revision UNAVAILABLE \
+    --simulation-source "$@"
+}
+
+note "release assembly accepts only exact raw absolute path operands and private output roots"
+assert_failure_contains '--source-root must be one exact raw canonical absolute path' \
+  raw_path_assembly relative/source "$TEST_TMP/release/deps" \
+  "$TEST_TMP/raw-relative-source" "$TEST_TMP/release/tested.json"
+assert_failure_contains '--output-root must be one exact raw canonical absolute path' \
+  raw_path_assembly "$TEST_TMP/release/source" "$TEST_TMP/release/deps" \
+  "$TEST_TMP/release/../raw-alias-output" "$TEST_TMP/release/tested.json"
+assert_failure_contains '--build-attestation must be one exact raw canonical absolute path' \
+  raw_path_assembly "$TEST_TMP/release/source" "$TEST_TMP/release/deps" \
+  "$TEST_TMP/raw-relative-attestation" "$TEST_TMP/release/tested.json" \
+  --build-attestation relative-attestation
+ln -s "$TEST_TMP/release/source" "$TEST_TMP/release-source-alias"
+assert_failure_contains '--source-root must be one exact canonical directory' \
+  raw_path_assembly "$TEST_TMP/release-source-alias" "$TEST_TMP/release/deps" \
+  "$TEST_TMP/raw-source-alias-output" "$TEST_TMP/release/tested.json"
+assert_failure_contains 'intersects a protected production root' \
+  raw_path_assembly "$TEST_TMP/release/source" "$TEST_TMP/release/deps" \
+  /opt/cosmos "$TEST_TMP/release/tested.json"
+note "release assembly rejects a protected root physical alias target"
+PHYSICAL_PROTECTED_TARGET="$TEST_TMP/physical-protected-target"
+PHYSICAL_PROTECTED_ALIAS="$TEST_TMP/physical-protected-alias"
+mkdir -m 700 "$PHYSICAL_PROTECTED_TARGET"
+ln -s "$PHYSICAL_PROTECTED_TARGET" "$PHYSICAL_PROTECTED_ALIAS"
+physical_protected_policy_check() {
+  node --input-type=module - \
+    "$I00_ROOT/bin/assembly-output-policy.mjs" "$1" "$2" <<'EOF'
+const [modulePath, outputRoot, protectedRoot] = process.argv.slice(2);
+const { requireAssemblyOutputDisjoint } = await import(modulePath);
+requireAssemblyOutputDisjoint(outputRoot, [protectedRoot]);
+EOF
+}
+assert_failure_contains 'intersects a protected production root' \
+  physical_protected_policy_check \
+  "$PHYSICAL_PROTECTED_TARGET/release-output" \
+  "$PHYSICAL_PROTECTED_ALIAS"
+assert_failure_contains 'intersects a protected production root' \
+  physical_protected_policy_check \
+  "$PHYSICAL_PROTECTED_TARGET/not-yet-created/release-output" \
+  "$PHYSICAL_PROTECTED_ALIAS/not-yet-created"
+assert_contains "$ASSEMBLER_SOURCE" 'requireAssemblyOutputDisjoint(outputRoot, PROTECTED_ASSEMBLY_ROOTS)'
+mkdir -m 755 "$TEST_TMP/nonprivate-assembly-output"
+assert_failure_contains 'must be owner-private mode 0700' \
+  raw_path_assembly "$TEST_TMP/release/source" "$TEST_TMP/release/deps" \
+  "$TEST_TMP/nonprivate-assembly-output" "$TEST_TMP/release/tested.json"
+PRECLAIMED_OUTPUT="$TEST_TMP/preclaimed-assembly-output"
+mkdir -m 700 "$PRECLAIMED_OUTPUT"
+preclaimed_staging_assembly() {
+  /bin/bash -c '
+    staging="$1/.partial-i00-$2-$$"
+    mkdir -m 700 "$staging"
+    printf "retained\n" > "$staging/sentinel"
+    exec "$3" "$4" \
+      --source-root "$5" \
+      --runtime-deps "$6" \
+      --output-root "$1" \
+      --tested-sha "$2" \
+      --tested-receipt "$7" \
+      --built-at-utc 2026-07-13T00:00:00Z \
+      --config-revision config-fixture \
+      --model-revision UNAVAILABLE \
+      --simulation-source
+  ' _ "$PRECLAIMED_OUTPUT" "$SHA" "$REAL_NODE" \
+    "$I00_ROOT/bin/assemble-release.mjs" \
+    "$TEST_TMP/release/source" "$TEST_TMP/release/deps" \
+    "$TEST_TMP/release/tested.json"
+}
+assert_failure_contains 'private staging path is already claimed' preclaimed_staging_assembly
+assert_eq "$(find "$PRECLAIMED_OUTPUT" -name sentinel -type f | wc -l | tr -d ' ')" 1
+
 assert_file "$RELEASE/release.json"
 assert_file "$RELEASE/artifact-manifest.json"
 assert_file "$RELEASE/server/dist/index.js"
@@ -23,6 +142,27 @@ assert_file "$RELEASE/web/dist/index.html"
 assert_file "$RELEASE/node_modules/fake-runtime/package.json"
 VALID="$(node "$I00_ROOT/bin/validate-release.mjs" --release "$RELEASE" --allow-simulation)"
 assert_contains "$VALID" RELEASE_VALID_NOT_DEPLOYED
+note "release validation rejects raw relative, dot, and symlink endpoints"
+validate_relative_release() {
+  (
+    cd "$(dirname "$RELEASE")"
+    node "$I00_ROOT/bin/validate-release.mjs" \
+      --release "$(basename "$RELEASE")" --allow-simulation
+  )
+}
+assert_failure_contains 'absolute lexical canonical path' validate_relative_release
+assert_failure_contains 'absolute lexical canonical path' \
+  node "$I00_ROOT/bin/validate-release.mjs" \
+  --release "$RELEASE/." --allow-simulation
+ln -s "$RELEASE" "$TEST_TMP/validate-release-leaf-alias"
+assert_failure_contains 'non-symlink unpacked release directory' \
+  node "$I00_ROOT/bin/validate-release.mjs" \
+  --release "$TEST_TMP/validate-release-leaf-alias" --allow-simulation
+ln -s "$(dirname "$RELEASE")" "$TEST_TMP/validate-release-parent-alias"
+assert_failure_contains 'not physically canonical' \
+  node "$I00_ROOT/bin/validate-release.mjs" \
+  --release "$TEST_TMP/validate-release-parent-alias/$(basename "$RELEASE")" \
+  --allow-simulation
 assert_failure node "$I00_ROOT/bin/validate-release.mjs" --release "$RELEASE"
 assert_contains "$(cat "$RELEASE/release.json")" '"activationState": "NOT_DEPLOYED"'
 assert_contains "$(cat "$RELEASE/release.json")" '"serverDistDigestSha256"'
@@ -40,12 +180,26 @@ assert_failure_contains 'caller overrides are forbidden' node "$I00_ROOT/bin/ass
 INSTALLED_I00="$SIMULATION_ROOT/installed-i00"
 INSTALL_OUT="$("$I00_ROOT/bin/install-ops-bundle.sh" --release "$RELEASE" --destination "$INSTALLED_I00" --simulation --simulation-root "$SIMULATION_ROOT")"
 assert_contains "$INSTALL_OUT" OPS_BUNDLE_INSTALLED_NO_SERVICE_MUTATION
+note "authorized ops-bundle destination is derived by the producer chain"
+assert_failure_contains \
+  'real install requires the complete authorization chain' \
+  "$I00_ROOT/bin/install-ops-bundle.sh" --release "$RELEASE" \
+  --destination "$TEST_TMP/not-production-i00"
+assert_contains "$(<"$I00_ROOT/bin/install-ops-bundle.sh")" \
+  'destination must be one raw canonical direct-child path'
+assert_contains "$(<"$I00_ROOT/bin/install-ops-bundle.sh")" \
+  'value.writeRoots.destinationParent.path !== dirname(destination)'
 note "DEPLOY-DEFECTS-007(3): installed root is immutable and searchable by service identities"
 INSTALLED_ROOT_MODE="$(stat -c '%a' "$INSTALLED_I00" 2>/dev/null || stat -f '%Lp' "$INSTALLED_I00")"
 assert_eq "$INSTALLED_ROOT_MODE" 511
 assert_eq "$(node -e 'const mode=Number.parseInt(process.argv[1],8);process.stdout.write(String((mode&0o222)===0&&(mode&0o111)===0o111))' "$INSTALLED_ROOT_MODE")" true
 assert_file "$INSTALLED_I00/bin/app-entrypoint.mjs"
 assert_file "$INSTALLED_I00/accepted-ops-live/bin/deploy.sh"
+INSTALLED_DEPLOY_MODE="$(stat -c '%a' \
+  "$INSTALLED_I00/accepted-ops-live/bin/deploy.sh" 2>/dev/null \
+  || stat -f '%Lp' "$INSTALLED_I00/accepted-ops-live/bin/deploy.sh")"
+assert_eq "$INSTALLED_DEPLOY_MODE" 555
+assert_contains "$(<"$I00_ROOT/bin/install-ops-bundle.sh")" '"$CP_PATH" -pR'
 assert_file "$INSTALLED_I00/install-receipt.json"
 assert_eq "$(node -e 'const v=require(process.argv[1]);process.stdout.write(String(v.serviceMutationPerformed))' "$INSTALLED_I00/install-receipt.json")" false
 assert_eq "$(node -e 'const v=require(process.argv[1]);process.stdout.write(String(v.schemaVersion))' "$INSTALLED_I00/install-receipt.json")" 2
@@ -87,6 +241,23 @@ assert_failure_contains 'staged I00 enforcement cohort differs from validated re
   --destination "$MUTABLE_DESTINATION" --simulation --simulation-root "$SIMULATION_ROOT"
 assert_file "$MUTATION_FLAG"
 assert_not_file "$MUTABLE_DESTINATION"
+
+note "release alias dot-dot traversal is rejected before validation and copy"
+KERNEL_RELEASE_ROOT="$TEST_TMP/kernel-release-path"
+mkdir -p "$KERNEL_RELEASE_ROOT/physical/anchor"
+cp -R "$RELEASE" "$KERNEL_RELEASE_ROOT/lexical-release"
+cp -R "$RELEASE" "$KERNEL_RELEASE_ROOT/physical/release"
+ln -s "$KERNEL_RELEASE_ROOT/physical/anchor" "$KERNEL_RELEASE_ROOT/alias"
+RAW_RELEASE_PATH="$KERNEL_RELEASE_ROOT/alias/../release"
+KERNEL_RELEASE_DESTINATION="$SIMULATION_ROOT/kernel-release-install"
+assert_failure_contains 'absolute lexical canonical path' env \
+  PATH="$MUTATING_NODE_BIN:$PATH" \
+  REAL_NODE="$(command -v node)" \
+  VALIDATE_RELEASE_PATH="$I00_ROOT/bin/validate-release.mjs" \
+  MUTATION_KIND=assert-canonical-release \
+  "$I00_ROOT/bin/install-ops-bundle.sh" --release "$RAW_RELEASE_PATH" \
+  --destination "$KERNEL_RELEASE_DESTINATION" --simulation --simulation-root "$SIMULATION_ROOT"
+assert_not_file "$KERNEL_RELEASE_DESTINATION"
 
 note "post-validation reserved receipt injection is rejected before receipt generation"
 RESERVED_RELEASE="$TEST_TMP/post-validation-reserved-release"
@@ -236,22 +407,129 @@ writeFileSync(signaturePath, `${sign(null, bytes, privateKey).toString('base64')
 writeFileSync(publicKeyPath, publicKey.export({ type: 'spki', format: 'pem' }), { mode: 0o600 });
 writeFileSync(privateKeyPath, privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });
 NODE
-PROD_ASSEMBLE=(node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$PROD_ROOT/source" --runtime-deps "$PROD_ROOT/deps" --output-root "$PROD_ROOT/releases" --tested-sha "$PROD_SHA" --tested-receipt "$PROD_ROOT/tested.json" --built-at-utc 2026-07-13T00:01:00Z --config-revision config-fixture --model-revision UNAVAILABLE --build-attestation "$PROD_ROOT/build-attestation.json" --build-attestation-signature "$PROD_ROOT/build-attestation.sig" --build-attestation-public-key "$PROD_ROOT/build-public.pem")
+PROD_ASSEMBLE=("$REAL_NODE" "$I00_ROOT/bin/assemble-release.mjs" --source-root "$PROD_ROOT/source" --runtime-deps "$PROD_ROOT/deps" --output-root "$PROD_ROOT/releases" --tested-sha "$PROD_SHA" --tested-receipt "$PROD_ROOT/tested.json" --built-at-utc 2026-07-13T00:01:00Z --config-revision config-fixture --model-revision UNAVAILABLE --build-attestation "$PROD_ROOT/build-attestation.json" --build-attestation-signature "$PROD_ROOT/build-attestation.sig" --build-attestation-public-key "$PROD_ROOT/build-public.pem")
+run_prod_assemble_to() {
+  local output_root="$1" index
+  local -a command=("${PROD_ASSEMBLE[@]}")
+  for ((index = 0; index < ${#command[@]}; index += 1)); do
+    if [ "${command[$index]}" = "--output-root" ]; then
+      command[$((index + 1))]="$output_root"
+      break
+    fi
+  done
+  env PATH="$MALICIOUS_GIT_BIN:$PATH" \
+    GIT_INVOCATION_MARKER="$GIT_INVOCATION_MARKER" \
+    "${command[@]}"
+}
 assert_failure node "$I00_ROOT/bin/assemble-release.mjs" --source-root "$PROD_ROOT/source" --runtime-deps "$PROD_ROOT/deps" --output-root "$PROD_ROOT/missing-proof" --tested-sha "$PROD_SHA" --tested-receipt "$PROD_ROOT/tested.json" --built-at-utc 2026-07-13T00:01:00Z --config-revision c --model-revision m
 set +e
-PROD_ASSEMBLE_OUTPUT="$("${PROD_ASSEMBLE[@]}" 2>&1)"; PROD_ASSEMBLE_RC=$?
+PROD_ASSEMBLE_OUTPUT="$(env PATH="$MALICIOUS_GIT_BIN:$PATH" \
+  GIT_INVOCATION_MARKER="$GIT_INVOCATION_MARKER" \
+  "${PROD_ASSEMBLE[@]}" 2>&1)"; PROD_ASSEMBLE_RC=$?
 set -e
 [ "$PROD_ASSEMBLE_RC" -eq 0 ] || fail_test "production assembly failed: $PROD_ASSEMBLE_OUTPUT"
 pass_assertion
+assert_contains "$PROD_ASSEMBLE_OUTPUT" '"gitExecutable":{"path":'
+assert_not_file "$GIT_INVOCATION_MARKER"
 PROD_RELEASE="$PROD_ROOT/releases/i00-$PROD_SHA"
 assert_failure node "$I00_ROOT/bin/validate-release.mjs" --release "$PROD_RELEASE"
 assert_success node "$I00_ROOT/bin/validate-release.mjs" --release "$PROD_RELEASE" --trusted-build-public-key "$PROD_ROOT/build-public.pem"
+note "trusted build key is explicit and rejects raw aliases"
+ln -s "$PROD_ROOT/build-public.pem" "$PROD_ROOT/build-public-alias.pem"
+ln -s "$PROD_ROOT" "$TEST_TMP/production-root-alias"
+assert_failure_contains 'absolute lexical canonical path' \
+  node "$I00_ROOT/bin/validate-release.mjs" --release "$PROD_RELEASE" \
+  --trusted-build-public-key "$PROD_ROOT/./build-public.pem"
+assert_failure_contains 'regular non-symlink file' \
+  node "$I00_ROOT/bin/validate-release.mjs" --release "$PROD_RELEASE" \
+  --trusted-build-public-key "$PROD_ROOT/build-public-alias.pem"
+assert_failure_contains 'not physically canonical' \
+  node "$I00_ROOT/bin/validate-release.mjs" --release "$PROD_RELEASE" \
+  --trusted-build-public-key "$TEST_TMP/production-root-alias/build-public.pem"
+assert_failure_contains 'explicit --trusted-build-public-key' \
+  env I00_TRUSTED_BUILD_PUBLIC_KEY="$PROD_ROOT/build-public.pem" \
+  node "$I00_ROOT/bin/validate-release.mjs" --release "$PROD_RELEASE"
+assert_success env I00_TRUSTED_BUILD_PUBLIC_KEY="$PROD_ROOT/build-public-alias.pem" \
+  node "$I00_ROOT/bin/validate-release.mjs" --release "$PROD_RELEASE" \
+  --trusted-build-public-key "$PROD_ROOT/build-public.pem"
 assert_file "$PROD_RELEASE/receipts/build-attestation.json"
 assert_file "$PROD_RELEASE/receipts/build-attestation.sig"
 assert_file "$PROD_RELEASE/receipts/build-attestation-public-key.pem"
 assert_not_file "$PROD_RELEASE/receipts/ephemeral-private.pem"
 assert_contains "$(cat "$PROD_RELEASE/release.json")" '"status": "VERIFIED_ED25519"'
 assert_contains "$(cat "$PROD_RELEASE/artifact-manifest.json")" '"builderIdentity": "ci://i00-fixture/release-builder"'
+
+note "production assembly binds copied tracked bytes despite hidden Git index state"
+cp "$PROD_ROOT/source/package.json" "$PROD_ROOT/package.json.accepted"
+git -C "$PROD_ROOT/source" update-index --assume-unchanged package.json
+printf '\n{"hostile":"assume-unchanged"}\n' >> "$PROD_ROOT/source/package.json"
+assert_failure_contains 'staged tracked bytes or mode differ from the bound source tree' \
+  run_prod_assemble_to "$PROD_ROOT/assume-unchanged-out"
+cp "$PROD_ROOT/package.json.accepted" "$PROD_ROOT/source/package.json"
+git -C "$PROD_ROOT/source" update-index --no-assume-unchanged package.json
+git -C "$PROD_ROOT/source" update-index --skip-worktree package.json
+printf '\n{"hostile":"skip-worktree"}\n' >> "$PROD_ROOT/source/package.json"
+assert_failure_contains 'staged tracked bytes or mode differ from the bound source tree' \
+  run_prod_assemble_to "$PROD_ROOT/skip-worktree-out"
+cp "$PROD_ROOT/package.json.accepted" "$PROD_ROOT/source/package.json"
+git -C "$PROD_ROOT/source" update-index --no-skip-worktree package.json
+
+note "production assembly neutralizes local fsmonitor, hooks, replacement refs, and ignored extras"
+FSMONITOR_MARKER="$PROD_ROOT/fsmonitor-invoked"
+FSMONITOR_HOOK="$PROD_ROOT/hostile-fsmonitor"
+printf '%s\n' '#!/bin/sh' "printf invoked > '$FSMONITOR_MARKER'" 'exit 97' > "$FSMONITOR_HOOK"
+chmod 700 "$FSMONITOR_HOOK"
+git -C "$PROD_ROOT/source" config core.fsmonitor "$FSMONITOR_HOOK"
+assert_success run_prod_assemble_to "$PROD_ROOT/fsmonitor-out"
+assert_not_file "$FSMONITOR_MARKER"
+git -C "$PROD_ROOT/source" config --unset core.fsmonitor
+
+REPLACE_INDEX="$PROD_ROOT/replace.index"
+GIT_INDEX_FILE="$REPLACE_INDEX" git -C "$PROD_ROOT/source" read-tree "$PROD_SHA^{tree}"
+HOSTILE_PACKAGE_BLOB="$(printf '{"hostile":"replace-ref"}\n' \
+  | git -C "$PROD_ROOT/source" hash-object -w --stdin)"
+GIT_INDEX_FILE="$REPLACE_INDEX" git -C "$PROD_ROOT/source" update-index \
+  --cacheinfo 100644 "$HOSTILE_PACKAGE_BLOB" package.json
+HOSTILE_TREE="$(GIT_INDEX_FILE="$REPLACE_INDEX" git -C "$PROD_ROOT/source" write-tree)"
+HOSTILE_COMMIT="$(printf 'hostile replacement\n' \
+  | git -C "$PROD_ROOT/source" -c user.name=I00 -c user.email=i00@invalid \
+    commit-tree "$HOSTILE_TREE")"
+git -C "$PROD_ROOT/source" replace "$PROD_SHA" "$HOSTILE_COMMIT"
+assert_success run_prod_assemble_to "$PROD_ROOT/replace-ref-out"
+cmp -s "$PROD_ROOT/package.json.accepted" \
+  "$PROD_ROOT/replace-ref-out/i00-$PROD_SHA/package.json" \
+  || fail_test "replacement ref altered released tracked bytes"
+pass_assertion
+git -C "$PROD_ROOT/source" replace -d "$PROD_SHA" >/dev/null
+
+printf 'ops/docs/i00/ignored-extra.txt\n' >> "$PROD_ROOT/source/.git/info/exclude"
+printf 'ignored hostile bytes\n' > "$PROD_ROOT/source/ops/docs/i00/ignored-extra.txt"
+assert_failure_contains 'staged tracked release path set differs from the bound source tree' \
+  run_prod_assemble_to "$PROD_ROOT/ignored-extra-out"
+rm "$PROD_ROOT/source/ops/docs/i00/ignored-extra.txt"
+
+git -C "$PROD_ROOT/source" config core.filemode false
+chmod +x "$PROD_ROOT/source/package.json"
+assert_failure_contains 'staged tracked bytes or mode differ from the bound source tree' \
+  run_prod_assemble_to "$PROD_ROOT/filemode-out"
+chmod -x "$PROD_ROOT/source/package.json"
+git -C "$PROD_ROOT/source" config --unset core.filemode
+
+assert_contains "$ASSEMBLER_SOURCE" "'core.fsmonitor=false'"
+assert_contains "$ASSEMBLER_SOURCE" "'core.hooksPath=/dev/null'"
+assert_contains "$ASSEMBLER_SOURCE" 'GIT_NO_REPLACE_OBJECTS'
+assert_contains "$ASSEMBLER_SOURCE" 'verifyStagedGitBoundInputs'
+if [ "$(uname -s)" = "Darwin" ]; then
+  BOUND_GIT_PATH="$(node -e \
+    'process.stdout.write(JSON.parse(process.argv[1]).gitExecutable.path)' \
+    "$PROD_ASSEMBLE_OUTPUT")"
+  assert_eq "$BOUND_GIT_PATH" "$(xcode-select --print-path)/usr/bin/git"
+  [ "$BOUND_GIT_PATH" != "/usr/bin/git" ] \
+    || fail_test "Darwin Git dispatcher was accepted as the implementation"
+  pass_assertion
+  assert_contains "$PROD_ASSEMBLE_OUTPUT" '"darwinDeveloperSelection":{"directory":'
+  assert_contains "$ASSEMBLER_SOURCE" 'active Darwin developer directory changed around Git use'
+fi
 
 node --input-type=module - "$PROD_ROOT/build-attestation.json" "$PROD_ROOT/forged.sig" "$PROD_ROOT/rogue-public.pem" <<'NODE'
 import { generateKeyPairSync, sign } from 'node:crypto';
@@ -474,8 +752,126 @@ JSON
 cat > "$TEST_TMP/supervisor.json" <<'JSON'
 {"source":"CANONICAL_SUPERVISOR_READBACK","observedAtUtc":"2026-07-13T00:00:00Z","validUntilUtc":"2026-07-13T00:10:00Z","deploymentFrozen":false,"exposureState":"NONE","ambiguityState":"NONE","recoveryState":"NONE","currentSchemaVersion":1,"rollbackFloor":1}
 JSON
-PREFLIGHT=(node "$I00_ROOT/bin/preflight.mjs" --release "$RELEASE" --host "$TEST_TMP/host.json" --supervisor "$TEST_TMP/supervisor.json" --mode deploy --now 2026-07-13T00:01:00Z --max-host-age-sec 300 --max-supervisor-age-sec 120 --required-supervisor-window-sec 130)
+PREFLIGHT=(node "$I00_ROOT/bin/preflight.mjs" --release "$RELEASE" --host "$TEST_TMP/host.json" --supervisor "$TEST_TMP/supervisor.json" --mode deploy --max-host-age-sec 300 --max-supervisor-age-sec 120 --required-supervisor-window-sec 130 --simulation-clock --simulation-root "$SIMULATION_ROOT" --now 2026-07-13T00:01:00Z)
 assert_success "${PREFLIGHT[@]}"
+preflight_with_evidence() {
+  node "$I00_ROOT/bin/preflight.mjs" --release "$RELEASE" \
+    --host "$1" --supervisor "$2" --mode deploy \
+    --max-host-age-sec 300 --max-supervisor-age-sec 120 \
+    --required-supervisor-window-sec 130 \
+    --simulation-clock --simulation-root "$SIMULATION_ROOT" \
+    --now 2026-07-13T00:01:00Z
+}
+note "preflight host and supervisor evidence operands reject raw aliases"
+assert_failure_contains 'canonical non-root absolute path' \
+  preflight_with_evidence host.json "$TEST_TMP/supervisor.json"
+assert_failure_contains 'canonical non-root absolute path' \
+  preflight_with_evidence "$TEST_TMP/host.json" supervisor.json
+assert_failure_contains 'canonical non-root absolute path' \
+  preflight_with_evidence "$TEST_TMP/./host.json" "$TEST_TMP/supervisor.json"
+assert_failure_contains 'canonical non-root absolute path' \
+  preflight_with_evidence "$TEST_TMP/host.json" "$TEST_TMP/./supervisor.json"
+ln -s "$TEST_TMP/host.json" "$TEST_TMP/preflight-host-leaf-alias"
+ln -s "$TEST_TMP/supervisor.json" "$TEST_TMP/preflight-supervisor-leaf-alias"
+assert_failure_contains 'canonical bounded non-writable single-link regular file' \
+  preflight_with_evidence \
+  "$TEST_TMP/preflight-host-leaf-alias" "$TEST_TMP/supervisor.json"
+assert_failure_contains 'canonical bounded non-writable single-link regular file' \
+  preflight_with_evidence \
+  "$TEST_TMP/host.json" "$TEST_TMP/preflight-supervisor-leaf-alias"
+mkdir -p "$TEST_TMP/preflight-evidence-real-parent"
+cp "$TEST_TMP/host.json" "$TEST_TMP/preflight-evidence-real-parent/host.json"
+cp "$TEST_TMP/supervisor.json" \
+  "$TEST_TMP/preflight-evidence-real-parent/supervisor.json"
+ln -s "$TEST_TMP/preflight-evidence-real-parent" \
+  "$TEST_TMP/preflight-evidence-parent-alias"
+assert_failure_contains 'ancestor' \
+  preflight_with_evidence \
+  "$TEST_TMP/preflight-evidence-parent-alias/host.json" \
+  "$TEST_TMP/supervisor.json"
+assert_failure_contains 'ancestor' \
+  preflight_with_evidence \
+  "$TEST_TMP/host.json" \
+  "$TEST_TMP/preflight-evidence-parent-alias/supervisor.json"
+note "preflight rejects raw relative, dot, and symlink release endpoints"
+preflight_with_release() {
+  local input="$1"
+  node "$I00_ROOT/bin/preflight.mjs" --release "$input" \
+    --host "$TEST_TMP/host.json" --supervisor "$TEST_TMP/supervisor.json" \
+    --mode deploy --max-host-age-sec 300 --max-supervisor-age-sec 120 \
+    --required-supervisor-window-sec 130 --simulation-clock \
+    --simulation-root "$SIMULATION_ROOT" --now 2026-07-13T00:01:00Z
+}
+preflight_relative_release() {
+  (
+    cd "$(dirname "$RELEASE")"
+    preflight_with_release "$(basename "$RELEASE")"
+  )
+}
+assert_failure_contains 'canonical non-root absolute path' preflight_relative_release
+assert_failure_contains 'canonical non-root absolute path' \
+  preflight_with_release "$RELEASE/."
+assert_failure_contains 'non-symlink directory' \
+  preflight_with_release "$TEST_TMP/validate-release-leaf-alias"
+assert_failure_contains 'not physically canonical' \
+  preflight_with_release \
+  "$TEST_TMP/validate-release-parent-alias/$(basename "$RELEASE")"
+assert_failure_contains '--now is accepted only with --simulation-clock' \
+  node "$I00_ROOT/bin/preflight.mjs" --release "$RELEASE" \
+  --host "$TEST_TMP/host.json" --supervisor "$TEST_TMP/supervisor.json" \
+  --mode deploy --max-host-age-sec 300 --max-supervisor-age-sec 120 \
+  --required-supervisor-window-sec 130 --now 2099-01-01T00:00:00Z
+assert_failure_contains 'marked simulation root' \
+  node "$I00_ROOT/bin/preflight.mjs" --release "$RELEASE" \
+  --host "$TEST_TMP/host.json" --supervisor "$TEST_TMP/supervisor.json" \
+  --mode deploy --max-host-age-sec 300 --max-supervisor-age-sec 120 \
+  --required-supervisor-window-sec 130 --simulation-clock \
+  --simulation-root "$TEST_TMP" --now 2026-07-13T00:01:00Z
+
+note "isolated staging preflight derives an exact system clock"
+node - "$TEST_TMP/system-clock-host.json" "$TEST_TMP/system-clock-supervisor.json" <<'NODE'
+const fs = require('node:fs');
+const [hostPath, supervisorPath] = process.argv.slice(2);
+const observedMs = Math.floor(Date.now() / 1000) * 1000;
+const observedAtUtc = new Date(observedMs).toISOString().replace('.000Z', 'Z');
+const validUntilUtc = new Date(observedMs + 600_000).toISOString().replace('.000Z', 'Z');
+fs.writeFileSync(hostPath, `${JSON.stringify({
+  source: 'TARGET_HOST_OWNER_READBACK',
+  account: 'simulation-account',
+  targetHost: 'fixture-host.internal',
+  environment: 'isolated-staging',
+  freeBytes: 10_000_000,
+  backupReserveBytes: 1_000,
+  sqliteVersion: '3.53.3',
+  evidenceSha256: 'b'.repeat(64),
+  observedAtUtc,
+})}\n`);
+fs.writeFileSync(supervisorPath, `${JSON.stringify({
+  source: 'CANONICAL_SUPERVISOR_READBACK',
+  observedAtUtc,
+  validUntilUtc,
+  deploymentFrozen: false,
+  exposureState: 'NONE',
+  ambiguityState: 'NONE',
+  recoveryState: 'NONE',
+  currentSchemaVersion: 1,
+  rollbackFloor: 1,
+})}\n`);
+NODE
+assert_success node "$I00_ROOT/bin/preflight.mjs" --release "$RELEASE" \
+  --host "$TEST_TMP/system-clock-host.json" \
+  --supervisor "$TEST_TMP/system-clock-supervisor.json" \
+  --mode deploy --max-host-age-sec 300 --max-supervisor-age-sec 120 \
+  --required-supervisor-window-sec 130
+cp "$TEST_TMP/system-clock-host.json" "$TEST_TMP/future-system-clock-host.json"
+node -e 'const fs=require("fs"),p=process.argv[1],v=require(p);v.observedAtUtc="2099-01-01T00:00:00Z";fs.writeFileSync(p,JSON.stringify(v));' \
+  "$TEST_TMP/future-system-clock-host.json"
+assert_failure_contains 'host preflight is stale or future-dated' \
+  node "$I00_ROOT/bin/preflight.mjs" --release "$RELEASE" \
+  --host "$TEST_TMP/future-system-clock-host.json" \
+  --supervisor "$TEST_TMP/system-clock-supervisor.json" \
+  --mode deploy --max-host-age-sec 300 --max-supervisor-age-sec 120 \
+  --required-supervisor-window-sec 130
 
 note "deploy/rollback preflight verifies release integrity, not just shape"
 # A tampered payload must fail the operator-facing gate exactly as it fails
@@ -544,16 +940,17 @@ assert_failure "${PREFLIGHT[@]}"
 
 note "first-host preflight accepts only the exact producer-bound clean baseline"
 FIRST_HOST_ROOT="$SIMULATION_ROOT/preflight-first-host"
-FIRST_HOST_COSMOS="$FIRST_HOST_ROOT/cosmos"
-FIRST_HOST_DATA="$FIRST_HOST_ROOT/data"
-FIRST_HOST_OPS="$FIRST_HOST_ROOT/ops"
-FIRST_HOST_EVIDENCE_PARENT="$SIMULATION_ROOT/preflight-first-host-evidence"
-FIRST_HOST_BUNDLE="$FIRST_HOST_EVIDENCE_PARENT/bundle"
+FIRST_HOST_COSMOS="$SIMULATION_ROOT/cosmos"
+FIRST_HOST_DATA="$SIMULATION_ROOT/data"
+FIRST_HOST_OPS="$SIMULATION_ROOT/ops-state"
+FIRST_HOST_EVIDENCE_PARENT="$SIMULATION_ROOT/first-host-evidence"
+FIRST_HOST_BUNDLE="$FIRST_HOST_EVIDENCE_PARENT/first-host-readback.preflight"
 FIRST_HOST_RELEASE="$(node -e 'process.stdout.write(require("fs").realpathSync(process.argv[1]))' "$RELEASE")"
 FIRST_HOST_ENV="$FIRST_HOST_ROOT/deploy.env"
 FIRST_HOST_SQLITE="$FIRST_HOST_ROOT/sqlite3"
 FIRST_HOST_SYSTEMCTL="$FIRST_HOST_ROOT/systemctl"
 mkdir -p "$FIRST_HOST_ROOT" "$FIRST_HOST_EVIDENCE_PARENT"
+chmod 700 "$FIRST_HOST_ROOT" "$FIRST_HOST_EVIDENCE_PARENT"
 cat > "$FIRST_HOST_SQLITE" <<'SH'
 #!/usr/bin/env bash
 printf '3.53.3 fixture\n'
@@ -564,6 +961,13 @@ printf 'inactive\n'
 exit 3
 SH
 chmod 755 "$FIRST_HOST_SQLITE" "$FIRST_HOST_SYSTEMCTL"
+refresh_first_host_systemctl_binding() {
+  local inspection
+  inspection="$(node "$I00_ROOT/bin/inspect-executable.mjs" --path "$FIRST_HOST_SYSTEMCTL")"
+  FIRST_HOST_SYSTEMCTL_SHA256="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).sha256)' "$inspection")"
+  FIRST_HOST_SYSTEMCTL_IDENTITY="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).endpointIdentity)' "$inspection")"
+}
+refresh_first_host_systemctl_binding
 cat > "$FIRST_HOST_ROOT/raw.env" <<EOF
 COSMOS_ROOT=$FIRST_HOST_COSMOS
 RELEASES_DIR=$FIRST_HOST_COSMOS/releases
@@ -575,37 +979,61 @@ APP_UNIT=cosmos-app.service
 HEALTH_BASE=http://127.0.0.1:18080
 EOF
 node "$I00_ROOT/bin/sanitize-donor-env.mjs" --env "$FIRST_HOST_ROOT/raw.env" \
-  --output "$FIRST_HOST_ENV" --profile deploy --require-first-host-no-current >/dev/null
+  --output "$FIRST_HOST_ENV" --profile deploy --provenance-mode TEST \
+  --provenance-root "$SIMULATION_ROOT" \
+  --require-first-host-no-current >/dev/null
 
 produce_first_host_bundle() {
   local reserve="${1:-1000}"
+  refresh_first_host_systemctl_binding
   chmod -R u+rwx "$FIRST_HOST_COSMOS" "$FIRST_HOST_DATA" "$FIRST_HOST_OPS" 2>/dev/null || true
   rm -rf "$FIRST_HOST_COSMOS" "$FIRST_HOST_DATA" "$FIRST_HOST_OPS" "$FIRST_HOST_BUNDLE"
   mkdir "$FIRST_HOST_BUNDLE"
   chmod 700 "$FIRST_HOST_BUNDLE"
   node "$I00_ROOT/bin/first-host-readback.mjs" --env "$FIRST_HOST_ENV" --release "$FIRST_HOST_RELEASE" \
-    --output-dir "$FIRST_HOST_BUNDLE" --account simulation-account \
+    --output-dir "$FIRST_HOST_BUNDLE" --evidence-root "$FIRST_HOST_EVIDENCE_PARENT" \
+    --provenance-mode TEST --provenance-root "$SIMULATION_ROOT" \
+    --account simulation-account \
     --target-host fixture-host.internal --environment simulation \
     --backup-reserve-bytes "$reserve" --sqlite "$FIRST_HOST_SQLITE" \
-    --systemctl "$FIRST_HOST_SYSTEMCTL" --now 2026-07-13T00:00:00Z >/dev/null
+    --systemctl "$FIRST_HOST_SYSTEMCTL" --simulation-clock \
+    --simulation-root "$SIMULATION_ROOT" --now 2026-07-13T00:00:00Z >/dev/null
 }
 
 first_host_preflight() {
   local mode="${1:-deploy}" target="${2:-NO_PRIOR_RELEASE_FIRST_HOST}" now="${3:-2026-07-13T00:01:00Z}"
   node "$I00_ROOT/bin/preflight.mjs" --release "$FIRST_HOST_RELEASE" \
     --host "$FIRST_HOST_BUNDLE/host.json" --supervisor "$FIRST_HOST_BUNDLE/supervisor.json" \
-    --mode "$mode" --now "$now" --max-host-age-sec 300 --max-supervisor-age-sec 120 \
+    --mode "$mode" --max-host-age-sec 300 --max-supervisor-age-sec 120 \
     --required-supervisor-window-sec 130 --recovery-target "$target" \
     --first-host-evidence "$FIRST_HOST_BUNDLE/collected-evidence.json" --donor-env "$FIRST_HOST_ENV" \
+    --systemctl-path "$FIRST_HOST_SYSTEMCTL" \
+    --systemctl-sha256 "$FIRST_HOST_SYSTEMCTL_SHA256" \
+    --systemctl-identity "$FIRST_HOST_SYSTEMCTL_IDENTITY" \
+    --simulation-clock --simulation-root "$SIMULATION_ROOT" --now "$now" \
     "${@:4}"
 }
 
 first_host_preflight_without_token() {
   node "$I00_ROOT/bin/preflight.mjs" --release "$FIRST_HOST_RELEASE" \
     --host "$FIRST_HOST_BUNDLE/host.json" --supervisor "$FIRST_HOST_BUNDLE/supervisor.json" \
-    --mode deploy --now 2026-07-13T00:01:00Z --max-host-age-sec 300 \
+    --mode deploy --max-host-age-sec 300 \
     --max-supervisor-age-sec 120 --required-supervisor-window-sec 130 \
-    --first-host-evidence "$FIRST_HOST_BUNDLE/collected-evidence.json" --donor-env "$FIRST_HOST_ENV"
+    --first-host-evidence "$FIRST_HOST_BUNDLE/collected-evidence.json" --donor-env "$FIRST_HOST_ENV" \
+    --systemctl-path "$FIRST_HOST_SYSTEMCTL" \
+    --systemctl-sha256 "$FIRST_HOST_SYSTEMCTL_SHA256" \
+    --systemctl-identity "$FIRST_HOST_SYSTEMCTL_IDENTITY" \
+    --simulation-clock --simulation-root "$SIMULATION_ROOT" --now 2026-07-13T00:01:00Z
+}
+
+first_host_preflight_without_systemctl_binding() {
+  node "$I00_ROOT/bin/preflight.mjs" --release "$FIRST_HOST_RELEASE" \
+    --host "$FIRST_HOST_BUNDLE/host.json" --supervisor "$FIRST_HOST_BUNDLE/supervisor.json" \
+    --mode deploy --max-host-age-sec 300 \
+    --max-supervisor-age-sec 120 --required-supervisor-window-sec 130 \
+    --recovery-target NO_PRIOR_RELEASE_FIRST_HOST \
+    --first-host-evidence "$FIRST_HOST_BUNDLE/collected-evidence.json" --donor-env "$FIRST_HOST_ENV" \
+    --simulation-clock --simulation-root "$SIMULATION_ROOT" --now 2026-07-13T00:01:00Z
 }
 
 mutate_first_host_bundle() {
@@ -625,7 +1053,12 @@ if (kind === 'short-lease') {
 else if (kind === 'unit-unknown') {
   evidence.baseline.unit.state = 'UNKNOWN';
   evidence.baseline.unit.exitCode = 4;
-} else if (kind === 'nonzero-floor') {
+} else if (kind === 'unit-systemctl-digest') {
+  evidence.baseline.unit.systemctlSha256 = '0'.repeat(64);
+} else if (kind === 'unit-systemctl-identity') {
+  evidence.baseline.unit.systemctlIdentity.inode =
+    evidence.baseline.unit.systemctlIdentity.inode === '0' ? '1' : '0';
+	} else if (kind === 'nonzero-floor') {
   evidence.derived.currentSchemaVersion = 1;
   evidence.derived.rollbackFloor = 1;
   supervisor.currentSchemaVersion = 1;
@@ -672,11 +1105,14 @@ assert_failure_contains 'recovery target must be NO_PRIOR_RELEASE_FIRST_HOST' \
   first_host_preflight deploy WRONG_FIRST_HOST
 assert_failure_contains 'recovery target must be NO_PRIOR_RELEASE_FIRST_HOST' \
   first_host_preflight_without_token
+assert_failure_contains 'systemctl-path is required' first_host_preflight_without_systemctl_binding
 assert_failure_contains 'deploy-only' first_host_preflight rollback
 assert_failure_contains 'canonical supervisor readback rejects first-host arguments' \
   "${PREFLIGHT[@]}" --recovery-target NO_PRIOR_RELEASE_FIRST_HOST
 assert_failure_contains 'duplicate first-host argument' first_host_preflight deploy \
   NO_PRIOR_RELEASE_FIRST_HOST 2026-07-13T00:01:00Z --recovery-target NO_PRIOR_RELEASE_FIRST_HOST
+assert_failure_contains 'duplicate first-host argument' first_host_preflight deploy \
+  NO_PRIOR_RELEASE_FIRST_HOST 2026-07-13T00:01:00Z --systemctl-path "$FIRST_HOST_SYSTEMCTL"
 assert_failure first_host_preflight deploy NO_PRIOR_RELEASE_FIRST_HOST 2026-07-12T23:59:00Z
 produce_first_host_bundle
 mutate_first_host_bundle wrong-source
@@ -687,9 +1123,13 @@ cp "$FIRST_HOST_BUNDLE/supervisor.json" "$FIRST_HOST_ROOT/caller-supervisor.json
 assert_failure_contains 'must be the producer bundle files' node "$I00_ROOT/bin/preflight.mjs" \
   --release "$FIRST_HOST_RELEASE" --host "$FIRST_HOST_ROOT/caller-host.json" \
   --supervisor "$FIRST_HOST_ROOT/caller-supervisor.json" --mode deploy \
-  --now 2026-07-13T00:01:00Z --max-host-age-sec 300 --max-supervisor-age-sec 120 \
+  --max-host-age-sec 300 --max-supervisor-age-sec 120 \
   --required-supervisor-window-sec 130 --recovery-target NO_PRIOR_RELEASE_FIRST_HOST \
-  --first-host-evidence "$FIRST_HOST_BUNDLE/collected-evidence.json" --donor-env "$FIRST_HOST_ENV"
+  --first-host-evidence "$FIRST_HOST_BUNDLE/collected-evidence.json" --donor-env "$FIRST_HOST_ENV" \
+  --systemctl-path "$FIRST_HOST_SYSTEMCTL" \
+  --systemctl-sha256 "$FIRST_HOST_SYSTEMCTL_SHA256" \
+  --systemctl-identity "$FIRST_HOST_SYSTEMCTL_IDENTITY" \
+  --simulation-clock --simulation-root "$SIMULATION_ROOT" --now 2026-07-13T00:01:00Z
 
 note "first-host preflight rejects every current and previous node type"
 for link in current previous; do
@@ -738,11 +1178,22 @@ assert_failure first_host_preflight
 chmod 700 "$FIRST_HOST_DATA"
 
 note "first-host evidence chronology, cross-bindings, clean derivation, and bytes fail closed"
-for mutation in short-lease cross-owner unit-unknown nonzero-floor frozen exposure ambiguity recovery env-digest release-cross; do
+for mutation in short-lease cross-owner unit-unknown unit-systemctl-digest unit-systemctl-identity \
+  nonzero-floor frozen exposure ambiguity recovery env-digest release-cross; do
   produce_first_host_bundle
   mutate_first_host_bundle "$mutation"
   assert_failure first_host_preflight
 done
+produce_first_host_bundle
+cat > "$FIRST_HOST_SYSTEMCTL.next" <<'SH'
+#!/usr/bin/env bash
+printf 'inactive\n'
+exit 3
+SH
+chmod 755 "$FIRST_HOST_SYSTEMCTL.next"
+mv -f "$FIRST_HOST_SYSTEMCTL.next" "$FIRST_HOST_SYSTEMCTL"
+refresh_first_host_systemctl_binding
+assert_failure_contains 'differs from the current wrapper binding' first_host_preflight
 produce_first_host_bundle
 printf ' ' >> "$FIRST_HOST_BUNDLE/collected-evidence.json"
 assert_failure_contains 'not canonical JSON' first_host_preflight

@@ -62,7 +62,12 @@ let frozenManifest = {
 };
 try {
   execFileSync('git', ['-C', sourceRoot, 'cat-file', '-e', `${headSha}^{commit}`], { stdio: 'ignore' });
-  frozenManifest = computeGitSourceFreeze({ sourceRoot, revision: headSha, protectedOwnerDirectives });
+  frozenManifest = computeGitSourceFreeze({
+    sourceRoot,
+    revision: headSha,
+    protectedOwnerDirectives,
+    executeGit: (gitArgs, options) => execFileSync('git', gitArgs, options),
+  });
 } catch {
   // Simulation fixtures still carry the exact manifest shape; production fixtures bind real Git blobs below.
 }

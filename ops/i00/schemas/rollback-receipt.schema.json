@@ -4,12 +4,65 @@
   "title": "I00 rollback receipt",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "kind", "fromSha", "toSha", "evidence", "status", "startedAtUtc", "completedAtUtc", "recordedAtUtc"],
+  "required": [
+    "schemaVersion",
+    "kind",
+    "authorizationId",
+    "riskVersion",
+    "serverPreviewDigest",
+    "authorizationSha256",
+    "riskDocumentSha256",
+    "previewDocumentSha256",
+    "authorizationConsumptionSha256",
+    "claimKey",
+    "effectRecordSha256",
+    "fromSha",
+    "toSha",
+    "from",
+    "to",
+    "evidence",
+    "status",
+    "startedAtUtc",
+    "completedAtUtc",
+    "recordedAtUtc"
+  ],
   "properties": {
-    "schemaVersion": {"const": 1},
+    "schemaVersion": {"const": 2},
     "kind": {"const": "ROLLBACK"},
+    "authorizationId": {"type": "string", "minLength": 1},
+    "riskVersion": {
+      "type": "string",
+      "pattern": "^i00-deployment-risk-v1:sha256:[0-9a-f]{64}$"
+    },
+    "serverPreviewDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "authorizationSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "riskDocumentSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "previewDocumentSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "authorizationConsumptionSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "claimKey": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "effectRecordSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "fromSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
     "toSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "from": {"$ref": "#/$defs/releaseBinding"},
+    "to": {"$ref": "#/$defs/releaseBinding"},
     "evidence": {
       "type": "object",
       "additionalProperties": false,
@@ -32,6 +85,38 @@
     "recordedAtUtc": {"type": "string", "format": "date-time"}
   },
   "$defs": {
+    "releaseBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "releaseId",
+        "testedSha",
+        "artifactManifestSha256",
+        "treeSha256",
+        "identity"
+      ],
+      "properties": {
+        "path": {"type": "string", "pattern": "^/"},
+        "releaseId": {
+          "type": "string",
+          "pattern": "^i00-[0-9a-f]{40}$"
+        },
+        "testedSha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "artifactManifestSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "treeSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "identity": {"type": "string", "minLength": 1}
+      }
+    },
     "evidenceReference": {
       "type": "object",
       "additionalProperties": false,

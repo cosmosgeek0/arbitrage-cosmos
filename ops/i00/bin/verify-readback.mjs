@@ -1,5 +1,11 @@
 #!/usr/bin/env node
-import { fail, hasPlaceholder, isFullSha, isUtc, parseArgs, readJson, requireKeys } from '../lib.mjs';
+import {
+  readBoundJsonInput,
+  recheckBoundJsonInput,
+} from '../bound-json-input.mjs';
+import {
+  fail, hasPlaceholder, isFullSha, isUtc, parseArgs, requireKeys,
+} from '../lib.mjs';
 import { compileJsonSchemaFile } from '../json-schema.mjs';
 
 const args = parseArgs(process.argv.slice(2), new Set(['simulation-clock']));
@@ -8,7 +14,8 @@ if (!isFullSha(args['expected-sha'])) fail('--expected-sha must be a full Git SH
 if (args['simulation-clock'] !== true && args.now) fail('--now is accepted only with --simulation-clock');
 if (args['simulation-clock'] === true && !isUtc(args.now)) fail('simulation clock requires exact --now UTC seconds');
 const effectiveNow = args['simulation-clock'] === true ? args.now : new Date().toISOString();
-const value = readJson(args.input, 'deployment readback');
+const inputBinding = readBoundJsonInput(args.input, 'deployment readback');
+const value = inputBinding.document;
 let structuralValidator;
 try {
   structuralValidator = compileJsonSchemaFile(
@@ -77,6 +84,7 @@ if (value.deployedSha === null) {
   if (!isFullSha(value.rollbackCandidate)) fail('proved deployment requires a full-SHA rollback candidate');
 }
 
+recheckBoundJsonInput(inputBinding, 'deployment readback');
 process.stdout.write(`${JSON.stringify({
   status: 'DEPLOYMENT_READBACK_VALID',
   testedSha: value.testedSha,

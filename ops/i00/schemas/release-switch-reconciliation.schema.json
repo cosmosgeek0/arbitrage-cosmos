@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmos.invalid/i00/release-switch-reconciliation.schema.json",
+  "title": "I00 Gate-5 release-switch reconciliation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "status",
+    "actionClass",
+    "authorizationId",
+    "deployedSha",
+    "riskVersion",
+    "riskDocumentSha256",
+    "serverPreviewDigest",
+    "previewDocumentSha256",
+    "authorizationConsumption",
+    "authorizedEffect",
+    "resultReceiptSha256",
+    "reconciledAtUtc",
+    "disposition"
+  ],
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "kind": {"const": "RELEASE_SWITCH_RECONCILIATION"},
+    "status": {
+      "enum": ["GATE_5_RECONCILED", "EFFECT_FAILURE_RECONCILED"]
+    },
+    "actionClass": {"const": "SERVICE_RELEASE_SWITCH"},
+    "authorizationId": {"type": "string", "minLength": 1},
+    "deployedSha": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        {"type": "null"}
+      ]
+    },
+    "riskVersion": {
+      "type": "string",
+      "pattern": "^i00-deployment-risk-v1:sha256:[0-9a-f]{64}$"
+    },
+    "riskDocumentSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "serverPreviewDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "previewDocumentSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "authorizationConsumption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claimKey", "sha256", "consumedAtUtc"],
+      "properties": {
+        "claimKey": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "consumedAtUtc": {"type": "string", "format": "date-time"}
+      }
+    },
+    "authorizedEffect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "startEvidencePath",
+        "startEvidenceSha256",
+        "terminalEvidencePath",
+        "terminalEvidenceSha256",
+        "effectStartedAtUtc",
+        "effectFinishedAtUtc",
+        "terminalStatus",
+        "exitCode",
+        "receiptPublicationReserveSeconds",
+        "claimKey",
+        "consumptionSha256",
+        "program",
+        "signal",
+        "forced",
+        "timedOut",
+        "programBindingRetained",
+        "effectMayHaveMutated",
+        "successRecorderEligible",
+        "runnerExitCode",
+        "receiptRoot"
+      ],
+      "properties": {
+        "startEvidencePath": {"type": "string", "pattern": "^/"},
+        "startEvidenceSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "terminalEvidencePath": {"type": "string", "pattern": "^/"},
+        "terminalEvidenceSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "effectStartedAtUtc": {"type": "string", "format": "date-time"},
+        "effectFinishedAtUtc": {"type": "string", "format": "date-time"},
+        "terminalStatus": {
+          "enum": ["AUTHORIZED_EFFECT_COMPLETED", "AUTHORIZED_EFFECT_TERMINATED"]
+        },
+        "exitCode": {"type": ["integer", "null"]},
+        "receiptPublicationReserveSeconds": {"type": "integer"},
+        "claimKey": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "consumptionSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "program": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256", "identity"],
+          "properties": {
+            "path": {"type": "string", "pattern": "^/"},
+            "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "identity": {"type": "string", "minLength": 1}
+          }
+        },
+        "signal": {"type": ["string", "null"]},
+        "forced": {"type": "boolean"},
+        "timedOut": {"type": "boolean"},
+        "programBindingRetained": {"type": "boolean"},
+        "effectMayHaveMutated": {"type": "boolean"},
+        "successRecorderEligible": {"type": "boolean"},
+        "runnerExitCode": {"type": "integer"},
+        "receiptRoot": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "identity"],
+          "properties": {
+            "path": {"type": "string", "pattern": "^/"},
+            "identity": {
+              "type": "string",
+              "pattern": "^device=[0-9]+,inode=[0-9]+,mode=[0-7]+,uid=[0-9]+,gid=[0-9]+$"
+            }
+          }
+        }
+      }
+    },
+    "resultReceiptSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "reconciledAtUtc": {"type": "string", "format": "date-time"},
+    "disposition": {
+      "enum": [
+        "GATE_5_RELEASE_SWITCH_PROVED_LATER_GATES_PENDING",
+        "RELEASE_SWITCH_FAILED_AFTER_EFFECT_RECORDED"
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["status", "deployedSha", "authorizedEffect", "disposition"],
+      "properties": {
+        "status": {"const": "GATE_5_RECONCILED"},
+        "deployedSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "authorizedEffect": {
+          "type": "object",
+          "required": ["terminalStatus", "successRecorderEligible"],
+          "properties": {
+            "terminalStatus": {"const": "AUTHORIZED_EFFECT_COMPLETED"},
+            "successRecorderEligible": {"const": true}
+          }
+        },
+        "disposition": {"const": "GATE_5_RELEASE_SWITCH_PROVED_LATER_GATES_PENDING"}
+      }
+    },
+    {
+      "type": "object",
+      "required": ["status", "deployedSha", "authorizedEffect", "disposition"],
+      "properties": {
+        "status": {"const": "EFFECT_FAILURE_RECONCILED"},
+        "deployedSha": {"type": "null"},
+        "authorizedEffect": {
+          "type": "object",
+          "required": [
+            "terminalStatus", "effectMayHaveMutated", "successRecorderEligible"
+          ],
+          "properties": {
+            "terminalStatus": {"const": "AUTHORIZED_EFFECT_TERMINATED"},
+            "effectMayHaveMutated": {"const": true},
+            "successRecorderEligible": {"const": false}
+          }
+        },
+        "disposition": {"const": "RELEASE_SWITCH_FAILED_AFTER_EFFECT_RECORDED"}
+      }
+    }
+  ]
+}

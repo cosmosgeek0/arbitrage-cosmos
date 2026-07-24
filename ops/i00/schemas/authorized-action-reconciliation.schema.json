@@ -1,0 +1,215 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmos.invalid/i00/authorized-action-reconciliation.v1.json",
+  "title": "I00 authorized action reconciliation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "status",
+    "actionClass",
+    "authorizationId",
+    "deployedSha",
+    "riskVersion",
+    "serverPreviewDigest",
+    "authorizationConsumptionSha256",
+    "resultReceiptSha256",
+    "reconciledAtUtc",
+    "disposition"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "kind": {
+      "type": "string",
+      "const": "AUTHORIZED_ACTION_RECONCILIATION"
+    },
+    "status": { "type": "string", "const": "RECONCILED" },
+    "actionClass": {
+      "type": "string",
+      "enum": [
+        "OPS_BUNDLE_INSTALL",
+        "BACKUP_CREATE",
+        "ISOLATED_RESTORE",
+        "SECRET_MATERIALIZATION",
+        "SERVICE_ROLLBACK"
+      ]
+    },
+    "authorizationId": { "type": "string", "minLength": 1 },
+    "deployedSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "riskVersion": {
+      "type": "string",
+      "pattern": "^i00-deployment-risk-v1:sha256:[0-9a-f]{64}$"
+    },
+    "serverPreviewDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "authorizationConsumptionSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "resultReceiptSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "reconciledAtUtc": { "type": "string", "format": "date-time" },
+    "disposition": {
+      "type": "string",
+      "enum": [
+        "SERVICE_MUTATION_NOT_PERFORMED",
+        "SOURCE_PATH_NOT_MUTATED_BY_ACTION",
+        "PRODUCTION_PATH_NOT_TARGETED",
+        "ONLY_EXACT_PRIVATE_OUTPUT_PUBLISHED",
+        "ROLLBACK_SEMANTIC_PROOF_RECONCILED",
+        "ROLLBACK_SWITCHED_FROZEN_REQUIRES_OWNER_ACTION",
+        "ROLLBACK_EFFECT_AMBIGUOUS_REQUIRES_OWNER_ACTION",
+        "ROLLBACK_REFUSED_NO_EFFECT_RECONCILED",
+        "EFFECT_TERMINATED_MUTATION_POSSIBLE"
+        ,"BACKUP_OUTPUT_UNRESOLVED_REQUIRES_OWNER_ACTION"
+      ]
+    },
+    "effect": {
+      "$ref": "#/$defs/effectBinding"
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["actionClass", "disposition", "effect"],
+      "properties": {
+        "actionClass": { "const": "OPS_BUNDLE_INSTALL" },
+        "disposition": {
+          "enum": [
+            "SERVICE_MUTATION_NOT_PERFORMED",
+            "EFFECT_TERMINATED_MUTATION_POSSIBLE"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["actionClass", "disposition", "effect"],
+      "properties": {
+        "actionClass": { "const": "BACKUP_CREATE" },
+        "disposition": {
+          "enum": [
+            "SOURCE_PATH_NOT_MUTATED_BY_ACTION",
+            "EFFECT_TERMINATED_MUTATION_POSSIBLE",
+            "BACKUP_OUTPUT_UNRESOLVED_REQUIRES_OWNER_ACTION"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["actionClass", "disposition", "effect"],
+      "properties": {
+        "actionClass": { "const": "ISOLATED_RESTORE" },
+        "disposition": {
+          "enum": [
+            "PRODUCTION_PATH_NOT_TARGETED",
+            "EFFECT_TERMINATED_MUTATION_POSSIBLE"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["actionClass", "disposition", "effect"],
+      "properties": {
+        "actionClass": { "const": "SECRET_MATERIALIZATION" },
+        "disposition": {
+          "enum": [
+            "ONLY_EXACT_PRIVATE_OUTPUT_PUBLISHED",
+            "EFFECT_TERMINATED_MUTATION_POSSIBLE"
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["actionClass", "disposition"],
+      "properties": {
+        "actionClass": { "const": "SERVICE_ROLLBACK" },
+        "disposition": {
+          "enum": [
+            "ROLLBACK_SEMANTIC_PROOF_RECONCILED",
+            "ROLLBACK_SWITCHED_FROZEN_REQUIRES_OWNER_ACTION",
+            "ROLLBACK_EFFECT_AMBIGUOUS_REQUIRES_OWNER_ACTION",
+            "ROLLBACK_REFUSED_NO_EFFECT_RECONCILED"
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "fileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "identity"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^/" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "identity": { "type": "string", "minLength": 1 }
+      }
+    },
+    "effectBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claimKey",
+        "startEvidencePath",
+        "startEvidenceSha256",
+        "terminalEvidencePath",
+        "terminalEvidenceSha256",
+        "effectStartedAtUtc",
+        "effectFinishedAtUtc",
+        "program",
+        "chain",
+        "receiptRoot"
+      ],
+      "properties": {
+        "claimKey": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "startEvidencePath": { "type": "string", "pattern": "^/" },
+        "startEvidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "terminalEvidencePath": { "type": "string", "pattern": "^/" },
+        "terminalEvidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "effectStartedAtUtc": { "type": "string", "format": "date-time" },
+        "effectFinishedAtUtc": { "type": "string", "format": "date-time" },
+        "program": { "$ref": "#/$defs/fileBinding" },
+        "chain": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "authorizationSha256",
+            "riskDocumentSha256",
+            "previewDocumentSha256",
+            "authorizationConsumptionSha256"
+          ],
+          "properties": {
+            "authorizationSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "riskDocumentSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "previewDocumentSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "authorizationConsumptionSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "receiptRoot": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "identity"],
+          "properties": {
+            "path": { "type": "string", "pattern": "^/" },
+            "identity": {
+              "type": "string",
+              "pattern": "^device=[0-9]+,inode=[0-9]+,mode=[0-7]+,uid=[0-9]+,gid=[0-9]+$"
+            }
+          }
+        }
+      }
+    }
+  }
+}

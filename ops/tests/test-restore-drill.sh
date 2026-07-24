@@ -4,6 +4,9 @@
 . "$(dirname "$0")/helpers.sh"
 . "$BIN/common.sh"
 
+TMPDIR="$(cd -P -- "${TMPDIR:-/tmp}" && pwd -P)"
+export TMPDIR
+
 export DATA_DIR="$SANDBOX/data"
 export OPS_STATE_DIR="$SANDBOX/ops"
 export BACKUP_DIR="$SANDBOX/backups"
@@ -55,8 +58,10 @@ assert_eq "$(node -e '
 ' "$BACKUP_DIR/drills/$REPORT2")" false "count mismatch recorded"
 
 note "3. no backups at all: drill fails with NO_BACKUP report"
-assert_rc 1 env BACKUP_DIR="$SANDBOX/empty-backups" bash "$DRILL"
-REPORT3="$(ls -1 "$SANDBOX/empty-backups/drills" | sort | tail -1)"
-assert_eq "$(json_get "$SANDBOX/empty-backups/drills/$REPORT3" reason)" NO_BACKUP "reason recorded"
+EMPTY_BACKUPS="$SANDBOX/empty-backups"
+mkdir -p "$EMPTY_BACKUPS"
+assert_rc 1 env BACKUP_DIR="$EMPTY_BACKUPS" bash "$DRILL"
+REPORT3="$(ls -1 "$EMPTY_BACKUPS/drills" | sort | tail -1)"
+assert_eq "$(json_get "$EMPTY_BACKUPS/drills/$REPORT3" reason)" NO_BACKUP "reason recorded"
 
 finish

@@ -5,10 +5,16 @@
 `REQUESTED_NOT_AUTHORIZED`
 
 This is a parameter and authorization request, not permission to execute. No
-command below may run against a real host or vendor until the owner creates the
-matching durable parent §20 authorization record. One action class never implies
-another. No withdrawal, transfer-out, order, borrow/repay, leverage, or other
-money authority is requested or permitted.
+effect wrapper, provider call, systemd action, or vendor action below may run
+until the owner creates the matching durable parent §20 authorization record.
+Before that record exists, read-only validation and the create-only risk and
+preview producers may run on a real host only through separately owner-approved
+engineering access and only inside the dedicated evidence directories. Those
+steps inspect local evidence and create `BOUND_NOT_AUTHORIZED` or
+`PREVIEW_READY_NOT_AUTHORIZED`; they do not grant approval or perform an
+operational effect. One action class never implies another. No withdrawal,
+transfer-out, order, borrow/repay, leverage, or other money authority is
+requested or permitted.
 
 ## Exact owner inputs required
 
@@ -47,7 +53,8 @@ money authority is requested or permitted.
 - optional exact customer-managed KMS key ARN and constrained decrypt policy,
   or explicit AWS-managed-key selection;
 - exact 0600 runtime credential output path plus distinct result and
-  reconciliation receipt paths; never provide secret values here;
+  reconciliation receipt paths below a dedicated root-owned mode-0700
+  `/var/lib/cosmos-action-receipts`; never provide secret values here;
 - Cloudflare account, tunnel ID, operator hostname, team domain, Access
   application/AUD, operator email/role, origin host, tunnel credential owner,
   and stable-egress readback;
@@ -61,8 +68,12 @@ money authority is requested or permitted.
   watchdog readback command;
 - accepted Q entrypoint/command, protocol, port, dependencies, lifecycle owner,
   and health readback, or explicit `NOT_CONFIGURED`;
-- exact evidence/model paths, backup directory/retention/age policy, database
-  and filesystem capacity, isolated restore target, and receipt evidence root;
+- backup directory/retention/age policy, database and filesystem capacity,
+  isolated restore target, and receipt evidence root. Canonical
+  `BACKUP_CREATE` is DB-only with empty `EVIDENCE_PATHS`; `/etc/cosmos` is never
+  archived. Evidence/model archival is
+  `BLOCKED_PENDING_EXPLICIT_READ_CAPABILITY` and requires a separate accepted
+  read-capability amendment;
 - accepted donor production-restore amendment for same-filesystem staging,
   complete DB/evidence/model verification, stopped connections, retained prior
   set, atomic switch, and rollback; until then production restore is blocked;
@@ -80,6 +91,15 @@ Each record must use the exact template at
 host, environment, command, product, endpoints/digests, credential permissions,
 zero capital/notional effect, operational maximum, preconditions, start/expiry,
 rollback/recovery, owner approval, and distinct result/reconciliation receipts.
+Before the owner creates that record, the class request must pass the canonical
+risk-version and action-preview producers. The owner copies the producer-bound
+risk version, nonce, preview digest, and exact action into the approval; callers
+receive the two producer artifacts and their dedicated persistent mode-0700
+consumption root, never caller-created raw risk/nonce/preview values.
+For ops-bundle install, backup, isolated restore, and secret materialization,
+the two receipt targets must be absent below canonical mode-0700 parents. The
+wrapper create-only publishes both exact mode-0600 outcome receipts after its
+class-specific verification succeeds.
 
 - `OPS_BUNDLE_INSTALL`
 - `SECRET_MATERIALIZATION`
@@ -93,15 +113,37 @@ rollback/recovery, owner approval, and distinct result/reconciliation receipts.
 - Any private read, signed validation, or tiny-live canary is a different parent
   §20 authorization and is not granted by this packet.
 
+## Exact producer input matrix
+
+Every production risk invocation requires `--request`, `--class`, and
+`--output`. The owner request supplies identity, authorization window, and
+receipt targets only. The producer derives the exact class, host, release,
+configuration, endpoint, executable, and digest bindings from the following
+verified evidence; callers cannot supply a nonce, risk version, preview digest,
+clock, or command-path override.
+
+| class | additional required risk-producer inputs |
+|---|---|
+| `OPS_BUNDLE_INSTALL` | `--release`, `--trusted-build-public-key`, `--host-readback`, `--host-evidence`, `--destination` |
+| `SERVICE_RELEASE_SWITCH` | `--release`, `--trusted-build-public-key`, `--runtime-env`, `--deploy-env`, `--sqlite`, plus exactly either `--host-readback` with `--host-evidence` or `--first-host-evidence-dir` |
+| `SERVICE_ROLLBACK` | `--release`, `--trusted-build-public-key`, `--host-readback`, `--host-evidence`, `--runtime-env`, `--deploy-env`, `--rollback-evidence-root` |
+| `BACKUP_CREATE` | `--host-readback`, `--host-evidence`, `--runtime-env`, `--backup-env` |
+| `ISOLATED_RESTORE` | `--host-readback`, `--host-evidence`, `--runtime-env`, `--backup-env`, `--backup`, `--target` |
+| `SECRET_MATERIALIZATION` | `--provider-config`, `--credential-output` |
+
+Every preview invocation requires exactly `--deployment-risk`,
+`--consumption-root`, and `--output`. Test-only clock, nonce, command-root, and
+donor-root inputs are not production activation inputs.
+
 ## Placeholder-only command plan
 
 The following commands are exact in shape and intentionally unresolved. Replace
 every `<OWNER_INPUT_...>` only inside an approved activation workspace.
 
 ```bash
-node ops/i00/bin/verify-donor.mjs --repo <OWNER_INPUT_REPO>
+ops/i00/bin/run-fixed-node-gate.sh verify-donor.mjs --repo <OWNER_INPUT_REPO>
 
-node ops/i00/bin/assemble-release.mjs \
+ops/i00/bin/run-fixed-node-gate.sh assemble-release.mjs \
   --source-root <OWNER_INPUT_CLEAN_SOURCE_ROOT> \
   --runtime-deps <OWNER_INPUT_PREBUILT_RUNTIME_DEPS> \
   --output-root <OWNER_INPUT_RELEASE_OUTPUT_ROOT> \
@@ -115,24 +157,41 @@ node ops/i00/bin/assemble-release.mjs \
   --build-attestation-signature <OWNER_INPUT_BUILD_ATTESTATION_SIG> \
   --build-attestation-public-key <OWNER_INPUT_BUILD_PUBLIC_KEY_PEM>
 
-node ops/i00/bin/validate-release.mjs \
+ops/i00/bin/run-fixed-node-gate.sh validate-release.mjs \
   --release <OWNER_INPUT_RELEASE_DIR> \
-  --trusted-build-public-key <OWNER_INPUT_TRUSTED_BUILD_PUBLIC_KEY_PEM>
+  --trusted-build-public-key <OWNER_INPUT_TRUSTED_BUILD_PUBLIC_KEY_PEM> \
+  --require-exact-cohort
 
-node ops/i00/bin/validate-config.mjs \
+install -d -m 0700 <OWNER_INPUT_AUTHORIZATION_CONSUMPTION_ROOT>
+
+ops/i00/bin/run-fixed-node-gate.sh produce-deployment-risk-version.mjs \
+  --request <OWNER_INPUT_CLASS_ACTION_REQUEST_JSON> \
+  --class <OWNER_INPUT_EXACT_ACTION_CLASS> \
+  <OWNER_INPUT_EXACT_CLASS_EVIDENCE_ARGUMENTS_FROM_MATRIX> \
+  --output <OWNER_INPUT_DEPLOYMENT_RISK_JSON>
+
+ops/i00/bin/run-fixed-node-gate.sh produce-deployment-action-preview.mjs \
+  --deployment-risk <OWNER_INPUT_DEPLOYMENT_RISK_JSON> \
+  --consumption-root <OWNER_INPUT_AUTHORIZATION_CONSUMPTION_ROOT> \
+  --output <OWNER_INPUT_ACTION_PREVIEW_JSON>
+
+# Only after reviewing both outputs, the owner may create the matching
+# external-authorization v2 document. Repeat the complete chain per class.
+
+ops/i00/bin/run-fixed-node-gate.sh validate-config.mjs \
   --env <OWNER_INPUT_RUNTIME_ENV> \
   --expected-sha <OWNER_INPUT_FULL_TESTED_SHA>
 
-node ops/i00/bin/probe.mjs --input <OWNER_INPUT_SUPERVISOR_JSON> --kind dependency --max-age-sec 30
-node ops/i00/bin/probe.mjs --input <OWNER_INPUT_SUPERVISOR_JSON> --kind readiness --max-age-sec 30
-node ops/i00/bin/probe.mjs --input <OWNER_INPUT_SUPERVISOR_JSON> --kind trade-readiness --max-age-sec 30
-node ops/i00/bin/probe.mjs --input <OWNER_INPUT_SUPERVISOR_JSON> --kind recovery-readiness --max-age-sec 30
+ops/i00/bin/run-fixed-node-gate.sh probe.mjs --input <OWNER_INPUT_SUPERVISOR_JSON> --kind dependency --max-age-sec 30
+ops/i00/bin/run-fixed-node-gate.sh probe.mjs --input <OWNER_INPUT_SUPERVISOR_JSON> --kind readiness --max-age-sec 30
+ops/i00/bin/run-fixed-node-gate.sh probe.mjs --input <OWNER_INPUT_SUPERVISOR_JSON> --kind trade-readiness --max-age-sec 30
+ops/i00/bin/run-fixed-node-gate.sh probe.mjs --input <OWNER_INPUT_SUPERVISOR_JSON> --kind recovery-readiness --max-age-sec 30
 
-node ops/i00/bin/verify-readback.mjs \
+ops/i00/bin/run-fixed-node-gate.sh verify-readback.mjs \
   --input <OWNER_INPUT_DEPLOYMENT_READBACK_JSON> --max-age-sec 30 \
   --expected-sha <OWNER_INPUT_FULL_TESTED_SHA>
 
-node ops/i00/bin/verify-cloudflare-readback.mjs \
+ops/i00/bin/run-fixed-node-gate.sh verify-cloudflare-readback.mjs \
   --input <OWNER_INPUT_CLOUDFLARE_READBACK_JSON> --max-age-sec 30 \
   --expected-hostname <OWNER_INPUT_OPERATOR_HOSTNAME> \
   --expected-account <OWNER_INPUT_CLOUDFLARE_ACCOUNT>
@@ -142,15 +201,21 @@ ops/i00/bin/install-ops-bundle.sh \
   --release <OWNER_INPUT_RELEASE_DIR> \
   --destination <OWNER_INPUT_IMMUTABLE_OPS_BUNDLE_DIR> \
   --authorization <OWNER_INPUT_OPS_INSTALL_AUTHORIZATION_JSON> \
+  --operator <OWNER_INPUT_OPERATOR> \
+  --config-version <OWNER_INPUT_CONFIG_VERSION> \
+  --deployment-risk <OWNER_INPUT_OPS_INSTALL_DEPLOYMENT_RISK_JSON> \
+  --action-preview <OWNER_INPUT_OPS_INSTALL_ACTION_PREVIEW_JSON> \
+  --authorization-consumption-root <OWNER_INPUT_OPS_INSTALL_CONSUMPTION_ROOT> \
   --host <OWNER_INPUT_TARGET_HOST> --environment <OWNER_INPUT_ENVIRONMENT> \
   --account <OWNER_INPUT_ACCOUNT> \
   --result-receipt <OWNER_INPUT_INSTALL_RESULT_RECEIPT> \
   --reconciliation-receipt <OWNER_INPUT_INSTALL_RECONCILIATION_RECEIPT>
 
-AWS_CLI=/usr/local/bin/aws node ops/i00/bin/secrets-provider.mjs \
-  --config <OWNER_INPUT_SECRET_PROVIDER_JSON> \
-  --output <OWNER_INPUT_0600_RUNTIME_CREDENTIAL_JSON> \
-  --authorization <OWNER_INPUT_SECRET_AUTHORIZATION_JSON>
+/usr/bin/node <OWNER_INPUT_INSTALLED_I00>/bin/secret-materialization.mjs \
+  --authorization <OWNER_INPUT_SECRET_AUTHORIZATION_JSON> \
+  --deployment-risk <OWNER_INPUT_SECRET_DEPLOYMENT_RISK_JSON> \
+  --action-preview <OWNER_INPUT_SECRET_ACTION_PREVIEW_JSON> \
+  --authorization-consumption-root <OWNER_INPUT_SECRET_CONSUMPTION_ROOT>
 
 I00_TRUSTED_BUILD_PUBLIC_KEY=<OWNER_INPUT_TRUSTED_BUILD_PUBLIC_KEY_PEM> \
 <OWNER_INPUT_INSTALLED_I00>/bin/release-switch.sh \
@@ -158,6 +223,11 @@ I00_TRUSTED_BUILD_PUBLIC_KEY=<OWNER_INPUT_TRUSTED_BUILD_PUBLIC_KEY_PEM> \
   --runtime-env <OWNER_INPUT_RUNTIME_ENV> --host <OWNER_INPUT_HOST_READBACK_JSON> \
   --supervisor <OWNER_INPUT_SUPERVISOR_JSON> \
   --authorization <OWNER_INPUT_SWITCH_AUTHORIZATION_JSON> \
+  --operator <OWNER_INPUT_OPERATOR> \
+  --config-version <OWNER_INPUT_CONFIG_VERSION> \
+  --deployment-risk <OWNER_INPUT_SWITCH_DEPLOYMENT_RISK_JSON> \
+  --action-preview <OWNER_INPUT_SWITCH_ACTION_PREVIEW_JSON> \
+  --authorization-consumption-root <OWNER_INPUT_SWITCH_CONSUMPTION_ROOT> \
   --evidence-root <OWNER_INPUT_EVIDENCE_ROOT> \
   --result-receipt <OWNER_INPUT_DEPLOYMENT_RECEIPT> \
   --reconciliation-receipt <OWNER_INPUT_RECONCILIATION_RECEIPT>
@@ -168,6 +238,11 @@ I00_TRUSTED_BUILD_PUBLIC_KEY=<OWNER_INPUT_TRUSTED_BUILD_PUBLIC_KEY_PEM> \
   --runtime-env <OWNER_INPUT_RUNTIME_ENV> --host <OWNER_INPUT_HOST_READBACK_JSON> \
   --supervisor <OWNER_INPUT_SUPERVISOR_JSON> \
   --authorization <OWNER_INPUT_ROLLBACK_AUTHORIZATION_JSON> \
+  --operator <OWNER_INPUT_OPERATOR> \
+  --config-version <OWNER_INPUT_CONFIG_VERSION> \
+  --deployment-risk <OWNER_INPUT_ROLLBACK_DEPLOYMENT_RISK_JSON> \
+  --action-preview <OWNER_INPUT_ROLLBACK_ACTION_PREVIEW_JSON> \
+  --authorization-consumption-root <OWNER_INPUT_ROLLBACK_CONSUMPTION_ROOT> \
   --evidence-root <OWNER_INPUT_EVIDENCE_ROOT> \
   --result-receipt <OWNER_INPUT_ROLLBACK_RECEIPT> \
   --reconciliation-receipt <OWNER_INPUT_RECONCILIATION_RECEIPT>
@@ -175,6 +250,12 @@ I00_TRUSTED_BUILD_PUBLIC_KEY=<OWNER_INPUT_TRUSTED_BUILD_PUBLIC_KEY_PEM> \
 <OWNER_INPUT_INSTALLED_I00>/bin/backup-verify.sh \
   --env-file <OWNER_INPUT_BACKUP_ENV> \
   --authorization <OWNER_INPUT_BACKUP_AUTHORIZATION_JSON> \
+  --operator <OWNER_INPUT_OPERATOR> \
+  --deployed-sha <OWNER_INPUT_FULL_TESTED_SHA> \
+  --config-version <OWNER_INPUT_CONFIG_VERSION> \
+  --deployment-risk <OWNER_INPUT_BACKUP_DEPLOYMENT_RISK_JSON> \
+  --action-preview <OWNER_INPUT_BACKUP_ACTION_PREVIEW_JSON> \
+  --authorization-consumption-root <OWNER_INPUT_BACKUP_CONSUMPTION_ROOT> \
   --host <OWNER_INPUT_TARGET_HOST> --environment <OWNER_INPUT_ENVIRONMENT> \
   --account <OWNER_INPUT_ACCOUNT> \
   --result-receipt <OWNER_INPUT_BACKUP_RESULT_RECEIPT> \
@@ -185,6 +266,12 @@ I00_TRUSTED_BUILD_PUBLIC_KEY=<OWNER_INPUT_TRUSTED_BUILD_PUBLIC_KEY_PEM> \
   --target <OWNER_INPUT_ISOLATED_RESTORE_DIR> \
   --env-file <OWNER_INPUT_BACKUP_ENV> \
   --authorization <OWNER_INPUT_ISOLATED_RESTORE_AUTHORIZATION_JSON> \
+  --operator <OWNER_INPUT_OPERATOR> \
+  --deployed-sha <OWNER_INPUT_FULL_TESTED_SHA> \
+  --config-version <OWNER_INPUT_CONFIG_VERSION> \
+  --deployment-risk <OWNER_INPUT_RESTORE_DEPLOYMENT_RISK_JSON> \
+  --action-preview <OWNER_INPUT_RESTORE_ACTION_PREVIEW_JSON> \
+  --authorization-consumption-root <OWNER_INPUT_RESTORE_CONSUMPTION_ROOT> \
   --host <OWNER_INPUT_TARGET_HOST> --environment <OWNER_INPUT_ENVIRONMENT> \
   --account <OWNER_INPUT_ACCOUNT> \
   --result-receipt <OWNER_INPUT_RESTORE_RESULT_RECEIPT> \

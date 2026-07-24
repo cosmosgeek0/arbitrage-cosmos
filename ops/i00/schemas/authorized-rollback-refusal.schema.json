@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmos.invalid/i00/authorized-rollback-refusal.v1.json",
+  "title": "I00 authorized rollback refusal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "status",
+    "authorizationId",
+    "riskVersion",
+    "serverPreviewDigest",
+    "authorizationSha256",
+    "riskDocumentSha256",
+    "previewDocumentSha256",
+    "authorizationConsumptionSha256",
+    "claimKey",
+    "target",
+    "retainedCurrent",
+    "preTargetReadbackSha256",
+    "refusalReadbackSha256",
+    "refusalPhase",
+    "donorExitCode",
+    "refusalClass",
+    "effect",
+    "completedAtUtc"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "kind": { "type": "string", "const": "AUTHORIZED_ROLLBACK_REFUSAL" },
+    "status": { "type": "string", "const": "ROLLBACK_REFUSED_NO_EFFECT" },
+    "authorizationId": { "type": "string", "minLength": 1 },
+    "riskVersion": {
+      "type": "string",
+      "pattern": "^i00-deployment-risk-v1:sha256:[0-9a-f]{64}$"
+    },
+    "serverPreviewDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "authorizationSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "riskDocumentSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "previewDocumentSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "authorizationConsumptionSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "claimKey": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "target": { "$ref": "#/$defs/releaseBinding" },
+    "retainedCurrent": { "$ref": "#/$defs/releaseBinding" },
+    "preTargetReadbackSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "refusalReadbackSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "refusalPhase": {
+      "type": "string",
+      "enum": ["STAGE_VERIFY_FAILED", "DONOR_TERMINATED"]
+    },
+    "donorExitCode": {
+      "type": ["integer", "null"],
+      "enum": [null, 1, 4, 5, 6]
+    },
+    "refusalClass": {
+      "type": "string",
+      "enum": [
+        "STAGE_VERIFY_FAILED",
+        "PRE_SWITCH_REFUSAL",
+        "DEPLOY_LOCK_BUSY",
+        "SCHEMA_INCOMPATIBLE",
+        "POLICY_REFUSED"
+      ]
+    },
+    "effect": {
+      "oneOf": [
+        { "type": "null" },
+        { "$ref": "#/$defs/effectBinding" }
+      ]
+    },
+    "completedAtUtc": { "type": "string", "format": "date-time" }
+  },
+  "oneOf": [
+    {
+      "required": ["refusalPhase", "donorExitCode", "refusalClass", "effect"],
+      "properties": {
+        "refusalPhase": { "const": "STAGE_VERIFY_FAILED" },
+        "donorExitCode": { "type": "null" },
+        "refusalClass": { "const": "STAGE_VERIFY_FAILED" },
+        "effect": { "type": "null" }
+      }
+    },
+    {
+      "required": ["refusalPhase", "donorExitCode", "refusalClass", "effect"],
+      "properties": {
+        "refusalPhase": { "const": "DONOR_TERMINATED" },
+        "donorExitCode": { "const": 1 },
+        "refusalClass": { "const": "PRE_SWITCH_REFUSAL" },
+        "effect": { "$ref": "#/$defs/effectBinding" }
+      }
+    },
+    {
+      "required": ["refusalPhase", "donorExitCode", "refusalClass", "effect"],
+      "properties": {
+        "refusalPhase": { "const": "DONOR_TERMINATED" },
+        "donorExitCode": { "const": 4 },
+        "refusalClass": { "const": "DEPLOY_LOCK_BUSY" },
+        "effect": { "$ref": "#/$defs/effectBinding" }
+      }
+    },
+    {
+      "required": ["refusalPhase", "donorExitCode", "refusalClass", "effect"],
+      "properties": {
+        "refusalPhase": { "const": "DONOR_TERMINATED" },
+        "donorExitCode": { "const": 5 },
+        "refusalClass": { "const": "SCHEMA_INCOMPATIBLE" },
+        "effect": { "$ref": "#/$defs/effectBinding" }
+      }
+    },
+    {
+      "required": ["refusalPhase", "donorExitCode", "refusalClass", "effect"],
+      "properties": {
+        "refusalPhase": { "const": "DONOR_TERMINATED" },
+        "donorExitCode": { "const": 6 },
+        "refusalClass": { "const": "POLICY_REFUSED" },
+        "effect": { "$ref": "#/$defs/effectBinding" }
+      }
+    }
+  ],
+  "$defs": {
+    "fileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "identity"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^/" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "identity": { "type": "string", "minLength": 1 }
+      }
+    },
+    "effectBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claimKey",
+        "startEvidencePath",
+        "startEvidenceSha256",
+        "terminalEvidencePath",
+        "terminalEvidenceSha256",
+        "effectStartedAtUtc",
+        "effectFinishedAtUtc",
+        "program",
+        "chain",
+        "receiptRoot"
+      ],
+      "properties": {
+        "claimKey": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "startEvidencePath": { "type": "string", "pattern": "^/" },
+        "startEvidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "terminalEvidencePath": { "type": "string", "pattern": "^/" },
+        "terminalEvidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "effectStartedAtUtc": { "type": "string", "format": "date-time" },
+        "effectFinishedAtUtc": { "type": "string", "format": "date-time" },
+        "program": { "$ref": "#/$defs/fileBinding" },
+        "chain": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "authorizationSha256",
+            "riskDocumentSha256",
+            "previewDocumentSha256",
+            "authorizationConsumptionSha256"
+          ],
+          "properties": {
+            "authorizationSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "riskDocumentSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "previewDocumentSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "authorizationConsumptionSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "receiptRoot": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "identity"],
+          "properties": {
+            "path": { "type": "string", "pattern": "^/" },
+            "identity": {
+              "type": "string",
+              "pattern": "^device=[0-9]+,inode=[0-9]+,mode=[0-7]+,uid=[0-9]+,gid=[0-9]+$"
+            }
+          }
+        }
+      }
+    },
+    "releaseBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "releaseId",
+        "testedSha",
+        "artifactManifestSha256",
+        "treeSha256",
+        "identity"
+      ],
+      "properties": {
+        "path": { "type": "string", "pattern": "^/" },
+        "releaseId": {
+          "type": "string",
+          "pattern": "^i00-[0-9a-f]{40}$"
+        },
+        "testedSha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "artifactManifestSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "treeSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "identity": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

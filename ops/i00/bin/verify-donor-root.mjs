@@ -1,18 +1,48 @@
 #!/usr/bin/env node
-import { lstatSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { lstatSync, realpathSync } from 'node:fs';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { fail, parseArgs, readJson, sha256File } from '../lib.mjs';
 import { loadL15AmendmentContract, verifyEffectiveL15Root } from '../l15-amendment.mjs';
 
 const EXPECTED_DONOR_CONTRACT_SHA256 = '078cc2a3d8bc79026f1de6985284856794e53ba34ffd7fda5d1140e46e31a1b3';
-const EXPECTED_AMENDMENT_CONTRACT_SHA256 = 'd60fdff586c1af91bfd92727ba49403bc0fd57210c4e76f1f5ee99391ee52581';
+const EXPECTED_AMENDMENT_CONTRACT_SHA256 = 'd316188f3d16b70a897e510f8508802d74323313d776d35491c5aedfc26f3035';
+
+function requireExactRawCanonicalPath(value, label, kind) {
+  if (typeof value !== 'string' || value.length === 0 || value.length > 4_096
+      || /[\u0000-\u001f\u007f]/u.test(value)
+      || !isAbsolute(value) || resolve(value) !== value) {
+    fail(`${label} must be one exact raw canonical absolute ${kind} path`);
+  }
+  let stat;
+  let physical;
+  try {
+    stat = lstatSync(value);
+    physical = realpathSync(value);
+  } catch {
+    fail(`${label} is unavailable`);
+  }
+  if (stat.isSymbolicLink() || physical !== value
+      || (kind === 'directory' && !stat.isDirectory())
+      || (kind === 'file' && !stat.isFile())) {
+    fail(`${label} must be one exact physical canonical non-symlink ${kind}`);
+  }
+  return value;
+}
+
 const args = parseArgs(process.argv.slice(2), new Set(['require-immutable', 'accepted-only']));
 if (!args.root) fail('--root is required');
 const here = dirname(fileURLToPath(import.meta.url));
-const contractPath = resolve(args.contract ?? resolve(here, '../donor-contract.json'));
-const amendmentPath = resolve(
+const root = requireExactRawCanonicalPath(args.root, '--root', 'directory');
+const contractPath = requireExactRawCanonicalPath(
+  args.contract ?? resolve(here, '../donor-contract.json'),
+  '--contract',
+  'file',
+);
+const amendmentPath = requireExactRawCanonicalPath(
   args['amendment-contract'] ?? resolve(dirname(contractPath), 'l15-amendment-contract.json'),
+  '--amendment-contract',
+  'file',
 );
 if (sha256File(contractPath) !== EXPECTED_DONOR_CONTRACT_SHA256) {
   fail('embedded donor contract does not match the exact accepted contract');
@@ -22,8 +52,6 @@ const loadedAmendment = loadL15AmendmentContract(
   amendmentPath,
   EXPECTED_AMENDMENT_CONTRACT_SHA256,
 );
-const root = resolve(args.root);
-
 function verifyAcceptedOnlyRoot() {
   let rootStat;
   try {

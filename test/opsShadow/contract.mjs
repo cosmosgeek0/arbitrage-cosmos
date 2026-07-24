@@ -669,6 +669,27 @@ export function validateOwnerArtifacts(artifacts) {
   requireText(issues, artifacts.appService, 'RuntimeDirectory=cosmos-app', 'APP_LEASE_RUNTIME_MISSING', 'appService');
   requireText(issues, artifacts.appService, 'RuntimeDirectoryMode=0700', 'APP_LEASE_RUNTIME_MODE_INVALID', 'appService');
   requireText(issues, artifacts.appService, 'RuntimeDirectoryPreserve=restart', 'APP_LEASE_RUNTIME_RESTART_PRESERVE_MISSING', 'appService');
+  requireText(
+    issues,
+    artifacts.appService,
+    'UnsetEnvironment=NODE_OPTIONS NODE_PATH NODE_REPL_EXTERNAL_MODULE NODE_EXTRA_CA_CERTS NODE_ICU_DATA NODE_V8_COVERAGE NODE_DEBUG NODE_DEBUG_NATIVE NODE_REDIRECT_WARNINGS NODE_COMPILE_CACHE NODE_DISABLE_COMPILE_CACHE NODE_PRESERVE_SYMLINKS NODE_PRESERVE_SYMLINKS_MAIN',
+    'APP_RUNTIME_INJECTION_ENV_UNSET_MISSING',
+    'appService',
+  );
+  requireText(
+    issues,
+    artifacts.appService,
+    'UnsetEnvironment=LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT LD_PROFILE LD_ORIGIN_PATH DYLD_INSERT_LIBRARIES DYLD_LIBRARY_PATH DYLD_FRAMEWORK_PATH OPENSSL_CONF OPENSSL_MODULES SSL_CERT_FILE SSL_CERT_DIR',
+    'APP_LOADER_INJECTION_ENV_UNSET_MISSING',
+    'appService',
+  );
+  requireText(
+    issues,
+    artifacts.appService,
+    'UnsetEnvironment=NODE_TLS_REJECT_UNAUTHORIZED NODE_USE_ENV_PROXY NODE_USE_SYSTEM_CA HTTP_PROXY HTTPS_PROXY NO_PROXY ALL_PROXY http_proxy https_proxy no_proxy all_proxy',
+    'APP_NETWORK_ENV_UNSET_MISSING',
+    'appService',
+  );
   const expectedAppExecStart = 'ExecStart=/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node server/dist/index.js';
   const appExecStarts = artifacts.appService.match(/^ExecStart=.*$/gmu) ?? [];
   if (appExecStarts.length !== 1 || appExecStarts[0] !== expectedAppExecStart) {

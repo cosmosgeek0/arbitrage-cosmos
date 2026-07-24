@@ -2373,6 +2373,26 @@ function exactList(actual, expected) {
     && actual.every((value, index) => value === expected[index]);
 }
 
+function recordedNodeExecutableValid(value) {
+  if (typeof value !== 'string'
+      || value.length === 0
+      || value.length > 4_096
+      || value !== value.trim()
+      || /[\u0000-\u001f\u007f]/u.test(value)) return false;
+  const segments = value.split(/[\\/]/u);
+  if (segments.some((segment) => segment === '.' || segment === '..')) return false;
+  return /^\/(?:[^/]+\/)*node(?:\.exe)?$/iu.test(value)
+    || /^[A-Z]:[\\/](?:[^\\/]+[\\/])*node(?:\.exe)?$/iu.test(value);
+}
+
+function recordedPerformancePlanCommandValid(command) {
+  const expected = ACCEPTANCE_PLAN.find((step) => step.kind === 'PERFORMANCE')?.command;
+  return Array.isArray(command)
+    && command.length === 4
+    && recordedNodeExecutableValid(command[0])
+    && exactList(command.slice(1), expected.slice(1));
+}
+
 function matchesDesignFontFamily(actual, expectedFamily) {
   if (typeof actual !== 'string') return false;
   if (expectedFamily === 'UI') return /(?:^|[\s,"'])inter(?:variable)?(?:$|[\s,"'])/iu.test(actual);
@@ -3454,7 +3474,11 @@ export function validateCompleteReceiptDocument(
   const planKinds = Array.isArray(document.plan) ? document.plan.map((step) => step.kind) : [];
   const planCommandsValid = Array.isArray(document.plan)
     && document.plan.length === ACCEPTANCE_PLAN.length
-    && document.plan.every((step, index) => exactList(step?.command, ACCEPTANCE_PLAN[index].command));
+    && document.plan.every((step, index) => (
+      ACCEPTANCE_PLAN[index].kind === 'PERFORMANCE'
+        ? recordedPerformancePlanCommandValid(step?.command)
+        : exactList(step?.command, ACCEPTANCE_PLAN[index].command)
+    ));
   const steps = Array.isArray(document.steps) ? document.steps : [];
   const stepIds = steps.map((step) => step.id);
   if (document.schemaVersion !== ACCEPTANCE_SCHEMA_VERSION || document.truthClass !== 'LOCAL_COMPLETE_ACCEPTANCE_MEASURED') failures.push('COMPLETE_RECEIPT_IDENTITY_INVALID');
@@ -3471,7 +3495,12 @@ export function validateCompleteReceiptDocument(
       || !Array.isArray(step?.secretFindings)
       || step.secretFindings.length !== 0)) failures.push('COMPLETE_RECEIPT_STEP_FAILED');
   if (steps.some((step) => !completeStepMeasurementValid(step))) failures.push('COMPLETE_RECEIPT_STEP_MEASUREMENT_INVALID');
-  if (steps.some((step, index) => !completeStepCommandValid(step, ACCEPTANCE_PLAN[index], expectedHead))) failures.push('COMPLETE_RECEIPT_STEP_COMMAND_INVALID');
+  if (steps.some((step, index) => !completeStepCommandValid(
+    step,
+    ACCEPTANCE_PLAN[index],
+    document.plan?.[index],
+    expectedHead,
+  ))) failures.push('COMPLETE_RECEIPT_STEP_COMMAND_INVALID');
   if (!Array.isArray(document.missingSteps) || document.missingSteps.length !== 0) failures.push('COMPLETE_RECEIPT_MISSING_STEPS');
   if (!uvProvenanceValid(document.uv)) failures.push('COMPLETE_RECEIPT_UV_PROVENANCE_INVALID');
   if (document.qExactDonor?.donorSha !== Q_DONOR_SHA
@@ -4169,13 +4198,14 @@ async function validateIntegrationCandidateReceiptAtRevision(environment, revisi
   });
 }
 
-function completeStepCommandValid(step, plan, expectedHead) {
-  if (!step || !plan || step.id !== plan.id || !Array.isArray(step.command)) return false;
+function completeStepCommandValid(step, plan, recordedPlan, expectedHead) {
+  if (!step || !plan || !recordedPlan || step.id !== plan.id || !Array.isArray(step.command)) return false;
   if (plan.kind === 'PERFORMANCE') {
     const args = step.command.slice(1);
     const durationMatch = /^--duration-seconds=(\d+)$/u.exec(args[3] ?? '');
     const durationSeconds = durationMatch === null ? null : Number(durationMatch[1]);
-    return step.command[0] === process.execPath
+    return recordedPerformancePlanCommandValid(recordedPlan.command)
+      && step.command[0] === recordedPlan.command[0]
       && args.length === 5
       && args[0] === 'test/i00/performance/local-proxy-soak.mjs'
       && args[1] === '--run'

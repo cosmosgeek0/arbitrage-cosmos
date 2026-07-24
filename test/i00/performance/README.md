@@ -72,4 +72,13 @@ The receipt also proves reduced motion, canonical API comparison, and visible no
 
 The serial runner executes each layer once: frozen Q donor byte/history and environment proof followed by the current canonical Quant gate, `npm test`, `npm run test:all`, both ops aggregate commands, generated-report parity, this performance campaign, browser-receipt validation, source freeze, and `git diff --check`. The Q donor is extracted from the pinned Git object into a clean archive; Git metadata is refused and the complete pinned inventory is verified before current execution. `--run` requires both an explicit accepted virtualenv for the preserved archive proof and an explicit `--uv` absolute path whose basename is `uv` (`uv.exe` on Windows). Uv preflight requires an existing regular executable target before any child step. The receipt binds the resolved uv path SHA-256 and binary SHA-256 alongside the virtualenv path and Python binary plus the accepted interpreter/distribution manifest, `pyproject.toml`, lockfile, `pip check`, and explicit pytest-plugin policy. The runner prepends only the explicit uv path's directory to the sealed child `PATH`, so PATH lookup resolves the same validated target; every other sealed environment field remains unchanged. The active `q_current_gate` runs `node test/run-quant-gates.mjs` against the clone's current `quant/.venv`, including locked sync and dependency integrity; archive-era pytest execution remains historical evidence rather than a current-machine gate. Validate-only additionally requires exact C, exact S, and the committed complete-acceptance receipt so the independent session can prove the detached-candidate/seal topology.
 
+Run mode resolves and executes the accepted `uv`, Q virtualenv, Node, and
+other command paths on the acceptance host and records their exact strings or
+digests as provenance. Later sealed-release validation treats that recorded
+command provenance only as immutable receipt evidence: it checks syntax,
+command identity, and digest bindings but never resolves or executes an
+acceptance-host path against the deployment host. A clean Linux host therefore
+validates the unmodified receipt without needing the macOS filesystem layout
+that produced it.
+
 No private reads, signed calls, money paths, AWS/Cloudflare mutation, deployment, push, or generated mission-report rewrite is part of this harness.

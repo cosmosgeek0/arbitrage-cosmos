@@ -1,5 +1,5 @@
-import { lstatSync, readdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { lstatSync, readdirSync, realpathSync } from 'node:fs';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import {
   fail, listRegularFiles, readJson, requireExactKeys, sha256File, treeDigest,
 } from './lib.mjs';
@@ -8,6 +8,11 @@ const SHA256_RE = /^[0-9a-f]{64}$/;
 const GIT_OBJECT_RE = /^[0-9a-f]{40}$/;
 const SAFE_PATH_RE = /^[A-Za-z0-9._/-]+$/;
 const GIT_MODES = new Set(['100644', '100755']);
+const AUTHORIZED_EFFECT_RUNTIME = Object.freeze({
+  nodePath: '/usr/bin/node',
+  runnerPath: 'ops/i00/bin/run-bound-effect.mjs',
+  verifierPath: 'ops/i00/bin/verify-authorized-effect-handoff.mjs',
+});
 
 const IMMUTABLE_DONOR = Object.freeze({
   contractSha256: '078cc2a3d8bc79026f1de6985284856794e53ba34ffd7fda5d1140e46e31a1b3',
@@ -26,7 +31,16 @@ const IMMUTABLE_DONOR = Object.freeze({
   acceptedAssertions: 347,
 });
 
-const FINDING_ORDER = Object.freeze(['R3-D-WATCHDOG-007', 'R3-D-BACKUP-008', 'CS-03', 'RB-27', 'FIX-031-CS-06', 'DEPLOY-READINESS-001', 'FIRST-HOST-001']);
+const FINDING_ORDER = Object.freeze([
+  'R3-D-WATCHDOG-007',
+  'R3-D-BACKUP-008',
+  'CS-03',
+  'RB-27',
+  'FIX-031-CS-06',
+  'DEPLOY-READINESS-001',
+  'FIRST-HOST-001',
+  'DEPLOY-PORTABILITY-008',
+]);
 const FINDING_PATHS = Object.freeze({
   'R3-D-WATCHDOG-007': Object.freeze([
     'ops/live/bin/common.sh',
@@ -67,6 +81,27 @@ const FINDING_PATHS = Object.freeze({
   'FIRST-HOST-001': Object.freeze([
     'ops/live/bin/deploy.sh',
   ]),
+  'DEPLOY-PORTABILITY-008': Object.freeze([
+    'ops/live/README.md',
+    'ops/live/bin/alert-log.sh',
+    'ops/live/bin/backup.sh',
+    'ops/live/bin/common.sh',
+    'ops/live/bin/deploy.sh',
+    'ops/live/bin/restore-drill.sh',
+    'ops/live/bin/restore.sh',
+    'ops/live/bin/rollback.sh',
+    'ops/live/bin/watchdog.sh',
+    'ops/live/env/cosmos-backup.env.template',
+    'ops/live/env/cosmos-deploy.env.template',
+    'ops/live/env/cosmos-watchdog.env.template',
+    'ops/live/systemd/cosmos-app.service',
+    'ops/live/systemd/cosmos-backup.service',
+    'ops/live/systemd/cosmos-backup.timer',
+    'ops/live/systemd/cosmos-restore-drill.service',
+    'ops/live/systemd/cosmos-restore-drill.timer',
+    'ops/live/systemd/cosmos-watchdog.service',
+    'ops/live/systemd/cosmos-watchdog.timer',
+  ]),
 });
 // Donor-owned test files a finding is authorized to evolve, with exact
 // before/after byte binding in the amendment. Empty for historical findings.
@@ -84,6 +119,14 @@ const FINDING_TEST_CHANGES = Object.freeze({
   'FIRST-HOST-001': Object.freeze([
     'ops/tests/test-deploy.sh',
   ]),
+  'DEPLOY-PORTABILITY-008': Object.freeze([
+    'ops/tests/helpers.sh',
+    'ops/tests/test-backup-restore.sh',
+    'ops/tests/test-deploy.sh',
+    'ops/tests/test-rollback.sh',
+    'ops/tests/test-systemd-units.sh',
+    'ops/tests/test-watchdog.sh',
+  ]),
 });
 const FINDING_TESTS = Object.freeze({
   'R3-D-WATCHDOG-007': 'ops/tests/i00/test-r3-d-watchdog-007.sh',
@@ -93,6 +136,19 @@ const FINDING_TESTS = Object.freeze({
   'FIX-031-CS-06': 'ops/tests/i00/test-fix-031-cs-06-l15-bytes.sh',
   'DEPLOY-READINESS-001': 'ops/tests/i00/test-deploy-readiness-001-l15-bytes.sh',
   'FIRST-HOST-001': 'ops/tests/i00/test-first-host-001-l15-bytes.sh',
+  'DEPLOY-PORTABILITY-008': 'ops/tests/i00/test-deploy-portability-008-l15-bytes.sh',
+});
+const FINDING_RECEIPT_PATHS = Object.freeze({
+  'R3-D-WATCHDOG-007': 'docs/archive/i00-phase4/R3-D-WATCHDOG-007_CORRECTION_RECEIPT.md',
+  'R3-D-BACKUP-008': 'docs/archive/i00-phase4/R3-D-BACKUP-008_CORRECTION_RECEIPT.md',
+  'CS-03': 'docs/archive/i00-phase4/CS-03_CORRECTION_RECEIPT.md',
+  'RB-27': 'docs/archive/i00-phase4/RB-27_CORRECTION_RECEIPT.md',
+  'FIX-031-CS-06': 'docs/archive/i00-phase4/FIX-031-CS-06_CORRECTION_RECEIPT.md',
+  'DEPLOY-READINESS-001': 'docs/archive/i00-phase4/DEPLOY-READINESS-001_CORRECTION_RECEIPT.md',
+  'FIRST-HOST-001': 'docs/archive/i00-phase4/FIRST-HOST-001_CORRECTION_RECEIPT.md',
+  // The final DF-32 correction receipt records post-commit Linux proof and the
+  // amendment-contract digest, so binding it here would create a hash cycle.
+  'DEPLOY-PORTABILITY-008': 'docs/archive/i00-phase4/DEPLOY-PORTABILITY-008_L15_AMENDMENT_RECEIPT.md',
 });
 
 function assertSafePath(value, label, prefix = '') {
@@ -115,8 +171,9 @@ function assertExactValue(actual, expected, label) {
 }
 
 function validateBoundFile(value, label, pathPrefix) {
-  requireExactKeys(value, ['path', 'gitBlob', 'sha256'], label);
+  requireExactKeys(value, ['path', 'mode', 'gitBlob', 'sha256'], label);
   assertSafePath(value.path, `${label}.path`, pathPrefix);
+  if (!GIT_MODES.has(value.mode)) fail(`${label}.mode is not a supported regular-file Git mode`);
   assertGitObject(value.gitBlob, `${label}.gitBlob`);
   assertSha256(value.sha256, `${label}.sha256`);
 }
@@ -195,7 +252,7 @@ function validateAmendment(contract, amendment, index, priorTree, priorDigest) {
     }
   });
   validateBoundFile(amendment.correctionReceipt, `${label}.correctionReceipt`, 'docs/archive/i00-phase4/');
-  if (amendment.correctionReceipt.path !== `docs/archive/i00-phase4/${expectedId}_CORRECTION_RECEIPT.md`) {
+  if (amendment.correctionReceipt.path !== FINDING_RECEIPT_PATHS[expectedId]) {
     fail(`${label}.correctionReceipt.path is not canonical`);
   }
   if (!Array.isArray(amendment.regressionTests) || amendment.regressionTests.length !== 1) {
@@ -215,6 +272,7 @@ export function loadL15AmendmentContract(contractPath, expectedSha256) {
   const contract = readJson(contractPath, 'L15 amendment contract');
   requireExactKeys(contract, [
     'schemaVersion', 'contractId', 'immutableDonor', 'amendments', 'effectiveLive',
+    'authorizedEffectRuntime',
   ], 'L15 amendment contract');
   if (contract.schemaVersion !== 1
       || contract.contractId !== 'i00-l15-post-integration-amendments.v1') {
@@ -229,6 +287,32 @@ export function loadL15AmendmentContract(contractPath, expectedSha256) {
     'path', 'gitBlob', 'sha256',
   ], 'L15 amendment contract.immutableDonor.acceptedReceipt');
   assertExactValue(contract.immutableDonor, IMMUTABLE_DONOR, 'L15 immutable donor anchor');
+  requireExactKeys(contract.authorizedEffectRuntime, [
+    'nodePath', 'runnerPath', 'runnerSha256', 'verifierPath', 'verifierSha256',
+  ], 'L15 amendment contract.authorizedEffectRuntime');
+  if (contract.authorizedEffectRuntime.nodePath !== AUTHORIZED_EFFECT_RUNTIME.nodePath
+      || contract.authorizedEffectRuntime.runnerPath !== AUTHORIZED_EFFECT_RUNTIME.runnerPath
+      || contract.authorizedEffectRuntime.verifierPath !== AUTHORIZED_EFFECT_RUNTIME.verifierPath) {
+    fail('L15 authorized effect runtime paths do not match the closed trust anchors');
+  }
+  assertSafePath(
+    contract.authorizedEffectRuntime.runnerPath,
+    'L15 amendment contract.authorizedEffectRuntime.runnerPath',
+    'ops/i00/bin/',
+  );
+  assertSafePath(
+    contract.authorizedEffectRuntime.verifierPath,
+    'L15 amendment contract.authorizedEffectRuntime.verifierPath',
+    'ops/i00/bin/',
+  );
+  assertSha256(
+    contract.authorizedEffectRuntime.runnerSha256,
+    'L15 amendment contract.authorizedEffectRuntime.runnerSha256',
+  );
+  assertSha256(
+    contract.authorizedEffectRuntime.verifierSha256,
+    'L15 amendment contract.authorizedEffectRuntime.verifierSha256',
+  );
   if (!Array.isArray(contract.amendments) || contract.amendments.length < 1
       || contract.amendments.length > FINDING_ORDER.length) {
     fail('L15 amendment contract must contain a nonempty closed correction prefix');
@@ -312,16 +396,33 @@ function listDirectories(root, relative = '') {
 }
 
 export function verifyEffectiveL15Root({ root, loadedContract, requireImmutable = false }) {
-  const absoluteRoot = resolve(root);
+  if (typeof root !== 'string' || root.length === 0 || root.length > 4_096
+      || /[\u0000-\u001f\u007f]/u.test(root)
+      || !isAbsolute(root) || resolve(root) !== root) {
+    fail('executed effective L15 root must be one exact raw canonical absolute directory path');
+  }
   let rootStat;
+  let physicalRoot;
   try {
-    rootStat = lstatSync(absoluteRoot);
+    rootStat = lstatSync(root);
+    physicalRoot = realpathSync(root);
   } catch {
     fail('executed effective L15 root does not exist');
   }
-  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) {
-    fail('executed effective L15 root must be a real directory');
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink() || physicalRoot !== root) {
+    fail('executed effective L15 root must be one exact physical canonical non-symlink directory');
   }
+  let cursor = root;
+  for (;;) {
+    const stat = lstatSync(cursor);
+    if (!stat.isDirectory() || stat.isSymbolicLink() || realpathSync(cursor) !== cursor) {
+      fail('executed effective L15 root ancestor chain is not physically canonical');
+    }
+    const parent = dirname(cursor);
+    if (parent === cursor) break;
+    cursor = parent;
+  }
+  const absoluteRoot = root;
   if (requireImmutable) requireImmutableDirectory(absoluteRoot, '.');
   const expectedFiles = loadedContract.contract.effectiveLive.files;
   const actualPaths = listRegularFiles(absoluteRoot);

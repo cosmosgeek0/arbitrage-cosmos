@@ -2,22 +2,54 @@
 set -euo pipefail
 . "$(dirname "$0")/helpers.sh"
 
+canonicalize_receipt() {
+  node --input-type=module - "$I00_ROOT/deployment-authorization-contract.mjs" "$1" <<'NODE'
+import { readFileSync, writeFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+const [contractPath, receiptPath] = process.argv.slice(2);
+const { canonicalJsonBytes } = await import(pathToFileURL(contractPath).href);
+writeFileSync(receiptPath, canonicalJsonBytes(JSON.parse(readFileSync(receiptPath))));
+NODE
+}
+
 note "all JSON templates and schemas parse"
 JSON_COUNT=0
 while IFS= read -r file; do
   node -e 'JSON.parse(require("fs").readFileSync(process.argv[1],"utf8"))' "$file"
   JSON_COUNT=$((JSON_COUNT + 1))
 done < <(find "$REPO_ROOT/ops/templates/i00" "$I00_ROOT/schemas" -type f \( -name '*.json' -o -name '*.json.template' \) | LC_ALL=C sort)
-assert_eq "$JSON_COUNT" 16
+assert_eq "$JSON_COUNT" 31
 assert_failure node --input-type=module -e '
   import { pathToFileURL } from "node:url";
   const { compileJsonSchema } = await import(pathToFileURL(process.argv[1]));
   compileJsonSchema({$schema:"https://json-schema.org/draft/2020-12/schema",type:"object",unknownKeyword:true});
 ' "$I00_ROOT/json-schema.mjs"
 
+note "authorization templates are canonical bytes with placeholders retained"
+for file in \
+  "$REPO_ROOT/ops/templates/i00/deployment-action-request.json.template" \
+  "$REPO_ROOT/ops/templates/i00/external-authorization.json.template"; do
+  assert_success node --input-type=module - "$file" "$I00_ROOT/deployment-authorization-contract.mjs" <<'NODE'
+import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+
+const [templatePath, contractPath] = process.argv.slice(2);
+const bytes = readFileSync(templatePath);
+const { canonicalJsonBytes } = await import(pathToFileURL(contractPath).href);
+const value = JSON.parse(bytes);
+if (!bytes.equals(canonicalJsonBytes(value))) {
+  throw new Error(`${templatePath} is not canonical JSON bytes`);
+}
+if (!bytes.includes(Buffer.from('REPLACE_ME_', 'utf8'))) {
+  throw new Error(`${templatePath} lost its explicit placeholders`);
+}
+NODE
+done
+
 note "systemd ordering, credential, loopback, and honest Q placeholder"
 APP_DROPIN="$(cat "$REPO_ROOT/ops/templates/i00/systemd/cosmos-app-i00.conf.template")"
 PROVIDER_UNIT="$(cat "$REPO_ROOT/ops/templates/i00/systemd/cosmos-secrets-provider.service.template")"
+PROVIDER_CONFIG="$(cat "$REPO_ROOT/ops/templates/i00/aws/secrets-provider.json.template")"
 Q_UNIT="$(cat "$REPO_ROOT/ops/templates/i00/systemd/cosmos-q.service.template")"
 RUNTIME_ENV_TEMPLATE="$(cat "$REPO_ROOT/ops/templates/i00/env/cosmos-i00.env.template")"
 assert_contains "$APP_DROPIN" 'Requires=cosmos-secrets-provider.service'
@@ -26,6 +58,60 @@ assert_contains "$APP_DROPIN" 'LoadCredential=app-secrets:/run/cosmos-secret-sou
 assert_contains "$APP_DROPIN" 'ExecStart=/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node /usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs'
 assert_contains "$PROVIDER_UNIT" 'Before=cosmos-app.service'
 assert_contains "$PROVIDER_UNIT" 'NoNewPrivileges=yes'
+if printf '%s' "$PROVIDER_UNIT" | grep -F 'StateDirectory=' >/dev/null; then
+  fail_test 'provider unit grants broad implicit state-directory write access'
+fi
+pass_assertion
+assert_contains "$PROVIDER_UNIT" 'ReadOnlyPaths=/var/lib/cosmos-deployment-authorization'
+assert_contains "$PROVIDER_UNIT" 'UnsetEnvironment=NODE_OPTIONS NODE_PATH NODE_REPL_EXTERNAL_MODULE'
+assert_contains "$PROVIDER_UNIT" 'ExecStart=/usr/bin/node /usr/local/lib/cosmos-ops/i00/bin/secret-materialization.mjs'
+assert_contains "$PROVIDER_UNIT" '--authorization /etc/cosmos/external-authorization.json'
+assert_contains "$PROVIDER_UNIT" '--deployment-risk /var/lib/cosmos-deployment-authorization/REPLACE_ME_DEPLOYMENT_RISK_DOCUMENT.json'
+assert_contains "$PROVIDER_UNIT" '--action-preview /var/lib/cosmos-deployment-authorization/REPLACE_ME_ACTION_PREVIEW_DOCUMENT.json'
+assert_contains "$PROVIDER_UNIT" '--authorization-consumption-root /var/lib/cosmos-authorization-consumption'
+if printf '%s' "$PROVIDER_UNIT" | grep -F 'run-bound-effect.mjs' >/dev/null; then
+  fail_test 'provider unit bypasses the single-use secret materialization wrapper'
+fi
+pass_assertion
+if printf '%s' "$PROVIDER_UNIT" | grep -F -- '--authorization-consumption ' >/dev/null; then
+  fail_test 'provider unit requires a preexisting authorization consumption receipt'
+fi
+pass_assertion
+for exact_parent in \
+  /run/cosmos-secret-source \
+  /REPLACE_ME_EXACT_AUTHORIZATION_CONSUMPTION_PARENT \
+  /REPLACE_ME_EXACT_EFFECT_EVIDENCE_PARENT \
+  /REPLACE_ME_EXACT_RESULT_RECEIPT_PARENT \
+  /REPLACE_ME_EXACT_RECONCILIATION_RECEIPT_PARENT; do
+  assert_contains "$PROVIDER_UNIT" "ReadWritePaths=$exact_parent"
+done
+if printf '%s' "$PROVIDER_UNIT" \
+  | grep -E '^ReadWritePaths=/var/(lib|backups)/cosmos($|/)' >/dev/null; then
+  fail_test 'provider unit grants a broad production write root'
+fi
+pass_assertion
+if printf '%s' "$PROVIDER_UNIT" \
+  | grep -F 'run-fixed-node-gate.sh secrets-provider.mjs' >/dev/null; then
+  fail_test 'real provider unit bypasses the four-document bound-effect runner'
+fi
+pass_assertion
+if printf '%s' "$PROVIDER_UNIT" | grep -F 'Environment=AWS_CLI=' >/dev/null; then
+  fail_test 'real provider unit retains a caller-supplied AWS CLI override'
+fi
+pass_assertion
+assert_contains "$PROVIDER_CONFIG" '"deploymentRisk"'
+assert_contains "$PROVIDER_CONFIG" '"actionPreview"'
+assert_contains "$PROVIDER_CONFIG" '"instanceRoleArn"'
+assert_contains "$PROVIDER_CONFIG" '"awsCliPath"'
+assert_contains "$PROVIDER_CONFIG" '"awsCliSha256"'
+assert_contains "$PROVIDER_CONFIG" '"/var/lib/cosmos-deployment-authorization/'
+assert_contains "$PROVIDER_CONFIG" '"authorizationConsumptionRoot": "/var/lib/cosmos-authorization-consumption"'
+assert_contains "$PROVIDER_CONFIG" '"resultReceiptTarget": "/var/lib/cosmos-action-receipts/'
+assert_contains "$PROVIDER_CONFIG" '"reconciliationReceiptTarget": "/var/lib/cosmos-action-receipts/'
+if printf '%s' "$PROVIDER_CONFIG" | grep -F '"authorizationNonce"' >/dev/null; then
+  fail_test 'provider config retains raw authorization nonce input'
+fi
+pass_assertion
 assert_contains "$Q_UNIT" 'ConditionPathExists=/opt/cosmos/current/REPLACE_ME_Q_ENTRYPOINT'
 assert_contains "$Q_UNIT" '--bind 127.0.0.1'
 assert_contains "$RUNTIME_ENV_TEMPLATE" 'I00_DEPLOYED_SHA=REPLACE_ME_FULL_DEPLOYED_SHA'
@@ -60,14 +146,18 @@ done
 note "non-secret environment validator rejects placeholders, public bind, and secrets"
 EXPECTED_SHA='0123456789abcdef0123456789abcdef01234567'
 ALTERNATE_SHA='1111111111111111111111111111111111111111'
-cat > "$TEST_TMP/runtime.env" <<'ENV'
+RUNTIME_PATH_ROOT="$(cd -P "$TEST_TMP" && pwd -P)/runtime-paths"
+mkdir -p "$RUNTIME_PATH_ROOT/data" "$RUNTIME_PATH_ROOT/evidence" \
+  "$RUNTIME_PATH_ROOT/models" "$RUNTIME_PATH_ROOT/backups" \
+  "$RUNTIME_PATH_ROOT/leases"
+cat > "$TEST_TMP/runtime.env" <<ENV
 HOST=127.0.0.1
 PORT=8080
-DATA_DIR=/var/lib/cosmos/data
-DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases
-EVIDENCE_DIR=/var/lib/cosmos/evidence
-MODEL_DIR=/var/lib/cosmos/models
-BACKUP_DIR=/var/backups/cosmos
+DATA_DIR=$RUNTIME_PATH_ROOT/data
+DATA_DIR_LOGICAL_LEASE_ROOT=$RUNTIME_PATH_ROOT/leases
+EVIDENCE_DIR=$RUNTIME_PATH_ROOT/evidence
+MODEL_DIR=$RUNTIME_PATH_ROOT/models
+BACKUP_DIR=$RUNTIME_PATH_ROOT/backups
 CONTROL_ROOM_OPERATOR_EMAIL=operator@private.invalid
 CF_ACCESS_TEAM_DOMAIN=https://team.cloudflareaccess.com
 CF_ACCESS_AUD=audience_12345678
@@ -83,6 +173,19 @@ if ! CONFIG_OUTPUT="$(node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/
 fi
 pass_assertion
 assert_contains "$CONFIG_OUTPUT" "\"deployedSha\":\"$EXPECTED_SHA\""
+assert_failure_contains 'absolute lexical canonical path' \
+  node "$I00_ROOT/bin/validate-config.mjs" --env runtime.env
+assert_failure_contains 'absolute lexical canonical path' \
+  node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/./runtime.env"
+ln -s "$TEST_TMP/runtime.env" "$TEST_TMP/runtime-env-leaf-link"
+assert_failure_contains 'non-symlink single-link regular file' \
+  node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/runtime-env-leaf-link"
+mkdir -p "$TEST_TMP/runtime-env-real-parent"
+cp "$TEST_TMP/runtime.env" "$TEST_TMP/runtime-env-real-parent/runtime.env"
+ln -s "$TEST_TMP/runtime-env-real-parent" "$TEST_TMP/runtime-env-parent-link"
+assert_failure_contains 'ancestors is not physically canonical' \
+  node "$I00_ROOT/bin/validate-config.mjs" \
+  --env "$TEST_TMP/runtime-env-parent-link/runtime.env"
 grep -v '^I00_DEPLOYED_SHA=' "$TEST_TMP/runtime.env" > "$TEST_TMP/missing-deployed.env"
 assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/missing-deployed.env"
 sed -e '/^DATA_DIR_LOGICAL_LEASE_ROOT=/d' -e '/^I00_DEPLOYED_SHA=/d' \
@@ -98,6 +201,28 @@ assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/public.
 cp "$TEST_TMP/runtime.env" "$TEST_TMP/secret.env"
 printf 'BINANCE_API_SECRET=FAKE_BUT_FORBIDDEN_HERE\n' >> "$TEST_TMP/secret.env"
 assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/secret.env"
+for injection_key in NODE_OPTIONS NODE_PATH NODE_REPL_EXTERNAL_MODULE \
+  NODE_COMPILE_CACHE NODE_PRESERVE_SYMLINKS NODE_TLS_REJECT_UNAUTHORIZED \
+  LD_PRELOAD LD_AUDIT DYLD_INSERT_LIBRARIES OPENSSL_CONF OPENSSL_MODULES \
+  SSL_CERT_FILE SSL_CERT_DIR \
+  HTTP_PROXY HTTPS_PROXY NO_PROXY
+do
+  cp "$TEST_TMP/runtime.env" "$TEST_TMP/runtime-injection.env"
+  printf '%s=%s\n' "$injection_key" /tmp/forbidden-runtime-injection \
+    >> "$TEST_TMP/runtime-injection.env"
+  assert_failure_contains 'runtime execution injection key' \
+    node "$I00_ROOT/bin/validate-config.mjs" \
+    --env "$TEST_TMP/runtime-injection.env"
+done
+ln -s "$RUNTIME_PATH_ROOT/data" "$RUNTIME_PATH_ROOT/data-alias"
+sed "s#^EVIDENCE_DIR=.*#EVIDENCE_DIR=$RUNTIME_PATH_ROOT/data-alias#" \
+  "$TEST_TMP/runtime.env" > "$TEST_TMP/runtime-alias.env"
+assert_failure_contains 'physical path without symbolic-link traversal' \
+  node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/runtime-alias.env"
+sed "s#^BACKUP_DIR=.*#BACKUP_DIR=$RUNTIME_PATH_ROOT/data/nested-backups#" \
+  "$TEST_TMP/runtime.env" > "$TEST_TMP/runtime-nested-root.env"
+assert_failure_contains 'distinct and non-nested' \
+  node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/runtime-nested-root.env"
 sed 's#^DATA_DIR_LOGICAL_LEASE_ROOT=.*#DATA_DIR_LOGICAL_LEASE_ROOT=/var/lib/cosmos/data/leases#' "$TEST_TMP/runtime.env" > "$TEST_TMP/nested-lease-root.env"
 assert_failure node "$I00_ROOT/bin/validate-config.mjs" --env "$TEST_TMP/nested-lease-root.env"
 sed 's#^DATA_DIR_LOGICAL_LEASE_ROOT=.*#DATA_DIR_LOGICAL_LEASE_ROOT=relative/leases#' "$TEST_TMP/runtime.env" > "$TEST_TMP/relative-lease-root.env"
@@ -107,7 +232,38 @@ note "receipt validators require hashed external evidence and reject forged proo
 cat > "$TEST_TMP/release-receipt.json" <<'JSON'
 {"schemaVersion":1,"kind":"RELEASE","releaseId":"i00-0123456789abcdef0123456789abcdef01234567","testedSha":"0123456789abcdef0123456789abcdef01234567","artifactManifestSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","status":"VALIDATED_NOT_DEPLOYED","recordedAtUtc":"2026-07-13T00:00:00Z"}
 JSON
+canonicalize_receipt "$TEST_TMP/release-receipt.json"
 assert_success node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/release-receipt.json" --kind RELEASE
+assert_failure_contains 'absolute lexical canonical path' \
+  node "$I00_ROOT/bin/validate-receipt.mjs" \
+  --input release-receipt.json --kind RELEASE
+assert_failure_contains 'absolute lexical canonical path' \
+  node "$I00_ROOT/bin/validate-receipt.mjs" \
+  --input "$TEST_TMP/./release-receipt.json" --kind RELEASE
+ln -s "$TEST_TMP/release-receipt.json" "$TEST_TMP/release-receipt-leaf-link.json"
+assert_failure_contains 'single-link regular file' \
+  node "$I00_ROOT/bin/validate-receipt.mjs" \
+  --input "$TEST_TMP/release-receipt-leaf-link.json" --kind RELEASE
+mkdir "$TEST_TMP/release-receipt-real-parent"
+cp "$TEST_TMP/release-receipt.json" \
+  "$TEST_TMP/release-receipt-real-parent/release-receipt.json"
+ln -s "$TEST_TMP/release-receipt-real-parent" \
+  "$TEST_TMP/release-receipt-parent-link"
+assert_failure_contains 'physically canonical' \
+  node "$I00_ROOT/bin/validate-receipt.mjs" \
+  --input "$TEST_TMP/release-receipt-parent-link/release-receipt.json" \
+  --kind RELEASE
+cp "$TEST_TMP/release-receipt.json" "$TEST_TMP/release-receipt-hardlink.json"
+ln "$TEST_TMP/release-receipt-hardlink.json" \
+  "$TEST_TMP/release-receipt-second-link.json"
+assert_failure_contains 'single-link regular file' \
+  node "$I00_ROOT/bin/validate-receipt.mjs" \
+  --input "$TEST_TMP/release-receipt-hardlink.json" --kind RELEASE
+printf ' %s' "$(cat "$TEST_TMP/release-receipt.json")" \
+  >"$TEST_TMP/release-receipt-noncanonical.json"
+assert_failure_contains 'not canonical JSON' \
+  node "$I00_ROOT/bin/validate-receipt.mjs" \
+  --input "$TEST_TMP/release-receipt-noncanonical.json" --kind RELEASE
 cp "$TEST_TMP/release-receipt.json" "$TEST_TMP/release-extra-field.json"
 node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p,"utf8"));v.unexpected=true;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/release-extra-field.json"
 assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/release-extra-field.json" --kind RELEASE
@@ -200,9 +356,34 @@ writeFileSync(rollbackPath, `${JSON.stringify({
 })}\n`);
 NODE
 
+canonicalize_receipt "$TEST_TMP/deploy-receipt.json"
+canonicalize_receipt "$TEST_TMP/rollback-receipt.json"
 DEPLOYMENT_ARGS=(--kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT" --expected-sha "$EXPECTED_SHA")
 assert_success node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-receipt.json" "${DEPLOYMENT_ARGS[@]}"
-assert_success node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/rollback-receipt.json" --kind ROLLBACK --evidence-root "$EVIDENCE_ROOT"
+assert_failure_contains 'absolute lexical canonical path' \
+  node "$I00_ROOT/bin/validate-receipt.mjs" \
+  --input "$TEST_TMP/deploy-receipt.json" --kind DEPLOYMENT \
+  --evidence-root evidence --expected-sha "$EXPECTED_SHA"
+assert_failure_contains 'absolute lexical canonical path' \
+  node "$I00_ROOT/bin/validate-receipt.mjs" \
+  --input "$TEST_TMP/deploy-receipt.json" --kind DEPLOYMENT \
+  --evidence-root "$EVIDENCE_ROOT/." --expected-sha "$EXPECTED_SHA"
+ln -s "$EVIDENCE_ROOT" "$TEST_TMP/evidence-root-leaf-link"
+assert_failure_contains 'evidence root must not be a symlink' \
+  node "$I00_ROOT/bin/validate-receipt.mjs" \
+  --input "$TEST_TMP/deploy-receipt.json" --kind DEPLOYMENT \
+  --evidence-root "$TEST_TMP/evidence-root-leaf-link" \
+  --expected-sha "$EXPECTED_SHA"
+mkdir -p "$TEST_TMP/evidence-root-real-parent/evidence"
+ln -s "$TEST_TMP/evidence-root-real-parent" "$TEST_TMP/evidence-root-parent-link"
+assert_failure_contains 'ancestors is not physically canonical' \
+  node "$I00_ROOT/bin/validate-receipt.mjs" \
+  --input "$TEST_TMP/deploy-receipt.json" --kind DEPLOYMENT \
+  --evidence-root "$TEST_TMP/evidence-root-parent-link/evidence" \
+  --expected-sha "$EXPECTED_SHA"
+# Legacy self-contained rollback receipts are no longer authoritative. The
+# focused authorized-rollback lifecycle test constructs and accepts v2.
+assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/rollback-receipt.json" --kind ROLLBACK --evidence-root "$EVIDENCE_ROOT"
 assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-receipt.json" --kind DEPLOYMENT --evidence-root "$EVIDENCE_ROOT"
 assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/deploy-receipt.json" --kind DEPLOYMENT --expected-sha "$EXPECTED_SHA"
 
@@ -303,11 +484,13 @@ node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p
 assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/rollback-missing-evidence.json" --kind ROLLBACK --evidence-root "$EVIDENCE_ROOT"
 
 assert_success node -e 'const fs=require("fs"),s=JSON.parse(fs.readFileSync(process.argv[1]));if(s.properties.status.const!=="DEPLOYED_PROVED"||!s.required.includes("evidence")||s.properties.serviceReadback)process.exit(1);' "$I00_ROOT/schemas/deployment-receipt.schema.json"
-assert_success node -e 'const fs=require("fs"),s=JSON.parse(fs.readFileSync(process.argv[1]));if(s.properties.status.const!=="ROLLED_BACK_PROVED"||!s.required.includes("evidence")||s.properties.schemaCompatible)process.exit(1);' "$I00_ROOT/schemas/rollback-receipt.schema.json"
+assert_success node -e 'const fs=require("fs"),s=JSON.parse(fs.readFileSync(process.argv[1]));if(s.properties.schemaVersion.const!==2||s.properties.status.const!=="ROLLED_BACK_PROVED"||!s.required.includes("authorizationConsumptionSha256")||!s.required.includes("effectRecordSha256")||!s.required.includes("evidence")||s.properties.schemaCompatible)process.exit(1);' "$I00_ROOT/schemas/rollback-receipt.schema.json"
+assert_success node -e 'const fs=require("fs"),s=JSON.parse(fs.readFileSync(process.argv[1]));if(s.properties.status.const!=="ROLLBACK_REFUSED_NO_EFFECT"||JSON.stringify(s.properties.refusalPhase.enum)!=="[\"STAGE_VERIFY_FAILED\",\"DONOR_TERMINATED\"]"||JSON.stringify(s.properties.donorExitCode.enum)!=="[null,1,4,5,6]"||!s.required.includes("effect")||s.oneOf.length!==5)process.exit(1);' "$I00_ROOT/schemas/authorized-rollback-refusal.schema.json"
 
 cat > "$TEST_TMP/restore-receipt.json" <<'JSON'
 {"schemaVersion":1,"kind":"RESTORE","backupId":"backup-1","isolated":true,"appInactive":false,"integrityCheck":"ok","foreignKeyViolations":0,"target":"/tmp/isolated","status":"ISOLATED_DRILL_PASS","authorizationReference":null,"recordedAtUtc":"2026-07-13T00:00:00Z"}
 JSON
+canonicalize_receipt "$TEST_TMP/restore-receipt.json"
 assert_success node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/restore-receipt.json" --kind RESTORE
 cp "$TEST_TMP/restore-receipt.json" "$TEST_TMP/restore-wrong-type.json"
 node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p,"utf8"));v.appInactive="false";fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/restore-wrong-type.json"
@@ -320,12 +503,14 @@ assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/rest
 cat > "$TEST_TMP/backup-receipt.json" <<'JSON'
 {"schemaVersion":1,"kind":"BACKUP","backupId":"backup-1","sourceSha":"0123456789abcdef0123456789abcdef01234567","databaseSha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","integrityCheck":"ok","foreignKeyViolations":0,"evidencePaths":[],"status":"BACKUP_VERIFIED","recordedAtUtc":"2026-07-13T00:00:00Z"}
 JSON
+canonicalize_receipt "$TEST_TMP/backup-receipt.json"
 assert_success node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/backup-receipt.json" --kind BACKUP
 node -e 'const fs=require("fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p,"utf8"));v.backupId=7;fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/backup-receipt.json"
 assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/backup-receipt.json" --kind BACKUP
 cat > "$TEST_TMP/incident-receipt.json" <<'JSON'
 {"schemaVersion":1,"kind":"INCIDENT","incidentId":"incident-1","fingerprint":"watchdog:host-1","severity":"CRITICAL","rootCause":"canonical watchdog missed","capitalRelevance":"UNKNOWN","firstSeenUtc":"2026-07-13T00:00:00Z","lastSeenUtc":"2026-07-13T00:01:00Z","status":"OPEN","operatorAction":"inspect target readback","correlationIds":["corr-1"]}
 JSON
+canonicalize_receipt "$TEST_TMP/incident-receipt.json"
 assert_success node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/incident-receipt.json" --kind INCIDENT
 node -e 'const fs=require("fs"),p=process.argv[1],v=require(p);v.severity="SEVERE";fs.writeFileSync(p,JSON.stringify(v));' "$TEST_TMP/incident-receipt.json"
 assert_failure node "$I00_ROOT/bin/validate-receipt.mjs" --input "$TEST_TMP/incident-receipt.json" --kind INCIDENT

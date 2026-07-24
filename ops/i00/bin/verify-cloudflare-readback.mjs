@@ -1,12 +1,22 @@
 #!/usr/bin/env node
-import { fail, hasPlaceholder, isUtc, parseArgs, readJson, requireKeys } from '../lib.mjs';
+import {
+  readBoundJsonInput,
+  recheckBoundJsonInput,
+} from '../bound-json-input.mjs';
+import {
+  fail, hasPlaceholder, isUtc, parseArgs, requireKeys,
+} from '../lib.mjs';
 
 const args = parseArgs(process.argv.slice(2), new Set(['simulation-clock']));
 if (!args.input || !args['max-age-sec'] || !args['expected-hostname'] || !args['expected-account']) fail('--input, --max-age-sec, --expected-hostname, and --expected-account are required');
 if (args['simulation-clock'] !== true && args.now) fail('--now is accepted only with --simulation-clock');
 if (args['simulation-clock'] === true && !isUtc(args.now)) fail('simulation clock requires exact --now UTC seconds');
 const effectiveNow = args['simulation-clock'] === true ? args.now : new Date().toISOString();
-const value = readJson(args.input, 'Cloudflare boundary readback');
+const inputBinding = readBoundJsonInput(
+  args.input,
+  'Cloudflare boundary readback',
+);
+const value = inputBinding.document;
 requireKeys(value, [
   'source', 'account', 'hostname', 'tunnelId', 'accessApplicationId', 'originHost', 'evidenceSha256',
   'tunnelState', 'directOriginReachable', 'unauthenticatedAccessStatus',
@@ -32,4 +42,5 @@ if (!isUtc(value.observedAtUtc)) fail('Cloudflare readback timestamp is invalid'
 const ageMs = Date.parse(effectiveNow) - Date.parse(value.observedAtUtc);
 const maxAgeMs = Number(args['max-age-sec']) * 1000;
 if (!Number.isFinite(ageMs) || !Number.isFinite(maxAgeMs) || maxAgeMs <= 0 || ageMs < 0 || ageMs > maxAgeMs) fail('Cloudflare readback is stale or future-dated');
+recheckBoundJsonInput(inputBinding, 'Cloudflare boundary readback');
 process.stdout.write(`${JSON.stringify({ status: 'CLOUDFLARE_BOUNDARY_VERIFIED', hostname: value.hostname })}\n`);

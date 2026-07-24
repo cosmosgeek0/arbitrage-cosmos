@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmosgeek.org/schemas/i00/deployment-action-request.v1.json",
+  "title": "I00 deployment action request",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "status",
+    "authorizationId",
+    "operator",
+    "approver",
+    "approvalReference",
+    "startsAtUtc",
+    "expiresAtUtc",
+    "receiptTargets"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "kind": { "type": "string", "const": "DEPLOYMENT_ACTION_REQUEST" },
+    "status": { "type": "string", "const": "REQUESTED_NOT_AUTHORIZED" },
+    "authorizationId": { "type": "string", "minLength": 1 },
+    "operator": { "type": "string", "minLength": 1 },
+    "approver": { "type": "string", "minLength": 1 },
+    "approvalReference": { "type": "string", "minLength": 1 },
+    "startsAtUtc": { "type": "string", "format": "date-time" },
+    "expiresAtUtc": { "type": "string", "format": "date-time" },
+    "receiptTargets": {
+      "type": "object",
+      "required": ["result", "reconciliation"],
+      "properties": {
+        "result": { "type": "string", "minLength": 1 },
+        "reconciliation": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

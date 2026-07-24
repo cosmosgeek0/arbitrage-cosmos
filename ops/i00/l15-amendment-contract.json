@@ -17,6 +17,13 @@
     "acceptedSuites": 11,
     "acceptedAssertions": 347
   },
+  "authorizedEffectRuntime": {
+    "nodePath": "/usr/bin/node",
+    "runnerPath": "ops/i00/bin/run-bound-effect.mjs",
+    "runnerSha256": "22698cd9688c229374df80ec2c99c6600a729c4b61531d109f70c1de0332cfdf",
+    "verifierPath": "ops/i00/bin/verify-authorized-effect-handoff.mjs",
+    "verifierSha256": "b5bc19b46949bc3ece12ea1f289ce66aaf638737c1db2a45f5726b6a67a4fe8d"
+  },
   "amendments": [
     {
       "findingId": "R3-D-WATCHDOG-007",
@@ -46,13 +53,15 @@
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/R3-D-WATCHDOG-007_CORRECTION_RECEIPT.md",
         "gitBlob": "9f5631fd7124cf28aaa98fa78aea8325d63b732a",
-        "sha256": "256746130d1433948be724f2bea4b1c2573893a53282dac3311a3148e68c15d2"
+        "sha256": "256746130d1433948be724f2bea4b1c2573893a53282dac3311a3148e68c15d2",
+        "mode": "100644"
       },
       "regressionTests": [
         {
           "path": "ops/tests/i00/test-r3-d-watchdog-007.sh",
           "gitBlob": "36f2217a5ee3c2fb899d3af42165c4a88ac880ab",
-          "sha256": "00aa0d94baddfd7827ff0d21ee34de1c95e0df079f29c8ce28f838d1434ed3e7"
+          "sha256": "00aa0d94baddfd7827ff0d21ee34de1c95e0df079f29c8ce28f838d1434ed3e7",
+          "mode": "100755"
         }
       ]
     },
@@ -84,13 +93,15 @@
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/R3-D-BACKUP-008_CORRECTION_RECEIPT.md",
         "gitBlob": "a09f927763a1f6aef1a08f0cd164e736633e12bc",
-        "sha256": "b7641a1986cf961b3b4a80f9c950e5264e6881d266a2f52cecb402f61390859e"
+        "sha256": "b7641a1986cf961b3b4a80f9c950e5264e6881d266a2f52cecb402f61390859e",
+        "mode": "100644"
       },
       "regressionTests": [
         {
           "path": "ops/tests/i00/test-r3-d-backup-008.sh",
           "gitBlob": "86faca0b7442daf483d5499c2c9c1e4cc1070756",
-          "sha256": "13a8ed59b53bb4e02e80f9367de05c469f6998b501d1aad451ae23f3cf800091"
+          "sha256": "13a8ed59b53bb4e02e80f9367de05c469f6998b501d1aad451ae23f3cf800091",
+          "mode": "100755"
         }
       ]
     },
@@ -122,13 +133,15 @@
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/CS-03_CORRECTION_RECEIPT.md",
         "gitBlob": "0112382ac50d20b0528fe2fa90bcecb498c771b3",
-        "sha256": "cbf11bbe0235258f9c574f00e643f3d4431cca2056409979087d82a63488542f"
+        "sha256": "cbf11bbe0235258f9c574f00e643f3d4431cca2056409979087d82a63488542f",
+        "mode": "100644"
       },
       "regressionTests": [
         {
           "path": "ops/tests/i00/test-cs-03-public-source-admission.sh",
           "gitBlob": "6106f6438908930fbac7f4167dc84362dd755bbf",
-          "sha256": "6e7d4bce36049579713e8a97871e38b7175710a5542346102f13c7df2c91a305"
+          "sha256": "6e7d4bce36049579713e8a97871e38b7175710a5542346102f13c7df2c91a305",
+          "mode": "100755"
         }
       ]
     },
@@ -152,13 +165,15 @@
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/RB-27_CORRECTION_RECEIPT.md",
         "gitBlob": "d7f80f6981cb655515deec641424c794771c5b16",
-        "sha256": "1202a1c2a8cba52fdacc84982d7511adf8c7928a647816e0027c91c88c73c380"
+        "sha256": "1202a1c2a8cba52fdacc84982d7511adf8c7928a647816e0027c91c88c73c380",
+        "mode": "100644"
       },
       "regressionTests": [
         {
           "path": "ops/tests/i00/test-rb-27-latency-deadlines.sh",
           "gitBlob": "41adec9423f29ec74487354cd2439d1728cab870",
-          "sha256": "99947891d2673a6d04ebad8cc5edea325fac6e8857ae18832d299485720ab9a2"
+          "sha256": "99947891d2673a6d04ebad8cc5edea325fac6e8857ae18832d299485720ab9a2",
+          "mode": "100755"
         }
       ]
     },
@@ -207,13 +222,15 @@
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/FIX-031-CS-06_CORRECTION_RECEIPT.md",
         "gitBlob": "c73ff643e396aa9410619c643a6f8244c28cc7b5",
-        "sha256": "29d501c4d7b00c715be9d10e176e11276e0de76123c34504952ca76b001487e5"
+        "sha256": "29d501c4d7b00c715be9d10e176e11276e0de76123c34504952ca76b001487e5",
+        "mode": "100644"
       },
       "regressionTests": [
         {
           "path": "ops/tests/i00/test-fix-031-cs-06-l15-bytes.sh",
           "gitBlob": "c82f88cfa891657d97b0acdb2859f5023827709a",
-          "sha256": "9b56a615829562493050d7f579fdf149d1498974867193373d199821d320cbce"
+          "sha256": "9b56a615829562493050d7f579fdf149d1498974867193373d199821d320cbce",
+          "mode": "100755"
         }
       ]
     },
@@ -350,13 +367,15 @@
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/DEPLOY-READINESS-001_CORRECTION_RECEIPT.md",
         "gitBlob": "d31e5f86223fdf44b627346ae1ef66b36fa22cb8",
-        "sha256": "d8be87b6f84183490b6632892952fd70d009af3c92664f4c5aa546ec532afe37"
+        "sha256": "d8be87b6f84183490b6632892952fd70d009af3c92664f4c5aa546ec532afe37",
+        "mode": "100644"
       },
       "regressionTests": [
         {
           "path": "ops/tests/i00/test-deploy-readiness-001-l15-bytes.sh",
           "gitBlob": "6d8e79a6ac73af90d2831229f6af4f1c7abb6cd8",
-          "sha256": "e8c01b83697d7e6a4b64f798d115adedf0104a5b9c8ca9df8240642d566b1af8"
+          "sha256": "e8c01b83697d7e6a4b64f798d115adedf0104a5b9c8ca9df8240642d566b1af8",
+          "mode": "100755"
         }
       ]
     },
@@ -389,27 +408,254 @@
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/FIRST-HOST-001_CORRECTION_RECEIPT.md",
         "gitBlob": "c1251f6526f19118f16bba995a377d11473e6f6c",
-        "sha256": "e0d9238b15dbe2aad2e0c4d1bd11c2c0e71c818cc4f5b8d150b4e7f2f56a7b9a"
+        "sha256": "e0d9238b15dbe2aad2e0c4d1bd11c2c0e71c818cc4f5b8d150b4e7f2f56a7b9a",
+        "mode": "100644"
       },
       "regressionTests": [
         {
           "path": "ops/tests/i00/test-first-host-001-l15-bytes.sh",
           "gitBlob": "71470775c3c16fe3b3b3c22d7c87c165d0be46bd",
-          "sha256": "f830dbb80f559d70e8247e848e1a047fb2b55de0bc6cd2cc534e269604f3f76f"
+          "sha256": "f830dbb80f559d70e8247e848e1a047fb2b55de0bc6cd2cc534e269604f3f76f",
+          "mode": "100755"
+        }
+      ]
+    },
+    {
+      "findingId": "DEPLOY-PORTABILITY-008",
+      "baseLiveTree": "a90d108fe7614a00de87e6280089fe0201c8dc3d",
+      "effectiveLiveTree": "e7ff70a057990121c8d5d9ce10964c8862b6a2c6",
+      "baseRootDigestSha256": "c37e5a80b9591a31ff41af7e07f66bb75a99d13f2d6e6edbcb8726dae7243cc0",
+      "effectiveRootDigestSha256": "5a86bb6b38fd5b8a97322481f52a0e00098946b32bbd40569e4382aae8597ac5",
+      "changedFiles": [
+        {
+          "path": "ops/live/README.md",
+          "mode": "100644",
+          "beforeGitBlob": "f57872f11e285bfec6280b89c03f6f5eadea8db0",
+          "beforeSha256": "e74826fbf31778f3fc37692e62498cd1553734e8d85dd303f4f00caa61ba2502",
+          "afterGitBlob": "c3ef2f6040584321bbbd7d236f853bc2f23505e2",
+          "afterSha256": "7b67ad9c3e8649cd4add24ea424ebbad212db74fe13365b455096c2643b81080"
+        },
+        {
+          "path": "ops/live/bin/alert-log.sh",
+          "mode": "100755",
+          "beforeGitBlob": "0a9aca8bd5a26eae904cb10e7f91c2d6e45b88f5",
+          "beforeSha256": "79b9f5fe1d4220c9a9b2dd8dfa8aac921aa00d698b515642e04a4a9aa01b6fd3",
+          "afterGitBlob": "b26147e5df4235ecf2ae9f3d6c87f747af2323c7",
+          "afterSha256": "0776e293653e33fa9dbb80d3650a8f7160d326ac5c1707880c9d661c833b74ba"
+        },
+        {
+          "path": "ops/live/bin/backup.sh",
+          "mode": "100755",
+          "beforeGitBlob": "9de219e48e0df15f4a3e0ee812ec907863389111",
+          "beforeSha256": "6d2c693251be5782ba8c3abb38714bee6580450dafa8e13b79606c17e48b5890",
+          "afterGitBlob": "d72bfffec8d3a4918f3ea0b8135334aa2af18565",
+          "afterSha256": "480662be633b64de538b3183e93ef848a82f9d497b40f2e1712b967558c64b94"
+        },
+        {
+          "path": "ops/live/bin/common.sh",
+          "mode": "100755",
+          "beforeGitBlob": "73f5b58317b56b662c0488ae7cfee793f71e027c",
+          "beforeSha256": "2da2ffd952daf2480bde91280f422e5d86d45c471515c390f0592923c52c09b6",
+          "afterGitBlob": "82d3dd57f6815f483eafb5deb5b14afdf686648b",
+          "afterSha256": "a04949f4937dc9d76a58cf9aad58b7cdd3457ecb61f2540d7dbd4b1dc51d87a6"
+        },
+        {
+          "path": "ops/live/bin/deploy.sh",
+          "mode": "100755",
+          "beforeGitBlob": "3c4eaf5c445ffd716216e9c27815d0cffee3ef8b",
+          "beforeSha256": "9424f10b73fab8b0fa98eb135b758b80282d6c529831b7e7fba3002f3014c02a",
+          "afterGitBlob": "1ec9cd9074b943fc4c4ece08311d193259077fcd",
+          "afterSha256": "225bf21f6b75380b394a2cd7ea6b9511282fac75f1b9ad2117addd903c412bf6"
+        },
+        {
+          "path": "ops/live/bin/restore-drill.sh",
+          "mode": "100755",
+          "beforeGitBlob": "c3a02480a7a598122c99912a7eff19f729756c4c",
+          "beforeSha256": "d5e102de8a146b508358613a492cbe24e18646d81a8f1453c9a1c2fd45b804f4",
+          "afterGitBlob": "a9e5c213011439357fb1b2c1eff572696a521735",
+          "afterSha256": "b6a2cc3302ba275638d0d8b25873902bab6865c1503e35c4d1379ce1f695dfe4"
+        },
+        {
+          "path": "ops/live/bin/restore.sh",
+          "mode": "100755",
+          "beforeGitBlob": "ad03af0ed0759a61ff56f3a6de7660423bd8df03",
+          "beforeSha256": "a2e6f29fa59a6ad0d0c0e15912348c4326eee83c61f203a08e7af2242327b332",
+          "afterGitBlob": "f2bc71ee46c508f44abeb542967bb4c56d977001",
+          "afterSha256": "c5820af2271f68cb101410189fb646a3d9fa0030fb3578c4a742301473d0c0e0"
+        },
+        {
+          "path": "ops/live/bin/rollback.sh",
+          "mode": "100755",
+          "beforeGitBlob": "5a0d289c35ed3cb51d7e217e477bd671a409071b",
+          "beforeSha256": "c594a483b810073c11a8ec65bdc716ab5e36010146b386a854df601e4cfd1728",
+          "afterGitBlob": "eaf36a8ac0a061a23b2f64d4bb62f5955eabdcfc",
+          "afterSha256": "e836e4a5faf90125eebe48750b2dabcc46166a7135fa116f83ada21d9a4db37c"
+        },
+        {
+          "path": "ops/live/bin/watchdog.sh",
+          "mode": "100755",
+          "beforeGitBlob": "249d54b8e55850f3e6bd7feab6cf61375d8ad029",
+          "beforeSha256": "bffacaf70b8aa2fb1df894f78db5d8e610ca16810b14e4fba9db3f000a994b0a",
+          "afterGitBlob": "2105647ce16146e936a5bfd17aa2fa279ef71d05",
+          "afterSha256": "5652e9296c324f2b8efc25463093b5affc9b133b73cf37e7f989dc976dd33beb"
+        },
+        {
+          "path": "ops/live/env/cosmos-backup.env.template",
+          "mode": "100644",
+          "beforeGitBlob": "f656fa524608697e01383da22c1b6d3f2dd1a44b",
+          "beforeSha256": "b483ed1cfc8ce53ee2a28ee82c938d74c6a31e8745fee7bee9b9dfc188f2e02c",
+          "afterGitBlob": "f920b6d23d68da3a61bf9971d526e61a45cd96c0",
+          "afterSha256": "260b57a2b9db96864450ca59e5c135d2e6168a5c6a6a6e9325d7202217507972"
+        },
+        {
+          "path": "ops/live/env/cosmos-deploy.env.template",
+          "mode": "100644",
+          "beforeGitBlob": "043ec964a2fdb9ab24656b587484d98e4798ceb1",
+          "beforeSha256": "e195a3d200b9f69aa0ea76c83d57190bedda253a4b07a5cf049bcece95fc21eb",
+          "afterGitBlob": "ab93cc5a8bc8190f0aadd75b79f1ad8740e5e05f",
+          "afterSha256": "2b6bf35173fdac98eee3416310d8697de198b76555084530fcf9ce862fce6dab"
+        },
+        {
+          "path": "ops/live/env/cosmos-watchdog.env.template",
+          "mode": "100644",
+          "beforeGitBlob": "009497f50028c24f409eb86c8cb31cfdfea6d40d",
+          "beforeSha256": "0bacd405c98d87a1ec6d0dd0fb33c77cade0dc233944b4761e3987b16d326ec1",
+          "afterGitBlob": "ec0dbb65bd447061d6c58430c7e112b0ad250a8b",
+          "afterSha256": "a83e1c98e5421977e3f9e08e84d06f10633f55afd558166442f1576adb0c2f31"
+        },
+        {
+          "path": "ops/live/systemd/cosmos-app.service",
+          "mode": "100644",
+          "beforeGitBlob": "cc2d689d2a76dab601fcf01fba915a721127916f",
+          "beforeSha256": "58fa4ba9c10c51c07e45891cc109e0ac0d743105db164702665a5e7e6319ab10",
+          "afterGitBlob": "18165f594a44cccbf332fa4a75adf236d332edb1",
+          "afterSha256": "ffe2404464f2739eb86aba00b1a94bec20c95d83952df48865e8462c871ea382"
+        },
+        {
+          "path": "ops/live/systemd/cosmos-backup.service",
+          "mode": "100644",
+          "beforeGitBlob": "21803732315160d967a300a4db3de8c8dc7fa70d",
+          "beforeSha256": "dafb2934f8d31a1634e4110346d502b0727a5bae5f4ee8ab13ac6941276a1d22",
+          "afterGitBlob": "f3dba4874a8d444c8c71136efb47378b923caf1a",
+          "afterSha256": "0500eb3bdfacd0e8a7b5d24a6509965811c1076ab76d3e499c6a1d7cd858be72"
+        },
+        {
+          "path": "ops/live/systemd/cosmos-backup.timer",
+          "mode": "100644",
+          "beforeGitBlob": "7f961dfd54eb0a1f2a1dbe011ca1f0dc364fa70a",
+          "beforeSha256": "4c215c9dbeb5aa9cb1a28e7de9ff405fbbb4482b0154aafedd6fac2412c3280d",
+          "afterGitBlob": "0ba70ff602afa232f2afd3ca42facda3271bb0f1",
+          "afterSha256": "5dbe7fdfc23a085639007022ac4c1bd5e80a99b0fbeeccc0b9ebf7c308a4efaa"
+        },
+        {
+          "path": "ops/live/systemd/cosmos-restore-drill.service",
+          "mode": "100644",
+          "beforeGitBlob": "4eca14745d6f3979a476f8de7be451b94c465ac7",
+          "beforeSha256": "d59160aebe5fc7efb9035661eb8e9098c0efc3d868cc0543765cba9c30ef62e6",
+          "afterGitBlob": "05fde90132206907185160b974f94252f717bd80",
+          "afterSha256": "3692a3ef9fe3799d7ca7db2f3eb5bc1329f8ca19f1d6a3f09cdc034d46985f1c"
+        },
+        {
+          "path": "ops/live/systemd/cosmos-restore-drill.timer",
+          "mode": "100644",
+          "beforeGitBlob": "72aec424978684fff5e154dff816298227474197",
+          "beforeSha256": "3534c1178cc2fbd48b0ecf8700b5ca52d69172f89155f7f65022909c51642a1b",
+          "afterGitBlob": "e22cdb76448ea44b1472d19811302bd261981096",
+          "afterSha256": "c937f9492f7b5b0a63e4a5621dfc13430132ef2a7e23fcac16096664f157f87c"
+        },
+        {
+          "path": "ops/live/systemd/cosmos-watchdog.service",
+          "mode": "100644",
+          "beforeGitBlob": "bb07d9d76080f8a0c4037acb9918a1ce7de24ebe",
+          "beforeSha256": "8bfab233229b61ce4aa50c886e0cbc2387a83568b049ab6272d16f69dc26b826",
+          "afterGitBlob": "f5c0706a40a798ce125c479f7441258af6266f11",
+          "afterSha256": "db75d2bb802c71c149f71bfa316ca4a658916f3d6a5768d8254861b54ee9f191"
+        },
+        {
+          "path": "ops/live/systemd/cosmos-watchdog.timer",
+          "mode": "100644",
+          "beforeGitBlob": "01f601b72c5d730b57041891d9dadce43ead8e17",
+          "beforeSha256": "f0c3c594b5ad939cc85ce6b87731395863c9373bf5d03b5f44ccc73330f72856",
+          "afterGitBlob": "1a21fb6c50d11d61f97248097e37069102b88f1a",
+          "afterSha256": "3bb4aa9302f055a358288bb80de8cc02f6e8968360b45d7c0b0195f4f54b200c"
+        }
+      ],
+      "changedTestFiles": [
+        {
+          "path": "ops/tests/helpers.sh",
+          "mode": "100755",
+          "beforeGitBlob": "acc06258e6178d3f8f0253abfc5f1571b8970be6",
+          "beforeSha256": "6f23aa5e7e770e4850038f7a228e33fe4e05ad44a3f7c75a7622fbcbd1b6b9bb",
+          "afterGitBlob": "69492c838a5474e62fe642fee895fbaa98e1ec9f",
+          "afterSha256": "113fd38a072b4227316e2a06c68c7b368e1ace4a8fbd21cde6c232202a7f6f26"
+        },
+        {
+          "path": "ops/tests/test-backup-restore.sh",
+          "mode": "100755",
+          "beforeGitBlob": "69190525a1bf9bc6001732c661def227aa512d16",
+          "beforeSha256": "82861a5b0e35b220e7abb22e25366bac3d6427f3ad94e83ddecf5b43ae2b0921",
+          "afterGitBlob": "62963e07d4e0f01c97e3f0502a629d07047a1c9a",
+          "afterSha256": "3e686298e8586c82b93d69e96062304ebcd048df5528e8eaa6d0d65fc35c341f"
+        },
+        {
+          "path": "ops/tests/test-deploy.sh",
+          "mode": "100755",
+          "beforeGitBlob": "700ad6fb184315895672de58ed151ff3c07273fe",
+          "beforeSha256": "e2dc8e1c8e714c75ae49052a2f168687ab2d06ff38bf13a8c2d7aadc85c121dd",
+          "afterGitBlob": "3bc2ad63b18fd2fee25eebe184892c110f9a072f",
+          "afterSha256": "85c989025189a86b3d136a6f9b17053adf66fdd813e2dd637178665fdb510cd1"
+        },
+        {
+          "path": "ops/tests/test-rollback.sh",
+          "mode": "100755",
+          "beforeGitBlob": "fce414f0672e80a37e817f19da595647b5f05e44",
+          "beforeSha256": "3b204172c9d91042a5c5f8d2f6272eda9efefaa4aba5e348c3c68383582b6df2",
+          "afterGitBlob": "a0a43a3689dd279ec8b8438c4a98da1ad745c33c",
+          "afterSha256": "d4e56488352f8a520eebe35a40052793e961b47ce51af19ffc8693b042f9e308"
+        },
+        {
+          "path": "ops/tests/test-systemd-units.sh",
+          "mode": "100755",
+          "beforeGitBlob": "bd7ab661e802482a7143e90861bd2d35e783eb84",
+          "beforeSha256": "b17443e04d8bb5c0a652a82de81146d9dc4964430e69402474a974bce8f55dcd",
+          "afterGitBlob": "593befbbd0ef951ab3032ffa31f1a30b503873d9",
+          "afterSha256": "b52ee27f18582f127097ae8053b442a12791382a093054997a318a479ccfde84"
+        },
+        {
+          "path": "ops/tests/test-watchdog.sh",
+          "mode": "100755",
+          "beforeGitBlob": "4f7b791a3897454c1b32517162d75f833d7be7c9",
+          "beforeSha256": "87c5a142bc13f18b8b23b181c43b7192b50c74bf259bafe02371c0a3667e3bf8",
+          "afterGitBlob": "6d87cf1e364de5ebef53dd2ebb42f357a1e50947",
+          "afterSha256": "947ce2ea5a5b7be8cd5b1f053e4394f939b86ef7a45f4f9eb5eebf67d70e5f33"
+        }
+      ],
+      "correctionReceipt": {
+        "path": "docs/archive/i00-phase4/DEPLOY-PORTABILITY-008_L15_AMENDMENT_RECEIPT.md",
+        "mode": "100644",
+        "gitBlob": "61c9d1e35a75994d2c2562dd83deb7b3d4295e6f",
+        "sha256": "0d28cc290a19fa56988cd8c416ae142f1737b85a3bb422d6a38c1ce4115040cb"
+      },
+      "regressionTests": [
+        {
+          "path": "ops/tests/i00/test-deploy-portability-008-l15-bytes.sh",
+          "mode": "100755",
+          "gitBlob": "c982bd7de6be81d0240639e8e03308ec0c6fef6f",
+          "sha256": "1d61b51abf85c64be667f1b09fe832e2921e9ac957ccbc0cc6d6ee59e236b437"
         }
       ]
     }
   ],
   "effectiveLive": {
-    "tree": "a90d108fe7614a00de87e6280089fe0201c8dc3d",
-    "rootDigestSha256": "c37e5a80b9591a31ff41af7e07f66bb75a99d13f2d6e6edbcb8726dae7243cc0",
+    "tree": "e7ff70a057990121c8d5d9ce10964c8862b6a2c6",
+    "rootDigestSha256": "5a86bb6b38fd5b8a97322481f52a0e00098946b32bbd40569e4382aae8597ac5",
     "fileCount": 31,
     "files": [
       {
         "path": "README.md",
         "mode": "100644",
-        "gitBlob": "f57872f11e285bfec6280b89c03f6f5eadea8db0",
-        "sha256": "e74826fbf31778f3fc37692e62498cd1553734e8d85dd303f4f00caa61ba2502"
+        "gitBlob": "c3ef2f6040584321bbbd7d236f853bc2f23505e2",
+        "sha256": "7b67ad9c3e8649cd4add24ea424ebbad212db74fe13365b455096c2643b81080"
       },
       {
         "path": "RECEIPT.md",
@@ -444,26 +690,26 @@
       {
         "path": "bin/alert-log.sh",
         "mode": "100755",
-        "gitBlob": "0a9aca8bd5a26eae904cb10e7f91c2d6e45b88f5",
-        "sha256": "79b9f5fe1d4220c9a9b2dd8dfa8aac921aa00d698b515642e04a4a9aa01b6fd3"
+        "gitBlob": "b26147e5df4235ecf2ae9f3d6c87f747af2323c7",
+        "sha256": "0776e293653e33fa9dbb80d3650a8f7160d326ac5c1707880c9d661c833b74ba"
       },
       {
         "path": "bin/backup.sh",
         "mode": "100755",
-        "gitBlob": "9de219e48e0df15f4a3e0ee812ec907863389111",
-        "sha256": "6d2c693251be5782ba8c3abb38714bee6580450dafa8e13b79606c17e48b5890"
+        "gitBlob": "d72bfffec8d3a4918f3ea0b8135334aa2af18565",
+        "sha256": "480662be633b64de538b3183e93ef848a82f9d497b40f2e1712b967558c64b94"
       },
       {
         "path": "bin/common.sh",
         "mode": "100755",
-        "gitBlob": "73f5b58317b56b662c0488ae7cfee793f71e027c",
-        "sha256": "2da2ffd952daf2480bde91280f422e5d86d45c471515c390f0592923c52c09b6"
+        "gitBlob": "82d3dd57f6815f483eafb5deb5b14afdf686648b",
+        "sha256": "a04949f4937dc9d76a58cf9aad58b7cdd3457ecb61f2540d7dbd4b1dc51d87a6"
       },
       {
         "path": "bin/deploy.sh",
         "mode": "100755",
-        "gitBlob": "3c4eaf5c445ffd716216e9c27815d0cffee3ef8b",
-        "sha256": "9424f10b73fab8b0fa98eb135b758b80282d6c529831b7e7fba3002f3014c02a"
+        "gitBlob": "1ec9cd9074b943fc4c4ece08311d193259077fcd",
+        "sha256": "225bf21f6b75380b394a2cd7ea6b9511282fac75f1b9ad2117addd903c412bf6"
       },
       {
         "path": "bin/latency-bench.mjs",
@@ -474,26 +720,26 @@
       {
         "path": "bin/restore-drill.sh",
         "mode": "100755",
-        "gitBlob": "c3a02480a7a598122c99912a7eff19f729756c4c",
-        "sha256": "d5e102de8a146b508358613a492cbe24e18646d81a8f1453c9a1c2fd45b804f4"
+        "gitBlob": "a9e5c213011439357fb1b2c1eff572696a521735",
+        "sha256": "b6a2cc3302ba275638d0d8b25873902bab6865c1503e35c4d1379ce1f695dfe4"
       },
       {
         "path": "bin/restore.sh",
         "mode": "100755",
-        "gitBlob": "ad03af0ed0759a61ff56f3a6de7660423bd8df03",
-        "sha256": "a2e6f29fa59a6ad0d0c0e15912348c4326eee83c61f203a08e7af2242327b332"
+        "gitBlob": "f2bc71ee46c508f44abeb542967bb4c56d977001",
+        "sha256": "c5820af2271f68cb101410189fb646a3d9fa0030fb3578c4a742301473d0c0e0"
       },
       {
         "path": "bin/rollback.sh",
         "mode": "100755",
-        "gitBlob": "5a0d289c35ed3cb51d7e217e477bd671a409071b",
-        "sha256": "c594a483b810073c11a8ec65bdc716ab5e36010146b386a854df601e4cfd1728"
+        "gitBlob": "eaf36a8ac0a061a23b2f64d4bb62f5955eabdcfc",
+        "sha256": "e836e4a5faf90125eebe48750b2dabcc46166a7135fa116f83ada21d9a4db37c"
       },
       {
         "path": "bin/watchdog.sh",
         "mode": "100755",
-        "gitBlob": "249d54b8e55850f3e6bd7feab6cf61375d8ad029",
-        "sha256": "bffacaf70b8aa2fb1df894f78db5d8e610ca16810b14e4fba9db3f000a994b0a"
+        "gitBlob": "2105647ce16146e936a5bfd17aa2fa279ef71d05",
+        "sha256": "5652e9296c324f2b8efc25463093b5affc9b133b73cf37e7f989dc976dd33beb"
       },
       {
         "path": "cloudflare/README.md",
@@ -522,20 +768,20 @@
       {
         "path": "env/cosmos-backup.env.template",
         "mode": "100644",
-        "gitBlob": "f656fa524608697e01383da22c1b6d3f2dd1a44b",
-        "sha256": "b483ed1cfc8ce53ee2a28ee82c938d74c6a31e8745fee7bee9b9dfc188f2e02c"
+        "gitBlob": "f920b6d23d68da3a61bf9971d526e61a45cd96c0",
+        "sha256": "260b57a2b9db96864450ca59e5c135d2e6168a5c6a6a6e9325d7202217507972"
       },
       {
         "path": "env/cosmos-deploy.env.template",
         "mode": "100644",
-        "gitBlob": "043ec964a2fdb9ab24656b587484d98e4798ceb1",
-        "sha256": "e195a3d200b9f69aa0ea76c83d57190bedda253a4b07a5cf049bcece95fc21eb"
+        "gitBlob": "ab93cc5a8bc8190f0aadd75b79f1ad8740e5e05f",
+        "sha256": "2b6bf35173fdac98eee3416310d8697de198b76555084530fcf9ce862fce6dab"
       },
       {
         "path": "env/cosmos-watchdog.env.template",
         "mode": "100644",
-        "gitBlob": "009497f50028c24f409eb86c8cb31cfdfea6d40d",
-        "sha256": "0bacd405c98d87a1ec6d0dd0fb33c77cade0dc233944b4761e3987b16d326ec1"
+        "gitBlob": "ec0dbb65bd447061d6c58430c7e112b0ad250a8b",
+        "sha256": "a83e1c98e5421977e3f9e08e84d06f10633f55afd558166442f1576adb0c2f31"
       },
       {
         "path": "systemd/cloudflared.service",
@@ -546,44 +792,44 @@
       {
         "path": "systemd/cosmos-app.service",
         "mode": "100644",
-        "gitBlob": "cc2d689d2a76dab601fcf01fba915a721127916f",
-        "sha256": "58fa4ba9c10c51c07e45891cc109e0ac0d743105db164702665a5e7e6319ab10"
+        "gitBlob": "18165f594a44cccbf332fa4a75adf236d332edb1",
+        "sha256": "ffe2404464f2739eb86aba00b1a94bec20c95d83952df48865e8462c871ea382"
       },
       {
         "path": "systemd/cosmos-backup.service",
         "mode": "100644",
-        "gitBlob": "21803732315160d967a300a4db3de8c8dc7fa70d",
-        "sha256": "dafb2934f8d31a1634e4110346d502b0727a5bae5f4ee8ab13ac6941276a1d22"
+        "gitBlob": "f3dba4874a8d444c8c71136efb47378b923caf1a",
+        "sha256": "0500eb3bdfacd0e8a7b5d24a6509965811c1076ab76d3e499c6a1d7cd858be72"
       },
       {
         "path": "systemd/cosmos-backup.timer",
         "mode": "100644",
-        "gitBlob": "7f961dfd54eb0a1f2a1dbe011ca1f0dc364fa70a",
-        "sha256": "4c215c9dbeb5aa9cb1a28e7de9ff405fbbb4482b0154aafedd6fac2412c3280d"
+        "gitBlob": "0ba70ff602afa232f2afd3ca42facda3271bb0f1",
+        "sha256": "5dbe7fdfc23a085639007022ac4c1bd5e80a99b0fbeeccc0b9ebf7c308a4efaa"
       },
       {
         "path": "systemd/cosmos-restore-drill.service",
         "mode": "100644",
-        "gitBlob": "4eca14745d6f3979a476f8de7be451b94c465ac7",
-        "sha256": "d59160aebe5fc7efb9035661eb8e9098c0efc3d868cc0543765cba9c30ef62e6"
+        "gitBlob": "05fde90132206907185160b974f94252f717bd80",
+        "sha256": "3692a3ef9fe3799d7ca7db2f3eb5bc1329f8ca19f1d6a3f09cdc034d46985f1c"
       },
       {
         "path": "systemd/cosmos-restore-drill.timer",
         "mode": "100644",
-        "gitBlob": "72aec424978684fff5e154dff816298227474197",
-        "sha256": "3534c1178cc2fbd48b0ecf8700b5ca52d69172f89155f7f65022909c51642a1b"
+        "gitBlob": "e22cdb76448ea44b1472d19811302bd261981096",
+        "sha256": "c937f9492f7b5b0a63e4a5621dfc13430132ef2a7e23fcac16096664f157f87c"
       },
       {
         "path": "systemd/cosmos-watchdog.service",
         "mode": "100644",
-        "gitBlob": "bb07d9d76080f8a0c4037acb9918a1ce7de24ebe",
-        "sha256": "8bfab233229b61ce4aa50c886e0cbc2387a83568b049ab6272d16f69dc26b826"
+        "gitBlob": "f5c0706a40a798ce125c479f7441258af6266f11",
+        "sha256": "db75d2bb802c71c149f71bfa316ca4a658916f3d6a5768d8254861b54ee9f191"
       },
       {
         "path": "systemd/cosmos-watchdog.timer",
         "mode": "100644",
-        "gitBlob": "01f601b72c5d730b57041891d9dadce43ead8e17",
-        "sha256": "f0c3c594b5ad939cc85ce6b87731395863c9373bf5d03b5f44ccc73330f72856"
+        "gitBlob": "1a21fb6c50d11d61f97248097e37069102b88f1a",
+        "sha256": "3bb4aa9302f055a358288bb80de8cc02f6e8968360b45d7c0b0195f4f54b200c"
       },
       {
         "path": "systemd/journald-cosmos.conf.template",

@@ -25,12 +25,14 @@ bin/
                      failure policy (auto-rollback only pre-money + exposure
                      NONE; otherwise FREEZE)
   rollback.sh        schema-barrier-checked rollback; exposure-gated automation
-  backup.sh          application-consistent SQLite online backup + evidence
-                     archives + retention + --verify-latest staleness probe
+  backup.sh          application-consistent SQLite online DB backup +
+                     --verify-latest staleness probe; an authorization-bound
+                     create never prunes existing data and rejects unbound
+                     evidence/model/configuration archive inputs
   restore.sh         integrity-verified restore into an EXPLICIT target;
-                     triple-guarded against the live state store
-  restore-drill.sh   periodic isolated restore test (never touches DATA_DIR)
-  watchdog.sh        external supervision: bounded restarts on live-failure,
+                     I00 authorization is isolated-only and cannot target DATA_DIR
+  restore-drill.sh   staging-only donor; no production action class exists
+  watchdog.sh        staging-only external supervision donor,
                      alert-only on ready-failure, tunnel/backup/frozen alarms
   alert-log.sh       default ALERT_CMD (journald-friendly local logging)
   latency-bench.mjs  L-B region/full-chain latency harness (plan-mode default;
@@ -54,6 +56,55 @@ bench/               benchmark targets template + harness docs
 /etc/cosmos/*.env                   installed env files (root-owned, 0640)
 /usr/local/lib/cosmos-ops/i00/accepted-ops-live/bin/  these scripts, OUTSIDE the release path
 ```
+
+## Production effect boundary
+
+The canonical production path is `run-bound-effect.mjs` with one consumed,
+authorization-bound evidence chain. It opens every donor byte, environment,
+interpreter, helper, and effect executable before dropping to the bound effect
+identity. The donor receives readonly descriptor capabilities, not a caller-set
+class or named command string. `common.sh` verifies the one-use handoff,
+acknowledges it once, and derives the exact action class and command from the
+verified result before it loads the descriptor-bound sanitized environment.
+
+| donor effect | verified action class | exact boundary |
+|---|---|---|
+| release switch | `SERVICE_RELEASE_SWITCH` | one switch; a compensating `--auto` rollback requires a distinct one-use subhandoff and the runner-retained deploy-lock capability |
+| manual rollback | `SERVICE_ROLLBACK` | one schema-compatible switch; the bound donor owns lock acquisition/reuse and the switch |
+| backup publication | `BACKUP_CREATE` | one new completed DB backup; no retention, stale-partial deletion, or evidence/model/configuration archival |
+| isolated restore | `ISOLATED_RESTORE` | one explicit target disjoint from `DATA_DIR`; production restore is unavailable |
+
+Release and rollback exposure reads use only the verified Node and exposure
+helper descriptors with no helper arguments and a fixed outer timeout. Local
+alert logging uses only the verified Bash and local alert-helper descriptors
+with the fixed severity/code/message shape and timeout. Authorized donor
+environments reject `EXPOSURE_CMD` and `ALERT_CMD`; named command seams remain
+available only to contained TEST or direct non-effect fixtures.
+
+The canonical backup environment leaves `EVIDENCE_PATHS` empty. Authorized
+`BACKUP_CREATE` rejects any nonempty value before the donor effect because no
+evidence, model, or configuration read capability is retained. In particular,
+`/etc/cosmos` is never archived. DB backup remains available; evidence/model
+archival is `BLOCKED_PENDING_EXPLICIT_READ_CAPABILITY`. Direct contained
+staging tests retain the legacy archive branch only as non-production proof.
+After durable publication, logging, and the final capability rechecks, the
+authorized donor writes one bounded canonical publication claim to its retained
+effect-output descriptor and closes that descriptor. The runner independently
+requires exactly one new direct child under the retained backup root, opens it
+without following links, and binds its identity, manifest, database, tree, and
+pre/post inventory evidence before a successful terminal outcome exists.
+
+On a rollback post-switch gate failure, the bound donor writes the frozen
+marker through its retained `opsStateDir` capability, opens that exact file
+without following a link, changes it to mode `0400`, fsyncs the file and
+directory capability, and only then exits `3`. The wrapper records the already
+sealed marker; it does not mutate the named marker or own the donor lock.
+
+No ratified action class exists for direct production `restore-drill.sh` or
+`watchdog.sh`. The backup, restore-drill, and watchdog services and timers keep
+their historical unit bytes for verification but carry an always-false unit
+condition plus `RefuseManualStart=yes`; they cannot be scheduled, dependency
+started, or manually started.
 
 ## DATA_DIR authority deployment precondition
 
@@ -132,7 +183,8 @@ It also alarms on tunnel-down, deploy-frozen, and backup-stale/missing.
 
 ## What activation (owner-authorized, spine-owned) still requires
 
-Filling `REPLACE_ME_*` values, creating users/dirs, installing units,
-creating the tunnel/Access app, attaching the IAM policy, enabling timers,
-and the live §24 proof run. None of that is performed — or performable —
-from this artifact set.
+Filling `REPLACE_ME_*` values, creating users/dirs, installing inert unit
+templates, creating the tunnel/Access app, attaching the IAM policy, and the
+live §24 proof run. Timer activation remains unavailable until a separately
+ratified action class and I00 wrapper exist. None of that is performed — or
+performable — from this artifact set.

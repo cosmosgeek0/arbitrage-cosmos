@@ -6,6 +6,9 @@
 # corruption detection, restore-onto-empty-box, and the production-path
 # refusal ladder.
 . "$(dirname "$0")/helpers.sh"
+SANDBOX="$(node -e 'process.stdout.write(require("fs").realpathSync(process.argv[1]))' \
+  "$SANDBOX")"
+export NODE="$(node -e 'process.stdout.write(require("fs").realpathSync(process.execPath))')"
 . "$BIN/common.sh"
 
 export DATA_DIR="$SANDBOX/data"
@@ -94,6 +97,27 @@ assert_eq "$(sqlite3 "$TARGET1/cosmos.db" 'SELECT COUNT(*) FROM events;')" 105 "
 assert_file "$TARGET1/restore-report.json"
 assert_eq "$(json_get "$TARGET1/restore-report.json" production)" false "isolated restore recorded"
 
+note "5b. restore caller paths must already be lexical and physical canonical endpoints"
+mkdir "$SANDBOX/restore-physical-parent"
+ln -s "$SANDBOX/restore-physical-parent" "$SANDBOX/restore-parent-alias"
+ln -s "$BACKUP_DIR" "$SANDBOX/backup-parent-alias"
+assert_rc 1 bash "$RESTORE" --backup latest --target relative/restore-target
+assert_rc 1 bash "$RESTORE" --backup latest \
+  --target "$SANDBOX/restore-physical-parent/../restore-dot-target"
+assert_rc 1 bash "$RESTORE" --backup latest \
+  --target "$SANDBOX/restore-parent-alias/restore-alias-target"
+assert_rc 1 bash "$RESTORE" --backup relative/backup \
+  --target "$SANDBOX/backup-relative-target"
+assert_rc 1 bash "$RESTORE" --backup "$BACKUP_DIR/$B2/." \
+  --target "$SANDBOX/backup-dot-target"
+assert_rc 1 bash "$RESTORE" --backup "$SANDBOX/backup-parent-alias/$B2" \
+  --target "$SANDBOX/backup-alias-target"
+assert_no_file "$SANDBOX/restore-dot-target"
+assert_no_file "$SANDBOX/restore-physical-parent/restore-alias-target"
+assert_no_file "$SANDBOX/backup-relative-target"
+assert_no_file "$SANDBOX/backup-dot-target"
+assert_no_file "$SANDBOX/backup-alias-target"
+
 note "6. corrupted backup is refused (sha mismatch), target untouched"
 LATEST="$(ls -1 "$BACKUP_DIR" | grep -E '^[0-9]{8}T' | sort | tail -1)"
 cp -R "$BACKUP_DIR/$LATEST" "$SANDBOX/corrupt"
@@ -112,21 +136,42 @@ echo cosmos-app.service > "$MOCK_ACTIVE_UNITS"
 assert_rc 2 env RESTORE_CONFIRM=RESTORE_PRODUCTION \
   bash "$RESTORE" --backup latest --target "$DATA_DIR" --allow-production
 : > "$MOCK_ACTIVE_UNITS"   # unit now inactive
-assert_rc 1 env RESTORE_CONFIRM=RESTORE_PRODUCTION \
+assert_rc 2 env RESTORE_CONFIRM=RESTORE_PRODUCTION \
   bash "$RESTORE" --backup latest --target "$DATA_DIR" --allow-production   # non-empty, no --force
 
-note "8. authorized production restore: db replaced, stale WAL sidecars removed"
-# Plant a recognizable stale WAL: if restore failed to remove it, the restored
-# db would be corrupted or the sentinel would survive. (macOS system SQLite
-# keeps a persistent, freshly-created -wal after reads, so absence of the
-# FILE is not the invariant — absence of the STALE content is.)
-echo STALE_WAL_SENTINEL > "$DB-wal"
-assert_rc 0 env RESTORE_CONFIRM=RESTORE_PRODUCTION \
+note "8. production restore remains unavailable under legacy confirmation and force flags"
+sqlite3 "$DB" "INSERT INTO events(ts, kind) VALUES (999,'must-survive-refusal');"
+printf '%s\n' MUST_SURVIVE_REFUSAL > "$DATA_DIR/production-restore-must-not-touch"
+assert_rc 2 env RESTORE_CONFIRM=RESTORE_PRODUCTION \
   bash "$RESTORE" --backup latest --target "$DATA_DIR" --allow-production --force
-assert_eq "$(sqlite3 "$DB" 'SELECT COUNT(*) FROM events;')" 105 "production rows after restore"
-ASSERTIONS=$((ASSERTIONS + 1))
-if [ -e "$DB-wal" ] && grep -q STALE_WAL_SENTINEL "$DB-wal" 2>/dev/null; then
-  fail "stale WAL sidecar survived the production restore"
-fi
+assert_eq "$(sqlite3 "$DB" 'SELECT COUNT(*) FROM events;')" 106 "production rows unchanged after refusal"
+assert_eq "$(cat "$DATA_DIR/production-restore-must-not-touch")" MUST_SURVIVE_REFUSAL \
+  "production target marker unchanged after refusal"
+
+note "9. fixed production roots refuse independently of staging DATA_DIR"
+for protected_target in \
+  /opt/cosmos/df32-restore-refusal \
+  /var/lib/cosmos/state/df32-restore-refusal \
+  /var/lib/cosmos/ops/df32-restore-refusal \
+  /var/lib/cosmos/releases/df32-restore-refusal \
+  /var/backups/cosmos/df32-restore-refusal \
+  /etc/cosmos/df32-restore-refusal \
+  /run/cosmos-app/df32-restore-refusal \
+  /run/cosmos-secret-source/df32-restore-refusal \
+  /usr/local/lib/cosmos-ops/df32-restore-refusal
+do
+  protected_rc=0
+  bash "$RESTORE" --backup latest --target "$protected_target" || protected_rc=$?
+  ASSERTIONS=$((ASSERTIONS + 1))
+  [ "$protected_rc" -ne 0 ] \
+    || fail "fixed production target unexpectedly accepted: $protected_target"
+done
+ln -s /var/lib "$SANDBOX/fixed-var-lib-alias"
+assert_rc 1 bash "$RESTORE" --backup latest \
+  --target "$SANDBOX/fixed-var-lib-alias/cosmos/state/alias-refusal"
+assert_rc 1 bash "$RESTORE" --backup latest \
+  --target "$SANDBOX/fixed-var-lib-alias/../lib/cosmos/ops/dot-alias-refusal"
+assert_eq "$(sqlite3 "$DB" 'SELECT COUNT(*) FROM events;')" 106 \
+  "staging DATA_DIR remains unchanged after fixed-root refusals"
 
 finish

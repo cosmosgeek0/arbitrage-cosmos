@@ -877,6 +877,63 @@ test('complete receipt binds all exact steps, candidate source, source freeze, Q
   assert.ok(validate(forgedDuration).semanticFailures.includes('COMPLETE_RECEIPT_STEP_MEASUREMENT_INVALID'));
 });
 
+test('complete receipt treats its acceptance-time Node path as recorded provenance', () => {
+  const fixture = completeFixture();
+  const document = structuredClone(fixture.document);
+  const performancePlan = document.plan.find((step) => step.kind === 'PERFORMANCE');
+  const performanceStep = document.steps.find((step) => step.id === performancePlan.id);
+  performancePlan.command[0] = '/opt/acceptance-runtime/bin/node';
+  performanceStep.command[0] = performancePlan.command[0];
+  const validate = (document) => validateCompleteReceiptDocument(
+    document,
+    CANDIDATE,
+    CANDIDATE_TREE,
+    fixture.performanceReceipt,
+    fixture.browserReceipt,
+    fixture.candidateManifest,
+    fixture.initialEvidence,
+  );
+
+  assert.equal(validate(document).passed, true);
+
+  const divergentStep = structuredClone(document);
+  divergentStep.steps.find((step) => step.id === performancePlan.id).command[0] = '/opt/other-runtime/bin/node';
+  assert.ok(validate(divergentStep).semanticFailures.includes('COMPLETE_RECEIPT_STEP_COMMAND_INVALID'));
+
+  const nonNode = structuredClone(document);
+  nonNode.plan.find((step) => step.kind === 'PERFORMANCE').command[0] = '/bin/sh';
+  nonNode.steps.find((step) => step.id === performancePlan.id).command[0] = '/bin/sh';
+  assert.ok(validate(nonNode).semanticFailures.includes('COMPLETE_RECEIPT_PLAN_INVALID'));
+
+  for (const unsafe of ['relative/node', '/opt/runtime/../node', ' /opt/runtime/node']) {
+    const malformed = structuredClone(document);
+    malformed.plan.find((step) => step.kind === 'PERFORMANCE').command[0] = unsafe;
+    malformed.steps.find((step) => step.id === performancePlan.id).command[0] = unsafe;
+    assert.ok(validate(malformed).semanticFailures.includes('COMPLETE_RECEIPT_PLAN_INVALID'));
+  }
+});
+
+test('complete receipt treats acceptance-time uv and Q venv paths as digest-only provenance', () => {
+  const fixture = completeFixture();
+  const document = structuredClone(fixture.document);
+  document.uv.resolvedPathSha256 = sha256('/opt/acceptance-runtime/bin/uv');
+  document.qExactDonor.venv.resolvedPathSha256 = sha256(
+    '/opt/acceptance-runtime/q-venv',
+  );
+
+  const result = validateCompleteReceiptDocument(
+    document,
+    CANDIDATE,
+    CANDIDATE_TREE,
+    fixture.performanceReceipt,
+    fixture.browserReceipt,
+    fixture.candidateManifest,
+    fixture.initialEvidence,
+  );
+
+  assert.equal(result.passed, true);
+});
+
 test('candidate Markdown receipt strictly binds donor, protocol, measured, manifest, limitation and terminal truth', () => {
   const fixture = candidateReceiptFixture();
   const validate = (document) => validateIntegrationCandidateReceiptMarkdown(

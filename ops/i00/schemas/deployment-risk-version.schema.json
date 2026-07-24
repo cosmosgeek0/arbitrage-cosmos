@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmosgeek.org/schemas/i00/deployment-risk-version.v1.json",
+  "title": "I00 deployment risk version",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "status",
+    "provenanceMode",
+    "evidenceValidUntilUtc",
+    "artifactPolicy",
+    "requestSha256",
+    "evidenceProvenance",
+    "enforcementProvenance",
+    "binding",
+    "authorizationWindow",
+    "action",
+    "actionDigest",
+    "policy",
+    "riskVersion"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "kind": { "type": "string", "const": "DEPLOYMENT_RISK_VERSION" },
+    "status": { "type": "string", "const": "BOUND_NOT_AUTHORIZED" },
+    "provenanceMode": {
+      "type": "string",
+      "enum": [
+        "SYSTEM_CLOCK_CRYPTOGRAPHIC_NONCE",
+        "STAGING_SYSTEM_CLOCK_CRYPTOGRAPHIC_NONCE",
+        "TEST_FIXTURE_INJECTED"
+      ]
+    },
+    "evidenceValidUntilUtc": { "type": "string", "format": "date-time" },
+    "artifactPolicy": { "$ref": "#/$defs/artifactPolicy" },
+    "requestSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "evidenceProvenance": {
+      "type": "object",
+      "required": ["derivationMode", "sources"],
+      "properties": {
+        "derivationMode": {
+          "type": "string",
+          "const": "CLASS_SPECIFIC_VERIFIED_EVIDENCE"
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["role", "sha256"],
+            "properties": {
+              "role": {
+                "type": "string",
+                "enum": [
+                  "ARTIFACT_MANIFEST",
+                  "BACKUP_DATABASE",
+                  "BACKUP_ENV",
+                  "BACKUP_MANIFEST",
+                  "CURRENT_ARTIFACT_MANIFEST",
+                  "CURRENT_RELEASE_JSON",
+                  "DEPLOY_ENV",
+                  "DONOR_CONTRACT",
+                  "FIRST_HOST_EVIDENCE",
+                  "HOST_EVIDENCE",
+                  "HOST_READBACK",
+                  "L15_AMENDMENT_CONTRACT",
+                  "PROVIDER_CONFIG",
+                  "RELEASE_JSON",
+                  "RUNTIME_ENV",
+                  "TRUSTED_BUILD_PUBLIC_KEY"
+                ]
+              },
+              "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "enforcementProvenance": {
+      "type": "object",
+      "required": [
+        "source",
+        "producerRelativePath",
+        "producerSha256",
+        "i00TreeDigestSha256"
+      ],
+      "properties": {
+        "source": {
+          "type": "string",
+          "const": "EXECUTING_I00_ENFORCEMENT_TREE"
+        },
+        "producerRelativePath": {
+          "type": "string",
+          "const": "bin/produce-deployment-risk-version.mjs"
+        },
+        "producerSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "i00TreeDigestSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      },
+      "additionalProperties": false
+    },
+    "binding": {
+      "type": "object",
+      "required": [
+        "authorizationId",
+        "actionClass",
+        "operator",
+        "approver",
+        "approvalReference",
+        "deployedSha",
+        "configVersion",
+        "nonce",
+        "account",
+        "environment",
+        "host"
+      ],
+      "properties": {
+        "authorizationId": { "type": "string", "minLength": 1 },
+        "actionClass": { "type": "string", "minLength": 1 },
+        "operator": { "type": "string", "minLength": 1 },
+        "approver": { "type": "string", "minLength": 1 },
+        "approvalReference": { "type": "string", "minLength": 1 },
+        "deployedSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "configVersion": { "type": "string", "minLength": 1 },
+        "nonce": { "type": "string", "pattern": "^(?:[0-9a-f]{2}){16,64}$" },
+        "account": { "type": "string", "minLength": 1 },
+        "environment": { "type": "string", "minLength": 1 },
+        "host": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "authorizationWindow": {
+      "type": "object",
+      "required": ["issuedAtUtc", "startsAtUtc", "expiresAtUtc"],
+      "properties": {
+        "issuedAtUtc": { "type": "string", "format": "date-time" },
+        "startsAtUtc": { "type": "string", "format": "date-time" },
+        "expiresAtUtc": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "action": { "$ref": "#/$defs/action" },
+    "actionDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "policy": {
+      "type": "object",
+      "required": [
+        "executionMode",
+        "maximumCapital",
+        "maximumNotional",
+        "moneyPaths",
+        "privateExchangeCalls",
+        "forbiddenAuthorities"
+      ],
+      "properties": {
+        "executionMode": { "type": "string", "const": "VALIDATE_ONLY" },
+        "maximumCapital": { "type": "string", "const": "ZERO" },
+        "maximumNotional": { "type": "string", "const": "ZERO" },
+        "moneyPaths": { "type": "string", "const": "FORBIDDEN" },
+        "privateExchangeCalls": { "type": "string", "const": "FORBIDDEN" },
+        "forbiddenAuthorities": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      },
+      "additionalProperties": false
+    },
+    "riskVersion": {
+      "type": "string",
+      "pattern": "^i00-deployment-risk-v1:sha256:[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "action": {
+      "type": "object",
+      "required": [
+        "command",
+        "scope",
+        "allowedEndpoints",
+        "allowedProducts",
+        "allowedCredentials",
+        "preconditions",
+        "maximumEffect",
+        "rollback",
+        "recovery",
+        "completionReserveSeconds",
+        "receiptPublicationReserveSeconds",
+        "receiptTargets"
+      ],
+      "properties": {
+        "command": { "type": "string", "minLength": 1 },
+        "scope": { "type": "string", "minLength": 1 },
+        "allowedEndpoints": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "allowedProducts": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "allowedCredentials": {
+          "type": "object",
+          "required": ["types", "permissions"],
+          "properties": {
+            "types": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            },
+            "permissions": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          },
+          "additionalProperties": false
+        },
+        "preconditions": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "maximumEffect": {
+          "type": "object",
+          "required": ["capital", "notional", "operational"],
+          "properties": {
+            "capital": { "type": "string", "const": "ZERO" },
+            "notional": { "type": "string", "const": "ZERO" },
+            "operational": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "rollback": { "type": "string", "minLength": 1 },
+        "recovery": { "type": "string", "minLength": 1 },
+        "completionReserveSeconds": { "type": "integer" },
+        "receiptPublicationReserveSeconds": { "type": "integer" },
+        "receiptTargets": {
+          "type": "object",
+          "required": ["result", "reconciliation"],
+          "properties": {
+            "result": { "type": "string", "minLength": 1 },
+            "reconciliation": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "artifactPolicy": {
+      "type": "object",
+      "required": [
+        "rootMode",
+        "proofRoot",
+        "proofRootIdentity",
+        "authorizationRoot",
+        "authorizationRootIdentity",
+        "consumptionRoot",
+        "consumptionRootIdentity",
+        "receiptRoot",
+        "receiptRootIdentity",
+        "effectEvidenceRoot",
+        "effectEvidenceRootIdentity"
+      ],
+      "properties": {
+        "rootMode": { "type": "string", "enum": ["SYSTEM", "STAGING", "TEST"] },
+        "proofRoot": { "type": "string", "minLength": 1 },
+        "proofRootIdentity": { "type": "string", "minLength": 1 },
+        "authorizationRoot": { "type": "string", "pattern": "^/" },
+        "authorizationRootIdentity": { "type": "string", "minLength": 1 },
+        "consumptionRoot": { "type": "string", "pattern": "^/" },
+        "consumptionRootIdentity": { "type": "string", "minLength": 1 },
+        "receiptRoot": { "type": "string", "pattern": "^/" },
+        "receiptRootIdentity": { "type": "string", "minLength": 1 },
+        "effectEvidenceRoot": { "type": "string", "pattern": "^/" },
+        "effectEvidenceRootIdentity": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

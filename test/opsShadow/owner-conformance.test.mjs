@@ -65,6 +65,15 @@ test('systemd public bind, lease-root precedence, PID namespace, secret, and cre
   const inlineSecret = { ...owners, appService: `${owners.appService}\nEnvironment=API_KEY=synthetic-forbidden\n` };
   assert(hasIssue(validateOwnerArtifacts(inlineSecret), 'SYSTEMD_INLINE_SECRET_FORBIDDEN'));
 
+  const runtimeInjectionUnsetMissing = {
+    ...owners,
+    appService: owners.appService.replace(/^UnsetEnvironment=.*\n/mu, ''),
+  };
+  assert(hasIssue(
+    validateOwnerArtifacts(runtimeInjectionUnsetMissing),
+    'APP_RUNTIME_INJECTION_ENV_UNSET_MISSING',
+  ));
+
   const overrideableLeaseRoot = {
     ...owners,
     appService: owners.appService.replace(

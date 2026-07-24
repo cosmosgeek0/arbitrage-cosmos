@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmosgeek.org/schemas/i00/authorized-automatic-rollback-handoff.v1.json",
+  "title": "I00 authorized automatic rollback inherited handoff",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "kind",
+    "status",
+    "handoffNonce",
+    "primaryHandoffNonce",
+    "actionClass",
+    "authorizationId",
+    "claimKey",
+    "consumptionSha256",
+    "riskVersion",
+    "serverPreviewDigest",
+    "authorizationExpiresAtUtc",
+    "evidenceValidUntilUtc",
+    "receiptPublicationReserveSeconds",
+    "effectUid",
+    "effectGid",
+    "recovery",
+    "program",
+    "verifier",
+    "delegatedScript",
+    "delegatedBootstrap",
+    "delegatedEnvironment",
+    "effectExecutables",
+    "delegatedArgv",
+    "effectDirectory",
+    "helperPolicy",
+    "writeRoots",
+    "readRoots",
+    "observedRoots",
+    "authorizationChain",
+    "startEvidencePath",
+    "startEvidenceSha256",
+    "effectStartedAtUtc",
+    "runner"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "kind": { "type": "string", "const": "AUTHORIZED_AUTOMATIC_ROLLBACK_HANDOFF" },
+    "status": { "type": "string", "const": "ARMED_BOUND_RECOVERY" },
+    "handoffNonce": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "primaryHandoffNonce": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "actionClass": { "type": "string", "const": "SERVICE_RELEASE_SWITCH" },
+    "authorizationId": { "type": "string", "minLength": 1 },
+    "claimKey": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "consumptionSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "riskVersion": {
+      "type": "string",
+      "pattern": "^i00-deployment-risk-v1:sha256:[0-9a-f]{64}$"
+    },
+    "serverPreviewDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "authorizationExpiresAtUtc": { "type": "string", "format": "date-time" },
+    "evidenceValidUntilUtc": { "type": "string", "format": "date-time" },
+    "receiptPublicationReserveSeconds": {
+      "type": "integer"
+    },
+    "effectUid": { "type": "string", "pattern": "^(?:0|[1-9][0-9]*)$" },
+    "effectGid": { "type": "string", "pattern": "^(?:0|[1-9][0-9]*)$" },
+    "recovery": { "type": "string", "minLength": 1 },
+    "program": { "$ref": "authorized-effect-handoff.v1.json#/$defs/fileBinding" },
+    "verifier": { "$ref": "authorized-effect-handoff.v1.json#/$defs/fileBinding" },
+    "delegatedScript": { "$ref": "authorized-effect-handoff.v1.json#/$defs/fileBinding" },
+    "delegatedBootstrap": {
+      "$ref": "authorized-effect-handoff.v1.json#/properties/delegatedBootstrap"
+    },
+    "delegatedEnvironment": {
+      "$ref": "authorized-effect-handoff.v1.json#/properties/delegatedEnvironment"
+    },
+    "effectExecutables": {
+      "$ref": "authorized-effect-handoff.v1.json#/properties/effectExecutables"
+    },
+    "delegatedArgv": {
+      "$ref": "authorized-effect-handoff.v1.json#/properties/delegatedArgv"
+    },
+    "effectDirectory": {
+      "$ref": "authorized-effect-handoff.v1.json#/properties/effectDirectory"
+    },
+    "helperPolicy": {
+      "$ref": "authorized-effect-handoff.v1.json#/properties/helperPolicy"
+    },
+    "writeRoots": {
+      "$ref": "authorized-effect-handoff.v1.json#/properties/writeRoots"
+    },
+    "readRoots": {
+      "$ref": "authorized-effect-handoff.v1.json#/properties/readRoots"
+    },
+    "observedRoots": {
+      "$ref": "authorized-effect-handoff.v1.json#/properties/observedRoots"
+    },
+    "authorizationChain": {
+      "$ref": "authorized-effect-handoff.v1.json#/properties/authorizationChain"
+    },
+    "startEvidencePath": { "type": "string", "pattern": "^/" },
+    "startEvidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "effectStartedAtUtc": { "type": "string", "format": "date-time" },
+    "runner": { "$ref": "authorized-effect-handoff.v1.json#/properties/runner" }
+  },
+  "additionalProperties": false
+}

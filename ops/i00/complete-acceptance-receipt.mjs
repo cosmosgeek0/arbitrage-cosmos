@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
 import { lstatSync, readFileSync, realpathSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 
 import {
@@ -151,6 +150,18 @@ function assertHashPinnedOwnerDirectives(rows, label) {
   }
 }
 
+export function recordedNodeExecutableValid(value) {
+  if (typeof value !== 'string'
+      || value.length === 0
+      || value.length > 4_096
+      || value !== value.trim()
+      || /[\u0000-\u001f\u007f]/u.test(value)) return false;
+  const segments = value.split(/[\\/]/u);
+  if (segments.some((segment) => segment === '.' || segment === '..')) return false;
+  return /^\/(?:[^/]+\/)*node(?:\.exe)?$/iu.test(value)
+    || /^[A-Z]:[\\/](?:[^\\/]+[\\/])*node(?:\.exe)?$/iu.test(value);
+}
+
 function assertPlan(receipt, expectedSha) {
   assert(Array.isArray(receipt.plan) && receipt.plan.length === PLAN.length, 'complete acceptance plan must contain exactly 10 steps');
   for (let index = 0; index < PLAN.length; index += 1) {
@@ -163,7 +174,7 @@ function assertPlan(receipt, expectedSha) {
       assert(exactJson(actual.command, expected.command), `complete acceptance plan ${expected.id} command is invalid`);
     } else {
       assert(actual.command.length === 4
-        && /(?:^|\/)node(?:\.exe)?$/.test(actual.command[0])
+        && recordedNodeExecutableValid(actual.command[0])
         && actual.command[1] === 'test/i00/performance/local-proxy-soak.mjs'
         && actual.command[2] === '--run'
         && actual.command[3] === '--duration-seconds=<bounded>', 'complete acceptance performance plan is invalid');
@@ -462,12 +473,21 @@ export function validateCompleteAcceptanceReceipt({
   });
 }
 
-export function computeGitSourceFreeze({ sourceRoot, revision, protectedOwnerDirectives }) {
+export function computeGitSourceFreeze({
+  sourceRoot,
+  revision,
+  protectedOwnerDirectives,
+  executeGit,
+}) {
   assert(isFullSha(revision), 'candidate revision for source-freeze validation is invalid');
+  assert(typeof executeGit === 'function', 'candidate source-freeze requires one bound Git runner');
   const root = realpathSync(path.resolve(sourceRoot));
   let rawRows;
   try {
-    rawRows = execFileSync('git', ['-C', root, 'ls-tree', '-r', '-z', '--full-tree', revision], { encoding: 'utf8' });
+    rawRows = executeGit(
+      ['-C', root, 'ls-tree', '-r', '-z', '--full-tree', revision],
+      { encoding: 'utf8' },
+    );
   } catch (error) {
     fail(`candidate source-freeze Git inventory failed: ${error.message}`);
   }
@@ -480,7 +500,7 @@ export function computeGitSourceFreeze({ sourceRoot, revision, protectedOwnerDir
   const objectShas = treeRows.map((row) => row.objectSha);
   let batch;
   try {
-    batch = execFileSync('git', ['-C', root, 'cat-file', '--batch'], {
+    batch = executeGit(['-C', root, 'cat-file', '--batch'], {
       input: `${objectShas.join('\n')}\n`,
       encoding: null,
       maxBuffer: 512 * 1024 * 1024,
@@ -529,11 +549,17 @@ export function computeGitSourceFreeze({ sourceRoot, revision, protectedOwnerDir
   });
 }
 
-export function validateGitSourceFreeze({ sourceRoot, revision, receipt }) {
+export function validateGitSourceFreeze({
+  sourceRoot,
+  revision,
+  receipt,
+  executeGit,
+}) {
   const actual = computeGitSourceFreeze({
     sourceRoot,
     revision,
     protectedOwnerDirectives: receipt.source.protectedOwnerDirectives,
+    executeGit,
   });
   assert(receipt.sourceFreeze.format === actual.format
     && receipt.sourceFreeze.fileCount === actual.fileCount

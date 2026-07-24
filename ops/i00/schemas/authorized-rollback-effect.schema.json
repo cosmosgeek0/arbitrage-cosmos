@@ -1,0 +1,262 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmos.invalid/i00/authorized-rollback-effect.v1.json",
+  "title": "I00 authorized rollback effect",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "status",
+    "authorizationId",
+    "riskVersion",
+    "serverPreviewDigest",
+    "authorizationSha256",
+    "riskDocumentSha256",
+    "previewDocumentSha256",
+    "authorizationConsumptionSha256",
+    "claimKey",
+    "from",
+    "to",
+    "preTargetReadbackSha256",
+    "postTargetReadbackSha256",
+    "frozenMarkerSha256",
+    "donorExitCode",
+    "startedAtUtc",
+    "completedAtUtc",
+    "effect",
+    "terminal"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "kind": { "type": "string", "const": "AUTHORIZED_ROLLBACK_EFFECT" },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ROLLBACK_EFFECT_RECORDED_PENDING_RECONCILIATION",
+        "ROLLBACK_SWITCHED_FROZEN_PENDING_OWNER_ACTION",
+        "ROLLBACK_EFFECT_AMBIGUOUS_PENDING_OWNER_ACTION"
+      ]
+    },
+    "authorizationId": { "type": "string", "minLength": 1 },
+    "riskVersion": {
+      "type": "string",
+      "pattern": "^i00-deployment-risk-v1:sha256:[0-9a-f]{64}$"
+    },
+    "serverPreviewDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "authorizationSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "riskDocumentSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "previewDocumentSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "authorizationConsumptionSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "claimKey": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "from": { "$ref": "#/$defs/releaseBinding" },
+    "to": { "$ref": "#/$defs/releaseBinding" },
+    "preTargetReadbackSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "postTargetReadbackSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "frozenMarkerSha256": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "donorExitCode": { "type": ["integer", "null"] },
+    "startedAtUtc": { "type": "string", "format": "date-time" },
+    "completedAtUtc": { "type": "string", "format": "date-time" },
+    "effect": { "$ref": "#/$defs/effectBinding" },
+    "terminal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "exitCode", "signal", "forced", "timedOut"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["AUTHORIZED_EFFECT_COMPLETED", "AUTHORIZED_EFFECT_TERMINATED"]
+        },
+        "exitCode": { "type": ["integer", "null"] },
+        "signal": { "type": ["string", "null"] },
+        "forced": { "type": "boolean" },
+        "timedOut": { "type": "boolean" }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["status", "donorExitCode", "frozenMarkerSha256", "terminal"],
+      "properties": {
+        "status": {
+          "const": "ROLLBACK_EFFECT_RECORDED_PENDING_RECONCILIATION"
+        },
+        "donorExitCode": { "const": 0 },
+        "frozenMarkerSha256": { "type": "null" },
+        "terminal": {
+          "type": "object",
+          "required": ["status", "exitCode"],
+          "properties": {
+            "status": { "const": "AUTHORIZED_EFFECT_COMPLETED" },
+            "exitCode": { "const": 0 }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["status", "donorExitCode", "frozenMarkerSha256", "terminal"],
+      "properties": {
+        "status": {
+          "const": "ROLLBACK_SWITCHED_FROZEN_PENDING_OWNER_ACTION"
+        },
+        "donorExitCode": { "const": 3 },
+        "frozenMarkerSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "terminal": {
+          "type": "object",
+          "required": ["status", "exitCode"],
+          "properties": {
+            "status": { "const": "AUTHORIZED_EFFECT_TERMINATED" },
+            "exitCode": { "const": 3 }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["status", "frozenMarkerSha256", "terminal"],
+      "properties": {
+        "status": {
+          "const": "ROLLBACK_EFFECT_AMBIGUOUS_PENDING_OWNER_ACTION"
+        },
+        "frozenMarkerSha256": { "type": "null" },
+        "terminal": {
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "status": { "const": "AUTHORIZED_EFFECT_TERMINATED" }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "fileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "identity"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^/" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "identity": { "type": "string", "minLength": 1 }
+      }
+    },
+    "effectBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claimKey",
+        "startEvidencePath",
+        "startEvidenceSha256",
+        "terminalEvidencePath",
+        "terminalEvidenceSha256",
+        "effectStartedAtUtc",
+        "effectFinishedAtUtc",
+        "program",
+        "chain",
+        "receiptRoot"
+      ],
+      "properties": {
+        "claimKey": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "startEvidencePath": { "type": "string", "pattern": "^/" },
+        "startEvidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "terminalEvidencePath": { "type": "string", "pattern": "^/" },
+        "terminalEvidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "effectStartedAtUtc": { "type": "string", "format": "date-time" },
+        "effectFinishedAtUtc": { "type": "string", "format": "date-time" },
+        "program": { "$ref": "#/$defs/fileBinding" },
+        "chain": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "authorizationSha256",
+            "riskDocumentSha256",
+            "previewDocumentSha256",
+            "authorizationConsumptionSha256"
+          ],
+          "properties": {
+            "authorizationSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "riskDocumentSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "previewDocumentSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "authorizationConsumptionSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "receiptRoot": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "identity"],
+          "properties": {
+            "path": { "type": "string", "pattern": "^/" },
+            "identity": {
+              "type": "string",
+              "pattern": "^device=[0-9]+,inode=[0-9]+,mode=[0-7]+,uid=[0-9]+,gid=[0-9]+$"
+            }
+          }
+        }
+      }
+    },
+    "releaseBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "releaseId",
+        "testedSha",
+        "artifactManifestSha256",
+        "treeSha256",
+        "identity"
+      ],
+      "properties": {
+        "path": { "type": "string", "pattern": "^/" },
+        "releaseId": {
+          "type": "string",
+          "pattern": "^i00-[0-9a-f]{40}$"
+        },
+        "testedSha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "artifactManifestSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "treeSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "identity": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

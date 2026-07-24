@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
+import { lstatSync, readFileSync, realpathSync } from 'node:fs';
+import {
+  basename, dirname, isAbsolute, join, resolve,
+} from 'node:path';
 import { fail, hasPlaceholder, isFullSha, parseArgs } from '../lib.mjs';
 
 // Exact synthetic fixture bytes retained by the historical, byte-bound CS-03
@@ -11,8 +13,85 @@ const SEALED_LEGACY_CS03_SHA256 = '8a0102cdc3da2056381e8f4951619ee99daf13b65e8ad
 
 const args = parseArgs(process.argv.slice(2));
 if (!args.env) fail('--env is required');
+
+function envFileIdentity(stat) {
+  return {
+    device: stat.dev.toString(),
+    inode: stat.ino.toString(),
+    mode: stat.mode.toString(8),
+    links: stat.nlink.toString(),
+    size: stat.size.toString(),
+    mtimeNs: stat.mtimeNs.toString(),
+    ctimeNs: stat.ctimeNs.toString(),
+  };
+}
+
+function exactEnvFile(raw) {
+  if (typeof raw !== 'string' || raw === '/' || !isAbsolute(raw)
+      || resolve(raw) !== raw || /[\u0000-\u001f\u007f]/u.test(raw)) {
+    fail('--env must be one absolute lexical canonical path');
+  }
+  let stat;
+  try {
+    stat = lstatSync(raw, { bigint: true });
+  } catch (error) {
+    fail(`--env is unavailable: ${error.message}`);
+  }
+  if (stat.isSymbolicLink() || !stat.isFile() || stat.nlink !== 1n) {
+    fail('--env must identify one non-symlink single-link regular file');
+  }
+  if ((stat.mode & 0o022n) !== 0n || (stat.mode & 0o7000n) !== 0n) {
+    fail('--env has an unsafe writable or special mode');
+  }
+  let physical;
+  try {
+    physical = realpathSync.native(raw);
+  } catch (error) {
+    fail(`--env cannot be physically canonicalized: ${error.message}`);
+  }
+  if (physical !== raw) {
+    fail('--env path or one of its ancestors is not physically canonical');
+  }
+  return { path: raw, identity: envFileIdentity(stat) };
+}
+
+const envFileBefore = exactEnvFile(args.env);
+const RUNTIME_EXECUTION_INJECTION_KEYS = new Set([
+  'NODE_OPTIONS',
+  'NODE_PATH',
+  'NODE_REPL_EXTERNAL_MODULE',
+  'NODE_EXTRA_CA_CERTS',
+  'NODE_ICU_DATA',
+  'NODE_V8_COVERAGE',
+  'NODE_DEBUG',
+  'NODE_DEBUG_NATIVE',
+  'NODE_REDIRECT_WARNINGS',
+  'NODE_COMPILE_CACHE',
+  'NODE_DISABLE_COMPILE_CACHE',
+  'NODE_PRESERVE_SYMLINKS',
+  'NODE_PRESERVE_SYMLINKS_MAIN',
+  'NODE_TLS_REJECT_UNAUTHORIZED',
+  'NODE_USE_ENV_PROXY',
+  'NODE_USE_SYSTEM_CA',
+  'LD_PRELOAD',
+  'LD_LIBRARY_PATH',
+  'LD_AUDIT',
+  'LD_PROFILE',
+  'LD_ORIGIN_PATH',
+  'DYLD_INSERT_LIBRARIES',
+  'DYLD_LIBRARY_PATH',
+  'DYLD_FRAMEWORK_PATH',
+  'OPENSSL_CONF',
+  'OPENSSL_MODULES',
+  'SSL_CERT_FILE',
+  'SSL_CERT_DIR',
+  'HTTP_PROXY',
+  'HTTPS_PROXY',
+  'NO_PROXY',
+  'ALL_PROXY',
+]);
 const values = {};
-const envBytes = readFileSync(resolve(args.env));
+const envBytes = readFileSync(envFileBefore.path);
 const lines = envBytes.toString('utf8').split(/\r?\n/);
 for (let index = 0; index < lines.length; index += 1) {
   const line = lines[index].trim();
@@ -20,6 +99,9 @@ for (let index = 0; index < lines.length; index += 1) {
   const match = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(line);
   if (!match) fail(`invalid env syntax at line ${index + 1}`);
   if (match[1] in values) fail(`duplicate env key ${match[1]}`);
+  if (RUNTIME_EXECUTION_INJECTION_KEYS.has(match[1])) {
+    fail(`runtime execution injection key ${match[1]} is forbidden`);
+  }
   if (/(?:SECRET|TOKEN|PASSWORD|PRIVATE_KEY|API_KEY|CREDENTIAL)/.test(match[1])
       || /^(?:AWS_PROFILE|AWS_SESSION_TOKEN|AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY)$/.test(match[1])) {
     fail(`secret value key ${match[1]} is forbidden in the non-secret env file`);
@@ -30,6 +112,40 @@ for (let index = 0; index < lines.length; index += 1) {
 const isSealedLegacyCs03Fixture = Object.keys(args).length === 1
   && envBytes.length === SEALED_LEGACY_CS03_BYTES
   && createHash('sha256').update(envBytes).digest('hex') === SEALED_LEGACY_CS03_SHA256;
+
+function canonicalPhysicalFuture(raw, label) {
+  if (typeof raw !== 'string' || raw === '/' || !isAbsolute(raw) || resolve(raw) !== raw) {
+    fail(`${label} must be one canonical non-root absolute path`);
+  }
+  let cursor = raw;
+  const suffix = [];
+  for (;;) {
+    let stat;
+    try {
+      stat = lstatSync(cursor, { throwIfNoEntry: false });
+    } catch (error) {
+      fail(`${label} existing ancestor cannot be inspected: ${error.message}`);
+    }
+    if (stat !== undefined) {
+      if (stat.isSymbolicLink() || realpathSync.native(cursor) !== cursor) {
+        fail(`${label} must use one physical path without symbolic-link traversal`);
+      }
+      if (suffix.length > 0 && !stat.isDirectory()) {
+        fail(`${label} deepest existing ancestor must be one directory`);
+      }
+      const projected = join(cursor, ...suffix);
+      if (projected !== raw) fail(`${label} physical projection changed`);
+      return projected;
+    }
+    const parent = dirname(cursor);
+    const component = basename(cursor);
+    if (parent === cursor || !component || component === '.' || component === '..') {
+      fail(`${label} has an unsafe missing path suffix`);
+    }
+    suffix.unshift(component);
+    cursor = parent;
+  }
+}
 
 const required = [
   'HOST', 'PORT', 'DATA_DIR', 'EVIDENCE_DIR', 'MODEL_DIR', 'BACKUP_DIR',
@@ -43,9 +159,19 @@ for (const key of required) {
 }
 if (values.HOST !== '127.0.0.1') fail('HOST must remain exactly 127.0.0.1');
 if (!/^\d+$/.test(values.PORT) || Number(values.PORT) < 1024 || Number(values.PORT) > 65535) fail('PORT is invalid');
-const paths = ['DATA_DIR', 'EVIDENCE_DIR', 'MODEL_DIR', 'BACKUP_DIR'].map((key) => values[key]);
-if (paths.some((path) => !isAbsolute(path)) || new Set(paths).size !== paths.length) {
-  fail('durable data/evidence/model/backup paths must be distinct absolute paths');
+const runtimePathKeys = ['DATA_DIR', 'EVIDENCE_DIR', 'MODEL_DIR', 'BACKUP_DIR'];
+const paths = runtimePathKeys.map((key) => (
+  isSealedLegacyCs03Fixture
+    ? values[key]
+    : canonicalPhysicalFuture(values[key], key)
+));
+const pathsOverlap = (left, right) => (
+  left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`)
+);
+if (paths.some((path) => !isAbsolute(path))
+    || paths.some((left, index) => paths.slice(index + 1)
+      .some((right) => pathsOverlap(left, right)))) {
+  fail('durable data/evidence/model/backup paths must be distinct and non-nested');
 }
 // F-033 (scoped): DATA_DIR_LOGICAL_LEASE_ROOT is a hard production boot
 // requirement (environment.ts throws DATA_DIR_LOGICAL_LEASE_ROOT_REQUIRED).
@@ -64,9 +190,13 @@ if ('DATA_DIR_LOGICAL_LEASE_ROOT' in values) {
   if (!isAbsolute(values.DATA_DIR_LOGICAL_LEASE_ROOT)) {
     fail('DATA_DIR_LOGICAL_LEASE_ROOT must be an absolute path');
   }
-  if (values.DATA_DIR_LOGICAL_LEASE_ROOT === values.DATA_DIR
-      || values.DATA_DIR_LOGICAL_LEASE_ROOT.startsWith(`${values.DATA_DIR}/`)
-      || values.DATA_DIR.startsWith(`${values.DATA_DIR_LOGICAL_LEASE_ROOT}/`)) {
+  const leaseRoot = isSealedLegacyCs03Fixture
+    ? values.DATA_DIR_LOGICAL_LEASE_ROOT
+    : canonicalPhysicalFuture(
+      values.DATA_DIR_LOGICAL_LEASE_ROOT,
+      'DATA_DIR_LOGICAL_LEASE_ROOT',
+    );
+  if (pathsOverlap(leaseRoot, paths[0])) {
     fail('DATA_DIR_LOGICAL_LEASE_ROOT and DATA_DIR must not nest');
   }
 }
@@ -91,6 +221,10 @@ if (args['expected-sha'] && values.I00_TESTED_SHA !== args['expected-sha']) {
 }
 if (args['expected-sha'] && values.I00_DEPLOYED_SHA !== args['expected-sha']) {
   fail('runtime config deployed SHA does not match the candidate release');
+}
+const envFileAfter = exactEnvFile(args.env);
+if (JSON.stringify(envFileAfter) !== JSON.stringify(envFileBefore)) {
+  fail('--env identity changed during validation');
 }
 
 process.stdout.write(`${JSON.stringify({

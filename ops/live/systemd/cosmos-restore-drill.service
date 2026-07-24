@@ -1,12 +1,12 @@
 # ops/live/systemd/cosmos-restore-drill.service — isolated restore test.
 #
-# Fired by cosmos-restore-drill.timer. Restores the newest backup into a
-# throwaway directory and verifies it (§24.2: periodic restore test against
-# an isolated copy, never the production state store). Runs as cosmos; it
-# has no privileged action at all.
+# Historical timer target retained for byte/audit continuity. It is dormant
+# because no production restore-drill action class exists.
 
 [Unit]
 Description=Cosmos periodic isolated restore drill
+ConditionPathExists=!/
+RefuseManualStart=yes
 
 [Service]
 Type=oneshot

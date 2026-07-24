@@ -1,14 +1,18 @@
 # ops/live/systemd/cosmos-watchdog.service — one external watchdog pass.
 #
-# Fired by cosmos-watchdog.timer. The watchdog scripts are installed at
+# Historical timer target retained for byte/audit continuity. The watchdog
+# scripts are installed at
 # /usr/local/lib/cosmos-ops — deliberately OUTSIDE /opt/cosmos/current, so a
 # broken release can never disable its own supervisor. Runs as root because
 # its one privileged action is `systemctl restart` of the app/tunnel units;
-# everything else it does is read-only loopback probing.
+# everything else it does is read-only loopback probing. The unit is dormant
+# because no production watchdog action class exists.
 
 [Unit]
 Description=Cosmos external watchdog (single bounded check pass)
 After=network-online.target
+ConditionPathExists=!/
+RefuseManualStart=yes
 
 [Service]
 Type=oneshot

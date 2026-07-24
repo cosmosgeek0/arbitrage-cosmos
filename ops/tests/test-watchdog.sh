@@ -9,8 +9,8 @@
 . "$BIN/common.sh"
 
 export OPS_STATE_DIR="$SANDBOX/ops"
-export APP_UNIT=cosmos-app.service
-export TUNNEL_UNIT=cloudflared.service
+export APP_UNIT=df32-fixture-app.service
+export TUNNEL_UNIT=df32-fixture-tunnel.service
 export SYSTEMCTL="$FIXTURES/mock-systemctl.sh"
 export MOCK_SYSTEMCTL_LOG="$SANDBOX/systemctl.log"
 export MOCK_ACTIVE_UNITS="$SANDBOX/active-units"
@@ -32,7 +32,7 @@ reset_scenario() { # state_dir
 }
 restart_count() { grep -c "restart $APP_UNIT" "$MOCK_SYSTEMCTL_LOG" || true; }
 
-printf '%s\n%s\n' cosmos-app.service cloudflared.service > "$MOCK_ACTIVE_UNITS"
+printf '%s\n%s\n' "$APP_UNIT" "$TUNNEL_UNIT" > "$MOCK_ACTIVE_UNITS"
 start_fake_app "$APP_PORT" "$SANDBOX/behavior.env" >/dev/null
 printf 'LIVE_OK=1\nREADY_OK=1\n' > "$SANDBOX/behavior.env"
 
@@ -73,13 +73,13 @@ printf 'LIVE_OK=1\nREADY_OK=1\n' > "$SANDBOX/behavior.env"
 
 note "4. tunnel down: alert; optional bounded restart"
 reset_scenario wd4
-echo cosmos-app.service > "$MOCK_ACTIVE_UNITS"     # tunnel no longer active
+echo "$APP_UNIT" > "$MOCK_ACTIVE_UNITS"     # tunnel no longer active
 assert_rc 0 bash "$WATCHDOG"
 assert_grep 'critical TUNNEL_DOWN' "$MOCK_ALERT_LOG" "tunnel down alerted"
 assert_eq "$(grep -c "restart $TUNNEL_UNIT" "$MOCK_SYSTEMCTL_LOG" || true)" 0 "no tunnel restart by default"
 WATCHDOG_RESTART_TUNNEL=1 bash "$WATCHDOG"
 assert_eq "$(grep -c "restart $TUNNEL_UNIT" "$MOCK_SYSTEMCTL_LOG" || true)" 1 "tunnel restarted when enabled"
-printf '%s\n%s\n' cosmos-app.service cloudflared.service > "$MOCK_ACTIVE_UNITS"
+printf '%s\n%s\n' "$APP_UNIT" "$TUNNEL_UNIT" > "$MOCK_ACTIVE_UNITS"
 
 note "5. deploy in progress: watchdog stands down entirely"
 reset_scenario wd5
@@ -104,7 +104,16 @@ node -e '
   require("fs").writeFileSync(process.argv[1],
     JSON.stringify({ backupId: "20200101T000000Z", createdAtUtc: "2020-01-01T00:00:00Z" }));
 ' "$BACKUP_DIR/20200101T000000Z/manifest.json"
-assert_rc 0 bash "$WATCHDOG"
+HOSTILE_INVENTORY_BIN="$SANDBOX/hostile-inventory-bin"
+HOSTILE_INVENTORY_WITNESS="$SANDBOX/hostile-inventory-witness"
+mkdir "$HOSTILE_INVENTORY_BIN"
+for utility in ls grep sort head tail; do
+  printf '#!/bin/sh\nprintf invoked >> "%s"\nexit 97\n' \
+    "$HOSTILE_INVENTORY_WITNESS" > "$HOSTILE_INVENTORY_BIN/$utility"
+  chmod 700 "$HOSTILE_INVENTORY_BIN/$utility"
+done
+assert_rc 0 env PATH="$HOSTILE_INVENTORY_BIN:/usr/bin:/bin" bash "$WATCHDOG"
+assert_no_file "$HOSTILE_INVENTORY_WITNESS"
 assert_grep 'warning BACKUP_STALE' "$MOCK_ALERT_LOG" "stale backup alerted"
 reset_scenario wd8
 export BACKUP_DIR="$SANDBOX/backups-none"

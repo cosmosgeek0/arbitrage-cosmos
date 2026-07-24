@@ -12,6 +12,7 @@ FIXTURES="$TESTS_DIR/fixtures"
 
 ASSERTIONS=0
 SANDBOX="$(mktemp -d "${TMPDIR:-/tmp}/cosmos-ops-test.XXXXXX")"
+SANDBOX="$(cd -P -- "$SANDBOX" && pwd -P)"
 _CLEANUP_PIDS=""
 
 cleanup() {
@@ -28,6 +29,29 @@ register_pid() { _CLEANUP_PIDS="$_CLEANUP_PIDS $1"; }
 
 fail() { echo "ASSERT FAIL: $*" >&2; exit 1; }
 note() { echo "  - $*"; }
+
+# Core ops suites source this helper before the donor common library. Bind the
+# exact canonical Node executable once so common.sh never falls back to
+# host-specific command paths or re-resolves an ambient `node` name.
+_OPS_TEST_NODE="$(
+  unset NODE_OPTIONS NODE_PATH NODE_REPL_EXTERNAL_MODULE NODE_ICU_DATA \
+    NODE_EXTRA_CA_CERTS NODE_V8_COVERAGE NODE_DEBUG NODE_DEBUG_NATIVE \
+    OPENSSL_CONF SSL_CERT_FILE SSL_CERT_DIR \
+    LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT LD_PROFILE LD_ORIGIN_PATH \
+    DYLD_INSERT_LIBRARIES DYLD_LIBRARY_PATH DYLD_FRAMEWORK_PATH
+  command node -e '
+    const fs = require("fs");
+    process.stdout.write(fs.realpathSync(process.execPath));
+  '
+)" || fail "trusted Node executable is unavailable"
+case "$_OPS_TEST_NODE" in
+  /*) ;;
+  *) fail "trusted Node executable did not resolve to an absolute path" ;;
+esac
+[ -f "$_OPS_TEST_NODE" ] && [ ! -L "$_OPS_TEST_NODE" ] && [ -x "$_OPS_TEST_NODE" ] \
+  || fail "trusted Node executable is not one canonical executable file"
+export NODE="$_OPS_TEST_NODE"
+unset _OPS_TEST_NODE
 
 assert_eq() { # got expected label
   ASSERTIONS=$((ASSERTIONS + 1))
@@ -65,7 +89,7 @@ assert_rc() {
 }
 
 pick_port() {
-  node -e '
+  "$NODE" -e '
     const s = require("net").createServer();
     s.listen(0, "127.0.0.1", () => { console.log(s.address().port); s.close(); });
   '
@@ -84,7 +108,7 @@ wait_http() { # url [timeout_sec]
 
 start_fake_app() { # port [behavior_file] -> echoes pid
   local port="$1" behavior="${2:-}"
-  PORT="$port" BEHAVIOR_FILE="$behavior" node "$FIXTURES/fake-app.mjs" >/dev/null 2>&1 &
+  PORT="$port" BEHAVIOR_FILE="$behavior" "$NODE" "$FIXTURES/fake-app.mjs" >/dev/null 2>&1 &
   local pid=$!
   register_pid "$pid"
   wait_http "http://127.0.0.1:$port/api/health"

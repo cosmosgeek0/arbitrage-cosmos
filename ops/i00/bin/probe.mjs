@@ -1,5 +1,9 @@
 #!/usr/bin/env node
-import { fail, isUtc, parseArgs, readJson, requireKeys } from '../lib.mjs';
+import {
+  readBoundJsonInput,
+  recheckBoundJsonInput,
+} from '../bound-json-input.mjs';
+import { fail, isUtc, parseArgs, requireKeys } from '../lib.mjs';
 
 const args = parseArgs(process.argv.slice(2), new Set(['simulation-clock']));
 if (!args.input || !args.kind || !args['max-age-sec']) fail('--input, --kind, and --max-age-sec are required');
@@ -7,7 +11,11 @@ if (args['simulation-clock'] !== true && args.now) fail('--now is accepted only 
 if (args['simulation-clock'] === true && !isUtc(args.now)) fail('simulation clock requires exact --now UTC seconds');
 const allowed = new Set(['dependency', 'readiness', 'trade-readiness', 'recovery-readiness']);
 if (!allowed.has(args.kind)) fail(`unsupported probe kind ${args.kind}`);
-const snapshot = readJson(args.input, 'canonical supervisor snapshot');
+const snapshotBinding = readBoundJsonInput(
+  args.input,
+  'canonical supervisor snapshot',
+);
+const snapshot = snapshotBinding.document;
 requireKeys(snapshot, ['source', 'observedAtUtc', 'dependencies', 'readiness', 'tradeReadiness', 'recoveryReadiness'], 'canonical supervisor snapshot');
 if (snapshot.source !== 'CANONICAL_SUPERVISOR_READBACK') fail('snapshot source is not canonical supervisor readback');
 const effectiveNow = args['simulation-clock'] === true ? args.now : new Date().toISOString();
@@ -44,5 +52,6 @@ if (args.kind === 'dependency') {
 }
 
 const result = { kind: args.kind, status: passed ? 'PASS' : 'BLOCKED', blockers };
+recheckBoundJsonInput(snapshotBinding, 'canonical supervisor snapshot');
 process.stdout.write(`${JSON.stringify(result)}\n`);
 process.exit(passed ? 0 : 2);

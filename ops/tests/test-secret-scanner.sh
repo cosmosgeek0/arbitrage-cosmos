@@ -32,8 +32,23 @@ ASSERTIONS=$((ASSERTIONS + 1))
 
 note "hostnames: placeholders and documented format suffixes only"
 DOMAIN_ALLOWLIST='^(cloudflareaccess\.com|anthropic\.com|claude\.com)$'
-DOMAIN_HITS="$(grep -rEoh '[A-Za-z0-9][A-Za-z0-9-]*\.(com|net|org|io|dev|cloud)' "$OPS_LIVE" \
-  | sort -u | grep -vE "$DOMAIN_ALLOWLIST" || true)"
+DOMAIN_MEMBER_ALLOWLIST='^(after|before|finalAfter|left|named|opened|openedAfter|openedWork|parentAfter|parentBefore|right|stat|workBefore)\.dev$'
+DOMAIN_PATTERN='[A-Za-z0-9][A-Za-z0-9-]*\.(com|net|org|io|dev|cloud)([^A-Za-z0-9-]|$)'
+scan_domains() {
+  local file match
+  find "$1" -type f | sort | while IFS= read -r file; do
+    grep -Eoh "$DOMAIN_PATTERN" "$file" \
+      | sed -E 's/[^A-Za-z0-9-]$//' \
+      | while IFS= read -r match; do
+          if [ "$file" = "$BIN/common.sh" ] \
+              && printf '%s\n' "$match" | grep -Eq "$DOMAIN_MEMBER_ALLOWLIST"; then
+            continue
+          fi
+          printf '%s\n' "$match"
+        done
+  done | sort -u | grep -vE "$DOMAIN_ALLOWLIST" || true
+}
+DOMAIN_HITS="$(scan_domains "$OPS_LIVE")"
 ASSERTIONS=$((ASSERTIONS + 1))
 [ -z "$DOMAIN_HITS" ] || fail "unexpected hostname(s) in ops/live: $DOMAIN_HITS"
 
@@ -48,5 +63,7 @@ mkdir -p "$CANARY"
 echo 'aws_access_key_id=AKIAIOSFODNN7EXAMPLE' > "$CANARY/leak.txt"
 HITS="$(grep -rEl 'AKIA[0-9A-Z]{16}' "$CANARY" || true)"
 assert_ne "$HITS" "" "scanner detects a seeded AWS key"
+echo 'https://stat.dev/path' > "$CANARY/domain.txt"
+assert_eq "$(scan_domains "$CANARY")" "stat.dev" "scanner detects an unapproved hostname"
 
 finish

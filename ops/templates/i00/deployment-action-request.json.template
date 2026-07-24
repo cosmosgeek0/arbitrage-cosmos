@@ -1,0 +1,15 @@
+{
+  "approvalReference": "REPLACE_ME_DURABLE_OWNER_REFERENCE",
+  "approver": "REPLACE_ME_EXACT_OWNER_IDENTITY",
+  "authorizationId": "REPLACE_ME_DURABLE_AUTHORIZATION_ID",
+  "expiresAtUtc": "REPLACE_ME_EXACT_UTC_SECOND",
+  "kind": "DEPLOYMENT_ACTION_REQUEST",
+  "operator": "REPLACE_ME_EXACT_OPERATOR_IDENTITY",
+  "receiptTargets": {
+    "reconciliation": "REPLACE_ME_EXACT_RECONCILIATION_RECEIPT_TARGET",
+    "result": "REPLACE_ME_EXACT_RESULT_RECEIPT_TARGET"
+  },
+  "schemaVersion": 1,
+  "startsAtUtc": "REPLACE_ME_EXACT_UTC_SECOND",
+  "status": "REQUESTED_NOT_AUTHORIZED"
+}

@@ -1,43 +1,57 @@
 {
-  "schemaVersion": 2,
-  "authorizationId": "REPLACE_ME_DURABLE_AUTHORIZATION_ID",
-  "operator": "REPLACE_ME_EXACT_OPERATOR_IDENTITY",
-  "status": "REPLACE_ME_APPROVED_ONLY_AFTER_OWNER_SIGNOFF",
-  "actionClasses": ["REPLACE_ME_ONE_EXACT_ACTION_CLASS"],
-  "scope": "REPLACE_ME_EXACT_SCOPE",
-  "deployedSha": "REPLACE_ME_EXACT_LOWERCASE_FULL_GIT_SHA",
-  "configVersion": "REPLACE_ME_EXACT_CONFIG_VERSION",
-  "riskVersion": "REPLACE_ME_EXACT_RISK_VERSION",
-  "nonce": "REPLACE_ME_128_TO_512_BIT_LOWERCASE_HEX_NONCE",
-  "serverPreviewDigest": "REPLACE_ME_SHA256_PREFIXED_SERVER_PREVIEW_DIGEST",
   "account": "REPLACE_ME_EXACT_ACCOUNT",
+  "actionClasses": [
+    "REPLACE_ME_ONE_EXACT_ACTION_CLASS"
+  ],
+  "allowedCommands": [
+    "REPLACE_ME_EXACT_COMMAND"
+  ],
+  "allowedCredentials": {
+    "permissions": [
+      "REPLACE_ME_EXACT_PERMISSION_ONLY"
+    ],
+    "types": [
+      "REPLACE_ME_CREDENTIAL_TYPE_ONLY"
+    ]
+  },
+  "allowedEndpoints": [
+    "REPLACE_ME_EXACT_ENDPOINT"
+  ],
+  "allowedProducts": [
+    "REPLACE_ME_EXACT_PRODUCT"
+  ],
+  "authorizationId": "REPLACE_ME_DURABLE_AUTHORIZATION_ID",
+  "configVersion": "REPLACE_ME_EXACT_CONFIG_VERSION",
+  "deployedSha": "REPLACE_ME_EXACT_LOWERCASE_FULL_GIT_SHA",
   "environment": "REPLACE_ME_ENVIRONMENT",
+  "expiresAtUtc": "REPLACE_ME_UTC",
   "host": "REPLACE_ME_EXACT_HOST",
   "issuedAtUtc": "REPLACE_ME_UTC",
-  "startsAtUtc": "REPLACE_ME_UTC",
-  "expiresAtUtc": "REPLACE_ME_UTC",
-  "allowedCommands": ["REPLACE_ME_EXACT_COMMAND"],
-  "allowedEndpoints": ["REPLACE_ME_EXACT_ENDPOINT"],
-  "allowedProducts": ["REPLACE_ME_EXACT_PRODUCT"],
-  "allowedCredentials": {
-    "types": ["REPLACE_ME_CREDENTIAL_TYPE_ONLY"],
-    "permissions": ["REPLACE_ME_EXACT_PERMISSION_ONLY"]
-  },
-  "preconditions": ["REPLACE_ME_EXACT_PRECONDITION"],
   "maximumEffect": {
     "capital": "REPLACE_ME_EXACT_CAPITAL_BOUND",
     "notional": "REPLACE_ME_EXACT_NOTIONAL_BOUND",
     "operational": "REPLACE_ME_EXACT_OPERATIONAL_BOUND"
   },
-  "rollback": "REPLACE_ME_EXACT_ROLLBACK",
-  "recovery": "REPLACE_ME_EXACT_RECOVERY",
+  "nonce": "REPLACE_ME_128_TO_512_BIT_LOWERCASE_HEX_NONCE",
+  "operator": "REPLACE_ME_EXACT_OPERATOR_IDENTITY",
   "ownerApproval": {
-    "approver": "REPLACE_ME_OWNER",
     "approvedAtUtc": "REPLACE_ME_UTC",
+    "approver": "REPLACE_ME_OWNER",
     "reference": "REPLACE_ME_DURABLE_REFERENCE"
   },
+  "preconditions": [
+    "REPLACE_ME_EXACT_PRECONDITION"
+  ],
   "receiptTargets": {
-    "result": "REPLACE_ME_EXACT_RESULT_RECEIPT_TARGET",
-    "reconciliation": "REPLACE_ME_EXACT_RECONCILIATION_RECEIPT_TARGET"
-  }
+    "reconciliation": "REPLACE_ME_EXACT_RECONCILIATION_RECEIPT_TARGET",
+    "result": "REPLACE_ME_EXACT_RESULT_RECEIPT_TARGET"
+  },
+  "recovery": "REPLACE_ME_EXACT_RECOVERY",
+  "riskVersion": "REPLACE_ME_EXACT_RISK_VERSION",
+  "rollback": "REPLACE_ME_EXACT_ROLLBACK",
+  "schemaVersion": 2,
+  "scope": "REPLACE_ME_EXACT_SCOPE",
+  "serverPreviewDigest": "REPLACE_ME_SHA256_PREFIXED_SERVER_PREVIEW_DIGEST",
+  "startsAtUtc": "REPLACE_ME_UTC",
+  "status": "REPLACE_ME_APPROVED_ONLY_AFTER_OWNER_SIGNOFF"
 }

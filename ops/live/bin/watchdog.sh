@@ -1,9 +1,8 @@
-#!/usr/bin/env bash
-# ops/live/bin/watchdog.sh — external supervision, one bounded check pass.
+#!/bin/bash -p
+# ops/live/bin/watchdog.sh — staging-only supervision, one bounded check pass.
 #
-# Fired by cosmos-watchdog.timer (see ops/live/systemd/). Deliberately
-# installed OUTSIDE the release path (/usr/local/lib/cosmos-ops) so a broken
-# release cannot take its own supervisor down with it.
+# The historical systemd templates are dormant because no production watchdog
+# action class exists. The donor remains executable only against staging paths.
 #
 # Policy (§23/§24):
 #   - /health/live failing LIVE_FAIL_THRESHOLD consecutive passes  -> restart
@@ -23,7 +22,19 @@
 # findings are reported via ALERT_CMD and $WATCHDOG_STATE_DIR/status.json.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+unset BASH_ENV ENV CDPATH GLOBIGNORE
+PATH=/usr/local/bin:/usr/bin:/bin
+export PATH
+readonly PATH
+case "$0" in
+  /*) _I00_ENTRY_DIR="${0%/*}" ;;
+  */*) _I00_ENTRY_DIR="$PWD/${0%/*}" ;;
+  *) printf '%s\n' 'FATAL: watchdog.sh requires an explicit script path' >&2; exit 1 ;;
+esac
+[ -n "$_I00_ENTRY_DIR" ] || _I00_ENTRY_DIR=/
+SCRIPT_DIR="$(cd -P -- "$_I00_ENTRY_DIR" && builtin pwd -P)" \
+  || { printf '%s\n' 'FATAL: watchdog.sh script directory is unavailable' >&2; exit 1; }
+unset _I00_ENTRY_DIR
 # shellcheck source=common.sh
 . "$SCRIPT_DIR/common.sh"
 OPS_LOG_TAG=cosmos-watchdog
@@ -37,6 +48,8 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+refuse_i00_effect_class
+require_i00_effect_env_file_binding "$ENV_FILE"
 load_env_file "$ENV_FILE"
 cosmos_layout_defaults
 : "${LIVE_PATH:=/health/live}"
@@ -48,8 +61,28 @@ cosmos_layout_defaults
 : "${WATCHDOG_STATE_DIR:=$OPS_STATE_DIR/watchdog}"
 : "${BACKUP_DIR:=}"
 : "${BACKUP_MAX_AGE_HOURS:=26}"
+if [ -n "$BACKUP_DIR" ]; then
+  BACKUP_DIR="$(exact_raw_canonical_path "$BACKUP_DIR")" \
+    || die_code 1 "backup root must be one exact raw canonical absolute path"
+fi
+
+if any_path_effectively_intersects_protected_union \
+      "$OPS_STATE_DIR" "$WATCHDOG_STATE_DIR" "$DEPLOY_LOCK" \
+    || [ "$APP_UNIT" = cosmos-app.service ] \
+    || [ "$TUNNEL_UNIT" = cloudflared.service ]; then
+  die_code 1 "production watchdog is unavailable without a ratified action class"
+fi
+
+require_nonroot_direct_effect_or_i00_class
+require_staging_supervisor_mock_or_i00_class
+if ! [[ "$APP_UNIT" =~ ^df32-fixture-[a-z0-9][a-z0-9-]*[.]service$ ]] \
+    || ! [[ "$TUNNEL_UNIT" =~ ^df32-fixture-[a-z0-9][a-z0-9-]*[.]service$ ]] \
+    || [ "$APP_UNIT" = "$TUNNEL_UNIT" ]; then
+  die_code 1 "staging watchdog units must be distinct exact df32 fixture service names"
+fi
+
 require_cmd "$NODE" "$CURL" "$SYSTEMCTL"
-mkdir -p "$WATCHDOG_STATE_DIR"
+fs_mkdir_p "$WATCHDOG_STATE_DIR"
 
 STREAK_FILE="$WATCHDOG_STATE_DIR/live-fail-streak"
 APP_RESTARTS="$WATCHDOG_STATE_DIR/app-restarts.log"
@@ -87,7 +120,30 @@ write_status() { # live ready tunnel skipped frozen backupFresh streak lockState
 if [ ! -e "$STREAK_FILE" ]; then
   LOCK_STREAK=0
 else
-  LOCK_STREAK="$(cat "$STREAK_FILE" 2>/dev/null || echo UNREADABLE)"
+  LOCK_STREAK="$(i00_guard_node - "$STREAK_FILE" <<'NODE' 2>/dev/null || printf UNREADABLE
+const fs = require('fs');
+const file = process.argv[2];
+const before = fs.lstatSync(file, { bigint: true });
+if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1n
+    || before.size < 1n || before.size > 64n
+    || fs.realpathSync.native(file) !== file) process.exit(1);
+const descriptor = fs.openSync(file, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+try {
+  const opened = fs.fstatSync(descriptor, { bigint: true });
+  const fields = ['dev', 'ino', 'mode', 'size', 'mtimeNs', 'ctimeNs'];
+  if (!fields.every((key) => opened[key] === before[key])) process.exit(1);
+  const bytes = fs.readFileSync(descriptor);
+  const after = fs.fstatSync(descriptor, { bigint: true });
+  const named = fs.lstatSync(file, { bigint: true });
+  if (!fields.every((key) => after[key] === opened[key] && named[key] === after[key])) {
+    process.exit(1);
+  }
+  process.stdout.write(bytes);
+} finally {
+  fs.closeSync(descriptor);
+}
+NODE
+)"
   case "$LOCK_STREAK" in
     (*[!0-9]*|"")
       wd_alert critical WATCHDOG_STATE_UNREADABLE \
@@ -194,7 +250,7 @@ if [ -n "$BACKUP_DIR" ]; then
     BACKUP_FRESH=true
   else
     BACKUP_FRESH=false
-    if [ -n "$(ls -1 "$BACKUP_DIR" 2>/dev/null | grep -E '^[0-9]{8}T[0-9]{6}Z' || true)" ]; then
+    if completed_backup_inventory has "$BACKUP_DIR"; then
       wd_alert warning BACKUP_STALE "newest backup in $BACKUP_DIR is older than ${BACKUP_MAX_AGE_HOURS}h"
     else
       wd_alert warning BACKUP_MISSING "no completed backup exists in $BACKUP_DIR"

@@ -2,12 +2,15 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
-  accessSync, closeSync, constants, fchmodSync, fsyncSync, lstatSync, openSync, readFileSync,
-  readdirSync, realpathSync, statfsSync, unlinkSync, writeFileSync,
+  accessSync, closeSync, constants, fchmodSync, fstatSync, fsyncSync, lstatSync, openSync,
+  readFileSync, readdirSync, realpathSync, statfsSync, writeFileSync,
 } from 'node:fs';
-import { dirname, isAbsolute, join, parse, resolve } from 'node:path';
+import {
+  basename, dirname, isAbsolute, join, parse, resolve,
+} from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { hasPlaceholder, verifyArtifactManifest } from '../lib.mjs';
+import { hasPlaceholder, typedTreeDigest, verifyArtifactManifest } from '../lib.mjs';
+import { validateSimulationRoot } from '../simulation-safety.mjs';
 
 const RECOVERY_TARGET = 'NO_PRIOR_RELEASE_FIRST_HOST';
 const EVIDENCE_SOURCE = 'FIRST_HOST_BOOTSTRAP_EVIDENCE';
@@ -22,14 +25,70 @@ const CLOSED_ENV = Object.freeze({
 const COMMAND_TIMEOUT_MS = 5_000;
 const COMMAND_MAX_BUFFER = 16 * 1024;
 const MAX_SAFE_BIGINT = BigInt(Number.MAX_SAFE_INTEGER);
+const SYSTEM_FIRST_HOST_EVIDENCE_ROOT =
+  '/var/lib/cosmos-deployment-authorization/first-host-evidence';
+const FIRST_HOST_BUNDLE_NAME = /^first-host-readback\.[A-Za-z0-9]+$/;
+const STAGING_PROOF_ROOT = /^\/var\/tmp\/cosmos-df32-proof-([0-9a-f]{4})$/;
+const PROTECTED_ROOTS = Object.freeze([
+  '/opt/cosmos',
+  '/var/lib/cosmos',
+  '/var/backups/cosmos',
+  '/etc/cosmos',
+  '/run/cosmos-app',
+  '/run/cosmos-secret-source',
+  '/usr/local/lib/cosmos-ops',
+  '/var/lib/cosmos-deployment-authorization',
+  '/var/lib/cosmos-authorization-consumption',
+  '/var/lib/cosmos-action-receipts',
+]);
+const INSPECT_EXECUTABLE = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  'inspect-executable.mjs',
+);
 
 class Blocked extends Error {}
 const block = (message) => { throw new Blocked(message); };
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const canonicalJson = (value) => `${JSON.stringify(value, null, 2)}\n`;
 
+function physicalPotentialPath(raw, label) {
+  if (typeof raw !== 'string' || raw === '/' || !isAbsolute(raw) || resolve(raw) !== raw) {
+    block(`${label} must be one canonical non-root absolute path`);
+  }
+  let cursor = raw;
+  const suffix = [];
+  for (;;) {
+    let stat;
+    try {
+      stat = lstatSync(cursor, { bigint: true, throwIfNoEntry: false });
+    } catch (error) {
+      block(`${label} existing ancestor cannot be inspected: ${error.message}`);
+    }
+    if (stat !== undefined) {
+      let physical;
+      try {
+        physical = realpathSync.native(cursor);
+      } catch (error) {
+        block(`${label} existing ancestor cannot be physically resolved: ${error.message}`);
+      }
+      const physicalStat = lstatSync(physical, { bigint: true });
+      if (suffix.length > 0 && !physicalStat.isDirectory()) {
+        block(`${label} deepest existing ancestor is not one directory`);
+      }
+      return resolve(physical, ...suffix);
+    }
+    const parent = dirname(cursor);
+    const component = basename(cursor);
+    if (parent === cursor || component === '' || component === '.' || component === '..') {
+      block(`${label} has an unsafe missing suffix`);
+    }
+    suffix.unshift(component);
+    cursor = parent;
+  }
+}
+
 function parseCli(argv) {
-  const flags = new Set(['sqlite-only']);
+  const flags = new Set(['sqlite-only', 'simulation-clock']);
   const out = {};
   for (let index = 0; index < argv.length; index += 1) {
     const raw = argv[index];
@@ -63,12 +122,181 @@ function canonicalUtc(raw, label) {
   return millis;
 }
 
-function observationTime(raw) {
-  if (raw !== undefined) {
-    canonicalUtc(raw, '--now');
-    return raw;
+function validateProvenance(args) {
+  const mode = args['provenance-mode'];
+  if (!['SYSTEM', 'STAGING', 'TEST'].includes(mode)) {
+    block('--provenance-mode must be SYSTEM, STAGING, or TEST');
   }
-  return new Date(Math.floor(Date.now() / 1000) * 1000).toISOString().replace('.000Z', 'Z');
+  if (mode === 'SYSTEM') {
+    if (args['provenance-root'] !== undefined) {
+      block('SYSTEM provenance rejects --provenance-root');
+    }
+    return { mode, root: null };
+  }
+  if (typeof args['provenance-root'] !== 'string') {
+    block(`${mode} provenance requires --provenance-root`);
+  }
+  if (mode === 'TEST') {
+    try {
+      return { mode, root: validateSimulationRoot(args['provenance-root']) };
+    } catch {
+      block('TEST provenance root must be one canonical marked simulation root');
+    }
+  }
+  const match = STAGING_PROOF_ROOT.exec(args['provenance-root']);
+  if (!match) {
+    block('STAGING provenance root must match the exact isolated-proof grammar');
+  }
+  const root = requireRealExisting(
+    args['provenance-root'],
+    'STAGING provenance root',
+    'directory',
+  );
+  if ((root.stat.mode & 0o7777n) !== 0o700n || root.stat.uid !== 0n) {
+    block('STAGING provenance root must be root-owned mode 0700');
+  }
+  const overlaps = (left, right) => (
+    left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`)
+  );
+  const protectedPhysicalRoots = PROTECTED_ROOTS.map((protectedRoot) => (
+    physicalPotentialPath(protectedRoot, 'protected production root')
+  ));
+  if (protectedPhysicalRoots.some((protectedRoot) => overlaps(root.path, protectedRoot))) {
+    block('STAGING provenance root intersects the protected production root union');
+  }
+  return { mode, root: root.path, suffix: match[1] };
+}
+
+function observationTime(args, provenance) {
+  if (args['simulation-clock'] !== true) {
+    if (args.now !== undefined) block('--now is accepted only with --simulation-clock');
+    if (args['simulation-root'] !== undefined) {
+      block('--simulation-root is accepted only with --simulation-clock');
+    }
+    return new Date(Math.floor(Date.now() / 1000) * 1000)
+      .toISOString().replace('.000Z', 'Z');
+  }
+  if (args.now === undefined || args['simulation-root'] === undefined) {
+    block('--simulation-clock requires exact --now and --simulation-root');
+  }
+  if (provenance.mode !== 'TEST'
+      || provenance.root !== args['simulation-root']) {
+    block('--simulation-clock requires matching TEST provenance');
+  }
+  canonicalUtc(args.now, '--now');
+  try {
+    validateSimulationRoot(args['simulation-root']);
+  } catch {
+    block('--simulation-root is not one canonical marked simulation root');
+  }
+  return args.now;
+}
+
+function directoryIdentity(stat) {
+  return {
+    device: stat.dev.toString(),
+    inode: stat.ino.toString(),
+    mode: stat.mode.toString(8),
+    uid: stat.uid.toString(),
+    gid: stat.gid.toString(),
+  };
+}
+
+function offlineUnitRootIdentity(stat) {
+  return {
+    device: stat.dev.toString(),
+    inode: stat.ino.toString(),
+    mode: stat.mode.toString(8),
+    uid: stat.uid.toString(),
+    gid: stat.gid.toString(),
+    mtimeNs: stat.mtimeNs.toString(),
+    ctimeNs: stat.ctimeNs.toString(),
+  };
+}
+
+function validateOutputProvenance(args, provenance) {
+  if (!args['evidence-root']) block('--evidence-root is required');
+  const expectedEvidenceRoot = provenance.mode === 'SYSTEM'
+    ? SYSTEM_FIRST_HOST_EVIDENCE_ROOT
+    : join(provenance.root, 'first-host-evidence');
+  if (args['evidence-root'] !== expectedEvidenceRoot) {
+    block(`${provenance.mode} evidence root is outside the canonical first-host category`);
+  }
+  const evidenceRoot = requireRealExisting(
+    args['evidence-root'],
+    '--evidence-root',
+    'directory',
+  );
+  const output = requireRealExisting(args['output-dir'], '--output-dir', 'directory');
+  const expectedUid = provenance.mode === 'TEST'
+    ? (typeof process.getuid === 'function' ? BigInt(process.getuid()) : output.stat.uid)
+    : 0n;
+  if ((evidenceRoot.stat.mode & 0o7777n) !== 0o700n
+      || evidenceRoot.stat.uid !== expectedUid) {
+    block('--evidence-root must have the provenance owner and mode 0700');
+  }
+  if ((output.stat.mode & 0o7777n) !== 0o700n
+      || output.stat.uid !== expectedUid
+      || dirname(output.path) !== evidenceRoot.path
+      || !FIRST_HOST_BUNDLE_NAME.test(basename(output.path))) {
+    block('--output-dir must be one direct provenance-owned mode-0700 first-host bundle');
+  }
+  if (provenance.mode === 'STAGING'
+      && basename(output.path) !== `first-host-readback.${provenance.suffix}`) {
+    block('STAGING first-host bundle leaf must match the proof-root suffix');
+  }
+  if (readdirSync(output.path).length !== 0) block('--output-dir must be empty');
+  return { output, identity: directoryIdentity(output.stat) };
+}
+
+function verifyPublishedBundle(outputPath, expectedIdentity) {
+  const output = requireRealExisting(outputPath, '--output-dir', 'directory');
+  if (!sameJson(directoryIdentity(output.stat), expectedIdentity)) {
+    block('--output-dir identity changed during publication');
+  }
+  const expectedFiles = [
+    'collected-evidence.json', 'host.json', 'sqlite-readback.json', 'supervisor.json',
+  ];
+  if (!sameJson(readdirSync(output.path).sort(), expectedFiles)) {
+    block('first-host bundle must contain exactly four direct evidence files');
+  }
+  const expectedUid = output.stat.uid;
+  for (const name of expectedFiles) {
+    const file = requireRealExisting(join(output.path, name), `bundle ${name}`, 'file');
+    if ((file.stat.mode & 0o7777n) !== 0o600n
+        || file.stat.uid !== expectedUid
+        || file.stat.nlink !== 1n) {
+      block('first-host bundle file identity or mode is invalid');
+    }
+  }
+}
+
+function validateSqliteOutput(args, provenance) {
+  if (!args.output) return null;
+  const output = requireCanonicalPath(args.output, '--output');
+  if (basename(output) !== 'sqlite-readback.json') {
+    block('--output must use the exact sqlite-readback.json leaf');
+  }
+  if (provenance.mode === 'SYSTEM') {
+    const bundle = dirname(output);
+    if (dirname(bundle) !== SYSTEM_FIRST_HOST_EVIDENCE_ROOT
+        || !FIRST_HOST_BUNDLE_NAME.test(basename(bundle))) {
+      block('SYSTEM --output must be an exact child of one canonical first-host bundle');
+    }
+    const systemRoot = requireRealExisting(
+      SYSTEM_FIRST_HOST_EVIDENCE_ROOT,
+      'SYSTEM first-host evidence root',
+      'directory',
+    );
+    const bundleRoot = requireRealExisting(bundle, 'SYSTEM first-host bundle', 'directory');
+    if ((systemRoot.stat.mode & 0o7777n) !== 0o700n || systemRoot.stat.uid !== 0n
+        || (bundleRoot.stat.mode & 0o7777n) !== 0o700n || bundleRoot.stat.uid !== 0n) {
+      block('SYSTEM first-host output roots must be root-owned mode 0700');
+    }
+  } else if (dirname(output) !== provenance.root) {
+    block(`${provenance.mode} --output must be one exact child of the bound provenance root`);
+  }
+  return output;
 }
 
 function requireCanonicalPath(raw, label) {
@@ -141,6 +369,18 @@ function sameJson(left, right) {
   return JSON.stringify(left) === JSON.stringify(right);
 }
 
+function requireExactObjectKeys(value, keys, label) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    block(`${label} must be one object`);
+  }
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  if (actual.length !== expected.length
+      || actual.some((key, index) => key !== expected[index])) {
+    block(`${label} has an unexpected field set`);
+  }
+}
+
 function runBounded(executable, argv, label) {
   const result = spawnSync(executable, argv, {
     encoding: 'utf8',
@@ -153,6 +393,38 @@ function runBounded(executable, argv, label) {
   if (result.error) block(`${label} failed: ${result.error.code ?? result.error.message}`);
   if (result.signal) block(`${label} was terminated by ${result.signal}`);
   return result;
+}
+
+function inspectExecutable(rawPath, label) {
+  const result = runBounded(
+    process.execPath,
+    [INSPECT_EXECUTABLE, '--path', rawPath],
+    `${label} inspection`,
+  );
+  if (result.status !== 0 || result.stderr !== '') {
+    block(`${label} inspection failed`);
+  }
+  let inspected;
+  try {
+    inspected = JSON.parse(result.stdout);
+  } catch {
+    block(`${label} inspection returned invalid JSON`);
+  }
+  requireExactObjectKeys(
+    inspected,
+    ['status', 'path', 'sha256', 'identity', 'endpointIdentity'],
+    `${label} inspection`,
+  );
+  requireExactObjectKeys(
+    inspected.identity,
+    ['device', 'inode', 'mode', 'size', 'mtimeNs', 'ctimeNs'],
+    `${label} identity`,
+  );
+  if (inspected.status !== 'EXECUTABLE_IDENTITY_VERIFIED'
+      || !/^[0-9a-f]{64}$/.test(inspected.sha256)) {
+    block(`${label} inspection is invalid`);
+  }
+  return inspected;
 }
 
 function sqliteReadback(rawPath, observedAtUtc) {
@@ -194,25 +466,125 @@ function sqliteReadback(rawPath, observedAtUtc) {
 }
 
 function exactCreate(entries) {
+  if (!Array.isArray(entries) || entries.length === 0) block('exact-create requires output entries');
+  const parentPath = dirname(entries[0][0]);
+  if (entries.some(([path]) => requireCanonicalPath(path, 'exact-create output') !== path
+      || dirname(path) !== parentPath)) {
+    block('exact-create outputs must share one canonical parent');
+  }
+  const parentBefore = requireRealExisting(
+    parentPath,
+    'exact-create output parent',
+    'directory',
+  );
+  if ((parentBefore.stat.mode & 0o777n) !== 0o700n) {
+    block('exact-create output parent must have mode 0700');
+  }
+  if (typeof process.getuid === 'function'
+      && parentBefore.stat.uid !== BigInt(process.getuid())) {
+    block('exact-create output parent owner must be the invoking identity');
+  }
+  const directoryIdentity = (stat) => ({
+    device: stat.dev.toString(),
+    inode: stat.ino.toString(),
+    mode: stat.mode.toString(8),
+    uid: stat.uid.toString(),
+    gid: stat.gid.toString(),
+  });
+  const fileObjectIdentity = (stat) => ({
+    device: stat.dev.toString(),
+    inode: stat.ino.toString(),
+    mode: stat.mode.toString(8),
+    links: stat.nlink.toString(),
+    uid: stat.uid.toString(),
+    gid: stat.gid.toString(),
+  });
+  const parentIdentity = directoryIdentity(parentBefore.stat);
+  const recheckParent = () => {
+    const current = requireRealExisting(
+      parentPath,
+      'exact-create output parent',
+      'directory',
+    );
+    if (!sameJson(directoryIdentity(current.stat), parentIdentity)) {
+      block('exact-create output parent path identity changed');
+    }
+  };
   const opened = [];
+  let parentDescriptor;
   try {
+    parentDescriptor = openSync(
+      parentPath,
+      constants.O_RDONLY | (constants.O_DIRECTORY ?? 0) | (constants.O_NOFOLLOW ?? 0),
+    );
+    const openedParent = fstatSync(parentDescriptor, { bigint: true });
+    if (!openedParent.isDirectory()
+        || !sameJson(directoryIdentity(openedParent), parentIdentity)) {
+      block('exact-create output parent descriptor identity changed');
+    }
+    recheckParent();
     for (const [path] of entries) {
-      const fd = openSync(path, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600);
+      if (lstatOrEnoent(path, 'exact-create output').status !== 'ENOENT') {
+        block('exact-create output must be absent');
+      }
+    }
+    for (const [path] of entries) {
+      recheckParent();
+      const anchoredPath = process.platform === 'linux'
+        ? `/proc/self/fd/${parentDescriptor}/${basename(path)}`
+        : path;
+      const fd = openSync(
+        anchoredPath,
+        constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL
+          | (constants.O_NOFOLLOW ?? 0),
+        0o600,
+      );
       fchmodSync(fd, 0o600);
-      opened.push({ path, fd });
+      const stat = fstatSync(fd, { bigint: true });
+      if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1n
+          || (stat.mode & 0o777n) !== 0o600n) {
+        block('exact-create output claim is not one private single-link regular file');
+      }
+      if (typeof process.getuid === 'function'
+          && stat.uid !== BigInt(process.getuid())) {
+        block('exact-create output owner changed');
+      }
+      opened.push({ path, fd, identity: fileObjectIdentity(stat) });
     }
     for (let index = 0; index < entries.length; index += 1) {
       writeFileSync(opened[index].fd, entries[index][1], 'utf8');
       fsyncSync(opened[index].fd);
+      const written = fstatSync(opened[index].fd, { bigint: true });
+      if (!sameJson(fileObjectIdentity(written), opened[index].identity)
+          || written.size !== BigInt(Buffer.byteLength(entries[index][1], 'utf8'))) {
+        block('exact-create output identity changed during write');
+      }
     }
-    for (const item of opened) closeSync(item.fd);
+    recheckParent();
+    for (const item of opened) {
+      const named = lstatSync(item.path, { bigint: true, throwIfNoEntry: false });
+      const descriptor = fstatSync(item.fd, { bigint: true });
+      if (!named?.isFile() || named.isSymbolicLink() || named.nlink !== 1n
+          || realpathSync.native(item.path) !== item.path
+          || !sameJson(fileObjectIdentity(named), fileObjectIdentity(descriptor))) {
+        block('exact-create output final identity is invalid');
+      }
+    }
+    fsyncSync(parentDescriptor);
+    recheckParent();
   } catch (error) {
     for (const item of opened) {
       try { closeSync(item.fd); } catch {}
-      try { unlinkSync(item.path); } catch {}
     }
+    if (parentDescriptor !== undefined) {
+      try { closeSync(parentDescriptor); } catch {}
+      parentDescriptor = undefined;
+    }
+    if (error instanceof Blocked) throw error;
     block(`exact-create output failed: ${error.message}`);
   }
+  for (const item of opened) closeSync(item.fd);
+  closeSync(parentDescriptor);
 }
 
 function parseSanitizedEnv(rawPath) {
@@ -315,18 +687,81 @@ function cleanCosmosRoot(path, releasesDir) {
   block('cosmosRoot contains residual state');
 }
 
-function unitObservation(systemctlPath, unit) {
+function liveUnitObservation(systemctlPath, unit) {
   if (!/^[A-Za-z0-9][A-Za-z0-9_.@:-]*\.service$/.test(unit)) block('APP_UNIT is not canonical');
-  const executable = requireExecutable(systemctlPath, '--systemctl').path;
-  const result = runBounded(executable, ['is-active', unit], 'systemctl is-active');
+  const before = inspectExecutable(systemctlPath, '--systemctl');
+  const result = runBounded(before.path, ['is-active', unit], 'systemctl is-active');
   if (result.stderr !== '') block('systemctl is-active wrote unexpected stderr');
+  let state;
+  let exitCode;
   if (result.stdout === 'inactive\n' && result.status === 3) {
-    return { systemctlPath: executable, unit, state: 'INACTIVE', exitCode: 3 };
+    state = 'INACTIVE';
+    exitCode = 3;
+  } else if (result.stdout === 'unknown\n' && result.status === 4) {
+    state = 'NOT_FOUND';
+    exitCode = 4;
+  } else {
+    block(`APP_UNIT is not exactly inactive/not-found (rc=${String(result.status)})`);
   }
-  if (result.stdout === 'unknown\n' && result.status === 4) {
-    return { systemctlPath: executable, unit, state: 'NOT_FOUND', exitCode: 4 };
+  const after = inspectExecutable(systemctlPath, '--systemctl');
+  if (!sameJson(after, before)) {
+    block('systemctl executable identity or bytes changed during readback');
   }
-  block(`APP_UNIT is not exactly inactive/not-found (rc=${String(result.status)})`);
+  return {
+    systemctlPath: before.path,
+    systemctlSha256: before.sha256,
+    systemctlIdentity: before.identity,
+    unit,
+    state,
+    exitCode,
+  };
+}
+
+function offlineUnitObservation(rawRoot, unit, provenance) {
+  if (provenance.mode !== 'STAGING') {
+    block('--offline-unit-root is accepted only with STAGING provenance');
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9_.@:-]*\.service$/.test(unit)) {
+    block('APP_UNIT is not canonical');
+  }
+  const expectedRoot = join(provenance.root, 'first-host-offline-systemd');
+  if (rawRoot !== expectedRoot) {
+    block('STAGING offline unit root is outside the exact proof-root category');
+  }
+  const before = requireRealExisting(rawRoot, '--offline-unit-root', 'directory');
+  if ((before.stat.mode & 0o7777n) !== 0o700n || before.stat.uid !== 0n) {
+    block('STAGING offline unit root must be root-owned mode 0700');
+  }
+  if (readdirSync(before.path).length !== 0) {
+    block('STAGING offline unit root must be one exact empty typed tree');
+  }
+  const identity = offlineUnitRootIdentity(before.stat);
+  const treeSha256 = typedTreeDigest(before.path);
+  const unitPath = join(before.path, unit);
+  if (lstatOrEnoent(unitPath, 'STAGING offline application unit').status !== 'ENOENT') {
+    block('STAGING offline application unit must be absent');
+  }
+  const after = requireRealExisting(rawRoot, '--offline-unit-root', 'directory');
+  if ((after.stat.mode & 0o7777n) !== 0o700n
+      || after.stat.uid !== 0n
+      || !sameJson(offlineUnitRootIdentity(after.stat), identity)
+      || readdirSync(after.path).length !== 0
+      || typedTreeDigest(after.path) !== treeSha256
+      || lstatOrEnoent(unitPath, 'STAGING offline application unit').status !== 'ENOENT') {
+    block('STAGING offline unit root changed during readback');
+  }
+  return {
+    observationMode: 'PRIVATE_OFFLINE_UNIT_ROOT',
+    systemctlPath: null,
+    systemctlSha256: null,
+    systemctlIdentity: null,
+    unit,
+    state: 'INACTIVE',
+    exitCode: null,
+    offlineUnitRoot: before.path,
+    offlineUnitRootIdentity: identity,
+    offlineUnitTreeSha256: treeSha256,
+  };
 }
 
 function nearestExistingDirectory(path) {
@@ -381,13 +816,17 @@ function canonicalUint(raw, flag) {
 }
 
 function runSqliteOnly(args) {
-  requireOnlyArgs(args, new Set(['sqlite-only', 'sqlite', 'output', 'now']));
+  requireOnlyArgs(args, new Set([
+    'sqlite-only', 'sqlite', 'output', 'provenance-mode', 'provenance-root',
+    'simulation-clock', 'simulation-root', 'now',
+  ]));
   if (!args.sqlite) block('--sqlite is required with --sqlite-only');
-  const observedAtUtc = observationTime(args.now);
+  const provenance = validateProvenance(args);
+  const observedAtUtc = observationTime(args, provenance);
   const document = sqliteReadback(args.sqlite, observedAtUtc);
   const bytes = canonicalJson(document);
   if (args.output) {
-    const output = requireCanonicalPath(args.output, '--output');
+    const output = validateSqliteOutput(args, provenance);
     const parent = requireRealExisting(dirname(output), '--output parent', 'directory');
     if ((parent.stat.mode & 0o777n) !== 0o700n) block('--output parent must have mode 0700');
     exactCreate([[output, bytes]]);
@@ -399,19 +838,30 @@ function runSqliteOnly(args) {
 function runFull(args) {
   requireOnlyArgs(args, new Set([
     'env', 'release', 'output-dir', 'account', 'target-host', 'environment',
-    'backup-reserve-bytes', 'sqlite', 'systemctl', 'now',
+    'backup-reserve-bytes', 'sqlite', 'systemctl', 'offline-unit-root',
+    'evidence-root', 'provenance-mode', 'provenance-root',
+    'simulation-clock', 'simulation-root', 'now',
   ]));
   for (const key of [
     'env', 'release', 'output-dir', 'account', 'target-host', 'environment',
-    'backup-reserve-bytes', 'sqlite', 'systemctl',
+    'backup-reserve-bytes', 'sqlite',
   ]) if (!args[key]) block(`--${key} is required`);
 
-  const observedAtUtc = observationTime(args.now);
+  const provenance = validateProvenance(args);
+  if (provenance.mode === 'STAGING') {
+    if (!args['offline-unit-root']) block('--offline-unit-root is required for STAGING');
+    if (args.systemctl !== undefined) block('STAGING first-host readback rejects --systemctl');
+  } else {
+    if (!args.systemctl) block('--systemctl is required for SYSTEM and TEST');
+    if (args['offline-unit-root'] !== undefined) {
+      block('--offline-unit-root is accepted only with STAGING provenance');
+    }
+  }
+  const observedAtUtc = observationTime(args, provenance);
   const observedMs = canonicalUtc(observedAtUtc, 'observation time');
   const validUntilUtc = new Date(observedMs + 600_000).toISOString().replace('.000Z', 'Z');
-  const output = requireRealExisting(args['output-dir'], '--output-dir', 'directory');
-  if ((output.stat.mode & 0o777n) !== 0o700n) block('--output-dir must have mode 0700');
-  if (readdirSync(output.path).length !== 0) block('--output-dir must be empty');
+  const publication = validateOutputProvenance(args, provenance);
+  const { output } = publication;
 
   const env = parseSanitizedEnv(args.env);
   const paths = validateLayout(env.values);
@@ -421,7 +871,30 @@ function runFull(args) {
     environment: canonicalOwnerValue(args.environment, '--environment'),
     backupReserveBytes: canonicalUint(args['backup-reserve-bytes'], '--backup-reserve-bytes'),
   };
+  if (provenance.mode === 'STAGING') {
+    const expectedHost = `cosmos-df32-proof-${provenance.suffix}.internal`;
+    const expectedEnvironment = `isolated-staging-${provenance.suffix}`;
+    const expectedUnit = `cosmos-df32-proof-${provenance.suffix}.service`;
+    if (owner.targetHost !== expectedHost
+        || owner.environment !== expectedEnvironment
+        || env.values.APP_UNIT !== expectedUnit) {
+      block('STAGING host, environment, and application unit must match the proof-root suffix');
+    }
+    if (env.path !== join(provenance.root, 'sanitized', 'deploy.env')
+        || paths.cosmosRoot !== join(provenance.root, 'cosmos')
+        || paths.releasesDir !== join(provenance.root, 'cosmos', 'releases')
+        || paths.currentLink !== join(provenance.root, 'cosmos', 'current')
+        || paths.previousLink !== join(provenance.root, 'cosmos', 'previous')
+        || paths.dataDir !== join(provenance.root, 'data')
+        || paths.opsStateDir !== join(provenance.root, 'ops-state')) {
+      block('STAGING environment paths must use the exact proof-root categories');
+    }
+  }
   const releasePath = requireRealExisting(args.release, '--release', 'directory').path;
+  if (provenance.mode === 'STAGING'
+      && !releasePath.startsWith(`${provenance.root}/`)) {
+    block('STAGING release must remain below the exact proof root');
+  }
   const verified = verifyArtifactManifest(releasePath);
   if (!/^[A-Za-z0-9._-]+$/.test(verified.release.releaseId)
       || !/^[0-9a-f]{40}$/.test(verified.release.testedSha)) block('release identity is invalid');
@@ -430,7 +903,9 @@ function runFull(args) {
   assertRealAncestors(paths.releaseDestination, 'releaseDestination');
 
   const sqlite = sqliteReadback(args.sqlite, observedAtUtc);
-  const unit = unitObservation(args.systemctl, env.values.APP_UNIT);
+  const unit = provenance.mode === 'STAGING'
+    ? offlineUnitObservation(args['offline-unit-root'], env.values.APP_UNIT, provenance)
+    : liveUnitObservation(args.systemctl, env.values.APP_UNIT);
   const links = {
     current: { path: paths.currentLink, lstat: requireAbsent(paths.currentLink, 'current').state === 'ABSENT' ? 'ENOENT' : null },
     previous: { path: paths.previousLink, lstat: requireAbsent(paths.previousLink, 'previous').state === 'ABSENT' ? 'ENOENT' : null },
@@ -511,6 +986,7 @@ function runFull(args) {
     [join(output.path, 'collected-evidence.json'), evidenceBytes],
     [join(output.path, 'sqlite-readback.json'), canonicalJson(sqlite)],
   ]);
+  verifyPublishedBundle(output.path, publication.identity);
   process.stdout.write(`${JSON.stringify({ status: 'FIRST_HOST_READBACK_CREATED', outputDir: output.path })}\n`);
 }
 

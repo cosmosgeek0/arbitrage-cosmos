@@ -40,6 +40,9 @@ assert_eq "$(unit_get "$APP" WorkingDirectory)" /opt/cosmos/current "runs from c
 assert_eq "$(grep -c '^ExecStart=' "$APP")" 1 "one application entrypoint"
 assert_eq "$(unit_get "$APP" ExecStart)" "/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node server/dist/index.js" "pins logical lease root after EnvironmentFile precedence"
 assert_grep '^EnvironmentFile=/etc/cosmos/' "$APP" "config from /etc/cosmos"
+assert_grep '^UnsetEnvironment=NODE_OPTIONS .*NODE_COMPILE_CACHE .*NODE_PRESERVE_SYMLINKS_MAIN$' "$APP" "removes Node runtime injection after EnvironmentFile"
+assert_grep '^UnsetEnvironment=LD_PRELOAD .*OPENSSL_MODULES SSL_CERT_FILE SSL_CERT_DIR$' "$APP" "removes loader and OpenSSL injection after EnvironmentFile"
+assert_grep '^UnsetEnvironment=NODE_TLS_REJECT_UNAUTHORIZED .*all_proxy$' "$APP" "removes TLS and proxy routing injection after EnvironmentFile"
 assert_eq "$(unit_get "$APP" RuntimeDirectory)" cosmos-app "same-host lease runtime shared across PrivateTmp"
 assert_eq "$(unit_get "$APP" RuntimeDirectoryMode)" 0700 "lease runtime is owner-only"
 assert_eq "$(unit_get "$APP" RuntimeDirectoryPreserve)" restart "lease runtime survives supervised restart"
@@ -100,5 +103,31 @@ J="$SYSD/journald-cosmos.conf.template"
 assert_grep '^\[Journal\]' "$J" "journal section"
 assert_grep '^SystemMaxUse=' "$J" "disk bound"
 assert_grep '^MaxRetentionSec=' "$J" "retention bound"
+
+note "default alert logging uses a fixed privileged shell and no ambient logger"
+ALERT_LOG="$OPS_LIVE/bin/alert-log.sh"
+ALERT_HOSTILE_BIN="$SANDBOX/alert-hostile-bin"
+ALERT_HOSTILE_MARKER="$SANDBOX/alert-hostile-marker"
+ALERT_HOSTILE_ENV="$SANDBOX/alert-hostile-env"
+mkdir "$ALERT_HOSTILE_BIN"
+printf '%s\n' '#!/bin/sh' \
+  'printf invoked > "${ALERT_HOSTILE_MARKER:?}"' \
+  'exit 97' > "$ALERT_HOSTILE_BIN/logger"
+chmod 700 "$ALERT_HOSTILE_BIN/logger"
+printf '%s\n' 'printf startup > "${ALERT_HOSTILE_MARKER:?}"' > "$ALERT_HOSTILE_ENV"
+ALERT_OUTPUT="$(
+  PATH="$ALERT_HOSTILE_BIN" \
+  BASH_ENV="$ALERT_HOSTILE_ENV" \
+  ALERT_HOSTILE_MARKER="$ALERT_HOSTILE_MARKER" \
+  "$ALERT_LOG" warning DF32_FIXED_ALERT "closed local alert" 2>&1
+)"
+assert_eq "$ALERT_OUTPUT" \
+  'cosmos-alert severity=warning code=DF32_FIXED_ALERT message=closed local alert' \
+  "default alert output is exact"
+assert_no_file "$ALERT_HOSTILE_MARKER"
+assert_eq "$(head -n 1 "$ALERT_LOG")" '#!/bin/bash -p' \
+  "default alert interpreter is fixed"
+assert_not_grep 'command -v logger|(^|[[:space:]])logger([[:space:]]|$)' "$ALERT_LOG" \
+  "default alert performs no ambient logger lookup"
 
 finish

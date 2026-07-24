@@ -1,0 +1,255 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmos.invalid/i00/authorized-action-result.v1.json",
+  "title": "I00 authorized action result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "status",
+    "actionClass",
+    "authorizationId",
+    "deployedSha",
+    "riskVersion",
+    "serverPreviewDigest",
+    "authorizationConsumptionSha256",
+    "completedAtUtc",
+    "outcome"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "kind": { "type": "string", "const": "AUTHORIZED_ACTION_RESULT" },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACTION_COMPLETED",
+        "ACTION_FAILED_AFTER_EFFECT",
+        "ACTION_REFUSED_NO_EFFECT"
+      ]
+    },
+    "actionClass": {
+      "type": "string",
+      "enum": [
+        "OPS_BUNDLE_INSTALL",
+        "BACKUP_CREATE",
+        "ISOLATED_RESTORE",
+        "SECRET_MATERIALIZATION",
+        "SERVICE_ROLLBACK"
+      ]
+    },
+    "authorizationId": { "type": "string", "minLength": 1 },
+    "deployedSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "riskVersion": {
+      "type": "string",
+      "pattern": "^i00-deployment-risk-v1:sha256:[0-9a-f]{64}$"
+    },
+    "serverPreviewDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "authorizationConsumptionSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "completedAtUtc": { "type": "string", "format": "date-time" },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "primaryPath", "evidenceSha256", "detail"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "OPS_BUNDLE_INSTALLED_NO_SERVICE_MUTATION",
+            "BACKUP_VERIFIED",
+            "ISOLATED_RESTORE_VERIFIED_NO_PRODUCTION_MUTATION",
+            "SECRET_MATERIALIZED_WITHOUT_DISCLOSURE",
+            "OPS_BUNDLE_INSTALL_FAILED_AFTER_EFFECT",
+            "BACKUP_CREATE_FAILED_AFTER_EFFECT",
+            "BACKUP_OUTPUT_UNRESOLVED_REQUIRES_OWNER_ACTION",
+            "ISOLATED_RESTORE_FAILED_AFTER_EFFECT",
+            "SECRET_MATERIALIZATION_FAILED_AFTER_EFFECT",
+            "ROLLBACK_SWITCHED_FROZEN_REQUIRES_OWNER_ACTION",
+            "ROLLBACK_EFFECT_AMBIGUOUS_REQUIRES_OWNER_ACTION",
+            "ROLLBACK_REFUSED_NO_EFFECT"
+          ]
+        },
+        "primaryPath": { "type": "string", "pattern": "^/" },
+        "evidenceSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "detail": { "type": "string", "minLength": 1 }
+      }
+    },
+    "effect": {
+      "$ref": "#/$defs/effectBinding"
+    }
+  },
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["status", "actionClass", "outcome", "effect"],
+      "properties": {
+        "status": { "const": "ACTION_COMPLETED" },
+        "actionClass": {
+          "enum": [
+            "OPS_BUNDLE_INSTALL",
+            "BACKUP_CREATE",
+            "ISOLATED_RESTORE",
+            "SECRET_MATERIALIZATION"
+          ]
+        },
+        "outcome": {
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "enum": [
+                "OPS_BUNDLE_INSTALLED_NO_SERVICE_MUTATION",
+                "BACKUP_VERIFIED",
+                "ISOLATED_RESTORE_VERIFIED_NO_PRODUCTION_MUTATION",
+                "SECRET_MATERIALIZED_WITHOUT_DISCLOSURE"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["status", "actionClass", "outcome", "effect"],
+      "properties": {
+        "status": { "const": "ACTION_FAILED_AFTER_EFFECT" },
+        "actionClass": {
+          "enum": [
+            "OPS_BUNDLE_INSTALL",
+            "BACKUP_CREATE",
+            "ISOLATED_RESTORE",
+            "SECRET_MATERIALIZATION"
+          ]
+        },
+        "outcome": {
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "enum": [
+                "OPS_BUNDLE_INSTALL_FAILED_AFTER_EFFECT",
+                "BACKUP_CREATE_FAILED_AFTER_EFFECT",
+                "BACKUP_OUTPUT_UNRESOLVED_REQUIRES_OWNER_ACTION",
+                "ISOLATED_RESTORE_FAILED_AFTER_EFFECT",
+                "SECRET_MATERIALIZATION_FAILED_AFTER_EFFECT"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["status", "actionClass", "outcome"],
+      "properties": {
+        "status": { "const": "ACTION_FAILED_AFTER_EFFECT" },
+        "actionClass": { "const": "SERVICE_ROLLBACK" },
+        "outcome": {
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "status": {
+              "enum": [
+                "ROLLBACK_SWITCHED_FROZEN_REQUIRES_OWNER_ACTION",
+                "ROLLBACK_EFFECT_AMBIGUOUS_REQUIRES_OWNER_ACTION"
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": ["status", "actionClass", "outcome"],
+      "properties": {
+        "status": { "const": "ACTION_REFUSED_NO_EFFECT" },
+        "actionClass": { "const": "SERVICE_ROLLBACK" },
+        "outcome": {
+          "type": "object",
+          "required": ["status"],
+          "properties": {
+            "status": { "const": "ROLLBACK_REFUSED_NO_EFFECT" }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "fileBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "identity"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^/" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "identity": { "type": "string", "minLength": 1 }
+      }
+    },
+    "effectBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "claimKey",
+        "startEvidencePath",
+        "startEvidenceSha256",
+        "terminalEvidencePath",
+        "terminalEvidenceSha256",
+        "effectStartedAtUtc",
+        "effectFinishedAtUtc",
+        "program",
+        "chain",
+        "receiptRoot"
+      ],
+      "properties": {
+        "claimKey": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "startEvidencePath": { "type": "string", "pattern": "^/" },
+        "startEvidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "terminalEvidencePath": { "type": "string", "pattern": "^/" },
+        "terminalEvidenceSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "effectStartedAtUtc": { "type": "string", "format": "date-time" },
+        "effectFinishedAtUtc": { "type": "string", "format": "date-time" },
+        "program": { "$ref": "#/$defs/fileBinding" },
+        "chain": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "authorizationSha256",
+            "riskDocumentSha256",
+            "previewDocumentSha256",
+            "authorizationConsumptionSha256"
+          ],
+          "properties": {
+            "authorizationSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "riskDocumentSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "previewDocumentSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "authorizationConsumptionSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "receiptRoot": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "identity"],
+          "properties": {
+            "path": { "type": "string", "pattern": "^/" },
+            "identity": {
+              "type": "string",
+              "pattern": "^device=[0-9]+,inode=[0-9]+,mode=[0-7]+,uid=[0-9]+,gid=[0-9]+$"
+            }
+          }
+        }
+      }
+    }
+  }
+}

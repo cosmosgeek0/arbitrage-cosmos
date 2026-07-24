@@ -21,6 +21,9 @@ BACKUP_DIR="$ROOT/backups"
 SOURCE_EVIDENCE="$ROOT/source-evidence"
 MODEL_EVIDENCE="$ROOT/model-evidence"
 FILE_EVIDENCE="$ROOT/single-evidence.txt"
+BOUND_NODE="$(node -e 'const fs=require("fs");process.stdout.write(fs.realpathSync(process.execPath))')"
+BOUND_TAR="$(node -e 'const fs=require("fs");process.stdout.write(fs.realpathSync(process.argv[1]))' "$(command -v tar)")"
+BOUND_SQLITE="$(node -e 'const fs=require("fs");process.stdout.write(fs.realpathSync(process.argv[1]))' "$(command -v sqlite3)")"
 mkdir -p "$DATA_DIR" "$OPS_STATE_DIR" "$SOURCE_EVIDENCE" "$MODEL_EVIDENCE"
 
 sqlite3 "$DATA_DIR/cosmos.db" '
@@ -35,6 +38,7 @@ printf 'original-single-file\n' > "$FILE_EVIDENCE"
 run_backup() {
   env DATA_DIR="$DATA_DIR" OPS_STATE_DIR="$OPS_STATE_DIR" \
     BACKUP_DIR="$BACKUP_DIR" \
+    NODE="$BOUND_NODE" \
     EVIDENCE_PATHS="$SOURCE_EVIDENCE:$MODEL_EVIDENCE:$FILE_EVIDENCE" \
     bash "$BACKUP"
 }
@@ -43,7 +47,7 @@ run_restore() {
   local backup="$1" target="$2"
   shift 2
   env DATA_DIR="$DATA_DIR" OPS_STATE_DIR="$OPS_STATE_DIR" \
-    BACKUP_DIR="$BACKUP_DIR" bash "$RESTORE" \
+    BACKUP_DIR="$BACKUP_DIR" NODE="$BOUND_NODE" bash "$RESTORE" \
     --backup "$backup" --target "$target" "$@"
 }
 
@@ -169,6 +173,34 @@ assert_eq "$(cat "$GOOD_TARGET/evidence/model-evidence/model.txt")" original-mod
 assert_eq "$(cat "$GOOD_TARGET/evidence/single-evidence.txt")" original-single-file
 assert_eq "$(node -e 'process.stdout.write(String(require(process.argv[1]).evidenceArchives))' "$GOOD_TARGET/restore-report.json")" 3
 assert_eq "$(node -e 'process.stdout.write(require(process.argv[1]).archiveVerification)' "$GOOD_TARGET/restore-report.json")" EXACT_MANIFEST_INVENTORY_HASH_SIZE_MEMBER_VERIFIED
+
+note "wrong class and hostile PATH cannot move restore executable bindings"
+WRONG_CLASS_WITNESS="$ROOT/wrong-class-env-witness"
+WRONG_CLASS_ENV="$ROOT/wrong-class.env"
+printf 'printf sourced > "%s"\n' "$WRONG_CLASS_WITNESS" >"$WRONG_CLASS_ENV"
+assert_failure env NODE="$BOUND_NODE" I00_EFFECT_CLASS=SERVICE_ROLLBACK \
+  /bin/bash "$RESTORE" --backup "$BASE_BACKUP" \
+  --target "$ROOT/wrong-class-target" --env-file "$WRONG_CLASS_ENV"
+assert_not_file "$WRONG_CLASS_WITNESS"
+BOUND_RESTORE_ENV="$ROOT/bound-restore.env"
+printf "DATA_DIR='%s'\nOPS_STATE_DIR='%s'\nBACKUP_DIR='%s'\nNODE='%s'\nSQLITE='%s'\nTAR='%s'\n" \
+  "$DATA_DIR" "$OPS_STATE_DIR" "$BACKUP_DIR" "$BOUND_NODE" "$BOUND_SQLITE" \
+  "$BOUND_TAR" >"$BOUND_RESTORE_ENV"
+HOSTILE_BIN="$ROOT/hostile-bin"
+HOSTILE_WITNESS="$ROOT/hostile-path-witness"
+mkdir "$HOSTILE_BIN"
+for hostile_name in node tar dirname mkdir chmod rm mktemp; do
+  printf '#!/bin/sh\nprintf invoked >> "%s"\nexit 97\n' "$HOSTILE_WITNESS" \
+    >"$HOSTILE_BIN/$hostile_name"
+  chmod 700 "$HOSTILE_BIN/$hostile_name"
+done
+HOSTILE_TARGET="$ROOT/hostile-path-target"
+assert_success env PATH="$HOSTILE_BIN:/usr/bin:/bin" NODE="$BOUND_NODE" \
+  TAR="$BOUND_TAR" \
+  /bin/bash "$RESTORE" --backup "$BASE_BACKUP" --target "$HOSTILE_TARGET" \
+  --env-file "$BOUND_RESTORE_ENV"
+assert_file "$HOSTILE_TARGET/cosmos.db"
+assert_not_file "$HOSTILE_WITNESS"
 
 run_stage_mutation_case() {
   local slug="$1" stage_line="$2" suffix="$3" mutation="$4"
@@ -299,7 +331,7 @@ assert_failure_contains "restore target and selected backup overlap" \
   run_restore "$BASE_BACKUP" "$BACKUP_DIR" --force
 assert_file "$BASE_BACKUP/manifest.json"
 
-note "an absent target below a symlink alias into DATA_DIR is production"
+note "an absent target below a symlink alias fails the exact endpoint boundary"
 LIVE_ALIAS="$ROOT/live-alias"
 ln -s "$DATA_DIR" "$LIVE_ALIAS"
 ALIAS_CHILD="$LIVE_ALIAS/alias-child"
@@ -307,11 +339,12 @@ set +e
 ALIAS_OUTPUT="$(run_restore "$BASE_BACKUP" "$ALIAS_CHILD" 2>&1)"
 ALIAS_RC=$?
 set -e
-assert_eq "$ALIAS_RC" 2
-assert_contains "$ALIAS_OUTPUT" "refusing to restore into the live state store"
+assert_eq "$ALIAS_RC" 1
+assert_contains "$ALIAS_OUTPUT" \
+  "restore target must be one exact raw and physical canonical absolute path"
 assert_not_file "$DATA_DIR/alias-child"
 
-note "raw symlink/../ traversal is resolved by the filesystem, not lexically"
+note "raw symlink/../ traversal fails the exact endpoint boundary"
 mkdir -p "$DATA_DIR/alias-nested"
 DOT_ALIAS="$ROOT/dot-alias"
 ln -s "$DATA_DIR/alias-nested" "$DOT_ALIAS"
@@ -319,13 +352,16 @@ set +e
 DOT_ALIAS_OUTPUT="$(run_restore "$BASE_BACKUP" "$DOT_ALIAS/../dot-child" 2>&1)"
 DOT_ALIAS_RC=$?
 set -e
-assert_eq "$DOT_ALIAS_RC" 2
-assert_contains "$DOT_ALIAS_OUTPUT" "refusing to restore into the live state store"
+assert_eq "$DOT_ALIAS_RC" 1
+assert_contains "$DOT_ALIAS_OUTPUT" \
+  "restore target must be one exact raw and physical canonical absolute path"
 assert_not_file "$DATA_DIR/dot-child"
 
-note "production restore accepts only systemctl rc=3 as proved inactive"
+note "production restore refuses before obsolete supervisor readback"
 SYSTEMCTL_ERROR="$ROOT/systemctl-error.sh"
-printf '#!/usr/bin/env bash\nexit 4\n' > "$SYSTEMCTL_ERROR"
+SYSTEMCTL_WITNESS="$ROOT/systemctl-witness"
+printf '#!/usr/bin/env bash\nprintf called > "%s"\nexit 4\n' "$SYSTEMCTL_WITNESS" \
+  > "$SYSTEMCTL_ERROR"
 chmod +x "$SYSTEMCTL_ERROR"
 LIVE_SHA_BEFORE_SYSTEMCTL="$(file_sha256 "$DATA_DIR/cosmos.db")"
 set +e
@@ -334,7 +370,8 @@ SYSTEMCTL_OUTPUT="$(SYSTEMCTL="$SYSTEMCTL_ERROR" RESTORE_CONFIRM=RESTORE_PRODUCT
 SYSTEMCTL_RC=$?
 set -e
 assert_eq "$SYSTEMCTL_RC" 2
-assert_contains "$SYSTEMCTL_OUTPUT" "cannot prove cosmos-app.service inactive (systemctl rc=4)"
+assert_contains "$SYSTEMCTL_OUTPUT" "production restore is unavailable"
+assert_not_file "$SYSTEMCTL_WITNESS"
 assert_eq "$(file_sha256 "$DATA_DIR/cosmos.db")" "$LIVE_SHA_BEFORE_SYSTEMCTL"
 
 note "TMPDIR aliases inside DATA_DIR fail before snapshot or target creation"
@@ -350,6 +387,25 @@ set -e
 pass_assertion
 assert_contains "$UNSAFE_TMP_OUTPUT" "refusing unsafe TMPDIR"
 assert_not_file "$UNSAFE_TMP_TARGET"
+
+note "fixed production marker and drill-report aliases refuse before mutation"
+FIXED_MARKER_TARGET="$ROOT/fixed-marker-target"
+set +e
+FIXED_MARKER_OUTPUT="$(COSMOS_RESTORE_TEST_MODE=1 \
+  RESTORE_TEST_STAGE_READY_MARKER=/var/lib/cosmos/ops/df32-restore-marker \
+  RESTORE_TEST_STAGE_CONTINUE_MARKER="$ROOT/fixed-marker-continue" \
+  run_restore "$BASE_BACKUP" "$FIXED_MARKER_TARGET" 2>&1)"
+FIXED_MARKER_RC=$?
+set -e
+[ "$FIXED_MARKER_RC" -ne 0 ] || fail_test "restore accepted a fixed production marker"
+pass_assertion
+assert_contains "$FIXED_MARKER_OUTPUT" "restore test marker intersects a fixed production root"
+assert_not_file "$FIXED_MARKER_TARGET"
+ln -s /var/lib "$ROOT/fixed-drill-var-lib-alias"
+assert_failure env NODE="$BOUND_NODE" DATA_DIR="$DATA_DIR" OPS_STATE_DIR="$OPS_STATE_DIR" \
+  BACKUP_DIR="$BACKUP_DIR" \
+  DRILL_DIR="$ROOT/fixed-drill-var-lib-alias/cosmos/ops/df32-drill-report" \
+  TMPDIR="$ROOT" /bin/bash "$DRILL"
 
 note "a failed forced restore preserves every pre-existing target artifact"
 PRESERVE_TARGET="$ROOT/preserve-target"
@@ -561,7 +617,8 @@ mkdir -p "$DRILL_BACKUPS"
 cp -R "$BASE_BACKUP" "$DRILL_BACKUPS/$(basename "$BASE_BACKUP")"
 PRODUCTION_SHA="$(file_sha256 "$DATA_DIR/cosmos.db")"
 assert_success env DATA_DIR="$DATA_DIR" OPS_STATE_DIR="$OPS_STATE_DIR" \
-  BACKUP_DIR="$DRILL_BACKUPS" DRILL_DIR="$DRILL_REPORTS" bash "$DRILL"
+  BACKUP_DIR="$DRILL_BACKUPS" DRILL_DIR="$DRILL_REPORTS" TMPDIR="$ROOT" \
+  NODE="$BOUND_NODE" bash "$DRILL"
 GOOD_DRILL_REPORT="$DRILL_REPORTS/$(ls -1 "$DRILL_REPORTS" | sort | tail -1)"
 assert_eq "$(node -e '
   const report = require(process.argv[1]);
@@ -579,7 +636,8 @@ sleep 1.1
 DRILL_BACKUP="$DRILL_BACKUPS/$(basename "$BASE_BACKUP")"
 replace_first_archive "$DRILL_BACKUP" drill-tamper
 assert_failure env DATA_DIR="$DATA_DIR" OPS_STATE_DIR="$OPS_STATE_DIR" \
-  BACKUP_DIR="$DRILL_BACKUPS" DRILL_DIR="$DRILL_REPORTS" bash "$DRILL"
+  BACKUP_DIR="$DRILL_BACKUPS" DRILL_DIR="$DRILL_REPORTS" TMPDIR="$ROOT" \
+  NODE="$BOUND_NODE" bash "$DRILL"
 BAD_DRILL_REPORT="$DRILL_REPORTS/$(ls -1 "$DRILL_REPORTS" | sort | tail -1)"
 assert_eq "$(node -e 'process.stdout.write(String(require(process.argv[1]).ok))' "$BAD_DRILL_REPORT")" false
 assert_eq "$(node -e '

@@ -7,9 +7,10 @@ import {
 import { dirname, isAbsolute, join, parse, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  fail, hasPlaceholder, isUtc, listRegularFiles, parseArgs, readJson, requireExactKeys,
-  sha256File, verifyArtifactManifest,
+  fail, hasPlaceholder, isUtc, listRegularFiles, parseArgs, requireExactKeys,
+  sha256File, typedTreeDigest, verifyArtifactManifest,
 } from '../lib.mjs';
+import { validateSimulationRoot } from '../simulation-safety.mjs';
 
 const FIRST_HOST_TARGET = 'NO_PRIOR_RELEASE_FIRST_HOST';
 const FIRST_HOST_SUPERVISOR_SOURCE = 'FIRST_HOST_BOOTSTRAP_READBACK';
@@ -22,14 +23,166 @@ const CLOSED_COMMAND_ENV = Object.freeze({
   LANG: 'C',
   LC_ALL: 'C',
 });
+const INSPECT_EXECUTABLE = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  'inspect-executable.mjs',
+);
+const EXECUTABLE_IDENTITY_KEYS = Object.freeze([
+  'device', 'inode', 'mode', 'size', 'mtimeNs', 'ctimeNs',
+]);
+const OFFLINE_ROOT_IDENTITY_KEYS = Object.freeze([
+  'device', 'inode', 'mode', 'uid', 'gid', 'mtimeNs', 'ctimeNs',
+]);
+const STAGING_PROOF_ROOT = /^\/var\/tmp\/cosmos-df32-proof-([0-9a-f]{4})$/;
+const PROTECTED_ROOTS = Object.freeze([
+  '/opt/cosmos',
+  '/var/lib/cosmos',
+  '/var/backups/cosmos',
+  '/etc/cosmos',
+  '/run/cosmos-app',
+  '/run/cosmos-secret-source',
+  '/usr/local/lib/cosmos-ops',
+  '/var/lib/cosmos-deployment-authorization',
+  '/var/lib/cosmos-authorization-consumption',
+  '/var/lib/cosmos-action-receipts',
+]);
 const canonicalJson = (value) => `${JSON.stringify(value, null, 2)}\n`;
 const sha256Bytes = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const sameValue = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 
+function effectiveObservationTime(args) {
+  if (args['simulation-clock'] !== true) {
+    if (args.now !== undefined) fail('--now is accepted only with --simulation-clock');
+    if (args['simulation-root'] !== undefined) {
+      fail('--simulation-root is accepted only with --simulation-clock');
+    }
+    return new Date(Math.floor(Date.now() / 1000) * 1000)
+      .toISOString().replace('.000Z', 'Z');
+  }
+  if (!isUtc(args.now) || args['simulation-root'] === undefined) {
+    fail('--simulation-clock requires exact --now and --simulation-root');
+  }
+  try {
+    validateSimulationRoot(args['simulation-root']);
+  } catch {
+    fail('--simulation-root is not one canonical marked simulation root');
+  }
+  return args.now;
+}
+
 function requireCanonicalAbsolute(path, label) {
   if (typeof path !== 'string' || path === '/' || !isAbsolute(path) || resolve(path) !== path) {
-    fail(`${label} must be a non-root canonical absolute path`);
+    fail(`${label} must be a canonical non-root absolute path`);
   }
+}
+
+function physicalPotentialPath(path, label) {
+  requireCanonicalAbsolute(path, label);
+  let cursor = path;
+  const suffix = [];
+  for (;;) {
+    let stat;
+    try {
+      stat = lstatSync(cursor, { bigint: true, throwIfNoEntry: false });
+    } catch (error) {
+      fail(`${label} existing ancestor cannot be inspected: ${error.message}`);
+    }
+    if (stat !== null && stat !== undefined) {
+      let physical;
+      try {
+        physical = realpathSync.native(cursor);
+      } catch (error) {
+        fail(`${label} existing ancestor cannot be physically resolved: ${error.message}`);
+      }
+      const physicalStat = lstatSync(physical, { bigint: true });
+      if (suffix.length > 0 && !physicalStat.isDirectory()) {
+        fail(`${label} deepest existing ancestor is not one directory`);
+      }
+      return resolve(physical, ...suffix);
+    }
+    const parent = dirname(cursor);
+    const component = cursor.slice(parent === '/' ? 1 : parent.length + 1);
+    if (parent === cursor || component === '' || component === '.' || component === '..') {
+      fail(`${label} has an unsafe missing suffix`);
+    }
+    suffix.unshift(component);
+    cursor = parent;
+  }
+}
+
+function directoryObjectIdentity(stat) {
+  return {
+    device: stat.dev.toString(),
+    inode: stat.ino.toString(),
+    mode: stat.mode.toString(8),
+    mtimeMs: stat.mtimeMs.toString(),
+    ctimeMs: stat.ctimeMs.toString(),
+  };
+}
+
+function requireCanonicalDirectory(path, label) {
+  requireCanonicalAbsolute(path, label);
+  const stat = lstatAfterSafeAncestors(path, label);
+  if (!stat || stat.isSymbolicLink() || !stat.isDirectory()) {
+    fail(`${label} must identify one non-symlink directory`);
+  }
+  let physical;
+  try {
+    physical = realpathSync(path);
+  } catch (error) {
+    fail(`${label} cannot be physically canonicalized: ${error.message}`);
+  }
+  if (physical !== path) {
+    fail(`${label} path or one of its ancestors is not physically canonical`);
+  }
+  return { path, identity: directoryObjectIdentity(stat) };
+}
+
+function evidenceFileIdentity(stat) {
+  return {
+    device: stat.dev.toString(),
+    inode: stat.ino.toString(),
+    mode: stat.mode.toString(8),
+    links: stat.nlink.toString(),
+    uid: stat.uid.toString(),
+    gid: stat.gid.toString(),
+    size: stat.size.toString(),
+    mtimeNs: stat.mtimeNs.toString(),
+    ctimeNs: stat.ctimeNs.toString(),
+  };
+}
+
+function readStableEvidenceJson(path, label) {
+  requireCanonicalAbsolute(path, label);
+  const before = lstatAfterSafeAncestors(path, label, { bigint: true });
+  if (!before || before.isSymbolicLink() || !before.isFile() || before.nlink !== 1n
+      || before.size <= 0n || before.size > 4n * 1024n * 1024n
+      || (before.mode & 0o022n) !== 0n || (before.mode & 0o7000n) !== 0n
+      || realpathSync.native(path) !== path) {
+    fail(`${label} must be one canonical bounded non-writable single-link regular file`);
+  }
+  const identity = evidenceFileIdentity(before);
+  let bytes;
+  let value;
+  try {
+    bytes = readFileSync(path);
+    value = JSON.parse(bytes);
+  } catch (error) {
+    fail(`${label} is unreadable or invalid JSON: ${error.message}`);
+  }
+  const after = lstatAfterSafeAncestors(path, label, { bigint: true });
+  if (!after || after.isSymbolicLink() || !after.isFile()
+      || realpathSync.native(path) !== path
+      || !sameValue(evidenceFileIdentity(after), identity)
+      || BigInt(bytes.length) !== after.size) {
+    fail(`${label} identity changed during read`);
+  }
+  return Object.freeze({
+    path,
+    identity: Object.freeze(identity),
+    sha256: sha256Bytes(bytes),
+    value,
+  });
 }
 
 function assertSafeAncestors(path, label) {
@@ -47,7 +200,7 @@ function assertSafeAncestors(path, label) {
       fail(`${label} ancestor ${cursor} is unreadable: ${error.message}`);
     }
     if (stat.isSymbolicLink() || !stat.isDirectory()) {
-      fail(`${label} ancestor ${cursor} is not a real directory`);
+      fail(`${label} ancestor ${cursor} is not physically canonical or is not a real directory`);
     }
     try {
       accessSync(cursor, constants.R_OK | constants.X_OK);
@@ -167,6 +320,77 @@ function sqliteIdentity(stat) {
   };
 }
 
+function canonicalExecutableIdentity(identity, label) {
+  requireExactKeys(identity, EXECUTABLE_IDENTITY_KEYS, label);
+  for (const key of EXECUTABLE_IDENTITY_KEYS) {
+    const value = identity[key];
+    const pattern = key === 'mode' ? /^[1-7][0-7]+$/ : /^(?:0|[1-9][0-9]*)$/;
+    if (typeof value !== 'string' || !pattern.test(value)) {
+      fail(`${label}.${key} is not canonically encoded`);
+    }
+  }
+  return EXECUTABLE_IDENTITY_KEYS
+    .map((key) => `${key}=${identity[key]}`)
+    .join(',');
+}
+
+function inspectExecutableBinding(path, label) {
+  const result = spawnSync(
+    process.execPath,
+    [INSPECT_EXECUTABLE, '--path', path],
+    {
+      encoding: 'utf8',
+      env: CLOSED_COMMAND_ENV,
+      timeout: 5_000,
+      maxBuffer: 16 * 1024,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true,
+    },
+  );
+  if (result.error || result.signal || result.status !== 0 || result.stderr !== '') {
+    fail(`${label} inspection failed`);
+  }
+  let inspected;
+  try {
+    inspected = JSON.parse(result.stdout);
+  } catch {
+    fail(`${label} inspection returned invalid JSON`);
+  }
+  requireExactKeys(
+    inspected,
+    ['status', 'path', 'sha256', 'identity', 'endpointIdentity'],
+    `${label} inspection`,
+  );
+  const endpointIdentity = canonicalExecutableIdentity(
+    inspected.identity,
+    `${label} inspection.identity`,
+  );
+  if (inspected.status !== 'EXECUTABLE_IDENTITY_VERIFIED'
+      || !/^[0-9a-f]{64}$/.test(inspected.sha256)
+      || inspected.endpointIdentity !== endpointIdentity) {
+    fail(`${label} inspection is invalid`);
+  }
+  return inspected;
+}
+
+function expectedSystemctlBinding(args) {
+  for (const key of ['systemctl-path', 'systemctl-sha256', 'systemctl-identity']) {
+    if (!args[key]) fail(`--${key} is required for first-host bootstrap`);
+  }
+  requireCanonicalAbsolute(args['systemctl-path'], 'first-host expected systemctl path');
+  if (!/^[0-9a-f]{64}$/.test(args['systemctl-sha256'])
+      || typeof args['systemctl-identity'] !== 'string'
+      || args['systemctl-identity'].length > 1_024
+      || /[\u0000-\u001f\u007f]/u.test(args['systemctl-identity'])) {
+    fail('first-host expected systemctl digest or identity is invalid');
+  }
+  return {
+    path: args['systemctl-path'],
+    sha256: args['systemctl-sha256'],
+    endpointIdentity: args['systemctl-identity'],
+  };
+}
+
 function verifyPinnedSqlite(readback, evidenceObservedAtUtc) {
   requireExactKeys(readback, [
     'schemaVersion', 'source', 'observedAtUtc', 'path', 'sha256', 'version', 'identity',
@@ -243,22 +467,36 @@ function nearestExistingDirectory(path) {
   }
 }
 
-function verifyUnitBaseline(unit) {
-  requireExactKeys(unit, ['systemctlPath', 'unit', 'state', 'exitCode'], 'first-host evidence.baseline.unit');
+function verifyUnitBaseline(unit, expectedSystemctl) {
+  requireExactKeys(unit, [
+    'systemctlPath', 'systemctlSha256', 'systemctlIdentity', 'unit', 'state', 'exitCode',
+  ], 'first-host evidence.baseline.unit');
+  const recordedIdentity = canonicalExecutableIdentity(
+    unit.systemctlIdentity,
+    'first-host evidence.baseline.unit.systemctlIdentity',
+  );
   if (!/^[A-Za-z0-9][A-Za-z0-9_.@:-]*\.service$/.test(unit.unit)) {
     fail('first-host APP_UNIT is not canonical');
   }
   requireCanonicalAbsolute(unit.systemctlPath, 'first-host systemctl path');
-  const stat = lstatAfterSafeAncestors(unit.systemctlPath, 'first-host systemctl path', { bigint: true });
-  if (!stat || stat.isSymbolicLink() || !stat.isFile() || (stat.mode & 0o111n) === 0n
-      || (stat.mode & 0o022n) !== 0n || realpathSync(unit.systemctlPath) !== unit.systemctlPath) {
-    fail('first-host systemctl path must be a canonical real non-writable executable');
+  if (!/^[0-9a-f]{64}$/.test(unit.systemctlSha256)) {
+    fail('first-host systemctl digest is invalid');
+  }
+  const before = inspectExecutableBinding(unit.systemctlPath, 'first-host systemctl');
+  if (unit.systemctlPath !== expectedSystemctl.path
+      || unit.systemctlSha256 !== expectedSystemctl.sha256
+      || recordedIdentity !== expectedSystemctl.endpointIdentity
+      || before.path !== expectedSystemctl.path
+      || before.sha256 !== expectedSystemctl.sha256
+      || before.endpointIdentity !== expectedSystemctl.endpointIdentity
+      || !sameValue(before.identity, unit.systemctlIdentity)) {
+    fail('first-host systemctl evidence differs from the current wrapper binding');
   }
   const result = spawnSync(unit.systemctlPath, ['is-active', unit.unit], {
     encoding: 'utf8', env: CLOSED_COMMAND_ENV, timeout: 5_000, maxBuffer: 16 * 1024,
     stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
   });
-  if (result.error || result.signal) {
+  if (result.error || result.signal || result.stderr !== '') {
     fail('first-host systemctl live readback failed');
   }
   const actual = result.stdout === 'inactive\n' && result.status === 3
@@ -269,6 +507,125 @@ function verifyUnitBaseline(unit) {
   if (!actual || unit.state !== actual.state || unit.exitCode !== actual.exitCode) {
     fail('first-host unit state differs from exact live inactive/not-found readback');
   }
+  const after = inspectExecutableBinding(unit.systemctlPath, 'first-host systemctl');
+  if (!sameValue(after, before)) {
+    fail('first-host systemctl executable changed during preflight');
+  }
+}
+
+function offlineRootIdentity(stat) {
+  return {
+    device: stat.dev.toString(),
+    inode: stat.ino.toString(),
+    mode: stat.mode.toString(8),
+    uid: stat.uid.toString(),
+    gid: stat.gid.toString(),
+    mtimeNs: stat.mtimeNs.toString(),
+    ctimeNs: stat.ctimeNs.toString(),
+  };
+}
+
+function verifyOfflineUnitBaseline(unit, {
+  donorEnvPath, evidenceDir, expectedUnit, owner, paths, releaseRoot,
+}) {
+  requireExactKeys(unit, [
+    'observationMode',
+    'systemctlPath', 'systemctlSha256', 'systemctlIdentity',
+    'unit', 'state', 'exitCode',
+    'offlineUnitRoot', 'offlineUnitRootIdentity', 'offlineUnitTreeSha256',
+  ], 'first-host evidence.baseline.unit');
+  requireExactKeys(
+    unit.offlineUnitRootIdentity,
+    OFFLINE_ROOT_IDENTITY_KEYS,
+    'first-host evidence.baseline.unit.offlineUnitRootIdentity',
+  );
+  for (const key of OFFLINE_ROOT_IDENTITY_KEYS) {
+    const value = unit.offlineUnitRootIdentity[key];
+    const pattern = key === 'mode' ? /^[1-7][0-7]+$/ : /^(?:0|[1-9][0-9]*)$/;
+    if (typeof value !== 'string' || !pattern.test(value)) {
+      fail(`first-host offline root identity.${key} is not canonically encoded`);
+    }
+  }
+  if (unit.observationMode !== 'PRIVATE_OFFLINE_UNIT_ROOT'
+      || unit.systemctlPath !== null
+      || unit.systemctlSha256 !== null
+      || unit.systemctlIdentity !== null
+      || unit.unit !== expectedUnit
+      || unit.state !== 'INACTIVE'
+      || unit.exitCode !== null
+      || !/^[0-9a-f]{64}$/.test(unit.offlineUnitTreeSha256)) {
+    fail('first-host offline unit evidence has an invalid closed state');
+  }
+  requireCanonicalAbsolute(unit.offlineUnitRoot, 'first-host offline unit root');
+  const proofRoot = dirname(unit.offlineUnitRoot);
+  const suffix = STAGING_PROOF_ROOT.exec(proofRoot);
+  if (suffix === null
+      || unit.offlineUnitRoot !== join(proofRoot, 'first-host-offline-systemd')
+      || evidenceDir !== join(
+        proofRoot,
+        'first-host-evidence',
+        `first-host-readback.${suffix[1]}`,
+      )
+      || owner.targetHost !== `cosmos-df32-proof-${suffix[1]}.internal`
+      || owner.environment !== `isolated-staging-${suffix[1]}`
+      || expectedUnit !== `cosmos-df32-proof-${suffix[1]}.service`) {
+    fail('first-host offline unit evidence is outside the exact proof-suffixed layout');
+  }
+  if (donorEnvPath !== join(proofRoot, 'sanitized', 'deploy.env')
+      || paths.cosmosRoot !== join(proofRoot, 'cosmos')
+      || paths.releasesDir !== join(proofRoot, 'cosmos', 'releases')
+      || paths.currentLink !== join(proofRoot, 'cosmos', 'current')
+      || paths.previousLink !== join(proofRoot, 'cosmos', 'previous')
+      || paths.dataDir !== join(proofRoot, 'data')
+      || paths.opsStateDir !== join(proofRoot, 'ops-state')
+      || !releaseRoot.startsWith(`${proofRoot}/`)) {
+    fail('first-host offline evidence paths are outside the exact proof-root categories');
+  }
+  const overlaps = (left, right) => (
+    left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`)
+  );
+  const protectedPhysicalRoots = PROTECTED_ROOTS.map((protectedRoot) => (
+    physicalPotentialPath(protectedRoot, 'protected production root')
+  ));
+  if (protectedPhysicalRoots.some((protectedRoot) => (
+    overlaps(proofRoot, protectedRoot)
+  ))) {
+    fail('first-host offline proof root intersects a protected production root');
+  }
+  const before = lstatAfterSafeAncestors(
+    unit.offlineUnitRoot,
+    'first-host offline unit root',
+    { bigint: true },
+  );
+  if (!before || before.isSymbolicLink() || !before.isDirectory()
+      || realpathSync(unit.offlineUnitRoot) !== unit.offlineUnitRoot
+      || (before.mode & 0o7777n) !== 0o700n || before.uid !== 0n
+      || !sameValue(offlineRootIdentity(before), unit.offlineUnitRootIdentity)
+      || readdirSync(unit.offlineUnitRoot).length !== 0
+      || typedTreeDigest(unit.offlineUnitRoot) !== unit.offlineUnitTreeSha256
+      || lstatAfterSafeAncestors(
+        join(unit.offlineUnitRoot, unit.unit),
+        'first-host offline application unit',
+        { bigint: true },
+      ) !== null) {
+    fail('first-host offline unit root differs from collected evidence');
+  }
+  const after = lstatAfterSafeAncestors(
+    unit.offlineUnitRoot,
+    'first-host offline unit root',
+    { bigint: true },
+  );
+  if (!after || after.isSymbolicLink() || !after.isDirectory()
+      || !sameValue(offlineRootIdentity(after), unit.offlineUnitRootIdentity)
+      || readdirSync(unit.offlineUnitRoot).length !== 0
+      || typedTreeDigest(unit.offlineUnitRoot) !== unit.offlineUnitTreeSha256
+      || lstatAfterSafeAncestors(
+        join(unit.offlineUnitRoot, unit.unit),
+        'first-host offline application unit',
+        { bigint: true },
+      ) !== null) {
+    fail('first-host offline unit root changed during preflight');
+  }
 }
 
 function validateFirstHostEvidence({ args, releaseRoot, release, artifactManifestSha256, host, supervisor }) {
@@ -277,7 +634,6 @@ function validateFirstHostEvidence({ args, releaseRoot, release, artifactManifes
   if (!args['first-host-evidence'] || !args['donor-env']) {
     fail('--first-host-evidence and --donor-env are required for first-host bootstrap');
   }
-
   const evidencePath = resolve(args['first-host-evidence']);
   if (evidencePath !== args['first-host-evidence'] || evidencePath !== join(dirname(evidencePath), 'collected-evidence.json')) {
     fail('--first-host-evidence must be the canonical collected-evidence.json path');
@@ -329,7 +685,19 @@ function validateFirstHostEvidence({ args, releaseRoot, release, artifactManifes
   for (const key of ['releaseDestination', 'journal', 'frozenMarker', 'moneyReadyMarker']) {
     requireExactKeys(evidence.baseline[key], ['path', 'state'], `first-host evidence.baseline.${key}`);
   }
-  requireExactKeys(evidence.baseline.unit, ['systemctlPath', 'unit', 'state', 'exitCode'], 'first-host evidence.baseline.unit');
+  const offlineUnitEvidence = evidence.baseline.unit?.observationMode
+    === 'PRIVATE_OFFLINE_UNIT_ROOT';
+  if (offlineUnitEvidence) {
+    for (const key of ['systemctl-path', 'systemctl-sha256', 'systemctl-identity']) {
+      if (Object.hasOwn(args, key)) {
+        fail(`first-host offline evidence rejects --${key}`);
+      }
+    }
+  } else {
+    requireExactKeys(evidence.baseline.unit, [
+      'systemctlPath', 'systemctlSha256', 'systemctlIdentity', 'unit', 'state', 'exitCode',
+    ], 'first-host evidence.baseline.unit');
+  }
   requireExactKeys(evidence.derived, [
     'cleanBaseline', 'deploymentFrozen', 'exposureState', 'ambiguityState', 'recoveryState',
     'currentSchemaVersion', 'rollbackFloor',
@@ -475,12 +843,23 @@ function validateFirstHostEvidence({ args, releaseRoot, release, artifactManifes
     requireLiveAbsent(evidence.paths[pathKey], `first-host ${key}`);
   }
   const unit = evidence.baseline.unit;
-  if (unit.unit !== env.APP_UNIT
-      || !((unit.state === 'INACTIVE' && unit.exitCode === 3)
-        || (unit.state === 'NOT_FOUND' && unit.exitCode === 4))) {
-    fail('first-host unit state must be exact inactive or not-found readback');
+  if (offlineUnitEvidence) {
+    verifyOfflineUnitBaseline(unit, {
+      donorEnvPath,
+      evidenceDir,
+      expectedUnit: env.APP_UNIT,
+      owner: evidence.owner,
+      paths: evidence.paths,
+      releaseRoot,
+    });
+  } else {
+    if (unit.unit !== env.APP_UNIT
+        || !((unit.state === 'INACTIVE' && unit.exitCode === 3)
+          || (unit.state === 'NOT_FOUND' && unit.exitCode === 4))) {
+      fail('first-host unit state must be exact inactive or not-found readback');
+    }
+    verifyUnitBaseline(unit, expectedSystemctlBinding(args));
   }
-  verifyUnitBaseline(unit);
   if (!sameValue(evidence.derived, {
     cleanBaseline: true,
     deploymentFrozen: false,
@@ -500,16 +879,20 @@ function validateFirstHostEvidence({ args, releaseRoot, release, artifactManifes
   return Number(liveFreeBytes);
 }
 
-for (const singleton of ['--recovery-target', '--first-host-evidence', '--donor-env']) {
+for (const singleton of [
+  '--recovery-target', '--first-host-evidence', '--donor-env',
+  '--systemctl-path', '--systemctl-sha256', '--systemctl-identity',
+]) {
   if (process.argv.slice(2).filter((argument) => argument === singleton).length > 1) {
     fail(`duplicate first-host argument ${singleton}`);
   }
 }
-const args = parseArgs(process.argv.slice(2));
-for (const key of ['release', 'host', 'supervisor', 'mode', 'now', 'max-host-age-sec', 'max-supervisor-age-sec', 'required-supervisor-window-sec']) {
+const args = parseArgs(process.argv.slice(2), new Set(['simulation-clock']));
+for (const key of ['release', 'host', 'supervisor', 'mode', 'max-host-age-sec', 'max-supervisor-age-sec', 'required-supervisor-window-sec']) {
   if (!args[key]) fail(`--${key} is required`);
 }
 if (!['deploy', 'rollback'].includes(args.mode)) fail('--mode must be deploy or rollback');
+const effectiveNow = effectiveObservationTime(args);
 
 // The operator-facing gate must never be weaker than the release validator:
 // before this call, a tampered payload and a 192-byte stub containing only a
@@ -517,20 +900,26 @@ if (!['deploy', 'rollback'].includes(args.mode)) fail('--mode must be deploy or 
 // rejected the identical artifacts. The manifest-verification core (exact
 // keys, per-file sha256+mode, tree digests, TOCTOU re-read) is shared from
 // lib.mjs — a re-use, not a re-implementation, so the two cannot drift.
-const releaseRoot = resolve(args.release);
+const releaseRootBefore = requireCanonicalDirectory(args.release, '--release');
+const releaseRoot = releaseRootBefore.path;
 const { release, artifactManifestSha256 } = verifyArtifactManifest(releaseRoot);
-const host = readJson(args.host, 'host preflight');
-const supervisor = readJson(args.supervisor, 'supervisor readback');
+const hostEvidenceBefore = readStableEvidenceJson(args.host, 'host preflight');
+const supervisorEvidenceBefore = readStableEvidenceJson(
+  args.supervisor,
+  'supervisor readback',
+);
+const host = hostEvidenceBefore.value;
+const supervisor = supervisorEvidenceBefore.value;
 requireExactKeys(host, ['source', 'account', 'targetHost', 'environment', 'freeBytes', 'backupReserveBytes', 'sqliteVersion', 'evidenceSha256', 'observedAtUtc'], 'host preflight');
 requireExactKeys(supervisor, ['source', 'observedAtUtc', 'validUntilUtc', 'deploymentFrozen', 'exposureState', 'ambiguityState', 'recoveryState', 'currentSchemaVersion', 'rollbackFloor'], 'supervisor readback');
-const nowMs = Date.parse(args.now);
+const nowMs = Date.parse(effectiveNow);
 const hostObservedMs = Date.parse(host.observedAtUtc);
 const supervisorObservedMs = Date.parse(supervisor.observedAtUtc);
 const validUntilMs = Date.parse(supervisor.validUntilUtc);
 const maxHostAgeMs = Number(args['max-host-age-sec']) * 1000;
 const maxSupervisorAgeMs = Number(args['max-supervisor-age-sec']) * 1000;
 const requiredWindowMs = Number(args['required-supervisor-window-sec']) * 1000;
-if (![args.now, host.observedAtUtc, supervisor.observedAtUtc, supervisor.validUntilUtc].every(isUtc)
+if (![effectiveNow, host.observedAtUtc, supervisor.observedAtUtc, supervisor.validUntilUtc].every(isUtc)
     || ![nowMs, hostObservedMs, supervisorObservedMs, validUntilMs, maxHostAgeMs, maxSupervisorAgeMs, requiredWindowMs].every(Number.isFinite)
     || maxHostAgeMs <= 0 || maxSupervisorAgeMs <= 0 || requiredWindowMs <= 0) fail('preflight times/windows are invalid');
 if (hostObservedMs > nowMs || nowMs - hostObservedMs > maxHostAgeMs) fail('host preflight is stale or future-dated');
@@ -538,7 +927,9 @@ if (host.source !== 'TARGET_HOST_OWNER_READBACK' || hasPlaceholder(host.account)
     || !/^[0-9a-f]{64}$/.test(host.evidenceSha256)) fail('host preflight is not exact owner readback evidence');
 
 const hasFirstHostArguments = Object.hasOwn(args, 'recovery-target')
-  || Object.hasOwn(args, 'first-host-evidence') || Object.hasOwn(args, 'donor-env');
+  || Object.hasOwn(args, 'first-host-evidence') || Object.hasOwn(args, 'donor-env')
+  || Object.hasOwn(args, 'systemctl-path') || Object.hasOwn(args, 'systemctl-sha256')
+  || Object.hasOwn(args, 'systemctl-identity');
 let firstHostLiveFreeBytes = null;
 if (supervisor.source === FIRST_HOST_SUPERVISOR_SOURCE) {
   firstHostLiveFreeBytes = validateFirstHostEvidence({
@@ -583,6 +974,19 @@ if (release.schemaVersion < supervisor.rollbackFloor) {
 }
 if (args.mode === 'rollback' && release.schemaVersion > supervisor.currentSchemaVersion) {
   fail('rollback candidate cannot be newer than the current schema');
+}
+const releaseRootAfter = requireCanonicalDirectory(args.release, '--release');
+if (!sameValue(releaseRootAfter, releaseRootBefore)) {
+  fail('--release root identity changed during preflight');
+}
+const hostEvidenceAfter = readStableEvidenceJson(args.host, 'host preflight');
+const supervisorEvidenceAfter = readStableEvidenceJson(
+  args.supervisor,
+  'supervisor readback',
+);
+if (!sameValue(hostEvidenceAfter, hostEvidenceBefore)
+    || !sameValue(supervisorEvidenceAfter, supervisorEvidenceBefore)) {
+  fail('host or supervisor evidence changed during preflight');
 }
 
 process.stdout.write(`${JSON.stringify({

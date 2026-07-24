@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-import { existsSync, lstatSync, readFileSync } from 'node:fs';
+import {
+  existsSync, lstatSync, readFileSync, readdirSync, realpathSync,
+} from 'node:fs';
 import { createHash } from 'node:crypto';
-import { dirname, resolve } from 'node:path';
+import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   RELEASE_KEYS, fail, isFullSha, isUtc, listRegularFiles, parseArgs, readJson, requireExactKeys,
@@ -12,16 +14,88 @@ import {
   validateCompleteAcceptanceReceipt,
 } from '../complete-acceptance-receipt.mjs';
 import { validateCanonicalAcceptanceEvidence } from '../canonical-acceptance-validation.mjs';
+import {
+  classifyValidatorCohort,
+  EXACT_TRUSTED_COHORT,
+  selectExpectedL15AmendmentContractSha256,
+} from '../cohort-compatibility.mjs';
 import { assertReleaseMatchesCompiledLedger } from '../ledger-compatibility.mjs';
 import { loadL15AmendmentContract, verifyEffectiveL15Root } from '../l15-amendment.mjs';
 import {
-  assertTrustedBuildPublicKey, expectedBuildAttestation, verifyBuildAttestation,
+  expectedBuildAttestation, verifyBuildAttestation,
 } from './verify-build-attestation.mjs';
 
-const EXPECTED_AMENDMENT_CONTRACT_SHA256 = 'd60fdff586c1af91bfd92727ba49403bc0fd57210c4e76f1f5ee99391ee52581';
-const args = parseArgs(process.argv.slice(2), new Set(['allow-simulation']));
+const EXPECTED_AMENDMENT_CONTRACT_SHA256 = 'd316188f3d16b70a897e510f8508802d74323313d776d35491c5aedfc26f3035';
+const args = parseArgs(
+  process.argv.slice(2),
+  new Set(['allow-simulation', 'require-exact-cohort', 'installed-immutable']),
+);
 if (!args.release) fail('--release is required');
-const root = resolve(args.release);
+
+function directoryIdentity(stat) {
+  return {
+    device: stat.dev.toString(),
+    inode: stat.ino.toString(),
+    mode: stat.mode.toString(8),
+    mtimeNs: stat.mtimeNs.toString(),
+    ctimeNs: stat.ctimeNs.toString(),
+  };
+}
+
+function exactReleaseRoot(raw) {
+  if (typeof raw !== 'string' || raw === '/' || !isAbsolute(raw)
+      || resolve(raw) !== raw || /[\u0000-\u001f\u007f]/u.test(raw)) {
+    fail('--release must be one absolute lexical canonical path');
+  }
+  let stat;
+  try {
+    stat = lstatSync(raw, { bigint: true });
+  } catch (error) {
+    fail(`--release is unavailable: ${error.message}`);
+  }
+  if (stat.isSymbolicLink() || !stat.isDirectory()) {
+    fail('--release must identify one non-symlink unpacked release directory');
+  }
+  let physical;
+  try {
+    physical = realpathSync.native(raw);
+  } catch (error) {
+    fail(`--release cannot be physically canonicalized: ${error.message}`);
+  }
+  if (physical !== raw) {
+    fail('--release path or one of its ancestors is not physically canonical');
+  }
+  return { path: raw, identity: directoryIdentity(stat) };
+}
+
+const rootBefore = exactReleaseRoot(args.release);
+const root = rootBefore.path;
+
+function requireInstalledImmutableTree(path, relative = '') {
+  const absolute = resolve(path, relative);
+  const stat = lstatSync(absolute, { throwIfNoEntry: false });
+  if (!stat || stat.isSymbolicLink()
+      || (!stat.isFile() && !stat.isDirectory())) {
+    fail(`installed immutable release contains an unsafe entry: ${relative || '.'}`);
+  }
+  if ((stat.mode & 0o222) !== 0) {
+    fail(`installed immutable release contains a writable entry: ${relative || '.'}`);
+  }
+  if (stat.isDirectory()) {
+    for (const name of readdirSync(absolute).sort()) {
+      requireInstalledImmutableTree(path, relative ? `${relative}/${name}` : name);
+    }
+  }
+}
+
+if (args['installed-immutable'] === true) {
+  const rootStat = lstatSync(root, { throwIfNoEntry: false });
+  if (!rootStat?.isDirectory() || rootStat.isSymbolicLink()
+      || realpathSync(root) !== root) {
+    fail('installed immutable release root must be one canonical real directory');
+  }
+  requireInstalledImmutableTree(root);
+}
 const release = readJson(resolve(root, 'release.json'), 'release.json');
 const manifestPath = resolve(root, 'artifact-manifest.json');
 let manifestBytes;
@@ -79,12 +153,35 @@ const trustedI00EnforcementTreeDigestSha256 = typedTreeDigest(trustedI00Root, {
   excludeTopLevel: ['accepted-ops-live', 'install-receipt.json'],
 });
 const releaseI00EnforcementTreeDigestSha256 = typedTreeDigest(resolve(root, 'ops/i00'));
-if (releaseI00EnforcementTreeDigestSha256 !== trustedI00EnforcementTreeDigestSha256) {
+const validatorCohortMode = classifyValidatorCohort({
+  trustedI00EnforcementTreeDigestSha256,
+  releaseI00EnforcementTreeDigestSha256,
+  testedSha: release.testedSha,
+  sourceTree: release.sourceTree,
+  artifactManifestSha256,
+  testedReceiptSha256: release.testedReceiptSha256,
+  browserReceiptSha256: release.acceptanceEvidence?.browserReceiptSha256,
+  performanceReceiptSha256: release.acceptanceEvidence?.performanceReceiptSha256,
+  attestationSha256: release.buildAttestation?.attestationSha256,
+  signatureSha256: release.buildAttestation?.signatureSha256,
+  publicKeySha256: release.buildAttestation?.publicKeySha256,
+});
+if (validatorCohortMode === null) {
   fail('release ops/i00 enforcement cohort differs from the trusted validator cohort');
+}
+if (args['require-exact-cohort'] === true && validatorCohortMode !== EXACT_TRUSTED_COHORT) {
+  fail('validation-only legacy cohort compatibility cannot authorize a release effect');
+}
+const expectedL15AmendmentContractSha256 = selectExpectedL15AmendmentContractSha256(
+  validatorCohortMode,
+  EXPECTED_AMENDMENT_CONTRACT_SHA256,
+);
+if (expectedL15AmendmentContractSha256 === null) {
+  fail('validator cohort has no exact L15 amendment-contract binding');
 }
 const loadedL15Contract = loadL15AmendmentContract(
   resolve(root, 'ops/i00/l15-amendment-contract.json'),
-  EXPECTED_AMENDMENT_CONTRACT_SHA256,
+  expectedL15AmendmentContractSha256,
 );
 const l15Verification = verifyEffectiveL15Root({
   root: resolve(root, 'ops/live'),
@@ -180,17 +277,12 @@ if (release.sourceVerification === 'SIMULATION_ONLY') {
   const attestationPath = resolve(root, release.buildAttestation.attestation);
   const signaturePath = resolve(root, release.buildAttestation.signature);
   const publicKeyPath = resolve(root, release.buildAttestation.publicKey);
-  const trustedPublicKeyPath = args['trusted-build-public-key'] || process.env.I00_TRUSTED_BUILD_PUBLIC_KEY;
-  if (!trustedPublicKeyPath) {
-    fail('production validation requires --trusted-build-public-key or I00_TRUSTED_BUILD_PUBLIC_KEY');
+  const trustedPublicKeyPath = args['trusted-build-public-key'];
+  if (typeof trustedPublicKeyPath !== 'string' || trustedPublicKeyPath.length === 0) {
+    fail('production validation requires explicit --trusted-build-public-key');
   }
-  assertTrustedBuildPublicKey({ embeddedPublicKeyPath: publicKeyPath, trustedPublicKeyPath });
-  for (const [path, digest, label] of [
-    [attestationPath, release.buildAttestation.attestationSha256, 'attestation'],
-    [signaturePath, release.buildAttestation.signatureSha256, 'signature'],
-    [publicKeyPath, release.buildAttestation.publicKeySha256, 'public key'],
-  ]) {
-    if (sha256File(path) !== digest) fail(`embedded build ${label} digest mismatch`);
+  if (trustedPublicKeyPath === root || trustedPublicKeyPath.startsWith(`${root}/`)) {
+    fail('--trusted-build-public-key must be external to the release tree');
   }
   const expected = expectedBuildAttestation({
     testedSha: release.testedSha,
@@ -208,9 +300,12 @@ if (release.sourceVerification === 'SIMULATION_ONLY') {
     attestationPath,
     signaturePath,
     publicKeyPath,
+    trustedPublicKeyPath,
     expected,
   });
-  for (const field of ['attestationSha256', 'signatureSha256', 'publicKeySha256', 'builderIdentity']) {
+  for (const field of [
+    'attestationSha256', 'signatureSha256', 'publicKeySha256', 'builderIdentity',
+  ]) {
     if (verified[field] !== release.buildAttestation[field]) fail(`build attestation ${field} mismatch`);
   }
 }
@@ -218,7 +313,9 @@ if (release.sourceVerification === 'SIMULATION_ONLY') {
 // The artifact-manifest core (exact keys, identity, provenance equality,
 // path-set equality, per-file sha256+mode, tree digests, TOCTOU re-read) is
 // shared with preflight.mjs via lib.mjs so the two gates can never drift.
-const verifiedArtifacts = verifyArtifactManifest(root, release);
+const verifiedArtifacts = verifyArtifactManifest(root, release, {
+  installedImmutable: args['installed-immutable'] === true,
+});
 const verifiedFileCount = verifiedArtifacts.fileCount;
 for (const key of Object.keys(compiledCompatibility)) {
   if (manifest.ledgerCompatibility[key] !== compiledCompatibility[key]) {
@@ -228,11 +325,16 @@ for (const key of Object.keys(compiledCompatibility)) {
 if (verifiedArtifacts.artifactManifestSha256 !== artifactManifestSha256) {
   fail('artifact manifest changed during validation');
 }
+const rootAfter = exactReleaseRoot(args.release);
+if (JSON.stringify(rootAfter) !== JSON.stringify(rootBefore)) {
+  fail('--release root identity changed during validation');
+}
 
 process.stdout.write(`${JSON.stringify({
   status: 'RELEASE_VALID_NOT_DEPLOYED',
   releaseId: release.releaseId,
   testedSha: release.testedSha,
   artifactManifestSha256,
+  validatorCohortMode,
   fileCount: verifiedFileCount,
 })}\n`);

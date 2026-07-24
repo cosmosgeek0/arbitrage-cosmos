@@ -11,7 +11,14 @@
     "testedSha",
     "deployedSha",
     "artifactManifestSha256",
+    "authorizationId",
     "authorizationSha256",
+    "riskVersion",
+    "riskDocumentSha256",
+    "serverPreviewDigest",
+    "previewDocumentSha256",
+    "authorizationConsumption",
+    "authorizedEffect",
     "recoveryTarget",
     "firstHostEvidenceSha256",
     "current",
@@ -25,13 +32,31 @@
     "recordedAtUtc"
   ],
   "properties": {
-    "schemaVersion": {"const": 1},
+    "schemaVersion": {"const": 2},
     "kind": {"const": "RELEASE_SWITCH"},
     "releaseId": {"type": "string", "pattern": "^i00-[0-9a-f]{40}$"},
     "testedSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
-    "deployedSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "deployedSha": {
+      "oneOf": [
+        {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        {"type": "null"}
+      ]
+    },
     "artifactManifestSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "authorizationId": {"type": "string", "minLength": 1},
     "authorizationSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "riskVersion": {
+      "type": "string",
+      "pattern": "^i00-deployment-risk-v1:sha256:[0-9a-f]{64}$"
+    },
+    "riskDocumentSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "serverPreviewDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "previewDocumentSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "authorizationConsumption": {"$ref": "#/$defs/authorizationConsumption"},
+    "authorizedEffect": {"$ref": "#/$defs/authorizedEffect"},
     "recoveryTarget": {
       "oneOf": [
         {"const": "NO_PRIOR_RELEASE_FIRST_HOST"},
@@ -44,15 +69,25 @@
         {"type": "null"}
       ]
     },
-    "current": {"$ref": "#/$defs/current"},
-    "previous": {"$ref": "#/$defs/previous"},
+    "current": {
+      "oneOf": [
+        {"$ref": "#/$defs/current"},
+        {"type": "null"}
+      ]
+    },
+    "previous": {
+      "oneOf": [
+        {"$ref": "#/$defs/previous"},
+        {"type": "null"}
+      ]
+    },
     "service": {
       "type": "object",
       "additionalProperties": false,
       "required": ["unit", "state"],
       "properties": {
         "unit": {"const": "cosmos-app.service"},
-        "state": {"const": "ACTIVE"}
+        "state": {"enum": ["ACTIVE", "UNKNOWN"]}
       }
     },
     "postSwitchGate": {
@@ -69,16 +104,166 @@
             "enum": ["/health/live", "/health/ready"]
           }
         },
-        "status": {"const": "PASS"}
+        "status": {"enum": ["PASS", "UNKNOWN"]}
       }
     },
-    "donorExitCode": {"const": 0},
-    "status": {"const": "RELEASE_SWITCH_PROVED"},
+    "donorExitCode": {"type": ["integer", "null"]},
+    "status": {
+      "enum": ["RELEASE_SWITCH_PROVED", "RELEASE_SWITCH_FAILED_AFTER_EFFECT"]
+    },
     "startedAtUtc": {"type": "string", "format": "date-time"},
     "completedAtUtc": {"type": "string", "format": "date-time"},
     "recordedAtUtc": {"type": "string", "format": "date-time"}
   },
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "deployedSha", "current", "previous", "service",
+        "postSwitchGate", "donorExitCode", "status", "authorizedEffect"
+      ],
+      "properties": {
+        "deployedSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "current": {"$ref": "#/$defs/current"},
+        "previous": {"$ref": "#/$defs/previous"},
+        "service": {
+          "type": "object",
+          "required": ["state"],
+          "properties": {"state": {"const": "ACTIVE"}}
+        },
+        "postSwitchGate": {
+          "type": "object",
+          "required": ["status"],
+          "properties": {"status": {"const": "PASS"}}
+        },
+        "donorExitCode": {"const": 0},
+        "status": {"const": "RELEASE_SWITCH_PROVED"},
+        "authorizedEffect": {
+          "type": "object",
+          "required": ["terminalStatus", "successRecorderEligible"],
+          "properties": {
+            "terminalStatus": {"const": "AUTHORIZED_EFFECT_COMPLETED"},
+            "successRecorderEligible": {"const": true}
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "deployedSha", "current", "previous", "service",
+        "postSwitchGate", "status", "authorizedEffect"
+      ],
+      "properties": {
+        "deployedSha": {"type": "null"},
+        "current": {"type": "null"},
+        "previous": {"type": "null"},
+        "service": {
+          "type": "object",
+          "required": ["state"],
+          "properties": {"state": {"const": "UNKNOWN"}}
+        },
+        "postSwitchGate": {
+          "type": "object",
+          "required": ["status"],
+          "properties": {"status": {"const": "UNKNOWN"}}
+        },
+        "status": {"const": "RELEASE_SWITCH_FAILED_AFTER_EFFECT"},
+        "authorizedEffect": {
+          "type": "object",
+          "required": [
+            "terminalStatus", "effectMayHaveMutated", "successRecorderEligible"
+          ],
+          "properties": {
+            "terminalStatus": {"const": "AUTHORIZED_EFFECT_TERMINATED"},
+            "effectMayHaveMutated": {"const": true},
+            "successRecorderEligible": {"const": false}
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
+    "authorizedEffect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "startEvidencePath",
+        "startEvidenceSha256",
+        "terminalEvidencePath",
+        "terminalEvidenceSha256",
+        "effectStartedAtUtc",
+        "effectFinishedAtUtc",
+        "terminalStatus",
+        "exitCode",
+        "receiptPublicationReserveSeconds",
+        "claimKey",
+        "consumptionSha256",
+        "program",
+        "signal",
+        "forced",
+        "timedOut",
+        "programBindingRetained",
+        "effectMayHaveMutated",
+        "successRecorderEligible",
+        "runnerExitCode",
+        "receiptRoot"
+      ],
+      "properties": {
+        "startEvidencePath": {"type": "string", "pattern": "^/"},
+        "startEvidenceSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "terminalEvidencePath": {"type": "string", "pattern": "^/"},
+        "terminalEvidenceSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "effectStartedAtUtc": {"type": "string", "format": "date-time"},
+        "effectFinishedAtUtc": {"type": "string", "format": "date-time"},
+        "terminalStatus": {
+          "enum": ["AUTHORIZED_EFFECT_COMPLETED", "AUTHORIZED_EFFECT_TERMINATED"]
+        },
+        "exitCode": {"type": ["integer", "null"]},
+        "receiptPublicationReserveSeconds": {"type": "integer"},
+        "claimKey": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "consumptionSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "program": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256", "identity"],
+          "properties": {
+            "path": {"type": "string", "pattern": "^/"},
+            "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "identity": {"type": "string", "minLength": 1}
+          }
+        },
+        "signal": {"type": ["string", "null"]},
+        "forced": {"type": "boolean"},
+        "timedOut": {"type": "boolean"},
+        "programBindingRetained": {"type": "boolean"},
+        "effectMayHaveMutated": {"type": "boolean"},
+        "successRecorderEligible": {"type": "boolean"},
+        "runnerExitCode": {"type": "integer"},
+        "receiptRoot": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "identity"],
+          "properties": {
+            "path": {"type": "string", "pattern": "^/"},
+            "identity": {
+              "type": "string",
+              "pattern": "^device=[0-9]+,inode=[0-9]+,mode=[0-7]+,uid=[0-9]+,gid=[0-9]+$"
+            }
+          }
+        }
+      }
+    },
+    "authorizationConsumption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["claimKey", "sha256", "consumedAtUtc"],
+      "properties": {
+        "claimKey": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "consumedAtUtc": {"type": "string", "format": "date-time"}
+      }
+    },
     "current": {
       "type": "object",
       "additionalProperties": false,

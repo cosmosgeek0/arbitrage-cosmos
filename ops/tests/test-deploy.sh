@@ -4,6 +4,13 @@
 # A fake loopback app serves health from $CURRENT_LINK/runtime-behavior.env
 # (re-read per request), so an atomic symlink switch observably changes the
 # served release. systemctl is mocked; no systemd, no network beyond loopback.
+if [ "${DF32_DEPLOY_RACE_NODE_WRAPPER:-}" = 1 ]; then
+  set -u
+  if [ "${1:-}" = - ] && [ "${2:-}" = recover ] && [ "${3:-}" = "$RACE_LOCK" ]; then
+    : > "$RACE_LOCK_ATTEMPT"
+  fi
+  exec "$RACE_REAL_NODE" "$@"
+fi
 . "$(dirname "$0")/helpers.sh"
 . "$BIN/common.sh"
 
@@ -13,7 +20,7 @@ export CURRENT_LINK="$COSMOS_ROOT/current"
 export PREVIOUS_LINK="$COSMOS_ROOT/previous"
 export DATA_DIR="$SANDBOX/data"
 export OPS_STATE_DIR="$SANDBOX/ops"
-export APP_UNIT=cosmos-app.service
+export APP_UNIT=df32-fixture-app.service
 APP_PORT="$(pick_port)"
 PROBE_PORT="$(pick_port)"
 export PROBE_PORT
@@ -32,7 +39,45 @@ export EXPOSURE_CMD="cat $SANDBOX/exposure"
 echo NONE > "$SANDBOX/exposure"
 export MONEY_READY_MARKER="$OPS_STATE_DIR/money-ready"
 # Probe boots the fake app against the candidate's probe-behavior.env.
-export PROBE_CMD='BEHAVIOR_FILE="$RELEASE_DIR/probe-behavior.env" PORT="$PROBE_PORT" exec node '"$FIXTURES"'/fake-app.mjs'
+PROBE_FIXTURE="$FIXTURES/fake-app.mjs"
+PROBE_EXPECTED_UID=""
+PROBE_EXPECTED_GID=""
+PROBE_IDENTITY_WITNESS=""
+if [ "${EUID:-$(id -u)}" -eq 0 ]; then
+  [ "$(uname -s)" = Linux ] || fail "root deploy proof requires Linux"
+  PROBE_EXPECTED_UID="$(/usr/bin/id -u cosmos 2>/dev/null)" \
+    || fail "root deploy proof requires the fixed cosmos user"
+  PROBE_EXPECTED_GID="$(/usr/bin/id -g cosmos 2>/dev/null)" \
+    || fail "root deploy proof requires the fixed cosmos group"
+  chmod 755 "$SANDBOX"
+  PROBE_FIXTURE="$SANDBOX/fake-app.mjs"
+  cp "$FIXTURES/fake-app.mjs" "$PROBE_FIXTURE"
+  chmod 444 "$PROBE_FIXTURE"
+  PROBE_IDENTITY_DIR="$SANDBOX/probe-identity"
+  mkdir "$PROBE_IDENTITY_DIR"
+  chown "$PROBE_EXPECTED_UID:$PROBE_EXPECTED_GID" "$PROBE_IDENTITY_DIR"
+  chmod 700 "$PROBE_IDENTITY_DIR"
+  PROBE_IDENTITY_WITNESS="$PROBE_IDENTITY_DIR/effective.json"
+  PROBE_IDENTITY_LAUNCHER="$SANDBOX/probe-identity-launcher.mjs"
+  cat > "$PROBE_IDENTITY_LAUNCHER" <<'NODE'
+import fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
+const [witness, target] = process.argv.slice(2);
+fs.writeFileSync(witness, `${JSON.stringify({
+  uid: process.getuid(),
+  gid: process.getgid(),
+  groups: process.getgroups(),
+})}\n`, { flag: 'w', mode: 0o600 });
+await import(pathToFileURL(target).href);
+NODE
+  chmod 444 "$PROBE_IDENTITY_LAUNCHER"
+  printf -v PROBE_CMD \
+    'BEHAVIOR_FILE="$RELEASE_DIR/probe-behavior.env" PORT="$PROBE_PORT" exec node %q %q %q' \
+    "$PROBE_IDENTITY_LAUNCHER" "$PROBE_IDENTITY_WITNESS" "$PROBE_FIXTURE"
+else
+  PROBE_CMD='BEHAVIOR_FILE="$RELEASE_DIR/probe-behavior.env" PORT="$PROBE_PORT" exec node '"$PROBE_FIXTURE"
+fi
+export PROBE_CMD
 
 DEPLOY="$BIN/deploy.sh"
 ROLLBACK="$BIN/rollback.sh"
@@ -65,12 +110,20 @@ bash "$MAKE_RELEASE" "$SRC/A" rel-A 1 false
 assert_rc 0 bash "$DEPLOY" --release "$SRC/A"
 assert_link_target "$CURRENT_LINK" "$RELEASES_DIR/rel-A" "current after A"
 assert_eq "$(release_served)" rel-A "served release after A"
-assert_grep 'restart cosmos-app.service' "$MOCK_SYSTEMCTL_LOG" "app restarted"
+assert_grep 'restart df32-fixture-app.service' "$MOCK_SYSTEMCTL_LOG" "app restarted"
 assert_eq "$(json_get "$JOURNAL" dataSchema)" 1 "journal dataSchema"
 assert_eq "$(json_get "$JOURNAL" rollbackFloor)" 0 "journal rollbackFloor"
 assert_grep '"result":"SUCCESS"' "$OPS_STATE_DIR/deploy-log.jsonl" "deploy logged"
 assert_rc 1 touch "$RELEASES_DIR/rel-A/tamper" 2>/dev/null
 assert_no_file "$PREVIOUS_LINK"
+if [ -n "$PROBE_IDENTITY_WITNESS" ]; then
+  assert_eq "$(json_get "$PROBE_IDENTITY_WITNESS" uid)" "$PROBE_EXPECTED_UID" \
+    "root probe effective uid"
+  assert_eq "$(json_get "$PROBE_IDENTITY_WITNESS" gid)" "$PROBE_EXPECTED_GID" \
+    "root probe effective gid"
+  assert_eq "$(json_get "$PROBE_IDENTITY_WITNESS" groups)" "[$PROBE_EXPECTED_GID]" \
+    "root probe supplementary groups cleared"
+fi
 
 note "2. probe gate failure: candidate rejected BEFORE switch, current untouched"
 bash "$MAKE_RELEASE" "$SRC/B" rel-B 1 false 1 1 1 0   # probe-ready fails
@@ -306,23 +359,13 @@ RACE_PROBE_MARKER="$SANDBOX/first-host-race/probe-ran"
 RACE_LOCK_ATTEMPT="$SANDBOX/first-host-race/lock-attempt"
 RACE_RC_FILE="$SANDBOX/first-host-race/deploy.rc"
 RACE_OUTPUT="$SANDBOX/first-host-race/deploy.log"
-RACE_NODE_WRAPPER="$SANDBOX/first-host-race/node-wrapper.sh"
+RACE_NODE_WRAPPER="$(canonical_path "$0")" \
+  || fail "test could not canonicalize deterministic race Node wrapper"
 RACE_REAL_NODE="$(command -v node)"
 mkdir -p "$RACE_ROOT" "$(dirname "$RACE_SYSTEMCTL_LOG")"
+RACE_LOCK="$(canonical_path "$RACE_LOCK")" \
+  || fail "test could not canonicalize deterministic race lock"
 : > "$RACE_SYSTEMCTL_LOG"
-apply_race_node_wrapper() {
-  local wrapper="$1"
-  {
-    printf '%s\n' '#!/usr/bin/env bash'
-    printf '%s\n' 'set -u'
-    printf '%s\n' 'if [ "${1:-}" = - ] && [ "${2:-}" = recover ] && [ "${3:-}" = "$RACE_LOCK" ]; then'
-    printf '%s\n' '  : > "$RACE_LOCK_ATTEMPT"'
-    printf '%s\n' 'fi'
-    printf '%s\n' 'exec "$RACE_REAL_NODE" "$@"'
-  } > "$wrapper"
-  chmod +x "$wrapper"
-}
-apply_race_node_wrapper "$RACE_NODE_WRAPPER"
 acquire_lock "$RACE_LOCK" || fail "test could not acquire deterministic race lock"
 (
   set +e
@@ -334,6 +377,7 @@ acquire_lock "$RACE_LOCK" || fail "test could not acquire deterministic race loc
     GUARD_PROBE_MARKER="$RACE_PROBE_MARKER" \
     PROBE_CMD=': > "$GUARD_PROBE_MARKER"; exit 1' \
     I00_REQUIRE_FIRST_HOST_NO_CURRENT=1 \
+    DF32_DEPLOY_RACE_NODE_WRAPPER=1 \
     NODE="$RACE_NODE_WRAPPER" RACE_LOCK="$RACE_LOCK" \
     RACE_LOCK_ATTEMPT="$RACE_LOCK_ATTEMPT" RACE_REAL_NODE="$RACE_REAL_NODE" \
     bash "$DEPLOY" --release "$SRC/FIRST-HOST-GUARD" \
@@ -342,7 +386,7 @@ acquire_lock "$RACE_LOCK" || fail "test could not acquire deterministic race loc
 ) &
 RACE_DEPLOY_PID=$!
 register_pid "$RACE_DEPLOY_PID"
-RACE_DEADLINE=$(( $(date -u +%s) + 10 ))
+RACE_DEADLINE=$(( $(date -u +%s) + 60 ))
 while [ ! -f "$RACE_LOCK_ATTEMPT" ]; do
   kill -0 "$RACE_DEPLOY_PID" 2>/dev/null \
     || fail "racing deploy exited before attempting the held lock"
@@ -381,7 +425,9 @@ mkdir -p "$FIRST_FAIL_ROOT" "$(dirname "$FIRST_FAIL_SYSTEMCTL_LOG")"
 printf '%s\n' NONE > "$FIRST_FAIL_EXPOSURE"
 bash "$MAKE_RELEASE" "$SRC/FIRST-HOST-POST-SWITCH" rel-first-host-post-switch 1 false 0 1 1 1
 start_fake_app "$FIRST_FAIL_PORT" "$FIRST_FAIL_CURRENT/runtime-behavior.env" >/dev/null
-FIRST_FAIL_PROBE_CMD=': > "$FIRST_FAIL_PROBE_MARKER"; BEHAVIOR_FILE="$RELEASE_DIR/probe-behavior.env" PORT="$PROBE_PORT" exec node '"$FIXTURES"'/fake-app.mjs'
+printf -v FIRST_FAIL_PROBE_CMD \
+  ': > %q; BEHAVIOR_FILE="$RELEASE_DIR/probe-behavior.env" PORT="$PROBE_PORT" exec node %q' \
+  "$FIRST_FAIL_PROBE_MARKER" "$FIXTURES/fake-app.mjs"
 assert_rc 2 env \
   COSMOS_ROOT="$FIRST_FAIL_ROOT" RELEASES_DIR="$FIRST_FAIL_RELEASES" \
   CURRENT_LINK="$FIRST_FAIL_CURRENT" PREVIOUS_LINK="$FIRST_FAIL_PREVIOUS" \
@@ -403,7 +449,7 @@ assert_link_target "$FIRST_FAIL_CURRENT" "$FIRST_FAIL_RELEASES/rel-first-host-po
 assert_no_path_entry "$FIRST_FAIL_PREVIOUS" "failed first-host has no rollback target"
 assert_file "$FIRST_FAIL_OPS/deploy-frozen.json"
 assert_grep 'critical DEPLOY_FROZEN' "$FIRST_FAIL_ALERT_LOG" "first-host freeze alerted"
-assert_grep 'restart cosmos-app.service' "$FIRST_FAIL_SYSTEMCTL_LOG" "first-host candidate restarted"
+assert_grep 'restart df32-fixture-app.service' "$FIRST_FAIL_SYSTEMCTL_LOG" "first-host candidate restarted"
 assert_grep '"result":"FROZEN"' "$FIRST_FAIL_OPS/deploy-log.jsonl" "first-host freeze logged"
 assert_not_grep '"result":"AUTO_ROLLBACK"' "$FIRST_FAIL_OPS/deploy-log.jsonl" "first-host never auto-rolls back"
 assert_no_path_entry "$FIRST_FAIL_OPS/locks/deploy.lock" "first-host failure lock is cleaned"

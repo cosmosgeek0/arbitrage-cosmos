@@ -34,13 +34,15 @@ export function parseArgs(argv, flags = new Set()) {
   for (let index = 0; index < argv.length; index += 1) {
     const key = argv[index];
     if (!key.startsWith('--')) fail(`unexpected argument ${key}`);
+    const name = key.slice(2);
+    if (Object.prototype.hasOwnProperty.call(out, name)) fail(`duplicate argument ${key}`);
     if (flags.has(key) || flags.has(key.slice(2))) {
-      out[key.slice(2)] = true;
+      out[name] = true;
       continue;
     }
     const value = argv[index + 1];
     if (value === undefined || value.startsWith('--')) fail(`${key} requires a value`);
-    out[key.slice(2)] = value;
+    out[name] = value;
     index += 1;
   }
   return out;

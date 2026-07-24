@@ -90,6 +90,19 @@ jobs:
           test -f /usr/bin/node && test ! -L /usr/bin/node && test -x /usr/bin/node
           /usr/bin/node --version
 
+      - name: Normalize workspace permissions to production shape
+        # I00 refuses to inspect an executable whose path is group/world
+        # writable. On the deployment target the installed tree is root-owned
+        # and not group-writable, so the control never fires there; a hosted
+        # runner checkout can carry group-write, which makes the guard fire
+        # first and mask the assertion under test ("executable path must not
+        # be group/world writable" instead of the expected refusal). Strip
+        # group/other write so the workspace matches the production shape.
+        run: |
+          set -euo pipefail
+          chmod -R go-w "$GITHUB_WORKSPACE"
+          find "$GITHUB_WORKSPACE" -perm /022 -print -quit | tee /dev/stderr | wc -l
+
       - name: Run generic local operations proofs
         run: bash ops/tests/run-all.sh
 

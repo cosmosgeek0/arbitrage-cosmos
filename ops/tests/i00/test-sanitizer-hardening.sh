@@ -320,10 +320,30 @@ if (typeof emitted !== 'string'
     || !emitted.includes(`I00_BASH='${bash}'`)
     || result.stdout.includes('COSMOS_ROOT=')
     || result.stdout.includes(root)) process.exit(4);
+// Supply descriptor 3 as an explicitly unwritable channel of the accepted
+// KIND, so the component deterministically reaches its emit-failure decline on
+// every platform. Leaving the slot merely unoccupied is not deterministic: on
+// one platform the slot is absent and on another it is occupied by something
+// of another kind, which are different declines. A read-only end of a named
+// pipe is of the accepted kind and cannot be written, so exactly one decline
+// is reachable here and the accepted wording below stays narrow.
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const fifoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'df32-fifo-'));
+const fifoPath = path.join(fifoDir, 'result-channel');
+const mkfifo = spawnSync('mkfifo', [fifoPath], { encoding: 'utf8' });
+if (mkfifo.status !== 0) process.exit(6);
+const readOnlyChannel = fs.openSync(
+  fifoPath,
+  fs.constants.O_RDONLY | fs.constants.O_NONBLOCK,
+);
 const noDescriptor = spawnSync(process.execPath, common, {
   encoding: 'utf8',
-  stdio: ['ignore', 'pipe', 'pipe'],
+  stdio: ['ignore', 'pipe', 'pipe', readOnlyChannel],
 });
+fs.closeSync(readOnlyChannel);
+fs.rmSync(fifoDir, { recursive: true, force: true });
 if (noDescriptor.status === 0
     || (!noDescriptor.stderr.includes('inherited non-filesystem descriptor')
       && !noDescriptor.stderr.includes('could not be emitted'))) process.exit(5);

@@ -259,7 +259,7 @@ assert_success /bin/bash -p -c '
   . "$1"
   fs_seal_file_readonly "$2" "$3"
 ' _ "$COMMON" "$MARKER" "$MARKER_ROOT"
-MARKER_MODE="$(stat -f %Lp "$MARKER" 2>/dev/null || stat -c %a "$MARKER")"
+MARKER_MODE="$(stat -c %a "$MARKER" 2>/dev/null || stat -f %Lp "$MARKER")"
 assert_eq "$MARKER_MODE" 400
 
 VICTIM="$MARKER_ROOT/victim"
@@ -273,7 +273,7 @@ assert_failure /bin/bash -p -c '
   fs_seal_file_readonly "$2" "$3"
 ' _ "$COMMON" "$REPLACED" "$MARKER_ROOT"
 assert_eq "$(cat "$VICTIM")" unchanged
-assert_eq "$(stat -f %Lp "$VICTIM" 2>/dev/null || stat -c %a "$VICTIM")" 600
+assert_eq "$(stat -c %a "$VICTIM" 2>/dev/null || stat -f %Lp "$VICTIM")" 600
 
 if [ -d /proc/self/fd ]; then
   note "Linux directory capability seals the exact descriptor-root child"

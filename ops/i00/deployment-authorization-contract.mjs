@@ -70,6 +70,17 @@ export const DEPLOYMENT_SYSTEM_ROOTS = Object.freeze({
   consumption: '/var/lib/cosmos-authorization-consumption',
   receipts: '/var/lib/cosmos-action-receipts',
 });
+
+// THE one definition of the per-class effect-evidence root. Everything that needs the path, or
+// only its final component, derives it from here. Two programs restating the same interpolation is
+// what produced the defect this replaced; a literal copy elsewhere would reintroduce it one step
+// further out.
+export function systemEffectEvidenceRoot(actionClass) {
+  return ['BACKUP_CREATE', 'ISOLATED_RESTORE'].includes(actionClass)
+    ? `/var/backups/cosmos/.i00-${actionClass === 'BACKUP_CREATE' ? 'backup' : 'restore'}-effects`
+    : `${DEPLOYMENT_SYSTEM_ROOTS.receipts}/effects`;
+}
+
 const COMMON_EFFECT_ENDPOINT_PREFIXES = Object.freeze([
   'completion-reserve-seconds',
   'effect-common-identity',
@@ -693,9 +704,7 @@ export function validateDeploymentArtifactPolicy(value, actionClass) {
       && value.consumptionRoot === DEPLOYMENT_SYSTEM_ROOTS.consumption
       && value.receiptRoot === DEPLOYMENT_SYSTEM_ROOTS.receipts,
     'SYSTEM artifact policy differs from the exact production roots');
-    const expectedEffectRoot = ['BACKUP_CREATE', 'ISOLATED_RESTORE'].includes(actionClass)
-      ? `/var/backups/cosmos/.i00-${actionClass === 'BACKUP_CREATE' ? 'backup' : 'restore'}-effects`
-      : `${DEPLOYMENT_SYSTEM_ROOTS.receipts}/effects`;
+    const expectedEffectRoot = systemEffectEvidenceRoot(actionClass);
     assert(value.effectEvidenceRoot === expectedEffectRoot,
       'SYSTEM effect evidence root differs from the exact class category');
   } else {

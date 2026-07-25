@@ -1,3 +1,4 @@
+import { systemEffectEvidenceRoot } from './deployment-authorization-contract.mjs';
 import { createHash } from 'node:crypto';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -225,9 +226,12 @@ export function validateAuthorizedEffectTerminal(document, startDocument = null)
 // Defined ONCE here rather than derived independently in each program: two copies of a branch
 // is how the earlier defect in this same area was produced.
 export function backupEffectEvidenceChildName(actionClass) {
-  if (actionClass === 'BACKUP_CREATE') return '.i00-backup-effects';
-  if (actionClass === 'ISOLATED_RESTORE') return '.i00-restore-effects';
-  return null;
+  if (!['BACKUP_CREATE', 'ISOLATED_RESTORE'].includes(actionClass)) return null;
+  // DERIVED, never restated. The root is defined once in the authorization contract; taking its
+  // final component here means this cannot drift from it. Writing the two names as literals - as
+  // an earlier version of this function did - was a third copy of one name, which is the defect
+  // this whole contract exists to end.
+  return systemEffectEvidenceRoot(actionClass).split('/').pop();
 }
 
 // The inventory both sides agree to hash and compare: the write root's direct children with the

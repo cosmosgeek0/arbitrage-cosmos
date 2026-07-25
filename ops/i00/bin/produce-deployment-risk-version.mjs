@@ -1034,6 +1034,12 @@ function hostBinding(hostPath, evidencePath) {
     assert(Number.isSafeInteger(host.document[key]) && host.document[key] >= 0,
       `host readback.${key} is invalid`);
   }
+  // Align with the strict endpoint validator (backup-reserve-bytes requires a
+  // leading 1-9 decimal), so a zero reserve is refused here, at the earliest
+  // check, instead of surviving until the strict side rejects it later.
+  assert(host.document.backupReserveBytes >= 1
+    && /^[1-9][0-9]*$/u.test(String(host.document.backupReserveBytes)),
+  `host readback.backupReserveBytes must be a strictly positive integer; got ${host.document.backupReserveBytes}`);
   return Object.freeze({
     account: host.document.account,
     environment: host.document.environment,

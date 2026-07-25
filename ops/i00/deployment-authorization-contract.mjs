@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import {
   closeSync, constants, fstatSync, fsyncSync, lstatSync, openSync, readFileSync,
-  realpathSync, writeFileSync,
+  realpathSync, unlinkSync, writeFileSync,
 } from 'node:fs';
 import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1741,6 +1741,7 @@ export function writeExactPrivateJson(
   const bytes = canonicalJsonBytes(document);
   let parentDescriptor;
   let descriptor;
+  let completed = false;
   try {
     parentDescriptor = openSync(
       parent.absolute,
@@ -1805,7 +1806,30 @@ export function writeExactPrivateJson(
     }
     fsyncSync(parentDescriptor);
     recheckPrivateDirectory(parent, `${label} parent`);
+    completed = true;
   } finally {
+    if (!completed && descriptor !== undefined) {
+      // Pre-completion failure after the exclusive create: remove only the record
+      // this call itself created, so an aborted claim leaves no residue that would
+      // block a legitimate retry. A call that reaches completion never enters this
+      // branch, so a COMPLETED record stays in place and still collides on any
+      // single-use replay via the O_EXCL create above.
+      try {
+        const residuePath = process.platform === 'linux' && parentDescriptor !== undefined
+          ? `/proc/self/fd/${parentDescriptor}/${basename(absolute)}`
+          : absolute;
+        const residue = lstatSync(residuePath, { bigint: true, throwIfNoEntry: false });
+        if (residue !== undefined && residue.isFile() && !residue.isSymbolicLink()
+            && sameRegularFileIdentity(
+              regularFileIdentity(residue),
+              regularFileIdentity(fstatSync(descriptor, { bigint: true })),
+            )) {
+          unlinkSync(residuePath);
+        }
+      } catch {
+        // Residue removal is best effort and must never mask the original refusal.
+      }
+    }
     if (descriptor !== undefined) closeSync(descriptor);
     if (parentDescriptor !== undefined) closeSync(parentDescriptor);
   }

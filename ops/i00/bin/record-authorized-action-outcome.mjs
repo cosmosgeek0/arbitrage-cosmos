@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import {
   chmodSync, closeSync, constants, fstatSync, fsyncSync, lstatSync,
   mkdirSync, mkdtempSync, openSync, readlinkSync, readSync, readdirSync,
-  realpathSync, rmSync, writeFileSync, writeSync,
+  realpathSync, rmSync, rmdirSync, writeFileSync, writeSync,
 } from 'node:fs';
 import { basename, dirname, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -2371,6 +2371,8 @@ function createPrivateClaimDirectory(paths, {
   assert(lstatSync(paths.claimDirectory, { throwIfNoEntry: false }) === undefined,
     'rollback claim evidence directory already exists');
   let descriptor;
+  let claimCreated = false;
+  let completed = false;
   try {
     descriptor = openSync(
       paths.root,
@@ -2395,6 +2397,7 @@ function createPrivateClaimDirectory(paths, {
       ? `/proc/self/fd/${descriptor}/${basename(paths.claimDirectory)}`
       : paths.claimDirectory;
     mkdirSync(anchoredClaim, { mode: 0o700 });
+    claimCreated = true;
     const claim = canonicalDirectory(
       paths.claimDirectory,
       'rollback claim evidence directory',
@@ -2419,7 +2422,27 @@ function createPrivateClaimDirectory(paths, {
       && directoryIdentityEndpoint(durableOpened) === paths.rootIdentity
       && realpathSync(paths.root) === paths.root,
     'rollback evidence root identity changed during claim durability sync');
+    completed = true;
   } finally {
+    if (claimCreated && !completed && descriptor !== undefined) {
+      // Pre-completion failure after the claim mkdir: remove only the empty claim
+      // directory this call just created so an aborted run leaves no residue that
+      // would trip the already-exists collision on a legitimate retry. rmdirSync
+      // refuses non-empty directories, so anything already recorded inside a claim
+      // is never destroyed, and a call that reached completion never enters this
+      // branch — the completed claim still collides on reuse.
+      try {
+        const residueClaim = process.platform === 'linux'
+          ? `/proc/self/fd/${descriptor}/${basename(paths.claimDirectory)}`
+          : paths.claimDirectory;
+        const residue = lstatSync(residueClaim, { bigint: true, throwIfNoEntry: false });
+        if (residue !== undefined && residue.isDirectory() && !residue.isSymbolicLink()) {
+          rmdirSync(residueClaim);
+        }
+      } catch {
+        // Residue removal is best effort and must never mask the original refusal.
+      }
+    }
     if (descriptor !== undefined) closeSync(descriptor);
   }
 }

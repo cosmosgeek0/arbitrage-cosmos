@@ -299,7 +299,25 @@ function automaticRollbackPrelude() {
   ].join('\n');
 }
 
+// Deferred refusal carrier. process.exit takes effect immediately and skips every
+// remaining cleanup, so a refusal raised inside a region that still owns residue
+// (the effect temporary directory) would leave that residue behind. While the
+// deferral scope below is active a refusal is thrown as this error instead of being
+// taken on the spot; the guarded region captures it, lets the cleanup run, and then
+// re-issues it through blocked() with the identical message and exit code. The
+// refusal wording, stream, and exit status seen by callers never change.
+class DeferredRefusal extends Error {
+  constructor(message, code) {
+    super(message);
+    this.name = 'DeferredRefusal';
+    this.refusalCode = code;
+  }
+}
+
+const DEFERRED_REFUSAL_SCOPE = { active: false };
+
 function blocked(message, code = 1) {
+  if (DEFERRED_REFUSAL_SCOPE.active) throw new DeferredRefusal(message, code);
   process.stderr.write(`I00_OPS_BLOCKED: ${message}\n`);
   process.exit(code);
 }
@@ -661,6 +679,7 @@ function writeEvidence(parent, path, document, label) {
   const bytes = authorizedEffectEvidenceBytes(document);
   let parentDescriptor;
   let descriptor;
+  let completed = false;
   try {
     parentDescriptor = openSync(
       parent.absolute,
@@ -695,11 +714,35 @@ function writeEvidence(parent, path, document, label) {
       && named.size === finalOpened.size && realpathSync(path) === path,
     `${label} identity changed during exact publication`);
     fsyncSync(parentDescriptor);
-    return Object.freeze({
+    const published = Object.freeze({
       bytes,
       sha256: createHash('sha256').update(bytes).digest('hex'),
     });
+    completed = true;
+    return published;
   } finally {
+    if (!completed && descriptor !== undefined) {
+      // Pre-completion failure after the exclusive create: remove only the record
+      // this call itself created, so an aborted run leaves no residue that would
+      // block a legitimate retry on the same deterministic evidence pathname. A
+      // call that reaches completion never enters this branch, so a COMPLETED
+      // record stays in place and still collides on the O_EXCL create above.
+      try {
+        const residuePath = process.platform === 'linux' && parentDescriptor !== undefined
+          ? `/proc/self/fd/${parentDescriptor}/${basename(path)}`
+          : path;
+        const residue = lstatSync(residuePath, { bigint: true, throwIfNoEntry: false });
+        if (residue !== undefined && residue.isFile() && !residue.isSymbolicLink()
+            && sameIdentity(
+              statIdentity(residue),
+              statIdentity(fstatSync(descriptor, { bigint: true })),
+            )) {
+          unlinkSync(residuePath);
+        }
+      } catch {
+        // Residue removal is best effort and must never mask the original refusal.
+      }
+    }
     if (descriptor !== undefined) closeSync(descriptor);
     if (parentDescriptor !== undefined) closeSync(parentDescriptor);
   }
@@ -1623,6 +1666,7 @@ function publishEffectOutputEvidence(parent, path, document) {
     'effect evidence root identity changed before output publication');
   let parentDescriptor;
   let descriptor;
+  let completed = false;
   try {
     parentDescriptor = openSync(
       parent.absolute,
@@ -1651,11 +1695,35 @@ function publishEffectOutputEvidence(parent, path, document) {
       && realpathSync(path) === path,
     'authorized effect output evidence publication is not exact');
     fsyncSync(parentDescriptor);
-    return Object.freeze({
+    const published = Object.freeze({
       path,
       sha256: createHash('sha256').update(bytes).digest('hex'),
     });
+    completed = true;
+    return published;
   } finally {
+    if (!completed && descriptor !== undefined) {
+      // Pre-completion failure after the exclusive create: remove only the output
+      // evidence record this call itself created, so an aborted run leaves no
+      // residue on the deterministic output-evidence pathname. A call that reaches
+      // completion never enters this branch, so a COMPLETED record stays in place
+      // and still collides on the O_EXCL create above.
+      try {
+        const residuePath = parentDescriptor === undefined
+          ? path
+          : `/proc/self/fd/${parentDescriptor}/${basename(path)}`;
+        const residue = lstatSync(residuePath, { bigint: true, throwIfNoEntry: false });
+        if (residue !== undefined && residue.isFile() && !residue.isSymbolicLink()
+            && sameIdentity(
+              statIdentity(residue),
+              statIdentity(fstatSync(descriptor, { bigint: true })),
+            )) {
+          unlinkSync(residuePath);
+        }
+      } catch {
+        // Residue removal is best effort and must never mask the original refusal.
+      }
+    }
     if (descriptor !== undefined) closeSync(descriptor);
     if (parentDescriptor !== undefined) closeSync(parentDescriptor);
   }
@@ -2907,6 +2975,17 @@ const quiescent = !groupExists();
 timedOut ||= Date.now() >= completionDeadlineMs;
 let programRemainedBound = false;
 let chainRemainedBound = false;
+// The rechecks below already treat a thrown failure as "did not remain bound" and
+// carry on, but an assert() refusal inside them called process.exit and skipped the
+// effect-directory cleanup further down — the only step that removes this run's
+// temporary-directory residue. Inside this scope a refusal is thrown instead (the
+// same throwing-reject shape already passed to inspectBoundFile below), captured
+// here, and re-issued unchanged once that cleanup has run.
+let pendingRefusal = null;
+const captureGuardedFailure = (error) => {
+  if (error instanceof DeferredRefusal && pendingRefusal === null) pendingRefusal = error;
+};
+DEFERRED_REFUSAL_SCOPE.active = true;
 try {
   recheckBoundDescriptor(program, 'delegated effect program', productionBinding);
   recheckBoundDescriptor(
@@ -2951,7 +3030,9 @@ try {
     reject: (message) => { throw new Error(message); },
   });
   programRemainedBound = true;
-} catch {}
+} catch (error) { captureGuardedFailure(error); }
+// The second region is read-only verification, so it is safe to run even with a
+// refusal already pending; the first refusal is the one re-issued.
 try {
   recheckChain(chain);
   documentDescriptors.forEach((held, index) => recheckDocumentDescriptor(
@@ -3008,9 +3089,13 @@ try {
     recheckObservedRoot(root, expectedUid, `${root.name} observed root`);
   }
   chainRemainedBound = true;
-} catch {}
+} catch (error) { captureGuardedFailure(error); }
+// Outside the guarded region refusals are taken immediately again, exactly as
+// before; while a refusal is pending the scope stays active so that a second
+// refusal raised by the cleanup below cannot replace the one being carried.
+if (pendingRefusal === null) DEFERRED_REFUSAL_SCOPE.active = false;
 let effectOutput = Object.freeze({ status: 'NOT_APPLICABLE' });
-if (actionClass === 'BACKUP_CREATE') {
+if (pendingRefusal === null && actionClass === 'BACKUP_CREATE') {
   if (effectOutputBytes.length === 0) {
     effectOutput = Object.freeze({ status: 'MISSING' });
   } else if (effectOutputOverflow) {
@@ -3073,6 +3158,13 @@ try {
   }
   effectDirectoryFinalized = true;
 } catch {}
+if (pendingRefusal !== null) {
+  // Cleanup has now run. Re-issue the captured refusal exactly as blocked() would
+  // have issued it at the original refusal point: same message, same exit code,
+  // same stream, and still before any terminal evidence is written.
+  DEFERRED_REFUSAL_SCOPE.active = false;
+  blocked(pendingRefusal.message, pendingRefusal.refusalCode);
+}
 const ackLines = ackBytes.match(/[^\n]*\n/gu) ?? [];
 const ackAccepted = !ackOverflow
   && ackLines.length === 1

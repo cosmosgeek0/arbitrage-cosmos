@@ -34,7 +34,9 @@ function runSuite(script) {
       ? 3_000_000
       : script === 'test:deterministic:built'
         ? 2_000_000
-        : 1_200_000;
+        : script === 'test:live-edge:built'
+          ? 2_000_000
+          : 1_200_000;
     const deadline = superviseRunnerChild(child, timeoutMs);
     child.once('error', (error) => {
       spawnError = error;

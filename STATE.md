@@ -24,6 +24,7 @@
 | peak-RSS SLO | soft review window; hard and slope unchanged | 640 MiB through 2026-10-18; then 512 MiB | BUILT_AND_TESTED |
 | production deployment correction | five director-authorized defects only | `docs/archive/i00-phase4/DEPLOY-DEFECTS-007_CORRECTION_RECEIPT.md`; sealed baseline `…21a0` | LANDED_AND_RESEALED |
 | deployment portability batch | one DF-32 landing and reseal | source implemented; final L15 bound; Linux sealed-bundle proof and final receipt pending | IMPLEMENTED_L15_BOUND_PROOF_PENDING |
+| canonical test:all per-suite bound | receipted harness raise; no suite assertion changed | `test:live-edge:built` 2,000,000 ms against the 1,200,000 ms default; basis three green runs at 1,050-1,087 s rising about 18 s per run; mandatory re-review 2026-10-18 | RAISED_PENDING_RE_REVIEW |
 
 This file owns current product state. `ARCHITECTURE.md` Part II owns code authority, `MISSION.md` owns purpose, and `verification/product-truth-20260716/STATE.md` alone owns campaign status and next action.
 

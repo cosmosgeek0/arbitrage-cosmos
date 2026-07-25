@@ -3125,8 +3125,19 @@ if (pendingRefusal === null && actionClass === 'BACKUP_CREATE') {
         outputDocument,
       );
       const inventoryFinal = snapshotBackupWriteRoot(backupWriteRoot);
-      outputRequire(sameJson(inventoryFinal, inventoryAfter),
-        'backup root changed after exact output verification');
+      // The effect-evidence root is a DIRECT CHILD of this write root, and publishing the
+      // output evidence happens between the two snapshots — so that one child necessarily
+      // differs on every fire. Comparing it would report a disturbance on a correct run.
+      //
+      // Exclude EXACTLY that pinned child, by its exact name, and nothing broader. Every
+      // other child is still compared, so a genuine disturbance elsewhere still fails.
+      const evidenceRootChild = basename(risk.artifactPolicy.effectEvidenceRoot);
+      const withoutEvidenceRootChild = (inventory) => inventory
+        .filter((entry) => entry.name !== evidenceRootChild);
+      outputRequire(
+        sameJson(withoutEvidenceRootChild(inventoryFinal), withoutEvidenceRootChild(inventoryAfter)),
+        'backup root changed after exact output verification',
+      );
       effectOutput = Object.freeze({
         status: 'BOUND',
         outputEvidencePath: outputEvidence.path,

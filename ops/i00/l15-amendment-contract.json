@@ -594,8 +594,8 @@
           "mode": "100755",
           "beforeGitBlob": "69190525a1bf9bc6001732c661def227aa512d16",
           "beforeSha256": "82861a5b0e35b220e7abb22e25366bac3d6427f3ad94e83ddecf5b43ae2b0921",
-          "afterGitBlob": "62963e07d4e0f01c97e3f0502a629d07047a1c9a",
-          "afterSha256": "3e686298e8586c82b93d69e96062304ebcd048df5528e8eaa6d0d65fc35c341f"
+          "afterGitBlob": "228f88de641bc7776310bbef131e8fc03a86bfde",
+          "afterSha256": "d16ab641b6354eecb43d7371950fb553724a2e7399f586bd7b7d252639c5ffe2"
         },
         {
           "path": "ops/tests/test-deploy.sh",

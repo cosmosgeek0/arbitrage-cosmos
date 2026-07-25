@@ -8,7 +8,6 @@
 . "$(dirname "$0")/helpers.sh"
 SANDBOX="$(node -e 'process.stdout.write(require("fs").realpathSync(process.argv[1]))' \
   "$SANDBOX")"
-export NODE="$(node -e 'process.stdout.write(require("fs").realpathSync(process.execPath))')"
 . "$BIN/common.sh"
 
 export DATA_DIR="$SANDBOX/data"

@@ -18,7 +18,13 @@ const snapshotBinding = readBoundJsonInput(
 const snapshot = snapshotBinding.document;
 requireKeys(snapshot, ['source', 'observedAtUtc', 'dependencies', 'readiness', 'tradeReadiness', 'recoveryReadiness'], 'canonical supervisor snapshot');
 if (snapshot.source !== 'CANONICAL_SUPERVISOR_READBACK') fail('snapshot source is not canonical supervisor readback');
-const effectiveNow = args['simulation-clock'] === true ? args.now : new Date().toISOString();
+const effectiveNow = args['simulation-clock'] === true
+  ? args.now
+  // Whole UTC seconds: this value is gated by the exact-seconds check below, and a
+  // millisecond form fails it. Every test supplies a simulation clock, so the real-clock
+  // branch was never exercised. Same truncation the readback, preflight and receipt
+  // programs already apply.
+  : new Date().toISOString().replace(/\.\d{3}Z$/u, 'Z');
 const nowMs = Date.parse(effectiveNow);
 const observedMs = Date.parse(snapshot.observedAtUtc);
 const maxAgeMs = Number(args['max-age-sec']) * 1000;

@@ -1248,7 +1248,7 @@ function primaryParentPrelude() {
     '  [ "/proc/$PPID/exe" -ef /usr/bin/node ] || exit 125',
     'fi',
     '_i00_parent_uid= _i00_parent_euid=',
-    'while IFS=" \\t" read -r _i00_key _i00_real _i00_effective _i00_rest; do',
+    'while IFS=" \t" read -r _i00_key _i00_real _i00_effective _i00_rest; do',
     '  if [ "$_i00_key" = "Uid:" ]; then _i00_parent_uid=$_i00_real; _i00_parent_euid=$_i00_effective; break; fi',
     'done < "/proc/$PPID/status"',
     '[ -n "$_i00_parent_uid" ] && [ -n "$_i00_parent_euid" ] || exit 125',

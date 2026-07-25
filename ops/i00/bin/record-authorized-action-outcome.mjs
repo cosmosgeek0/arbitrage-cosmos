@@ -21,6 +21,7 @@ import {
   validateAuthorizedEffectOutput,
   validateAuthorizedEffectStart,
   validateAuthorizedEffectTerminal,
+  backupComparableInventory,
 } from '../authorized-effect-evidence.mjs';
 import { compileJsonSchemaFile } from '../json-schema.mjs';
 import { loadL15AmendmentContract } from '../l15-amendment.mjs';
@@ -931,7 +932,7 @@ function backupRootEntryIdentity(stat) {
   });
 }
 
-function backupRootInventorySha256(path, label) {
+function backupRootInventorySha256(path, label, actionClass) {
   const root = canonicalDirectory(path, label);
   const entries = readdirSync(root.absolute).sort().map((name) => {
     assert(name.length > 0 && name !== '.' && name !== '..'
@@ -948,9 +949,12 @@ function backupRootInventorySha256(path, label) {
   assert(sameStatIdentity(root.stat, after)
     && realpathSync(root.absolute) === root.absolute,
   `${label} changed while inventorying`);
+  // Hash the AGREED inventory, via the one shared contract the effect runner also uses. The
+  // effect-evidence child changes between the runner's snapshot and this re-derivation, so
+  // comparing raw inventories would fail on every correct fire.
   return createHash('sha256')
     .update('I00_BACKUP_WRITE_ROOT_INVENTORY_V1\0')
-    .update(canonicalJsonBytes(entries))
+    .update(canonicalJsonBytes(backupComparableInventory(entries, actionClass)))
     .digest('hex');
 }
 
@@ -1247,6 +1251,7 @@ function validateOutcomeEvidence(actionClass, action, args, effect) {
     const rootInventoryBefore = backupRootInventorySha256(
       backupDirectory,
       'authorized backup directory',
+      actionClass,
     );
     assert(rootInventoryBefore === output.afterInventorySha256,
       'authorized backup root differs from the runner-bound post inventory');
@@ -1278,6 +1283,7 @@ function validateOutcomeEvidence(actionClass, action, args, effect) {
     const rootInventoryAfter = backupRootInventorySha256(
       backupDirectory,
       'authorized backup directory',
+      actionClass,
     );
     assert(rootInventoryAfter === output.afterInventorySha256,
       'authorized backup root changed during independent outcome verification');

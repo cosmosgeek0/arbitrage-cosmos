@@ -36,6 +36,7 @@ import {
   validateAuthorizedEffectOutput,
   validateAuthorizedEffectStart,
   validateAuthorizedEffectTerminal,
+  backupComparableInventory,
 } from '../authorized-effect-evidence.mjs';
 import {
   canonicalJsonBytes,
@@ -3165,8 +3166,15 @@ if (pendingRefusal === null && actionClass === 'BACKUP_CREATE') {
         receiptSha256: artifact.receiptSha256,
         databaseSha256: artifact.databaseSha256,
         databaseBytes: artifact.databaseBytes,
-        beforeInventorySha256: backupInventorySha256(backupInventoryBefore),
-        afterInventorySha256: backupInventorySha256(inventoryAfter),
+        // Hash the AGREED inventory, not the raw one: the outcome recorder re-derives this
+        // same value later, after more evidence has landed in the effect-evidence child, and
+        // asserts equality. Both sides use the one shared contract so neither can drift.
+        beforeInventorySha256: backupInventorySha256(
+          backupComparableInventory(backupInventoryBefore, actionClass),
+        ),
+        afterInventorySha256: backupInventorySha256(
+          backupComparableInventory(inventoryAfter, actionClass),
+        ),
       });
     } catch {
       effectOutput = Object.freeze({ status: 'INVALID' });

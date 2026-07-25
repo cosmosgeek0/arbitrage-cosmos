@@ -213,3 +213,26 @@ export function validateAuthorizedEffectTerminal(document, startDocument = null)
   }
   return Object.freeze(document);
 }
+
+// ONE AGREED CONTRACT for the backup write-root inventory, imported by both the effect runner
+// and the outcome recorder so neither can drift from the other.
+//
+// The effect-evidence root is a DIRECT CHILD of the backup write root, and evidence is written
+// into it while the effect runs. Any inventory of that write root therefore sees that one child
+// change on every correct fire. Both programs must exclude exactly that child, by exactly the
+// same rule, or one will hash or compare something the other does not.
+//
+// Defined ONCE here rather than derived independently in each program: two copies of a branch
+// is how the earlier defect in this same area was produced.
+export function backupEffectEvidenceChildName(actionClass) {
+  if (actionClass === 'BACKUP_CREATE') return '.i00-backup-effects';
+  if (actionClass === 'ISOLATED_RESTORE') return '.i00-restore-effects';
+  return null;
+}
+
+// The inventory both sides agree to hash and compare: the write root's direct children with the
+// effect-evidence child removed. A null child name leaves the inventory untouched.
+export function backupComparableInventory(entries, actionClass) {
+  const excluded = backupEffectEvidenceChildName(actionClass);
+  return excluded === null ? entries : entries.filter((entry) => entry.name !== excluded);
+}

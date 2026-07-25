@@ -1530,12 +1530,25 @@ function readBackupOutputFile(
 
 function inspectBoundBackupOutput({
   writeRoot,
-  before,
-  after,
+  before: rawBefore,
+  after: rawAfter,
   document,
   expectedUid,
   expectedGid,
+  evidenceRootChild,
 }) {
+  // The effect-evidence root is a DIRECT CHILD of this write root, and the start evidence
+  // is written into it AFTER the `before` snapshot is taken. That child therefore differs
+  // between the two snapshots on every correct fire, and the delta check below - which
+  // requires every prior child to be retained UNCHANGED - would reject it.
+  //
+  // Exclude EXACTLY that pinned child from both sides, by its exact name, and nothing
+  // broader. The one added child the check expects is still the backup itself, and every
+  // other child is still compared unchanged.
+  const excludeEvidenceRootChild = (inventory) => inventory
+    .filter((entry) => entry.name !== evidenceRootChild);
+  const before = excludeEvidenceRootChild(rawBefore);
+  const after = excludeEvidenceRootChild(rawAfter);
   const beforeByName = new Map(before.map((entry) => [entry.name, entry]));
   const afterByName = new Map(after.map((entry) => [entry.name, entry]));
   const added = after.filter((entry) => !beforeByName.has(entry.name));
@@ -3118,6 +3131,7 @@ if (pendingRefusal === null && actionClass === 'BACKUP_CREATE') {
         document: outputDocument,
         expectedUid,
         expectedGid,
+        evidenceRootChild: basename(risk.artifactPolicy.effectEvidenceRoot),
       });
       const outputEvidence = publishEffectOutputEvidence(
         evidenceParent,

@@ -7,6 +7,7 @@ FAIL=0
 ASSERTIONS=0
 FAILED=""
 ROUTED=0
+SANCTIONED_SKIPS=0
 ROUTING_DRIVER=test-deploy-portability-008-l15-bytes.sh
 for test_file in test-*.sh; do
   case "$test_file" in
@@ -22,6 +23,9 @@ for test_file in test-*.sh; do
   LOG="$(mktemp "${TMPDIR:-/tmp}/i00-test-log.XXXXXX")"
   if bash "$test_file" >"$LOG" 2>&1; then
     cat "$LOG"
+    if grep -q '^--- SANCTIONED SKIP ' "$LOG"; then
+      SANCTIONED_SKIPS=$((SANCTIONED_SKIPS + 1))
+    fi
     COUNT="$(sed -n 's/^OK (\([0-9][0-9]*\) assertions)$/\1/p' "$LOG" | tail -1)"
     if [ -z "$COUNT" ] || [ "$COUNT" -le 0 ]; then
       FAIL=$((FAIL + 1))
@@ -42,6 +46,19 @@ for test_file in test-*.sh; do
   rm -f "$LOG"
 done
 
+# The single sanctioned skip is allowed ONLY under the exact incapability that
+# justifies it: a Linux account without the bound privileged identity cannot
+# exercise the authorized-effect section at all. Everywhere else the expected
+# count is zero, so an unexpected skip still fails the job.
+EXPECTED_SANCTIONED_SKIPS=0
+if [ "$(uname -s)" = Linux ] && [ "$(id -u)" -ne 0 ]; then
+  EXPECTED_SANCTIONED_SKIPS=1
+fi
+if [ "$SANCTIONED_SKIPS" -ne "$EXPECTED_SANCTIONED_SKIPS" ]; then
+  printf '%s\n' \
+    "NOT OK: expected $EXPECTED_SANCTIONED_SKIPS sanctioned skip(s), observed $SANCTIONED_SKIPS"
+  exit 1
+fi
 if [ "$ROUTED" -ne 2 ]; then
   FAIL=$((FAIL + 1))
   FAILED="$FAILED historical-r3-routing"

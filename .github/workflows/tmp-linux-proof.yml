@@ -1,0 +1,24 @@
+name: tmp-df32-linux-proof
+on:
+  push:
+    branches: [tmp-df32-linux-proof]
+jobs:
+  ops-linux-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Mirror production fixed interpreter
+        run: |
+          sudo cp "$(command -v node)" /usr/bin/node && sudo chown root:root /usr/bin/node && sudo chmod 0755 /usr/bin/node && /usr/bin/node --version
+      - run: npm ci
+      - name: Generic ops proofs
+        run: bash ops/tests/run-all.sh
+      - name: I00 ops proofs
+        run: bash ops/tests/i00/run-all.sh

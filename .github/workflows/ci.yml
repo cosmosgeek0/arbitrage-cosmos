@@ -91,17 +91,23 @@ jobs:
           /usr/bin/node --version
 
       - name: Normalize workspace permissions to production shape
-        # I00 refuses to inspect an executable whose path is group/world
-        # writable. On the deployment target the installed tree is root-owned
-        # and not group-writable, so the control never fires there; a hosted
-        # runner checkout can carry group-write, which makes the guard fire
-        # first and mask the assertion under test ("executable path must not
-        # be group/world writable" instead of the expected refusal). Strip
-        # group/other write so the workspace matches the production shape.
+        # The path-permission rule inspects an executable's FULL ancestor chain.
+        # On the deployment target the installed tree is root-owned and the
+        # chain is clean, so the rule never fires there. A hosted runner can
+        # carry a permissive bit higher up the chain than the workspace, and
+        # suites also stage fixture programs under the runner temp root, which
+        # is outside the workspace entirely - so normalizing only downward from
+        # the workspace could never reach either subject. Normalize the whole
+        # runner chain and the temp root as well.
         run: |
-          set -euo pipefail
-          chmod -R go-w "$GITHUB_WORKSPACE"
-          find "$GITHUB_WORKSPACE" -perm /022 -print -quit | tee /dev/stderr | wc -l
+          set -uo pipefail
+          for d in /home/runner /home/runner/work "$GITHUB_WORKSPACE" "${RUNNER_TEMP:-}" "${TMPDIR:-}"; do
+            [ -n "$d" ] && [ -d "$d" ] && chmod go-w "$d" || true
+          done
+          chmod -R go-w "$GITHUB_WORKSPACE" || true
+          for p in / /home /home/runner /home/runner/work "$GITHUB_WORKSPACE" "${RUNNER_TEMP:-/tmp}"; do
+            [ -n "$p" ] && [ -e "$p" ] && stat -c '%n %U:%G %a' "$p" || true
+          done
 
       - name: Run generic local operations proofs
         run: bash ops/tests/run-all.sh

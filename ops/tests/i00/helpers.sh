@@ -27,6 +27,14 @@ else
       'const fs=require("fs");process.stdout.write(fs.realpathSync(process.execPath))'
   )" || { printf 'NOT OK: test helper Node bootstrap failed\n' >&2; exit 1; }
 fi
+# Suites in this tree invoke a bare `node`. The tooling they exercise binds the
+# fixed interpreter resolved above, and the two must be the same file or the
+# identity bindings legitimately disagree. On a developer machine there is only
+# one interpreter, so this is invisible; a hosted runner puts a second one
+# earlier on PATH. Put the resolved interpreter's directory first so a bare
+# `node` is the same file the tooling uses. Resolution itself is unchanged.
+PATH="$(dirname "$I00_TEST_HELPER_NODE"):$PATH"
+export PATH
 for I00_TEST_MKTEMP_CANDIDATE in /usr/bin/mktemp /bin/mktemp; do
   if [ -f "$I00_TEST_MKTEMP_CANDIDATE" ] \
       && [ ! -L "$I00_TEST_MKTEMP_CANDIDATE" ] \

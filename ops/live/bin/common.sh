@@ -271,10 +271,11 @@ if (value.directory.kind !== 'CLAIM_TEMPORARY_DIRECTORY'
 const executableMaps = {
   SERVICE_RELEASE_SWITCH: {
     node: fd(16), bash: fd(17), env: fd(18), systemctl: fd(19),
-    curl: fd(20), sqlite: fd(21),
+    curl: fd(20), sqlite: fd(21), exposure: fd(33), alert: fd(34),
   },
   SERVICE_ROLLBACK: {
     node: fd(16), bash: fd(17), env: fd(18), systemctl: fd(19), curl: fd(20),
+    exposure: fd(33), alert: fd(34),
   },
   BACKUP_CREATE: {
     node: fd(16), bash: fd(17), env: fd(18), sqlite: fd(21), tar: fd(22),

@@ -84,3 +84,32 @@ is already a corrected path of DEPLOY-PORTABILITY-008. No new finding id was min
 | donor test path | modified only | `ops/tests/helpers.sh` re-corrected for the fixed-interpreter preference | FIXED |
 | amendment contract | effective tree, root digest, and file binding re-chained | `ops/i00/l15-amendment-contract.json` | BOUND |
 | contract pin | repinned in every consumer | five consumers under `ops/i00/bin/` | REPINNED |
+
+## Re-correction 2026-07-25 (ROW-25) — switch-class authorized-effect executable key set
+
+Recorded as a RE-CORRECTION of this same finding via the per-amendment seen-paths law
+rather than a new finding, because `FINDING_ORDER` is a closed eight-entry list and
+`ops/live/bin/common.sh` is already a corrected path of DEPLOY-PORTABILITY-008. No new
+finding id was minted.
+
+| item | expected | found | status |
+|---|---|---|---|
+| defect | consumer executable key set equals the producer declaration | `SERVICE_RELEASE_SWITCH` carried 6 of 8 keys; `SERVICE_ROLLBACK` carried 5 of 7 | RED |
+| producer | closed per-class declaration | `ops/i00/bin/verify-authorized-effect-handoff.mjs` binds `exposure` fd 33 and `alert` fd 34 for both switch classes | MEASURED |
+| handoff projection | declared capabilities are emitted verbatim | the handoff `executables` object is built from `effectExecutables`, so both keys are always present | MEASURED |
+| consumer assert | exact key-set equality | `exact(value.executables, Object.keys(executableMaps[value.actionClass]))` in `ops/live/bin/common.sh` | EXITS 1 |
+| blast radius | which entry points abort | `ops/live/bin/deploy.sh` (both `PRIMARY_EFFECT` and `AUTOMATIC_ROLLBACK` roles) and `ops/live/bin/rollback.sh` | DEPLOY BLOCKER |
+| production exposure | unconditional under a real authorized effect | release-switch and rollback-switch both abort while sourcing, before any work | EXPOSED |
+| masking | why it had not been seen | the block runs only when `_I00_AUTHORIZED_EFFECT_PRESENT=1`, i.e. under a real authorized handoff, never during ordinary sourcing | EXPLAINED |
+| correction | declare the two missing capabilities in both switch maps only | `exposure: fd(33)`, `alert: fd(34)` | FIXED |
+| descriptor wiring | already bound elsewhere in the same file | the helper-policy asserts already require `exposure.script` fd 33 and `alert.script` fd 34, and the effect environment already exports `I00_AUTHORIZED_EFFECT_EXPOSURE_FD=33` and `I00_AUTHORIZED_EFFECT_ALERT_FD=34` | UNCHANGED |
+| class sweep | remaining classes in the same map | `BACKUP_CREATE` and `ISOLATED_RESTORE` key sets already equal the producer declaration, ten keys each | CLEAN |
+| class sweep | producer classes this consumer does not carry | `OPS_BUNDLE_INSTALL` and `SECRET_MATERIALIZATION` are not effective-L15 donor classes | CLEAN |
+| class sweep | the other closed capability maps | `hashPolicy`, `helperPolicy`, `writeRoots`, `observedRoots`, `readRoots` show no key-set drift against the producer | CLEAN |
+| scope | bytes changed under `ops/live/**` | one file, two declaration lines, no other map touched | BOUNDED |
+| donor test transition | donor-owned suites unchanged | no `ops/tests/**` byte changed; `changedTestFiles` retains its bound eight | UNCHANGED |
+| additive regression | no new suite minted in this ceremony | the closed `FINDING_TESTS` set for this finding is unchanged at four suites | DEFERRED |
+| live path | modified only | `ops/live/bin/common.sh` re-corrected for the switch-class executable key set | FIXED |
+| amendment contract | effective tree, root digest, and file binding re-chained | `ops/i00/l15-amendment-contract.json` | BOUND |
+| contract pin | repinned in every consumer | five consumers under `ops/i00/bin/` | REPINNED |
+| integrated donor gate | post-commit proof against `HEAD:ops/live` | separate final receipt | DEFERRED |

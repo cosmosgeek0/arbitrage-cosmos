@@ -423,9 +423,9 @@
     {
       "findingId": "DEPLOY-PORTABILITY-008",
       "baseLiveTree": "a90d108fe7614a00de87e6280089fe0201c8dc3d",
-      "effectiveLiveTree": "ac9b359ed58e4b3f4b54b2f7e15f4d0eabc2844f",
+      "effectiveLiveTree": "8c9e801b6f27e2e4d2a8c964eba71f76920cacb4",
       "baseRootDigestSha256": "c37e5a80b9591a31ff41af7e07f66bb75a99d13f2d6e6edbcb8726dae7243cc0",
-      "effectiveRootDigestSha256": "7969c01db666c8f9cf6f1d2a5d6fb77248cf004ae63bde0854bfe323b3d15b23",
+      "effectiveRootDigestSha256": "8fda04cd9e63b54db61aa55a455db8a02874a434c2b46911c4fc22dd8baa9942",
       "changedFiles": [
         {
           "path": "ops/live/README.md",
@@ -456,8 +456,8 @@
           "mode": "100755",
           "beforeGitBlob": "73f5b58317b56b662c0488ae7cfee793f71e027c",
           "beforeSha256": "2da2ffd952daf2480bde91280f422e5d86d45c471515c390f0592923c52c09b6",
-          "afterGitBlob": "dd7a1d918496ceee26fdb0ddd20fef14c1219262",
-          "afterSha256": "e2235fdbd7a89adbe358c622697d9a57a7051fa4a7eb9bf2438feb5d28c385ba"
+          "afterGitBlob": "060940a54660a6e0deed787daba5142834b365e7",
+          "afterSha256": "6026c6871092b32fbb4d05a617400710309f542cdf4a041a115e2c37388f0778"
         },
         {
           "path": "ops/live/bin/deploy.sh",
@@ -649,8 +649,8 @@
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/DEPLOY-PORTABILITY-008_L15_AMENDMENT_RECEIPT.md",
         "mode": "100644",
-        "gitBlob": "ee970c1cefc88690de23d7df47838334516c472f",
-        "sha256": "ad9a944867cee676162e2ec3c6b46c9898b064fe15857f5281350698b0746456"
+        "gitBlob": "ec0a806e8c9d5aa49a988fd80eae3c02b3993525",
+        "sha256": "e664c9939b4fc1e1853667a6264b52899bcfca79aea51c4a0521fc021c44e04d"
       },
       "regressionTests": [
         {
@@ -681,8 +681,8 @@
     }
   ],
   "effectiveLive": {
-    "tree": "ac9b359ed58e4b3f4b54b2f7e15f4d0eabc2844f",
-    "rootDigestSha256": "7969c01db666c8f9cf6f1d2a5d6fb77248cf004ae63bde0854bfe323b3d15b23",
+    "tree": "8c9e801b6f27e2e4d2a8c964eba71f76920cacb4",
+    "rootDigestSha256": "8fda04cd9e63b54db61aa55a455db8a02874a434c2b46911c4fc22dd8baa9942",
     "fileCount": 31,
     "files": [
       {
@@ -736,8 +736,8 @@
       {
         "path": "bin/common.sh",
         "mode": "100755",
-        "gitBlob": "dd7a1d918496ceee26fdb0ddd20fef14c1219262",
-        "sha256": "e2235fdbd7a89adbe358c622697d9a57a7051fa4a7eb9bf2438feb5d28c385ba"
+        "gitBlob": "060940a54660a6e0deed787daba5142834b365e7",
+        "sha256": "6026c6871092b32fbb4d05a617400710309f542cdf4a041a115e2c37388f0778"
       },
       {
         "path": "bin/deploy.sh",

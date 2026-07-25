@@ -18,6 +18,7 @@ import {
   readCanonicalDeploymentDocument,
   validateDeploymentActionRequest,
   writeExactPrivateJson,
+  systemEffectEvidenceRoot,
 } from '../deployment-authorization-contract.mjs';
 import {
   fail, parseArgs, typedTreeDigest, verifyArtifactManifest,
@@ -394,9 +395,11 @@ function buildArtifactPolicy(actionClass) {
       'action receipt root',
       { rootOwned: true },
     );
-    const effectPath = ['BACKUP_CREATE', 'ISOLATED_RESTORE'].includes(actionClass)
-      ? `/var/backups/cosmos/.i00-${actionClass === 'BACKUP_CREATE' ? 'backup' : 'restore'}-effects`
-      : '/var/lib/cosmos-action-receipts/effects';
+    // Derived from the single definition, never restated. This is the copy an earlier commit
+    // claimed to have removed and did not: the contract's inline copy was routed through the
+    // shared definition while THIS one - the constructor that actually builds the policy - was
+    // left standing. Two copies of one path is the defect the shared definition exists to end.
+    const effectPath = systemEffectEvidenceRoot(actionClass);
     const effect = boundPrivateDirectory(effectPath, 'authorized effect evidence root');
     return Object.freeze({
       rootMode,

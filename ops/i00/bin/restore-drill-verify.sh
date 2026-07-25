@@ -774,12 +774,16 @@ if [ "$DELEGATE_RC" != 0 ]; then
   record_authorized_outcome "$TARGET_CANON" "" "" AUTHORIZED_ACTION_FAILURE_RECORDED
   exit "$DELEGATE_RC"
 fi
-record_authorized_outcome "$TARGET_CANON" "$BACKUP_CANON" \
-  "$TARGET_CANON/restore-report.json" AUTHORIZED_ACTION_OUTCOME_RECORDED
 require_sqlite_identity
 require_delegate_env_identity
 require_backup_identity
 require_effect_executable_identities
+# The published database must be one regular, non-symlink file before any
+# database tool opens it. Without this the tool creates an absent path as a
+# new empty database, which then reports clean and the verified line prints
+# over nothing at all.
+[ -f "$TARGET_CANON/cosmos.db" ] && [ ! -L "$TARGET_CANON/cosmos.db" ] \
+  || { printf 'I00_OPS_BLOCKED: isolated restore database is not one regular file\n' >&2; exit 1; }
 SQLITE_INTEGRITY="$("$SQLITE_PATH" "$TARGET_CANON/cosmos.db" 'PRAGMA integrity_check;')"
 require_sqlite_identity
 [ "$SQLITE_INTEGRITY" = "ok" ] \
@@ -788,6 +792,28 @@ SQLITE_FOREIGN_KEYS="$("$SQLITE_PATH" "$TARGET_CANON/cosmos.db" 'PRAGMA foreign_
 require_sqlite_identity
 [ -z "$SQLITE_FOREIGN_KEYS" ] \
   || { printf 'I00_OPS_BLOCKED: isolated restore foreign_key_check failed\n' >&2; exit 1; }
+# Structural validity is not identity. Re-hash the published database and
+# compare it to the backup digest already bound earlier in this run, so the
+# drill proves the BACKUP RESTORED CORRECTLY rather than that some valid
+# database exists at the target.
+RESTORED_DATABASE_SHA256="$(
+  "$NODE_PATH" -e '
+    const fs = require("fs");
+    const crypto = require("crypto");
+    process.stdout.write(
+      crypto.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"),
+    );
+  ' "$TARGET_CANON/cosmos.db"
+)"
+require_effect_executable_identities
+[ -n "$BACKUP_DATABASE_SHA256" ] \
+  || { printf 'I00_OPS_BLOCKED: isolated restore backup database digest is unavailable\n' >&2; exit 1; }
+[ "$RESTORED_DATABASE_SHA256" = "$BACKUP_DATABASE_SHA256" ] \
+  || { printf 'I00_OPS_BLOCKED: isolated restore database does not match the backup digest\n' >&2; exit 1; }
+# Every check above has now passed. Only here is the terminal success outcome
+# recorded, so a failed drill can no longer leave a receipt saying it passed.
+record_authorized_outcome "$TARGET_CANON" "$BACKUP_CANON" \
+  "$TARGET_CANON/restore-report.json" AUTHORIZED_ACTION_OUTCOME_RECORDED
 require_backup_identity
 require_effect_executable_identities
 printf '{"status":"ISOLATED_RESTORE_VERIFIED_NO_PRODUCTION_MUTATION","target":"%s"}\n' "$TARGET_CANON"

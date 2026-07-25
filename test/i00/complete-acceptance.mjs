@@ -21,6 +21,16 @@ const SEALED_ENVIRONMENT = Object.freeze({
   TZ: 'UTC',
   LC_ALL: 'C',
   CI: '1',
+  // uv derives its cache from HOME when this is unset, and HOME is '/' above. On a host whose
+  // root filesystem is read-only (macOS SIP), `/.cache/uv` cannot be created, so uv aborts:
+  //   "Failed to initialize cache at `/.cache/uv` ... Read-only file system (os error 30)".
+  // That failed uv-lock-check and uv-all-extras-synchronized, which failed test:quant:built, which
+  // failed test:gate-coverage:built, which exited the whole repository_test_all step non-zero while
+  // every counted suite reported green — an exit code with no failing test behind it.
+  // Pinning the cache under the already-sealed temp root keeps the environment deterministic and
+  // isolated (fresh temp root per run) while giving uv somewhere it is permitted to write.
+  // This weakens no assertion: it supplies a writable path, it does not relax a check.
+  UV_CACHE_DIR: `${realpathSync('/tmp')}/cosmos-acceptance-uv-cache`,
 });
 
 function explicitOptionValue(argv, option) {

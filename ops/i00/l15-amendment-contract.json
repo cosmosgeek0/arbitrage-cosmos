@@ -656,8 +656,8 @@
         {
           "path": "ops/tests/i00/test-deploy-portability-008-l15-bytes.sh",
           "mode": "100755",
-          "gitBlob": "5f7a1b2359715844d7c6b9e711b779c5c17e0cf1",
-          "sha256": "55cfdbb7538196a2ad8c8611242bff7c95746677d729d688b4e4f0eafd793783"
+          "gitBlob": "bcc943ecef9dcc9cb2a1b36703d2a9030854b316",
+          "sha256": "036758e3045a4eee8303c46fb53190f45fd9b153464ba586092d6f1d86608c88"
         },
         {
           "path": "ops/tests/i00/df32-r3-watchdog-successor.sh",

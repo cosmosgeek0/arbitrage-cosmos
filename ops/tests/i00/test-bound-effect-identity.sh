@@ -614,7 +614,15 @@ const nested = String.raw`
   const missing = process.argv[2] === 'missing';
   const args = JSON.parse(process.argv[3]);
   const stdio = Array.from({ length: descriptor + 1 }, () => 'ignore');
-  if (!missing) stdio[descriptor] = descriptor;
+  if (!missing) {
+    stdio[descriptor] = descriptor;
+  } else {
+    // The nested path is resolved against THIS process's descriptor table, not
+    // the one handed to the grandchild. Leaving the slot open here means the
+    // negative case still resolves and succeeds, so it never tested absence.
+    // Detach it here so absence is real for this case.
+    try { require('node:fs').closeSync(descriptor); } catch (error) { void error; }
+  }
   const result = spawnSync('/proc/self/fd/' + descriptor, args, { stdio });
   process.exit(missing
     ? (result.error || result.signal || result.status !== 0 ? 0 : 1)

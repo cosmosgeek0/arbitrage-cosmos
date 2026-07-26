@@ -5,8 +5,6 @@
 
 [Unit]
 Description=Run the cosmos backup hourly
-ConditionPathExists=!/
-RefuseManualStart=yes
 
 [Timer]
 OnCalendar=hourly

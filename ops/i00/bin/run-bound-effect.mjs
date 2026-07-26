@@ -2724,6 +2724,7 @@ const automaticRollbackHandoffDocument = automaticRollbackDescriptor === null
         name, fd, path, identity, treeSha256,
       }))),
       observedRoots: commonEvidence.observedRoots,
+      effectOutput: commonEvidence.effectOutputPolicy,
       authorizationChain: handoffDocument.authorizationChain,
       startEvidencePath,
       startEvidenceSha256: startEvidence.sha256,

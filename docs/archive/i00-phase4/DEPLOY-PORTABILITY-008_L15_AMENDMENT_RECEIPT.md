@@ -113,3 +113,34 @@ finding id was minted.
 | amendment contract | effective tree, root digest, and file binding re-chained | `ops/i00/l15-amendment-contract.json` | BOUND |
 | contract pin | repinned in every consumer | five consumers under `ops/i00/bin/` | REPINNED |
 | integrated donor gate | post-commit proof against `HEAD:ops/live` | separate final receipt | DEFERRED |
+
+## Re-correction 2026-07-27 (QUEUE-ROW-1) — source/live drift and fail-closed recovery
+
+Recorded as one re-correction of the existing final amendment because the released
+source fixes share its closed effective-runtime contract. No ninth finding id and
+no second amendment ceremony were created.
+
+| item | expected | found | status |
+|---|---|---|---|
+| scope | five released source patches plus the minimum rollback-floor exact-token closure | ten semantic target files | BOUNDED |
+| app address families | Linux host-identity lookup may open netlink | `AF_NETLINK` added to the existing allowlist | FIXED |
+| backup source activation | remove only the impossible-path and manual-start bars | backup service and timer only; restore-drill remains barred | FIXED |
+| backup live activation | source landing must not enable or start the host timer | deferred to QUEUE row 2 after one manual backup and isolated restore | UNCHANGED |
+| authorization refusals | preserve verdicts while naming direction and operands | six direction-specific time refusals; source-anchored 3,125-case model equivalence grid | PASS |
+| authorization regression | exact six messages, first-gate parity, and weakening negative control | `ops/tests/i00/test-secrets-provider.sh`; 226 assertions in the focused suite | PASS |
+| automatic rollback handoff | producer, closed schema, and verifier agree on the required output object | producer emits `effectOutput: {}`; schema requires that exact empty object; verifier admits the key | FIXED |
+| automatic rollback regression | valid empty object passes; omission, nonempty value, and extra outer key refuse | repository-owned hostile seam test | PASS |
+| rollback floor | malformed journal or release schema cannot bypass comparison | plain-object input plus exact raw-token canonical nonnegative safe-integer extraction and explicit comparison-result handling | FIXED |
+| numeric precision | JSON fractions/exponents cannot round or underflow into accepted integers | original token bytes are checked before any shell comparison; safe maximum accepted, next integer refused | PASS |
+| honest floor behavior | valid floor 7 and safe maximum refuse older schema; valid floor 0 allows | preserved in the hostile matrix | PASS |
+| rollback floor regression | missing/zero, null/non-object root, numeric-string, text, injection-like, negative/negative-zero, fractional precision edges, exponent underflow, safe boundary, unsafe integer, and malformed/unsafe/precision-edge schema cases | deploy 352 assertions; rollback 169 assertions | PASS |
+| unit policy regression | exact app allowlist, backup blocker removal, cadence retention, restore-drill bars | systemd suite 128 assertions | PASS |
+| adjacent journal arithmetic | `dataSchema` is read and compared after the switch without its own type guard | source finding only; not live-measured; separate queue item | NOT IN THIS PATCH |
+| live paths rebound | every changed effective-L15 path | common helper, app unit, backup service/timer, deploy, rollback | BOUND |
+| authorized-effect runtime | executing producer and verifier equal their L15 trust anchors | runner and verifier SHA-256 regenerated | BOUND |
+| effective inventory | same closed regular-file set | 31 files | BOUND |
+| amendment contract | effective tree, root digest, receipt, and file bindings | `ops/i00/l15-amendment-contract.json` | BOUND |
+| contract pin | exact amended digest in every current consumer | five consumers under `ops/i00/bin/` | REPINNED |
+| live site | no deploy, restart, timer enable, or provider action in this row | source-only landing | UNCHANGED |
+| Linux unit runtime | systemd/netlink execution cannot be proved on this macOS checkout | fresh Linux CI and sealed-bundle proof remain required | NOT MEASURED |
+| cloudflared address-family question | outside the five released patches | retained as `NOT_MEASURED` | OUT OF SCOPE |

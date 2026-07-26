@@ -19,6 +19,11 @@ BACKUP_WRAPPER="$REPO_ROOT/ops/i00/bin/backup-verify.sh"
 RESTORE_WRAPPER="$REPO_ROOT/ops/i00/bin/restore-drill-verify.sh"
 ROLLBACK_WRAPPER="$REPO_ROOT/ops/i00/bin/rollback-switch.sh"
 OUTCOME_RECORDER="$REPO_ROOT/ops/i00/bin/record-authorized-action-outcome.mjs"
+BOUND_EFFECT_RUNNER="$REPO_ROOT/ops/i00/bin/run-bound-effect.mjs"
+HANDOFF_VERIFIER="$REPO_ROOT/ops/i00/bin/verify-authorized-effect-handoff.mjs"
+AUTOMATIC_HANDOFF_SCHEMA="$REPO_ROOT/ops/i00/schemas/authorized-automatic-rollback-handoff.schema.json"
+PRIMARY_HANDOFF_SCHEMA="$REPO_ROOT/ops/i00/schemas/authorized-effect-handoff.schema.json"
+JSON_SCHEMA_COMPILER="$REPO_ROOT/ops/i00/json-schema.mjs"
 RUN_ALL="$REPO_ROOT/ops/tests/i00/run-all.sh"
 HISTORICAL_WATCHDOG="$REPO_ROOT/ops/tests/i00/test-r3-d-watchdog-007.sh"
 HISTORICAL_BACKUP="$REPO_ROOT/ops/tests/i00/test-r3-d-backup-008.sh"
@@ -87,6 +92,114 @@ BACKUP_WRAPPER_SOURCE="$(cat "$BACKUP_WRAPPER")"
 RESTORE_WRAPPER_SOURCE="$(cat "$RESTORE_WRAPPER")"
 ROLLBACK_WRAPPER_SOURCE="$(cat "$ROLLBACK_WRAPPER")"
 OUTCOME_SOURCE="$(cat "$OUTCOME_RECORDER")"
+
+note "automatic rollback handoff carries one required empty effect-output object"
+assert_success "$NODE" --input-type=module - \
+  "$BOUND_EFFECT_RUNNER" \
+  "$HANDOFF_VERIFIER" \
+  "$AUTOMATIC_HANDOFF_SCHEMA" \
+  "$PRIMARY_HANDOFF_SCHEMA" \
+  "$JSON_SCHEMA_COMPILER" <<'NODE'
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+
+const [
+  runnerPath,
+  verifierPath,
+  automaticSchemaPath,
+  primarySchemaPath,
+  schemaCompilerPath,
+] = process.argv.slice(2);
+const runnerSource = readFileSync(runnerPath, 'utf8');
+const verifierSource = readFileSync(verifierPath, 'utf8');
+const automaticSchema = JSON.parse(readFileSync(automaticSchemaPath, 'utf8'));
+const primarySchema = JSON.parse(readFileSync(primarySchemaPath, 'utf8'));
+
+const automaticStart = runnerSource.indexOf(
+  'const automaticRollbackHandoffDocument',
+);
+const automaticEnd = runnerSource.indexOf(
+  'const automaticRollbackHandoffBytes',
+  automaticStart,
+);
+assert.notEqual(automaticStart, -1);
+assert.notEqual(automaticEnd, -1);
+const automaticProducer = runnerSource.slice(automaticStart, automaticEnd);
+assert.equal(
+  (automaticProducer.match(
+    /effectOutput: commonEvidence\.effectOutputPolicy,/gu,
+  ) ?? []).length,
+  1,
+);
+const policyStart = runnerSource.indexOf('const effectOutputPolicy =');
+const policyEnd = runnerSource.indexOf('const commonEvidence', policyStart);
+assert.notEqual(policyStart, -1);
+assert.notEqual(policyEnd, -1);
+const effectOutputPolicy = runnerSource.slice(policyStart, policyEnd);
+assert.match(
+  effectOutputPolicy,
+  /const effectOutputPolicy = actionClass === 'BACKUP_CREATE'/u,
+);
+assert.equal(
+  effectOutputPolicy.trimEnd().endsWith(': Object.freeze({});'),
+  true,
+);
+assert.equal(
+  automaticSchema.properties.actionClass.const,
+  'SERVICE_RELEASE_SWITCH',
+);
+
+const keysStart = verifierSource.indexOf('const AUTOMATIC_HANDOFF_KEYS');
+const keysEnd = verifierSource.indexOf('const PROGRAM_KEYS', keysStart);
+assert.notEqual(keysStart, -1);
+assert.notEqual(keysEnd, -1);
+const automaticKeys = verifierSource.slice(keysStart, keysEnd);
+assert.equal((automaticKeys.match(/'effectOutput'/gu) ?? []).length, 1);
+const commonStart = verifierSource.indexOf(
+  'function validateCommonHandoff(document)',
+);
+const commonEnd = verifierSource.indexOf(
+  'function validateHandoff(document)',
+  commonStart,
+);
+assert.notEqual(commonStart, -1);
+assert.notEqual(commonEnd, -1);
+const commonValidator = verifierSource.slice(commonStart, commonEnd);
+assert.equal(
+  (commonValidator.match(
+    /\} else \{\s+requireExactKeys\(document\.effectOutput, \[\], 'authorized effect output policy'\);\s+\}/gu,
+  ) ?? []).length,
+  1,
+);
+
+assert.equal(automaticSchema.required.includes('effectOutput'), true);
+assert.deepEqual(automaticSchema.properties.effectOutput, {
+  $ref: 'authorized-effect-handoff.v1.json#/$defs/emptyObject',
+});
+assert.equal(automaticSchema.additionalProperties, false);
+
+const { compileJsonSchema } = await import(pathToFileURL(schemaCompilerPath));
+const validateEffectOutputSeam = compileJsonSchema({
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  type: 'object',
+  required: ['effectOutput'],
+  properties: {
+    effectOutput: primarySchema.$defs.emptyObject,
+  },
+  additionalProperties: false,
+}, 'automatic rollback effect-output seam');
+
+assert.equal(validateEffectOutputSeam({ effectOutput: {} }).valid, true);
+assert.equal(validateEffectOutputSeam({}).valid, false);
+assert.equal(validateEffectOutputSeam({
+  effectOutput: { unexpected: true },
+}).valid, false);
+assert.equal(validateEffectOutputSeam({
+  effectOutput: {},
+  unexpected: true,
+}).valid, false);
+NODE
 
 note "bare action classes and ambient release-source metadata fail closed"
 assert_failure env I00_EFFECT_CLASS=SERVICE_ROLLBACK \

@@ -191,14 +191,20 @@ RELEASE_READ_SRC="$(authorized_release_source_effect_path "$RELEASE_SRC")"
   || die_code 1 "release.json missing in $RELEASE_SRC"
 RELEASE_ID="$(json_get "$RELEASE_READ_SRC/release.json" releaseId)" \
   || die_code 1 "release.json: releaseId missing"
-SCHEMA_VERSION="$(json_get "$RELEASE_READ_SRC/release.json" schemaVersion)" \
-  || die_code 1 "release.json: schemaVersion missing"
+set +e
+SCHEMA_VERSION="$(json_get_nonnegative_safe_integer \
+  "$RELEASE_READ_SRC/release.json" schemaVersion)"
+SCHEMA_VERSION_RC=$?
+set -e
+case "$SCHEMA_VERSION_RC" in
+  0) : ;;
+  3|4) die_code 1 "release.json: schemaVersion missing" ;;
+  5) die_code 1 "schemaVersion must be a non-negative integer within the exact comparison range: '$SCHEMA_VERSION'" ;;
+  *) die_code 1 "release.json: schemaVersion validation failed" ;;
+esac
 BARRIER="$(json_get "$RELEASE_READ_SRC/release.json" rollbackBarrier || echo false)"
 case "$RELEASE_ID" in
   ""|"."|".."|*[!A-Za-z0-9._-]*) die_code 1 "releaseId must be one non-dot [A-Za-z0-9._-] name: '$RELEASE_ID'" ;;
-esac
-case "$SCHEMA_VERSION" in
-  ""|*[!0-9]*) die_code 1 "schemaVersion must be a non-negative integer: '$SCHEMA_VERSION'" ;;
 esac
 case "$BARRIER" in
   true|false) : ;;
@@ -251,17 +257,26 @@ if [ -f "$JOURNAL_EFFECT_FILE" ]; then
   # Part 4 #6: a corrupt journal must never default a SAFETY BARRIER to its
   # most permissive value. Key absent (rc 3) legitimately means floor 0; an
   # unreadable journal (any other failure) refuses the deploy.
-  set +e; FLOOR_VALUE="$(json_get "$JOURNAL_EFFECT_FILE" rollbackFloor)"; FLOOR_RC=$?; set -e
+  set +e; FLOOR_VALUE="$(json_get_nonnegative_safe_integer "$JOURNAL_EFFECT_FILE" rollbackFloor)"; FLOOR_RC=$?; set -e
   case "$FLOOR_RC" in
     0) ROLLBACK_FLOOR="$FLOOR_VALUE" ;;
     3) ROLLBACK_FLOOR=0 ;;
+    5) die_code 1 "journal rollbackFloor is not a nonnegative integer - refusing to evaluate the non-rollback barrier against an uncomparable value" ;;
     *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to assume a zero rollback floor" ;;
   esac
 fi
-if [ "$SCHEMA_VERSION" -lt "$ROLLBACK_FLOOR" ]; then
-  log_event REFUSED_SCHEMA "candidate schema $SCHEMA_VERSION is behind the non-rollback barrier $ROLLBACK_FLOOR"
-  die_code 1 "candidate schemaVersion $SCHEMA_VERSION is behind the non-rollback barrier (rollbackFloor=$ROLLBACK_FLOOR); this release can no longer read the journal"
-fi
+set +e
+[ "$SCHEMA_VERSION" -lt "$ROLLBACK_FLOOR" ]
+BARRIER_COMPARISON_RC=$?
+set -e
+case "$BARRIER_COMPARISON_RC" in
+  0)
+    log_event REFUSED_SCHEMA "candidate schema $SCHEMA_VERSION is behind the non-rollback barrier $ROLLBACK_FLOOR"
+    die_code 1 "candidate schemaVersion $SCHEMA_VERSION is behind the non-rollback barrier (rollbackFloor=$ROLLBACK_FLOOR); this release can no longer read the journal"
+    ;;
+  1) : ;;
+  *) die_code 1 "release schemaVersion and journal rollbackFloor are not safely comparable - refusing to evaluate the non-rollback barrier" ;;
+esac
 
 # --- 4. install into an immutable release directory --------------------------
 RELEASE_DIR="$RELEASES_DIR/$RELEASE_ID"

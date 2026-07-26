@@ -2593,6 +2593,59 @@ json_get() {
   ' "$1" "$2"
 }
 
+# json_get_nonnegative_safe_integer FILE DOTTED.KEY — prints one canonical
+# base-10 JSON integer that Node and the shell can compare without precision
+# loss. Exit 3 means the key is absent from a plain-object document; 4 means
+# unreadable/invalid JSON; 5 means the document shape or value is null,
+# wrong-typed, negative, fractional, non-canonical, or outside the exact integer
+# range. Callers must never treat 4 or 5 as an absent optional field.
+json_get_nonnegative_safe_integer() {
+  i00_guard_node -e '
+    const fs = require("fs");
+    const [file, key] = process.argv.slice(1);
+    const sourceByHolder = new WeakMap();
+    let root;
+    try {
+      root = JSON.parse(fs.readFileSync(file, "utf8"), function (property, value, context) {
+        if (context && typeof context.source === "string") {
+          let properties = sourceByHolder.get(this);
+          if (!properties) {
+            properties = new Map();
+            sourceByHolder.set(this, properties);
+          }
+          properties.set(property, context.source);
+        }
+        return value;
+      });
+    } catch {
+      process.exit(4);
+    }
+    if (root === null || typeof root !== "object" || Array.isArray(root)) process.exit(5);
+    const parts = key.split(".");
+    if (parts.length === 0 || parts.some((part) => part.length === 0)) process.exit(5);
+    let holder = root;
+    for (let index = 0; index < parts.length - 1; index += 1) {
+      const part = parts[index];
+      if (holder === null || typeof holder !== "object" || Array.isArray(holder)) process.exit(5);
+      if (!Object.prototype.hasOwnProperty.call(holder, part)) process.exit(3);
+      holder = holder[part];
+    }
+    if (holder === null || typeof holder !== "object" || Array.isArray(holder)) process.exit(5);
+    const property = parts[parts.length - 1];
+    if (!Object.prototype.hasOwnProperty.call(holder, property)) process.exit(3);
+    const value = holder[property];
+    const source = sourceByHolder.get(holder)?.get(property);
+    if (typeof value !== "number"
+        || !Number.isSafeInteger(value)
+        || value < 0
+        || typeof source !== "string"
+        || !/^(?:0|[1-9][0-9]*)$/.test(source)) process.exit(5);
+    const exact = BigInt(source);
+    if (exact > BigInt(Number.MAX_SAFE_INTEGER) || BigInt(value) !== exact) process.exit(5);
+    process.stdout.write(source);
+  ' "$1" "$2"
+}
+
 # json_write FILE KEY=VALUE...  VALUE is parsed as JSON when possible
 # (numbers, booleans), otherwise stored as a string.
 json_write() {

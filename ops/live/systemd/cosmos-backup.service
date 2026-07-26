@@ -5,10 +5,6 @@
 
 [Unit]
 Description=Cosmos application-consistent state store backup
-# No ratified timer/manual action class exists. Keep the historical unit bytes
-# for audit compatibility, but make activation impossible.
-ConditionPathExists=!/
-RefuseManualStart=yes
 
 [Service]
 Type=oneshot

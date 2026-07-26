@@ -207,6 +207,210 @@ bash "$MAKE_RELEASE" "$SRC/I" rel-I 1 false
 assert_rc 1 bash "$DEPLOY" --release "$SRC/I"
 assert_grep '"result":"REFUSED_SCHEMA"' "$OPS_STATE_DIR/deploy-log.jsonl" "schema refusal logged"
 
+note "11a. rollback-floor operands refuse before any deploy mutation"
+FLOOR_SRC="$SRC/FLOOR"
+FLOOR_TARGET="$RELEASES_DIR/rel-floor"
+FLOOR_TARGET_SENTINEL="$FLOOR_TARGET/preexisting"
+FLOOR_PROBE_MARKER="$SANDBOX/floor-probe-ran"
+FLOOR_INJECTION_MARKER="$SANDBOX/floor-injection-ran"
+FLOOR_SCHEMA_INJECTION_MARKER="$SANDBOX/floor-schema-injection-ran"
+bash "$MAKE_RELEASE" "$FLOOR_SRC" rel-floor 3 false
+mkdir -p "$FLOOR_TARGET"
+printf '%s\n' unchanged > "$FLOOR_TARGET_SENTINEL"
+FLOOR_SYSTEMCTL_BYTES="$(wc -c < "$MOCK_SYSTEMCTL_LOG" | tr -d ' ')"
+
+write_floor_journal() { # missing|value|raw-value|raw-root [value]
+  case "$1" in
+    missing) json_write "$JOURNAL" dataSchema=2 ;;
+    value) json_write "$JOURNAL" dataSchema=2 "rollbackFloor=$2" ;;
+    raw-value) printf '{"dataSchema":2,"rollbackFloor":%s}\n' "$2" > "$JOURNAL" ;;
+    raw-root) printf '%s\n' "$2" > "$JOURNAL" ;;
+    *) fail "unknown rollback-floor journal fixture kind: $1" ;;
+  esac
+}
+
+assert_deploy_floor_case() { # kind value rc required-fragment forbidden-fragment
+  local kind="$1" value="$2" expected_rc="$3"
+  local required="$4" forbidden="$5" output rc
+  write_floor_journal "$kind" "$value"
+  set +e
+  output="$(
+    env FLOOR_PROBE_MARKER="$FLOOR_PROBE_MARKER" \
+      PROBE_CMD=': > "$FLOOR_PROBE_MARKER"; exit 1' \
+      bash "$DEPLOY" --release "$FLOOR_SRC" 2>&1
+  )"
+  rc=$?
+  set -e
+  assert_eq "$rc" "$expected_rc" "rollback-floor deploy refusal code"
+  ASSERTIONS=$((ASSERTIONS + 1))
+  case "$output" in
+    *"$required"*) ;;
+    *) fail "deploy output omitted rollback-floor proof [$required]: $output" ;;
+  esac
+  if [ -n "$forbidden" ]; then
+    ASSERTIONS=$((ASSERTIONS + 1))
+    case "$output" in
+      *"$forbidden"*) fail "deploy reached forbidden later gate [$forbidden]: $output" ;;
+      *) ;;
+    esac
+  fi
+  assert_link_target "$CURRENT_LINK" "$RELEASES_DIR/rel-H" \
+    "rollback-floor refusal leaves current unchanged"
+  assert_file "$FLOOR_TARGET_SENTINEL"
+  assert_no_path_entry "$FLOOR_PROBE_MARKER" \
+    "rollback-floor refusal does not invoke the probe"
+  assert_no_path_entry "$OPS_STATE_DIR/locks/deploy.lock" \
+    "rollback-floor refusal cleans the deploy lock"
+}
+
+assert_deploy_floor_case value 7 1 \
+  "candidate schemaVersion 3 is behind the non-rollback barrier" \
+  "release directory already exists"
+assert_deploy_floor_case missing "" 1 \
+  "release directory already exists" \
+  "journal rollbackFloor is not a nonnegative integer"
+assert_deploy_floor_case value 0 1 \
+  "release directory already exists" \
+  "journal rollbackFloor is not a nonnegative integer"
+for invalid_floor in "" null '"7"' "not-a-number" \
+  "0; : > $FLOOR_INJECTION_MARKER" -1 3.5 9223372036854775808; do
+  assert_deploy_floor_case value "$invalid_floor" 1 \
+    "journal rollbackFloor is not a nonnegative integer" \
+    "release directory already exists"
+done
+for precision_edge_floor in 1.0000000000000001 9007199254740990.5 \
+  9007199254740991.1 1e-4000 -0 9007199254740992; do
+  assert_deploy_floor_case raw-value "$precision_edge_floor" 1 \
+    "journal rollbackFloor is not a nonnegative integer" \
+    "release directory already exists"
+done
+assert_deploy_floor_case raw-value 9007199254740991 1 \
+  "candidate schemaVersion 3 is behind the non-rollback barrier" \
+  "journal rollbackFloor is not a nonnegative integer"
+for invalid_root in null '[]' 0 '"journal"'; do
+  assert_deploy_floor_case raw-root "$invalid_root" 1 \
+    "journal rollbackFloor is not a nonnegative integer" \
+    "release directory already exists"
+done
+assert_no_file "$FLOOR_INJECTION_MARKER"
+assert_eq "$(sed -n '1p' "$FLOOR_TARGET_SENTINEL")" unchanged \
+  "dirty target sentinel remains unchanged"
+assert_eq "$(wc -c < "$MOCK_SYSTEMCTL_LOG" | tr -d ' ')" \
+  "$FLOOR_SYSTEMCTL_BYTES" "rollback-floor cases do not invoke systemctl"
+
+FLOOR_BAD_SCHEMA_SRC="$SRC/FLOOR-BAD-SCHEMA"
+bash "$MAKE_RELEASE" "$FLOOR_BAD_SCHEMA_SRC" rel-floor-bad-schema \
+  "\"0; : > $FLOOR_SCHEMA_INJECTION_MARKER\"" false
+write_floor_journal value 2
+set +e
+FLOOR_BAD_SCHEMA_OUTPUT="$(
+  env FLOOR_PROBE_MARKER="$FLOOR_PROBE_MARKER" \
+    PROBE_CMD=': > "$FLOOR_PROBE_MARKER"; exit 1' \
+    bash "$DEPLOY" --release "$FLOOR_BAD_SCHEMA_SRC" 2>&1
+)"
+FLOOR_BAD_SCHEMA_RC=$?
+set -e
+assert_eq "$FLOOR_BAD_SCHEMA_RC" 1 "malformed deploy schema refuses"
+ASSERTIONS=$((ASSERTIONS + 1))
+case "$FLOOR_BAD_SCHEMA_OUTPUT" in
+  *"schemaVersion must be a non-negative integer"*) ;;
+  *) fail "malformed deploy schema omitted exact refusal: $FLOOR_BAD_SCHEMA_OUTPUT" ;;
+esac
+assert_no_file "$FLOOR_SCHEMA_INJECTION_MARKER"
+assert_no_path_entry "$RELEASES_DIR/rel-floor-bad-schema" \
+  "malformed schema is not installed"
+assert_no_path_entry "$FLOOR_PROBE_MARKER" \
+  "malformed schema does not invoke the probe"
+assert_no_path_entry "$OPS_STATE_DIR/locks/deploy.lock" \
+  "malformed schema does not acquire the deploy lock"
+assert_eq "$(wc -c < "$MOCK_SYSTEMCTL_LOG" | tr -d ' ')" \
+  "$FLOOR_SYSTEMCTL_BYTES" "malformed schema does not invoke systemctl"
+
+FLOOR_HUGE_SCHEMA_SRC="$SRC/FLOOR-HUGE-SCHEMA"
+bash "$MAKE_RELEASE" "$FLOOR_HUGE_SCHEMA_SRC" rel-floor-huge-schema \
+  9223372036854775808 false
+set +e
+FLOOR_HUGE_SCHEMA_OUTPUT="$(
+  env FLOOR_PROBE_MARKER="$FLOOR_PROBE_MARKER" \
+    PROBE_CMD=': > "$FLOOR_PROBE_MARKER"; exit 1' \
+    bash "$DEPLOY" --release "$FLOOR_HUGE_SCHEMA_SRC" 2>&1
+)"
+FLOOR_HUGE_SCHEMA_RC=$?
+set -e
+assert_eq "$FLOOR_HUGE_SCHEMA_RC" 1 "oversized deploy schema refuses"
+ASSERTIONS=$((ASSERTIONS + 1))
+case "$FLOOR_HUGE_SCHEMA_OUTPUT" in
+  *"schemaVersion must be a non-negative integer"*) ;;
+  *) fail "oversized deploy schema omitted exact refusal: $FLOOR_HUGE_SCHEMA_OUTPUT" ;;
+esac
+assert_no_path_entry "$RELEASES_DIR/rel-floor-huge-schema" \
+  "oversized schema is not installed"
+assert_no_path_entry "$FLOOR_PROBE_MARKER" \
+  "oversized schema does not invoke the probe"
+assert_no_path_entry "$OPS_STATE_DIR/locks/deploy.lock" \
+  "oversized schema does not acquire the deploy lock"
+assert_eq "$(wc -c < "$MOCK_SYSTEMCTL_LOG" | tr -d ' ')" \
+  "$FLOOR_SYSTEMCTL_BYTES" "oversized schema does not invoke systemctl"
+
+FLOOR_STRING_SCHEMA_SRC="$SRC/FLOOR-STRING-SCHEMA"
+bash "$MAKE_RELEASE" "$FLOOR_STRING_SCHEMA_SRC" rel-floor-string-schema \
+  '"3"' false
+set +e
+FLOOR_STRING_SCHEMA_OUTPUT="$(
+  env FLOOR_PROBE_MARKER="$FLOOR_PROBE_MARKER" \
+    PROBE_CMD=': > "$FLOOR_PROBE_MARKER"; exit 1' \
+    bash "$DEPLOY" --release "$FLOOR_STRING_SCHEMA_SRC" 2>&1
+)"
+FLOOR_STRING_SCHEMA_RC=$?
+set -e
+assert_eq "$FLOOR_STRING_SCHEMA_RC" 1 "numeric-string deploy schema refuses"
+ASSERTIONS=$((ASSERTIONS + 1))
+case "$FLOOR_STRING_SCHEMA_OUTPUT" in
+  *"schemaVersion must be a non-negative integer"*) ;;
+  *) fail "numeric-string deploy schema omitted exact refusal: $FLOOR_STRING_SCHEMA_OUTPUT" ;;
+esac
+assert_no_path_entry "$RELEASES_DIR/rel-floor-string-schema" \
+  "numeric-string schema is not installed"
+assert_no_path_entry "$FLOOR_PROBE_MARKER" \
+  "numeric-string schema does not invoke the probe"
+assert_no_path_entry "$OPS_STATE_DIR/locks/deploy.lock" \
+  "numeric-string schema does not acquire the deploy lock"
+assert_eq "$(wc -c < "$MOCK_SYSTEMCTL_LOG" | tr -d ' ')" \
+  "$FLOOR_SYSTEMCTL_BYTES" "numeric-string schema does not invoke systemctl"
+
+FLOOR_PRECISION_SCHEMA_INDEX=0
+for precision_edge_schema in 1.0000000000000001 9007199254740990.5 1e-4000; do
+  FLOOR_PRECISION_SCHEMA_INDEX=$((FLOOR_PRECISION_SCHEMA_INDEX + 1))
+  FLOOR_PRECISION_SCHEMA_SRC="$SRC/FLOOR-PRECISION-SCHEMA-$FLOOR_PRECISION_SCHEMA_INDEX"
+  FLOOR_PRECISION_SCHEMA_ID="rel-floor-precision-schema-$FLOOR_PRECISION_SCHEMA_INDEX"
+  bash "$MAKE_RELEASE" "$FLOOR_PRECISION_SCHEMA_SRC" \
+    "$FLOOR_PRECISION_SCHEMA_ID" "$precision_edge_schema" false
+  set +e
+  FLOOR_PRECISION_SCHEMA_OUTPUT="$(
+    env FLOOR_PROBE_MARKER="$FLOOR_PROBE_MARKER" \
+      PROBE_CMD=': > "$FLOOR_PROBE_MARKER"; exit 1' \
+      bash "$DEPLOY" --release "$FLOOR_PRECISION_SCHEMA_SRC" 2>&1
+  )"
+  FLOOR_PRECISION_SCHEMA_RC=$?
+  set -e
+  assert_eq "$FLOOR_PRECISION_SCHEMA_RC" 1 \
+    "precision-edge deploy schema refuses"
+  ASSERTIONS=$((ASSERTIONS + 1))
+  case "$FLOOR_PRECISION_SCHEMA_OUTPUT" in
+    *"schemaVersion must be a non-negative integer"*) ;;
+    *) fail "precision-edge deploy schema omitted exact refusal: $FLOOR_PRECISION_SCHEMA_OUTPUT" ;;
+  esac
+  assert_no_path_entry "$RELEASES_DIR/$FLOOR_PRECISION_SCHEMA_ID" \
+    "precision-edge schema is not installed"
+  assert_no_path_entry "$FLOOR_PROBE_MARKER" \
+    "precision-edge schema does not invoke the probe"
+  assert_no_path_entry "$OPS_STATE_DIR/locks/deploy.lock" \
+    "precision-edge schema does not acquire the deploy lock"
+  assert_eq "$(wc -c < "$MOCK_SYSTEMCTL_LOG" | tr -d ' ')" \
+    "$FLOOR_SYSTEMCTL_BYTES" "precision-edge schema does not invoke systemctl"
+done
+write_floor_journal value 2
+
 note "12. stale lock from a crashed deploy (dead owner pid) is reclaimed"
 mkdir -p "$OPS_STATE_DIR/locks/deploy.lock"
 echo 999999 > "$OPS_STATE_DIR/locks/deploy.lock/pid"

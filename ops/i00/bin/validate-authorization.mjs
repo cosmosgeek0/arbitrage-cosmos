@@ -440,10 +440,17 @@ if (!isUtc(authorization.issuedAtUtc) || !isUtc(authorization.startsAtUtc) || !i
 const issuedAt = Date.parse(authorization.issuedAtUtc);
 const startsAt = Date.parse(authorization.startsAtUtc);
 const expiresAt = Date.parse(authorization.expiresAtUtc);
-if (issuedAt > startsAt || startsAt >= expiresAt) fail('authorization time ordering must be issued <= start < expiry');
-if (Date.parse(initialEvaluationTime) < startsAt
-    || Date.parse(initialEvaluationTime) >= expiresAt) {
-  fail('external authorization is not active at the evaluation time');
+if (issuedAt > startsAt) {
+  fail(`authorization time ordering must be issued <= start < expiry: issuedAtUtc ${authorization.issuedAtUtc} is AFTER startsAtUtc ${authorization.startsAtUtc}`);
+}
+if (startsAt >= expiresAt) {
+  fail(`authorization time ordering must be issued <= start < expiry: startsAtUtc ${authorization.startsAtUtc} is not BEFORE expiresAtUtc ${authorization.expiresAtUtc}`);
+}
+if (Date.parse(initialEvaluationTime) < startsAt) {
+  fail(`external authorization is not active yet: evaluation time ${initialEvaluationTime} is BEFORE startsAtUtc ${authorization.startsAtUtc}`);
+}
+if (Date.parse(initialEvaluationTime) >= expiresAt) {
+  fail(`external authorization has expired: evaluation time ${initialEvaluationTime} is AT OR AFTER expiresAtUtc ${authorization.expiresAtUtc}`);
 }
 
 const allowedCommands = exactList(authorization.allowedCommands, 'allowedCommands', { forbidBroad: true });
@@ -470,7 +477,12 @@ const approver = exactText(authorization.ownerApproval.approver, 'ownerApproval.
 const approvalReference = exactText(authorization.ownerApproval.reference, 'ownerApproval.reference', { forbidBroad: true });
 if (!isUtc(authorization.ownerApproval.approvedAtUtc)) fail('owner approval timestamp must be exact UTC seconds');
 const approvedAt = Date.parse(authorization.ownerApproval.approvedAtUtc);
-if (approvedAt < issuedAt || approvedAt > startsAt) fail('owner approval must occur at or after issue and no later than start');
+if (approvedAt < issuedAt) {
+  fail(`owner approval must occur at or after issue and no later than start: ownerApproval.approvedAtUtc ${authorization.ownerApproval.approvedAtUtc} is BEFORE issuedAtUtc ${authorization.issuedAtUtc}`);
+}
+if (approvedAt > startsAt) {
+  fail(`owner approval must occur at or after issue and no later than start: ownerApproval.approvedAtUtc ${authorization.ownerApproval.approvedAtUtc} is AFTER startsAtUtc ${authorization.startsAtUtc}`);
+}
 
 requireExactObject(authorization.receiptTargets, ['result', 'reconciliation'], 'receiptTargets');
 const resultReceiptTarget = exactText(authorization.receiptTargets.result, 'receiptTargets.result', { forbidBroad: true });

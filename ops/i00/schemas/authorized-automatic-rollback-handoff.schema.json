@@ -33,6 +33,7 @@
     "writeRoots",
     "readRoots",
     "observedRoots",
+    "effectOutput",
     "authorizationChain",
     "startEvidencePath",
     "startEvidenceSha256",
@@ -94,6 +95,9 @@
     },
     "observedRoots": {
       "$ref": "authorized-effect-handoff.v1.json#/properties/observedRoots"
+    },
+    "effectOutput": {
+      "$ref": "authorized-effect-handoff.v1.json#/$defs/emptyObject"
     },
     "authorizationChain": {
       "$ref": "authorized-effect-handoff.v1.json#/properties/authorizationChain"

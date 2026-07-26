@@ -193,6 +193,10 @@ const AUTOMATIC_HANDOFF_KEYS = Object.freeze([
   'writeRoots',
   'readRoots',
   'observedRoots',
+  // Required by validateCommonHandoff's non-BACKUP_CREATE branch, which
+  // requires one exact empty effectOutput object. HANDOFF_KEYS already carries
+  // this field; without it no automatic rollback document can pass both gates.
+  'effectOutput',
   'authorizationChain',
   'startEvidencePath',
   'startEvidenceSha256',

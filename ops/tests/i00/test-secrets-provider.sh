@@ -567,6 +567,139 @@ replace_repeated_arg_value() {
   [ "$found" = 1 ] || fail_test "expected one exact $target value"
   assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${replaced[@]}"
 }
+
+note "authorization time refusals name the exact direction and bound values"
+assert_timed_auth_failure() { # argument-name replacement expected-message
+  local target="$1" replacement="$2" expected="$3" found=0
+  local -a timed_args=("${AUTH_BASE[@]}")
+  local index
+  for ((index = 0; index < ${#timed_args[@]}; index += 1)); do
+    if [ "${timed_args[$index]}" = "$target" ]; then
+      timed_args[$((index + 1))]="$replacement"
+      found=$((found + 1))
+    fi
+  done
+  [ "$found" = 1 ] || fail_test "expected one $target timing argument"
+  assert_failure_contains "$expected" \
+    node "$I00_ROOT/bin/validate-authorization.mjs" "${timed_args[@]}"
+}
+mutate_auth "$AUTH_ROOT/auth-issued-after-start.json" \
+  'value.issuedAtUtc="2026-07-13T00:16:00Z";'
+assert_timed_auth_failure --input "$AUTH_ROOT/auth-issued-after-start.json" \
+  'authorization time ordering must be issued <= start < expiry: issuedAtUtc 2026-07-13T00:16:00Z is AFTER startsAtUtc 2026-07-13T00:15:00Z'
+
+mutate_auth "$AUTH_ROOT/auth-start-at-expiry.json" \
+  'value.startsAtUtc="2026-07-13T01:00:00Z";'
+assert_timed_auth_failure --input "$AUTH_ROOT/auth-start-at-expiry.json" \
+  'authorization time ordering must be issued <= start < expiry: startsAtUtc 2026-07-13T01:00:00Z is not BEFORE expiresAtUtc 2026-07-13T01:00:00Z'
+
+assert_timed_auth_failure --now 2026-07-13T00:14:59Z \
+  'external authorization is not active yet: evaluation time 2026-07-13T00:14:59Z is BEFORE startsAtUtc 2026-07-13T00:15:00Z'
+
+assert_timed_auth_failure --now 2026-07-13T01:00:00Z \
+  'external authorization has expired: evaluation time 2026-07-13T01:00:00Z is AT OR AFTER expiresAtUtc 2026-07-13T01:00:00Z'
+
+mutate_auth "$AUTH_ROOT/auth-approval-before-issue.json" \
+  'value.ownerApproval.approvedAtUtc="2026-07-12T23:59:59Z";'
+assert_timed_auth_failure --input "$AUTH_ROOT/auth-approval-before-issue.json" \
+  'owner approval must occur at or after issue and no later than start: ownerApproval.approvedAtUtc 2026-07-12T23:59:59Z is BEFORE issuedAtUtc 2026-07-13T00:00:00Z'
+
+mutate_auth "$AUTH_ROOT/auth-approval-after-start.json" \
+  'value.ownerApproval.approvedAtUtc="2026-07-13T00:15:01Z";'
+assert_timed_auth_failure --input "$AUTH_ROOT/auth-approval-after-start.json" \
+  'owner approval must occur at or after issue and no later than start: ownerApproval.approvedAtUtc 2026-07-13T00:15:01Z is AFTER startsAtUtc 2026-07-13T00:15:00Z'
+
+assert_eq \
+  "$(find "$CLAIM_ROOT" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d ' ')" \
+  0
+
+note "authorization time-guard split preserves every prior verdict"
+assert_success node --input-type=module - \
+  "$I00_ROOT/bin/validate-authorization.mjs" <<'NODE'
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const source = readFileSync(process.argv[2], 'utf8');
+const anchors = [
+  'if (issuedAt > startsAt) {',
+  'if (startsAt >= expiresAt) {',
+  'if (Date.parse(initialEvaluationTime) < startsAt) {',
+  'if (Date.parse(initialEvaluationTime) >= expiresAt) {',
+  'if (approvedAt < issuedAt) {',
+  'if (approvedAt > startsAt) {',
+];
+for (const anchor of anchors) {
+  assert.equal(source.split(anchor).length - 1, 1);
+}
+const messages = [...source.matchAll(
+  /fail\(`([^`]*(?:issuedAtUtc|startsAtUtc|expiresAtUtc|evaluation time)[^`]*)`\)/gu,
+)].map((match) => match[1]);
+assert.equal(messages.length, 6);
+assert.equal(new Set(messages).size, 6);
+for (const message of messages) {
+  assert.match(message, /\b(?:AFTER|BEFORE|AT OR AFTER|not BEFORE)\b/u);
+  assert.ok((message.match(/\$\{/gu) ?? []).length >= 2);
+}
+
+const oldDecide = (issued, starts, expires, now, approved) => {
+  if (issued > starts || starts >= expires) return 'ORDERING';
+  if (now < starts || now >= expires) return 'WINDOW';
+  if (approved < issued || approved > starts) return 'APPROVAL';
+  return 'ACCEPT';
+};
+const newDecide = (issued, starts, expires, now, approved) => {
+  if (issued > starts) return 'ORDERING';
+  if (starts >= expires) return 'ORDERING';
+  if (now < starts) return 'WINDOW';
+  if (now >= expires) return 'WINDOW';
+  if (approved < issued) return 'APPROVAL';
+  if (approved > starts) return 'APPROVAL';
+  return 'ACCEPT';
+};
+const weakened = (issued, starts, expires, now, approved) => {
+  if (issued > starts) return 'ORDERING';
+  if (starts >= expires) return 'ORDERING';
+  if (now < starts) return 'WINDOW';
+  if (now >= expires) return 'WINDOW';
+  if (approved < issued) return 'APPROVAL';
+  return 'ACCEPT';
+};
+
+const domain = [0, 1, 2, 3, 4];
+let cases = 0;
+let mismatches = 0;
+let accepted = 0;
+let negativeControlDivergences = 0;
+const outcomes = new Set();
+for (const issued of domain) {
+  for (const starts of domain) {
+    for (const expires of domain) {
+      for (const now of domain) {
+        for (const approved of domain) {
+          cases += 1;
+          const prior = oldDecide(issued, starts, expires, now, approved);
+          const current = newDecide(issued, starts, expires, now, approved);
+          outcomes.add(current);
+          if (current === 'ACCEPT') accepted += 1;
+          if (prior !== current) mismatches += 1;
+          if (prior !== weakened(issued, starts, expires, now, approved)) {
+            negativeControlDivergences += 1;
+          }
+        }
+      }
+    }
+  }
+}
+assert.equal(cases, 3_125);
+assert.equal(mismatches, 0);
+assert.deepEqual(
+  [...outcomes].sort(),
+  ['ACCEPT', 'APPROVAL', 'ORDERING', 'WINDOW'],
+);
+assert.equal(accepted, 56);
+assert.equal(negativeControlDivergences, 98);
+NODE
+
 mutate_auth "$AUTH_ROOT/auth-missing.json" 'delete value.receiptTargets;'
 assert_failure node "$I00_ROOT/bin/validate-authorization.mjs" "${AUTH_BASE[@]/$AUTH_ROOT\/auth.json/$AUTH_ROOT\/auth-missing.json}"
 mutate_auth "$AUTH_ROOT/auth-missing-start.json" 'delete value.startsAtUtc;'

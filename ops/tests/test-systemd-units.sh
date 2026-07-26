@@ -70,6 +70,11 @@ esac
 assert_grep '^LogRateLimitIntervalSec=' "$APP" "journal rate bounded"
 assert_grep '^ReadWritePaths=.*/var/lib/cosmos' "$APP" "state dir writable"
 assert_grep '^ReadWritePaths=.*/run/cosmos-app' "$APP" "logical lease runtime writable"
+assert_eq "$(grep -c '^RestrictAddressFamilies=' "$APP")" 1 \
+  "one app address-family allowlist"
+assert_eq "$(unit_get "$APP" RestrictAddressFamilies)" \
+  "AF_UNIX AF_INET AF_INET6 AF_NETLINK" \
+  "app permits netlink host-identity lookup"
 assert_grep '^WantedBy=multi-user.target' "$APP" "installable"
 
 note "cloudflared.service: separate supervised tunnel, no autoupdate"
@@ -95,8 +100,31 @@ done
 
 note "timers: cadences declared"
 assert_grep '^OnUnitActiveSec=1min' "$SYSD/cosmos-watchdog.timer" "watchdog every minute"
-assert_grep '^OnCalendar=hourly' "$SYSD/cosmos-backup.timer" "backup hourly"
+BACKUP_TIMER="$SYSD/cosmos-backup.timer"
+for u in "$SYSD/cosmos-backup.service" "$BACKUP_TIMER"; do
+  assert_not_grep '^(ConditionPathExists|RefuseManualStart)=' "$u" \
+    "$(basename "$u") has no impossible/manual-start blocker"
+done
+assert_eq "$(grep -c '^OnCalendar=' "$BACKUP_TIMER")" 1 \
+  "backup has one cadence"
+assert_eq "$(unit_get "$BACKUP_TIMER" OnCalendar)" hourly \
+  "backup remains hourly"
+assert_eq "$(unit_get "$BACKUP_TIMER" Persistent)" true \
+  "backup catches up after downtime"
+assert_eq "$(unit_get "$BACKUP_TIMER" RandomizedDelaySec)" 5min \
+  "backup retains bounded jitter"
 assert_grep '^OnCalendar=weekly' "$SYSD/cosmos-restore-drill.timer" "drill weekly"
+for u in "$SYSD/cosmos-restore-drill.service" \
+  "$SYSD/cosmos-restore-drill.timer"; do
+  assert_eq "$(grep -c '^ConditionPathExists=' "$u")" 1 \
+    "$(basename "$u") has one condition bar"
+  assert_eq "$(unit_get "$u" ConditionPathExists)" '!/' \
+    "$(basename "$u") remains impossible to activate"
+  assert_eq "$(grep -c '^RefuseManualStart=' "$u")" 1 \
+    "$(basename "$u") has one manual-start policy"
+  assert_eq "$(unit_get "$u" RefuseManualStart)" yes \
+    "$(basename "$u") still refuses manual start"
+done
 
 note "journald drop-in: bounded logs"
 J="$SYSD/journald-cosmos.conf.template"

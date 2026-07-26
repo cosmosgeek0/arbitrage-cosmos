@@ -227,25 +227,43 @@ case "$TARGET_ID" in
 esac
 [ "$TARGET_ID" = "$TARGET_PATH_ID" ] \
   || die_code 1 "rollback target directory and releaseId do not match"
-TARGET_SCHEMA="$(json_get "$TARGET_READ_DIR/release.json" schemaVersion)" \
-  || die_code 1 "rollback target release.json: schemaVersion missing"
+set +e
+TARGET_SCHEMA="$(json_get_nonnegative_safe_integer \
+  "$TARGET_READ_DIR/release.json" schemaVersion)"
+TARGET_SCHEMA_RC=$?
+set -e
+case "$TARGET_SCHEMA_RC" in
+  0) : ;;
+  3|4) die_code 1 "rollback target release.json: schemaVersion missing" ;;
+  5) die_code 1 "target release schemaVersion is not a nonnegative integer within the exact comparison range" ;;
+  *) die_code 1 "rollback target release.json: schemaVersion validation failed" ;;
+esac
 
 # --- journal/schema compatibility: absolute ------------------------------------
 ROLLBACK_FLOOR=0
 if [ -f "$JOURNAL_EFFECT_FILE" ]; then
   # Part 4 #6: a corrupt journal must never default the non-rollback barrier
   # to its most permissive value.
-  set +e; FLOOR_VALUE="$(json_get "$JOURNAL_EFFECT_FILE" rollbackFloor)"; FLOOR_RC=$?; set -e
+  set +e; FLOOR_VALUE="$(json_get_nonnegative_safe_integer "$JOURNAL_EFFECT_FILE" rollbackFloor)"; FLOOR_RC=$?; set -e
   case "$FLOOR_RC" in
     0) ROLLBACK_FLOOR="$FLOOR_VALUE" ;;
     3) ROLLBACK_FLOOR=0 ;;
+    5) die_code 1 "journal rollbackFloor is not a nonnegative integer - refusing to evaluate the non-rollback barrier against an uncomparable value" ;;
     *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to assume a zero rollback floor" ;;
   esac
 fi
-if [ "$TARGET_SCHEMA" -lt "$ROLLBACK_FLOOR" ]; then
-  log_event REFUSED_SCHEMA "target schema $TARGET_SCHEMA behind non-rollback barrier $ROLLBACK_FLOOR"
-  die_code 5 "rollback to $TARGET_ID refused: schemaVersion $TARGET_SCHEMA is behind the non-rollback barrier (rollbackFloor=$ROLLBACK_FLOOR); the target cannot read the journal — a data migration, not a rollback, is required"
-fi
+set +e
+[ "$TARGET_SCHEMA" -lt "$ROLLBACK_FLOOR" ]
+BARRIER_COMPARISON_RC=$?
+set -e
+case "$BARRIER_COMPARISON_RC" in
+  0)
+    log_event REFUSED_SCHEMA "target schema $TARGET_SCHEMA behind non-rollback barrier $ROLLBACK_FLOOR"
+    die_code 5 "rollback to $TARGET_ID refused: schemaVersion $TARGET_SCHEMA is behind the non-rollback barrier (rollbackFloor=$ROLLBACK_FLOOR); the target cannot read the journal — a data migration, not a rollback, is required"
+    ;;
+  1) : ;;
+  *) die_code 1 "target release schemaVersion and journal rollbackFloor are not safely comparable - refusing to evaluate the non-rollback barrier" ;;
+esac
 
 # --- exposure / money-readiness policy -----------------------------------------
 EXPOSURE="$(get_exposure)"

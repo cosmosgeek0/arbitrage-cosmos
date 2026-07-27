@@ -4,11 +4,17 @@
  * This module owns no environment, clock, signer, transport, private read,
  * persistence, ledger, venue-test, order, cancel, or capital-movement port.
  * Callers must inject an explicit symbol ticket, canonical risk evidence, and
- * a fresh public exchangeInfo filter projection. Even a successful validation
- * returns no signed-test or live-order intent.
+ * fresh public exchangeInfo filters, execution rules, and reference-price
+ * evidence. Even a successful validation returns no signed-test or live-order
+ * intent.
  */
 import { canonicalJson } from '../contracts/identity.js';
-import type { BinanceSpotFilterValidation } from '../exchange/binanceSpot/filters.js';
+import {
+  normalizeSpotDecimal,
+  type BinanceSpotFallbackPriceEvidence,
+  type BinanceSpotFilterValidation,
+  type BinanceSpotReferencePriceEvidence,
+} from '../exchange/binanceSpot/filters.js';
 import {
   OWNER_SPOT_MAX_ORDER_NOTIONAL_QUOTE,
   type SpotRiskVerdict,
@@ -29,6 +35,10 @@ export const SPOT_PUBLIC_FILTER_EVIDENCE_SCHEMA =
   'cosmos.foundation.spot-public-filter-evidence.v1' as const;
 export const SPOT_PUBLIC_FILTER_SOURCE =
   'BINANCE_SPOT_EXCHANGE_INFO' as const;
+export const SPOT_VENUE_EVIDENCE_SCHEMA =
+  'cosmos.foundation.spot-venue-execution-evidence.v1' as const;
+export const SPOT_VENUE_EVIDENCE_SOURCE =
+  'BINANCE_SPOT_EXECUTION_RULES_AND_REFERENCE_PRICE' as const;
 export const MAX_SPOT_PUBLIC_FILTER_AGE_MS = 60_000 as const;
 
 export const SPOT_VALIDATE_ONLY_CAPABILITIES = Object.freeze({
@@ -60,6 +70,9 @@ export const SPOT_VALIDATE_ONLY_BLOCKING_CODES = Object.freeze([
   'PUBLIC_FILTER_STALE',
   'PUBLIC_FILTER_TRADING_DISABLED',
   'PUBLIC_FILTER_ORDER_TYPE_UNSUPPORTED',
+  'VENUE_EVIDENCE_INVALID',
+  'VENUE_EVIDENCE_SYMBOL_MISMATCH',
+  'VENUE_EVIDENCE_STALE',
   'CORE_VALIDATION_FAILED',
 ] as const);
 
@@ -116,11 +129,43 @@ export interface SpotPublicFilterEvidence {
   readonly filters: readonly unknown[];
 }
 
+/**
+ * Authority-owned projection of current public price evidence and the
+ * separately published executionRules row. Neither may be reconstructed from
+ * the caller's own ticket.
+ */
+export interface SpotVenueExecutionEvidence {
+  readonly schema: typeof SPOT_VENUE_EVIDENCE_SCHEMA;
+  readonly source: typeof SPOT_VENUE_EVIDENCE_SOURCE;
+  readonly verification: 'VERIFIED_BY_PUBLIC_SPOT_EVIDENCE_OWNER';
+  readonly revision: string;
+  readonly symbol: string;
+  readonly observedAtMs: number;
+  readonly validUntilMs: number;
+  /** Exactly what the public referencePrice endpoint answered. */
+  readonly referencePrice: Readonly<BinanceSpotReferencePriceEvidence>;
+  /**
+   * Window-bound public prices consulted only while the reference price is
+   * null or never set. It must be an explicit empty array otherwise, so an
+   * unfetched window cannot masquerade as a published one.
+   */
+  readonly fallbackPrices:
+    readonly Readonly<BinanceSpotFallbackPriceEvidence>[];
+  /** Exact inner rules array from the public executionRules symbol row. */
+  readonly executionRules: readonly unknown[];
+}
+
 export interface SpotValidateOnlyInput {
   readonly nowMs: number;
   readonly ticket: Readonly<SpotExecutionTicket>;
   readonly riskEvidence: Readonly<SpotRiskEvidence> | null;
   readonly publicFilterEvidence: Readonly<SpotPublicFilterEvidence>;
+  /**
+   * Separately sourced public rule/reference evidence. Validate-only requires
+   * an explicit empty rules array when no execution rule is published, so a
+   * missing fetch cannot masquerade as absence.
+   */
+  readonly venueExecutionEvidence: Readonly<SpotVenueExecutionEvidence>;
 }
 
 export interface SpotValidateOnlyResult {
@@ -134,6 +179,7 @@ export interface SpotValidateOnlyResult {
   readonly symbol: string | null;
   readonly quoteAsset: string | null;
   readonly filterEvidenceRevision: string | null;
+  readonly venueEvidenceRevision: string | null;
   readonly filterValidation: Readonly<BinanceSpotFilterValidation> | null;
   readonly riskVerdict: Readonly<SpotRiskVerdict> | null;
   readonly blockingCodes: readonly SpotValidateOnlyBlockingCode[];
@@ -164,6 +210,166 @@ function record(value: unknown): UnknownRecord | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as UnknownRecord)
     : null;
+}
+
+function hasExactKeys(
+  candidate: UnknownRecord,
+  expected: readonly string[],
+): boolean {
+  const keys = Reflect.ownKeys(candidate);
+  return (
+    keys.length === expected.length &&
+    keys.every((key) => typeof key === 'string' && expected.includes(key))
+  );
+}
+
+function validPositiveDecimal(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  try {
+    return normalizeSpotDecimal(value, 'venuePrice.price') !== '0';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Structural reading of venue price evidence. Only the provider-stamped times
+ * it carries are surfaced, because freshness is the seam's concern and price
+ * selection is the filter validator's.
+ */
+interface VenuePriceStructure {
+  readonly timestamps: readonly number[];
+}
+
+interface ReferencePriceStructure extends VenuePriceStructure {
+  readonly state: 'SET' | 'NULL' | 'NEVER_SET';
+}
+
+function referencePriceStructure(
+  value: unknown,
+): Readonly<ReferencePriceStructure> | null {
+  const candidate = record(value);
+  if (candidate === null) return null;
+  if (
+    candidate.state === 'SET' &&
+    hasExactKeys(candidate, ['state', 'price', 'providerTimestampMs']) &&
+    validPositiveDecimal(candidate.price) &&
+    validUtcMs(candidate.providerTimestampMs)
+  ) {
+    return Object.freeze({
+      state: 'SET' as const,
+      timestamps: Object.freeze([candidate.providerTimestampMs]),
+    });
+  }
+  if (
+    candidate.state === 'NULL' &&
+    hasExactKeys(candidate, ['state', 'providerTimestampMs']) &&
+    validUtcMs(candidate.providerTimestampMs)
+  ) {
+    return Object.freeze({
+      state: 'NULL' as const,
+      timestamps: Object.freeze([candidate.providerTimestampMs]),
+    });
+  }
+  // A never-set reference is an exact venue answer, not a fetch failure, and it
+  // carries no provider time of its own.
+  if (
+    candidate.state === 'NEVER_SET' &&
+    hasExactKeys(candidate, ['state', 'errorCode']) &&
+    candidate.errorCode === -2043
+  ) {
+    return Object.freeze({
+      state: 'NEVER_SET' as const,
+      timestamps: Object.freeze([]),
+    });
+  }
+  return null;
+}
+
+function fallbackPriceStructure(
+  value: unknown,
+): Readonly<VenuePriceStructure> | null {
+  const candidate = record(value);
+  if (candidate === null || !validPositiveDecimal(candidate.price)) {
+    return null;
+  }
+  if (
+    candidate.basis === 'VWAP' &&
+    hasExactKeys(candidate, [
+      'basis',
+      'price',
+      'windowMins',
+      'providerCloseTimeMs',
+    ]) &&
+    Number.isSafeInteger(candidate.windowMins) &&
+    (candidate.windowMins as number) > 0 &&
+    validUtcMs(candidate.providerCloseTimeMs)
+  ) {
+    return Object.freeze({
+      timestamps: Object.freeze([candidate.providerCloseTimeMs]),
+    });
+  }
+  if (
+    candidate.basis === 'LAST_PRICE' &&
+    hasExactKeys(candidate, [
+      'basis',
+      'price',
+      'retrievedAtMs',
+      'providerTimestampMs',
+    ]) &&
+    validUtcMs(candidate.retrievedAtMs) &&
+    (candidate.providerTimestampMs === null ||
+      validUtcMs(candidate.providerTimestampMs))
+  ) {
+    return Object.freeze({
+      timestamps: Object.freeze([
+        candidate.retrievedAtMs,
+        ...(candidate.providerTimestampMs === null
+          ? []
+          : [candidate.providerTimestampMs]),
+      ]),
+    });
+  }
+  return null;
+}
+
+function fallbackPriceSetStructure(
+  value: unknown,
+): Readonly<VenuePriceStructure> | null {
+  if (!Array.isArray(value) || value.length > 32) return null;
+  const structures = value.map((candidate) =>
+    fallbackPriceStructure(candidate),
+  );
+  if (structures.some((candidate) => candidate === null)) return null;
+  return Object.freeze({
+    timestamps: Object.freeze(
+      structures.flatMap((candidate) => candidate?.timestamps ?? []),
+    ),
+  });
+}
+
+function venuePriceStructure(
+  referencePrice: unknown,
+  fallbackPrices: unknown,
+): Readonly<VenuePriceStructure> | null {
+  const reference = referencePriceStructure(referencePrice);
+  const fallback = fallbackPriceSetStructure(fallbackPrices);
+  if (reference === null || fallback === null) return null;
+  // A non-null reference price answers every window by itself, so fallbacks
+  // alongside it are ambiguous evidence rather than extra coverage.
+  if (
+    reference.state === 'SET' &&
+    Array.isArray(fallbackPrices) &&
+    fallbackPrices.length > 0
+  ) {
+    return null;
+  }
+  return Object.freeze({
+    timestamps: Object.freeze([
+      ...reference.timestamps,
+      ...fallback.timestamps,
+    ]),
+  });
 }
 
 function snapshotPlainRecord(value: unknown): UnknownRecord {
@@ -275,6 +481,7 @@ function freezeResult(
     readonly ticket: Readonly<SpotExecutionTicket> | null;
     readonly quoteAsset: string | null;
     readonly filterEvidenceRevision: string | null;
+    readonly venueEvidenceRevision: string | null;
     readonly filterValidation: Readonly<BinanceSpotFilterValidation> | null;
     readonly riskVerdict: Readonly<SpotRiskVerdict> | null;
     readonly blockingCodes: readonly SpotValidateOnlyBlockingCode[];
@@ -291,6 +498,7 @@ function freezeResult(
     symbol: input.ticket?.symbol ?? null,
     quoteAsset: input.quoteAsset,
     filterEvidenceRevision: input.filterEvidenceRevision,
+    venueEvidenceRevision: input.venueEvidenceRevision,
     filterValidation: input.filterValidation,
     riskVerdict: input.riskVerdict,
     blockingCodes: uniqueCodes(input.blockingCodes),
@@ -312,12 +520,14 @@ function blocked(
   blockingCodes: readonly SpotValidateOnlyBlockingCode[],
   ticket: Readonly<SpotExecutionTicket> | null = null,
   evidence: Readonly<SpotPublicFilterEvidence> | null = null,
+  venueEvidenceRevision: string | null = null,
 ): Readonly<SpotValidateOnlyResult> {
   return freezeResult({
     passed: false,
     ticket,
     quoteAsset: evidence?.quoteAsset ?? null,
     filterEvidenceRevision: evidence?.revision ?? null,
+    venueEvidenceRevision,
     filterValidation: null,
     riskVerdict: null,
     blockingCodes,
@@ -382,6 +592,7 @@ export function createSpotValidateOnlySeam(
         const riskEvidenceValue = inputRecord.riskEvidence;
         const publicFilterEvidenceValue =
           inputRecord.publicFilterEvidence;
+        const venueEvidenceValue = inputRecord.venueExecutionEvidence;
 
         if (!validUtcMs(nowMsValue)) {
           return blocked(['EVALUATION_TIME_INVALID']);
@@ -400,6 +611,20 @@ export function createSpotValidateOnlySeam(
 
         const evidence = snapshotPlainRecord(publicFilterEvidenceValue);
         const evidenceStructurallyValid =
+          hasExactKeys(evidence, [
+            'schema',
+            'source',
+            'verification',
+            'revision',
+            'symbol',
+            'quoteAsset',
+            'tradingStatus',
+            'spotTradingAllowed',
+            'orderTypes',
+            'observedAtMs',
+            'validUntilMs',
+            'filters',
+          ]) &&
           evidence.schema === SPOT_PUBLIC_FILTER_EVIDENCE_SCHEMA &&
           evidence.source === SPOT_PUBLIC_FILTER_SOURCE &&
           evidence.verification === 'VERIFIED_BY_PUBLIC_FILTER_OWNER' &&
@@ -447,8 +672,85 @@ export function createSpotValidateOnlySeam(
         if (!publicEvidence.orderTypes.includes(ticket.type)) {
           outerCodes.push('PUBLIC_FILTER_ORDER_TYPE_UNSUPPORTED');
         }
+
+        let venueEvidence: Readonly<SpotVenueExecutionEvidence> | null = null;
+        if (venueEvidenceValue !== undefined && venueEvidenceValue !== null) {
+          const venue = snapshotPlainRecord(venueEvidenceValue);
+          const priceStructure = venuePriceStructure(
+            venue.referencePrice,
+            venue.fallbackPrices,
+          );
+          const venueStructurallyValid =
+            hasExactKeys(venue, [
+              'schema',
+              'source',
+              'verification',
+              'revision',
+              'symbol',
+              'observedAtMs',
+              'validUntilMs',
+              'referencePrice',
+              'fallbackPrices',
+              'executionRules',
+            ]) &&
+            venue.schema === SPOT_VENUE_EVIDENCE_SCHEMA &&
+            venue.source === SPOT_VENUE_EVIDENCE_SOURCE &&
+            venue.verification === 'VERIFIED_BY_PUBLIC_SPOT_EVIDENCE_OWNER' &&
+            validLabel(venue.revision, 256) &&
+            validLabel(venue.symbol, 64, /^[A-Z0-9]{1,64}$/u) &&
+            validUtcMs(venue.observedAtMs) &&
+            validUtcMs(venue.validUntilMs) &&
+            priceStructure !== null &&
+            Array.isArray(venue.executionRules) &&
+            venue.executionRules.length <= 32;
+          if (!venueStructurallyValid) {
+            outerCodes.push('VENUE_EVIDENCE_INVALID');
+            return blocked(outerCodes, ticket, publicEvidence);
+          }
+          const venueProjection =
+            venue as unknown as Readonly<SpotVenueExecutionEvidence>;
+          venueEvidence = venueProjection;
+          if (venueProjection.symbol !== ticket.symbol) {
+            outerCodes.push('VENUE_EVIDENCE_SYMBOL_MISMATCH');
+          }
+          // Reference prices move at execution time, so this evidence is held
+          // to the same freshness bound as the public filter projection, and
+          // every provider time it carries is bounded with it.
+          const providerTimestamps = priceStructure.timestamps;
+          if (
+            venueProjection.observedAtMs > nowMs ||
+            venueProjection.validUntilMs <= nowMs ||
+            venueProjection.validUntilMs <= venueProjection.observedAtMs ||
+            venueProjection.validUntilMs - venueProjection.observedAtMs >
+              maximumFilterAgeMs ||
+            nowMs - venueProjection.observedAtMs > maximumFilterAgeMs ||
+            providerTimestamps.some(
+              (timestamp) =>
+                timestamp > venueProjection.observedAtMs ||
+                nowMs - timestamp > maximumFilterAgeMs,
+            )
+          ) {
+            outerCodes.push('VENUE_EVIDENCE_STALE');
+          }
+        } else {
+          outerCodes.push('VENUE_EVIDENCE_INVALID');
+        }
+        const venueEvidenceRevision = venueEvidence?.revision ?? null;
+
         if (outerCodes.length > 0) {
-          return blocked(outerCodes, ticket, publicEvidence);
+          return blocked(
+            outerCodes,
+            ticket,
+            publicEvidence,
+            venueEvidenceRevision,
+          );
+        }
+        if (venueEvidence === null) {
+          return blocked(
+            ['VENUE_EVIDENCE_INVALID'],
+            ticket,
+            publicEvidence,
+          );
         }
 
         const riskEvidence =
@@ -467,12 +769,18 @@ export function createSpotValidateOnlySeam(
             },
             nowMs,
             riskEvidence,
+            venueEvidence: {
+              referencePrice: venueEvidence.referencePrice,
+              fallbackPrices: venueEvidence.fallbackPrices,
+              executionRules: venueEvidence.executionRules,
+            },
           });
           return freezeResult({
             passed: preparation.readyForSignedTest,
             ticket,
             quoteAsset: publicEvidence.quoteAsset,
             filterEvidenceRevision: publicEvidence.revision,
+            venueEvidenceRevision,
             filterValidation: preparation.filterValidation,
             riskVerdict: preparation.riskVerdict,
             blockingCodes: preparation.blockingCodes,
@@ -482,6 +790,7 @@ export function createSpotValidateOnlySeam(
             ['CORE_VALIDATION_FAILED'],
             ticket,
             publicEvidence,
+            venueEvidenceRevision,
           );
         }
       } catch {

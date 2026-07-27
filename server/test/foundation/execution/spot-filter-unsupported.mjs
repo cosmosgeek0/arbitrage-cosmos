@@ -12,6 +12,7 @@ import { validateBinanceSpotOrderFilters } from '../../../dist/foundation/exchan
 
 const order = Object.freeze({
   type: 'LIMIT',
+  side: 'BUY',
   quantity: '1',
   price: '10',
 });
@@ -43,7 +44,6 @@ function supportedFilters() {
 
 const currentUnimplementedSendConstraints = [
   'PERCENT_PRICE',
-  'PERCENT_PRICE_BY_SIDE',
   'ICEBERG_PARTS',
   'MAX_NUM_ORDERS',
   'MAX_NUM_ALGO_ORDERS',
@@ -58,6 +58,15 @@ const currentUnimplementedSendConstraints = [
   'EXCHANGE_MAX_NUM_ORDER_LISTS',
   'MAX_ASSET',
 ];
+
+const percentPriceBySide = Object.freeze({
+  filterType: 'PERCENT_PRICE_BY_SIDE',
+  bidMultiplierUp: '5',
+  bidMultiplierDown: '0.2',
+  askMultiplierUp: '5',
+  askMultiplierDown: '0.2',
+  avgPriceMins: 5,
+});
 
 test('a fully supported filter snapshot passes with disabled PRICE_FILTER zero fields', () => {
   const result = validateBinanceSpotOrderFilters(order, supportedFilters());
@@ -89,6 +98,62 @@ test('every current unimplemented price, order-count, position, and asset constr
       filterType,
     );
   }
+});
+
+test('PERCENT_PRICE_BY_SIDE is implemented and no longer blocks as unsupported', () => {
+  const result = validateBinanceSpotOrderFilters(
+    order,
+    [...supportedFilters(), percentPriceBySide],
+    {
+      referencePrice: {
+        state: 'SET',
+        price: '10',
+        providerTimestampMs: 1,
+      },
+      fallbackPrices: [],
+      executionRules: [],
+    },
+  );
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.failures, []);
+});
+
+test('PRICE_RANGE is not an exchangeInfo filter and fails closed inside a snapshot', () => {
+  const result = validateBinanceSpotOrderFilters(order, [
+    ...supportedFilters(),
+    {
+      filterType: 'PRICE_RANGE',
+      ruleType: 'PRICE_RANGE',
+      bidLimitMultUp: '2',
+    },
+  ]);
+
+  assert.equal(result.ok, false);
+  assert.deepEqual(
+    result.failures.filter((failure) => failure.code === 'UNSUPPORTED_FILTER'),
+    [
+      {
+        code: 'UNSUPPORTED_FILTER',
+        filterType: 'PRICE_RANGE',
+        field: 'filterType',
+        observed: 'PRICE_RANGE',
+        limit: 'locally implemented filter',
+      },
+    ],
+  );
+  // The snapshot entry is rejected rather than silently promoted to the
+  // separate execution-time rule it impersonates.
+  assert.deepEqual(result.priceRange, {
+    rulePresent: false,
+    side: 'BUY',
+    limitMultiplierDown: null,
+    limitMultiplierUp: null,
+    referencePriceState: 'UNKNOWN',
+    enforcementPhase: 'TAKER_EXECUTION',
+    outOfRangeOutcome: 'EXPIRED_EXECUTION_RULE_PRICE_RANGE_EXCEEDED',
+    venueAcceptance: 'NOT_CLAIMED',
+  });
 });
 
 test('an unknown future filter and malformed filter entries cannot pass', () => {

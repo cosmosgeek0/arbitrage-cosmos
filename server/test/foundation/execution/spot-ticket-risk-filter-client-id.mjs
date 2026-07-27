@@ -136,6 +136,37 @@ check('normalizes without Number coercion', () => {
   assert.equal(addSpotDecimals('999999999999999999.9', '0.1'), '1000000000000000000');
   assert.equal(compareSpotDecimals('1.0000000000000000001', '1'), 1);
 });
+check('compares the bounded exact output of 120-digit multiplication', () => {
+  const operand = '9'.repeat(120);
+  const product = multiplySpotDecimals(operand, operand);
+  assert.equal(product.length, 240);
+  assert.equal(compareSpotDecimals(product, product), 0);
+  const result = validateBinanceSpotOrderFilters(
+    { type: 'LIMIT', side: 'BUY', quantity: operand, price: operand },
+    [
+      {
+        filterType: 'PRICE_FILTER',
+        minPrice: '0',
+        maxPrice: '0',
+        tickSize: '0',
+      },
+      {
+        filterType: 'LOT_SIZE',
+        minQty: '1',
+        maxQty: operand,
+        stepSize: '1',
+      },
+      {
+        filterType: 'MIN_NOTIONAL',
+        minNotional: '1',
+        applyToMarket: true,
+        avgPriceMins: 5,
+      },
+    ],
+  );
+  assert.equal(result.ok, true);
+  assert.equal(result.notional, product);
+});
 check('rejects exponent, sign, whitespace, NaN, and Infinity forms', () => {
   for (const value of ['1e-8', '-1', '+1', ' 1', 'NaN', 'Infinity', '.1']) {
     assert.throws(() => normalizeSpotDecimal(value), TypeError);
@@ -228,6 +259,7 @@ check('accepts exact LIMIT boundaries and computes exact notional', () => {
   const result = validateBinanceSpotOrderFilters(
     {
       type: 'LIMIT',
+      side: 'BUY',
       quantity: '0.1000',
       price: '100.00',
       stopPrice: '99.99',
@@ -243,6 +275,7 @@ check('enforces PRICE_FILTER tick and bounds for price and stopPrice', () => {
   const tick = validateBinanceSpotOrderFilters(
     {
       type: 'LIMIT',
+      side: 'BUY',
       quantity: '0.1',
       price: '100.001',
       stopPrice: '99.999',
@@ -255,14 +288,14 @@ check('enforces PRICE_FILTER tick and bounds for price and stopPrice', () => {
     2,
   );
   const below = validateBinanceSpotOrderFilters(
-    { type: 'LIMIT', quantity: '100', price: '0.001' },
+    { type: 'LIMIT', side: 'BUY', quantity: '100', price: '0.001' },
     supportedFilters(),
   );
   assert.equal(codes(below).includes('PRICE_BELOW_MIN'), true);
 });
 check('honors disabled PRICE_FILTER rules represented by zero', () => {
   const result = validateBinanceSpotOrderFilters(
-    { type: 'LIMIT', quantity: '0.1', price: '100.001' },
+    { type: 'LIMIT', side: 'BUY', quantity: '0.1', price: '100.001' },
     supportedFilters({
       filterType: 'PRICE_FILTER',
       minPrice: '0',
@@ -275,36 +308,37 @@ check('honors disabled PRICE_FILTER rules represented by zero', () => {
 });
 check('enforces LOT_SIZE and MARKET_LOT_SIZE independently', () => {
   const lot = validateBinanceSpotOrderFilters(
-    { type: 'LIMIT', quantity: '0.10005', price: '100' },
+    { type: 'LIMIT', side: 'BUY', quantity: '0.10005', price: '100' },
     supportedFilters(),
   );
   assert.equal(codes(lot).includes('QUANTITY_STEP_MISMATCH'), true);
   const marketLot = validateBinanceSpotOrderFilters(
     {
       type: 'MARKET',
+      side: 'BUY',
       quantity: '0.0005',
       price: null,
-      marketReferencePrice: '20000',
     },
     supportedFilters(),
+    venueEvidence({ referencePrice: referencePriceSet('20000') }),
   );
   assert.equal(codes(marketLot).includes('QUANTITY_BELOW_MIN'), true);
 });
 check('enforces MIN_NOTIONAL and NOTIONAL lower/upper limits', () => {
   const low = validateBinanceSpotOrderFilters(
-    { type: 'LIMIT', quantity: '0.09', price: '100' },
+    { type: 'LIMIT', side: 'BUY', quantity: '0.09', price: '100' },
     supportedFilters(),
   );
   assert.equal(codes(low).includes('NOTIONAL_BELOW_MIN'), true);
   const high = validateBinanceSpotOrderFilters(
-    { type: 'LIMIT', quantity: '10.0001', price: '100' },
+    { type: 'LIMIT', side: 'BUY', quantity: '10.0001', price: '100' },
     supportedFilters(),
   );
   assert.equal(codes(high).includes('NOTIONAL_ABOVE_MAX'), true);
 });
 check('MARKET notional is fail-closed without its injected reference price', () => {
   const missing = validateBinanceSpotOrderFilters(
-    { type: 'MARKET', quantity: '0.1', price: null },
+    { type: 'MARKET', side: 'BUY', quantity: '0.1', price: null },
     supportedFilters(),
   );
   assert.equal(
@@ -314,14 +348,84 @@ check('MARKET notional is fail-closed without its injected reference price', () 
   const valid = validateBinanceSpotOrderFilters(
     {
       type: 'MARKET',
+      side: 'BUY',
       quantity: '0.1',
       price: null,
-      marketReferencePrice: '100',
     },
     supportedFilters(),
+    venueEvidence(),
   );
   assert.equal(valid.ok, true);
   assert.equal(valid.notional, '10');
+
+  const vwapFallback = validateBinanceSpotOrderFilters(
+    { type: 'MARKET', side: 'BUY', quantity: '0.1', price: null },
+    supportedFilters(),
+    fallbackEvidence([vwapFallbackPrice()]),
+  );
+  assert.equal(vwapFallback.ok, true);
+  assert.equal(vwapFallback.notional, '10');
+
+  // Concurrently published filters can demand different windows, so a fallback
+  // set carries one entry per window rather than one shared price.
+  const mixedWindows = validateBinanceSpotOrderFilters(
+    { type: 'MARKET', side: 'BUY', quantity: '0.1', price: null },
+    supportedFilters().map((filter) =>
+      filter.filterType === 'MIN_NOTIONAL'
+        ? { ...filter, avgPriceMins: 1 }
+        : filter,
+    ),
+    fallbackEvidence([
+      vwapFallbackPrice('100', 1),
+      vwapFallbackPrice('110', 5),
+    ]),
+  );
+  assert.equal(mixedWindows.ok, true);
+  assert.equal(mixedWindows.notional, '11');
+
+  const belowMinWindow = validateBinanceSpotOrderFilters(
+    { type: 'MARKET', side: 'BUY', quantity: '0.1', price: null },
+    supportedFilters().map((filter) =>
+      filter.filterType === 'MIN_NOTIONAL'
+        ? { ...filter, avgPriceMins: 1 }
+        : filter,
+    ),
+    fallbackEvidence([
+      vwapFallbackPrice('99', 1),
+      vwapFallbackPrice('110', 5),
+    ]),
+  );
+  assert.ok(
+    belowMinWindow.failures.some(
+      (failure) =>
+        failure.code === 'NOTIONAL_BELOW_MIN' &&
+        failure.filterType === 'MIN_NOTIONAL',
+    ),
+  );
+
+  const aboveMaxWindow = validateBinanceSpotOrderFilters(
+    { type: 'MARKET', side: 'BUY', quantity: '0.1', price: null },
+    supportedFilters().map((filter) => {
+      if (filter.filterType === 'MIN_NOTIONAL') {
+        return { ...filter, avgPriceMins: 1 };
+      }
+      if (filter.filterType === 'NOTIONAL') {
+        return { ...filter, maxNotional: '10.5' };
+      }
+      return filter;
+    }),
+    fallbackEvidence([
+      vwapFallbackPrice('100', 1),
+      vwapFallbackPrice('110', 5),
+    ]),
+  );
+  assert.ok(
+    aboveMaxWindow.failures.some(
+      (failure) =>
+        failure.code === 'NOTIONAL_ABOVE_MAX' &&
+        failure.filterType === 'NOTIONAL',
+    ),
+  );
 });
 check('market-application flags can disable reference-price notional checks', () => {
   const filters = supportedFilters().map((filter) => {
@@ -338,7 +442,7 @@ check('market-application flags can disable reference-price notional checks', ()
     return filter;
   });
   const result = validateBinanceSpotOrderFilters(
-    { type: 'MARKET', quantity: '0.1', price: null },
+    { type: 'MARKET', side: 'BUY', quantity: '0.1', price: null },
     filters,
   );
   assert.equal(result.ok, true);
@@ -346,7 +450,7 @@ check('market-application flags can disable reference-price notional checks', ()
 });
 check('missing, duplicate, and malformed safety filters reject', () => {
   const missing = validateBinanceSpotOrderFilters(
-    { type: 'LIMIT', quantity: '0.1', price: '100' },
+    { type: 'LIMIT', side: 'BUY', quantity: '0.1', price: '100' },
     supportedFilters().filter((filter) => filter.filterType !== 'LOT_SIZE'),
   );
   assert.equal(codes(missing).includes('MISSING_LOT_SIZE_FILTER'), true);
@@ -354,22 +458,571 @@ check('missing, duplicate, and malformed safety filters reject', () => {
   const duplicateFilters = supportedFilters();
   duplicateFilters.push({ ...duplicateFilters[0] });
   const duplicate = validateBinanceSpotOrderFilters(
-    { type: 'LIMIT', quantity: '0.1', price: '100' },
+    { type: 'LIMIT', side: 'BUY', quantity: '0.1', price: '100' },
     duplicateFilters,
   );
   assert.equal(codes(duplicate).includes('DUPLICATE_FILTER'), true);
 
   const malformed = validateBinanceSpotOrderFilters(
-    { type: 'LIMIT', quantity: '0.1', price: '100' },
+    { type: 'LIMIT', side: 'BUY', quantity: '0.1', price: '100' },
     supportedFilters({ filterType: 'PRICE_FILTER', tickSize: '1e-2' }),
   );
   assert.equal(codes(malformed).includes('MALFORMED_FILTER'), true);
 
   const disabled = validateBinanceSpotOrderFilters(
-    { type: 'LIMIT', quantity: '0.1', price: '100' },
+    { type: 'LIMIT', side: 'BUY', quantity: '0.1', price: '100' },
     supportedFilters({ filterType: 'LOT_SIZE', stepSize: '0' }),
   );
   assert.equal(codes(disabled).includes('MALFORMED_FILTER'), true);
+
+  const evolvedKnownFilter = validateBinanceSpotOrderFilters(
+    { type: 'LIMIT', side: 'BUY', quantity: '0.1', price: '100' },
+    supportedFilters({
+      filterType: 'PRICE_FILTER',
+      futureConstraint: '1',
+    }),
+  );
+  assert.equal(
+    codes(evolvedKnownFilter).includes('MALFORMED_FILTER'),
+    true,
+  );
+});
+
+function percentPriceBySide(overrides = {}) {
+  return {
+    filterType: 'PERCENT_PRICE_BY_SIDE',
+    bidMultiplierUp: '1.2',
+    bidMultiplierDown: '0.8',
+    askMultiplierUp: '1.5',
+    askMultiplierDown: '0.5',
+    avgPriceMins: 5,
+    ...overrides,
+  };
+}
+
+function priceRangeRule(overrides = {}) {
+  return {
+    ruleType: 'PRICE_RANGE',
+    bidLimitMultUp: '1.2',
+    bidLimitMultDown: '0.8',
+    askLimitMultUp: '1.5',
+    askLimitMultDown: '0.5',
+    ...overrides,
+  };
+}
+
+function sideOrder(side, price) {
+  return { type: 'LIMIT', side, quantity: '1', price };
+}
+
+function referencePriceSet(price = '100') {
+  return {
+    state: 'SET',
+    price,
+    providerTimestampMs: NOW - 10,
+  };
+}
+
+function referencePriceNull() {
+  return { state: 'NULL', providerTimestampMs: NOW - 20 };
+}
+
+function referencePriceNeverSet() {
+  return { state: 'NEVER_SET', errorCode: -2043 };
+}
+
+function vwapFallbackPrice(price = '100', windowMins = 5) {
+  return {
+    basis: 'VWAP',
+    price,
+    windowMins,
+    providerCloseTimeMs: NOW - 10,
+  };
+}
+
+function lastFallbackPrice(price = '100') {
+  return {
+    basis: 'LAST_PRICE',
+    price,
+    retrievedAtMs: NOW - 10,
+    providerTimestampMs: null,
+  };
+}
+
+function venueEvidence(overrides = {}) {
+  return {
+    referencePrice: referencePriceSet(),
+    fallbackPrices: [],
+    executionRules: [],
+    ...overrides,
+  };
+}
+
+/** Fallbacks are only in force while the venue reports no reference price. */
+function fallbackEvidence(fallbackPrices, overrides = {}) {
+  return venueEvidence({
+    referencePrice: referencePriceNull(),
+    fallbackPrices,
+    ...overrides,
+  });
+}
+
+function percentAdmission(side, price, evidence = venueEvidence()) {
+  return validateBinanceSpotOrderFilters(
+    sideOrder(side, price),
+    [...supportedFilters(), percentPriceBySide()],
+    evidence,
+  );
+}
+
+check('an order without an exact side cannot be validated at all', () => {
+  for (const side of [undefined, null, 'buy', 'LONG', '']) {
+    const result = validateBinanceSpotOrderFilters(
+      { type: 'LIMIT', side, quantity: '1', price: '100' },
+      supportedFilters(),
+    );
+    assert.equal(result.ok, false);
+    assert.deepEqual(codes(result), ['INVALID_ORDER']);
+    assert.equal(result.failures[0].field, 'side');
+    assert.equal(result.priceRange, null);
+  }
+});
+check('numeric-zero stepSize disables only MARKET_LOT_SIZE while LOT_SIZE stays active', () => {
+  const enforced = validateBinanceSpotOrderFilters(
+    {
+      type: 'MARKET',
+      side: 'BUY',
+      quantity: '0.1005',
+      price: null,
+    },
+    supportedFilters(),
+    venueEvidence(),
+  );
+  assert.equal(
+    codes(enforced).includes('QUANTITY_STEP_MISMATCH'),
+    true,
+  );
+
+  const disabled = validateBinanceSpotOrderFilters(
+    {
+      type: 'MARKET',
+      side: 'BUY',
+      quantity: '0.1005',
+      price: null,
+    },
+    supportedFilters({
+      filterType: 'MARKET_LOT_SIZE',
+      minQty: '0.00000000',
+      maxQty: '0.2',
+      stepSize: '0.00000000',
+    }),
+    venueEvidence(),
+  );
+  assert.equal(disabled.ok, true);
+  assert.deepEqual(disabled.failures, []);
+
+  const lotStillActive = validateBinanceSpotOrderFilters(
+    {
+      type: 'MARKET',
+      side: 'BUY',
+      quantity: '0.10005',
+      price: null,
+    },
+    supportedFilters({
+      filterType: 'MARKET_LOT_SIZE',
+      minQty: '0.00000000',
+      maxQty: '0.2',
+      stepSize: '0.00000000',
+    }),
+    venueEvidence(),
+  );
+  assert.deepEqual(
+    lotStillActive.failures.map((item) => [item.code, item.filterType]),
+    [['QUANTITY_STEP_MISMATCH', 'LOT_SIZE']],
+  );
+
+  const marketMaxStillActive = validateBinanceSpotOrderFilters(
+    {
+      type: 'MARKET',
+      side: 'BUY',
+      quantity: '0.2001',
+      price: null,
+    },
+    supportedFilters({
+      filterType: 'MARKET_LOT_SIZE',
+      minQty: '0.00000000',
+      maxQty: '0.2',
+      stepSize: '0.00000000',
+    }),
+    venueEvidence(),
+  );
+  assert.deepEqual(
+    marketMaxStillActive.failures
+      .filter((item) => item.code === 'QUANTITY_ABOVE_MAX')
+      .map((item) => item.filterType),
+    ['MARKET_LOT_SIZE'],
+  );
+
+  const lotZeroStep = validateBinanceSpotOrderFilters(
+    { type: 'LIMIT', side: 'BUY', quantity: '0.1', price: '100' },
+    supportedFilters({ filterType: 'LOT_SIZE', stepSize: '0.00000000' }),
+  );
+  assert.equal(codes(lotZeroStep).includes('MALFORMED_FILTER'), true);
+});
+check('PERCENT_PRICE_BY_SIDE admits inclusively from the order side multipliers', () => {
+  for (const price of ['80', '100', '120']) {
+    assert.equal(percentAdmission('BUY', price).ok, true, price);
+  }
+  for (const price of ['50', '100', '150']) {
+    assert.equal(percentAdmission('SELL', price).ok, true, price);
+  }
+
+  const above = percentAdmission('BUY', '120.01');
+  assert.deepEqual(codes(above), ['PRICE_ABOVE_PERCENT_BOUND']);
+  assert.equal(above.failures[0].limit, '120');
+  assert.equal(above.failures[0].observed, '120.01');
+
+  const below = percentAdmission('BUY', '79.99');
+  assert.deepEqual(codes(below), ['PRICE_BELOW_PERCENT_BOUND']);
+  assert.equal(below.failures[0].limit, '80');
+
+  // The same prices are admissible on the ask side and not on the bid side.
+  assert.equal(percentAdmission('SELL', '120.01').ok, true);
+  assert.equal(percentAdmission('SELL', '79.99').ok, true);
+  assert.equal(percentAdmission('SELL', '150.01').ok, false);
+  assert.equal(percentAdmission('BUY', '150').ok, false);
+});
+check('PERCENT_PRICE_BY_SIDE never substitutes a caller-supplied price', () => {
+  const missing = validateBinanceSpotOrderFilters(
+    {
+      type: 'LIMIT',
+      side: 'BUY',
+      quantity: '1',
+      price: '120',
+    },
+    [...supportedFilters(), percentPriceBySide()],
+  );
+  assert.deepEqual(codes(missing), ['MISSING_PERCENT_PRICE_REFERENCE']);
+
+  const vwapFallback = percentAdmission(
+    'BUY',
+    '120',
+    fallbackEvidence([vwapFallbackPrice()]),
+  );
+  assert.equal(vwapFallback.ok, true);
+
+  // Only the filter's own window answers it; a nearby window is not evidence.
+  const wrongWindow = percentAdmission(
+    'BUY',
+    '120',
+    fallbackEvidence([vwapFallbackPrice('100', 1)]),
+  );
+  assert.deepEqual(codes(wrongWindow), ['MISSING_PERCENT_PRICE_REFERENCE']);
+
+  const lastFallback = validateBinanceSpotOrderFilters(
+    sideOrder('BUY', '120'),
+    [
+      ...supportedFilters(),
+      percentPriceBySide({ avgPriceMins: 0 }),
+    ],
+    fallbackEvidence([lastFallbackPrice()], {
+      referencePrice: referencePriceNeverSet(),
+    }),
+  );
+  assert.equal(lastFallback.ok, true);
+
+  // PERCENT_PRICE_BY_SIDE applies to order price, not stopPrice.
+  const stop = validateBinanceSpotOrderFilters(
+    {
+      type: 'LIMIT',
+      side: 'BUY',
+      quantity: '1',
+      price: '120',
+      stopPrice: '120.01',
+    },
+    [...supportedFilters(), percentPriceBySide()],
+    venueEvidence(),
+  );
+  assert.equal(stop.ok, true);
+  assert.equal(
+    stop.failures.some((failure) =>
+      failure.code === 'PRICE_ABOVE_PERCENT_BOUND'),
+    false,
+  );
+});
+check('PERCENT_PRICE_BY_SIDE rejects zero, inverted, duplicate, and malformed rules', () => {
+  for (const override of [
+    { bidMultiplierDown: '0' },
+    { askMultiplierUp: '0.00000000' },
+    { bidMultiplierUp: '1.2', bidMultiplierDown: '1.5' },
+    { askMultiplierUp: '1e2' },
+    { avgPriceMins: '5' },
+    { avgPriceMins: -1 },
+  ]) {
+    const result = validateBinanceSpotOrderFilters(
+      sideOrder('BUY', '100'),
+      [...supportedFilters(), percentPriceBySide(override)],
+      venueEvidence(),
+    );
+    assert.equal(result.ok, false, JSON.stringify(override));
+    assert.equal(
+      codes(result).includes('MALFORMED_FILTER'),
+      true,
+      JSON.stringify(override),
+    );
+  }
+
+  const duplicate = validateBinanceSpotOrderFilters(
+    sideOrder('BUY', '100'),
+    [...supportedFilters(), percentPriceBySide(), percentPriceBySide()],
+    venueEvidence(),
+  );
+  assert.equal(codes(duplicate).includes('DUPLICATE_FILTER'), true);
+
+  const badEvidence = validateBinanceSpotOrderFilters(
+    sideOrder('BUY', '100'),
+    [...supportedFilters(), percentPriceBySide()],
+    venueEvidence({ referencePrice: referencePriceSet('0') }),
+  );
+  assert.equal(codes(badEvidence).includes('VENUE_EVIDENCE_INVALID'), true);
+
+  for (const evidence of [
+    // A live reference price and a fallback cannot both be in force.
+    venueEvidence({ fallbackPrices: [vwapFallbackPrice()] }),
+    // Two rows for one window leave no single answer for that window.
+    fallbackEvidence([vwapFallbackPrice(), vwapFallbackPrice()]),
+    // Present-but-unusable evidence is corruption, not documented disabling.
+    venueEvidence({ referencePrice: { state: 'MAYBE', price: '100' } }),
+    fallbackEvidence([{ ...vwapFallbackPrice(), windowMins: 0 }]),
+  ]) {
+    const ambiguousEvidence = validateBinanceSpotOrderFilters(
+      sideOrder('BUY', '100'),
+      [...supportedFilters(), percentPriceBySide()],
+      evidence,
+    );
+    assert.equal(
+      codes(ambiguousEvidence).includes('VENUE_EVIDENCE_INVALID'),
+      true,
+    );
+  }
+});
+check('PRICE_RANGE is recognized as taker-execution-only compatibility state', () => {
+  const buy = validateBinanceSpotOrderFilters(
+    sideOrder('BUY', '130'),
+    supportedFilters(),
+    venueEvidence({ executionRules: [priceRangeRule()] }),
+  );
+  // PRICE_RANGE is enforced by Binance at taker execution, not order admission.
+  assert.equal(buy.ok, true);
+  assert.deepEqual(buy.priceRange, {
+    rulePresent: true,
+    side: 'BUY',
+    limitMultiplierDown: '0.8',
+    limitMultiplierUp: '1.2',
+    referencePriceState: 'SET',
+    enforcementPhase: 'TAKER_EXECUTION',
+    outOfRangeOutcome: 'EXPIRED_EXECUTION_RULE_PRICE_RANGE_EXCEEDED',
+    venueAcceptance: 'NOT_CLAIMED',
+  });
+
+  const sell = validateBinanceSpotOrderFilters(
+    sideOrder('SELL', '130'),
+    supportedFilters(),
+    venueEvidence({ executionRules: [priceRangeRule()] }),
+  );
+  assert.equal(sell.priceRange.limitMultiplierDown, '0.5');
+  assert.equal(sell.priceRange.limitMultiplierUp, '1.5');
+
+  // A different validation-time reference never becomes an admitted bound.
+  const moved = validateBinanceSpotOrderFilters(
+    sideOrder('BUY', '120'),
+    supportedFilters(),
+    venueEvidence({
+      referencePrice: referencePriceSet('200'),
+      executionRules: [priceRangeRule()],
+    }),
+  );
+  assert.equal(moved.ok, true);
+  assert.deepEqual(codes(moved), []);
+  assert.equal(moved.priceRange.limitMultiplierDown, '0.8');
+  assert.equal(moved.priceRange.limitMultiplierUp, '1.2');
+  assert.equal(moved.priceRange.enforcementPhase, 'TAKER_EXECUTION');
+  assert.equal(moved.priceRange.venueAcceptance, 'NOT_CLAIMED');
+});
+check('PRICE_RANGE preserves absent rule, reference, and individual bound disabling', () => {
+  // Unreadable evidence reports UNKNOWN; the venue's own answers report
+  // themselves.
+  for (const evidence of [
+    null,
+    fallbackEvidence([vwapFallbackPrice()]),
+    fallbackEvidence([lastFallbackPrice()], {
+      referencePrice: referencePriceNeverSet(),
+    }),
+    venueEvidence(),
+  ]) {
+    const absent = validateBinanceSpotOrderFilters(
+      sideOrder('BUY', '100'),
+      supportedFilters(),
+      evidence,
+    );
+    assert.equal(absent.ok, true);
+    assert.deepEqual(absent.priceRange, {
+      rulePresent: false,
+      side: 'BUY',
+      limitMultiplierDown: null,
+      limitMultiplierUp: null,
+      referencePriceState:
+        evidence === null ? 'UNKNOWN' : evidence.referencePrice.state,
+      enforcementPhase: 'TAKER_EXECUTION',
+      outOfRangeOutcome: 'EXPIRED_EXECUTION_RULE_PRICE_RANGE_EXCEEDED',
+      venueAcceptance: 'NOT_CLAIMED',
+    });
+  }
+
+  const unreferenced = validateBinanceSpotOrderFilters(
+    sideOrder('BUY', '100'),
+    supportedFilters(),
+    fallbackEvidence([vwapFallbackPrice()], {
+      executionRules: [priceRangeRule()],
+    }),
+  );
+  assert.equal(unreferenced.ok, true);
+  assert.equal(unreferenced.priceRange.rulePresent, true);
+  assert.equal(unreferenced.priceRange.referencePriceState, 'NULL');
+
+  const upperOnlyRule = priceRangeRule();
+  delete upperOnlyRule.bidLimitMultDown;
+  delete upperOnlyRule.askLimitMultDown;
+  const upperOnly = validateBinanceSpotOrderFilters(
+    sideOrder('BUY', '10'),
+    supportedFilters(),
+    venueEvidence({ executionRules: [upperOnlyRule] }),
+  );
+  assert.equal(upperOnly.ok, true);
+  assert.equal(upperOnly.priceRange.limitMultiplierDown, null);
+  assert.equal(upperOnly.priceRange.limitMultiplierUp, '1.2');
+
+  const bothBoundsAbsent = validateBinanceSpotOrderFilters(
+    sideOrder('BUY', '1000'),
+    supportedFilters(),
+    venueEvidence({
+      executionRules: [{
+        ruleType: 'PRICE_RANGE',
+        askLimitMultUp: '1.5',
+      }],
+    }),
+  );
+  assert.equal(bothBoundsAbsent.ok, true);
+  assert.equal(bothBoundsAbsent.priceRange.limitMultiplierDown, null);
+  assert.equal(bothBoundsAbsent.priceRange.limitMultiplierUp, null);
+});
+check('PRICE_RANGE fails closed on unknown rule types and corrupt bounds', () => {
+  for (const ruleType of ['PERCENT', 'ABSOLUTE', 'FUTURE_RULE', '', 7, null]) {
+    const unknown = validateBinanceSpotOrderFilters(
+      sideOrder('BUY', '100'),
+      supportedFilters(),
+      venueEvidence({
+        executionRules: [{ ...priceRangeRule(), ruleType }],
+      }),
+    );
+    assert.equal(unknown.ok, false, String(ruleType));
+    assert.deepEqual(codes(unknown), ['PRICE_RANGE_RULE_UNSUPPORTED']);
+    assert.equal(unknown.priceRange.rulePresent, false);
+  }
+
+  for (const override of [
+    { bidLimitMultUp: '0' },
+    { bidLimitMultUp: '1.2', bidLimitMultDown: '1.5' },
+    { bidLimitMultUp: null },
+  ]) {
+    const corrupt = validateBinanceSpotOrderFilters(
+      sideOrder('BUY', '100'),
+      supportedFilters(),
+      venueEvidence({ executionRules: [priceRangeRule(override)] }),
+    );
+    assert.equal(corrupt.ok, false, JSON.stringify(override));
+    assert.equal(
+      codes(corrupt).includes('PRICE_RANGE_EVIDENCE_INVALID'),
+      true,
+      JSON.stringify(override),
+    );
+  }
+
+  for (const rule of ['PRICE_RANGE', 7, []]) {
+    const shape = validateBinanceSpotOrderFilters(
+      sideOrder('BUY', '100'),
+      supportedFilters(),
+      venueEvidence({ executionRules: [rule] }),
+    );
+    assert.equal(shape.ok, false, JSON.stringify(rule));
+    assert.deepEqual(codes(shape), ['PRICE_RANGE_EVIDENCE_INVALID']);
+  }
+
+  for (const price of ['0', '1e2']) {
+    const corruptReference = validateBinanceSpotOrderFilters(
+      sideOrder('BUY', '100'),
+      supportedFilters(),
+      venueEvidence({
+        referencePrice: referencePriceSet(price),
+        executionRules: [priceRangeRule()],
+      }),
+    );
+    assert.equal(corruptReference.ok, false, price);
+    assert.equal(
+      codes(corruptReference).includes('VENUE_EVIDENCE_INVALID'),
+      true,
+    );
+    // A reference this validation cannot read is UNKNOWN, never a venue answer.
+    assert.equal(corruptReference.priceRange.referencePriceState, 'UNKNOWN');
+  }
+
+  const duplicate = validateBinanceSpotOrderFilters(
+    sideOrder('BUY', '100'),
+    supportedFilters(),
+    venueEvidence({
+      executionRules: [priceRangeRule(), priceRangeRule()],
+    }),
+  );
+  assert.equal(codes(duplicate).includes('PRICE_RANGE_RULE_DUPLICATE'), true);
+});
+check('dynamic price bounds retain decimal precision beyond binary64', () => {
+  const exactUpper = '100.00000000000000001';
+  const preciseFilter = percentPriceBySide({
+    bidMultiplierUp: '1.0000000000000000001',
+  });
+  const exact = validateBinanceSpotOrderFilters(
+    sideOrder('BUY', exactUpper),
+    [
+      ...supportedFilters({ filterType: 'PRICE_FILTER', tickSize: '0' }),
+      preciseFilter,
+    ],
+    venueEvidence(),
+  );
+  assert.equal(exact.ok, true);
+
+  const above = validateBinanceSpotOrderFilters(
+    sideOrder('BUY', '100.000000000000000011'),
+    [
+      ...supportedFilters({ filterType: 'PRICE_FILTER', tickSize: '0' }),
+      preciseFilter,
+    ],
+    venueEvidence(),
+  );
+  assert.equal(codes(above).includes('PRICE_ABOVE_PERCENT_BOUND'), true);
+
+  const range = validateBinanceSpotOrderFilters(
+    sideOrder('BUY', '100'),
+    supportedFilters(),
+    venueEvidence({
+      executionRules: [
+        priceRangeRule({ bidLimitMultUp: '1.0000000000000000001' }),
+      ],
+    }),
+  );
+  assert.equal(
+    range.priceRange.limitMultiplierUp,
+    '1.0000000000000000001',
+  );
 });
 
 console.log('\nHard Spot risk policy');

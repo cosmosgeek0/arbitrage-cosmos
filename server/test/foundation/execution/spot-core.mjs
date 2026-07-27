@@ -85,6 +85,19 @@ function riskEvidence(value, overrides = {}) {
   };
 }
 
+function venueEvidence(overrides = {}) {
+  return {
+    referencePrice: {
+      state: 'SET',
+      price: '100',
+      providerTimestampMs: 1_390,
+    },
+    fallbackPrices: [],
+    executionRules: [],
+    ...overrides,
+  };
+}
+
 function input(value, overrides = {}) {
   return {
     ticket: value,
@@ -95,6 +108,7 @@ function input(value, overrides = {}) {
     },
     nowMs: 2_000,
     riskEvidence: riskEvidence(value),
+    venueEvidence: venueEvidence(),
     ...overrides,
   };
 }
@@ -142,6 +156,172 @@ test('preparation binds exact ticket, risk evidence, filters, and a non-live sig
   assert.equal(result.signedTestIntent?.liveSendAuthorized, false);
   assert.equal(result.liveSendAuthorized, false);
   assert.equal(result.sendsPerformed, 0);
+});
+
+test('venue execution evidence reaches filter validation without ticket substitution', () => {
+  // The ticket carries a risk price far from the venue reference on purpose.
+  const value = ticket({ riskReferencePrice: '1000' });
+  const filters = [
+    ...FILTERS,
+    {
+      filterType: 'PERCENT_PRICE_BY_SIDE',
+      bidMultiplierUp: '1.2',
+      bidMultiplierDown: '0.8',
+      askMultiplierUp: '1.5',
+      askMultiplierDown: '0.5',
+      avgPriceMins: 5,
+    },
+  ];
+  const snapshot = {
+    revision: 'exchange-info-revision-1',
+    observedAtMs: 1_400,
+    filters,
+  };
+
+  const withoutEvidence = prepareSpotCore(
+    input(value, { filterSnapshot: snapshot, venueEvidence: null }),
+  );
+  assert.equal(withoutEvidence.readyForSignedTest, false);
+  assert.ok(
+    withoutEvidence.blockingCodes.includes('FILTER_VALIDATION_FAILED'),
+  );
+  assert.ok(withoutEvidence.blockingCodes.includes('VENUE_EVIDENCE_INVALID'));
+  assert.deepEqual(
+    withoutEvidence.filterValidation.failures.map((item) => item.code),
+    ['MISSING_PERCENT_PRICE_REFERENCE'],
+  );
+
+  const withEvidence = prepareSpotCore(
+    input(value, {
+      filterSnapshot: snapshot,
+      venueEvidence: venueEvidence(),
+    }),
+  );
+  assert.equal(withEvidence.readyForSignedTest, true);
+  assert.deepEqual(withEvidence.filterValidation.failures, []);
+  assert.equal(withEvidence.filterValidation.notional, '5');
+
+  const market = ticket({
+    type: 'MARKET',
+    timeInForce: null,
+    price: null,
+    riskReferencePrice: '1000',
+  });
+  const marketPrepared = prepareSpotCore(input(market));
+  assert.equal(marketPrepared.filterValidation.notional, '5');
+  assert.ok(
+    marketPrepared.blockingCodes.includes('TICKET_FILTER_NOTIONAL_MISMATCH'),
+  );
+
+  const mixedWindowPrepared = prepareSpotCore(
+    input(
+      ticket({
+        type: 'MARKET',
+        timeInForce: null,
+        price: null,
+        riskReferencePrice: '100',
+      }),
+      {
+        filterSnapshot: {
+          revision: 'exchange-info-revision-1',
+          observedAtMs: 1_400,
+          filters: [
+            ...FILTERS.map((filter) =>
+              filter.filterType === 'MIN_NOTIONAL'
+                ? { ...filter, avgPriceMins: 1 }
+                : filter,
+            ),
+            {
+              filterType: 'NOTIONAL',
+              minNotional: '1',
+              applyMinToMarket: true,
+              maxNotional: '10',
+              applyMaxToMarket: true,
+              avgPriceMins: 5,
+            },
+          ],
+        },
+        venueEvidence: {
+          referencePrice: {
+            state: 'NULL',
+            providerTimestampMs: 1_390,
+          },
+          fallbackPrices: [
+            {
+              basis: 'VWAP',
+              price: '100',
+              windowMins: 1,
+              providerCloseTimeMs: 1_390,
+            },
+            {
+              basis: 'VWAP',
+              price: '110',
+              windowMins: 5,
+              providerCloseTimeMs: 1_390,
+            },
+          ],
+          executionRules: [],
+        },
+      },
+    ),
+  );
+  assert.equal(mixedWindowPrepared.filterValidation.notional, '5.5');
+  assert.ok(
+    mixedWindowPrepared.blockingCodes.includes(
+      'TICKET_FILTER_NOTIONAL_MISMATCH',
+    ),
+  );
+});
+
+test('carried PRICE_RANGE evidence remains taker-execution-only compatibility', () => {
+  const value = ticket();
+  const prepared = prepareSpotCore(
+    input(value, {
+      venueEvidence: {
+        ...venueEvidence(),
+        executionRules: [{
+          ruleType: 'PRICE_RANGE',
+          bidLimitMultUp: '1.2',
+          bidLimitMultDown: '0.8',
+          askLimitMultUp: '1.5',
+          askLimitMultDown: '0.5',
+        }],
+      },
+    }),
+  );
+
+  assert.deepEqual(prepared.filterValidation.priceRange, {
+    rulePresent: true,
+    side: 'BUY',
+    limitMultiplierDown: '0.8',
+    limitMultiplierUp: '1.2',
+    referencePriceState: 'SET',
+    enforcementPhase: 'TAKER_EXECUTION',
+    outOfRangeOutcome: 'EXPIRED_EXECUTION_RULE_PRICE_RANGE_EXCEEDED',
+    venueAcceptance: 'NOT_CLAIMED',
+  });
+  assert.equal(prepared.readyForSignedTest, true);
+  assert.equal(prepared.signedTestRequired, true);
+  assert.equal(prepared.liveSendAuthorized, false);
+
+  const unknownRule = prepareSpotCore(
+    input(value, {
+      venueEvidence: venueEvidence({
+        executionRules: [{ ruleType: 'FUTURE_RULE' }],
+      }),
+    }),
+  );
+  assert.equal(unknownRule.readyForSignedTest, false);
+  assert.deepEqual(
+    unknownRule.filterValidation.failures.map((item) => item.code),
+    ['PRICE_RANGE_RULE_UNSUPPORTED'],
+  );
+});
+
+test('core requires explicit public execution-rule evidence even for static filters', () => {
+  const result = prepareSpotCore(input(ticket(), { venueEvidence: null }));
+  assert.equal(result.readyForSignedTest, false);
+  assert.ok(result.blockingCodes.includes('VENUE_EVIDENCE_INVALID'));
 });
 
 test('risk evidence must bind the exact ticket identity', () => {
@@ -234,6 +414,7 @@ test('kill switch blocks again at the final send seam', () => {
 
   assert.equal(decision.allowed, false);
   assert.equal(decision.intent, null);
+  assert.equal(decision.sendsPerformed, 0);
   assert.ok(decision.blockingCodes.includes('KILL_SWITCH_ENGAGED'));
   assert.ok(decision.blockingCodes.includes('RISK_POLICY_BLOCKED'));
 });

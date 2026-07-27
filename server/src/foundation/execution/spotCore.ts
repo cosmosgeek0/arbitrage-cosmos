@@ -9,6 +9,7 @@ import {
   normalizeSpotDecimal,
   validateBinanceSpotOrderFilters,
   type BinanceSpotFilterValidation,
+  type BinanceSpotVenueEvidence,
 } from '../exchange/binanceSpot/filters.js';
 import {
   evaluateSpotRiskPolicy,
@@ -38,6 +39,7 @@ export const SPOT_RISK_EVIDENCE_SCHEMA =
 
 export const SPOT_CORE_BLOCKING_CODES = Object.freeze([
   'FILTER_SNAPSHOT_INVALID',
+  'VENUE_EVIDENCE_INVALID',
   'FILTER_VALIDATION_FAILED',
   'TICKET_FILTER_NOTIONAL_MISMATCH',
   'RISK_EVIDENCE_MISSING',
@@ -74,6 +76,13 @@ export interface PrepareSpotCoreInput {
   readonly filterSnapshot: Readonly<SpotFilterSnapshot>;
   readonly nowMs: number;
   readonly riskEvidence: Readonly<SpotRiskEvidence> | null;
+  /**
+   * Execution-time venue evidence carried through to filter validation
+   * unchanged. It is separate from the exchangeInfo projection because its
+   * reference prices move independently of the snapshot, and the core never
+   * substitutes the ticket's own risk price for it.
+   */
+  readonly venueEvidence: Readonly<BinanceSpotVenueEvidence> | null;
 }
 
 export interface SpotRiskReductionEvidence {
@@ -193,6 +202,7 @@ function emptyFilterValidation(): Readonly<BinanceSpotFilterValidation> {
   return Object.freeze({
     ok: false,
     notional: null,
+    priceRange: null,
     failures: Object.freeze([]),
   });
 }
@@ -331,19 +341,22 @@ export function prepareSpotCore(
     input.filterSnapshot.observedAtMs <= input.nowMs &&
     Array.isArray(input.filterSnapshot.filters);
   if (!snapshotValid) blockingCodes.push('FILTER_SNAPSHOT_INVALID');
+  const venueEvidencePresent =
+    typeof input?.venueEvidence === 'object' &&
+    input.venueEvidence !== null &&
+    !Array.isArray(input.venueEvidence);
+  if (!venueEvidencePresent) blockingCodes.push('VENUE_EVIDENCE_INVALID');
 
   const filterValidation = snapshotValid
     ? validateBinanceSpotOrderFilters(
         {
           type: input.ticket.type,
+          side: input.ticket.side,
           quantity: input.ticket.quantity,
           price: input.ticket.price,
-          marketReferencePrice:
-            input.ticket.type === 'MARKET'
-              ? input.ticket.riskReferencePrice
-              : null,
         },
         input.filterSnapshot.filters,
+        venueEvidencePresent ? input.venueEvidence : null,
       )
     : emptyFilterValidation();
   if (!filterValidation.ok) blockingCodes.push('FILTER_VALIDATION_FAILED');

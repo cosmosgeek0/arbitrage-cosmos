@@ -11,6 +11,8 @@
 set -euo pipefail
 dir="$1"; id="$2"; schema="$3"; barrier="$4"
 live="${5:-1}"; ready="${6:-1}"; plive="${7:-1}"; pready="${8:-1}"
+floor=0
+[ "$barrier" = true ] && floor="$schema"
 
 mkdir -p "$dir/server/dist"
 echo "// dummy release payload for ops tests: $id" > "$dir/server/dist/index.js"
@@ -20,6 +22,7 @@ cat > "$dir/release.json" <<EOF
   "gitSha": "0000000",
   "builtAtUtc": "2026-07-12T00:00:00Z",
   "schemaVersion": $schema,
+  "rollbackFloor": $floor,
   "rollbackBarrier": $barrier
 }
 EOF

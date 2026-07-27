@@ -649,6 +649,72 @@ check(39, executable(['/usr/bin/gzip', '/bin/gzip']), ['--version']);
 NODE
 fi
 
+note "backup inventory excludes only an exact direct-child effect evidence root"
+assert_success node --input-type=module - "$EVIDENCE" <<'NODE'
+import assert from 'node:assert/strict';
+import { pathToFileURL } from 'node:url';
+
+const {
+  backupComparableInventory,
+} = await import(pathToFileURL(process.argv[2]).href);
+
+const entries = Object.freeze([
+  Object.freeze({ name: '.i00-backup-effects', identity: Object.freeze({ inode: '1' }) }),
+  Object.freeze({ name: 'effects', identity: Object.freeze({ inode: '2' }) }),
+  Object.freeze({ name: 'retained', identity: Object.freeze({ inode: '3' }) }),
+]);
+const names = (backupRoot, effectEvidenceRoot, inventory = entries) => (
+  backupComparableInventory(inventory, { backupRoot, effectEvidenceRoot })
+    .map((entry) => entry.name)
+);
+
+assert.deepEqual(
+  names('/var/backups/cosmos', '/var/backups/cosmos/.i00-backup-effects'),
+  ['effects', 'retained'],
+);
+const changedSystemEvidence = entries.map((entry) => (
+  entry.name === '.i00-backup-effects'
+    ? Object.freeze({ ...entry, identity: Object.freeze({ inode: '99' }) })
+    : entry
+));
+assert.deepEqual(
+  backupComparableInventory(entries, {
+    backupRoot: '/var/backups/cosmos',
+    effectEvidenceRoot: '/var/backups/cosmos/.i00-backup-effects',
+  }),
+  backupComparableInventory(changedSystemEvidence, {
+    backupRoot: '/var/backups/cosmos',
+    effectEvidenceRoot: '/var/backups/cosmos/.i00-backup-effects',
+  }),
+);
+for (const proofRoot of ['/tmp/test-proof', '/var/tmp/cosmos-df32-proof-abcd']) {
+  assert.deepEqual(
+    names(`${proofRoot}/backups`, `${proofRoot}/effects`),
+    ['.i00-backup-effects', 'effects', 'retained'],
+  );
+}
+assert.deepEqual(
+  names('/var/backups/cosmos', '/var/backups/cosmos/nested/effects'),
+  ['.i00-backup-effects', 'effects', 'retained'],
+);
+
+const mutated = entries.map((entry) => (
+  entry.name === 'effects'
+    ? Object.freeze({ ...entry, identity: Object.freeze({ inode: '99' }) })
+    : entry
+));
+assert.notDeepEqual(
+  backupComparableInventory(entries, {
+    backupRoot: '/tmp/test-proof/backups',
+    effectEvidenceRoot: '/tmp/test-proof/effects',
+  }),
+  backupComparableInventory(mutated, {
+    backupRoot: '/tmp/test-proof/backups',
+    effectEvidenceRoot: '/tmp/test-proof/effects',
+  }),
+);
+NODE
+
 note "start and terminal evidence schemas bind roots and exact terminal semantics"
 assert_success node --input-type=module - "$EVIDENCE" <<'NODE'
 import { pathToFileURL } from 'node:url';

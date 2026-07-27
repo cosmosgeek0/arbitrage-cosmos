@@ -4,6 +4,15 @@
 # A fake loopback app serves health from $CURRENT_LINK/runtime-behavior.env
 # (re-read per request), so an atomic symlink switch observably changes the
 # served release. systemctl is mocked; no systemd, no network beyond loopback.
+TEST_SELF="$(cd -P -- "$(dirname "$0")" && pwd -P)/$(basename "$0")"
+if [ "${DF32_DEPLOY_BARRIER_RESTART_WITNESS:-}" = 1 ]; then
+  set -eu
+  if [ "${1:-}" = restart ]; then
+    cp "${DF32_DEPLOY_BARRIER_JOURNAL:?}" \
+      "${DF32_DEPLOY_BARRIER_WITNESS:?}"
+  fi
+  exit 0
+fi
 if [ "${DF32_DEPLOY_RACE_NODE_WRAPPER:-}" = 1 ]; then
   set -u
   if [ "${1:-}" = - ] && [ "${2:-}" = recover ] && [ "${3:-}" = "$RACE_LOCK" ]; then
@@ -105,6 +114,17 @@ assert_empty_file() { # path label
   [ ! -s "$1" ] || fail "${2:-expected empty file}: $1"
 }
 
+journal_file_mode() {
+  "$NODE" -e '
+    const fs = require("node:fs");
+    const stat = fs.lstatSync(process.argv[1], { bigint: true });
+    if (!stat.isFile() || stat.isSymbolicLink() || stat.nlink !== 1n) {
+      process.exit(1);
+    }
+    process.stdout.write((stat.mode & 0o7777n).toString(8));
+  ' "$1"
+}
+
 note "1. first deploy: happy path, immutability, journal, restart, gate"
 bash "$MAKE_RELEASE" "$SRC/A" rel-A 1 false
 assert_rc 0 bash "$DEPLOY" --release "$SRC/A"
@@ -113,6 +133,7 @@ assert_eq "$(release_served)" rel-A "served release after A"
 assert_grep 'restart df32-fixture-app.service' "$MOCK_SYSTEMCTL_LOG" "app restarted"
 assert_eq "$(json_get "$JOURNAL" dataSchema)" 1 "journal dataSchema"
 assert_eq "$(json_get "$JOURNAL" rollbackFloor)" 0 "journal rollbackFloor"
+assert_eq "$(journal_file_mode "$JOURNAL")" 644 "deployed journal mode"
 assert_grep '"result":"SUCCESS"' "$OPS_STATE_DIR/deploy-log.jsonl" "deploy logged"
 assert_rc 1 touch "$RELEASES_DIR/rel-A/tamper" 2>/dev/null
 assert_no_file "$PREVIOUS_LINK"
@@ -192,6 +213,48 @@ chmod -R u+w "$SRC/nodist" && rm -rf "$SRC/nodist/server"
 assert_rc 1 bash "$DEPLOY" --release "$SRC/nodist"
 assert_rc 1 bash "$DEPLOY" --release "$SRC/does-not-exist"
 
+note "9a. release rollback-floor metadata is exact and internally consistent"
+RELEASE_METADATA_CURRENT="$(readlink "$CURRENT_LINK")"
+RELEASE_METADATA_SYSTEMCTL_BYTES="$(wc -c < "$MOCK_SYSTEMCTL_LOG" | tr -d ' ')"
+assert_release_metadata_refusal() { # NAME MUTATION REQUIRED
+  local name="$1" mutation="$2" required="$3" source output rc
+  source="$SRC/release-metadata-$name"
+  bash "$MAKE_RELEASE" "$source" "rel-metadata-$name" 2 false
+  "$NODE" - "$source/release.json" "$mutation" <<'NODE'
+const fs = require('node:fs');
+const [file, mutation] = process.argv.slice(2);
+const release = JSON.parse(fs.readFileSync(file, 'utf8'));
+if (mutation === 'missing-floor') delete release.rollbackFloor;
+else if (mutation === 'partial-floor') release.rollbackFloor = 1;
+else if (mutation === 'barrier-mismatch') release.rollbackBarrier = true;
+else process.exit(1);
+fs.writeFileSync(file, `${JSON.stringify(release, null, 2)}\n`);
+NODE
+  set +e
+  output="$(bash "$DEPLOY" --release "$source" 2>&1)"
+  rc=$?
+  set -e
+  assert_eq "$rc" 1 "inconsistent release compatibility metadata refuses"
+  ASSERTIONS=$((ASSERTIONS + 1))
+  case "$output" in
+    *"$required"*) ;;
+    *) fail "release metadata refusal omitted [$required]: $output" ;;
+  esac
+  assert_link_target "$CURRENT_LINK" "$RELEASE_METADATA_CURRENT" \
+    "release metadata refusal leaves current unchanged"
+  assert_no_path_entry "$RELEASES_DIR/rel-metadata-$name" \
+    "release metadata refusal installs no target"
+}
+assert_release_metadata_refusal missing-floor missing-floor \
+  "release.json: rollbackFloor missing"
+assert_release_metadata_refusal partial-floor partial-floor \
+  "release rollbackFloor is not representable by its schemaVersion"
+assert_release_metadata_refusal barrier-mismatch barrier-mismatch \
+  "release rollbackBarrier does not match its rollbackFloor"
+assert_eq "$(wc -c < "$MOCK_SYSTEMCTL_LOG" | tr -d ' ')" \
+  "$RELEASE_METADATA_SYSTEMCTL_BYTES" \
+  "release metadata refusals never invoke systemctl"
+
 note "10. dirty host: current exists as a real directory -> hard refuse"
 mkdir -p "$SANDBOX/opt2/current"
 assert_rc 1 env CURRENT_LINK="$SANDBOX/opt2/current" \
@@ -200,9 +263,27 @@ assert_rc 1 env CURRENT_LINK="$SANDBOX/opt2/current" \
 
 note "11. non-rollback barrier recorded; older schema then refused"
 bash "$MAKE_RELEASE" "$SRC/H" rel-H 2 true
-assert_rc 0 bash "$DEPLOY" --release "$SRC/H"
+BARRIER_RESTART_WITNESS="$SANDBOX/barrier-at-restart.json"
+assert_rc 0 env \
+  MOCK_RESTART_HOOK="$TEST_SELF" \
+  DF32_DEPLOY_BARRIER_RESTART_WITNESS=1 \
+  DF32_DEPLOY_BARRIER_JOURNAL="$JOURNAL" \
+  DF32_DEPLOY_BARRIER_WITNESS="$BARRIER_RESTART_WITNESS" \
+  bash "$DEPLOY" --release "$SRC/H"
+assert_file "$BARRIER_RESTART_WITNESS"
+assert_eq "$(json_get "$BARRIER_RESTART_WITNESS" dataSchema)" 1 \
+  "floor-raising deploy preserves the applied schema before candidate restart"
+assert_eq "$(json_get "$BARRIER_RESTART_WITNESS" rollbackFloor)" 2 \
+  "floor-raising deploy commits its rollback floor before candidate restart"
+assert_eq "$(json_get "$BARRIER_RESTART_WITNESS" updatedBy)" \
+  deploy.sh.prestart-barrier \
+  "floor-raising deploy exposes the exact PENDING sentinel at restart"
 assert_eq "$(json_get "$JOURNAL" dataSchema)" 2 "journal dataSchema after barrier"
 assert_eq "$(json_get "$JOURNAL" rollbackFloor)" 2 "journal rollbackFloor after barrier"
+assert_eq "$(json_get "$JOURNAL" updatedBy)" deploy.sh \
+  "healthy barrier deploy finalizes the steady journal state"
+assert_eq "$(journal_file_mode "$JOURNAL")" 644 \
+  "real barrier deploy retains the replaced journal mode"
 bash "$MAKE_RELEASE" "$SRC/I" rel-I 1 false
 assert_rc 1 bash "$DEPLOY" --release "$SRC/I"
 assert_grep '"result":"REFUSED_SCHEMA"' "$OPS_STATE_DIR/deploy-log.jsonl" "schema refusal logged"
@@ -219,11 +300,13 @@ mkdir -p "$FLOOR_TARGET"
 printf '%s\n' unchanged > "$FLOOR_TARGET_SENTINEL"
 FLOOR_SYSTEMCTL_BYTES="$(wc -c < "$MOCK_SYSTEMCTL_LOG" | tr -d ' ')"
 
-write_floor_journal() { # missing|value|raw-value|raw-root [value]
+write_floor_journal() { # missing|value|barrier-value|raw-value|raw-barrier|raw-root [value]
   case "$1" in
     missing) json_write "$JOURNAL" dataSchema=2 ;;
     value) json_write "$JOURNAL" dataSchema=2 "rollbackFloor=$2" ;;
+    barrier-value) json_write "$JOURNAL" "dataSchema=$2" "rollbackFloor=$2" ;;
     raw-value) printf '{"dataSchema":2,"rollbackFloor":%s}\n' "$2" > "$JOURNAL" ;;
+    raw-barrier) printf '{"dataSchema":%s,"rollbackFloor":%s}\n' "$2" "$2" > "$JOURNAL" ;;
     raw-root) printf '%s\n' "$2" > "$JOURNAL" ;;
     *) fail "unknown rollback-floor journal fixture kind: $1" ;;
   esac
@@ -263,35 +346,279 @@ assert_deploy_floor_case() { # kind value rc required-fragment forbidden-fragmen
     "rollback-floor refusal cleans the deploy lock"
 }
 
-assert_deploy_floor_case value 7 1 \
+assert_deploy_floor_case barrier-value 7 1 \
   "candidate schemaVersion 3 is behind the non-rollback barrier" \
   "release directory already exists"
 assert_deploy_floor_case missing "" 1 \
   "release directory already exists" \
-  "journal rollbackFloor is not a nonnegative integer"
+  "journal document or rollbackFloor is invalid"
 assert_deploy_floor_case value 0 1 \
   "release directory already exists" \
-  "journal rollbackFloor is not a nonnegative integer"
+  "journal document or rollbackFloor is invalid"
 for invalid_floor in "" null '"7"' "not-a-number" \
   "0; : > $FLOOR_INJECTION_MARKER" -1 3.5 9223372036854775808; do
   assert_deploy_floor_case value "$invalid_floor" 1 \
-    "journal rollbackFloor is not a nonnegative integer" \
+    "journal document or rollbackFloor is invalid" \
     "release directory already exists"
 done
 for precision_edge_floor in 1.0000000000000001 9007199254740990.5 \
   9007199254740991.1 1e-4000 -0 9007199254740992; do
   assert_deploy_floor_case raw-value "$precision_edge_floor" 1 \
-    "journal rollbackFloor is not a nonnegative integer" \
+    "journal document or rollbackFloor is invalid" \
     "release directory already exists"
 done
-assert_deploy_floor_case raw-value 9007199254740991 1 \
+assert_deploy_floor_case raw-barrier 9007199254740991 1 \
   "candidate schemaVersion 3 is behind the non-rollback barrier" \
-  "journal rollbackFloor is not a nonnegative integer"
+  "journal document or rollbackFloor is invalid"
 for invalid_root in null '[]' 0 '"journal"'; do
   assert_deploy_floor_case raw-root "$invalid_root" 1 \
-    "journal rollbackFloor is not a nonnegative integer" \
+    "journal document or rollbackFloor is invalid" \
     "release directory already exists"
 done
+
+remove_journal_endpoint() {
+  if [ -d "$JOURNAL" ] && [ ! -L "$JOURNAL" ]; then
+    rmdir "$JOURNAL"
+  else
+    rm -f -- "$JOURNAL"
+  fi
+}
+
+FLOOR_PREVIOUS_TARGET="$(readlink "$PREVIOUS_LINK")"
+FLOOR_DEPLOY_LOG_BYTES="$(wc -c < "$OPS_STATE_DIR/deploy-log.jsonl" | tr -d ' ')"
+FLOOR_ALERT_BYTES="$(wc -c < "$MOCK_ALERT_LOG" | tr -d ' ')"
+FLOOR_SYMLINK_TARGET="$SANDBOX/journal-symlink-target.json"
+printf '{"dataSchema":2,"rollbackFloor":0}\n' > "$FLOOR_SYMLINK_TARGET"
+FLOOR_SYMLINK_TARGET_SHA="$(sha256_file "$FLOOR_SYMLINK_TARGET")"
+FLOOR_HARDLINK_TARGET="$SANDBOX/journal-hardlink-target.json"
+printf '{"dataSchema":2,"rollbackFloor":0}\n' > "$FLOOR_HARDLINK_TARGET"
+FLOOR_HARDLINK_TARGET_SHA="$(sha256_file "$FLOOR_HARDLINK_TARGET")"
+
+assert_deploy_journal_endpoint_case() { # kind rc required forbidden
+  local kind="$1" expected_rc="$2" required="$3" forbidden="$4" output rc
+  local endpoint_pid="" endpoint_deadline endpoint_sha=""
+  local snapshot_expected_rc=6 snapshot_output
+  remove_journal_endpoint
+  case "$kind" in
+    absent) : ;;
+    directory) mkdir "$JOURNAL" ;;
+    fifo) mkfifo "$JOURNAL" ;;
+    symlink) ln -s "$FLOOR_SYMLINK_TARGET" "$JOURNAL" ;;
+    dangling-symlink) ln -s "$SANDBOX/missing-journal-target" "$JOURNAL" ;;
+    hardlink) ln "$FLOOR_HARDLINK_TARGET" "$JOURNAL" ;;
+    unreadable)
+      printf '{"dataSchema":2,"rollbackFloor":0}\n' > "$JOURNAL"
+      endpoint_sha="$(sha256_file "$JOURNAL")"
+      chmod 000 "$JOURNAL"
+      snapshot_expected_rc=4
+      ;;
+    oversized)
+      "$NODE" -e '
+        require("node:fs").writeFileSync(process.argv[1], Buffer.alloc(1048577, 65));
+      ' "$JOURNAL"
+      endpoint_sha="$(sha256_file "$JOURNAL")"
+      ;;
+    socket)
+      "$NODE" -e '
+        const net = require("node:net");
+        const path = require("node:path");
+        const server = net.createServer();
+        const endpoint = process.argv[1];
+        process.chdir(path.dirname(endpoint));
+        server.listen(path.basename(endpoint));
+      ' "$JOURNAL" &
+      endpoint_pid=$!
+      register_pid "$endpoint_pid"
+      endpoint_deadline=$(( $(date -u +%s) + 5 ))
+      while [ ! -S "$JOURNAL" ]; do
+        kill -0 "$endpoint_pid" 2>/dev/null \
+          || fail "journal socket fixture exited before binding"
+        [ "$(date -u +%s)" -lt "$endpoint_deadline" ] \
+          || fail "journal socket fixture did not bind"
+        sleep 0.1
+      done
+      ;;
+    *) fail "unknown deploy journal endpoint kind: $kind" ;;
+  esac
+  [ "$kind" = absent ] && snapshot_expected_rc=0
+  run_bounded_capture "$SANDBOX/journal-snapshot-$kind.out" 20 \
+    bash -c '
+      . "$1"
+      journal_state_snapshot "$2"
+    ' _ "$BIN/common.sh" "$JOURNAL"
+  snapshot_output="$BOUNDED_OUTPUT"
+  assert_eq "$BOUNDED_RC" "$snapshot_expected_rc" \
+    "journal snapshot classifies $kind endpoint"
+  if [ "$kind" = absent ]; then
+    assert_eq "$snapshot_output" "ABSENT|0|0|-|-|-|-|-|-" \
+      "journal snapshot emits the exact absent token"
+  else
+    assert_eq "$snapshot_output" "" \
+      "unsafe journal snapshot emits no usable token"
+  fi
+  run_bounded_capture "$SANDBOX/deploy-journal-$kind.out" 20 \
+    env FLOOR_PROBE_MARKER="$FLOOR_PROBE_MARKER" \
+      PROBE_CMD=': > "$FLOOR_PROBE_MARKER"; exit 1' \
+      bash "$DEPLOY" --release "$FLOOR_SRC"
+  output="$BOUNDED_OUTPUT"
+  rc="$BOUNDED_RC"
+  assert_eq "$rc" "$expected_rc" "deploy journal endpoint $kind refusal code"
+  ASSERTIONS=$((ASSERTIONS + 1))
+  case "$output" in
+    *"$required"*) ;;
+    *) fail "deploy journal endpoint $kind omitted [$required]: $output" ;;
+  esac
+  ASSERTIONS=$((ASSERTIONS + 1))
+  case "$output" in
+    *"$forbidden"*) fail "deploy journal endpoint $kind reached [$forbidden]: $output" ;;
+    *) ;;
+  esac
+  assert_link_target "$CURRENT_LINK" "$RELEASES_DIR/rel-H" \
+    "deploy journal endpoint $kind leaves current unchanged"
+  assert_link_target "$PREVIOUS_LINK" "$FLOOR_PREVIOUS_TARGET" \
+    "deploy journal endpoint $kind leaves previous unchanged"
+  assert_file "$FLOOR_TARGET_SENTINEL"
+  assert_no_path_entry "$FLOOR_PROBE_MARKER" \
+    "deploy journal endpoint $kind does not invoke probe"
+  assert_no_path_entry "$OPS_STATE_DIR/locks/deploy.lock" \
+    "deploy journal endpoint $kind does not publish a lock"
+  assert_eq "$(wc -c < "$MOCK_SYSTEMCTL_LOG" | tr -d ' ')" \
+    "$FLOOR_SYSTEMCTL_BYTES" "deploy journal endpoint $kind does not invoke systemctl"
+  assert_eq "$(wc -c < "$OPS_STATE_DIR/deploy-log.jsonl" | tr -d ' ')" \
+    "$FLOOR_DEPLOY_LOG_BYTES" "deploy journal endpoint $kind does not append the deploy log"
+  assert_eq "$(wc -c < "$MOCK_ALERT_LOG" | tr -d ' ')" \
+    "$FLOOR_ALERT_BYTES" "deploy journal endpoint $kind does not alert"
+  case "$kind" in
+    absent)
+      assert_no_path_entry "$JOURNAL" "absent deploy journal remains absent"
+      ;;
+    directory)
+      ASSERTIONS=$((ASSERTIONS + 1))
+      [ -d "$JOURNAL" ] && [ ! -L "$JOURNAL" ] \
+        || fail "deploy changed the journal directory endpoint"
+      ;;
+    fifo)
+      ASSERTIONS=$((ASSERTIONS + 1))
+      [ -p "$JOURNAL" ] || fail "deploy changed the journal FIFO endpoint"
+      ;;
+    symlink)
+      ASSERTIONS=$((ASSERTIONS + 1))
+      [ -L "$JOURNAL" ] || fail "deploy changed the journal symlink endpoint"
+      assert_eq "$(sha256_file "$FLOOR_SYMLINK_TARGET")" \
+        "$FLOOR_SYMLINK_TARGET_SHA" "deploy leaves journal symlink target unchanged"
+      ;;
+    dangling-symlink)
+      ASSERTIONS=$((ASSERTIONS + 1))
+      [ -L "$JOURNAL" ] || fail "deploy changed the dangling journal symlink endpoint"
+      ;;
+    hardlink)
+      ASSERTIONS=$((ASSERTIONS + 1))
+      [ "$JOURNAL" -ef "$FLOOR_HARDLINK_TARGET" ] \
+        || fail "deploy changed the journal hardlink endpoint"
+      assert_eq "$(sha256_file "$FLOOR_HARDLINK_TARGET")" \
+        "$FLOOR_HARDLINK_TARGET_SHA" "deploy leaves journal hardlink peer unchanged"
+      ;;
+    oversized)
+      assert_file "$JOURNAL"
+      assert_eq "$(sha256_file "$JOURNAL")" "$endpoint_sha" \
+        "deploy leaves oversized journal bytes unchanged"
+      ;;
+    unreadable)
+      assert_file "$JOURNAL"
+      assert_eq "$(journal_file_mode "$JOURNAL")" 0 \
+        "deploy leaves unreadable journal mode unchanged"
+      chmod 600 "$JOURNAL"
+      assert_eq "$(sha256_file "$JOURNAL")" "$endpoint_sha" \
+        "deploy leaves unreadable journal bytes unchanged"
+      ;;
+    socket)
+      ASSERTIONS=$((ASSERTIONS + 1))
+      [ -S "$JOURNAL" ] || fail "deploy changed the journal socket endpoint"
+      ;;
+  esac
+  if [ -n "$endpoint_pid" ]; then
+    kill "$endpoint_pid" 2>/dev/null || true
+    wait "$endpoint_pid" 2>/dev/null || true
+    unregister_pid "$endpoint_pid"
+  fi
+  remove_journal_endpoint
+}
+
+assert_deploy_journal_endpoint_case absent 1 \
+  "release directory already exists" \
+  "journal path is occupied"
+assert_deploy_journal_endpoint_case directory 1 \
+  "journal path is occupied by a non-regular or linked endpoint" \
+  "release directory already exists"
+assert_deploy_journal_endpoint_case fifo 1 \
+  "journal path is occupied by a non-regular or linked endpoint" \
+  "release directory already exists"
+assert_deploy_journal_endpoint_case symlink 1 \
+  "JOURNAL_FILE must be one exact raw canonical absolute path" \
+  "release directory already exists"
+assert_deploy_journal_endpoint_case dangling-symlink 1 \
+  "JOURNAL_FILE must be one exact raw canonical absolute path" \
+  "release directory already exists"
+assert_deploy_journal_endpoint_case hardlink 1 \
+  "journal path is occupied by a non-regular or linked endpoint" \
+  "release directory already exists"
+assert_deploy_journal_endpoint_case oversized 1 \
+  "or exceeds the size limit" \
+  "release directory already exists"
+assert_deploy_journal_endpoint_case socket 1 \
+  "journal path is occupied by a non-regular or linked endpoint" \
+  "release directory already exists"
+if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+  assert_deploy_journal_endpoint_case unreadable 1 \
+    "journal unreadable:" \
+    "release directory already exists"
+fi
+
+note "11c2. journal change after validation refuses before the deploy switch"
+SWITCH_SRC="$SRC/JOURNAL-SWITCH-STALE"
+bash "$MAKE_RELEASE" "$SWITCH_SRC" rel-journal-switch-stale 2 false
+write_floor_journal value 0
+if [ "${EUID:-$(id -u)}" -eq 0 ]; then
+  chown "$PROBE_EXPECTED_UID:$PROBE_EXPECTED_GID" "$DATA_DIR" "$JOURNAL"
+  chmod 0700 "$DATA_DIR"
+  chmod 0600 "$JOURNAL"
+else
+  chmod 0666 "$JOURNAL"
+fi
+SWITCH_CURRENT_TARGET="$(readlink "$CURRENT_LINK")"
+SWITCH_PREVIOUS_TARGET="$(readlink "$PREVIOUS_LINK")"
+SWITCH_SYSTEMCTL_BYTES="$(wc -c < "$MOCK_SYSTEMCTL_LOG" | tr -d ' ')"
+printf -v SWITCH_PROBE_CMD \
+  'printf "%%s\\n" %q > %q; BEHAVIOR_FILE="$RELEASE_DIR/probe-behavior.env" PORT="$PROBE_PORT" exec %q %q' \
+  '{"dataSchema":3,"rollbackFloor":0,"externalRevision":"before-switch"}' \
+  "$JOURNAL" "$NODE" "$PROBE_FIXTURE"
+set +e
+SWITCH_OUTPUT="$(
+  env PROBE_CMD="$SWITCH_PROBE_CMD" \
+    bash "$DEPLOY" --release "$SWITCH_SRC" 2>&1
+)"
+SWITCH_RC=$?
+set -e
+assert_eq "$SWITCH_RC" 1 \
+  "journal change after validation refuses the deploy switch"
+ASSERTIONS=$((ASSERTIONS + 1))
+case "$SWITCH_OUTPUT" in
+  *"journal changed after under-lock validation - refusing to switch releases"*) ;;
+  *) fail "deploy pre-switch journal change omitted exact refusal: $SWITCH_OUTPUT" ;;
+esac
+assert_link_target "$CURRENT_LINK" "$SWITCH_CURRENT_TARGET" \
+  "deploy pre-switch journal change leaves current unchanged"
+assert_link_target "$PREVIOUS_LINK" "$SWITCH_PREVIOUS_TARGET" \
+  "deploy pre-switch journal change leaves previous unchanged"
+assert_eq "$(json_get "$JOURNAL" externalRevision)" before-switch \
+  "deploy pre-switch refusal preserves newer journal bytes"
+assert_eq "$(wc -c < "$MOCK_SYSTEMCTL_LOG" | tr -d ' ')" \
+  "$SWITCH_SYSTEMCTL_BYTES" "deploy pre-switch refusal does not invoke systemctl"
+assert_no_path_entry "$OPS_STATE_DIR/locks/deploy.lock" \
+  "deploy pre-switch refusal cleans the deploy lock"
+chmod 0644 "$JOURNAL"
+write_floor_journal value 0
+
 assert_no_file "$FLOOR_INJECTION_MARKER"
 assert_eq "$(sed -n '1p' "$FLOOR_TARGET_SENTINEL")" unchanged \
   "dirty target sentinel remains unchanged"
@@ -657,5 +984,158 @@ assert_grep 'restart df32-fixture-app.service' "$FIRST_FAIL_SYSTEMCTL_LOG" "firs
 assert_grep '"result":"FROZEN"' "$FIRST_FAIL_OPS/deploy-log.jsonl" "first-host freeze logged"
 assert_not_grep '"result":"AUTO_ROLLBACK"' "$FIRST_FAIL_OPS/deploy-log.jsonl" "first-host never auto-rolls back"
 assert_no_path_entry "$FIRST_FAIL_OPS/locks/deploy.lock" "first-host failure lock is cleaned"
+
+run_post_switch_fault_deploy() { # DEPLOY_SCRIPT RELEASE_SOURCE
+  local deploy_script="$1" release_source="$2"
+  env \
+    COSMOS_ROOT="$FAULT_ROOT" RELEASES_DIR="$FAULT_RELEASES" \
+    CURRENT_LINK="$FAULT_CURRENT" PREVIOUS_LINK="$FAULT_PREVIOUS" \
+    DATA_DIR="$FAULT_DATA" OPS_STATE_DIR="$FAULT_OPS" \
+    DEPLOY_LOCK="$FAULT_OPS/locks/deploy.lock" \
+    DEPLOY_LOG="$FAULT_OPS/deploy-log.jsonl" \
+    FROZEN_MARKER="$FAULT_OPS/deploy-frozen.json" \
+    MONEY_READY_MARKER="$FAULT_OPS/money-ready" \
+    HEALTH_BASE="http://127.0.0.1:$FAULT_PORT" GATE_TIMEOUT_SEC=2 \
+    MOCK_SYSTEMCTL_LOG="$FAULT_SYSTEMCTL_LOG" \
+    MOCK_ALERT_LOG="$FAULT_ALERT_LOG" \
+    EXPOSURE_CMD="cat $FAULT_EXPOSURE" \
+    PROBE_PORT="$FAULT_PROBE_PORT" \
+    bash "$deploy_script" --release "$release_source"
+}
+
+note "17a. restart failure after floor prearm is fix-forward-only and freezes"
+FAULT_ROOT="$SANDBOX/barrier-restart-failure/root"
+FAULT_RELEASES="$FAULT_ROOT/releases"
+FAULT_CURRENT="$FAULT_ROOT/current"
+FAULT_PREVIOUS="$FAULT_ROOT/previous"
+FAULT_DATA="$SANDBOX/barrier-restart-failure/data"
+FAULT_OPS="$SANDBOX/barrier-restart-failure/ops"
+FAULT_SYSTEMCTL_LOG="$SANDBOX/barrier-restart-failure/systemctl.log"
+FAULT_ALERT_LOG="$SANDBOX/barrier-restart-failure/alerts.log"
+FAULT_EXPOSURE="$SANDBOX/barrier-restart-failure/exposure"
+FAULT_BASE_SRC="$SRC/BARRIER-RESTART-BASE"
+FAULT_CANDIDATE_SRC="$SRC/BARRIER-RESTART-CANDIDATE"
+FAULT_PORT="$(pick_port)"
+FAULT_PROBE_PORT="$(pick_port)"
+mkdir -p "$FAULT_ROOT" "$(dirname "$FAULT_SYSTEMCTL_LOG")"
+: > "$FAULT_SYSTEMCTL_LOG"
+: > "$FAULT_ALERT_LOG"
+printf '%s\n' NONE > "$FAULT_EXPOSURE"
+bash "$MAKE_RELEASE" "$FAULT_BASE_SRC" rel-barrier-restart-base 1 false
+bash "$MAKE_RELEASE" "$FAULT_CANDIDATE_SRC" rel-barrier-restart-candidate 2 true
+start_fake_app "$FAULT_PORT" "$FAULT_CURRENT/runtime-behavior.env" >/dev/null
+assert_rc 0 run_post_switch_fault_deploy "$DEPLOY" "$FAULT_BASE_SRC"
+export MOCK_RESTART_RC=9
+assert_rc 2 run_post_switch_fault_deploy "$DEPLOY" "$FAULT_CANDIDATE_SRC"
+unset MOCK_RESTART_RC
+assert_link_target "$FAULT_CURRENT" \
+  "$FAULT_RELEASES/rel-barrier-restart-candidate" \
+  "restart failure preserves the committed-forward candidate"
+assert_link_target "$FAULT_PREVIOUS" \
+  "$FAULT_RELEASES/rel-barrier-restart-base" \
+  "restart failure retains the prior release only as previous"
+BARRIER_FAILURE_SNAPSHOT="$(
+  journal_state_snapshot "$FAULT_DATA/journal-compat.json"
+)"
+ASSERTIONS=$((ASSERTIONS + 1))
+case "$BARRIER_FAILURE_SNAPSHOT" in
+  PENDING\|1\|2\|*) ;;
+  *) fail "restart failure did not preserve the exact PENDING barrier: $BARRIER_FAILURE_SNAPSHOT" ;;
+esac
+assert_file "$FAULT_OPS/deploy-frozen.json"
+assert_grep 'rollback barrier was armed before candidate start' \
+  "$FAULT_OPS/deploy-frozen.json" \
+  "restart failure records the committed-forward rollback policy"
+assert_not_grep '"result":"AUTO_ROLLBACK"' "$FAULT_OPS/deploy-log.jsonl" \
+  "restart failure after floor prearm never auto-rolls back"
+assert_no_path_entry "$FAULT_OPS/locks/deploy.lock" \
+  "restart failure after floor prearm cleans the deploy lock"
+
+note "17b. health failure after floor prearm preserves PENDING and never rolls back"
+FAULT_ROOT="$SANDBOX/barrier-health-failure/root"
+FAULT_RELEASES="$FAULT_ROOT/releases"
+FAULT_CURRENT="$FAULT_ROOT/current"
+FAULT_PREVIOUS="$FAULT_ROOT/previous"
+FAULT_DATA="$SANDBOX/barrier-health-failure/data"
+FAULT_OPS="$SANDBOX/barrier-health-failure/ops"
+FAULT_SYSTEMCTL_LOG="$SANDBOX/barrier-health-failure/systemctl.log"
+FAULT_ALERT_LOG="$SANDBOX/barrier-health-failure/alerts.log"
+FAULT_EXPOSURE="$SANDBOX/barrier-health-failure/exposure"
+FAULT_BASE_SRC="$SRC/BARRIER-HEALTH-BASE"
+FAULT_CANDIDATE_SRC="$SRC/BARRIER-HEALTH-CANDIDATE"
+FAULT_PORT="$(pick_port)"
+FAULT_PROBE_PORT="$(pick_port)"
+mkdir -p "$FAULT_ROOT" "$(dirname "$FAULT_SYSTEMCTL_LOG")"
+: > "$FAULT_SYSTEMCTL_LOG"
+: > "$FAULT_ALERT_LOG"
+printf '%s\n' NONE > "$FAULT_EXPOSURE"
+bash "$MAKE_RELEASE" "$FAULT_BASE_SRC" rel-barrier-health-base 1 false
+bash "$MAKE_RELEASE" \
+  "$FAULT_CANDIDATE_SRC" rel-barrier-health-candidate 2 true 0 1 1 1
+start_fake_app "$FAULT_PORT" "$FAULT_CURRENT/runtime-behavior.env" >/dev/null
+assert_rc 0 run_post_switch_fault_deploy "$DEPLOY" "$FAULT_BASE_SRC"
+assert_rc 2 run_post_switch_fault_deploy "$DEPLOY" "$FAULT_CANDIDATE_SRC"
+assert_link_target "$FAULT_CURRENT" \
+  "$FAULT_RELEASES/rel-barrier-health-candidate" \
+  "health failure preserves the committed-forward candidate"
+BARRIER_FAILURE_SNAPSHOT="$(
+  journal_state_snapshot "$FAULT_DATA/journal-compat.json"
+)"
+ASSERTIONS=$((ASSERTIONS + 1))
+case "$BARRIER_FAILURE_SNAPSHOT" in
+  PENDING\|1\|2\|*) ;;
+  *) fail "health failure did not preserve the exact PENDING barrier: $BARRIER_FAILURE_SNAPSHOT" ;;
+esac
+assert_grep 'post-switch health gate failed; rollback barrier was armed' \
+  "$FAULT_OPS/deploy-frozen.json" \
+  "health failure records why automatic rollback is forbidden"
+assert_not_grep '"result":"AUTO_ROLLBACK"' "$FAULT_OPS/deploy-log.jsonl" \
+  "health failure after floor prearm never auto-rolls back"
+
+note "17c. a compatible fix-forward deploy finalizes an existing PENDING barrier"
+FAULT_ROOT="$SANDBOX/barrier-fix-forward/root"
+FAULT_RELEASES="$FAULT_ROOT/releases"
+FAULT_CURRENT="$FAULT_ROOT/current"
+FAULT_PREVIOUS="$FAULT_ROOT/previous"
+FAULT_DATA="$SANDBOX/barrier-fix-forward/data"
+FAULT_OPS="$SANDBOX/barrier-fix-forward/ops"
+FAULT_SYSTEMCTL_LOG="$SANDBOX/barrier-fix-forward/systemctl.log"
+FAULT_ALERT_LOG="$SANDBOX/barrier-fix-forward/alerts.log"
+FAULT_EXPOSURE="$SANDBOX/barrier-fix-forward/exposure"
+FAULT_BASE_SRC="$SRC/BARRIER-FIX-FORWARD-BASE"
+FAULT_CANDIDATE_SRC="$SRC/BARRIER-FIX-FORWARD-CANDIDATE"
+FAULT_PORT="$(pick_port)"
+FAULT_PROBE_PORT="$(pick_port)"
+mkdir -p "$FAULT_ROOT" "$(dirname "$FAULT_SYSTEMCTL_LOG")"
+: > "$FAULT_SYSTEMCTL_LOG"
+: > "$FAULT_ALERT_LOG"
+printf '%s\n' NONE > "$FAULT_EXPOSURE"
+bash "$MAKE_RELEASE" "$FAULT_BASE_SRC" rel-barrier-fix-forward-base 1 false
+bash "$MAKE_RELEASE" \
+  "$FAULT_CANDIDATE_SRC" rel-barrier-fix-forward-candidate 2 true
+start_fake_app "$FAULT_PORT" "$FAULT_CURRENT/runtime-behavior.env" >/dev/null
+assert_rc 0 run_post_switch_fault_deploy "$DEPLOY" "$FAULT_BASE_SRC"
+json_write "$FAULT_DATA/journal-compat.json" \
+  dataSchema=1 rollbackFloor=2 \
+  updatedAtUtc=2026-07-27T00:00:00Z \
+  updatedBy=deploy.sh.prestart-barrier
+json_write "$FAULT_OPS/deploy-frozen.json" \
+  ts=2026-07-27T00:00:00Z \
+  releaseId=rel-barrier-fix-forward-candidate \
+  exposure=NONE reason=pending operatorAction=required
+assert_rc 0 run_post_switch_fault_deploy "$DEPLOY" "$FAULT_CANDIDATE_SRC"
+assert_link_target "$FAULT_CURRENT" \
+  "$FAULT_RELEASES/rel-barrier-fix-forward-candidate" \
+  "fix-forward deploy publishes the compatible candidate"
+assert_eq "$(json_get "$FAULT_DATA/journal-compat.json" dataSchema)" 2 \
+  "fix-forward deploy finalizes the applied schema"
+assert_eq "$(json_get "$FAULT_DATA/journal-compat.json" rollbackFloor)" 2 \
+  "fix-forward deploy preserves the armed floor"
+assert_eq "$(json_get "$FAULT_DATA/journal-compat.json" updatedBy)" deploy.sh \
+  "fix-forward deploy returns the journal to steady PRESENT"
+assert_no_path_entry "$FAULT_OPS/deploy-frozen.json" \
+  "healthy fix-forward completion clears the stale frozen marker"
+assert_grep '"result":"SUCCESS"' "$FAULT_OPS/deploy-log.jsonl" \
+  "fix-forward completion records success"
 
 finish

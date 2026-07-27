@@ -2121,12 +2121,11 @@ async function marketSources(): Promise<MarketSourceSnapshot> {
 }
 
 async function readMarketOwnerSnapshot() {
-  const {
-    at,
-    spotBookRes,
-    perpBookRes,
-    perp24hRes,
-  } = await marketSources();
+  const { spotBookRes, perpBookRes, perp24hRes } = await marketSources();
+  // marketSources publishes the exact resolved snapshot to this cache before
+  // its promise resolves; there is no asynchronous boundary between these
+  // reads, so the source timestamp stays coupled to the three settled results.
+  const at = marketSourceCache!.at;
   const spotBooks = spotBookRes.status === 'fulfilled'
     ? spotBookRes.value
     : new Map<string, BookTicker>();

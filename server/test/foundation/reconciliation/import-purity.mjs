@@ -73,7 +73,7 @@ section('3. compiled Lane E modules contain no implicit I/O or execution authori
   const { fileURLToPath } = await import('node:url');
   const distDir = join(dirname(fileURLToPath(import.meta.url)), '../../../dist/foundation/reconciliation');
   const files = readdirSync(distDir).filter((file) => file.endsWith('.js'));
-  check('all four compiled reconciliation modules present', files.length === 4, files.join(','));
+  check('all six compiled reconciliation modules present', files.length === 6, files.join(','));
   const codeOnly = (source) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
   const forbidden = [
     ['process.env', /process\.env/],

@@ -67,6 +67,7 @@ for (const name of [
   'recommendExecutionRecovery',
   'createExecutionCoordinator',
   'restoreExecutionCoordinator',
+  'createSpotValidateOnlySeam',
 ]) {
   check(`exports ${name}()`, typeof mod[name] === 'function');
 }
@@ -78,7 +79,7 @@ section('3. compiled Lane C modules contain no implicit I/O');
   const { fileURLToPath } = await import('node:url');
   const distDir = join(dirname(fileURLToPath(import.meta.url)), '../../../dist/foundation/execution');
   const files = readdirSync(distDir).filter((file) => file.endsWith('.js'));
-  check('all eight compiled execution modules present', files.length === 8, files.join(','));
+  check('all fourteen compiled execution modules present', files.length === 14, files.join(','));
   const forbidden = [
     ['process.env', /process\.env/],
     ['Date.now', /Date\.now/],
@@ -96,9 +97,35 @@ section('3. compiled Lane C modules contain no implicit I/O');
     const offenders = files.filter((file) => pattern.test(codeOnly(readFileSync(join(distDir, file), 'utf8'))));
     check(`no ${label}`, offenders.length === 0, offenders.join(','));
   }
-  const allCode = files.map((file) => codeOnly(readFileSync(join(distDir, file), 'utf8'))).join('\n');
-  check('no concrete live-order method', !/placeOrder|submitLive|liveOrder|newOrder\s*\(/i.test(allCode));
-  check('no capital-movement method', !/withdraw|repay|transferOut|changeLeverage|changeMarginMode/i.test(allCode));
+  const existingCode = files
+    .filter((file) => file !== 'spotValidateOnly.js')
+    .map((file) => codeOnly(readFileSync(join(distDir, file), 'utf8')))
+    .join('\n');
+  check('no concrete live-order method', !/placeOrder|submitLive|liveOrder|newOrder\s*\(/i.test(existingCode));
+  check('no capital-movement method', !/withdraw|repay|transferOut|changeLeverage|changeMarginMode/i.test(existingCode));
+
+  const validateOnlyCode = codeOnly(
+    readFileSync(join(distDir, 'spotValidateOnly.js'), 'utf8'),
+  );
+  check(
+    'validate-only seam has no external-action call',
+    !/(placeOrder|submitLive\w*|liveOrder|newOrder|withdraw\w*|repay|borrow|transfer\w*|changeLeverage|changeMarginMode)\s*\(/i.test(validateOnlyCode),
+  );
+  for (const capability of [
+    'signedTestOrder',
+    'liveOrder',
+    'orderQuery',
+    'cancelOrder',
+    'withdrawal',
+    'transfer',
+    'borrow',
+    'repay',
+  ]) {
+    check(
+      `validate-only seam denies ${capability}`,
+      new RegExp(`${capability}:\\s*false`).test(validateOnlyCode),
+    );
+  }
 }
 
 const passed = results.filter((result) => result.pass).length;

@@ -388,6 +388,10 @@ assert_failure /bin/bash -p -c '
 assert_eq "$(cat "$VICTIM")" unchanged
 assert_eq "$(stat -c %a "$VICTIM" 2>/dev/null || stat -f %Lp "$VICTIM")" 600
 
+if [ "$(uname -s)" = Linux ]; then
+  [ -d /proc/self/fd ] \
+    || fail_test "Linux journal descriptor-root proof requires procfs"
+fi
 if [ -d /proc/self/fd ]; then
   note "Linux directory capability seals the exact descriptor-root child"
   CAP_ROOT="$TEST_TMP/capability-root"
@@ -408,6 +412,116 @@ if [ -d /proc/self/fd ]; then
     . "$1"
     fs_seal_file_readonly /proc/self/fd/44/deploy-frozen.json /proc/self/fd/44
   ' _ "$COMMON"
+
+  note "Linux non-root directory capability publishes the exact journal child"
+  JOURNAL_CAP_ROOT="$TEST_TMP/journal-capability-root"
+  mkdir "$JOURNAL_CAP_ROOT"
+  JOURNAL_CAPABILITY_PROOF='
+    set -eu
+    common="$1"
+    root="$2"
+    expected_uid="$3"
+    expected_gid="$4"
+    expected_groups="$5"
+    if [ -n "$expected_uid" ]; then
+      [ "$(id -u)" = "$expected_uid" ]
+      [ "$(id -g)" = "$expected_gid" ]
+      [ "$(id -G)" = "$expected_groups" ]
+    fi
+    named="$root/journal-compat.json"
+    journal="$named"
+    parent_before="$(stat -c "%d:%i" "$root")"
+    . "$common"
+
+    absent="$(journal_state_snapshot "$journal")"
+    [ "$absent" = "ABSENT|0|0|-|-|-|-|-|-" ]
+    json_write_exact_regular_or_absent \
+      "$journal" "$absent" dataSchema=1 rollbackFloor=0
+    [ "$(json_get "$named" dataSchema)" = 1 ]
+    [ "$(stat -c %a "$named")" = 644 ]
+    [ "$(sha256_file "$named")" = \
+      1f7243aacde74b25c927022ca2a65dab1feb14b41ea01fd34edbeadbf14e4ec8 ]
+    first_identity="$(stat -c "%d:%i" "$named")"
+
+    present="$(journal_state_snapshot "$journal")"
+    json_write_exact_regular_or_absent \
+      "$journal" "$present" dataSchema=2 rollbackFloor=1
+    [ "$(json_get "$named" dataSchema)" = 2 ]
+    [ "$(json_get "$named" rollbackFloor)" = 1 ]
+    [ "$(stat -c %a "$named")" = 644 ]
+    [ "$(sha256_file "$named")" = \
+      0eb622956bded66b79428025af1e1ec90b0bc3964090a3d249f3a2ebad45dd88 ]
+    [ "$(stat -c "%d:%i" "$named")" != "$first_identity" ]
+
+    stale="$(journal_state_snapshot "$journal")"
+    printf "%s\n" \
+      "{\"dataSchema\":3,\"rollbackFloor\":2,\"externalRevision\":\"newer\"}" \
+      > "$named"
+    newer_sha="$(sha256_file "$named")"
+    if json_write_exact_regular_or_absent \
+        "$journal" "$stale" dataSchema=4 rollbackFloor=2; then
+      exit 1
+    fi
+    [ "$(sha256_file "$named")" = "$newer_sha" ]
+    [ "$(json_get "$named" externalRevision)" = newer ]
+    [ "$(stat -c %a "$named")" = 644 ]
+    [ "$(stat -c "%d:%i" "$root")" = "$parent_before" ]
+    debris="$(find "$root"/ -maxdepth 1 \
+      -name ".journal-compat.json.write-*" -print)"
+    [ -z "$debris" ]
+
+    unreadable="$root/journal-unreadable.json"
+    printf "%s\n" "{\"dataSchema\":2,\"rollbackFloor\":0}" > "$unreadable"
+    unreadable_sha="$(sha256_file "$unreadable")"
+    chmod 000 "$unreadable"
+    set +e
+    unreadable_snapshot="$(journal_state_snapshot "$unreadable")"
+    unreadable_rc=$?
+    set -e
+    [ "$unreadable_rc" = 4 ]
+    [ -z "$unreadable_snapshot" ]
+    [ "$(stat -c %a "$unreadable")" = 0 ]
+    chmod 600 "$unreadable"
+    [ "$(sha256_file "$unreadable")" = "$unreadable_sha" ]
+    rm -f "$unreadable"
+  '
+  if [ "$(id -u)" = 0 ]; then
+    [ -x /usr/bin/setpriv ] \
+      || fail_test "root Linux journal proof requires /usr/bin/setpriv"
+    JOURNAL_CAP_UID="$(id -u cosmos 2>/dev/null)" \
+      || fail_test "root Linux journal proof requires the cosmos user"
+    JOURNAL_CAP_GID="$(id -g cosmos 2>/dev/null)" \
+      || fail_test "root Linux journal proof requires the cosmos group"
+    [ "$JOURNAL_CAP_UID" -gt 0 ] && [ "$JOURNAL_CAP_GID" -gt 0 ] \
+      || fail_test "root Linux journal proof requires positive identifiers"
+    chown "$JOURNAL_CAP_UID:$JOURNAL_CAP_GID" "$JOURNAL_CAP_ROOT"
+    chmod 700 "$JOURNAL_CAP_ROOT"
+    assert_success /usr/bin/setpriv \
+      --reuid="$JOURNAL_CAP_UID" --regid="$JOURNAL_CAP_GID" \
+      --clear-groups --inh-caps=-all --bounding-set=-all --nnp \
+      /usr/bin/env -i \
+      PATH=/usr/bin:/bin:/usr/sbin:/sbin HOME=/tmp TMPDIR=/tmp \
+      NODE="$I00_TEST_HELPER_NODE" \
+      /bin/bash -p -c "$JOURNAL_CAPABILITY_PROOF" \
+      _ /proc/self/fd/48 /proc/self/fd/49 \
+      "$JOURNAL_CAP_UID" "$JOURNAL_CAP_GID" "$JOURNAL_CAP_GID" \
+      48<"$COMMON" 49<"$JOURNAL_CAP_ROOT"
+    assert_eq "$(stat -c %u:%g "$JOURNAL_CAP_ROOT/journal-compat.json")" \
+      "$JOURNAL_CAP_UID:$JOURNAL_CAP_GID"
+  else
+    JOURNAL_CAP_UID="$(id -u)"
+    JOURNAL_CAP_GID="$(id -g)"
+    JOURNAL_CAP_GROUPS="$(id -G)"
+    assert_success /usr/bin/env -i \
+      PATH=/usr/bin:/bin:/usr/sbin:/sbin HOME=/tmp TMPDIR=/tmp \
+      NODE="$I00_TEST_HELPER_NODE" \
+      /bin/bash -p -c "$JOURNAL_CAPABILITY_PROOF" \
+      _ /proc/self/fd/48 /proc/self/fd/49 \
+      "$JOURNAL_CAP_UID" "$JOURNAL_CAP_GID" "$JOURNAL_CAP_GROUPS" \
+      48<"$COMMON" 49<"$JOURNAL_CAP_ROOT"
+    assert_eq "$(stat -c %u:%g "$JOURNAL_CAP_ROOT/journal-compat.json")" \
+      "$JOURNAL_CAP_UID:$JOURNAL_CAP_GID"
+  fi
 fi
 
 note "descriptor children default closed and reopen only named capabilities"

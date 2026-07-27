@@ -52,7 +52,7 @@ const I00_ROOT = resolve(SCRIPT_DIR, '..');
 const EXPECTED_DONOR_CONTRACT_SHA256 =
   '078cc2a3d8bc79026f1de6985284856794e53ba34ffd7fda5d1140e46e31a1b3';
 const EXPECTED_AMENDMENT_CONTRACT_SHA256 =
-  '6b749cc288e5a0a89baa6344aa67f1b14159f0b0b67beb2090f775fbaefe5445';
+  '31f5446c063c192ceed9c6f3b4300442a614bef31944500a7858205ced945071';
 const INSTALL_RECEIPT_KEYS = Object.freeze([
   'schemaVersion', 'testedSha', 'sourceReleaseId', 'installedTreeDigestSha256',
   'effectiveOpsRoot', 'immutableDonorCommit', 'immutableDonorLiveTree',
@@ -932,7 +932,7 @@ function backupRootEntryIdentity(stat) {
   });
 }
 
-function backupRootInventorySha256(path, label, actionClass) {
+function backupRootInventorySha256(path, label, effectEvidenceRoot) {
   const root = canonicalDirectory(path, label);
   const entries = readdirSync(root.absolute).sort().map((name) => {
     assert(name.length > 0 && name !== '.' && name !== '..'
@@ -949,12 +949,15 @@ function backupRootInventorySha256(path, label, actionClass) {
   assert(sameStatIdentity(root.stat, after)
     && realpathSync(root.absolute) === root.absolute,
   `${label} changed while inventorying`);
-  // Hash the AGREED inventory, via the one shared contract the effect runner also uses. The
-  // effect-evidence child changes between the runner's snapshot and this re-derivation, so
-  // comparing raw inventories would fail on every correct fire.
+  // Hash the AGREED inventory via the runner's shared path-aware contract. SYSTEM evidence is a
+  // mutable direct child and must be excluded; TEST/STAGING evidence is a sibling, so every
+  // backup-root child remains comparable.
   return createHash('sha256')
     .update('I00_BACKUP_WRITE_ROOT_INVENTORY_V1\0')
-    .update(canonicalJsonBytes(backupComparableInventory(entries, actionClass)))
+    .update(canonicalJsonBytes(backupComparableInventory(entries, {
+      backupRoot: root.absolute,
+      effectEvidenceRoot,
+    })))
     .digest('hex');
 }
 
@@ -1210,7 +1213,7 @@ function validateInstalledBundle(destination, evidenceFile, action) {
   });
 }
 
-function validateOutcomeEvidence(actionClass, action, args, effect) {
+function validateOutcomeEvidence(actionClass, action, artifactPolicy, args, effect) {
   if (actionClass === 'OPS_BUNDLE_INSTALL') {
     const primaryPath = resolve(args['primary-path']);
     assert(primaryPath === args['primary-path'],
@@ -1251,7 +1254,7 @@ function validateOutcomeEvidence(actionClass, action, args, effect) {
     const rootInventoryBefore = backupRootInventorySha256(
       backupDirectory,
       'authorized backup directory',
-      actionClass,
+      artifactPolicy.effectEvidenceRoot,
     );
     assert(rootInventoryBefore === output.afterInventorySha256,
       'authorized backup root differs from the runner-bound post inventory');
@@ -1283,7 +1286,7 @@ function validateOutcomeEvidence(actionClass, action, args, effect) {
     const rootInventoryAfter = backupRootInventorySha256(
       backupDirectory,
       'authorized backup directory',
-      actionClass,
+      artifactPolicy.effectEvidenceRoot,
     );
     assert(rootInventoryAfter === output.afterInventorySha256,
       'authorized backup root changed during independent outcome verification');
@@ -4200,7 +4203,13 @@ try {
     'authorized action receipt targets must be distinct');
 
   const evidence = effect.success
-    ? validateOutcomeEvidence(args.class, preview.document.action, args, effect)
+    ? validateOutcomeEvidence(
+        args.class,
+        preview.document.action,
+        risk.document.artifactPolicy,
+        args,
+        effect,
+      )
     : Object.freeze({
         primaryPath: effect.terminal.absolute,
         evidenceSha256: effect.terminal.sha256,

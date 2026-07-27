@@ -230,7 +230,21 @@ DONOR_ROOT="$SIMULATION_ROOT/donor/ops/live"
 chmod -R a-w "$DONOR_ROOT"
 
 "$BOUND_SQLITE" "$DATA_ROOT/cosmos.db" \
-  "PRAGMA journal_mode=WAL; CREATE TABLE events(id INTEGER PRIMARY KEY, payload TEXT); INSERT INTO events(payload) VALUES ('fixture-a'),('fixture-b');"
+  "PRAGMA journal_mode=WAL;
+   CREATE TABLE events(id INTEGER PRIMARY KEY, payload TEXT);
+   CREATE TABLE ledger_schema_compatibility(
+     singleton INTEGER PRIMARY KEY,
+     current_schema_version INTEGER NOT NULL,
+     rollback_floor INTEGER NOT NULL
+   );
+   INSERT INTO ledger_schema_compatibility(
+     singleton, current_schema_version, rollback_floor
+   ) VALUES (1, 3, 3);
+   PRAGMA user_version=3;
+   INSERT INTO events(payload) VALUES ('fixture-a'),('fixture-b');"
+printf '%s\n' \
+  '{"dataSchema":3,"rollbackFloor":3,"updatedAtUtc":"2026-07-27T00:00:00Z","updatedBy":"test"}' \
+  > "$DATA_ROOT/journal-compat.json"
 chmod 600 "$DATA_ROOT/cosmos.db"
 if [ "$(id -u)" = 0 ]; then
   chown -R "$EFFECT_UID:$EFFECT_GID" \
@@ -521,6 +535,10 @@ PUBLISHED_BACKUP="$("$BOUND_NODE" -e \
   'process.stdout.write(JSON.parse(process.argv[1]).backupPath)' "$BACKUP_JSON")"
 assert_file "$PUBLISHED_BACKUP/manifest.json"
 assert_file "$PUBLISHED_BACKUP/cosmos.db"
+assert_eq "$(json_value "$PUBLISHED_BACKUP/manifest.json" schemaVersion)" 2
+assert_eq "$(json_value "$PUBLISHED_BACKUP/manifest.json" journalState)" PRESENT
+assert_eq "$(json_value "$PUBLISHED_BACKUP/manifest.json" dataSchema)" 3
+assert_eq "$(json_value "$PUBLISHED_BACKUP/manifest.json" rollbackFloor)" 3
 assert_eq "$("$BOUND_SQLITE" "$PUBLISHED_BACKUP/cosmos.db" 'PRAGMA integrity_check;')" ok
 assert_eq "$("$BOUND_SQLITE" "$PUBLISHED_BACKUP/cosmos.db" 'SELECT COUNT(*) FROM events;')" 2
 assert_eq "$(find "$CLAIM_ROOT" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d ' ')" 1
@@ -540,6 +558,10 @@ RESTORE_JSON="$(printf '%s\n' "$RESTORE_OUTPUT" | tail -n 1)"
 assert_contains "$RESTORE_JSON" ISOLATED_RESTORE_VERIFIED_NO_PRODUCTION_MUTATION
 assert_file "$RESTORE_TARGET/restore-report.json"
 assert_file "$RESTORE_TARGET/cosmos.db"
+assert_file "$RESTORE_TARGET/journal-compat.json"
+assert_eq "$(json_value "$RESTORE_TARGET/journal-compat.json" dataSchema)" 3
+assert_eq "$(json_value "$RESTORE_TARGET/journal-compat.json" rollbackFloor)" 3
+assert_eq "$(json_value "$RESTORE_TARGET/journal-compat.json" updatedBy)" restore.sh
 assert_eq "$("$BOUND_SQLITE" "$RESTORE_TARGET/cosmos.db" 'PRAGMA integrity_check;')" ok
 assert_eq "$("$BOUND_SQLITE" "$RESTORE_TARGET/cosmos.db" 'SELECT COUNT(*) FROM events;')" 2
 assert_eq "$(find "$CLAIM_ROOT" -mindepth 1 -maxdepth 1 -type f | wc -l | tr -d ' ')" 2
@@ -595,7 +617,9 @@ const scenarios = [
   'invalid-manifest',
   'database-mismatch',
   'extra-delta',
+  'sibling-evidence-name',
   'post-terminal-root-mutation',
+  'post-terminal-shared-name-mutation',
 ];
 const index = scenarios.indexOf(scenario);
 if (index < 0 || !/^[0-9a-f]{64}$/u.test(claimKey)) process.exit(2);
@@ -640,15 +664,19 @@ const createArtifact = ({ invalidManifest = false, mismatchedDatabase = false } 
   const database = fs.readFileSync(path.join(backupPath, 'cosmos.db'));
   const digest = crypto.createHash('sha256').update(database).digest('hex');
   const manifest = {
+    schemaVersion: 2,
     backupId: backupName,
     createdAtUtc: '2030-01-01T00:00:00Z',
-    dataSchema: null,
+    dataSchema: 3,
     dbBytes: database.length,
     dbFile: 'cosmos.db',
     dbSha256: mismatchedDatabase ? '0'.repeat(64) : digest,
     eventsCount: 2,
     evidence: [],
     integrityCheck: 'ok',
+    journalState: 'PRESENT',
+    rollbackFloor: 3,
+    sourceJournalSha256: '1'.repeat(64),
   };
   fs.writeFileSync(
     path.join(backupPath, 'manifest.json'),
@@ -698,7 +726,13 @@ switch (scenario) {
     fs.mkdirSync(path.join(backupRoot, secondName), { mode: 0o700 });
     emit(outputDocument());
     break;
+  case 'sibling-evidence-name':
+    createArtifact();
+    fs.mkdirSync(path.join(backupRoot, 'effects'), { mode: 0o700 });
+    emit(outputDocument());
+    break;
   case 'post-terminal-root-mutation':
+  case 'post-terminal-shared-name-mutation':
     createArtifact();
     emit(outputDocument());
     break;
@@ -771,6 +805,39 @@ run_hostile_backup_effect() {
   HOSTILE_CHAIN="$chain"
 }
 
+assert_post_terminal_root_mutation_refused() {
+  local scenario="$1" mutation_child="$2"
+  local mutation_result mutation_reconciliation mutation_authorization
+  local mutation_risk mutation_preview mutation_consumption mutation_start
+  local mutation_terminal
+  run_hostile_backup_effect "$scenario" BOUND
+  mutation_result="$(hostile_chain_value "$HOSTILE_CHAIN" result)"
+  mutation_reconciliation="$(hostile_chain_value "$HOSTILE_CHAIN" reconciliation)"
+  mutation_authorization="$(hostile_chain_value "$HOSTILE_CHAIN" authorization)"
+  mutation_risk="$(hostile_chain_value "$HOSTILE_CHAIN" risk)"
+  mutation_preview="$(hostile_chain_value "$HOSTILE_CHAIN" preview)"
+  mutation_consumption="$(hostile_chain_value "$HOSTILE_CHAIN" consumption)"
+  mutation_start="$(hostile_chain_value "$HOSTILE_CHAIN" effectStart)"
+  mutation_terminal="$(hostile_chain_value "$HOSTILE_CHAIN" effectFinish)"
+  mkdir "$BACKUP_ROOT/$mutation_child"
+  chmod 700 "$BACKUP_ROOT/$mutation_child"
+  assert_failure_contains \
+    'authorized backup root differs from the runner-bound post inventory' \
+    "$BOUND_NODE" "$OUTCOME_RECORDER" \
+      --class BACKUP_CREATE \
+      --authorization "$mutation_authorization" \
+      --deployment-risk "$mutation_risk" \
+      --action-preview "$mutation_preview" \
+      --authorization-consumption "$mutation_consumption" \
+      --result-receipt "$mutation_result" \
+      --reconciliation-receipt "$mutation_reconciliation" \
+      --effect-start-evidence "$mutation_start" \
+      --effect-finish-evidence "$mutation_terminal" \
+      --simulation-clock
+  assert_not_file "$mutation_result"
+  assert_not_file "$mutation_reconciliation"
+}
+
 run_hostile_backup_effect missing MISSING
 run_hostile_backup_effect malformed INVALID
 run_hostile_backup_effect duplicate INVALID
@@ -781,32 +848,11 @@ run_hostile_backup_effect symlink-output INVALID
 run_hostile_backup_effect invalid-manifest INVALID
 run_hostile_backup_effect database-mismatch INVALID
 run_hostile_backup_effect extra-delta INVALID
+run_hostile_backup_effect sibling-evidence-name INVALID
 
-run_hostile_backup_effect post-terminal-root-mutation BOUND
-MUTATION_RESULT="$(hostile_chain_value "$HOSTILE_CHAIN" result)"
-MUTATION_RECONCILIATION="$(hostile_chain_value "$HOSTILE_CHAIN" reconciliation)"
-MUTATION_AUTHORIZATION="$(hostile_chain_value "$HOSTILE_CHAIN" authorization)"
-MUTATION_RISK="$(hostile_chain_value "$HOSTILE_CHAIN" risk)"
-MUTATION_PREVIEW="$(hostile_chain_value "$HOSTILE_CHAIN" preview)"
-MUTATION_CONSUMPTION="$(hostile_chain_value "$HOSTILE_CHAIN" consumption)"
-MUTATION_START="$(hostile_chain_value "$HOSTILE_CHAIN" effectStart)"
-MUTATION_TERMINAL="$(hostile_chain_value "$HOSTILE_CHAIN" effectFinish)"
-mkdir "$BACKUP_ROOT/20300101T235959Z"
-chmod 700 "$BACKUP_ROOT/20300101T235959Z"
-assert_failure_contains \
-  'authorized backup root differs from the runner-bound post inventory' \
-  "$BOUND_NODE" "$OUTCOME_RECORDER" \
-    --class BACKUP_CREATE \
-    --authorization "$MUTATION_AUTHORIZATION" \
-    --deployment-risk "$MUTATION_RISK" \
-    --action-preview "$MUTATION_PREVIEW" \
-    --authorization-consumption "$MUTATION_CONSUMPTION" \
-    --result-receipt "$MUTATION_RESULT" \
-    --reconciliation-receipt "$MUTATION_RECONCILIATION" \
-    --effect-start-evidence "$MUTATION_START" \
-    --effect-finish-evidence "$MUTATION_TERMINAL" \
-    --simulation-clock
-assert_not_file "$MUTATION_RESULT"
-assert_not_file "$MUTATION_RECONCILIATION"
+assert_post_terminal_root_mutation_refused \
+  post-terminal-root-mutation 20300101T235959Z
+assert_post_terminal_root_mutation_refused \
+  post-terminal-shared-name-mutation .i00-backup-effects
 
 finish

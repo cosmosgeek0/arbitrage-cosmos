@@ -115,6 +115,51 @@ test('legacy DB rows survive one-time marker import while the unsafe legacy floo
   }
 });
 
+test('prestart barrier marker safely admits fresh and legacy activation without lowering its floor', () => {
+  const freshDir = tempDataDir();
+  writeLegacyMarker(freshDir, {
+    dataSchema: 0,
+    rollbackFloor: 3,
+    updatedBy: 'deploy.sh.prestart-barrier',
+  });
+  const fresh = new Ledger(freshDir);
+  try {
+    assert.equal(fresh.db.pragma('user_version', { simple: true }), 3);
+    assert.deepEqual(fresh.readSchemaCompatibility(), {
+      state: 'AVAILABLE', currentSchemaVersion: 3, rollbackFloor: 3, reasonCode: null,
+    });
+  } finally {
+    fresh.close();
+    rmSync(freshDir, { recursive: true, force: true });
+  }
+
+  const legacyDir = tempDataDir();
+  const legacy = new Database(path.join(legacyDir, 'cosmos.db'));
+  legacy.exec(`
+    CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, kind TEXT NOT NULL, symbol TEXT, data TEXT);
+    CREATE TABLE config (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    INSERT INTO events (ts, kind, symbol, data) VALUES (${T0}, 'legacy.pending', NULL, '{"pending":true}');
+    INSERT INTO config (key, value) VALUES ('legacy.pending', 'preserved');
+  `);
+  legacy.close();
+  writeLegacyMarker(legacyDir, {
+    dataSchema: 1,
+    rollbackFloor: 3,
+    updatedBy: 'deploy.sh.prestart-barrier',
+  });
+  const migrated = new Ledger(legacyDir);
+  try {
+    assert.equal(migrated.getConfigValue('legacy.pending'), 'preserved');
+    assert.equal(migrated.countEvents('legacy.pending'), 1);
+    assert.deepEqual(migrated.readSchemaCompatibility(), {
+      state: 'AVAILABLE', currentSchemaVersion: 3, rollbackFloor: 3, reasonCode: null,
+    });
+  } finally {
+    migrated.close();
+    rmSync(legacyDir, { recursive: true, force: true });
+  }
+});
+
 test('Ledger readback withholds both numbers for malformed, mismatched, and unavailable truth', () => {
   const dataDir = tempDataDir();
   const ledger = new Ledger(dataDir);
@@ -185,6 +230,22 @@ test('legacy marker import is closed-schema and refuses extras, malformed values
     [{ extra: 'not-allowed' }, /LEDGER_LEGACY_SCHEMA_COMPATIBILITY_MALFORMED/],
     [{ updatedAtUtc: 'not-utc' }, /LEDGER_LEGACY_SCHEMA_COMPATIBILITY_MALFORMED/],
     [{ updatedAtUtc: '2026-02-31T00:00:00Z' }, /LEDGER_LEGACY_SCHEMA_COMPATIBILITY_MALFORMED/],
+    [{ dataSchema: 1, rollbackFloor: 3 }, /LEDGER_LEGACY_SCHEMA_COMPATIBILITY_MALFORMED/],
+    [{
+      dataSchema: 1,
+      rollbackFloor: 0,
+      updatedBy: 'deploy.sh.prestart-barrier',
+    }, /LEDGER_LEGACY_SCHEMA_COMPATIBILITY_MALFORMED/],
+    [{
+      dataSchema: 0,
+      rollbackFloor: 1,
+      updatedBy: 'deploy.sh.prestart-barrier',
+    }, /LEDGER_LEGACY_SCHEMA_COMPATIBILITY_MALFORMED/],
+    [{
+      dataSchema: 3,
+      rollbackFloor: 3,
+      updatedBy: 'deploy.sh.prestart-barrier',
+    }, /LEDGER_LEGACY_SCHEMA_COMPATIBILITY_MALFORMED/],
     [{ dataSchema: 4, rollbackFloor: 3 }, /LEDGER_SCHEMA_VERSION_UNSUPPORTED_NEWER/],
   ];
   for (const [overrides, expected] of cases) {

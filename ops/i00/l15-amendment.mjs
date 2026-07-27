@@ -121,6 +121,8 @@ const FINDING_TEST_CHANGES = Object.freeze({
     'ops/tests/test-deploy.sh',
   ]),
   'DEPLOY-PORTABILITY-008': Object.freeze([
+    'ops/tests/fixtures/make-release.sh',
+    'ops/tests/fixtures/mock-systemctl.sh',
     'ops/tests/helpers.sh',
     'ops/tests/test-backup-restore.sh',
     'ops/tests/test-deploy.sh',

@@ -582,6 +582,22 @@
       ],
       "changedTestFiles": [
         {
+          "path": "ops/tests/fixtures/make-release.sh",
+          "mode": "100755",
+          "beforeGitBlob": "07a1dbdb47bfaa3973d1757f21a13f67daa0f233",
+          "beforeSha256": "1fdfb5e8800380db52df42de90c1c5baaaf05b800c2e56ffec00b80eb4b7ea75",
+          "afterGitBlob": "b1be8fee59260473890bff15b101cc2f2eb63fff",
+          "afterSha256": "f262190f16d682d9d997c0f6496ca653da673fc4b2eac3f044f12ab7459a1c85"
+        },
+        {
+          "path": "ops/tests/fixtures/mock-systemctl.sh",
+          "mode": "100755",
+          "beforeGitBlob": "74a195964a9bfd63d0228b8d77f6a5483382733e",
+          "beforeSha256": "1fbd7bcc06b7f9b6a3d31b19687b49e8cca5d996cbcdaf5ffb6d1633f793f4ca",
+          "afterGitBlob": "e30c575eff04219c274e0161f9761190f3cf6551",
+          "afterSha256": "1fcb171cf4dfff266b3fec1338475fe24e5830709fe2e30ed876a3ca4a0bbf6d"
+        },
+        {
           "path": "ops/tests/helpers.sh",
           "mode": "100755",
           "beforeGitBlob": "acc06258e6178d3f8f0253abfc5f1571b8970be6",
@@ -668,8 +684,8 @@
         {
           "path": "ops/tests/i00/df32-r3-backup-successor.sh",
           "mode": "100755",
-          "gitBlob": "be3c772dc48cc2be480d8a827852a0942f5778bb",
-          "sha256": "05e3466348c78d9f59f842dc542b27bad0afcc353400fe328c531e04d53890b0"
+          "gitBlob": "8a3499ab452367723b1cf0011b56ba504de972e6",
+          "sha256": "951b6d80e7f83d06ee6d6ba798bb89a0ba3447ff8e08340882923a077ca4aa3a"
         },
         {
           "path": "ops/tests/i00/test-deploy-portability-008-bash-canonicality.sh",

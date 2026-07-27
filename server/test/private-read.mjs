@@ -767,16 +767,16 @@ test('restart behind a stopped in-flight read schedules one current-generation r
   const stoppedGeneration = service.refresh();
   service.stop();
   service.start();
+  const restarted = service.refresh();
   assert.equal(permissionReads, 1, 'restart joins the one existing transport read');
   release();
   assert.equal(await stoppedGeneration, before);
 
-  for (let turn = 0; turn < 10 && permissionReads < 2; turn += 1) {
-    await new Promise((resolve) => setImmediate(resolve));
-  }
+  const refreshed = await restarted;
   assert.equal(permissionReads, 2, 'restart follows the fenced read with exactly one current read');
-  assert.notEqual(service.snapshot(), before);
-  assert.equal(service.snapshot().permissionPosture.state, 'UNSAFE');
+  assert.notEqual(refreshed, before);
+  assert.equal(service.snapshot(), refreshed);
+  assert.equal(refreshed.permissionPosture.state, 'UNSAFE');
   service.stop();
 });
 

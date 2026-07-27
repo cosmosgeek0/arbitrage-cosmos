@@ -487,7 +487,7 @@ test('account truth is raised only while the exact canonical account cut still h
   assert.equal(bound.surfaces.account.bindingState, 'BINDING_READY');
   assert.equal(
     bound.surfaces.borrow.truthLabel,
-    'NOT_CONFIGURED',
+    'MISSING',
     'the account cut never reaches the separately owned borrow surface',
   );
 

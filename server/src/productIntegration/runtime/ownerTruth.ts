@@ -33,7 +33,7 @@ const ASSET = /^[A-Z0-9]{1,20}$/;
 export type ProductRuntimeOwnerTruthMarketSourceState = 'fresh' | 'unavailable';
 
 /**
- * Bounded structural subset of the existing `/api/markets` projected row.
+ * Bounded structural subset of the existing public Markets projected row.
  * Index owns acquisition and projection; this adapter only summarizes the
  * immutable rows it is given.
  */
@@ -1138,7 +1138,7 @@ function marketSurface(
 /**
  * Pure owner-truth composition. The caller supplies one already sampled
  * supervisor cut, one current PrivateRead snapshot, and the same bounded public
- * Markets projection used by `/api/markets`; this function performs no I/O.
+ * Markets projection used by the public Markets route; this function performs no I/O.
  */
 export function projectProductRuntimeOwnerTruthCut(
   input: Readonly<ProductRuntimeOwnerTruthProjectionInput>,

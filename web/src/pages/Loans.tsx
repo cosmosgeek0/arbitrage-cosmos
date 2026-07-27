@@ -5,8 +5,8 @@ import { createSettledPoll } from '../lib/polling';
 import { TokenIcon } from '../components/TokenIcon';
 import { IconSearch } from '../components/Icons';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
-import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { fmtBasis, fmtMoney, timeAgo } from '../format';
+import { exactOrDash, projectPrivateRead } from '../lib/privateRead';
 import type { BasisRow, BasisSnapshot } from '../lib/basisRuntime';
 import './Markets.css';
 import './Loans.css';
@@ -27,8 +27,7 @@ function decisionLabel(row: BasisRow): string {
 }
 
 export function Loans() {
-  const { openDetail, setPage } = useStore();
-  const { binding: productBinding } = useProductControlRoomContext();
+  const { privateRead, privateReadError, openDetail, setPage } = useStore();
   const [basis, setBasis] = useState<BasisSnapshot | null>(null);
   const [basisError, setBasisError] = useState<string | null>(null);
   const [view, setView] = useState<LoanView>('overview');
@@ -58,27 +57,21 @@ export function Loans() {
 
   const basisRuntimeError = basisError ?? basis?.status.lastError ?? null;
   const basisLive = !!basis && !basisRuntimeError;
-  const borrowSurface = productBinding.snapshot?.surfaces.borrow ?? null;
-  const borrowDatum = (fieldId: string) => borrowSurface?.evidence.find((datum) => datum.fieldId === fieldId) ?? null;
-  const currentBorrowed = borrowDatum('current-borrowed');
-  const accruedInterest = borrowDatum('accrued-interest');
-  const collateralAmount = borrowDatum('collateral-amount');
-  const currentLtv = borrowDatum('current-ltv');
-  const privateState = productBinding.continuity !== 'PROVEN'
-    ? 'UNAVAILABLE'
-    : borrowSurface?.truthLabel ?? 'UNAVAILABLE';
-  const privateSource = borrowSurface?.canonicalSource ?? 'systemIntegration supervisor:borrow';
-  const sourceTone = view === 'preflight' ? (basisLive ? 'on' : basis ? 'partial' : '') : borrowSurface ? 'partial' : '';
+  const privatePresentation = projectPrivateRead(privateRead);
+  const liabilityRows = privateRead.margin.assets?.filter((asset) => asset.borrowed !== '0' || asset.interest !== '0') ?? null;
+  const sourceTone = view === 'preflight'
+    ? (basisLive ? 'on' : basis ? 'partial' : '')
+    : privatePresentation.tone === 'ok' ? 'on' : privatePresentation.tone === 'warn' ? 'partial' : '';
   const sourceText = view === 'preflight'
     ? basisRuntimeError
       ? `Public Source Error · ${basis ? 'Cached' : 'No Data'}`
       : basis
         ? `Public Basis · ${timeAgo(basis.updatedAt)}`
         : 'Loading Public Basis'
-    : `${privateSource.replace(/_/g, ' ')} · ${privateState}`;
+    : `Binance Private Read · ${privatePresentation.stateLabel}`;
   const viewCounts: Record<LoanView, string> = {
-    overview: '—',
-    assets: '—',
+    overview: liabilityRows === null ? '—' : String(liabilityRows.length),
+    assets: privateRead.margin.assets === null ? '—' : String(privateRead.margin.assets.length),
     preflight: basis ? String(preflightRows.length) : '—',
     activity: '—',
   };
@@ -89,7 +82,7 @@ export function Loans() {
         <header className="borrowx-toolbar">
           <div className="borrowx-identity">
             <span className="borrowx-source-mark"><img className="borrowx-page-mark" src="/borrow-money-bag.png" alt="" aria-hidden="true" /></span>
-            <span><h1>Borrow</h1><small>Public Preflight · Private Truth Owner Gated</small></span>
+            <span><h1>Borrow</h1><small>Public Preflight · Private Liabilities {privatePresentation.stateLabel}</small></span>
           </div>
           <div className="borrowx-tools">
             <label className="borrowx-search"><IconSearch size={15} /><input aria-label="Search Borrow" placeholder="Search" value={search} onChange={(event) => setSearch(event.target.value)} spellCheck={false} />{search && <button type="button" aria-label="Clear Search" onClick={() => setSearch('')}>×</button>}</label>
@@ -101,10 +94,10 @@ export function Loans() {
         </header>
 
         <div className="borrowx-summary" aria-label="Borrow Summary">
-          <article><span>Current Borrowed</span><strong>{currentBorrowed?.value ?? '—'}</strong><small>{currentBorrowed?.canonicalSource ?? 'Liability source unavailable'} · {currentBorrowed?.truthLabel ?? privateState}</small></article>
-          <article><span>Accrued Interest</span><strong>{accruedInterest?.value ?? '—'}</strong><small>{accruedInterest?.canonicalSource ?? 'Liability freshness unavailable'} · {accruedInterest?.truthLabel ?? privateState}</small></article>
-          <article><span>Posted Collateral</span><strong>{collateralAmount?.value ?? '—'}</strong><small>{collateralAmount?.canonicalSource ?? 'Collateral source unavailable'} · {collateralAmount?.truthLabel ?? privateState}</small></article>
-          <article><span>Current LTV</span><strong>{currentLtv?.value ?? '—'}</strong><small>{currentLtv?.canonicalSource ?? 'Venue LTV freshness unavailable'} · {currentLtv?.truthLabel ?? privateState}</small></article>
+          <article><span>Margin Liability</span><strong>{exactOrDash(privateRead.margin.totalLiabilityBtc)}</strong><small>{privateRead.margin.totalLiabilityBtc === null ? '— · provider aggregate unavailable' : 'BTC-denominated provider aggregate'}</small></article>
+          <article><span>Liability Assets</span><strong>{liabilityRows === null ? '—' : String(liabilityRows.length)}</strong><small>{privateRead.reconciliation.liabilities.state} · {privateRead.reconciliation.liabilities.reason ?? privatePresentation.observedLabel}</small></article>
+          <article><span>Total Margin Assets</span><strong>{exactOrDash(privateRead.margin.totalAssetBtc)}</strong><small>{privateRead.margin.totalAssetBtc === null ? '— · aggregate unavailable' : 'BTC-denominated provider aggregate'}</small></article>
+          <article><span>Net Margin Assets</span><strong>{exactOrDash(privateRead.margin.totalNetAssetBtc)}</strong><small>{privateRead.margin.state} · {privateRead.margin.coverage.state.replaceAll('_', ' ')}</small></article>
         </div>
 
         <ProductSurfaceAdapter surfaceId="borrow" />
@@ -122,7 +115,7 @@ export function Loans() {
               </button>
             ))}
           </div>
-          <span className={`borrowx-live ${sourceTone}`} title={view === 'preflight' ? basisRuntimeError ?? '' : productBinding.error ?? borrowSurface?.blocker ?? 'No authorized private BorrowTruth adapter is mounted'}><i />{sourceText}</span>
+          <span className={`borrowx-live ${sourceTone}`} title={view === 'preflight' ? basisRuntimeError ?? '' : privateReadError ?? privateRead.margin.coverage.limitation ?? privatePresentation.reconciliationLabel}><i />{sourceText}</span>
         </nav>
 
         <div className="borrowx-workspace">
@@ -130,15 +123,36 @@ export function Loans() {
             <>
               <section className="borrowx-section" aria-labelledby="borrow-active-title">
                 <header className="borrowx-section-head">
-                  <span><strong id="borrow-active-title">Active Positions</strong><small>Flexible Loan + Cross Margin</small></span>
-                  <span>{privateState} · Owner Gated</span>
+                  <span><strong id="borrow-active-title">Cross Margin Liabilities</strong><small>Borrowed And Accrued Interest Remain In Asset Units</small></span>
+                  <span>{privateRead.margin.state} · {privatePresentation.observedLabel}</span>
                 </header>
-                <div className="borrowx-empty compact"><span><b>Private Borrow Positions Not Configured</b><small>Unavailable account truth is not reported as zero positions.</small></span></div>
+                {liabilityRows === null ? (
+                  <div className="borrowx-empty compact"><span><b>Liability Facts Unavailable</b><small>{privateReadError ?? privateRead.reconciliation.liabilities.reason ?? 'Unavailable account truth is not reported as zero liabilities.'}</small></span></div>
+                ) : liabilityRows.length === 0 ? (
+                  <div className="borrowx-empty compact"><span><b>No Margin Liabilities</b><small>The configured Cross Margin read returned exact observed zero borrowed and interest rows.</small></span></div>
+                ) : (
+                  <div className="borrowx-table-scroll">
+                    <table className="borrowx-table preflight">
+                      <thead><tr><th className="l">Asset</th><th>Borrowed</th><th>Interest</th><th>Free</th><th>Locked</th><th>Net Asset</th><th>Freshness</th></tr></thead>
+                      <tbody>{liabilityRows.map((asset) => (
+                        <tr key={asset.asset}>
+                          <td className="l borrowx-asset"><TokenIcon symbol={`${asset.asset}USDT`} size={32} /><span><b>{asset.asset}</b><small>Cross Margin</small></span></td>
+                          <td><b>{asset.borrowed}</b><small>Provider Quantity</small></td>
+                          <td><b>{asset.interest}</b><small>Accrued</small></td>
+                          <td><b>{asset.free}</b><small>Free</small></td>
+                          <td><b>{asset.locked}</b><small>Locked</small></td>
+                          <td><b>{asset.netAsset}</b><small>Net Asset</small></td>
+                          <td><b>{privatePresentation.observedLabel}</b><small>{privateRead.reconciliation.liabilities.state}</small></td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                )}
               </section>
 
               <section className="borrowx-section borrowx-market-section" aria-labelledby="borrow-market-title">
                 <header className="borrowx-section-head borrowx-market-head">
-                  <span><strong id="borrow-market-title">Loan Market</strong><small>Private Binance loan inventory is NOT_CONFIGURED</small></span>
+                  <span><strong id="borrow-market-title">Loan Market</strong><small>Loan catalog is outside private-read v1</small></span>
                   <span className="borrowx-market-count">Inventory Unknown · Owner Gated</span>
                 </header>
                 <div className="borrowx-empty compact"><span><b>Loan Inventory Not Configured</b><small>No signed/private catalog is fetched by this page.</small></span></div>
@@ -147,7 +161,27 @@ export function Loans() {
           )}
 
           {view === 'assets' && (
-            <div className="borrowx-empty"><span><b>Private Borrow Assets Not Configured</b><small>Debt and collateral exposure remain UNKNOWN until the canonical private owner is mounted.</small></span></div>
+            privateRead.margin.assets === null ? (
+              <div className="borrowx-empty"><span><b>Margin Asset Facts Unavailable</b><small>{privateReadError ?? privateRead.margin.coverage.limitation ?? 'The private owner did not publish margin asset rows.'}</small></span></div>
+            ) : (
+              <div className="borrowx-table-scroll">
+                <table className="borrowx-table preflight">
+                  <thead><tr><th className="l">Asset</th><th>Free</th><th>Locked</th><th>Borrowed</th><th>Interest</th><th>Net Asset</th><th>State</th></tr></thead>
+                  <tbody>{privateRead.margin.assets.map((asset) => (
+                    <tr key={asset.asset}>
+                      <td className="l borrowx-asset"><TokenIcon symbol={`${asset.asset}USDT`} size={32} /><span><b>{asset.asset}</b><small>Cross Margin</small></span></td>
+                      <td><b>{asset.free}</b><small>Free</small></td>
+                      <td><b>{asset.locked}</b><small>Locked</small></td>
+                      <td><b>{asset.borrowed}</b><small>Borrowed</small></td>
+                      <td><b>{asset.interest}</b><small>Accrued</small></td>
+                      <td><b>{asset.netAsset}</b><small>Net Asset</small></td>
+                      <td><b>{privateRead.margin.state}</b><small>{privatePresentation.observedLabel}</small></td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+                {privateRead.margin.assets.length === 0 && <div className="borrowx-empty"><span><b>No Margin Asset Rows</b><small>The configured read returned an exact empty array.</small></span></div>}
+              </div>
+            )
           )}
 
           {view === 'preflight' && (
@@ -176,8 +210,8 @@ export function Loans() {
         </div>
 
         <footer className="borrowx-footer">
-          <span>{view === 'preflight' ? basisRuntimeError ? `Public Borrow Source Error: ${basisRuntimeError}` : `Public Borrow Source: ${basis?.status.borrowSource ?? 'Loading'}` : `Foundation BorrowTruth: ${privateState} · Liability/Collateral Sources Unavailable`}</span>
-          <span>{view === 'preflight' ? basis ? `${preflightRows.length} Public Rows` : 'Public Rows Unknown' : 'Private Counts Unknown'}</span>
+          <span>{view === 'preflight' ? basisRuntimeError ? `Public Borrow Source Error: ${basisRuntimeError}` : `Public Borrow Source: ${basis?.status.borrowSource ?? 'Loading'}` : `Private Liability Truth: ${privateRead.reconciliation.liabilities.state} · Money Actions Blocked`}</span>
+          <span>{view === 'preflight' ? basis ? `${preflightRows.length} Public Rows` : 'Public Rows Unknown' : liabilityRows === null ? 'Private Counts Unknown' : `${liabilityRows.length} Liability Assets`}</span>
           {view === 'preflight' && <button type="button" onClick={() => setPage('strategies')}>Open Basis</button>}
         </footer>
       </section>

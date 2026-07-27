@@ -49758,6 +49758,7 @@ body::after {
 .smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet .ops-clock-zones { grid-template-rows: repeat(5, minmax(0, 1fr)) !important; }
 .smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet .ops-advisor-list { grid-auto-rows: minmax(0, 1fr) !important; }
 .smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet .ops-control-list { grid-template-rows: repeat(5, minmax(0, 1fr)) !important; }
+.smenu-bar.topbar-suite-v4 .smenu-pane .api-key-sheet-v2 .api-permission-list { grid-template-rows: repeat(7, minmax(0, 1fr)) !important; }
 .smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet.ops-currency-sheet > .ops-list { grid-template-rows: repeat(6, minmax(0, 1fr)) !important; }
 .smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet .ops-notification-list {
   display: grid !important;

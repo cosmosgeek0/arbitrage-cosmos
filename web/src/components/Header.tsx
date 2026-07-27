@@ -23,6 +23,7 @@ import {
   type ProductComponentProjection,
 } from '../lib/productIntegration';
 import { canonicalRefreshTargetPosture, canonicalWatchmanLauncherPresentation } from '../lib/operatorControlPosture';
+import { projectPrivateRead, type PrivateReadSnapshot } from '../lib/privateRead';
 import { ACCENTS, CURRENCIES, DATA_CADENCE_DEFAULTS, MARKET_PING_CHOICES, type AccentKey, type DataCadenceKey, type NotificationRuleKey } from '../lib/prefs';
 import { openOverlay, useOverlay } from '../lib/overlay';
 import { TokenIcon } from './TokenIcon';
@@ -1379,24 +1380,24 @@ const clockDate = (zoneId: string, d: Date) => {
     return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
   }
 };
-function PrivateAdapterSheet() {
+function PrivateAdapterSheet({ snapshot }: { readonly snapshot: PrivateReadSnapshot }) {
+  const presentation = projectPrivateRead(snapshot);
   return (
     <div className="ops-sheet ops-key-sheet api-key-sheet-v2">
       <OpsSheetHeader
-        icon={<PopupSourceMark tone="#ffb000" brand><ApiKeyIdentityMark size={40} /></PopupSourceMark>}
-        title="Private Exchange Adapter"
-        subtitle="Credential-bearing access is outside this candidate"
-        status="Owner Gated"
-        tone="warn"
+        icon={<PopupSourceMark tone={presentation.postureTone === 'ok' ? '#24c85a' : presentation.postureTone === 'bad' ? '#ef4444' : '#ffb000'} brand><ApiKeyIdentityMark size={40} /></PopupSourceMark>}
+        title="API Permissions"
+        subtitle={presentation.identityLabel}
+        status={presentation.postureLabel}
+        tone={presentation.postureTone}
       />
-      <div className="ops-section-label"><span>Authority Boundary</span><em>No Credential Discovery</em></div>
-      <div className="ops-list ops-control-list" aria-label="Private exchange adapter posture">
-        <OpsRow title="Private Adapter" detail="A separately accepted owner must supply the audited adapter." value="NOT CONFIGURED" tone="warn" />
-        <OpsRow title="Credentials" detail="The browser and assembled runtime do not discover or load exchange secrets." value="NOT LOADED" tone="idle" />
-        <OpsRow title="Signed Reads" detail="Account, wallet, order, loan, and fill reads are not mounted." value="BLOCKED" tone="bad" />
-        <OpsRow title="Money Actions" detail="Test orders, live orders, borrow, repay, transfer, and withdrawal remain absent." value="BLOCKED" tone="bad" />
+      <div className="ops-section-label"><span>Provider Readback</span><em>{presentation.observedLabel}</em></div>
+      <div className="ops-list ops-control-list api-permission-list" aria-label="Binance API permission facts">
+        {presentation.permissionRows.map((row) => (
+          <OpsRow key={row.id} title={row.label} detail={row.detail} value={row.value} tone={row.tone} />
+        ))}
       </div>
-      <div className="aws-pop-notice neutral"><IconShield size={14} /><span>OWNER_GATED · Private access requires separate owner authorization and independent verification.</span></div>
+      <div className="aws-pop-notice neutral"><IconShield size={14} /><span>Facts only · no credential material, permission changes, or money-action controls.</span></div>
     </div>
   );
 }
@@ -1424,12 +1425,13 @@ function AwsOwnerGatedSheet() {
 
 function SharedTopBar() {
   const {
-    state, connected, page, prefs, updatePref, setPage,
+    state, privateRead, connected, page, prefs, updatePref, setPage,
     fxTruth, fxBusy: currencyBusy, refreshFx: refreshCurrencyFx,
   } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
   const notificationFeedState = useNotificationFeed();
   const theme = useResolvedTheme();
+  const privateReadPresentation = projectPrivateRead(privateRead);
   const rowRef = useRef<HTMLDivElement>(null);
   const menuContentRef = useRef<HTMLDivElement>(null);
   const incomingPaneRef = useRef<HTMLDivElement>(null);
@@ -1938,7 +1940,7 @@ function SharedTopBar() {
         return <AwsOwnerGatedSheet />;
 
       case 'apikey':
-        return <PrivateAdapterSheet />;
+        return <PrivateAdapterSheet snapshot={privateRead} />;
 
       case 'advisor': {
         return (
@@ -2233,9 +2235,9 @@ function SharedTopBar() {
       {trig('shell', 'hdr-ic tint-shell shell-ghost shell-premium-trigger', <>
         <span className="rail-icon-core aws-runner-trigger-core" aria-hidden="true"><AwsCubeIdentityMark size={24} /></span>
       </>, { title: 'AWS Runner Control — OWNER GATED · NOT CONFIGURED' })}
-      {trig('apikey', 'hdr-ic apikey-ghost apikey-premium-trigger s-missing', <>
-        <span className="rail-icon-core api-key-trigger-core s-missing"><ApiKeyIdentityMark size={24} /></span>
-      </>, { title: 'Private exchange adapter — OWNER GATED · NOT CONFIGURED' })}
+      {trig('apikey', `hdr-ic apikey-ghost apikey-premium-trigger s-${privateReadPresentation.postureTone}`, <>
+        <span className={`rail-icon-core api-key-trigger-core s-${privateReadPresentation.postureTone}`}><ApiKeyIdentityMark size={24} /></span>
+      </>, { title: `API Permissions — ${privateReadPresentation.postureLabel} · ${privateReadPresentation.observedLabel}` })}
       {trig('advisor', `hdr-ic advisor-ghost advisor-premium-trigger grade-${advTone}`, <>
         <span className={`rail-icon-core trust-advisor-trigger-core ${advTone}`}>
           <img className="trust-advisor-trigger-image" src={TRUST_ADVISOR_MARK} alt="" />

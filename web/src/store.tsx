@@ -32,6 +32,11 @@ import {
   RECONNECT_BACKOFF_STABLE_OPEN_MS,
   planReconnectBackoff,
 } from './lib/reconnectBackoff';
+import {
+  decodePrivateReadSnapshot,
+  unavailablePrivateRead,
+  type PrivateReadSnapshot,
+} from './lib/privateRead';
 import type {
   AppConfig,
   MarketRow,
@@ -171,6 +176,9 @@ interface Store {
   stateStatus: CompatibilityStateStatus;
   stateLastSuccessAtMs: number | null;
   stateError: string | null;
+  privateRead: PrivateReadSnapshot;
+  privateReadSource: 'PENDING' | 'STATE' | 'FALLBACK';
+  privateReadError: string | null;
   markets: MarketRow[];
   marketStatus: CompatibilityStateStatus;
   marketsLastSuccessAtMs: number | null;
@@ -560,6 +568,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [stateTruth, setStateTruth] = useState<CompatibilityStateTruth>(
     INITIAL_COMPATIBILITY_STATE_TRUTH,
   );
+  const [privateRead, setPrivateRead] = useState<PrivateReadSnapshot>(
+    () => unavailablePrivateRead('PRIVATE_READ_PENDING'),
+  );
+  const [privateReadSource, setPrivateReadSource] = useState<'PENDING' | 'STATE' | 'FALLBACK'>('PENDING');
+  const [privateReadError, setPrivateReadError] = useState<string | null>(null);
   const [markets, setMarkets] = useState<MarketRow[]>([]);
   const [marketTruth, setMarketTruth] = useState<MarketStateTruth>(INITIAL_MARKET_STATE_TRUTH);
   const [marketsUpdatedAt, setMarketsUpdatedAt] = useState<number | null>(null);
@@ -591,6 +604,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<(() => void) | null>(null);
   const watchlistMutationQueueRef = useRef<SerializedWatchlistMutationQueue | null>(null);
+
+  const acceptPrivateReadFromState = useCallback((snapshot: ServerState) => {
+    const decoded = decodePrivateReadSnapshot(snapshot.privateRead);
+    if (decoded) {
+      setPrivateRead(decoded);
+      setPrivateReadSource('STATE');
+      setPrivateReadError(null);
+      return;
+    }
+    setPrivateReadSource('FALLBACK');
+    if (Object.prototype.hasOwnProperty.call(snapshot, 'privateRead')) {
+      setPrivateRead(unavailablePrivateRead('PRIVATE_READ_STATE_CONTRACT_INVALID'));
+      setPrivateReadError('PRIVATE_READ_STATE_CONTRACT_INVALID');
+    }
+  }, []);
 
   // One FX owner feeds both global formatters and the operator sheet. Cached
   // rates remain diagnostic evidence after failure, but never current truth.
@@ -686,6 +714,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         .then((snapshot) => {
           if (!closed && !controller.signal.aborted) {
             setState(failClosedState(snapshot));
+            acceptPrivateReadFromState(snapshot);
             setStateTruth((current) => reduceCompatibilityStateTruth(current, {
               kind: 'SUCCESS',
               observedAtMs: Date.now(),
@@ -694,6 +723,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
         .catch((cause) => {
           if (!closed && !controller.signal.aborted) {
+            setPrivateReadSource((current) => current === 'STATE' ? current : 'FALLBACK');
             setStateTruth((current) => reduceCompatibilityStateTruth(current, {
               kind: 'FAILURE',
               observedAtMs: Date.now(),
@@ -839,7 +869,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       closeCurrent();
       setConnected(false);
     };
-  }, []);
+  }, [acceptPrivateReadFromState]);
+
+  // The compatibility state is the preferred and normally sole private-read
+  // transport. Older/malformed state envelopes activate one bounded fallback
+  // poll; accepting state.privateRead stops and aborts that poll immediately.
+  useEffect(() => {
+    if (privateReadSource !== 'FALLBACK') return;
+    const poll = createSettledPoll<unknown>({
+      intervalMs: Math.max(5, prefs.dataCadence?.account ?? 10) * 1_000,
+      request: (signal) => fetchJson<unknown>('/api/private-account', { cache: 'no-store', signal }),
+      onSuccess: (payload) => {
+        const decoded = decodePrivateReadSnapshot(payload);
+        if (!decoded) throw new Error('PRIVATE_READ_FALLBACK_CONTRACT_INVALID');
+        setPrivateRead(decoded);
+        setPrivateReadError(null);
+      },
+      onError: (cause) => {
+        const contractInvalid = cause instanceof Error && cause.message === 'PRIVATE_READ_FALLBACK_CONTRACT_INVALID';
+        const reason = contractInvalid
+          ? 'PRIVATE_READ_FALLBACK_CONTRACT_INVALID'
+          : 'PRIVATE_READ_FALLBACK_UNAVAILABLE';
+        setPrivateRead(unavailablePrivateRead(reason));
+        setPrivateReadError(reason);
+      },
+    });
+    poll.start();
+    return poll.stop;
+  }, [prefs.dataCadence?.account, privateReadSource]);
 
   // markets poll at the preferred source cadence. `refreshSec` is retained as
   // the legacy market value; `dataCadence.market` is the new source map.
@@ -930,6 +987,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       const s = await fetchJson<ServerState>('/api/state');
       setState(failClosedState(s));
+      acceptPrivateReadFromState(s);
       setStateTruth((current) => reduceCompatibilityStateTruth(current, {
         kind: 'SUCCESS',
         observedAtMs: Date.now(),
@@ -972,13 +1030,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       issues,
       ts: Date.now(),
     };
-  }, []);
+  }, [acceptPrivateReadFromState]);
 
   const store: Store = {
     state,
     stateStatus: stateTruth.status,
     stateLastSuccessAtMs: stateTruth.lastSuccessAtMs,
     stateError: stateTruth.error,
+    privateRead,
+    privateReadSource,
+    privateReadError,
     markets,
     marketStatus: marketTruth.status,
     marketsLastSuccessAtMs: marketTruth.lastSuccessAtMs,

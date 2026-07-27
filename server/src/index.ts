@@ -2093,14 +2093,25 @@ app.get('/api/wallet-balances', (_req, res) => {
   sendNotConfigured(res, 'PRIVATE_WALLET_BALANCES', ['rows']);
 });
 
+type ObservedMarketSourceResult<T> = PromiseSettledResult<T> & {
+  observedAtMs: number;
+};
+
 type MarketSourceSnapshot = {
   at: number;
-  spotBookRes: PromiseSettledResult<Map<string, BookTicker>>;
-  perpBookRes: PromiseSettledResult<Map<string, BookTicker>>;
-  perp24hRes: PromiseSettledResult<Map<string, Futures24hTicker>>;
+  spotBookRes: ObservedMarketSourceResult<Map<string, BookTicker>>;
+  perpBookRes: ObservedMarketSourceResult<Map<string, BookTicker>>;
+  perp24hRes: ObservedMarketSourceResult<Map<string, Futures24hTicker>>;
 };
 let marketSourceCache: MarketSourceSnapshot | null = null;
 let marketSourceInFlight: Promise<MarketSourceSnapshot> | null = null;
+
+function observedMarketSourceResult<T>(
+  result: PromiseSettledResult<T>,
+  observedAtMs: number,
+): ObservedMarketSourceResult<T> {
+  return Object.freeze({ ...result, observedAtMs });
+}
 
 async function marketSources(): Promise<MarketSourceSnapshot> {
   const now = Date.now();
@@ -2111,7 +2122,13 @@ async function marketSources(): Promise<MarketSourceSnapshot> {
     fetchAllBookTickers('futures'),
     fetchAllFutures24hTickers(),
   ]).then(([spotBookRes, perpBookRes, perp24hRes]) => {
-    const snapshot = { at: Date.now(), spotBookRes, perpBookRes, perp24hRes };
+    const at = Date.now();
+    const snapshot = {
+      at,
+      spotBookRes: observedMarketSourceResult(spotBookRes, at),
+      perpBookRes: observedMarketSourceResult(perpBookRes, at),
+      perp24hRes: observedMarketSourceResult(perp24hRes, at),
+    };
     marketSourceCache = snapshot;
     return snapshot;
   }).finally(() => {
@@ -2122,10 +2139,7 @@ async function marketSources(): Promise<MarketSourceSnapshot> {
 
 async function readMarketOwnerSnapshot() {
   const { spotBookRes, perpBookRes, perp24hRes } = await marketSources();
-  // marketSources publishes the exact resolved snapshot to this cache before
-  // its promise resolves; there is no asynchronous boundary between these
-  // reads, so the source timestamp stays coupled to the three settled results.
-  const at = marketSourceCache!.at;
+  const at = spotBookRes.observedAtMs;
   const spotBooks = spotBookRes.status === 'fulfilled'
     ? spotBookRes.value
     : new Map<string, BookTicker>();

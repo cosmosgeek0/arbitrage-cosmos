@@ -12,6 +12,7 @@ import {
   readSync,
   realpathSync,
   writeFileSync,
+  writeSync,
 } from 'node:fs';
 import {
   basename, dirname, isAbsolute, resolve,
@@ -75,6 +76,56 @@ const closedLocalEnvironment = Object.freeze({
 let retainedCredentialDescriptor;
 let retainedOutputParentDescriptor;
 const retainedAuthorizedEffectDescriptors = new Set();
+const PREPUBLICATION_TERMINAL_PREFIX = 'PRECREDENTIAL_PROVIDER_TERMINAL ';
+const PREPUBLICATION_SAFE_RETRY = 'REFUSED_REQUIRES_FRESH_AUTHORIZATION';
+const PREPUBLICATION_STAGES = new Set([
+  'ENTRY_GUARD',
+  'HANDOFF_VERIFICATION',
+  'CONFIG_VALIDATION',
+  'OUTPUT_PRECHECK',
+  'PROVIDER_BINDING',
+  'CALLER_IDENTITY',
+  'SECRET_FETCH',
+  'SECRET_VALIDATION',
+  'CREDENTIAL_PUBLICATION',
+]);
+const PREPUBLICATION_CAUSES = new Set([
+  'POLICY_REFUSAL',
+  'HANDOFF_REJECTED',
+  'CONFIG_REJECTED',
+  'OUTPUT_REJECTED',
+  'PROVIDER_BINDING_REJECTED',
+  'BOUND_INPUT_CHANGED',
+  'IDENTITY_MISMATCH',
+  'COMMAND_FAILED',
+  'RESPONSE_REJECTED',
+]);
+let prepublicationStage = 'ENTRY_GUARD';
+let prepublicationCause = 'POLICY_REFUSAL';
+let credentialPublicationStarted = false;
+let prepublicationTerminalEmitted = false;
+
+function setPrepublicationFailure(stage, cause) {
+  if (!PREPUBLICATION_STAGES.has(stage) || !PREPUBLICATION_CAUSES.has(cause)) {
+    prepublicationStage = 'ENTRY_GUARD';
+    prepublicationCause = 'POLICY_REFUSAL';
+    return;
+  }
+  prepublicationStage = stage;
+  prepublicationCause = cause;
+}
+
+process.once('exit', (code) => {
+  if (code === 0 || credentialPublicationStarted || prepublicationTerminalEmitted) return;
+  prepublicationTerminalEmitted = true;
+  writeSync(2, `${PREPUBLICATION_TERMINAL_PREFIX}${JSON.stringify({
+    status: 'PRECREDENTIAL_PROVIDER_FAILURE',
+    stage: prepublicationStage,
+    cause: prepublicationCause,
+    credentialPublished: false,
+    safeRetry: PREPUBLICATION_SAFE_RETRY,
+  })}\n`);
+});
 
 function fail(message, code = 1) {
   for (const descriptor of retainedAuthorizedEffectDescriptors) {
@@ -878,7 +929,11 @@ if (provenanceMode !== 'SYSTEM') {
     fail('TEST credential output must equal the exact marked-root credential category path');
   }
 }
-if (authorizedEffectMode) verifyAuthorizedEffectHandoff();
+if (authorizedEffectMode) {
+  setPrepublicationFailure('HANDOFF_VERIFICATION', 'HANDOFF_REJECTED');
+  verifyAuthorizedEffectHandoff();
+}
+setPrepublicationFailure('CONFIG_VALIDATION', 'CONFIG_REJECTED');
 const providerConfig = authorizedEffectMode
   ? readAuthorizedProviderConfig(rawConfig, 12)
   : readBoundProviderConfig(rawConfig);
@@ -921,6 +976,7 @@ for (const variable of ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_SESSI
   if (process.env[variable]) fail(`static or ambient AWS credential source ${variable} is forbidden`);
 }
 
+setPrepublicationFailure('OUTPUT_PRECHECK', 'OUTPUT_REJECTED');
 const output = rawOutput;
 let outputParent;
 let outputParentDescriptor;
@@ -939,6 +995,7 @@ if (lstatSync(anchoredOutput, { throwIfNoEntry: false }) !== undefined) {
   fail('credential output must be absent before provider access');
 }
 
+setPrepublicationFailure('PROVIDER_BINDING', 'PROVIDER_BINDING_REJECTED');
 let aws = config.awsCliPath;
 let initialAwsCli;
 if (authorizedEffectMode) {
@@ -1026,13 +1083,18 @@ function spawnAws(arguments_, maxBuffer) {
   return spawnSync(aws, arguments_, options);
 }
 
+setPrepublicationFailure('PROVIDER_BINDING', 'BOUND_INPUT_CHANGED');
 requireSameEffectInputs();
+setPrepublicationFailure('CALLER_IDENTITY', 'COMMAND_FAILED');
 const caller = spawnAws([
   'sts', 'get-caller-identity', '--output', 'json', '--no-cli-pager',
 ], 128 * 1024);
 if (caller.status !== 0) fail('AWS STS caller identity check failed without disclosing output');
+setPrepublicationFailure('CALLER_IDENTITY', 'IDENTITY_MISMATCH');
 validateCallerIdentity(caller.stdout, config.instanceRoleArn, secretAccount);
+setPrepublicationFailure('PROVIDER_BINDING', 'BOUND_INPUT_CHANGED');
 requireSameEffectInputs();
+setPrepublicationFailure('SECRET_FETCH', 'COMMAND_FAILED');
 const fetched = spawnAws([
   'secretsmanager', 'get-secret-value', '--secret-id', config.secretArn,
   '--region', config.region, '--version-id', config.secretVersionId,
@@ -1040,6 +1102,7 @@ const fetched = spawnAws([
   '--output', 'text', '--no-cli-pager',
 ], 1024 * 1024);
 if (fetched.status !== 0) fail('Secrets Manager provider failed without disclosing output');
+setPrepublicationFailure('SECRET_VALIDATION', 'RESPONSE_REJECTED');
 let secret;
 try { secret = JSON.parse(fetched.stdout); } catch { fail('Secrets Manager response was not a JSON object'); }
 if (!secret || typeof secret !== 'object' || Array.isArray(secret)) fail('Secrets Manager response was not a JSON object');
@@ -1052,16 +1115,19 @@ for (const key of config.requiredKeys) {
   materialized[key] = value;
 }
 
+setPrepublicationFailure('PROVIDER_BINDING', 'BOUND_INPUT_CHANGED');
 requireSameEffectInputs();
 let outputDescriptor;
 let retainedOutputIdentity;
 try {
   requireSameEffectInputs();
+  setPrepublicationFailure('CREDENTIAL_PUBLICATION', 'OUTPUT_REJECTED');
   outputDescriptor = openSync(
     anchoredOutput,
     constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | (constants.O_NOFOLLOW ?? 0),
     0o600,
   );
+  credentialPublicationStarted = true;
   retainedCredentialDescriptor = outputDescriptor;
   const opened = fstatSync(outputDescriptor, { bigint: true });
   if (!opened.isFile() || (opened.mode & 0o7777n) !== 0o600n) {

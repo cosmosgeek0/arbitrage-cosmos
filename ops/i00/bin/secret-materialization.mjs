@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
+import { lstatSync, writeSync } from 'node:fs';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,6 +34,101 @@ const CLOSED_ENVIRONMENT = Object.freeze({
   PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
   TZ: 'UTC',
 });
+const LEGACY_SUCCESS_TERMINAL =
+  '{"status":"SECRET_MATERIALIZATION_COMPLETED_RECORDED"}\n';
+
+// I00_PROVIDER_TERMINAL_CONTRACT_BEGIN
+const PROVIDER_TERMINAL_PREFIX = 'PRECREDENTIAL_PROVIDER_TERMINAL ';
+const PROVIDER_TERMINAL_STATUS = 'PRECREDENTIAL_PROVIDER_FAILURE';
+const PROVIDER_SAFE_RETRY = 'REFUSED_REQUIRES_FRESH_AUTHORIZATION';
+const PROVIDER_TERMINAL_KEYS = Object.freeze([
+  'status',
+  'stage',
+  'cause',
+  'credentialPublished',
+  'safeRetry',
+]);
+const PROVIDER_STAGES = new Set([
+  'ENTRY_GUARD',
+  'HANDOFF_VERIFICATION',
+  'CONFIG_VALIDATION',
+  'OUTPUT_PRECHECK',
+  'PROVIDER_BINDING',
+  'CALLER_IDENTITY',
+  'SECRET_FETCH',
+  'SECRET_VALIDATION',
+  'CREDENTIAL_PUBLICATION',
+  'PROVIDER_EXECUTION',
+]);
+const PROVIDER_CAUSES = new Set([
+  'POLICY_REFUSAL',
+  'HANDOFF_REJECTED',
+  'CONFIG_REJECTED',
+  'OUTPUT_REJECTED',
+  'PROVIDER_BINDING_REJECTED',
+  'BOUND_INPUT_CHANGED',
+  'IDENTITY_MISMATCH',
+  'COMMAND_FAILED',
+  'RESPONSE_REJECTED',
+  'PROCESS_TIMEOUT',
+  'PROCESS_SIGNALLED',
+  'UNCLASSIFIED_FAILURE',
+]);
+
+function exactObjectKeys(value, expected) {
+  return value !== null
+    && typeof value === 'object'
+    && !Array.isArray(value)
+    && Object.keys(value).length === expected.length
+    && expected.every((key) => Object.hasOwn(value, key));
+}
+
+function parseProviderTerminal(stderr) {
+  if (typeof stderr !== 'string') return null;
+  const lines = stderr
+    .split('\n')
+    .filter((line) => line.startsWith(PROVIDER_TERMINAL_PREFIX));
+  if (lines.length !== 1 || lines[0].includes('\r')) return null;
+  let terminal;
+  try {
+    terminal = JSON.parse(lines[0].slice(PROVIDER_TERMINAL_PREFIX.length));
+  } catch {
+    return null;
+  }
+  if (!exactObjectKeys(terminal, PROVIDER_TERMINAL_KEYS)
+      || terminal.status !== PROVIDER_TERMINAL_STATUS
+      || !PROVIDER_STAGES.has(terminal.stage)
+      || !PROVIDER_CAUSES.has(terminal.cause)
+      || terminal.credentialPublished !== false
+      || terminal.safeRetry !== PROVIDER_SAFE_RETRY) {
+    return null;
+  }
+  return {
+    status: terminal.status,
+    stage: terminal.stage,
+    cause: terminal.cause,
+    credentialPublished: terminal.credentialPublished,
+    safeRetry: terminal.safeRetry,
+  };
+}
+
+function fallbackProviderTerminal(runner, credentialPublished) {
+  let cause = 'UNCLASSIFIED_FAILURE';
+  if (runner?.error?.code === 'ETIMEDOUT') cause = 'PROCESS_TIMEOUT';
+  else if (typeof runner?.signal === 'string') cause = 'PROCESS_SIGNALLED';
+  return {
+    status: PROVIDER_TERMINAL_STATUS,
+    stage: 'PROVIDER_EXECUTION',
+    cause,
+    credentialPublished: credentialPublished === false ? false : 'UNKNOWN',
+    safeRetry: PROVIDER_SAFE_RETRY,
+  };
+}
+
+function providerTerminalLine(terminal) {
+  return `${JSON.stringify(terminal)}\n`;
+}
+// I00_PROVIDER_TERMINAL_CONTRACT_END
 
 function blocked(message, code = 1) {
   process.stderr.write(`I00_OPS_BLOCKED: ${message}\n`);
@@ -101,6 +197,46 @@ function runNode(script, arguments_) {
     maxBuffer: 256 * 1024,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+}
+
+// I00_PENDING_PROVIDER_TERMINAL_BEGIN
+let terminalEmitted = false;
+let pendingProviderTerminal;
+
+function armProviderTerminal(line) {
+  if (terminalEmitted || pendingProviderTerminal !== undefined) {
+    blocked('secret materialization attempted to arm a second terminal');
+  }
+  pendingProviderTerminal = line;
+}
+
+function emitTerminal(line) {
+  if (terminalEmitted) blocked('secret materialization attempted a second terminal');
+  terminalEmitted = true;
+  pendingProviderTerminal = undefined;
+  writeSync(1, line);
+}
+
+// Arm the terminal before outcome recording. If that recorder fails, blocked() exits and
+// this finalizer still writes the one already-redacted terminal synchronously.
+process.once('exit', () => {
+  if (!terminalEmitted && pendingProviderTerminal !== undefined) {
+    terminalEmitted = true;
+    writeSync(1, pendingProviderTerminal);
+  }
+});
+// I00_PENDING_PROVIDER_TERMINAL_END
+
+// The single claim in the terminal that is not a classification, so the wrapper proves it
+// first-hand rather than inferring it from anything the effect reported. lstat, not stat:
+// a symlink standing where the credential belongs counts as something being there, and the
+// prepublication terminal is withheld rather than asserting an absence never observed.
+function credentialOutputAbsent(path) {
+  try {
+    return lstatSync(path, { bigint: true, throwIfNoEntry: false }) === undefined;
+  } catch {
+    return false;
+  }
 }
 
 const argv = process.argv.slice(2);
@@ -307,6 +443,20 @@ const runner = runNode(RUNNER, [
   '--', PROVIDER,
 ]);
 const runnerExitCode = Number.isInteger(runner.status) ? runner.status : 1;
+if (runnerExitCode !== 0) {
+  const providerTerminal = parseProviderTerminal(runner.stderr);
+  if (providerTerminal !== null) {
+    armProviderTerminal(providerTerminalLine(providerTerminal));
+  } else {
+    const credentialPublished = credentialOutputAbsent(credentialOutput) ? false : 'UNKNOWN';
+    armProviderTerminal(
+      providerTerminalLine(fallbackProviderTerminal(runner, credentialPublished)),
+    );
+  }
+  // Publish the non-recorded provider terminal before outcome recording. A stuck recorder
+  // therefore cannot suppress the already-established stage, cause, or retry refusal.
+  emitTerminal(pendingProviderTerminal);
+}
 
 const outcome = runNode(OUTCOME_RECORDER, [
   '--class', 'SECRET_MATERIALIZATION',
@@ -330,7 +480,6 @@ assert(recorded.status === expectedRecordedStatus
 'secret materialization outcome recorder returned another action');
 
 if (runnerExitCode !== 0) {
-  process.stdout.write('{"status":"SECRET_MATERIALIZATION_FAILED_RECORDED"}\n');
   process.exit(Math.min(255, Math.max(1, runnerExitCode)));
 }
-process.stdout.write('{"status":"SECRET_MATERIALIZATION_COMPLETED_RECORDED"}\n');
+emitTerminal(LEGACY_SUCCESS_TERMINAL);

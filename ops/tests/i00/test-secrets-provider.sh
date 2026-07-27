@@ -226,6 +226,9 @@ note "fake exact-ARN provider materializes without stdout disclosure"
 AWS_CLI="$SIMULATION_ROOT/fakes/aws-fixture.sh" node "$I00_ROOT/bin/secrets-provider.mjs" --config "$PROVIDER_CONFIG_ROOT/secrets-provider.json" --output "$SIMULATION_ROOT/credentials/app-secrets.json" --simulation --simulation-root "$SIMULATION_ROOT" >"$PROVIDER_CONFIG_ROOT/provider.stdout" 2>"$PROVIDER_CONFIG_ROOT/provider.stderr"
 OUT="$(cat "$PROVIDER_CONFIG_ROOT/provider.stdout")"
 assert_contains "$OUT" SECRET_MATERIALIZED_WITHOUT_DISCLOSURE
+assert_eq "$(
+  grep -c '^PRECREDENTIAL_PROVIDER_TERMINAL ' "$PROVIDER_CONFIG_ROOT/provider.stderr" || true
+)" 0
 if cat "$PROVIDER_CONFIG_ROOT/provider.stdout" "$PROVIDER_CONFIG_ROOT/provider.stderr" | grep -F 'FAKE_SECRET_123456' >/dev/null; then fail_test 'provider disclosed the secret'; fi
 pass_assertion
 assert_file "$SIMULATION_ROOT/credentials/app-secrets.json"
@@ -972,13 +975,16 @@ assert_success node - "$I00_ROOT/bin/secrets-provider.mjs" <<'NODE'
 const fs = require('node:fs');
 const source = fs.readFileSync(process.argv[2], 'utf8');
 const stagingReject = source.indexOf("if (provenanceMode === 'STAGING')");
-const handoffVerify = source.indexOf(
-  'if (authorizedEffectMode) verifyAuthorizedEffectHandoff()',
+const handoffStage = source.indexOf(
+  "setPrepublicationFailure('HANDOFF_VERIFICATION', 'HANDOFF_REJECTED')",
 );
+const handoffVerify = source.indexOf('verifyAuthorizedEffectHandoff();', handoffStage);
 const configRead = source.indexOf('readAuthorizedProviderConfig(rawConfig, 12)');
 const stsEffect = source.indexOf('const caller = spawnAws([');
-if (stagingReject < 0 || handoffVerify < 0 || configRead < 0 || stsEffect < 0
-    || stagingReject > handoffVerify || handoffVerify > configRead
+if (stagingReject < 0 || handoffStage < 0 || handoffVerify < 0
+    || configRead < 0 || stsEffect < 0
+    || stagingReject > handoffStage || handoffStage > handoffVerify
+    || handoffVerify > configRead
     || configRead > stsEffect) process.exit(2);
 NODE
 assert_contains "$SECRETS_SOURCE" 'requireSameAuthorizedOutputParent(outputParent, outputParentDescriptor)'
@@ -1088,5 +1094,336 @@ mkdir -p "$OUTSIDE_RELEASE/server/dist"
 cp "$KEYLESS_ROOT/server/dist/index.js" "$OUTSIDE_RELEASE/server/dist/index.js"
 assert_failure_contains 'current link' bash -c \
   "cd '$OUTSIDE_RELEASE' && node '$I00_ROOT/bin/app-entrypoint.mjs'"
+
+note "M-A3: hostile STS, secret fetch, and secret shape fail closed without disclosure"
+# One driver for every hostile provider run so each case proves the same four things:
+# the run refused, it refused with its own fixed wording, it published no credential, and
+# it emitted exactly one refusal line. What the CLI said is then checked separately.
+HOSTILE_PROVIDER_OUTPUT=
+hostile_provider_failure() {
+  local variant="$1" aws_cli="$2" expected="$3" expected_stage="$4" expected_cause="$5"
+  local canonical="$PROVIDER_CONFIG_ROOT/secrets-provider.json"
+  local saved="$PROVIDER_CONFIG_ROOT/secrets-provider.hostile-saved.json"
+  local stdout_file="$TEST_TMP/ma3-provider.stdout"
+  local stderr_file="$TEST_TMP/ma3-provider.stderr"
+  local rc
+  mv "$canonical" "$saved"
+  cp "$variant" "$canonical"
+  chmod 600 "$canonical"
+  set +e
+  env AWS_CLI="$aws_cli" node "$I00_ROOT/bin/secrets-provider.mjs" \
+    --config "$canonical" \
+    --output "$SIMULATION_ROOT/credentials/app-secrets.json" \
+    --simulation --simulation-root "$SIMULATION_ROOT" \
+    >"$stdout_file" 2>"$stderr_file"
+  rc=$?
+  set -e
+  rm "$canonical"
+  mv "$saved" "$canonical"
+  HOSTILE_PROVIDER_OUTPUT="$(cat "$stderr_file")"
+  [ "$rc" -ne 0 ] || fail_test 'hostile provider variant unexpectedly succeeded'
+  pass_assertion
+  [ ! -s "$stdout_file" ] || fail_test 'failed provider wrote to stdout'
+  pass_assertion
+  assert_contains "$HOSTILE_PROVIDER_OUTPUT" "$expected"
+  assert_not_file "$SIMULATION_ROOT/credentials/app-secrets.json"
+  assert_eq "$(
+    grep -c '^PRECREDENTIAL_PROVIDER_TERMINAL ' "$stderr_file" || true
+  )" 1
+  assert_success node --input-type=module - \
+    "$stderr_file" "$expected_stage" "$expected_cause" <<'NODE'
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const bytes = readFileSync(process.argv[2]);
+assert.equal(bytes.at(-1), 0x0a);
+const prefix = 'PRECREDENTIAL_PROVIDER_TERMINAL ';
+const terminals = bytes.toString('utf8').split('\n')
+  .filter((line) => line.startsWith(prefix));
+assert.equal(terminals.length, 1);
+const terminal = JSON.parse(terminals[0].slice(prefix.length));
+assert.deepEqual(Object.keys(terminal), [
+  'status', 'stage', 'cause', 'credentialPublished', 'safeRetry',
+]);
+assert.equal(terminal.status, 'PRECREDENTIAL_PROVIDER_FAILURE');
+assert.equal(terminal.stage, process.argv[3]);
+assert.equal(terminal.cause, process.argv[4]);
+assert.equal(terminal.credentialPublished, false);
+assert.equal(terminal.safeRetry, 'REFUSED_REQUIRES_FRESH_AUTHORIZATION');
+NODE
+}
+assert_undisclosed() {
+  if printf '%s' "$HOSTILE_PROVIDER_OUTPUT" | grep -F -- "$1" >/dev/null; then
+    fail_test "provider surfaced CLI-supplied text [$1]"
+  fi
+  pass_assertion
+}
+hostile_provider_config() {
+  node --input-type=module - \
+    "$PROVIDER_CONFIG_ROOT/secrets-provider.json" "$1" "$2" "${3:-}" "${4:-}" <<'NODE'
+import { readFileSync, writeFileSync } from 'node:fs';
+
+const [source, output, variant, first, second] = process.argv.slice(2);
+const value = JSON.parse(readFileSync(source, 'utf8'));
+if (variant === 'sts-role') {
+  value.awsCliPath = first;
+  value.awsCliSha256 = second;
+} else if (variant === 'sts-account') {
+  value.secretArn =
+    'arn:aws:secretsmanager:ap-south-1:210987654321:secret:cosmos/read-only-Ab12Cd';
+  value.instanceRoleArn = 'arn:aws:iam::210987654321:role/cosmos-instance-role';
+} else if (variant === 'read-failure') {
+  value.secretArn =
+    'arn:aws:secretsmanager:ap-south-1:123456789012:secret:cosmos/unmatched-Zz99Yy';
+} else if (variant === 'secret-shape') {
+  value.requiredKeys = ['BINANCE_API_KEY', 'BINANCE_API_SECRET', 'EXTRA_REQUIRED_KEY'];
+} else {
+  process.exit(2);
+}
+writeFileSync(output, JSON.stringify(value));
+NODE
+}
+
+# Hostile STS identity: the fixture answers with a role the configuration never approved.
+hostile_provider_config "$PROVIDER_CONFIG_ROOT/provider-ma3-sts-role.json" \
+  'sts-role' "$WRONG_ROLE_AWS" "$WRONG_ROLE_SHA256"
+hostile_provider_failure "$PROVIDER_CONFIG_ROOT/provider-ma3-sts-role.json" \
+  "$WRONG_ROLE_AWS" \
+  'AWS STS caller identity does not match the exact configured instance role' \
+  'CALLER_IDENTITY' 'IDENTITY_MISMATCH'
+assert_undisclosed 'other-instance-role'
+assert_undisclosed 'ROLEID'
+assert_undisclosed 'assumed-role'
+
+# Hostile STS shape: a well-formed answer that binds an account the secret never named.
+hostile_provider_config "$PROVIDER_CONFIG_ROOT/provider-ma3-sts-account.json" \
+  'sts-account'
+hostile_provider_failure "$PROVIDER_CONFIG_ROOT/provider-ma3-sts-account.json" \
+  "$SIMULATION_AWS" \
+  'AWS STS caller account does not match the exact secret account' \
+  'CALLER_IDENTITY' 'IDENTITY_MISMATCH'
+assert_undisclosed '123456789012'
+assert_undisclosed 'session-001'
+
+# Hostile secret fetch: STS succeeds, the versioned read fails, and the CLI status is all
+# the provider is allowed to learn from it.
+hostile_provider_config "$PROVIDER_CONFIG_ROOT/provider-ma3-read-failure.json" \
+  'read-failure'
+hostile_provider_failure "$PROVIDER_CONFIG_ROOT/provider-ma3-read-failure.json" \
+  "$SIMULATION_AWS" 'Secrets Manager provider failed without disclosing output' \
+  'SECRET_FETCH' 'COMMAND_FAILED'
+assert_undisclosed 'unmatched-Zz99Yy'
+
+# Hostile secret shape: the read succeeds, so both real secret values are in the provider's
+# memory when it refuses. Neither may appear in anything it prints.
+hostile_provider_config "$PROVIDER_CONFIG_ROOT/provider-ma3-secret-shape.json" \
+  'secret-shape'
+hostile_provider_failure "$PROVIDER_CONFIG_ROOT/provider-ma3-secret-shape.json" \
+  "$SIMULATION_AWS" 'required secret field EXTRA_REQUIRED_KEY is missing or malformed' \
+  'SECRET_VALIDATION' 'RESPONSE_REJECTED'
+assert_undisclosed 'FAKE_SECRET_123456'
+assert_undisclosed 'FAKE_API_KEY_123456'
+
+note "M-A3: the provider surfaces one terminal and never a spawned CLI error stream"
+assert_eq "$(grep -c 'process\.stdout\.write' "$I00_ROOT/bin/secrets-provider.mjs")" 1
+for stream in caller.stderr fetched.stderr checked.stderr; do
+  if printf '%s' "$SECRETS_SOURCE" | grep -F -- "$stream" >/dev/null; then
+    fail_test "provider referenced a spawned CLI error stream: $stream"
+  fi
+  pass_assertion
+done
+assert_success node --input-type=module - "$I00_ROOT/bin/secrets-provider.mjs" <<'NODE'
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const source = readFileSync(process.argv[2], 'utf8');
+const hook = source.indexOf("process.once('exit'");
+const arguments_ = source.indexOf('const args = parseArgs');
+const publication = source.indexOf('outputDescriptor = openSync(');
+const publicationStarted = source.indexOf('credentialPublicationStarted = true', publication);
+assert.ok(hook >= 0 && hook < arguments_);
+assert.ok(publication >= 0 && publicationStarted > publication);
+NODE
+
+note "M-A3: the wrapper accepts only the redacted provider terminal and arms it before recording"
+SECRET_WRAPPER="$I00_ROOT/bin/secret-materialization.mjs"
+PROVIDER_UNIT_TEMPLATE="$REPO_ROOT/ops/templates/i00/systemd/cosmos-secrets-provider.service.template"
+SECRET_WRAPPER_SOURCE="$(cat "$SECRET_WRAPPER")"
+assert_eq "$(grep -c 'process\.once.*exit' "$SECRET_WRAPPER")" 1
+assert_eq "$(grep -c 'emitTerminal(' "$SECRET_WRAPPER")" 3
+assert_contains "$SECRET_WRAPPER_SOURCE" 'parseProviderTerminal(runner.stderr)'
+assert_contains "$SECRET_WRAPPER_SOURCE" 'armProviderTerminal(providerTerminalLine'
+if printf '%s' "$SECRET_WRAPPER_SOURCE" | grep -E \
+    'writeSync\(1, runner|process\.stdout\.write\(runner' >/dev/null; then
+  fail_test 'secret materialization relays raw runner output'
+fi
+pass_assertion
+# The success terminal survives byte for byte.
+assert_contains "$SECRET_WRAPPER_SOURCE" '{"status":"SECRET_MATERIALIZATION_COMPLETED_RECORDED"}'
+assert_success node --input-type=module - "$SECRET_WRAPPER" <<'NODE'
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const source = readFileSync(process.argv[2], 'utf8');
+const runner = source.indexOf('const runner = runNode(RUNNER');
+const arm = source.indexOf('armProviderTerminal(providerTerminalLine', runner);
+const emission = source.indexOf('emitTerminal(pendingProviderTerminal)', arm);
+const recorder = source.indexOf('const outcome = runNode(OUTCOME_RECORDER', runner);
+const finalizer = source.indexOf("process.once('exit'");
+assert.ok(runner >= 0 && arm > runner && emission > arm && recorder > emission);
+assert.ok(finalizer >= 0 && finalizer < runner);
+assert.match(
+  source.slice(finalizer, runner),
+  /!terminalEmitted && pendingProviderTerminal !== undefined/u,
+);
+NODE
+
+note "M-A3: pre-recorder emission and exit fallback write the terminal exactly once"
+assert_success node --input-type=module - "$SECRET_WRAPPER" <<'NODE'
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const source = readFileSync(process.argv[2], 'utf8');
+const begin = '// I00_PENDING_PROVIDER_TERMINAL_BEGIN';
+const end = '// I00_PENDING_PROVIDER_TERMINAL_END';
+const start = source.indexOf(begin);
+const stop = source.indexOf(end);
+assert.ok(start >= 0 && stop > start);
+const region = source.slice(start + begin.length, stop);
+function harness() {
+  const writes = [];
+  let onExit;
+  const api = new Function(
+    'blocked',
+    'writeSync',
+    'process',
+    `${region}\nreturn { armProviderTerminal, emitTerminal };`,
+  )(
+    (message) => {
+      throw new Error(message);
+    },
+    (descriptor, line) => writes.push([descriptor, line]),
+    {
+      once: (event, handler) => {
+        assert.equal(event, 'exit');
+        onExit = handler;
+      },
+    },
+  );
+  assert.equal(typeof onExit, 'function');
+  return { ...api, writes, onExit };
+}
+const line =
+  '{"status":"PRECREDENTIAL_PROVIDER_FAILURE","stage":"PROVIDER_EXECUTION",'
+  + '"cause":"UNCLASSIFIED_FAILURE","credentialPublished":false,'
+  + '"safeRetry":"REFUSED_REQUIRES_FRESH_AUTHORIZATION"}\n';
+const exitFallback = harness();
+exitFallback.armProviderTerminal(line);
+exitFallback.onExit(1);
+exitFallback.onExit(1);
+assert.deepEqual(exitFallback.writes, [[1, line]]);
+
+const preRecorder = harness();
+preRecorder.armProviderTerminal(line);
+preRecorder.emitTerminal(line);
+preRecorder.onExit(1);
+assert.deepEqual(preRecorder.writes, [[1, line]]);
+NODE
+
+note "M-A3: malformed provider diagnostics normalize to fixed fallback tokens"
+assert_success node --input-type=module - "$SECRET_WRAPPER" <<'NODE'
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const source = readFileSync(process.argv[2], 'utf8');
+const begin = '// I00_PROVIDER_TERMINAL_CONTRACT_BEGIN';
+const end = '// I00_PROVIDER_TERMINAL_CONTRACT_END';
+const start = source.indexOf(begin);
+const stop = source.indexOf(end);
+assert.ok(start >= 0 && stop > start);
+assert.equal(source.indexOf(begin, start + 1), -1);
+assert.equal(source.indexOf(end, stop + 1), -1);
+const region = source.slice(start + begin.length, stop);
+const MARKER = 'HOSTILE_DIAGNOSTIC_MARKER';
+const contract = new Function(
+  `${region}\nreturn { parseProviderTerminal, fallbackProviderTerminal, providerTerminalLine };`,
+)();
+const prefix = 'PRECREDENTIAL_PROVIDER_TERMINAL ';
+const valid = {
+  status: 'PRECREDENTIAL_PROVIDER_FAILURE',
+  stage: 'SECRET_FETCH',
+  cause: 'COMMAND_FAILED',
+  credentialPublished: false,
+  safeRetry: 'REFUSED_REQUIRES_FRESH_AUTHORIZATION',
+};
+assert.deepEqual(contract.parseProviderTerminal(`${prefix}${JSON.stringify(valid)}\n`), valid);
+for (const hostile of [
+  '',
+  MARKER,
+  `${prefix}${MARKER}\n`,
+  `${prefix}${JSON.stringify({ ...valid, stage: MARKER })}\n`,
+  `${prefix}${JSON.stringify({ ...valid, extra: MARKER })}\n`,
+  `${prefix}${JSON.stringify(valid)}\n${prefix}${JSON.stringify(valid)}\n`,
+]) {
+  assert.equal(contract.parseProviderTerminal(hostile), null);
+}
+assert.deepEqual(contract.fallbackProviderTerminal(
+  { error: { code: 'ETIMEDOUT' } },
+  false,
+), {
+  status: 'PRECREDENTIAL_PROVIDER_FAILURE',
+  stage: 'PROVIDER_EXECUTION',
+  cause: 'PROCESS_TIMEOUT',
+  credentialPublished: false,
+  safeRetry: 'REFUSED_REQUIRES_FRESH_AUTHORIZATION',
+});
+assert.equal(
+  contract.fallbackProviderTerminal({ signal: 'SIGKILL' }, false).cause,
+  'PROCESS_SIGNALLED',
+);
+assert.equal(
+  contract.fallbackProviderTerminal({ status: 1 }, false).cause,
+  'UNCLASSIFIED_FAILURE',
+);
+assert.equal(
+  contract.fallbackProviderTerminal({ status: 1 }, 'UNKNOWN').credentialPublished,
+  'UNKNOWN',
+);
+assert.equal(contract.providerTerminalLine(valid), `${JSON.stringify(valid)}\n`);
+assert.equal(contract.providerTerminalLine(valid).includes(MARKER), false);
+NODE
+
+note "M-A3: the provider unit refuses automatic retry and routes its terminal to the journal"
+assert_success node --input-type=module - "$PROVIDER_UNIT_TEMPLATE" <<'NODE'
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const service = new Map();
+let section = null;
+for (const raw of readFileSync(process.argv[2], 'utf8').split('\n')) {
+  const line = raw.trim();
+  if (line === '' || line.startsWith('#') || line.startsWith(';')) continue;
+  if (line.startsWith('[') && line.endsWith(']')) {
+    section = line;
+    continue;
+  }
+  if (section !== '[Service]') continue;
+  const separator = line.indexOf('=');
+  assert.ok(separator > 0, line);
+  const key = line.slice(0, separator);
+  service.set(key, [...(service.get(key) ?? []), line.slice(separator + 1)]);
+}
+// Stated, stated once, and stating refusal. The authorization this unit consumes is
+// single-use, so an automatic restart would re-fire the wrapper against an authorization
+// that is already spent: the same refusal the prepublication terminal reports as
+// safeRetry=REFUSED_REQUIRES_FRESH_AUTHORIZATION, held at the platform level too.
+assert.deepEqual(service.get('Type'), ['oneshot']);
+assert.deepEqual(service.get('Restart'), ['no']);
+// The wrapper's single terminal is what an operator reads, so where it lands is stated
+// rather than inherited from whatever the host's default happens to be.
+assert.deepEqual(service.get('StandardOutput'), ['journal']);
+assert.deepEqual(service.get('StandardError'), ['journal']);
+assert.deepEqual(service.get('SyslogIdentifier'), ['cosmos-secrets-provider']);
+NODE
 
 finish

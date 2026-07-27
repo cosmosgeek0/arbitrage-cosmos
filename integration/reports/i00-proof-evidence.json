@@ -785,7 +785,7 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 3651,
+        "line": 3667,
         "classification": "LEGACY_APP_DELIVERY"
       },
       {
@@ -1180,7 +1180,7 @@
       },
       {
         "file": "web/src/store.tsx",
-        "line": 781,
+        "line": 805,
         "classification": "LOCAL_OPERATOR_DELIVERY"
       }
     ],
@@ -3554,49 +3554,49 @@
         "concept": "ledger-authority",
         "declaration": "function pruneEphemeralLedgerEvents",
         "file": "server/src/index.ts",
-        "line": 627
+        "line": 633
       },
       {
         "concept": "control-authority",
         "declaration": "function recordSupervisorReadFailure",
         "file": "server/src/index.ts",
-        "line": 846
+        "line": 852
       },
       {
         "concept": "semantic-source",
         "declaration": "function sendLegacyScannerRetired",
         "file": "server/src/index.ts",
-        "line": 896
+        "line": 902
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketSourceSnapshot",
         "file": "server/src/index.ts",
-        "line": 2088
+        "line": 2094
       },
       {
         "concept": "semantic-source",
         "declaration": "function marketSources",
         "file": "server/src/index.ts",
-        "line": 2097
+        "line": 2103
       },
       {
         "concept": "semantic-source",
         "declaration": "function cachedSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2477
+        "line": 2483
       },
       {
         "concept": "semantic-source",
         "declaration": "function rememberSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2489
+        "line": 2495
       },
       {
         "concept": "semantic-source",
         "declaration": "function loadSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2499
+        "line": 2505
       },
       {
         "concept": "semantic-source",
@@ -15152,5 +15152,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "58dd07d1a7415386f80a12c6f7ec8ada2c72150b1bc2e8edf588ca5d11578202"
+  "evidenceSha256": "9c8a5f0cdbd9ecb79afe42a0dc009fd1b83bbb310f22485848ed358edc745d6e"
 }

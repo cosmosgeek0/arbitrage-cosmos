@@ -603,22 +603,41 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const fxPollRef = useRef<ReturnType<typeof createSettledPoll> | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<(() => void) | null>(null);
+  const privateReadCadenceRef = useRef<(() => void) | null>(null);
   const watchlistMutationQueueRef = useRef<SerializedWatchlistMutationQueue | null>(null);
 
-  const acceptPrivateReadFromState = useCallback((snapshot: ServerState) => {
-    const decoded = decodePrivateReadSnapshot(snapshot.privateRead);
-    if (decoded) {
-      setPrivateRead(decoded);
-      setPrivateReadSource('STATE');
-      setPrivateReadError(null);
-      return;
-    }
-    setPrivateReadSource('FALLBACK');
-    if (Object.prototype.hasOwnProperty.call(snapshot, 'privateRead')) {
-      setPrivateRead(unavailablePrivateRead('PRIVATE_READ_STATE_CONTRACT_INVALID'));
-      setPrivateReadError('PRIVATE_READ_STATE_CONTRACT_INVALID');
-    }
+  // Private snapshots are ordered by the id assigned when their request left
+  // the browser, so a slow earlier answer can never overwrite newer account
+  // truth no matter which caller (socket delta, cadence, manual refresh) won.
+  const privateReadRequestRef = useRef(0);
+  const privateReadAppliedRef = useRef(0);
+  const nextPrivateReadRequestId = useCallback(() => {
+    privateReadRequestRef.current += 1;
+    return privateReadRequestRef.current;
   }, []);
+
+  const applyPrivateReadUpdate = useCallback((requestId: number, apply: () => void) => {
+    if (requestId <= privateReadAppliedRef.current) return;
+    privateReadAppliedRef.current = requestId;
+    apply();
+  }, []);
+
+  const acceptPrivateReadFromState = useCallback((snapshot: ServerState, requestId: number) => {
+    applyPrivateReadUpdate(requestId, () => {
+      const decoded = decodePrivateReadSnapshot(snapshot.privateRead);
+      if (decoded) {
+        setPrivateRead(decoded);
+        setPrivateReadSource('STATE');
+        setPrivateReadError(null);
+        return;
+      }
+      setPrivateReadSource('FALLBACK');
+      if (Object.prototype.hasOwnProperty.call(snapshot, 'privateRead')) {
+        setPrivateRead(unavailablePrivateRead('PRIVATE_READ_STATE_CONTRACT_INVALID'));
+        setPrivateReadError('PRIVATE_READ_STATE_CONTRACT_INVALID');
+      }
+    });
+  }, [applyPrivateReadUpdate]);
 
   // One FX owner feeds both global formatters and the operator sheet. Cached
   // rates remain diagnostic evidence after failure, but never current truth.
@@ -701,20 +720,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let stateRefreshInFlight = false;
     let stateRefreshQueued = false;
     let stateRefreshController: AbortController | null = null;
-    const requestCompatibilityState = () => {
+    const requestCompatibilityState = (trigger: 'DELTA' | 'CADENCE' = 'DELTA') => {
       if (closed) return;
       if (stateRefreshInFlight) {
-        stateRefreshQueued = true;
+        // A cadence tick never queues a second read: the in-flight one already
+        // answers it. Only a supervisor delta invalidates a read that started
+        // before the delta, so only a delta may queue follow-up work.
+        if (trigger === 'DELTA') stateRefreshQueued = true;
         return;
       }
       stateRefreshInFlight = true;
+      const requestId = nextPrivateReadRequestId();
       const controller = new AbortController();
       stateRefreshController = controller;
       void fetchJson<ServerState>('/api/state', { cache: 'no-store', signal: controller.signal })
         .then((snapshot) => {
           if (!closed && !controller.signal.aborted) {
             setState(failClosedState(snapshot));
-            acceptPrivateReadFromState(snapshot);
+            acceptPrivateReadFromState(snapshot, requestId);
             setStateTruth((current) => reduceCompatibilityStateTruth(current, {
               kind: 'SUCCESS',
               observedAtMs: Date.now(),
@@ -736,11 +759,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           stateRefreshInFlight = false;
           if (!closed && stateRefreshQueued) {
             stateRefreshQueued = false;
-            requestCompatibilityState();
+            requestCompatibilityState('DELTA');
           }
         });
     };
-    requestCompatibilityState();
+    privateReadCadenceRef.current = () => requestCompatibilityState('CADENCE');
+    requestCompatibilityState('DELTA');
     const clearRetry = () => {
       if (retry !== null) window.clearTimeout(retry);
       retry = null;
@@ -865,38 +889,59 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       stateRefreshController?.abort();
       stateRefreshController = null;
       stateRefreshQueued = false;
+      privateReadCadenceRef.current = null;
       reconnectRef.current = null;
       closeCurrent();
       setConnected(false);
     };
-  }, [acceptPrivateReadFromState]);
+  }, [acceptPrivateReadFromState, nextPrivateReadRequestId]);
+
+  // The canonical socket only speaks when supervisor truth changes, so a
+  // signed-in account would otherwise age silently behind a delta-free cockpit.
+  // This cadence advances the same single-flight state read the socket uses:
+  // no second private transport, no overlapping request, and no work at all
+  // while the bounded fallback poll owns the source.
+  useEffect(() => {
+    if (privateReadSource === 'FALLBACK') return;
+    const intervalMs = Math.max(5, prefs.dataCadence?.account ?? 10) * 1_000;
+    const timer = window.setInterval(() => privateReadCadenceRef.current?.(), intervalMs);
+    return () => window.clearInterval(timer);
+  }, [prefs.dataCadence?.account, privateReadSource]);
 
   // The compatibility state is the preferred and normally sole private-read
   // transport. Older/malformed state envelopes activate one bounded fallback
   // poll; accepting state.privateRead stops and aborts that poll immediately.
   useEffect(() => {
     if (privateReadSource !== 'FALLBACK') return;
+    let fallbackRequestId = 0;
     const poll = createSettledPoll<unknown>({
       intervalMs: Math.max(5, prefs.dataCadence?.account ?? 10) * 1_000,
-      request: (signal) => fetchJson<unknown>('/api/private-account', { cache: 'no-store', signal }),
+      request: (signal) => {
+        fallbackRequestId = nextPrivateReadRequestId();
+        return fetchJson<unknown>('/api/private-account', { cache: 'no-store', signal });
+      },
       onSuccess: (payload) => {
         const decoded = decodePrivateReadSnapshot(payload);
         if (!decoded) throw new Error('PRIVATE_READ_FALLBACK_CONTRACT_INVALID');
-        setPrivateRead(decoded);
-        setPrivateReadError(null);
+        applyPrivateReadUpdate(fallbackRequestId, () => {
+          setPrivateRead(decoded);
+          setPrivateReadError(null);
+        });
       },
       onError: (cause) => {
         const contractInvalid = cause instanceof Error && cause.message === 'PRIVATE_READ_FALLBACK_CONTRACT_INVALID';
         const reason = contractInvalid
           ? 'PRIVATE_READ_FALLBACK_CONTRACT_INVALID'
           : 'PRIVATE_READ_FALLBACK_UNAVAILABLE';
-        setPrivateRead(unavailablePrivateRead(reason));
-        setPrivateReadError(reason);
+        applyPrivateReadUpdate(fallbackRequestId, () => {
+          setPrivateRead(unavailablePrivateRead(reason));
+          setPrivateReadError(reason);
+        });
       },
     });
     poll.start();
     return poll.stop;
-  }, [prefs.dataCadence?.account, privateReadSource]);
+  }, [applyPrivateReadUpdate, nextPrivateReadRequestId, prefs.dataCadence?.account, privateReadSource]);
 
   // markets poll at the preferred source cadence. `refreshSec` is retained as
   // the legacy market value; `dataCadence.market` is the new source map.
@@ -984,10 +1029,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // canonical Product preview/digest/revision/receipt protocol.
   const refresh = useCallback(async (): Promise<RefreshResult> => {
     const issues: string[] = [];
+    const requestId = nextPrivateReadRequestId();
     try {
       const s = await fetchJson<ServerState>('/api/state');
       setState(failClosedState(s));
-      acceptPrivateReadFromState(s);
+      acceptPrivateReadFromState(s, requestId);
       setStateTruth((current) => reduceCompatibilityStateTruth(current, {
         kind: 'SUCCESS',
         observedAtMs: Date.now(),
@@ -1030,7 +1076,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       issues,
       ts: Date.now(),
     };
-  }, [acceptPrivateReadFromState]);
+  }, [acceptPrivateReadFromState, nextPrivateReadRequestId]);
 
   const store: Store = {
     state,

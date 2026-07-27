@@ -247,6 +247,12 @@ check(
     !/from\s+['"]\.\/services\/loans\.js['"]/.test(serverIndex)
 );
 check(
+  'private-read transport is positively admitted, never started by credential presence alone',
+  /const privateReadTransportAdmitted = !deterministicOfflinePublicSourcesEnabled\(\);/.test(serverIndex) &&
+    /if \(privateReadTransportAdmitted\) privateRead\.start\(\);/.test(serverIndex) &&
+    !/^\s*privateRead\.start\(\);/m.test(serverIndex)
+);
+check(
   'legacy signed services receive only a mechanically unavailable client',
   /function\s+unavailablePrivateBinanceClient\(\):\s*BinanceClient\s*\|\s*null\s*\{\s*return\s+null;\s*\}/s.test(serverIndex) &&
     /const\s+client\s*=\s*unavailablePrivateBinanceClient\(\);/.test(serverIndex)
@@ -423,19 +429,27 @@ check(
 );
 
 // ---------- boot server ----------
-console.log('\nBooting server (keyless private-read posture, isolated data dir)…');
+console.log('\nBooting server (hostile ambient credentials, isolated data dir)…');
 const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-gates-'));
 const privateEgressSentinel = path.join(dataDir, 'private-egress-attempts.log');
 const networkEgressSentinel = path.join(dataDir, 'network-egress-attempts.log');
+// Fixed synthetic tokens, never the operator's environment. The gate asserts
+// what these values cannot become; it never reads or prints a real credential.
+const AMBIENT_BINANCE_API_KEY = 'SENTINELBINANCEKEYNOTASECRET0001';
+const AMBIENT_BINANCE_API_SECRET = 'sentinel-binance-secret-not-a-secret';
 const child = spawn(process.execPath, ['--import', TRIPWIRE_URL, 'server/dist/index.js'], {
-  // The deterministic gate intentionally proves credential absence. Configured
-  // private reads have their own injected network-free signer/service proof.
+  // Ambient Binance and AWS credentials are supplied on purpose. A gate that
+  // boots without them proves only that absent keys stay absent; the property
+  // under test is that present keys still buy no mutation authority, no
+  // private runtime posture, and no egress.
   env: {
     PATH: process.env.PATH,
     PORT: String(PORT),
     HOST,
     DATA_DIR: dataDir,
     SKIP_DOTENV: '1',
+    BINANCE_API_KEY: AMBIENT_BINANCE_API_KEY,
+    BINANCE_API_SECRET: AMBIENT_BINANCE_API_SECRET,
     AWS_ACCESS_KEY_ID: 'SENTINELACCESSKEY',
     AWS_SECRET_ACCESS_KEY: 'sentinel-aws-secret-not-a-secret',
     AWS_SESSION_TOKEN: 'sentinel-aws-session-not-a-secret',
@@ -495,7 +509,10 @@ check(
 );
 
 const health = (await get('/api/health')).body;
-check('keys absent → keysPresent=false', health.keysPresent === false);
+// Ambient keys exist in this child's environment. keysPresent is legacy
+// money-path capability truth, and that path holds no credential by
+// construction, so it stays false while the keys sit in the environment.
+check('ambient keys do not make the legacy money path keyed', health.keysPresent === false);
 check('fresh boot mode is HALTED', health.mode === 'HALTED');
 check(
   'legacy /api/health is explicitly process-liveness compatibility and never semantic readiness',
@@ -528,6 +545,49 @@ check('disconnected state: binance.connected=false', state.binance.connected ===
 check(
   'ambient Binance credentials cannot create a private runtime posture',
   state.binance.keysPresent === false && state.binance.userStream === 'off' && state.binance.keyFingerprint === null
+);
+// The private-read facade is the only holder of an ambient Binance credential.
+// Under the deterministic offline boundary it is configured but never
+// authorized to reach Binance, so it must publish fail-closed truth rather
+// than rows, and must never publish the credential itself.
+const ambientPrivateAccount = await get('/api/private-account');
+check(
+  'ambient Binance credentials publish fail-closed private truth, never account rows',
+  ambientPrivateAccount.body?.schemaVersion === 'binance.private-read.v1' &&
+    ambientPrivateAccount.body?.state === 'UNAVAILABLE' &&
+    ambientPrivateAccount.body?.permissionPosture?.state === 'UNKNOWN' &&
+    ambientPrivateAccount.body?.permissionPosture?.observedAt === null &&
+    ['reading', 'withdrawals', 'internalTransfer', 'universalTransfer', 'margin', 'futures',
+      'ipRestricted', 'vanillaOptions', 'fixTrade', 'fixReadOnly', 'spotMarginTrading',
+      'portfolioMarginTrading']
+      .every((flag) => ambientPrivateAccount.body?.permissionPosture?.[flag] === null) &&
+    ['spot', 'margin', 'usdm'].every((product) => {
+      const family = ambientPrivateAccount.body?.[product];
+      return family?.state === 'UNAVAILABLE'
+        && Object.entries(family).every(([key, value]) => (
+          key === 'state' || key === 'coverage' || value === null
+        ));
+    }),
+  JSON.stringify(ambientPrivateAccount.body?.state ?? null),
+);
+const ambientApiKeySurface = await get('/api/apikey');
+check(
+  'the key surface exposes last-4 identity only and never an ambient credential',
+  ambientApiKeySurface.body?.permissionPosture?.keyLast4 === '0001' &&
+    ambientApiKeySurface.body?.permissionPosture?.keyLabel === 'Binance Read Only' &&
+    ambientApiKeySurface.body?.permissionPosture?.state === 'UNKNOWN'
+);
+const ambientCredentialLeak = [
+  ambientPrivateAccount,
+  ambientApiKeySurface,
+  { body: state },
+  { body: health },
+].map((response) => JSON.stringify(response.body ?? null)).join('\n');
+check(
+  'no response body carries an ambient Binance key or secret',
+  !ambientCredentialLeak.includes(AMBIENT_BINANCE_API_KEY) &&
+    !ambientCredentialLeak.includes(AMBIENT_BINANCE_API_SECRET) &&
+    !/BINANCE_API_(?:KEY|SECRET)/.test(ambientCredentialLeak)
 );
 check('state includes config/risk/events', !!state.config && !!state.risk && Array.isArray(state.events));
 check(
@@ -896,16 +956,20 @@ const privateAccountResponse = await get('/api/private-account');
 const privateRefreshResponse = await post('/api/refresh', { target: 'account' });
 const apiKeyResponse = await get('/api/apikey');
 check(
-  'keyless private-read contracts return explicit NOT_CONFIGURED truth without egress',
-  privateAccountResponse.status === 200
+  'credentialed private-read contracts answer fail-closed and refuse transport, never 200 green',
+  privateAccountResponse.status === 503
     && privateAccountResponse.body?.schemaVersion === 'binance.private-read.v1'
-    && privateAccountResponse.body?.state === 'NOT_CONFIGURED'
-    && privateAccountResponse.body?.permissionPosture?.state === 'NOT_CONFIGURED'
-    && privateRefreshResponse.status === 200
-    && privateRefreshResponse.body?.privateRead?.state === 'NOT_CONFIGURED'
-    && apiKeyResponse.status === 200
+    && privateAccountResponse.body?.state === 'UNAVAILABLE'
+    && privateAccountResponse.body?.permissionPosture?.state === 'UNKNOWN'
+    // A private read is external transport: an operator refresh must refuse
+    // loudly rather than quietly reach for the exchange.
+    && privateRefreshResponse.status === 503
+    && privateRefreshResponse.body?.ok === false
+    && privateRefreshResponse.body?.privateRead === undefined
+    && apiKeyResponse.status === 503
     && apiKeyResponse.body?.schemaVersion === 'binance.api-permissions.v1'
-    && apiKeyResponse.body?.permissionPosture?.state === 'NOT_CONFIGURED'
+    && apiKeyResponse.body?.permissionPosture?.state === 'UNKNOWN',
+  `${privateAccountResponse.status}/${privateRefreshResponse.status}/${apiKeyResponse.status}`,
 );
 
 const retiredMoneyResponses = [

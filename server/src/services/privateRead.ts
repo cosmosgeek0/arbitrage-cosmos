@@ -38,7 +38,12 @@ export interface PrivateReadPermissionPosture {
   internalTransfer: boolean | null;
   universalTransfer: boolean | null;
   ipRestricted: boolean | null;
+  vanillaOptions: boolean | null;
   fixTrade: boolean | null;
+  // A read-only permission carried honestly for owner context. It is never
+  // action authority, so its boolean value neither blocks nor grants
+  // VERIFIED_READ_ONLY after the response contract has decoded completely.
+  fixReadOnly: boolean | null;
   portfolioMarginTrading: boolean | null;
 }
 
@@ -104,8 +109,11 @@ export interface UsdmPosition {
   markPrice: string;
   unRealizedProfit: string;
   liquidationPrice: string;
-  leverage: string;
-  marginType: string;
+  // Position Information V3 does not return leverage or margin type. The
+  // fields stay for consumer compatibility and are always null: an unread
+  // value is unknown, never a fabricated "1" or "cross".
+  leverage: string | null;
+  marginType: string | null;
   isolatedMargin: string;
   notional: string;
   updateTime: number;
@@ -193,6 +201,7 @@ export interface PrivateReadServiceOptions {
 const SYMBOL_RE = /^[A-Z0-9]{5,30}$/;
 const TOKEN_RE = /^[A-Za-z0-9_./:-]{1,64}$/;
 const DECIMAL_RE = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/;
+const MAX_DECIMAL_CHARS = 32;
 const MAX_ROWS = 5_000;
 const MAX_SYMBOLS = 16;
 const DEFAULT_KEY_LABEL = 'Binance Read Only';
@@ -227,11 +236,51 @@ function symbol(value: unknown, label: string): string {
   return value;
 }
 
+/**
+ * True for a fixed-scale decimal whose value is zero at any scale and either
+ * sign: Binance reports an untouched Cross Margin field as `0.00000000`, and a
+ * settled one can come back as `-0.00000000`. Both are numerically zero, so
+ * neither may be read as an open liability. Valid input contains only digits,
+ * an optional sign and one point, so the absence of a non-zero digit is exact.
+ */
+function isZeroDecimal(value: string): boolean {
+  return !/[1-9]/.test(value);
+}
+
+/**
+ * Validates a fixed-scale decimal and normalizes negative zero to a single
+ * canonical form, so `-0.00000000` and `0.00000000` cannot render as two
+ * different balances or compare unequal. Length is bounded because these
+ * strings feed exact `BigInt` arithmetic below.
+ */
 function decimal(value: unknown, label: string): string {
-  if (typeof value !== 'string' || !DECIMAL_RE.test(value)) {
+  if (typeof value !== 'string' || value.length > MAX_DECIMAL_CHARS || !DECIMAL_RE.test(value)) {
     throw new TypeError(`${label} is malformed`);
   }
-  return value;
+  return value.startsWith('-') && isZeroDecimal(value) ? value.slice(1) : value;
+}
+
+/** Fraction-digit count of an already validated decimal. */
+function scaleOf(value: string): number {
+  const point = value.indexOf('.');
+  return point === -1 ? 0 : value.length - point - 1;
+}
+
+/**
+ * Exact value of an already validated decimal as an integer at `scale`
+ * fraction digits, which must be at least the value's own scale. Fixed-scale
+ * integers are used instead of `Number` so an equality check between reported
+ * totals is a real proof rather than a float-tolerance guess. Leading zeros
+ * are stripped so the digits reach `BigInt` in one unambiguous form.
+ */
+function scaled(value: string, scale: number): bigint {
+  const negative = value.startsWith('-');
+  const magnitude = negative ? value.slice(1) : value;
+  const point = magnitude.indexOf('.');
+  const whole = point === -1 ? magnitude : magnitude.slice(0, point);
+  const fraction = point === -1 ? '' : magnitude.slice(point + 1);
+  const units = BigInt(`${whole}${fraction.padEnd(scale, '0')}`.replace(/^0+(?=[0-9])/, ''));
+  return negative ? -units : units;
 }
 
 function integerId(value: unknown, label: string): string {
@@ -367,6 +416,13 @@ function normalizeUsdmBalances(value: unknown): UsdmBalance[] {
   });
 }
 
+/**
+ * Decodes `GET /fapi/v3/positionRisk`. V3 retired the per-position `leverage`
+ * and `marginType` fields, so requiring them would reject every truthful
+ * answer, and defaulting them would publish a leverage the account may not
+ * have. They are carried as null instead — an honest unknown that keeps the
+ * row shape stable for consumers.
+ */
 function normalizeUsdmPositions(value: unknown): UsdmPosition[] {
   return rows(value, 'USD-M positions').map((entry, index) => {
     const row = record(entry, `USD-M position ${index}`);
@@ -378,8 +434,8 @@ function normalizeUsdmPositions(value: unknown): UsdmPosition[] {
       markPrice: decimal(row.markPrice, `USD-M position ${index} markPrice`),
       unRealizedProfit: decimal(row.unRealizedProfit, `USD-M position ${index} unRealizedProfit`),
       liquidationPrice: decimal(row.liquidationPrice, `USD-M position ${index} liquidationPrice`),
-      leverage: decimal(row.leverage, `USD-M position ${index} leverage`),
-      marginType: token(row.marginType, `USD-M position ${index} marginType`),
+      leverage: null,
+      marginType: null,
       isolatedMargin: decimal(row.isolatedMargin, `USD-M position ${index} isolatedMargin`),
       notional: decimal(row.notional, `USD-M position ${index} notional`),
       updateTime: timestamp(row.updateTime, `USD-M position ${index} updateTime`),
@@ -463,7 +519,9 @@ function initialSnapshot(
       internalTransfer: null,
       universalTransfer: null,
       ipRestricted: null,
+      vanillaOptions: null,
       fixTrade: null,
+      fixReadOnly: null,
       portfolioMarginTrading: null,
     },
     spot: {
@@ -552,14 +610,87 @@ function productState(values: readonly unknown[], coverage: PrivateReadCoverage)
   return 'AVAILABLE';
 }
 
+interface ReconciliationEntry {
+  state: ReconciliationState;
+  observedAt: number | null;
+  reason: string | null;
+}
+
+/**
+ * Reconciliation for the families where this service reads one side only.
+ *
+ * A successful read proves the provider answered, not that two independently
+ * derived values agree, so a complete set of reads is still PARTIAL and says
+ * exactly which proof is missing. RECONCILED is reserved for an invariant this
+ * service actually computes.
+ */
 function reconciliation(
   values: readonly unknown[],
   observedAt: number | null,
-  partialReason: string,
-): { state: ReconciliationState; observedAt: number | null; reason: string | null } {
+  reasons: { unavailable: string; incomplete: string; unproven: string },
+): ReconciliationEntry {
   const available = values.filter((value) => value !== null).length;
-  if (available === 0) return { state: 'UNAVAILABLE', observedAt: null, reason: 'Required provider reads were unavailable.' };
-  if (available < values.length) return { state: 'PARTIAL', observedAt, reason: partialReason };
+  if (available === 0) return { state: 'UNAVAILABLE', observedAt: null, reason: reasons.unavailable };
+  if (available < values.length) return { state: 'PARTIAL', observedAt, reason: reasons.incomplete };
+  return { state: 'PARTIAL', observedAt, reason: reasons.unproven };
+}
+
+/**
+ * The one family with a computable invariant on both sides.
+ *
+ * Cross Margin reports its totals and the per-asset rows behind them, so two
+ * checks are exact rather than assumed: the reported totals must satisfy
+ * `net = asset - liability` at their own scale, and the presence of a
+ * liability in the total must agree with the presence of borrowed or accrued
+ * interest in the rows. A zero total is a proof of no liability only because
+ * fixed-scale zero strings are read numerically. Converting a non-zero
+ * per-asset liability into BTC would need a price source this service does not
+ * read, so that case is honestly PARTIAL.
+ */
+function liabilityReconciliation(
+  margin: {
+    totalAssetBtc: string;
+    totalLiabilityBtc: string;
+    totalNetAssetBtc: string;
+    assets: MarginAsset[];
+  } | null,
+  observedAt: number | null,
+): ReconciliationEntry {
+  if (margin === null) {
+    return { state: 'UNAVAILABLE', observedAt: null, reason: 'Cross Margin liability read was unavailable.' };
+  }
+  const scale = Math.max(
+    scaleOf(margin.totalAssetBtc),
+    scaleOf(margin.totalLiabilityBtc),
+    scaleOf(margin.totalNetAssetBtc),
+  );
+  const totalsBalance = scaled(margin.totalAssetBtc, scale) - scaled(margin.totalLiabilityBtc, scale)
+    === scaled(margin.totalNetAssetBtc, scale);
+  const rowsCarryLiability = margin.assets.some(
+    (asset) => !isZeroDecimal(asset.borrowed) || !isZeroDecimal(asset.interest),
+  );
+  const totalCarriesLiability = !isZeroDecimal(margin.totalLiabilityBtc);
+
+  const failures: string[] = [];
+  if (!totalsBalance) {
+    failures.push('Reported Cross Margin totals do not satisfy net = asset - liability.');
+  }
+  if (totalCarriesLiability && !rowsCarryLiability) {
+    failures.push('Total liability is non-zero while no asset row carries borrowed or interest.');
+  }
+  if (!totalCarriesLiability && rowsCarryLiability) {
+    failures.push('Total liability is zero while an asset row carries borrowed or interest.');
+  }
+  if (failures.length > 0) {
+    return { state: 'PARTIAL', observedAt, reason: failures.join(' ') };
+  }
+  if (totalCarriesLiability) {
+    return {
+      state: 'PARTIAL',
+      observedAt,
+      reason: 'Totals balance and rows agree that a liability is open, but per-asset liabilities cannot be recomputed in BTC without a price source.',
+    };
+  }
   return { state: 'RECONCILED', observedAt, reason: null };
 }
 
@@ -622,10 +753,113 @@ export class PrivateReadService {
     return inFlight;
   }
 
+  /**
+   * Posture facts for one refresh. A read that failed and a payload that failed
+   * to decode are the same evidence — none — so both answer UNKNOWN with every
+   * flag null rather than carrying stale flags forward under a new timestamp.
+   */
+  private postureOf(
+    restrictions: PrivateReadPermissions | null,
+    observedAt: number,
+  ): PrivateReadPermissionPosture {
+    if (restrictions === null) {
+      return {
+        state: 'UNKNOWN',
+        observedAt: null,
+        keyLabel: this.keyLabel,
+        keyLast4: this.keyLast4,
+        reading: null,
+        spotMarginTrading: null,
+        margin: null,
+        futures: null,
+        withdrawals: null,
+        internalTransfer: null,
+        universalTransfer: null,
+        ipRestricted: null,
+        vanillaOptions: null,
+        fixTrade: null,
+        fixReadOnly: null,
+        portfolioMarginTrading: null,
+      };
+    }
+    return {
+      state: restrictions.status === 'VERIFIED' ? 'VERIFIED_READ_ONLY' : 'UNSAFE',
+      observedAt,
+      keyLabel: this.keyLabel,
+      keyLast4: this.keyLast4,
+      reading: restrictions.enableReading,
+      spotMarginTrading: restrictions.enableSpotAndMarginTrading,
+      margin: restrictions.enableMargin,
+      futures: restrictions.enableFutures,
+      withdrawals: restrictions.enableWithdrawals,
+      internalTransfer: restrictions.enableInternalTransfer,
+      universalTransfer: restrictions.permitsUniversalTransfer,
+      ipRestricted: restrictions.ipRestrict,
+      vanillaOptions: restrictions.enableVanillaOptions,
+      fixTrade: restrictions.enableFixApiTrade,
+      fixReadOnly: restrictions.enableFixReadOnly,
+      portfolioMarginTrading: restrictions.enablePortfolioMarginTrading,
+    };
+  }
+
+  /**
+   * The snapshot published when posture admission fails. No product row was
+   * requested, so every row is null and every family is UNAVAILABLE: an unsafe
+   * or unproven key must not leave account contents visible from an earlier
+   * refresh, and the reason states that the reads were withheld rather than
+   * attempted and lost.
+   */
+  private withheldSnapshot(permissionPosture: PrivateReadPermissionPosture): PrivateReadSnapshot {
+    const withheld = (): ReconciliationEntry => ({
+      state: 'UNAVAILABLE',
+      observedAt: null,
+      reason: 'Private row reads were withheld: the API key posture is not verified read-only.',
+    });
+    const product = () => ({
+      state: 'UNAVAILABLE' as const,
+      observedAt: null,
+      coverage: configuredCoverage(),
+    });
+    return deepFreeze<PrivateReadSnapshot>({
+      schemaVersion: 'binance.private-read.v1',
+      state: 'UNAVAILABLE',
+      observedAt: permissionPosture.observedAt,
+      permissionPosture,
+      spot: { ...product(), balances: null, openOrders: null, fills: null },
+      margin: {
+        ...product(),
+        totalAssetBtc: null,
+        totalLiabilityBtc: null,
+        totalNetAssetBtc: null,
+        assets: null,
+        openOrders: null,
+        fills: null,
+      },
+      usdm: { ...product(), balances: null, positions: null, openOrders: null, fills: null },
+      reconciliation: {
+        balances: withheld(),
+        orders: withheld(),
+        fills: withheld(),
+        positions: withheld(),
+        liabilities: withheld(),
+      },
+    });
+  }
+
   private async readOnce(): Promise<PrivateReadSnapshot> {
     const gateway = this.gateway!;
+    // Permission-first sequencing. The restriction answer is the only private
+    // call a refresh may make on its own authority; every row read below is
+    // reachable only after that answer decodes as verified read-only, so an
+    // unsafe or unreadable posture costs zero further private calls.
+    const restrictions = await settled(() => gateway.apiRestrictions(), normalizeRestrictions);
+    const permissionPosture = this.postureOf(restrictions, this.now());
+    if (permissionPosture.state !== 'VERIFIED_READ_ONLY') {
+      this.current = this.withheldSnapshot(permissionPosture);
+      return this.current;
+    }
+
     const [
-      restrictions,
       spotBalances,
       spotOrders,
       spotFills,
@@ -637,7 +871,6 @@ export class PrivateReadService {
       usdmOrders,
       usdmFills,
     ] = await Promise.all([
-      settled(() => gateway.apiRestrictions(), normalizeRestrictions),
       settled(() => gateway.spotAccount(), normalizeSpotBalances),
       settled(() => gateway.spotOpenOrders(), (value) => normalizeSpotOrders(value, 'Spot open orders')),
       scopedRows(this.symbols, (current) => gateway.spotTrades(current), (value) => normalizeSpotFills(value, 'Spot fills')),
@@ -650,39 +883,6 @@ export class PrivateReadService {
       scopedRows(this.symbols, (current) => gateway.usdmTrades(current), normalizeUsdmFills),
     ]);
     const observedAt = this.now();
-    const permissionPosture: PrivateReadPermissionPosture = restrictions === null
-      ? {
-          ...this.current.permissionPosture,
-          state: 'UNKNOWN',
-          observedAt: null,
-          reading: null,
-          spotMarginTrading: null,
-          margin: null,
-          futures: null,
-          withdrawals: null,
-          internalTransfer: null,
-          universalTransfer: null,
-          ipRestricted: null,
-          fixTrade: null,
-          portfolioMarginTrading: null,
-        }
-      : {
-          state: restrictions.status === 'VERIFIED' ? 'VERIFIED_READ_ONLY' : 'UNSAFE',
-          observedAt,
-          keyLabel: this.keyLabel,
-          keyLast4: this.keyLast4,
-          reading: restrictions.enableReading,
-          spotMarginTrading: restrictions.enableSpotAndMarginTrading,
-          margin: restrictions.enableMargin,
-          futures: restrictions.enableFutures,
-          withdrawals: restrictions.enableWithdrawals,
-          internalTransfer: restrictions.enableInternalTransfer,
-          universalTransfer: restrictions.permitsUniversalTransfer,
-          ipRestricted: restrictions.ipRestrict,
-          fixTrade: restrictions.enableFixApiTrade,
-          portfolioMarginTrading: restrictions.enablePortfolioMarginTrading,
-        };
-
     const spotCoverage = coverageOf(spotFills.symbols, spotFills.failed);
     const marginCoverage = coverageOf(marginFills.symbols, marginFills.failed);
     const usdmCoverage = coverageOf(usdmFills.symbols, usdmFills.failed);
@@ -700,21 +900,26 @@ export class PrivateReadService {
       : productStates.every((value) => value === 'AVAILABLE')
         ? 'AVAILABLE'
         : 'PARTIAL';
-    const state: PrivateReadState = permissionPosture.state === 'VERIFIED_READ_ONLY'
-      ? productStateSummary
-      : 'UNAVAILABLE';
     const latestObservedAt = [permissionPosture.observedAt, spotObservedAt, marginObservedAt, usdmObservedAt]
       .filter((value): value is number => value !== null)
       .reduce<number | null>((latest, value) => latest === null ? value : Math.max(latest, value), null);
     const balanceReconciliation = reconciliation(
       [spotBalances, marginAccount?.assets ?? null, usdmBalances],
       latestObservedAt,
-      'One or more product balance reads were unavailable.',
+      {
+        unavailable: 'No product balance read was available.',
+        incomplete: 'One or more product balance reads were unavailable.',
+        unproven: 'Balances are provider-reported per product; no independent source is read to recompute them.',
+      },
     );
     const orderReconciliation = reconciliation(
       [spotOrders, marginOrders, usdmOrders],
       latestObservedAt,
-      'One or more current open-order reads were unavailable.',
+      {
+        unavailable: 'No current open-order read was available.',
+        incomplete: 'One or more current open-order reads were unavailable.',
+        unproven: 'Open orders are provider-reported per product; no independent source is read to recompute them.',
+      },
     );
     const fillReconciliation = [spotFills.rows, marginFills.rows, usdmFills.rows].some((value) => value !== null)
       ? {
@@ -730,7 +935,9 @@ export class PrivateReadService {
 
     this.current = deepFreeze<PrivateReadSnapshot>({
       schemaVersion: 'binance.private-read.v1',
-      state,
+      // Posture is proven verified read-only on this path, so product truth is
+      // the only remaining input to the summary.
+      state: productStateSummary,
       observedAt: latestObservedAt,
       permissionPosture,
       spot: {
@@ -768,13 +975,13 @@ export class PrivateReadService {
         positions: reconciliation(
           [usdmPositions],
           usdmObservedAt,
-          'USD-M position read was unavailable.',
+          {
+            unavailable: 'USD-M position read was unavailable.',
+            incomplete: 'USD-M position read was unavailable.',
+            unproven: 'Positions are provider-reported; no independent source is read to recompute size or notional.',
+          },
         ),
-        liabilities: reconciliation(
-          [marginAccount?.assets ?? null],
-          marginObservedAt,
-          'Cross Margin liability read was unavailable.',
-        ),
+        liabilities: liabilityReconciliation(marginAccount, marginObservedAt),
       },
     });
     return this.current;

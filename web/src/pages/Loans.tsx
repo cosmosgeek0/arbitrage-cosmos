@@ -6,7 +6,7 @@ import { TokenIcon } from '../components/TokenIcon';
 import { IconSearch } from '../components/Icons';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { fmtBasis, fmtMoney, timeAgo } from '../format';
-import { exactOrDash, projectPrivateRead } from '../lib/privateRead';
+import { exactOrDash, hasMarginLiability, projectPrivateRead } from '../lib/privateRead';
 import type { BasisRow, BasisSnapshot } from '../lib/basisRuntime';
 import './Markets.css';
 import './Loans.css';
@@ -58,17 +58,25 @@ export function Loans() {
   const basisRuntimeError = basisError ?? basis?.status.lastError ?? null;
   const basisLive = !!basis && !basisRuntimeError;
   const privatePresentation = projectPrivateRead(privateRead);
-  const liabilityRows = privateRead.margin.assets?.filter((asset) => asset.borrowed !== '0' || asset.interest !== '0') ?? null;
+  // Server-normalized fixed-scale zeros stay zeros: `0.00000000` borrowed and
+  // interest is an observed no-liability row, not an outstanding loan.
+  const liabilityRows = privateRead.margin.assets?.filter(hasMarginLiability) ?? null;
   const sourceTone = view === 'preflight'
     ? (basisLive ? 'on' : basis ? 'partial' : '')
-    : privatePresentation.tone === 'ok' ? 'on' : privatePresentation.tone === 'warn' ? 'partial' : '';
+    : privatePresentation.guardTone === 'ok' ? 'on' : privatePresentation.guardTone === 'warn' ? 'partial' : '';
   const sourceText = view === 'preflight'
     ? basisRuntimeError
       ? `Public Source Error · ${basis ? 'Cached' : 'No Data'}`
       : basis
         ? `Public Basis · ${timeAgo(basis.updatedAt)}`
         : 'Loading Public Basis'
-    : `Binance Private Read · ${privatePresentation.stateLabel}`;
+    : `Binance Private Read · ${privatePresentation.stateLabel} · ${privatePresentation.freshness.label}`;
+  // A stale observation outranks coverage wording: the age is why the shown
+  // liabilities cannot be trusted, whatever the coverage says about scope.
+  const privateSourceReason = privateReadError
+    ?? (privatePresentation.freshness.state === 'CURRENT'
+      ? privateRead.margin.coverage.limitation ?? privatePresentation.reconciliationLabel
+      : privatePresentation.freshness.reason);
   const viewCounts: Record<LoanView, string> = {
     overview: liabilityRows === null ? '—' : String(liabilityRows.length),
     assets: privateRead.margin.assets === null ? '—' : String(privateRead.margin.assets.length),
@@ -115,7 +123,7 @@ export function Loans() {
               </button>
             ))}
           </div>
-          <span className={`borrowx-live ${sourceTone}`} title={view === 'preflight' ? basisRuntimeError ?? '' : privateReadError ?? privateRead.margin.coverage.limitation ?? privatePresentation.reconciliationLabel}><i />{sourceText}</span>
+          <span className={`borrowx-live ${sourceTone}`} title={view === 'preflight' ? basisRuntimeError ?? '' : privateSourceReason}><i />{sourceText}</span>
         </nav>
 
         <div className="borrowx-workspace">
@@ -124,7 +132,7 @@ export function Loans() {
               <section className="borrowx-section" aria-labelledby="borrow-active-title">
                 <header className="borrowx-section-head">
                   <span><strong id="borrow-active-title">Cross Margin Liabilities</strong><small>Borrowed And Accrued Interest Remain In Asset Units</small></span>
-                  <span>{privateRead.margin.state} · {privatePresentation.observedLabel}</span>
+                  <span>{privateRead.margin.state} · {privatePresentation.observedLabel} · {privatePresentation.freshness.label}</span>
                 </header>
                 {liabilityRows === null ? (
                   <div className="borrowx-empty compact"><span><b>Liability Facts Unavailable</b><small>{privateReadError ?? privateRead.reconciliation.liabilities.reason ?? 'Unavailable account truth is not reported as zero liabilities.'}</small></span></div>

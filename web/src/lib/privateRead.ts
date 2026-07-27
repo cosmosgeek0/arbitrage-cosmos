@@ -3,7 +3,13 @@ export type PermissionPostureState = 'VERIFIED_READ_ONLY' | 'UNSAFE' | 'UNKNOWN'
 export type CoverageState = 'COMPLETE_CURRENT' | 'PARTIAL_SYMBOL_SCOPED' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
 export type ReconciliationState = 'RECONCILED' | 'PARTIAL' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
 export type PrivateReadTone = 'ok' | 'warn' | 'bad' | 'idle';
+export type PrivateReadFreshnessState = 'CURRENT' | 'STALE' | 'UNKNOWN' | 'NOT_CONFIGURED';
 
+/**
+ * One browser-side field per permission flag the provider readback admits.
+ * `fixReadOnly` mirrors Binance `enableFixReadOnly`: it must decode as part of
+ * the current contract, but either boolean value is non-action authority.
+ */
 export interface PermissionPosture {
   state: PermissionPostureState;
   observedAt: number | null;
@@ -19,6 +25,8 @@ export interface PermissionPosture {
   ipRestricted: boolean | null;
   fixTrade: boolean | null;
   portfolioMarginTrading: boolean | null;
+  vanillaOptions: boolean | null;
+  fixReadOnly: boolean | null;
 }
 
 export interface PrivateReadCoverage {
@@ -81,6 +89,11 @@ export interface UsdmBalance {
   crossUnPnl: string;
 }
 
+/**
+ * USD-M Position Information V3 publishes no leverage and no margin mode, so
+ * both stay nullable compatibility fields. An absent value is rendered as an
+ * explicit dash or "not published" label and is never filled with a default.
+ */
 export interface UsdmPosition {
   symbol: string;
   positionSide: 'BOTH' | 'LONG' | 'SHORT';
@@ -89,8 +102,8 @@ export interface UsdmPosition {
   markPrice: string;
   unRealizedProfit: string;
   liquidationPrice: string;
-  leverage: string;
-  marginType: string;
+  leverage: string | null;
+  marginType: string | null;
   isolatedMargin: string;
   notional: string;
   updateTime: number;
@@ -175,6 +188,44 @@ export interface ApiPermissionsEnvelope {
   permissionPosture: PermissionPosture;
 }
 
+/** Permission fields whose observed value decides whether a key is safe. */
+const REQUIRED_TRUE_PERMISSIONS = ['reading', 'ipRestricted'] as const;
+const REQUIRED_FALSE_PERMISSIONS = [
+  'spotMarginTrading', 'margin', 'futures', 'withdrawals', 'internalTransfer',
+  'universalTransfer', 'fixTrade', 'portfolioMarginTrading', 'vanillaOptions',
+] as const;
+/** Required contract fact carried for owner context; either value is safe. */
+const INFORMATIONAL_PERMISSIONS = ['fixReadOnly'] as const;
+
+export type PermissionFlagId =
+  | (typeof REQUIRED_TRUE_PERMISSIONS)[number]
+  | (typeof REQUIRED_FALSE_PERMISSIONS)[number]
+  | (typeof INFORMATIONAL_PERMISSIONS)[number];
+
+const PERMISSION_FLAG_IDS = [
+  ...REQUIRED_TRUE_PERMISSIONS, ...REQUIRED_FALSE_PERMISSIONS, ...INFORMATIONAL_PERMISSIONS,
+] as const;
+
+const PERMISSION_FLAG_LABELS: Record<PermissionFlagId, string> = {
+  reading: 'Reading',
+  ipRestricted: 'IP Restriction',
+  spotMarginTrading: 'Spot / Margin Trading',
+  margin: 'Margin',
+  futures: 'Futures',
+  withdrawals: 'Withdrawals',
+  internalTransfer: 'Internal Transfer',
+  universalTransfer: 'Universal Transfer',
+  fixTrade: 'FIX API Trade',
+  portfolioMarginTrading: 'Portfolio Margin Trading',
+  vanillaOptions: 'Vanilla Options',
+  fixReadOnly: 'FIX Read Only',
+};
+
+/** A private snapshot older than this bound is presented as stale, not current. */
+export const PRIVATE_READ_STALE_AFTER_MS = 120_000;
+const MINIMUM_STALE_AFTER_MS = 15_000;
+const MAXIMUM_STALE_AFTER_MS = 600_000;
+
 const PRIVATE_STATES = new Set<PrivateReadState>(['AVAILABLE', 'PARTIAL', 'UNAVAILABLE', 'NOT_CONFIGURED']);
 const POSTURE_STATES = new Set<PermissionPostureState>(['VERIFIED_READ_ONLY', 'UNSAFE', 'UNKNOWN', 'NOT_CONFIGURED']);
 const COVERAGE_STATES = new Set<CoverageState>(['COMPLETE_CURRENT', 'PARTIAL_SYMBOL_SCOPED', 'UNAVAILABLE', 'NOT_CONFIGURED']);
@@ -197,7 +248,7 @@ function hasExactKeys(value: unknown, keys: readonly string[]): value is Record<
 }
 
 function isTimestamp(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
 }
 
 function isTimestampOrNull(value: unknown): value is number | null {
@@ -234,7 +285,7 @@ function isSymbol(value: unknown): value is string {
 
 function isDecimal(value: unknown): value is string {
   return typeof value === 'string'
-    && value.length <= 96
+    && value.length <= 32
     && /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(value)
     && value !== '-0'
     && !/^-0\.0+$/.test(value);
@@ -269,64 +320,54 @@ function decodeNullableArray<T>(
   return output;
 }
 
+/**
+ * Names every permission whose observed value contradicts a read-only key. A
+ * `null` flag is unproven rather than violated, so it is never listed; the
+ * posture state carries incompleteness instead.
+ */
+export function permissionViolations(posture: PermissionPosture): PermissionFlagId[] {
+  const violations: PermissionFlagId[] = [];
+  for (const flag of REQUIRED_TRUE_PERMISSIONS) if (posture[flag] === false) violations.push(flag);
+  for (const flag of REQUIRED_FALSE_PERMISSIONS) if (posture[flag] === true) violations.push(flag);
+  return violations;
+}
+
 function decodePermissionPosture(value: unknown): PermissionPosture | typeof INVALID {
   const keys = [
-    'state', 'observedAt', 'keyLabel', 'keyLast4', 'reading', 'spotMarginTrading',
-    'margin', 'futures', 'withdrawals', 'internalTransfer', 'universalTransfer',
-    'ipRestricted', 'fixTrade', 'portfolioMarginTrading',
+    'state', 'observedAt', 'keyLabel', 'keyLast4', ...PERMISSION_FLAG_IDS,
   ] as const;
   if (!hasExactKeys(value, keys)
       || !POSTURE_STATES.has(value.state as PermissionPostureState)
       || !isTimestampOrNull(value.observedAt)
       || !isKeyLabel(value.keyLabel)
       || !(value.keyLast4 === null || (typeof value.keyLast4 === 'string' && /^[A-Za-z0-9]{4}$/.test(value.keyLast4)))
-      || !isBooleanOrNull(value.reading)
-      || !isBooleanOrNull(value.spotMarginTrading)
-      || !isBooleanOrNull(value.margin)
-      || !isBooleanOrNull(value.futures)
-      || !isBooleanOrNull(value.withdrawals)
-      || !isBooleanOrNull(value.internalTransfer)
-      || !isBooleanOrNull(value.universalTransfer)
-      || !isBooleanOrNull(value.ipRestricted)
-      || !isBooleanOrNull(value.fixTrade)
-      || !isBooleanOrNull(value.portfolioMarginTrading)) return INVALID;
+      || !PERMISSION_FLAG_IDS.every((flag) => isBooleanOrNull(value[flag]))) return INVALID;
 
-  const state = value.state as PermissionPostureState;
-  const flags = [
-    value.reading, value.spotMarginTrading, value.margin, value.futures,
-    value.withdrawals, value.internalTransfer, value.universalTransfer,
-    value.ipRestricted, value.fixTrade, value.portfolioMarginTrading,
-  ];
+  const posture = { ...(value as unknown as PermissionPosture) };
+  const state = posture.state;
+  const contractProven = PERMISSION_FLAG_IDS
+    .every((flag) => typeof posture[flag] === 'boolean');
+  const violations = permissionViolations(posture);
+  // A configured posture must carry every current permission flag as a real
+  // boolean. `fixReadOnly` never changes the safe direction, but a missing or
+  // wrong-typed current-contract field still makes the response unproven.
   if (state === 'VERIFIED_READ_ONLY' && (
-    value.observedAt === null
-    || value.reading !== true
-    || value.ipRestricted !== true
-    || flags.slice(1, 7).some((flag) => flag !== false)
-    || value.fixTrade !== false
-    || value.portfolioMarginTrading !== false
-  )) return INVALID;
-  if (state === 'NOT_CONFIGURED' && (
-    value.observedAt !== null
-    || value.keyLast4 !== null
-    || flags.some((flag) => flag !== null)
+    posture.observedAt === null || !contractProven || violations.length > 0
   )) return INVALID;
   if (state === 'UNSAFE' && (
-    value.observedAt === null
-    || ![
-      value.reading === false,
-      value.spotMarginTrading === true,
-      value.margin === true,
-      value.futures === true,
-      value.withdrawals === true,
-      value.internalTransfer === true,
-      value.universalTransfer === true,
-      value.ipRestricted === false,
-      value.fixTrade === true,
-      value.portfolioMarginTrading === true,
-    ].some(Boolean)
+    posture.observedAt === null || !contractProven || violations.length === 0
+  )) return INVALID;
+  if (state === 'UNKNOWN' && (
+    posture.observedAt !== null
+    || PERMISSION_FLAG_IDS.some((flag) => posture[flag] !== null)
+  )) return INVALID;
+  if (state === 'NOT_CONFIGURED' && (
+    posture.observedAt !== null
+    || posture.keyLast4 !== null
+    || PERMISSION_FLAG_IDS.some((flag) => posture[flag] !== null)
   )) return INVALID;
 
-  return { ...(value as unknown as PermissionPosture) };
+  return posture;
 }
 
 function decodeCoverage(value: unknown): PrivateReadCoverage | typeof INVALID {
@@ -429,8 +470,11 @@ function decodeUsdmPosition(value: unknown): UsdmPosition | typeof INVALID {
       || !isDecimal(value.markPrice)
       || !isDecimal(value.unRealizedProfit)
       || !isDecimal(value.liquidationPrice)
-      || !isDecimal(value.leverage)
-      || !isSafeToken(String(value.marginType).toUpperCase())
+      // Position Information V3 publishes neither field. This v1 server
+      // contract therefore permits only null; any non-null value would be an
+      // unsupported compatibility claim, not a V3 fact.
+      || value.leverage !== null
+      || value.marginType !== null
       || !isDecimal(value.isolatedMargin)
       || !isDecimal(value.notional)
       || !isTimestamp(value.updateTime)) return INVALID;
@@ -578,6 +622,64 @@ function decodeUsdm(value: unknown): PrivateReadSnapshot['usdm'] | typeof INVALI
   };
 }
 
+/** Fraction-digit count of an already validated decimal. */
+function scaleOf(value: string): number {
+  const point = value.indexOf('.');
+  return point === -1 ? 0 : value.length - point - 1;
+}
+
+/** Exact integer value of a validated decimal at a common fixed scale. */
+function scaledDecimal(value: string, scale: number): bigint {
+  const negative = value.startsWith('-');
+  const magnitude = negative ? value.slice(1) : value;
+  const point = magnitude.indexOf('.');
+  const whole = point === -1 ? magnitude : magnitude.slice(0, point);
+  const fraction = point === -1 ? '' : magnitude.slice(point + 1);
+  const exact = BigInt(whole + (fraction + '0'.repeat(scale)).slice(0, scale));
+  return negative ? -exact : exact;
+}
+
+/**
+ * Re-proves the one Cross Margin invariant the browser can check for itself:
+ * the reported totals must satisfy `net = asset - liability`, and a reconciled
+ * liability claim means both the total and every row agree that nothing is
+ * borrowed. Fixed-scale zeros are read numerically, so a normalized
+ * `0.00000000` is the observed zero it claims to be.
+ */
+function marginLiabilitiesAreReconcilable(margin: PrivateReadSnapshot['margin']): boolean {
+  const { assets, totalAssetBtc, totalLiabilityBtc, totalNetAssetBtc } = margin;
+  if (assets === null || totalAssetBtc === null || totalLiabilityBtc === null || totalNetAssetBtc === null) return false;
+  const scale = Math.max(scaleOf(totalAssetBtc), scaleOf(totalLiabilityBtc), scaleOf(totalNetAssetBtc));
+  if (scaledDecimal(totalAssetBtc, scale) - scaledDecimal(totalLiabilityBtc, scale)
+      !== scaledDecimal(totalNetAssetBtc, scale)) return false;
+  return isZeroDecimal(totalLiabilityBtc) && !assets.some(hasMarginLiability);
+}
+
+/**
+ * RECONCILED is a claim that a fact was proven, so the browser admits it only
+ * where the contract can support the claim under a verified read-only key.
+ * Non-null provider rows are never sufficient on their own. This candidate
+ * computes no independent invariant for balances, orders, fills, or positions,
+ * so those families can never be RECONCILED. The liability family alone may
+ * reach it after the browser re-proves its exact arithmetic invariant.
+ */
+function reconciliationIsSupported(
+  reconciliation: PrivateReadSnapshot['reconciliation'],
+  permissionPosture: PermissionPosture,
+  margin: PrivateReadSnapshot['margin'],
+): boolean {
+  const keyVerified = permissionPosture.state === 'VERIFIED_READ_ONLY';
+  const support: Record<keyof PrivateReadSnapshot['reconciliation'], boolean> = {
+    balances: false,
+    orders: false,
+    fills: false,
+    positions: false,
+    liabilities: keyVerified && marginLiabilitiesAreReconcilable(margin),
+  };
+  return (Object.keys(support) as (keyof typeof support)[])
+    .every((factId) => reconciliation[factId].state !== 'RECONCILED' || support[factId]);
+}
+
 export function decodePrivateReadSnapshot(value: unknown): PrivateReadSnapshot | null {
   if (!hasExactKeys(value, [
     'schemaVersion', 'state', 'observedAt', 'permissionPosture',
@@ -614,6 +716,8 @@ export function decodePrivateReadSnapshot(value: unknown): PrivateReadSnapshot |
     || [spot.state, margin.state, usdm.state].some((productState) => productState !== 'NOT_CONFIGURED')
   )) return null;
   if (permissionPosture.state !== 'VERIFIED_READ_ONLY' && (state === 'AVAILABLE' || state === 'PARTIAL')) return null;
+  const reconciliation = { balances, orders, fills, positions, liabilities };
+  if (!reconciliationIsSupported(reconciliation, permissionPosture, margin)) return null;
   return {
     schemaVersion: 'binance.private-read.v1',
     state,
@@ -622,7 +726,7 @@ export function decodePrivateReadSnapshot(value: unknown): PrivateReadSnapshot |
     spot,
     margin,
     usdm,
-    reconciliation: { balances, orders, fills, positions, liabilities },
+    reconciliation,
   };
 }
 
@@ -665,6 +769,8 @@ export function unavailablePrivateRead(reason = 'PRIVATE_READ_UNAVAILABLE'): Pri
       ipRestricted: null,
       fixTrade: null,
       portfolioMarginTrading: null,
+      vanillaOptions: null,
+      fixReadOnly: null,
     },
     spot: {
       state: 'UNAVAILABLE', observedAt: null, balances: null, openOrders: null, fills: null, coverage: coverage(),
@@ -705,6 +811,16 @@ export function permissionPostureTone(state: PermissionPostureState): PrivateRea
   return 'idle';
 }
 
+/**
+ * Answers whether a provider decimal is exactly zero at any scale. The server
+ * normalizes liabilities to a fixed scale (and negative zero to zero), so
+ * `0.00000000` is an observed zero and must never be counted as a liability;
+ * the exact string itself stays untouched for display.
+ */
+export function isZeroDecimal(value: string | null | undefined): boolean {
+  return typeof value === 'string' && /^-?0(?:\.0+)?$/.test(value);
+}
+
 export function privateReadAge(observedAt: number | null, now = Date.now()): string {
   if (observedAt === null || !Number.isFinite(now) || now < observedAt) return 'Freshness Unknown';
   const seconds = Math.floor((now - observedAt) / 1_000);
@@ -716,6 +832,100 @@ export function privateReadAge(observedAt: number | null, now = Date.now()): str
 
 export function exactOrDash(value: string | null | undefined): string {
   return value ?? '—';
+}
+
+export interface PrivateReadFreshness {
+  state: PrivateReadFreshnessState;
+  label: string;
+  reason: string;
+  tone: PrivateReadTone;
+  ageMs: number | null;
+  staleAfterMs: number;
+}
+
+function boundedStaleAfterMs(staleAfterMs: number): number {
+  if (!Number.isFinite(staleAfterMs)) return PRIVATE_READ_STALE_AFTER_MS;
+  return Math.min(MAXIMUM_STALE_AFTER_MS, Math.max(MINIMUM_STALE_AFTER_MS, Math.trunc(staleAfterMs)));
+}
+
+/**
+ * The private-account guard. The browser cannot re-derive account truth, so
+ * freshness is decided only by the snapshot's own observation time against a
+ * bounded threshold. An unknown or future-dated observation is never current.
+ */
+export function privateReadFreshness(
+  snapshot: PrivateReadSnapshot,
+  now = Date.now(),
+  staleAfterMs = PRIVATE_READ_STALE_AFTER_MS,
+): PrivateReadFreshness {
+  const bounded = boundedStaleAfterMs(staleAfterMs);
+  const seconds = Math.round(bounded / 1_000);
+  if (snapshot.state === 'NOT_CONFIGURED') {
+    return {
+      state: 'NOT_CONFIGURED',
+      label: 'Freshness Not Configured',
+      reason: 'No private account read is configured, so no observation time exists.',
+      tone: 'idle',
+      ageMs: null,
+      staleAfterMs: bounded,
+    };
+  }
+  if (snapshot.state === 'UNAVAILABLE') {
+    return {
+      state: 'UNKNOWN',
+      label: 'Freshness Unknown',
+      reason: 'No private account rows were admitted; account age cannot be proven.',
+      tone: 'warn',
+      ageMs: null,
+      staleAfterMs: bounded,
+    };
+  }
+  if (snapshot.observedAt === null || !Number.isFinite(now)) {
+    return {
+      state: 'UNKNOWN',
+      label: 'Freshness Unknown',
+      reason: 'The private read published no observation time; age cannot be proven.',
+      tone: 'warn',
+      ageMs: null,
+      staleAfterMs: bounded,
+    };
+  }
+  if (now < snapshot.observedAt) {
+    return {
+      state: 'UNKNOWN',
+      label: 'Freshness Unknown',
+      reason: 'The observation time is ahead of the browser clock; age cannot be proven.',
+      tone: 'warn',
+      ageMs: null,
+      staleAfterMs: bounded,
+    };
+  }
+  const ageMs = now - snapshot.observedAt;
+  if (ageMs >= bounded) {
+    return {
+      state: 'STALE',
+      label: 'Stale Account Truth',
+      reason: `Observed ${privateReadAge(snapshot.observedAt, now)}, beyond the ${seconds}s account freshness bound.`,
+      tone: 'warn',
+      ageMs,
+      staleAfterMs: bounded,
+    };
+  }
+  return {
+    state: 'CURRENT',
+    label: 'Current Account Truth',
+    reason: `Observed ${privateReadAge(snapshot.observedAt, now)}, within the ${seconds}s account freshness bound.`,
+    tone: 'ok',
+    ageMs,
+    staleAfterMs: bounded,
+  };
+}
+
+const TONE_SEVERITY: Record<PrivateReadTone, number> = { ok: 0, idle: 1, warn: 2, bad: 3 };
+
+/** The worse of two tones, so a guard can only ever downgrade a claim. */
+export function worstTone(left: PrivateReadTone, right: PrivateReadTone): PrivateReadTone {
+  return TONE_SEVERITY[right] > TONE_SEVERITY[left] ? right : left;
 }
 
 export interface PermissionPresentationRow {
@@ -730,9 +940,14 @@ export interface PrivateReadPresentation {
   state: PrivateReadState;
   stateLabel: string;
   tone: PrivateReadTone;
+  /** State tone downgraded by the freshness guard; never upgraded by it. */
+  guardTone: PrivateReadTone;
+  freshness: PrivateReadFreshness;
   observedLabel: string;
   postureLabel: string;
   postureTone: PrivateReadTone;
+  postureDetail: string;
+  permissionViolationLabels: string[];
   identityLabel: string;
   permissionRows: PermissionPresentationRow[];
   spotAvailableUsdt: string | null;
@@ -776,7 +991,35 @@ function permissionRow(
   };
 }
 
-export function projectPrivateRead(snapshot: PrivateReadSnapshot, now = Date.now()): PrivateReadPresentation {
+/**
+ * One owner of "this margin asset carries a liability". Fixed-scale provider
+ * zeros stay zeros here, so a normalized `0.00000000` row is never presented
+ * as an outstanding borrow.
+ */
+export function hasMarginLiability(asset: MarginAsset): boolean {
+  return !isZeroDecimal(asset.borrowed) || !isZeroDecimal(asset.interest);
+}
+
+function postureDetailOf(posture: PermissionPosture, violationLabels: readonly string[]): string {
+  if (posture.state === 'UNSAFE') {
+    return violationLabels.length > 0
+      ? `Unsafe permissions observed: ${violationLabels.join(', ')}`
+      : 'Unsafe permission posture reported by the provider readback';
+  }
+  if (posture.state === 'VERIFIED_READ_ONLY') {
+    return posture.fixReadOnly === true
+      ? 'Reading and IP restriction verified; FIX read-only permission observed'
+      : 'Reading and IP restriction verified; every action permission observed off';
+  }
+  if (posture.state === 'NOT_CONFIGURED') return 'No private key is configured for this candidate';
+  return 'Provider permission readback unavailable; the key is not proven safe';
+}
+
+export function projectPrivateRead(
+  snapshot: PrivateReadSnapshot,
+  now = Date.now(),
+  staleAfterMs = PRIVATE_READ_STALE_AFTER_MS,
+): PrivateReadPresentation {
   const permissionPosture = snapshot.permissionPosture;
   const counts = {
     spotBalances: snapshot.spot.balances?.length ?? null,
@@ -791,7 +1034,7 @@ export function projectPrivateRead(snapshot: PrivateReadSnapshot, now = Date.now
     positions: snapshot.usdm.positions?.length ?? null,
     liabilities: snapshot.margin.assets === null
       ? null
-      : snapshot.margin.assets.filter((asset) => asset.borrowed !== '0' || asset.interest !== '0').length,
+      : snapshot.margin.assets.filter(hasMarginLiability).length,
   };
   const reconciliationStates = Object.values(snapshot.reconciliation).map((fact) => fact.state);
   const reconciliationLabel = reconciliationStates.every((state) => state === 'RECONCILED')
@@ -812,13 +1055,21 @@ export function projectPrivateRead(snapshot: PrivateReadSnapshot, now = Date.now
   const identityLabel = permissionPosture.keyLast4
     ? `${permissionPosture.keyLabel} · Ending ${permissionPosture.keyLast4}`
     : permissionPosture.keyLabel;
+  const freshness = privateReadFreshness(snapshot, now, staleAfterMs);
+  const permissionViolationLabels = permissionViolations(permissionPosture)
+    .map((flag) => PERMISSION_FLAG_LABELS[flag])
+    .sort();
   return {
     state: snapshot.state,
     stateLabel: titleState(snapshot.state),
     tone: privateReadTone(snapshot.state),
+    guardTone: worstTone(privateReadTone(snapshot.state), freshness.tone),
+    freshness,
     observedLabel: privateReadAge(snapshot.observedAt, now),
     postureLabel: titleState(permissionPosture.state),
     postureTone: permissionPostureTone(permissionPosture.state),
+    postureDetail: postureDetailOf(permissionPosture, permissionViolationLabels),
+    permissionViolationLabels,
     identityLabel,
     permissionRows: [
       permissionRow(permissionPosture, 'reading', 'Reading', permissionPosture.reading, true, 'On', 'Off'),

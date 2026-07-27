@@ -12,14 +12,16 @@ const REQUIRED_FALSE_FLAGS = [
 ];
 
 const REQUIRED_FLAGS = [...REQUIRED_TRUE_FLAGS, ...REQUIRED_FALSE_FLAGS];
+const INFORMATIONAL_FLAG = 'enableFixReadOnly';
 
-const RETURNED_KEYS = [...REQUIRED_FLAGS, 'enableFixReadOnly', 'status', 'violations', 'reason'].sort();
+const RETURNED_KEYS = [...REQUIRED_FLAGS, INFORMATIONAL_FLAG, 'status', 'violations', 'reason'].sort();
 
 /** The only payload shape that may ever decode green. */
 function safePayload(overrides = {}) {
   const payload = {};
   for (const flag of REQUIRED_TRUE_FLAGS) payload[flag] = true;
   for (const flag of REQUIRED_FALSE_FLAGS) payload[flag] = false;
+  payload[INFORMATIONAL_FLAG] = false;
   return { ...payload, ...overrides };
 }
 
@@ -28,7 +30,7 @@ test('a read-only IP-pinned payload decodes VERIFIED with no violations', () => 
   assert.equal(decoded.status, 'VERIFIED');
   assert.deepEqual(decoded.violations, []);
   assert.equal(decoded.reason, null);
-  assert.equal(decoded.enableFixReadOnly, null, 'an absent informational flag stays unproven');
+  assert.equal(decoded.enableFixReadOnly, false, 'the informational permission is carried');
   for (const flag of REQUIRED_TRUE_FLAGS) assert.equal(decoded[flag], true, flag);
   for (const flag of REQUIRED_FALSE_FLAGS) assert.equal(decoded[flag], false, flag);
 });
@@ -53,6 +55,7 @@ test('every safe-direction violation is named exactly and sorted', () => {
   const everything = {};
   for (const flag of REQUIRED_TRUE_FLAGS) everything[flag] = false;
   for (const flag of REQUIRED_FALSE_FLAGS) everything[flag] = true;
+  everything[INFORMATIONAL_FLAG] = false;
   const decoded = decodePrivateReadPermissions(everything);
   assert.equal(decoded.status, 'UNSAFE');
   assert.deepEqual(decoded.violations, [...REQUIRED_FLAGS].sort(), 'all violations, lexicographically sorted');
@@ -128,7 +131,7 @@ test('reading a flag never runs foreign code', () => {
   assert.equal(decoded.status, 'UNKNOWN');
 });
 
-test('enableFixReadOnly is reported but never moves the verdict', () => {
+test('enableFixReadOnly is strictly decoded but never changes the safe direction', () => {
   for (const value of [true, false]) {
     const decoded = decodePrivateReadPermissions(safePayload({ enableFixReadOnly: value }));
     assert.equal(decoded.enableFixReadOnly, value);
@@ -140,21 +143,64 @@ test('enableFixReadOnly is reported but never moves the verdict', () => {
   for (const bad of ['true', 1, null, undefined, {}]) {
     const decoded = decodePrivateReadPermissions(safePayload({ enableFixReadOnly: bad }));
     assert.equal(decoded.enableFixReadOnly, null, 'unreadable informational flag is null');
-    assert.equal(decoded.status, 'VERIFIED', 'it cannot make a complete payload UNKNOWN');
-    assert.equal(decoded.reason, null);
+    assert.equal(decoded.status, 'UNKNOWN', 'an unreadable current contract flag fails closed');
+    assert.equal(decoded.reason, 'MALFORMED_OR_INCOMPLETE');
   }
+
+  const missing = safePayload();
+  delete missing.enableFixReadOnly;
+  const unproven = decodePrivateReadPermissions(missing);
+  assert.equal(unproven.enableFixReadOnly, null);
+  assert.equal(unproven.status, 'UNKNOWN', 'a missing current contract flag fails closed');
 
   const unsafe = decodePrivateReadPermissions(safePayload({ enableFixReadOnly: true, enableMargin: true }));
   assert.equal(unsafe.status, 'UNSAFE');
   assert.deepEqual(unsafe.violations, ['enableMargin'], 'it is absent from violations');
 });
 
+test('the complete documented contract decodes VERIFIED and carries the read-only permission', () => {
+  // Every field GET /sapi/v1/account/apiRestrictions currently returns.
+  const decoded = decodePrivateReadPermissions(safePayload({
+    createTime: 1_784_000_000_000,
+    enableFixReadOnly: true,
+  }));
+  assert.equal(decoded.status, 'VERIFIED');
+  assert.equal(decoded.reason, null);
+  assert.equal(decoded.enableFixReadOnly, true, 'a read-only permission is carried, not dropped');
+  assert.deepEqual(decoded.violations, [], 'a read-only permission is not action authority');
+});
+
+test('a field outside the documented contract fails closed instead of being ignored', () => {
+  // An unrecognized key means Binance changed the answer this decoder was
+  // proven against, so the flags it did carry can no longer be trusted to mean
+  // what they meant. Green is unreachable until the contract is re-verified.
+  for (const drift of [
+    { tradingAuthorityExpirationTime: 1_784_390_000_000 },
+    { enableSpotTrading: false },
+    { enableWithdrawal: false }, // near-miss of a real flag name
+    { '': false },
+    { [Symbol('enableWithdrawals')]: false },
+  ]) {
+    const decoded = decodePrivateReadPermissions(safePayload(drift));
+    assert.equal(decoded.status, 'UNKNOWN', JSON.stringify(Object.keys(drift)));
+    assert.equal(decoded.reason, 'UNEXPECTED_RESPONSE_FIELD');
+    assert.equal(decoded.enableReading, true, 'the flags that were readable are still reported');
+  }
+
+  // Drift never silences an observed breach: the unsafe flag is still named.
+  const unsafeDrift = decodePrivateReadPermissions(safePayload({
+    enableWithdrawals: true,
+    tradingAuthorityExpirationTime: 1_784_390_000_000,
+  }));
+  assert.equal(unsafeDrift.status, 'UNKNOWN');
+  assert.equal(unsafeDrift.reason, 'UNEXPECTED_RESPONSE_FIELD');
+  assert.deepEqual(unsafeDrift.violations, ['enableWithdrawals']);
+});
+
 test('unknown keys and raw payload values are never returned', () => {
   const secret = 'sk-live-must-not-appear';
   const decoded = decodePrivateReadPermissions(safePayload({
     apiKey: secret,
-    tradingAuthorityExpirationTime: 1_784_390_000_000,
-    createTime: 1_784_000_000_000,
     status: 'ATTACKER_SUPPLIED_VERIFIED',
     reason: secret,
     violations: ['not-ours'],
@@ -162,14 +208,17 @@ test('unknown keys and raw payload values are never returned', () => {
   }));
 
   assert.deepEqual(Object.keys(decoded).sort(), RETURNED_KEYS, 'exactly the normalized keys');
-  assert.equal(decoded.status, 'VERIFIED', 'an input key never overwrites the verdict');
-  assert.equal(decoded.reason, null);
+  assert.equal(decoded.status, 'UNKNOWN', 'an input key never overwrites the verdict');
+  assert.equal(decoded.reason, 'UNEXPECTED_RESPONSE_FIELD');
   assert.deepEqual(decoded.violations, []);
   assert.ok(!JSON.stringify(decoded).includes(secret), 'no raw input value survives the decode');
   for (const value of Object.values(decoded)) {
     assert.ok(
       typeof value === 'boolean' || value === null || Array.isArray(value)
-        || ['VERIFIED', 'UNSAFE', 'UNKNOWN'].includes(value),
+        || [
+          'VERIFIED', 'UNSAFE', 'UNKNOWN',
+          'MALFORMED_OR_INCOMPLETE', 'UNEXPECTED_RESPONSE_FIELD', 'UNSAFE_PERMISSION_POSTURE',
+        ].includes(value),
       'only normalized facts are returned',
     );
   }

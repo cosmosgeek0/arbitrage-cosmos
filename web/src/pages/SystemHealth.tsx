@@ -31,6 +31,14 @@ export function SystemHealth() {
   const advance = healthSurface?.evidence.find((datum) => datum.fieldId === 'heartbeat-advance');
   const ledgerSchema = healthSurface?.evidence.find((datum) => datum.fieldId === 'ledger-schema-compatibility');
   const privatePresentation = projectPrivateRead(privateRead);
+  // Transport error first, then the freshness guard, then why the key posture
+  // is what it is. Health never reports a reason it cannot substantiate.
+  const privateReadReason = privateReadError
+    ?? (privateRead.permissionPosture.state === 'UNSAFE'
+      ? `${privatePresentation.postureDetail} · ${privatePresentation.freshness.reason}`
+      : privatePresentation.freshness.state === 'CURRENT'
+        ? privatePresentation.postureDetail
+        : privatePresentation.freshness.reason);
 
   return (
     <div className="container page healthx-page">
@@ -98,9 +106,9 @@ export function SystemHealth() {
 
             <ComponentOperationalHealthTable components={snapshot.components} />
 
-            <div className="healthx-alert">
+            <div className="healthx-alert" title={privatePresentation.postureDetail}>
               <ShieldCheck size={14} />
-              Private Account {privatePresentation.stateLabel} · Permissions {privatePresentation.postureLabel} · {privatePresentation.observedLabel} · {privateReadError ?? privatePresentation.reconciliationLabel}
+              Private Account {privatePresentation.stateLabel} · Permissions {privatePresentation.postureLabel} · {privatePresentation.freshness.label} · {privateReadReason}
             </div>
 
             <div className="healthx-filter-actions">

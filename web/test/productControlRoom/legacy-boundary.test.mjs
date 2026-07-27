@@ -52,6 +52,35 @@ test('the web source tree contains no legacy private, money-moving, cancel, or A
   }
 });
 
+test('the bounded private-account cadence adds no browser transport, credential, or permission mutation', async () => {
+  const store = await read('store.tsx');
+  const surfaces = await Promise.all([
+    read('pages/Account.tsx'),
+    read('pages/Dashboard.tsx'),
+    read('pages/Loans.tsx'),
+    read('pages/SystemHealth.tsx'),
+  ]);
+  const combined = surfaces.join('\n');
+
+  // The cadence rides the existing state read; the fallback remains the only
+  // other private endpoint, and neither surface fetches private truth itself.
+  const privateEndpoints = [...store.matchAll(/'(\/api\/[a-z-]+)'/g)]
+    .map(([, endpoint]) => endpoint)
+    .filter((endpoint) => endpoint === '/api/state' || endpoint === '/api/private-account');
+  assert.deepEqual(new Set(privateEndpoints), new Set(['/api/state', '/api/private-account']));
+  assert.equal(privateEndpoints.filter((endpoint) => endpoint === '/api/private-account').length, 1);
+  assert.doesNotMatch(combined, /fetchJson[^;]*\/api\/(?:state|private-account)/);
+
+  // No permission or key mutation may enter through the private-read path.
+  for (const token of ['apiRestrictions', 'apiSecret', 'secretKey', 'X-MBX-APIKEY', 'enableWithdrawals']) {
+    assert.equal(store.includes(token), false, `store retains credential-adjacent token ${token}`);
+    assert.equal(combined.includes(token), false, `a private surface retains credential-adjacent token ${token}`);
+  }
+  assert.doesNotMatch(combined, /<button[^>]*>\s*(?:Rotate Key|Edit Permissions|Enable Trading)/i);
+  assert.match(store, /method: 'POST'/);
+  assert.equal((store.match(/method: 'POST'/g) ?? []).length, 1, 'config is the only browser write path');
+});
+
 test('automatic token rendering uses only same-origin owners and deterministic local fallbacks', async () => {
   const [detail, icon] = await Promise.all([
     read('pages/TokenDetail.tsx'),

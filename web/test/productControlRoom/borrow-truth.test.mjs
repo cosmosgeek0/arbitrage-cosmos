@@ -7,6 +7,7 @@ import {
   REQUIRED_SURFACE_EVIDENCE,
   productSurfaceReadinessBlocker,
 } from '../../src/lib/productIntegration/model.ts';
+import { hasMarginLiability, projectPrivateRead, unavailablePrivateRead } from '../../src/lib/privateRead.ts';
 
 const loansUrl = new URL('../../src/pages/Loans.tsx', import.meta.url);
 
@@ -43,6 +44,30 @@ test('Borrow preserves canonical preflight evidence and projects sanitized priva
   assert.doesNotMatch(source, /\/api\/loans/);
   assert.doesNotMatch(source, /fetchJson[^;]*\/api\/private-account/);
   assert.doesNotMatch(source, /<button[^>]*>\s*(?:Borrow|Repay|Transfer|Withdraw)/i);
+});
+
+test('normalized zero liabilities stay zero and unavailable liabilities stay unknown on Borrow', async () => {
+  const source = await readFile(loansUrl, 'utf8');
+  // The page classifies liabilities through the shared owner, so a fixed-scale
+  // provider zero cannot be re-read as an outstanding borrow.
+  assert.match(source, /privateRead\.margin\.assets\?\.filter\(hasMarginLiability\)/);
+  assert.doesNotMatch(source, /borrowed !== '0'|interest !== '0'/);
+  assert.match(source, /privatePresentation\.freshness\.label/);
+  assert.match(source, /privatePresentation\.guardTone/);
+
+  const zeroRow = { asset: 'USDT', free: '8.00000000', locked: '0.00000000', borrowed: '0.00000000', interest: '0.00000000', netAsset: '8.00000000' };
+  const negativeZeroRow = { ...zeroRow, asset: 'BNB', borrowed: '-0.00000000', interest: '0' };
+  const borrowedRow = { ...zeroRow, asset: 'BTC', borrowed: '0.00000000', interest: '0.00000001' };
+  assert.equal(hasMarginLiability(zeroRow), false);
+  assert.equal(hasMarginLiability(negativeZeroRow), false);
+  assert.equal(hasMarginLiability(borrowedRow), true);
+  assert.equal([zeroRow, negativeZeroRow, borrowedRow].filter(hasMarginLiability).length, 1);
+
+  // Absent liability truth is never presented as an observed zero.
+  const unavailable = projectPrivateRead(unavailablePrivateRead('PRIVATE_READ_REQUEST_FAILED'));
+  assert.equal(unavailable.counts.liabilities, null);
+  assert.equal(unavailable.marginLiabilityBtc, null);
+  assert.equal(unavailable.guardTone, 'bad');
 });
 
 test('isolated liability or LTV values cannot fabricate a ready canonical Borrow surface', () => {

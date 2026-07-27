@@ -118,24 +118,51 @@ function gateway(overrides = {}) {
       crossWalletBalance: '2000.00000000',
       crossUnPnl: '10.00000000',
     }],
+    // GET /fapi/v3/positionRisk as Binance actually answers it: no leverage
+    // and no marginType. Those were removed in V3.
     usdmPositions: async () => [{
       symbol: 'BTCUSDT',
       positionSide: 'BOTH',
       positionAmt: '-0.010',
       entryPrice: '60000.000',
+      breakEvenPrice: '59970.000',
       markPrice: '59000.000',
       unRealizedProfit: '10.00000000',
       liquidationPrice: '0',
-      leverage: '1',
-      marginType: 'cross',
       isolatedMargin: '0',
       notional: '-590.00000000',
+      marginAsset: 'USDT',
+      isolatedWallet: '0',
+      initialMargin: '0',
+      maintMargin: '0',
+      positionInitialMargin: '0',
+      openOrderInitialMargin: '0',
+      adl: 1,
+      bidNotional: '0',
+      askNotional: '0',
       updateTime: NOW - 250,
     }],
     usdmOpenOrders: async () => [{ ...USDM_ORDER }],
     usdmTrades: async () => [{ ...USDM_FILL }],
     ...overrides,
   };
+}
+
+/**
+ * Wraps a gateway so a test can prove which private endpoints a refresh
+ * actually reached, in order. Sequencing is a safety property here, not an
+ * implementation detail: the count is the evidence.
+ */
+function recordingGateway(overrides = {}) {
+  const calls = [];
+  const wrapped = {};
+  for (const [name, read] of Object.entries(gateway(overrides))) {
+    wrapped[name] = async (...args) => {
+      calls.push(name);
+      return read(...args);
+    };
+  }
+  return { gateway: wrapped, calls };
 }
 
 test('GET-only signer rejects every mutation and unreviewed path before signing or fetch', async () => {
@@ -263,6 +290,8 @@ test('provider facts normalize into the frozen private-read contract without bro
   assert.equal(snapshot.margin.assets[0].interest, '0.10000000');
   assert.equal(snapshot.usdm.balances[0].availableBalance, '1900.00000000');
   assert.equal(snapshot.usdm.positions[0].positionAmt, '-0.010');
+  assert.equal(snapshot.usdm.positions[0].leverage, null, 'V3 does not return leverage');
+  assert.equal(snapshot.usdm.positions[0].marginType, null, 'V3 does not return marginType');
   assert.equal(snapshot.usdm.openOrders[0].reduceOnly, true);
   assert.equal(snapshot.usdm.fills[0].realizedPnl, '1.50000000');
   assert.deepEqual(snapshot.spot.coverage, {
@@ -270,16 +299,144 @@ test('provider facts normalize into the frozen private-read contract without bro
     symbols: ['BTCUSDT'],
     limitation: 'History is limited to the configured symbol scope; Binance does not provide account-wide trade history.',
   });
-  assert.equal(snapshot.reconciliation.balances.state, 'RECONCILED');
-  assert.equal(snapshot.reconciliation.orders.state, 'RECONCILED');
-  assert.equal(snapshot.reconciliation.fills.state, 'PARTIAL');
-  assert.equal(snapshot.reconciliation.positions.state, 'RECONCILED');
-  assert.equal(snapshot.reconciliation.liabilities.state, 'RECONCILED');
+  assert.equal(snapshot.permissionPosture.vanillaOptions, false, 'every admitted flag is carried');
+  assert.equal(snapshot.permissionPosture.fixReadOnly, false, 'the read-only permission is carried');
+  // A successful read is not a reconciliation. Every family whose second side
+  // this service does not compute reports PARTIAL and says why.
+  for (const family of ['balances', 'orders', 'fills', 'positions']) {
+    const entry = snapshot.reconciliation[family];
+    assert.equal(entry.state, 'PARTIAL', family);
+    assert.equal(typeof entry.reason, 'string', family);
+    assert.ok(entry.reason.length > 0, family);
+  }
+  assert.match(
+    snapshot.reconciliation.positions.reason,
+    /provider-reported/,
+    'a non-null position read is not a recomputed position',
+  );
+  // Totals balance and the rows agree a liability is open, but converting it to
+  // BTC needs a price this service does not read.
+  assert.equal(snapshot.reconciliation.liabilities.state, 'PARTIAL');
+  assert.match(snapshot.reconciliation.liabilities.reason, /price source/);
   const serialized = JSON.stringify(snapshot);
   assert.equal(serialized.includes(CREDS.apiKey), false);
   assert.equal(serialized.includes(CREDS.apiSecret), false);
   assert.equal(Object.isFrozen(snapshot), true);
   assert.equal(Object.isFrozen(snapshot.usdm.positions), true);
+});
+
+test('a refresh asks for permissions first and reaches no other private endpoint until admitted', async () => {
+  const admitted = recordingGateway();
+  const service = new PrivateReadService(admitted.gateway, { now: () => NOW, symbols: ['BTCUSDT'] });
+  await service.refresh();
+  assert.equal(admitted.calls[0], 'apiRestrictions', 'permissions are asked first');
+  assert.equal(
+    admitted.calls.filter((call) => call === 'apiRestrictions').length,
+    1,
+    'the permission answer is read once and reused, not re-fetched per family',
+  );
+  assert.ok(admitted.calls.includes('spotAccount'), 'a verified posture admits row reads');
+});
+
+test('an unsafe or unproven posture costs exactly one private call and exposes no row', async () => {
+  const blocked = [
+    ['an action permission is enabled', { ...PERMISSIONS, enableWithdrawals: true }, 'UNSAFE'],
+    ['the key is not IP-pinned', { ...PERMISSIONS, ipRestrict: false }, 'UNSAFE'],
+    ['a required flag is missing', (() => {
+      const partial = { ...PERMISSIONS };
+      delete partial.enableFutures;
+      return partial;
+    })(), 'UNKNOWN'],
+    ['a required flag is the wrong type', { ...PERMISSIONS, enableMargin: 'false' }, 'UNKNOWN'],
+    ['the answer carries an undocumented field', { ...PERMISSIONS, enableSpotTrading: true }, 'UNKNOWN'],
+    ['the answer is not an object', ['enableReading'], 'UNKNOWN'],
+    ['the permission read itself failed', null, 'UNKNOWN'],
+  ];
+
+  for (const [label, payload, expected] of blocked) {
+    const recorded = recordingGateway({
+      apiRestrictions: async () => {
+        if (payload === null) throw new Error('signed url must never escape');
+        return payload;
+      },
+    });
+    const service = new PrivateReadService(recorded.gateway, { now: () => NOW, symbols: ['BTCUSDT'] });
+    const snapshot = await service.refresh();
+
+    assert.deepEqual(recorded.calls, ['apiRestrictions'], label);
+    assert.equal(snapshot.permissionPosture.state, expected, label);
+    assert.equal(snapshot.state, 'UNAVAILABLE', label);
+    for (const product of ['spot', 'margin', 'usdm']) {
+      assert.equal(snapshot[product].state, 'UNAVAILABLE', `${label}: ${product}`);
+      assert.equal(snapshot[product].observedAt, null, `${label}: ${product}`);
+    }
+    assert.equal(snapshot.spot.balances, null, label);
+    assert.equal(snapshot.spot.openOrders, null, label);
+    assert.equal(snapshot.spot.fills, null, label);
+    assert.equal(snapshot.margin.assets, null, label);
+    assert.equal(snapshot.margin.totalLiabilityBtc, null, label);
+    assert.equal(snapshot.usdm.balances, null, label);
+    assert.equal(snapshot.usdm.positions, null, label);
+    assert.equal(snapshot.usdm.openOrders, null, label);
+    assert.equal(snapshot.usdm.fills, null, label);
+    for (const family of Object.keys(snapshot.reconciliation)) {
+      assert.equal(snapshot.reconciliation[family].state, 'UNAVAILABLE', `${label}: ${family}`);
+      assert.match(snapshot.reconciliation[family].reason, /withheld/, `${label}: ${family}`);
+    }
+  }
+});
+
+test('a posture that decodes UNSAFE stays visible as UNSAFE and never degrades to safe', async () => {
+  const service = new PrivateReadService(gateway({
+    apiRestrictions: async () => ({ ...PERMISSIONS, enableFutures: true }),
+  }), { now: () => NOW, symbols: ['BTCUSDT'] });
+  const snapshot = await service.refresh();
+
+  assert.equal(snapshot.permissionPosture.state, 'UNSAFE');
+  assert.equal(snapshot.permissionPosture.futures, true, 'the observed breach is reported, not hidden');
+  assert.equal(snapshot.permissionPosture.observedAt, NOW, 'an unsafe posture was genuinely observed');
+  assert.equal(snapshot.permissionPosture.reading, true, 'the flags that were read are kept');
+
+  // A later unreadable answer must not leave the previous flags standing.
+  const stale = new PrivateReadService(gateway({
+    apiRestrictions: async () => { throw new Error('transport failed'); },
+  }), { now: () => NOW, symbols: ['BTCUSDT'] });
+  const unknown = await stale.refresh();
+  assert.equal(unknown.permissionPosture.state, 'UNKNOWN');
+  assert.equal(unknown.permissionPosture.observedAt, null);
+  for (const flag of [
+    'reading', 'spotMarginTrading', 'margin', 'futures', 'withdrawals', 'internalTransfer',
+    'universalTransfer', 'ipRestricted', 'vanillaOptions', 'fixTrade', 'fixReadOnly',
+    'portfolioMarginTrading',
+  ]) {
+    assert.equal(unknown.permissionPosture[flag], null, flag);
+  }
+});
+
+test('the read-only FIX permission is carried honestly and is never action authority', async () => {
+  for (const value of [true, false]) {
+    const service = new PrivateReadService(gateway({
+      apiRestrictions: async () => ({ ...PERMISSIONS, enableFixReadOnly: value }),
+    }), { now: () => NOW, symbols: ['BTCUSDT'] });
+    const posture = (await service.refresh()).permissionPosture;
+    assert.equal(posture.fixReadOnly, value, 'decoded end to end');
+    assert.equal(posture.state, 'VERIFIED_READ_ONLY', 'a read-only permission never blocks admission');
+  }
+
+  for (const value of [undefined, null, 'false', 0]) {
+    const incomplete = { ...PERMISSIONS, enableFixReadOnly: value };
+    if (value === undefined) delete incomplete.enableFixReadOnly;
+    const recorded = recordingGateway({
+      apiRestrictions: async () => incomplete,
+    });
+    const service = new PrivateReadService(recorded.gateway, {
+      now: () => NOW,
+      symbols: ['BTCUSDT'],
+    });
+    const posture = (await service.refresh()).permissionPosture;
+    assert.equal(posture.state, 'UNKNOWN', String(value));
+    assert.deepEqual(recorded.calls, ['apiRestrictions'], 'an incomplete current flag admits no row reads');
+  }
 });
 
 test('every dangerous permission bit is UNSAFE and every missing required bit is UNKNOWN', async () => {
@@ -336,6 +493,128 @@ test('failed and malformed provider endpoints publish null/UNAVAILABLE instead o
   assert.equal(snapshot.reconciliation.positions.state, 'UNAVAILABLE');
   assert.equal(snapshot.reconciliation.liabilities.state, 'UNAVAILABLE');
   assert.equal(snapshot.reconciliation.balances.state, 'PARTIAL');
+  assert.match(
+    snapshot.reconciliation.balances.reason,
+    /unavailable/,
+    'a lost read is reported as a lost read, not as an unproven invariant',
+  );
+});
+
+test('Cross Margin fixed-scale zero strings are numerically zero for liability selection', async () => {
+  const marginAccount = (overrides = {}) => async () => ({
+    totalAssetOfBtc: '0.20000000',
+    totalLiabilityOfBtc: '0.00000000',
+    totalNetAssetOfBtc: '0.20000000',
+    userAssets: [{
+      asset: 'USDT',
+      free: '1000.00000000',
+      locked: '0.00000000',
+      borrowed: '0.00000000',
+      interest: '-0.00000000',
+      netAsset: '1000.00000000',
+    }],
+    ...overrides,
+  });
+  const refresh = (overrides) => new PrivateReadService(
+    gateway({ marginAccount: marginAccount(overrides) }),
+    { now: () => NOW, symbols: ['BTCUSDT'] },
+  ).refresh();
+
+  // Both sides computed and equal: no liability in the total, none in the rows.
+  const flat = await refresh();
+  assert.equal(flat.reconciliation.liabilities.state, 'RECONCILED');
+  assert.equal(flat.reconciliation.liabilities.reason, null);
+  assert.equal(flat.reconciliation.liabilities.observedAt, NOW);
+
+  // Canonical negative zero is the same number and normalizes to one form.
+  const negativeZero = await refresh({ totalLiabilityOfBtc: '-0.00000000' });
+  assert.equal(negativeZero.reconciliation.liabilities.state, 'RECONCILED');
+  assert.equal(negativeZero.margin.totalLiabilityBtc, '0.00000000', 'negative zero renders once');
+  assert.equal(negativeZero.margin.assets[0].interest, '0.00000000');
+
+  // One satoshi of borrow at the reported scale is a liability, not a zero.
+  const borrowed = await refresh({
+    userAssets: [{
+      asset: 'USDT',
+      free: '1000.00000000',
+      locked: '0.00000000',
+      borrowed: '0.00000001',
+      interest: '0.00000000',
+      netAsset: '999.99999999',
+    }],
+  });
+  assert.equal(borrowed.reconciliation.liabilities.state, 'PARTIAL');
+  assert.match(borrowed.reconciliation.liabilities.reason, /Total liability is zero while an asset row carries/);
+
+  // Accrued interest alone is a liability even with nothing borrowed.
+  const interestOnly = await refresh({
+    totalLiabilityOfBtc: '0.00000001',
+    totalNetAssetOfBtc: '0.19999999',
+    userAssets: [{
+      asset: 'USDT',
+      free: '1000.00000000',
+      locked: '0.00000000',
+      borrowed: '0.00000000',
+      interest: '0.00000002',
+      netAsset: '999.99999998',
+    }],
+  });
+  assert.equal(interestOnly.reconciliation.liabilities.state, 'PARTIAL');
+  assert.match(interestOnly.reconciliation.liabilities.reason, /price source/);
+
+  // A total that no row explains is a disagreement, never a green reconcile.
+  const unexplained = await refresh({
+    totalLiabilityOfBtc: '0.01000000',
+    totalNetAssetOfBtc: '0.19000000',
+  });
+  assert.equal(unexplained.reconciliation.liabilities.state, 'PARTIAL');
+  assert.match(unexplained.reconciliation.liabilities.reason, /no asset row carries borrowed or interest/);
+
+  // Totals that do not satisfy net = asset - liability are never RECONCILED.
+  const inconsistent = await refresh({ totalNetAssetOfBtc: '0.19999999' });
+  assert.equal(inconsistent.reconciliation.liabilities.state, 'PARTIAL');
+  assert.match(inconsistent.reconciliation.liabilities.reason, /net = asset - liability/);
+
+  // Scales may differ between the reported totals; equality stays exact.
+  const mixedScale = await refresh({
+    totalAssetOfBtc: '0.2',
+    totalLiabilityOfBtc: '0',
+    totalNetAssetOfBtc: '0.20000000',
+  });
+  assert.equal(mixedScale.reconciliation.liabilities.state, 'RECONCILED');
+});
+
+test('malformed decimals are rejected strictly rather than coerced to zero', async () => {
+  for (const malformed of [
+    '', ' 0.1', '0.1 ', '+1.0', '.5', '1.', '00.1', '1e3', '1_000', '1,000.00',
+    'NaN', 'Infinity', '-', '0x10', '٠.١', '0.1\n', 100, null, true,
+    `1${'0'.repeat(40)}.0`,
+  ]) {
+    const service = new PrivateReadService(gateway({
+      marginAccount: async () => ({
+        totalAssetOfBtc: '0.20000000',
+        totalLiabilityOfBtc: '0.00000000',
+        totalNetAssetOfBtc: '0.20000000',
+        userAssets: [{
+          asset: 'USDT',
+          free: '1000.00000000',
+          locked: '0.00000000',
+          borrowed: malformed,
+          interest: '0.00000000',
+          netAsset: '1000.00000000',
+        }],
+      }),
+    }), { now: () => NOW, symbols: ['BTCUSDT'] });
+    const snapshot = await service.refresh();
+
+    assert.equal(snapshot.margin.assets, null, JSON.stringify(malformed));
+    assert.equal(snapshot.margin.totalLiabilityBtc, null, JSON.stringify(malformed));
+    assert.equal(
+      snapshot.reconciliation.liabilities.state,
+      'UNAVAILABLE',
+      'an unreadable liability row is unavailable, never a zero liability',
+    );
+  }
 });
 
 test('refreshes do not overlap and exact observedAt comes from the injected clock', async () => {

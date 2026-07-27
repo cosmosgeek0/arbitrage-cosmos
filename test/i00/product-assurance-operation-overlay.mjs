@@ -72,7 +72,7 @@ const PROFILE_SITE_IDS = Object.freeze([
 ].sort());
 
 const BINANCE_PRIVATE_READ_PATH = 'server/src/binance/privateReadClient.ts';
-const BINANCE_PRIVATE_READ_SOURCE_SHA256 = '0395659688cceec22d32c2fd095fd6edd46fe330d2076b5e04ecdad69b300631';
+const BINANCE_PRIVATE_READ_SOURCE_SHA256 = '748052ec4943f547739b79c71824bfaf3a6ccac5c7a79608c9105dc587f8cbce';
 const BINANCE_PRIVATE_READ_SITE_ID = 'OPSITE_26D026D9BE4F85360AE7';
 
 const TWIN_RULE = Object.freeze({
@@ -222,7 +222,7 @@ function verifyBaseUncovered(report) {
     siteIds: [BINANCE_PRIVATE_READ_SITE_ID],
     kindSet: new Set([OPERATION_KINDS.NETWORK_HTTP_REQUEST]),
     symbolSet: new Set(['this.fetchFn']),
-    line: 243,
+    line: 248,
     column: 30,
   })) throw new Error('I00_OPERATION_OVERLAY_BINANCE_PRIVATE_READ_SOURCE_DRIFT');
 }
@@ -276,7 +276,7 @@ function verifyIntegratedMappings(report) {
     siteIds: [BINANCE_PRIVATE_READ_SITE_ID],
     kindSet: new Set([OPERATION_KINDS.NETWORK_HTTP_REQUEST]),
     symbolSet: new Set(['this.fetchFn']),
-    line: 243,
+    line: 248,
     column: 30,
     operationId: BINANCE_PRIVATE_READ_RULE.operationId,
     mappingRuleId: BINANCE_PRIVATE_READ_RULE.ruleId,

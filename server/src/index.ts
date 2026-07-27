@@ -582,6 +582,12 @@ const privateRead = new PrivateReadService(privateReadClient, {
   keyLabel: 'Binance Read Only',
   keyLast4: privateReadCreds?.apiKey.slice(-4) ?? null,
 });
+// The deterministic offline boundary forbids external source transport, and a
+// signed private read is external source transport. Ambient credentials
+// therefore configure the facade without ever authorizing it to reach Binance:
+// the snapshot stays fail-closed rather than silently egressing under a gate
+// that claims the process made no external call.
+const privateReadTransportAdmitted = !deterministicOfflinePublicSourcesEnabled();
 function readLocalMutationAuthority(): 'PROVEN_ABSENT' | 'PRESENT' | 'AMBIGUOUS' | 'UNKNOWN' {
   try {
     // This is process-local capability truth only. It never claims that the
@@ -3260,6 +3266,16 @@ app.post('/api/refresh', (req, res) => {
     }
     const target = requested as ConnectionRefreshTarget;
     if (target === 'account') {
+      if (!privateReadTransportAdmitted) {
+        res.status(503).json({
+          ok: false,
+          error: 'private account refresh unavailable',
+          issues: ['Deterministic offline mode forbids private read transport'],
+          target,
+          ts: Date.now(),
+        });
+        return;
+      }
       const snapshot = await privateRead.refresh();
       if (privateReadClient !== null && snapshot.state === 'UNAVAILABLE') {
         res.status(503);
@@ -3934,7 +3950,7 @@ function startServerTimers(): void {
   // Listener ownership exists before background work is admitted. Product
   // operator events remain dedicated-cursor truth; raw Ledger events and
   // metrics are never exposed on the application WebSocket.
-  privateRead.start();
+  if (privateReadTransportAdmitted) privateRead.start();
   pruneEphemeralLedgerEvents(5);
   eventRetentionTimer = setInterval(() => {
     pruneEphemeralLedgerEvents(5);

@@ -395,8 +395,8 @@ export function Dashboard() {
           <Metric
             label="Private Account"
             value={privatePresentation.stateLabel}
-            detail={`${privatePresentation.coverageLabel} · ${privatePresentation.observedLabel}`}
-            tone={privatePresentation.tone}
+            detail={`${privatePresentation.coverageLabel} · ${privatePresentation.freshness.label}`}
+            tone={privatePresentation.guardTone}
           />
           <Metric
             label="Today’s Account Change"

@@ -2,9 +2,7 @@ import { createHmac } from 'node:crypto';
 
 import {
   BinanceApiError,
-  normalizeApiRestrictions,
   rateLimit,
-  type ApiRestrictions,
   type BinanceCreds,
 } from './client.js';
 
@@ -121,7 +119,14 @@ export class BinancePrivateReadClient {
     }
   }
 
-  apiRestrictions(): Promise<ApiRestrictions> {
+  /**
+   * The permission answer is returned exactly as Binance sent it. The legacy
+   * client normalizes this payload — coercing `"false"` to `false` and dropping
+   * unrecognized keys — which would hand the strict decoder a shape that
+   * already looks like the contract. Only the raw answer lets the decoder fail
+   * closed on the drift and type surprises it exists to catch.
+   */
+  apiRestrictions(): Promise<unknown> {
     return this.request<unknown>(
       'GET',
       'SPOT',
@@ -130,7 +135,7 @@ export class BinancePrivateReadClient {
       if (!isRecord(value)) {
         throw new BinanceApiError(502, undefined, 'Binance returned invalid API restrictions');
       }
-      return normalizeApiRestrictions(value);
+      return value;
     });
   }
 

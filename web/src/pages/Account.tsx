@@ -204,11 +204,14 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
   const exact = (value: string | null | undefined, hidden = '••••') => mask ? hidden : exactOrDash(value);
 
   const currentRange = RANGES.find((item) => item.id === range) ?? RANGES[1];
+  // The freshness guard outranks a stale green claim: an old observation is
+  // reported before any reconciliation or coverage wording.
   const sourceReason = privateReadError
+    ?? (presentation.freshness.state === 'CURRENT' ? null : presentation.freshness.reason)
     ?? Object.values(privateRead.reconciliation).find((fact) => fact.reason)?.reason
     ?? presentation.coverageLabel;
-  const sourceClass = presentation.tone === 'ok' ? 'on' : presentation.tone === 'warn' ? 'partial' : 'loading';
-  const sourceLabel = `Private Reads ${presentation.stateLabel}`;
+  const sourceClass = presentation.guardTone === 'ok' ? 'on' : presentation.guardTone === 'warn' ? 'partial' : 'loading';
+  const sourceLabel = `Private Reads ${presentation.stateLabel} · ${presentation.freshness.label}`;
   const rowCount = view === 'orders'
     ? ordersAvailable ? openOrders.length : null
     : view === 'fills'
@@ -224,7 +227,7 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
         <header className="accountx-toolbar">
           <div className="accountx-identity">
             <span className="accountx-source-mark"><img className="accountx-page-mark" src="/account-wallet.png" alt="" aria-hidden="true" /></span>
-            <span><h1>Account</h1><small>Private Account Reads · {presentation.stateLabel} · {presentation.observedLabel}</small></span>
+            <span><h1>Account</h1><small>Private Account Reads · {presentation.stateLabel} · {presentation.observedLabel} · {presentation.freshness.label}</small></span>
           </div>
           <div className="accountx-tools">
             <button type="button" className="accountx-mask" onClick={toggleMask} title={mask ? 'Show Balances' : 'Hide Balances'} aria-label={mask ? 'Show Balances' : 'Hide Balances'}>
@@ -249,10 +252,10 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
             <strong>{exact(presentation.marginLiabilityBtc, '••••••')}</strong>
             <small>{presentation.marginLiabilityBtc === null ? '— · liability aggregate unavailable' : 'BTC-denominated provider aggregate'}</small>
           </article>
-          <article>
+          <article title={presentation.freshness.reason}>
             <span>Reconciliation</span>
             <strong>{presentation.reconciliationLabel}</strong>
-            <small>{presentation.coverageLabel}</small>
+            <small>{presentation.coverageLabel} · {presentation.freshness.label}</small>
           </article>
         </section>
 
@@ -362,12 +365,12 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
                 <thead><tr><th className="l">Position</th><th>Amount</th><th>Entry</th><th>Mark</th><th>Unrealized PnL</th><th>Updated</th></tr></thead>
                 <tbody>{positions?.map((position) => (
                   <tr key={`${position.symbol}-${position.positionSide}`}>
-                    <td className="l"><span className="accountx-order"><TokenIcon symbol={position.symbol} size={36} /><span><b>{position.symbol}</b><small>{position.positionSide} · {position.marginType}</small></span></span></td>
+                    <td className="l"><span className="accountx-order"><TokenIcon symbol={position.symbol} size={36} /><span><b>{position.symbol}</b><small>{position.positionSide} · {position.marginType ?? 'Margin Mode Not Published'}</small></span></span></td>
                     <td><b>{exact(position.positionAmt)}</b><small>Position Amount</small></td>
                     <td><b>{exact(position.entryPrice)}</b><small>Entry Price</small></td>
                     <td><b>{exact(position.markPrice)}</b><small>Mark Price</small></td>
                     <td><b>{exact(position.unRealizedProfit)}</b><small>USD-M Provider Fact</small></td>
-                    <td><b>{timeAgo(position.updateTime)}</b><small>Leverage {position.leverage}</small></td>
+                    <td><b>{timeAgo(position.updateTime)}</b><small>{position.leverage === null ? 'Leverage — · Not Published By Position V3' : `Leverage ${position.leverage}`}</small></td>
                   </tr>
                 ))}</tbody>
               </table>

@@ -243,8 +243,12 @@ export interface ServerState {
     canTrade: boolean | null;
     userStream: string;
     keyFingerprint: string | null;
+    /** Legacy mirror of the official per-key apiRestrictions answer. Fields the
+     * provider may omit stay optional and are never defaulted; the strict
+     * `privateRead` contract, not this view, decides permission truth. */
     keyPermissions: {
       ipRestrict: boolean;
+      createTime?: number | null;
       enableReading: boolean;
       enableWithdrawals: boolean;
       enableInternalTransfer: boolean;
@@ -253,6 +257,9 @@ export interface ServerState {
       enableFutures: boolean;
       permitsUniversalTransfer: boolean;
       enableVanillaOptions?: boolean;
+      enableFixApiTrade?: boolean;
+      enableFixReadOnly?: boolean | null;
+      enablePortfolioMarginTrading?: boolean;
     } | null;
     keyPermissionsTs?: number | null;
     keyPosture: {

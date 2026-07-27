@@ -617,7 +617,133 @@ test('malformed decimals are rejected strictly rather than coerced to zero', asy
   }
 });
 
-test('refreshes do not overlap and exact observedAt comes from the injected clock', async () => {
+test('non-finite refresh intervals use the bounded default', async (t) => {
+  const intervals = [];
+  const cleared = [];
+  let unrefs = 0;
+  t.mock.method(globalThis, 'setInterval', (_callback, delay) => {
+    const handle = {
+      unref() {
+        unrefs += 1;
+        return handle;
+      },
+    };
+    intervals.push(delay);
+    return handle;
+  });
+  t.mock.method(globalThis, 'clearInterval', (handle) => {
+    cleared.push(handle);
+  });
+
+  for (const refreshIntervalMs of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+    const service = new PrivateReadService(gateway({
+      apiRestrictions: async () => ({ ...PERMISSIONS, enableWithdrawals: true }),
+    }), { now: () => NOW, refreshIntervalMs });
+    service.start();
+    service.stop();
+  }
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(intervals, [30_000, 30_000, 30_000]);
+  assert.equal(unrefs, 3);
+  assert.equal(cleared.length, 3);
+});
+
+test('duplicate start schedules once and duplicate stop clears once', async (t) => {
+  let permissionReads = 0;
+  let schedules = 0;
+  let clears = 0;
+  let unrefs = 0;
+  const handle = {
+    unref() {
+      unrefs += 1;
+      return handle;
+    },
+  };
+  t.mock.method(globalThis, 'setInterval', () => {
+    schedules += 1;
+    return handle;
+  });
+  t.mock.method(globalThis, 'clearInterval', (current) => {
+    assert.equal(current, handle);
+    clears += 1;
+  });
+  const service = new PrivateReadService(gateway({
+    apiRestrictions: async () => {
+      permissionReads += 1;
+      return { ...PERMISSIONS, enableWithdrawals: true };
+    },
+  }), { now: () => NOW });
+
+  service.start();
+  service.start();
+  assert.equal(permissionReads, 1, 'duplicate start joins the immediate refresh');
+  assert.equal(schedules, 1);
+  assert.equal(unrefs, 1);
+
+  service.stop();
+  service.stop();
+  assert.equal(clears, 1);
+  await new Promise((resolve) => setImmediate(resolve));
+});
+
+test('stop fences an in-flight publication and explicit post-stop refresh can publish', async () => {
+  let release;
+  let permissionReads = 0;
+  const blocked = new Promise((resolve) => { release = resolve; });
+  const service = new PrivateReadService(gateway({
+    apiRestrictions: async () => {
+      permissionReads += 1;
+      await blocked;
+      return { ...PERMISSIONS };
+    },
+  }), { now: () => NOW, symbols: ['BTCUSDT'] });
+  const before = service.snapshot();
+
+  const startedBeforeStop = service.refresh();
+  service.stop();
+  release();
+
+  assert.equal(await startedBeforeStop, before, 'the stopped generation resolves to the published snapshot');
+  assert.equal(service.snapshot(), before, 'the stopped generation cannot replace owner-visible state');
+
+  const refreshedAfterStop = await service.refresh();
+  assert.notEqual(refreshedAfterStop, before);
+  assert.equal(service.snapshot(), refreshedAfterStop);
+  assert.equal(refreshedAfterStop.permissionPosture.state, 'VERIFIED_READ_ONLY');
+  assert.equal(permissionReads, 2, 'explicit refresh remains available after stop');
+});
+
+test('restart behind a stopped in-flight read schedules one current-generation refresh', async () => {
+  let release;
+  let permissionReads = 0;
+  const blocked = new Promise((resolve) => { release = resolve; });
+  const service = new PrivateReadService(gateway({
+    apiRestrictions: async () => {
+      permissionReads += 1;
+      if (permissionReads === 1) await blocked;
+      return { ...PERMISSIONS, enableWithdrawals: true };
+    },
+  }), { now: () => NOW });
+  const before = service.snapshot();
+
+  const stoppedGeneration = service.refresh();
+  service.stop();
+  service.start();
+  assert.equal(permissionReads, 1, 'restart joins the one existing transport read');
+  release();
+  assert.equal(await stoppedGeneration, before);
+
+  for (let turn = 0; turn < 10 && permissionReads < 2; turn += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(permissionReads, 2, 'restart follows the fenced read with exactly one current read');
+  assert.notEqual(service.snapshot(), before);
+  assert.equal(service.snapshot().permissionPosture.state, 'UNSAFE');
+  service.stop();
+});
+
+test('refresh preserves the same promise while one read is in flight and uses the injected clock', async () => {
   let release;
   let calls = 0;
   const blocked = new Promise((resolve) => { release = resolve; });

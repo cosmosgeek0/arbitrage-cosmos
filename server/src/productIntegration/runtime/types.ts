@@ -112,6 +112,166 @@ export interface ProductRuntimeMaterialSourcePage {
   readonly items: readonly Readonly<ProductRuntimeMaterialSourceRecord>[];
 }
 
+export const PRODUCT_RUNTIME_OWNER_TRUTH_SCHEMA = 'product-owner-truth.v1' as const;
+
+/**
+ * The only three product surfaces that receive this additional non-System
+ * owner readback. Every other surface keeps its existing owner; this cut may
+ * never widen beyond these three.
+ */
+export const PRODUCT_RUNTIME_OWNER_TRUTH_SURFACE_IDS = Object.freeze([
+  'dashboard',
+  'account',
+  'markets',
+] as const);
+export type ProductRuntimeOwnerTruthSurfaceId = (typeof PRODUCT_RUNTIME_OWNER_TRUTH_SURFACE_IDS)[number];
+
+/**
+ * Exact rows owned by the injected cut. Dashboard keeps its existing System
+ * Integration rows and supplies only the four facts that owner does not
+ * publish. Account and Markets replace every row because their prior
+ * freshness/reconciliation values came from a different owner.
+ */
+export const PRODUCT_RUNTIME_OWNER_TRUTH_FIELDS: Readonly<Record<
+  ProductRuntimeOwnerTruthSurfaceId,
+  readonly string[]
+>> = Object.freeze({
+  dashboard: Object.freeze([
+    'pnl-drawdown',
+    'pipeline-counts',
+    'active-objects',
+    'strategy-q',
+  ]),
+  account: Object.freeze([
+    'spot-truth',
+    'usdm-truth',
+    'margin-truth',
+    'balances-equity-collateral',
+    'available-capital',
+    'permissions-modes',
+    'orders-positions',
+    'liabilities-interest',
+    'freshness-completeness',
+    'reconciliation',
+    'foreign-manual',
+  ]),
+  markets: Object.freeze([
+    'basis',
+    'wake-up',
+    'flow',
+    'liquidity',
+    'derivatives',
+    'data-quality',
+    'candidate-focus',
+    'source-freshness',
+    'q-assessment',
+  ]),
+});
+
+/**
+ * Labels an available owner row may carry. `SYNTHETIC_ONLY` is deliberately
+ * absent: a fixture must never be able to bind Account balances or Markets
+ * numbers as owner truth.
+ */
+export const PRODUCT_RUNTIME_OWNER_TRUTH_AVAILABLE_LABELS = Object.freeze([
+  'LIVE_PUBLIC', 'WIRED', 'BUILT_AND_TESTED', 'IMPORTED',
+] as const);
+export type ProductRuntimeOwnerTruthAvailableLabel =
+  (typeof PRODUCT_RUNTIME_OWNER_TRUTH_AVAILABLE_LABELS)[number];
+
+export const PRODUCT_RUNTIME_OWNER_TRUTH_UNAVAILABLE_LABELS = Object.freeze([
+  'BLOCKED', 'NOT_CONFIGURED', 'UNAVAILABLE', 'MISSING', 'UNKNOWN',
+] as const);
+export type ProductRuntimeOwnerTruthUnavailableLabel =
+  (typeof PRODUCT_RUNTIME_OWNER_TRUTH_UNAVAILABLE_LABELS)[number];
+
+/**
+ * One owner row. Availability is exact: a value with no reason, or a reason
+ * with no value. There is no third shape and no default.
+ */
+export type ProductRuntimeOwnerTruthField =
+  | Readonly<{
+      readonly fieldId: string;
+      readonly state: 'AVAILABLE';
+      readonly value: string;
+      readonly truthLabel: ProductRuntimeOwnerTruthAvailableLabel;
+      readonly source: string;
+      readonly unavailableReason: null;
+    }>
+  | Readonly<{
+      readonly fieldId: string;
+      readonly state: 'UNAVAILABLE';
+      readonly value: null;
+      readonly truthLabel: ProductRuntimeOwnerTruthUnavailableLabel;
+      readonly source: string;
+      readonly unavailableReason: string;
+    }>;
+
+export interface ProductRuntimeOwnerTruthSurfaceCut {
+  readonly surfaceId: ProductRuntimeOwnerTruthSurfaceId;
+  readonly source: string;
+  readonly state: 'AVAILABLE' | 'UNAVAILABLE';
+  /** Owner observation time. Freshness is measured against the injected clock. */
+  readonly observedAtMs: number;
+  readonly maxAgeMs: number;
+  readonly truthLabel: ProductRuntimeTruthLabel;
+  readonly unavailableReason: string | null;
+  /**
+   * Account only. The exact canonical `capital.accountTruthState` this cut was
+   * taken against. The projection raises the Account surface label to this cut
+   * only while that canonical state still matches, so a moved Capital owner
+   * fails the surface closed instead of leaving a silent override behind.
+   */
+  readonly supersedesCanonicalAccountTruthState: string | null;
+  /** Exactly the surface's owner-owned rows when available; empty otherwise. */
+  readonly fields: readonly Readonly<ProductRuntimeOwnerTruthField>[];
+}
+
+/**
+ * One immutable owner-truth cut. It is read once per envelope and binds every
+ * surface in it; Product never fetches, never reads configuration, and never
+ * fills an absent row.
+ */
+export interface ProductRuntimeOwnerTruthCut {
+  readonly schemaVersion: typeof PRODUCT_RUNTIME_OWNER_TRUTH_SCHEMA;
+  /** Bounded identity of the composite cut; every row carries its own source. */
+  readonly source: string;
+  readonly observedAtMs: number;
+  readonly surfaces: readonly Readonly<ProductRuntimeOwnerTruthSurfaceCut>[];
+}
+
+export type ProductRuntimeOwnerTruthUnavailableReason =
+  | 'OWNER_TRUTH_CUT_NOT_CONFIGURED'
+  | 'OWNER_TRUTH_OWNER_UNAVAILABLE';
+
+/** One validated owner row, already shaped for a surface evidence datum. */
+export interface ProductRuntimeOwnerTruthDatum {
+  readonly value: string | null;
+  readonly truthLabel: ProductRuntimeTruthLabel;
+  readonly canonicalSource: string;
+  readonly unavailableReason: string | null;
+}
+
+export interface ProductRuntimeOwnerTruthSurfaceBinding {
+  readonly state: 'AVAILABLE' | 'UNAVAILABLE';
+  readonly surfaceTruthLabel: ProductRuntimeTruthLabel;
+  readonly supersedesCanonicalAccountTruthState: string | null;
+  readonly fields: Readonly<Record<string, Readonly<ProductRuntimeOwnerTruthDatum>>>;
+}
+
+/**
+ * The validated projection of one injected cut. Every owner-owned row of all
+ * three surfaces is present here — bound to a value or carrying an exact
+ * unavailable reason. There is no partially decided surface.
+ */
+export interface ProductRuntimeOwnerTruthBinding {
+  readonly revisionToken: string;
+  readonly surfaces: Readonly<Record<
+    ProductRuntimeOwnerTruthSurfaceId,
+    Readonly<ProductRuntimeOwnerTruthSurfaceBinding>
+  >>;
+}
+
 export interface ProductRuntimeReadPorts {
   applicationStartOk(): boolean | Promise<boolean>;
   applicationStartFailureCodes?(): readonly string[] | Promise<readonly string[]>;
@@ -131,6 +291,15 @@ export interface ProductRuntimeReadPorts {
     | Promise<Readonly<SystemTraceSnapshot> | null>;
   incidents?(): Readonly<ProductRuntimeIncidentSnapshot>
     | Promise<Readonly<ProductRuntimeIncidentSnapshot>>;
+  /**
+   * Optional canonical owner of the private-account and market rows the System
+   * Integration supervisor does not own. An absent port leaves those rows
+   * exactly as they are today; a present port must answer with one bounded cut
+   * or an explicit unavailable cut. Presence alone never binds a row.
+   */
+  ownerTruth?(supervisor: Readonly<SystemSupervisorReadModel>): Readonly<ProductRuntimeOwnerTruthCut>
+    | null
+    | Promise<Readonly<ProductRuntimeOwnerTruthCut> | null>;
 }
 
 export interface ProductRuntimeClock {

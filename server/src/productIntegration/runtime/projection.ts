@@ -22,6 +22,11 @@ import {
 import { productTruthLabel } from './events.js';
 import { buildProductRuntimeManagedInventory } from './managedInventory.js';
 import {
+  PRODUCT_RUNTIME_OWNER_TRUTH_AVAILABLE_LABELS,
+  PRODUCT_RUNTIME_OWNER_TRUTH_FIELDS,
+  PRODUCT_RUNTIME_OWNER_TRUTH_SCHEMA,
+  PRODUCT_RUNTIME_OWNER_TRUTH_SURFACE_IDS,
+  PRODUCT_RUNTIME_OWNER_TRUTH_UNAVAILABLE_LABELS,
   PRODUCT_RUNTIME_SUPERVISOR_SCHEMA,
   type ProductRuntimeCapability,
   type ProductRuntimeBootReleaseIdentityIssue,
@@ -37,6 +42,12 @@ import {
   type ProductRuntimeIncidentProjection,
   type ProductRuntimeIncidentSnapshot,
   type ProductRuntimeMaterialEventPage,
+  type ProductRuntimeOwnerTruthBinding,
+  type ProductRuntimeOwnerTruthCut,
+  type ProductRuntimeOwnerTruthDatum,
+  type ProductRuntimeOwnerTruthSurfaceBinding,
+  type ProductRuntimeOwnerTruthSurfaceId,
+  type ProductRuntimeOwnerTruthUnavailableReason,
   type ProductRuntimeOwnerView,
   type ProductRuntimeServiceReadinessDisposition,
   type ProductRuntimeServiceReadinessPolicy,
@@ -1066,6 +1077,249 @@ function opsDatum(
   });
 }
 
+const OWNER_TRUTH_CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
+const OWNER_TRUTH_SOURCE = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/;
+const OWNER_TRUTH_MAX_VALUE_LENGTH = 240;
+const OWNER_TRUTH_MAX_AGE_CEILING_MS = 86_400_000;
+
+const OWNER_TRUTH_CUT_KEYS = Object.freeze(['schemaVersion', 'source', 'observedAtMs', 'surfaces']);
+const OWNER_TRUTH_SURFACE_KEYS = Object.freeze([
+  'surfaceId', 'source', 'state', 'observedAtMs', 'maxAgeMs', 'truthLabel',
+  'unavailableReason', 'supersedesCanonicalAccountTruthState', 'fields',
+]);
+const OWNER_TRUTH_FIELD_KEYS = Object.freeze([
+  'fieldId', 'source', 'state', 'value', 'truthLabel', 'unavailableReason',
+]);
+const OWNER_TRUTH_SURFACE_ID_SET: ReadonlySet<string> = new Set(PRODUCT_RUNTIME_OWNER_TRUTH_SURFACE_IDS);
+const OWNER_TRUTH_AVAILABLE_LABEL_SET: ReadonlySet<string> = new Set(PRODUCT_RUNTIME_OWNER_TRUTH_AVAILABLE_LABELS);
+const OWNER_TRUTH_UNAVAILABLE_LABEL_SET: ReadonlySet<string> = new Set(PRODUCT_RUNTIME_OWNER_TRUTH_UNAVAILABLE_LABELS);
+
+function isOwnerTruthSurfaceId(value: string): value is ProductRuntimeOwnerTruthSurfaceId {
+  return OWNER_TRUTH_SURFACE_ID_SET.has(value);
+}
+
+/**
+ * A bound owner row is a short printable line. Control characters are refused
+ * outright so no owner value can smuggle framing into a rendered surface.
+ */
+function isOwnerTruthValue(value: unknown): value is string {
+  if (typeof value !== 'string' || value.length < 1 || value.length > OWNER_TRUTH_MAX_VALUE_LENGTH) {
+    return false;
+  }
+  for (const character of value) {
+    const code = character.codePointAt(0) ?? 0;
+    if (code < 32 || code === 127) return false;
+  }
+  return true;
+}
+
+function ownerTruthCanonicalSource(source: string | null, fieldId: string): string {
+  return source === null
+    ? `productIntegration.owner-truth:${fieldId}`
+    : `productIntegration.owner-truth:${source}:${fieldId}`;
+}
+
+function unavailableOwnerTruthSurface(
+  surfaceId: ProductRuntimeOwnerTruthSurfaceId,
+  unavailableReason: string,
+  truthLabel: ProductRuntimeTruthLabel,
+  source: string | null,
+): Readonly<ProductRuntimeOwnerTruthSurfaceBinding> {
+  const fields: Record<string, Readonly<ProductRuntimeOwnerTruthDatum>> = {};
+  for (const fieldId of PRODUCT_RUNTIME_OWNER_TRUTH_FIELDS[surfaceId]) {
+    fields[fieldId] = Object.freeze({
+      value: null,
+      truthLabel,
+      canonicalSource: ownerTruthCanonicalSource(source, fieldId),
+      unavailableReason,
+    });
+  }
+  return Object.freeze({
+    state: 'UNAVAILABLE',
+    surfaceTruthLabel: truthLabel,
+    supersedesCanonicalAccountTruthState: null,
+    fields: Object.freeze(fields),
+  });
+}
+
+function ownerTruthBinding(
+  bound: Readonly<Record<ProductRuntimeOwnerTruthSurfaceId, Readonly<ProductRuntimeOwnerTruthSurfaceBinding>>>,
+  observedAtMs: number,
+): Readonly<ProductRuntimeOwnerTruthBinding> {
+  const canonical = PRODUCT_RUNTIME_OWNER_TRUTH_SURFACE_IDS.map((surfaceId) => {
+    const surface = bound[surfaceId];
+    return Object.freeze({
+      surfaceId,
+      state: surface.state,
+      surfaceTruthLabel: surface.surfaceTruthLabel,
+      supersedesCanonicalAccountTruthState: surface.supersedesCanonicalAccountTruthState,
+      fields: PRODUCT_RUNTIME_OWNER_TRUTH_FIELDS[surfaceId].map((fieldId) => Object.freeze({
+        fieldId,
+        ...surface.fields[fieldId],
+      })),
+    });
+  });
+  const revisionToken = createHash('sha256')
+    .update(JSON.stringify({ observedAtMs, surfaces: canonical }))
+    .digest('hex');
+  return Object.freeze({ revisionToken, surfaces: bound });
+}
+
+function unavailableOwnerTruthBinding(
+  unavailableReason: string,
+  truthLabel: ProductRuntimeTruthLabel,
+  source: string | null,
+): Readonly<ProductRuntimeOwnerTruthBinding> {
+  return ownerTruthBinding(Object.freeze({
+    dashboard: unavailableOwnerTruthSurface('dashboard', unavailableReason, truthLabel, source),
+    account: unavailableOwnerTruthSurface('account', unavailableReason, truthLabel, source),
+    markets: unavailableOwnerTruthSurface('markets', unavailableReason, truthLabel, source),
+  }), 0);
+}
+
+function projectOwnerTruthSurfaceFields(
+  surfaceId: ProductRuntimeOwnerTruthSurfaceId,
+  value: readonly unknown[],
+): Readonly<Record<string, Readonly<ProductRuntimeOwnerTruthDatum>>> | null {
+  const expected = PRODUCT_RUNTIME_OWNER_TRUTH_FIELDS[surfaceId];
+  if (value.length !== expected.length) return null;
+  const fields: Record<string, Readonly<ProductRuntimeOwnerTruthDatum>> = {};
+  for (const entry of value) {
+    if (!isRecord(entry) || !exactKeys(entry, OWNER_TRUTH_FIELD_KEYS)) return null;
+    const fieldId = entry.fieldId;
+    if (typeof fieldId !== 'string' || !expected.includes(fieldId)
+      || Object.prototype.hasOwnProperty.call(fields, fieldId)
+      || typeof entry.truthLabel !== 'string'
+      || typeof entry.source !== 'string' || !OWNER_TRUTH_SOURCE.test(entry.source)) return null;
+    if (entry.state === 'AVAILABLE') {
+      if (!isOwnerTruthValue(entry.value)
+        || entry.unavailableReason !== null
+        || !OWNER_TRUTH_AVAILABLE_LABEL_SET.has(entry.truthLabel)) return null;
+      fields[fieldId] = Object.freeze({
+        value: entry.value,
+        truthLabel: entry.truthLabel as ProductRuntimeTruthLabel,
+        canonicalSource: ownerTruthCanonicalSource(entry.source, fieldId),
+        unavailableReason: null,
+      });
+      continue;
+    }
+    // A row the owner answered for but cannot evidence keeps its exact reason
+    // and a blocking label, so the surface stays honest instead of green.
+    if (entry.state !== 'UNAVAILABLE' || entry.value !== null
+      || typeof entry.unavailableReason !== 'string'
+      || !OWNER_TRUTH_CODE.test(entry.unavailableReason)
+      || !OWNER_TRUTH_UNAVAILABLE_LABEL_SET.has(entry.truthLabel)) return null;
+    fields[fieldId] = Object.freeze({
+      value: null,
+      truthLabel: entry.truthLabel as ProductRuntimeTruthLabel,
+      canonicalSource: ownerTruthCanonicalSource(entry.source, fieldId),
+      unavailableReason: entry.unavailableReason,
+    });
+  }
+  return Object.freeze(fields);
+}
+
+/**
+ * Validate one injected owner-truth cut. The cut is the only way a Dashboard,
+ * Account, or Markets owner row can carry a value; Product itself never
+ * acquires, defaults, or infers one. A structurally invalid cut is rejected as
+ * a whole — a producer that cannot describe one surface exactly is not trusted
+ * for the others — while a well-formed but old cut fails only its own surface.
+ *
+ * Returns `null` when no owner-truth port is wired at all, which leaves the
+ * pre-existing `CANONICAL_OWNER_FIELD_NOT_CONFIGURED` rows untouched.
+ */
+export function projectProductRuntimeOwnerTruthBinding(
+  cut: Readonly<ProductRuntimeOwnerTruthCut> | null | undefined,
+  unavailableReason: ProductRuntimeOwnerTruthUnavailableReason | null,
+  nowMs: number,
+): Readonly<ProductRuntimeOwnerTruthBinding> | null {
+  if (cut === null || cut === undefined) {
+    if (unavailableReason === null) return null;
+    return unavailableOwnerTruthBinding(
+      unavailableReason,
+      unavailableReason === 'OWNER_TRUTH_CUT_NOT_CONFIGURED' ? 'NOT_CONFIGURED' : 'UNAVAILABLE',
+      null,
+    );
+  }
+  const malformed = () => unavailableOwnerTruthBinding('OWNER_TRUTH_CUT_MALFORMED', 'UNAVAILABLE', null);
+  if (!validUtcMs(nowMs)) return malformed();
+  const value: unknown = cut;
+  if (!isRecord(value) || !exactKeys(value, OWNER_TRUTH_CUT_KEYS)
+    || value.schemaVersion !== PRODUCT_RUNTIME_OWNER_TRUTH_SCHEMA
+    || typeof value.source !== 'string' || !OWNER_TRUTH_SOURCE.test(value.source)
+    || !validUtcMs(value.observedAtMs) || value.observedAtMs > nowMs
+    || !Array.isArray(value.surfaces)
+    || value.surfaces.length > PRODUCT_RUNTIME_OWNER_TRUTH_SURFACE_IDS.length) return malformed();
+  const source = value.source;
+  const cutObservedAtMs = value.observedAtMs;
+  const bound: Partial<Record<ProductRuntimeOwnerTruthSurfaceId, Readonly<ProductRuntimeOwnerTruthSurfaceBinding>>> = {};
+  for (const entry of value.surfaces as readonly unknown[]) {
+    if (!isRecord(entry) || !exactKeys(entry, OWNER_TRUTH_SURFACE_KEYS)) return malformed();
+    const surfaceId = entry.surfaceId;
+    if (typeof surfaceId !== 'string' || !isOwnerTruthSurfaceId(surfaceId)
+      || Object.prototype.hasOwnProperty.call(bound, surfaceId)
+      || typeof entry.source !== 'string' || !OWNER_TRUTH_SOURCE.test(entry.source)
+      || typeof entry.truthLabel !== 'string'
+      || !validUtcMs(entry.observedAtMs) || entry.observedAtMs > cutObservedAtMs
+      || !Number.isSafeInteger(entry.maxAgeMs)
+      || Number(entry.maxAgeMs) < 1 || Number(entry.maxAgeMs) > OWNER_TRUTH_MAX_AGE_CEILING_MS
+      || !Array.isArray(entry.fields)) return malformed();
+    const supersedes = entry.supersedesCanonicalAccountTruthState;
+    if (!(supersedes === null
+      || (surfaceId === 'account' && typeof supersedes === 'string'
+        && PRODUCT_IDENTIFIER.test(supersedes)))) return malformed();
+    if (entry.state === 'UNAVAILABLE') {
+      if (entry.fields.length !== 0 || supersedes !== null
+        || typeof entry.unavailableReason !== 'string'
+        || !OWNER_TRUTH_CODE.test(entry.unavailableReason)
+        || !OWNER_TRUTH_UNAVAILABLE_LABEL_SET.has(entry.truthLabel)) return malformed();
+      bound[surfaceId] = unavailableOwnerTruthSurface(
+        surfaceId,
+        entry.unavailableReason,
+        entry.truthLabel as ProductRuntimeTruthLabel,
+        entry.source,
+      );
+      continue;
+    }
+    if (entry.state !== 'AVAILABLE' || entry.unavailableReason !== null
+      || !OWNER_TRUTH_AVAILABLE_LABEL_SET.has(entry.truthLabel)) return malformed();
+    const fields = projectOwnerTruthSurfaceFields(surfaceId, entry.fields as readonly unknown[]);
+    if (fields === null) return malformed();
+    if (nowMs - entry.observedAtMs > Number(entry.maxAgeMs)) {
+      // The producer answered, but this cut is older than the owner's own
+      // bound. Withhold every row rather than show an aged account or market.
+      bound[surfaceId] = unavailableOwnerTruthSurface(
+        surfaceId,
+        'OWNER_TRUTH_CUT_STALE',
+        'UNAVAILABLE',
+        entry.source,
+      );
+      continue;
+    }
+    bound[surfaceId] = Object.freeze({
+      state: 'AVAILABLE',
+      surfaceTruthLabel: entry.truthLabel as ProductRuntimeTruthLabel,
+      supersedesCanonicalAccountTruthState: supersedes as string | null,
+      fields,
+    });
+  }
+  for (const surfaceId of PRODUCT_RUNTIME_OWNER_TRUTH_SURFACE_IDS) {
+    if (bound[surfaceId] === undefined) {
+      bound[surfaceId] = unavailableOwnerTruthSurface(
+        surfaceId,
+        'OWNER_TRUTH_SURFACE_NOT_SUPPLIED',
+        'NOT_CONFIGURED',
+        source,
+      );
+    }
+  }
+  return ownerTruthBinding(
+    Object.freeze(bound as Record<ProductRuntimeOwnerTruthSurfaceId, Readonly<ProductRuntimeOwnerTruthSurfaceBinding>>),
+    cutObservedAtMs,
+  );
+}
+
 function surfaces(
   snapshot: Readonly<SystemSupervisorReadModel>,
   dashboard: Readonly<SystemSupervisorReadModel>,
@@ -1075,6 +1329,7 @@ function surfaces(
   opsReadback: Readonly<CanonicalSupervisorOpsReadback>,
   opsIntakeInterlock: Readonly<CanonicalOpsIntakeInterlock>,
   incidentSnapshot: Readonly<ProductRuntimeIncidentSnapshot>,
+  ownerTruth: Readonly<ProductRuntimeOwnerTruthBinding> | null,
 ): Readonly<Record<string, Readonly<ProductRuntimeSurfaceProjection>>> {
   const activeIncidents = incidentSnapshot.incidents.filter((incident) => incident.state !== 'RESOLVED');
   const acknowledgedIncidents = incidentSnapshot.incidents.filter((incident) => incident.acknowledgedAtMs !== null);
@@ -1126,7 +1381,22 @@ function surfaces(
   });
   const result: Record<string, Readonly<ProductRuntimeSurfaceProjection>> = {};
   for (const surfaceId of Object.keys(SURFACE_EVIDENCE) as (keyof typeof SURFACE_EVIDENCE)[]) {
-    const baseTruthLabel = surfaceTruth(surfaceId, snapshot, incidentSnapshot);
+    const ownerTruthSurface = ownerTruth !== null && isOwnerTruthSurfaceId(surfaceId)
+      ? ownerTruth.surfaces[surfaceId]
+      : null;
+    const canonicalTruthLabel = surfaceTruth(surfaceId, snapshot, incidentSnapshot);
+    // Account is the one surface whose canonical label is owned by Capital's
+    // account-truth state. A bound cut raises it only while the exact canonical
+    // state it was taken against still holds; anything else stays canonical.
+    const supersededTruthLabel = ownerTruthSurface !== null
+      && ownerTruthSurface.state === 'AVAILABLE'
+      && ownerTruthSurface.supersedesCanonicalAccountTruthState !== null
+      && ownerTruthSurface.supersedesCanonicalAccountTruthState === snapshot.summaries.capital.accountTruthState
+      ? ownerTruthSurface.surfaceTruthLabel
+      : null;
+    const baseTruthLabel = surfaceId === 'markets' && ownerTruthSurface !== null
+      ? ownerTruthSurface.surfaceTruthLabel
+      : supersededTruthLabel ?? canonicalTruthLabel;
     const ownerTruthLabel = (surfaceId === 'control-room' || surfaceId === 'health')
       ? weakestSurfaceTruth([baseTruthLabel, opsInterlockTruth(opsIntakeInterlock)])
       : baseTruthLabel;
@@ -1137,6 +1407,14 @@ function surfaces(
           fieldId,
           label: fieldId.replaceAll('-', ' '),
           ...canonicalOpsDatum,
+        } satisfies ProductRuntimeSurfaceDatum);
+      }
+      const ownerTruthDatum = ownerTruthSurface?.fields[fieldId];
+      if (ownerTruthDatum) {
+        return Object.freeze({
+          fieldId,
+          label: fieldId.replaceAll('-', ' '),
+          ...ownerTruthDatum,
         } satisfies ProductRuntimeSurfaceDatum);
       }
       const value = surfaceId === 'notifications' && incidentSnapshot.availability.state !== 'AVAILABLE'
@@ -1193,7 +1471,9 @@ function surfaces(
       label: SURFACE_LABELS[surfaceId],
       bindingState: blocked ? 'BLOCKED_BACKEND' : 'BINDING_READY',
       truthLabel,
-      canonicalSource: surfaceId === 'notifications'
+      canonicalSource: ownerTruthSurface !== null
+        ? `productIntegration owner-truth projection:${surfaceId}`
+        : surfaceId === 'notifications'
         ? 'productIntegration incident-router projection'
         : `systemIntegration supervisor:${surfaceId}`,
       evaluatedAtMs: snapshot.evaluatedAtMs,
@@ -1254,6 +1534,8 @@ export function buildProductRuntimeSupervisorEnvelope(input: Readonly<{
   materialEvents: Readonly<ProductRuntimeMaterialEventPage>;
   traces: readonly Readonly<ProductRuntimeCorrelationTrace>[];
   incidentSnapshot?: Readonly<ProductRuntimeIncidentSnapshot>;
+  ownerTruthCut?: Readonly<ProductRuntimeOwnerTruthCut> | null;
+  ownerTruthUnavailableReason?: ProductRuntimeOwnerTruthUnavailableReason | null;
   nowMs: number;
   commandOwner?: Readonly<ProductRuntimeCommandOwnerPort>;
 }>): Readonly<ProductRuntimeSupervisorEnvelope> {
@@ -1285,6 +1567,11 @@ export function buildProductRuntimeSupervisorEnvelope(input: Readonly<{
     bootReleaseReadback,
   );
   const canonicalCockpit = canonicalCockpitTruth(view, projectedComponents);
+  const ownerTruth = projectProductRuntimeOwnerTruthBinding(
+    input.ownerTruthCut ?? null,
+    input.ownerTruthUnavailableReason ?? null,
+    input.nowMs,
+  );
   const projectedSurfaces = surfaces(
     input.snapshot,
     dashboard,
@@ -1294,13 +1581,19 @@ export function buildProductRuntimeSupervisorEnvelope(input: Readonly<{
     input.opsReadback,
     input.opsIntakeInterlock,
     incidentSnapshot,
+    ownerTruth,
   );
   const incidentHighWater = incidentSnapshot.incidents.reduce(
     (maximum, incident) => Math.max(maximum, incident.ledgerEventId),
     0,
   );
   const incidentRevision = `${incidentSnapshot.availability.state.toLowerCase()}-${incidentSnapshot.incidents.length}-${incidentHighWater}`;
-  const revision = `system-${input.snapshot.revision}-runtime-${input.snapshot.runtimeGeneration}-control-${input.snapshot.controlGeneration}-incident-${incidentRevision}`;
+  // The browser invalidates its bounded snapshot from this revision, so a wired
+  // owner-truth port must move it: a fresh account or market cut behind an
+  // unchanged System revision would otherwise never reach the cockpit. An
+  // unwired port leaves the canonical revision byte-identical.
+  const ownerTruthRevision = ownerTruth === null ? '' : `-owner-${ownerTruth.revisionToken}`;
+  const revision = `system-${input.snapshot.revision}-runtime-${input.snapshot.runtimeGeneration}-control-${input.snapshot.controlGeneration}-incident-${incidentRevision}${ownerTruthRevision}`;
   const body = {
     schemaVersion: PRODUCT_RUNTIME_SUPERVISOR_SCHEMA,
     revision,

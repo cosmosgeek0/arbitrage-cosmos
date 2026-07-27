@@ -124,6 +124,7 @@ import {
   createProductIntegrationRuntimeRouter,
   isProductRuntimeCursor,
   parseProductRuntimeMaterialDeliveryAfterCursor,
+  projectProductRuntimeOwnerTruthCut,
   projectProductRuntimeSupervisorDelta,
   projectProductRuntimeMaterialDeliveryPage,
   type ProductRuntimeReadPorts,
@@ -522,6 +523,7 @@ const productIntegrationRead: ProductRuntimeReadPorts = Object.freeze({
   opsReadback: (supervisor: Readonly<SystemSupervisorReadModel>) => readCanonicalOps(supervisor),
   bootReleaseReadback: () => bootReleasePersistence.readback(),
   incidents: () => productIncidentRouter.readProjection(),
+  ownerTruth: (supervisor: Readonly<SystemSupervisorReadModel>) => readProductOwnerTruth(supervisor),
   events: ({ afterCursor, limit }: Readonly<{ afterCursor: string; limit: number }>) => (
     ledger.readProductOperatorEventPage(afterCursor, limit)
   ),
@@ -2118,31 +2120,67 @@ async function marketSources(): Promise<MarketSourceSnapshot> {
   return marketSourceInFlight;
 }
 
+async function readMarketOwnerSnapshot() {
+  const {
+    at,
+    spotBookRes,
+    perpBookRes,
+    perp24hRes,
+  } = await marketSources();
+  const spotBooks = spotBookRes.status === 'fulfilled'
+    ? spotBookRes.value
+    : new Map<string, BookTicker>();
+  const perpBooks = perpBookRes.status === 'fulfilled'
+    ? perpBookRes.value
+    : new Map<string, BookTicker>();
+  const perp24h = perp24hRes.status === 'fulfilled'
+    ? perp24hRes.value
+    : new Map<string, Futures24hTicker>();
+
+  const rows = engine
+    .allRows()
+    .map((row) => projectMarketApiRow({
+      row,
+      spotBook: spotBooks.get(row.symbol),
+      perpBook: perpBooks.get(row.symbol),
+      perpTicker: perp24h.get(row.symbol),
+      spark: engine.sparkOf(row.symbol, 36),
+    }))
+    .sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0));
+
+  return {
+    observedAtMs: at,
+    dataSources: {
+      spotBookTicker: spotBookRes.status === 'fulfilled' ? 'fresh' as const : 'unavailable' as const,
+      futuresBookTicker: perpBookRes.status === 'fulfilled' ? 'fresh' as const : 'unavailable' as const,
+      futures24hTicker: perp24hRes.status === 'fulfilled' ? 'fresh' as const : 'unavailable' as const,
+    },
+    rows,
+  };
+}
+
+async function readProductOwnerTruth(
+  supervisor: Readonly<SystemSupervisorReadModel>,
+) {
+  const markets = await readMarketOwnerSnapshot();
+  // The private reader owns its cadence and single-flight transport. Product
+  // samples the one immutable published snapshot exactly once and never
+  // triggers a credential-bearing refresh from a read route.
+  const privateReadSnapshot = privateRead.snapshot();
+  return projectProductRuntimeOwnerTruthCut({
+    supervisor,
+    privateRead: privateReadSnapshot,
+    markets,
+  });
+}
+
 app.get('/api/markets', (_req, res) => {
   runAsync(res, async () => {
-    const { spotBookRes, perpBookRes, perp24hRes } = await marketSources();
-    const spotBooks = spotBookRes.status === 'fulfilled' ? spotBookRes.value : new Map<string, BookTicker>();
-    const perpBooks = perpBookRes.status === 'fulfilled' ? perpBookRes.value : new Map<string, BookTicker>();
-    const perp24h = perp24hRes.status === 'fulfilled' ? perp24hRes.value : new Map<string, Futures24hTicker>();
-
-    const rows = engine
-      .allRows()
-      .map((row) => projectMarketApiRow({
-        row,
-        spotBook: spotBooks.get(row.symbol),
-        perpBook: perpBooks.get(row.symbol),
-        perpTicker: perp24h.get(row.symbol),
-        spark: engine.sparkOf(row.symbol, 36),
-      }))
-      .sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0));
+    const snapshot = await readMarketOwnerSnapshot();
     res.json({
       updatedAt: Date.now(),
-      dataSources: {
-        spotBookTicker: spotBookRes.status === 'fulfilled' ? 'fresh' : 'unavailable',
-        futuresBookTicker: perpBookRes.status === 'fulfilled' ? 'fresh' : 'unavailable',
-        futures24hTicker: perp24hRes.status === 'fulfilled' ? 'fresh' : 'unavailable',
-      },
-      rows,
+      dataSources: snapshot.dataSources,
+      rows: snapshot.rows,
     });
   });
 });

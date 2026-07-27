@@ -26,6 +26,8 @@ import {
   type ProductRuntimeMaterialEventPage,
   type ProductRuntimeOperator,
   type ProductRuntimeOptions,
+  type ProductRuntimeOwnerTruthCut,
+  type ProductRuntimeOwnerTruthUnavailableReason,
   type ProductRuntimeIncidentSnapshot,
   type ProductRuntimeSupervisorEnvelope,
 } from './types.js';
@@ -231,6 +233,25 @@ export class ProductIntegrationRuntimeService {
           });
         }
       }
+      const ownerTruthWired = typeof this.options.read.ownerTruth === 'function';
+      let ownerTruthCut: Readonly<ProductRuntimeOwnerTruthCut> | null = null;
+      let ownerTruthUnavailableReason: ProductRuntimeOwnerTruthUnavailableReason | null = null;
+      if (typeof this.options.read.ownerTruth === 'function') {
+        try {
+          // Exactly one owner-truth read per envelope. Re-reading the port
+          // would let a later account cut land beside an earlier market row in
+          // the same immutable envelope.
+          ownerTruthCut = (await this.options.read.ownerTruth(snapshot)) ?? null;
+        } catch {
+          // Private-account and market owner truth stays explicit when its
+          // owner cannot answer. The projection withholds every bound row.
+          ownerTruthCut = null;
+          ownerTruthUnavailableReason = 'OWNER_TRUTH_OWNER_UNAVAILABLE';
+        }
+        if (ownerTruthCut === null && ownerTruthUnavailableReason === null) {
+          ownerTruthUnavailableReason = 'OWNER_TRUTH_CUT_NOT_CONFIGURED';
+        }
+      }
       const materialEvents = await this.readSupervisorMaterialTail();
       const correlationIds = [...new Set(snapshot.recentCorrelatedDecisions.map((event) => event.correlationId))].slice(0, 4);
       const traces: Readonly<ProductRuntimeCorrelationTrace>[] = [];
@@ -272,6 +293,7 @@ export class ProductIntegrationRuntimeService {
         materialEvents,
         traces: Object.freeze(traces),
         ...(incidentSnapshot === undefined ? {} : { incidentSnapshot }),
+        ...(ownerTruthWired ? { ownerTruthCut, ownerTruthUnavailableReason } : {}),
         nowMs,
         ...(this.options.commandOwner ? { commandOwner: this.options.commandOwner } : {}),
       });

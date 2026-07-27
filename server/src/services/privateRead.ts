@@ -205,6 +205,9 @@ const MAX_DECIMAL_CHARS = 32;
 const MAX_ROWS = 5_000;
 const MAX_SYMBOLS = 16;
 const DEFAULT_KEY_LABEL = 'Binance Read Only';
+const DEFAULT_REFRESH_INTERVAL_MS = 30_000;
+const MIN_REFRESH_INTERVAL_MS = 10_000;
+const MAX_REFRESH_INTERVAL_MS = 5 * 60_000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -312,6 +315,13 @@ function safeKeyLabel(value: unknown): string {
     return DEFAULT_KEY_LABEL;
   }
   return label;
+}
+
+function safeRefreshInterval(value: number | undefined): number {
+  const requested = value === undefined || !Number.isFinite(value)
+    ? DEFAULT_REFRESH_INTERVAL_MS
+    : Math.trunc(value);
+  return Math.min(MAX_REFRESH_INTERVAL_MS, Math.max(MIN_REFRESH_INTERVAL_MS, requested));
 }
 
 function normalizeRestrictions(value: unknown): PrivateReadPermissions {
@@ -702,17 +712,16 @@ export class PrivateReadService {
   private readonly keyLast4: string | null;
   private current: PrivateReadSnapshot;
   private refreshInFlight: Promise<PrivateReadSnapshot> | null = null;
+  private refreshInFlightGeneration: number | null = null;
   private timer: NodeJS.Timeout | null = null;
+  private publicationGeneration = 0;
 
   constructor(
     private readonly gateway: PrivateReadGateway | null,
     options: PrivateReadServiceOptions = {},
   ) {
     this.now = options.now ?? Date.now;
-    this.refreshIntervalMs = Math.min(
-      5 * 60_000,
-      Math.max(10_000, Math.trunc(options.refreshIntervalMs ?? 30_000)),
-    );
+    this.refreshIntervalMs = safeRefreshInterval(options.refreshIntervalMs);
     this.symbols = Object.freeze(
       [...new Set((options.symbols ?? []).filter((value) => SYMBOL_RE.test(value)))]
         .sort()
@@ -731,7 +740,17 @@ export class PrivateReadService {
 
   start(): void {
     if (this.gateway === null || this.timer !== null) return;
-    void this.refresh().catch(() => undefined);
+    const publicationGeneration = this.publicationGeneration;
+    const joinedStoppedGeneration = this.refreshInFlight !== null
+      && this.refreshInFlightGeneration !== publicationGeneration;
+    const immediate = this.refresh();
+    void immediate.then(() => {
+      if (joinedStoppedGeneration
+        && this.timer !== null
+        && this.publicationGeneration === publicationGeneration) {
+        void this.refresh().catch(() => undefined);
+      }
+    }, () => undefined);
     this.timer = setInterval(() => void this.refresh().catch(() => undefined), this.refreshIntervalMs);
     this.timer.unref();
   }
@@ -739,18 +758,37 @@ export class PrivateReadService {
   stop(): void {
     if (this.timer !== null) clearInterval(this.timer);
     this.timer = null;
+    // A request already in flight cannot always be aborted at this layer, but
+    // it must not republish after the lifecycle owner has stopped the service.
+    // A later explicit refresh captures the new generation and may publish.
+    this.publicationGeneration += 1;
   }
 
   refresh(): Promise<PrivateReadSnapshot> {
     if (this.gateway === null) return Promise.resolve(this.current);
     if (this.refreshInFlight !== null) return this.refreshInFlight;
-    const inFlight = this.readOnce();
+    const publicationGeneration = this.publicationGeneration;
+    const inFlight = this.readOnce(publicationGeneration);
     this.refreshInFlight = inFlight;
+    this.refreshInFlightGeneration = publicationGeneration;
     const clear = () => {
-      if (this.refreshInFlight === inFlight) this.refreshInFlight = null;
+      if (this.refreshInFlight === inFlight) {
+        this.refreshInFlight = null;
+        this.refreshInFlightGeneration = null;
+      }
     };
     void inFlight.then(clear, clear);
     return inFlight;
+  }
+
+  private publish(
+    snapshot: PrivateReadSnapshot,
+    publicationGeneration: number,
+  ): PrivateReadSnapshot {
+    if (publicationGeneration === this.publicationGeneration) {
+      this.current = snapshot;
+    }
+    return this.current;
   }
 
   /**
@@ -846,7 +884,7 @@ export class PrivateReadService {
     });
   }
 
-  private async readOnce(): Promise<PrivateReadSnapshot> {
+  private async readOnce(publicationGeneration: number): Promise<PrivateReadSnapshot> {
     const gateway = this.gateway!;
     // Permission-first sequencing. The restriction answer is the only private
     // call a refresh may make on its own authority; every row read below is
@@ -855,8 +893,7 @@ export class PrivateReadService {
     const restrictions = await settled(() => gateway.apiRestrictions(), normalizeRestrictions);
     const permissionPosture = this.postureOf(restrictions, this.now());
     if (permissionPosture.state !== 'VERIFIED_READ_ONLY') {
-      this.current = this.withheldSnapshot(permissionPosture);
-      return this.current;
+      return this.publish(this.withheldSnapshot(permissionPosture), publicationGeneration);
     }
 
     const [
@@ -933,7 +970,7 @@ export class PrivateReadService {
           reason: 'No configured symbol-scoped trade history read succeeded.',
         };
 
-    this.current = deepFreeze<PrivateReadSnapshot>({
+    const snapshot = deepFreeze<PrivateReadSnapshot>({
       schemaVersion: 'binance.private-read.v1',
       // Posture is proven verified read-only on this path, so product truth is
       // the only remaining input to the summary.
@@ -984,6 +1021,6 @@ export class PrivateReadService {
         liabilities: liabilityReconciliation(marginAccount, marginObservedAt),
       },
     });
-    return this.current;
+    return this.publish(snapshot, publicationGeneration);
   }
 }

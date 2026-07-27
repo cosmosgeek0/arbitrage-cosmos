@@ -1,4 +1,7 @@
-import type { ApiRestrictions } from '../binance/client.js';
+import {
+  decodePrivateReadPermissions,
+  type PrivateReadPermissions,
+} from '../binance/privateReadDecoder.js';
 
 export type PrivateReadState = 'AVAILABLE' | 'PARTIAL' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
 export type CoverageState =
@@ -9,7 +12,7 @@ export type CoverageState =
 export type ReconciliationState = 'RECONCILED' | 'PARTIAL' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
 
 export interface PrivateReadGateway {
-  apiRestrictions(): Promise<ApiRestrictions>;
+  apiRestrictions(): Promise<unknown>;
   spotAccount(): Promise<unknown>;
   spotOpenOrders(): Promise<unknown>;
   spotTrades(symbol: string): Promise<unknown>;
@@ -262,36 +265,12 @@ function safeKeyLabel(value: unknown): string {
   return label;
 }
 
-function normalizeRestrictions(value: unknown): ApiRestrictions {
-  const row = record(value, 'API restrictions');
-  return {
-    ipRestrict: exactBoolean(row.ipRestrict, 'API restrictions ipRestrict'),
-    enableReading: exactBoolean(row.enableReading, 'API restrictions enableReading'),
-    enableWithdrawals: exactBoolean(row.enableWithdrawals, 'API restrictions enableWithdrawals'),
-    enableInternalTransfer: exactBoolean(row.enableInternalTransfer, 'API restrictions enableInternalTransfer'),
-    enableMargin: exactBoolean(row.enableMargin, 'API restrictions enableMargin'),
-    enableSpotAndMarginTrading: exactBoolean(
-      row.enableSpotAndMarginTrading,
-      'API restrictions enableSpotAndMarginTrading',
-    ),
-    enableFutures: exactBoolean(row.enableFutures, 'API restrictions enableFutures'),
-    permitsUniversalTransfer: exactBoolean(
-      row.permitsUniversalTransfer,
-      'API restrictions permitsUniversalTransfer',
-    ),
-    enableVanillaOptions: exactBoolean(row.enableVanillaOptions, 'API restrictions enableVanillaOptions'),
-    enableFixApiTrade: exactBoolean(row.enableFixApiTrade, 'API restrictions enableFixApiTrade'),
-    enableFixReadOnly: row.enableFixReadOnly === undefined
-      ? undefined
-      : exactBoolean(row.enableFixReadOnly, 'API restrictions enableFixReadOnly'),
-    enablePortfolioMarginTrading: exactBoolean(
-      row.enablePortfolioMarginTrading,
-      'API restrictions enablePortfolioMarginTrading',
-    ),
-    createTime: row.createTime === undefined
-      ? undefined
-      : timestamp(row.createTime, 'API restrictions createTime'),
-  };
+function normalizeRestrictions(value: unknown): PrivateReadPermissions {
+  const decoded = decodePrivateReadPermissions(value);
+  if (decoded.status === 'UNKNOWN') {
+    throw new TypeError('API restrictions are malformed or incomplete');
+  }
+  return decoded;
 }
 
 function deepFreeze<T>(value: T): T {
@@ -688,19 +667,7 @@ export class PrivateReadService {
           portfolioMarginTrading: null,
         }
       : {
-          state: restrictions.enableReading
-            && restrictions.ipRestrict
-            && !restrictions.enableWithdrawals
-            && !restrictions.enableInternalTransfer
-            && !restrictions.enableMargin
-            && !restrictions.enableFutures
-            && !restrictions.permitsUniversalTransfer
-            && !restrictions.enableVanillaOptions
-            && !restrictions.enableFixApiTrade
-            && !restrictions.enableSpotAndMarginTrading
-            && !restrictions.enablePortfolioMarginTrading
-            ? 'VERIFIED_READ_ONLY'
-            : 'UNSAFE',
+          state: restrictions.status === 'VERIFIED' ? 'VERIFIED_READ_ONLY' : 'UNSAFE',
           observedAt,
           keyLabel: this.keyLabel,
           keyLast4: this.keyLast4,

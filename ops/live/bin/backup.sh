@@ -138,8 +138,174 @@ latest_completed() {
 if [ "$VERIFY_LATEST" = 1 ]; then
   latest="$(latest_completed)"
   [ -n "$latest" ] || die_code 1 "no completed backup found in $BACKUP_DIR"
-  created="$(json_get "$BACKUP_EFFECT_DIR/$latest/manifest.json" createdAtUtc)" \
-    || die_code 1 "latest backup $latest has no readable manifest"
+  VERIFY_PROOF="$(
+    i00_guard_node - \
+      "$BACKUP_EFFECT_DIR/$latest/manifest.json" \
+      "$BACKUP_EFFECT_DIR/$latest/cosmos.db" "$latest" <<'NODE'
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const [manifestPath, databasePath, expectedBackupId] = process.argv.slice(2);
+const exactKeys = (value, expected) => {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const actual = Object.keys(value).sort();
+  const wanted = [...expected].sort();
+  return actual.length === wanted.length
+    && actual.every((key, index) => key === wanted[index]);
+};
+const canonical = (value) => {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value !== null && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.keys(value).sort().map((key) => [key, canonical(value[key])]),
+    );
+  }
+  return value;
+};
+const readExactRegular = (file, maxBytes, expectedBytes = null) => {
+  const before = fs.lstatSync(file, { bigint: true });
+  if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1n
+      || before.size < 1n || before.size > BigInt(maxBytes)
+      || (expectedBytes !== null && before.size !== BigInt(expectedBytes))) {
+    throw new Error('unsafe backup file');
+  }
+  const descriptor = fs.openSync(
+    file,
+    fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW | fs.constants.O_NONBLOCK,
+  );
+  try {
+    const opened = fs.fstatSync(descriptor, { bigint: true });
+    if (opened.dev !== before.dev || opened.ino !== before.ino
+        || opened.size !== before.size || opened.mtimeNs !== before.mtimeNs
+        || opened.ctimeNs !== before.ctimeNs) throw new Error('backup file changed');
+    const digest = crypto.createHash('sha256');
+    const chunks = [];
+    const buffer = Buffer.allocUnsafe(1024 * 1024);
+    let total = 0n;
+    for (;;) {
+      const count = fs.readSync(descriptor, buffer, 0, buffer.length, null);
+      if (count === 0) break;
+      const chunk = Buffer.from(buffer.subarray(0, count));
+      digest.update(chunk);
+      if (maxBytes <= 1024 * 1024) chunks.push(chunk);
+      total += BigInt(count);
+      if (total > BigInt(maxBytes)) throw new Error('backup file grew');
+    }
+    const after = fs.fstatSync(descriptor, { bigint: true });
+    const named = fs.lstatSync(file, { bigint: true });
+    if (total !== before.size || after.dev !== before.dev || after.ino !== before.ino
+        || after.size !== before.size || after.mtimeNs !== before.mtimeNs
+        || after.ctimeNs !== before.ctimeNs || named.dev !== before.dev
+        || named.ino !== before.ino || named.size !== before.size
+        || named.mtimeNs !== before.mtimeNs || named.ctimeNs !== before.ctimeNs) {
+      throw new Error('backup file changed');
+    }
+    return { bytes: Buffer.concat(chunks), sha256: digest.digest('hex') };
+  } finally {
+    fs.closeSync(descriptor);
+  }
+};
+const manifestRead = readExactRegular(manifestPath, 1024 * 1024);
+const manifestText = manifestRead.bytes.toString('utf8');
+const manifest = JSON.parse(manifestText);
+const keys = [
+  'schemaVersion', 'backupId', 'createdAtUtc', 'dbFile', 'dbSha256',
+  'dbBytes', 'eventsCount', 'journalState', 'dataSchema', 'rollbackFloor',
+  'sourceJournalSha256', 'integrityCheck', 'evidence',
+];
+if (!exactKeys(manifest, keys)
+    || manifest.schemaVersion !== 2
+    || manifest.backupId !== expectedBackupId
+    || manifest.dbFile !== 'cosmos.db'
+    || !/^[0-9a-f]{64}$/u.test(manifest.dbSha256)
+    || !Number.isSafeInteger(manifest.dbBytes) || manifest.dbBytes <= 0
+    || !Number.isSafeInteger(manifest.eventsCount) || manifest.eventsCount < 0
+    || manifest.journalState !== 'PRESENT'
+    || !Number.isSafeInteger(manifest.dataSchema) || manifest.dataSchema < 1
+    || !Number.isSafeInteger(manifest.rollbackFloor) || manifest.rollbackFloor < 0
+    || manifest.rollbackFloor > manifest.dataSchema
+    || !/^[0-9a-f]{64}$/u.test(manifest.sourceJournalSha256)
+    || manifest.integrityCheck !== 'ok'
+    || typeof manifest.createdAtUtc !== 'string'
+    || !Number.isFinite(Date.parse(manifest.createdAtUtc))
+    || !Array.isArray(manifest.evidence)
+    || manifest.evidence.length > 10000
+    || manifestText !== `${JSON.stringify(canonical(manifest), null, 2)}\n`) {
+  throw new Error('latest manifest is not one exact restorable v2 backup');
+}
+for (let index = 0; index < manifest.evidence.length; index += 1) {
+  const item = manifest.evidence[index];
+  if (typeof item?.source !== 'string' || item.source.length === 0
+      || /[\0-\x1f\x7f]/u.test(item.source)
+      || !(item.missing === true
+        ? exactKeys(item, ['source', 'missing'])
+        : exactKeys(item, ['source', 'archive', 'sha256'])
+          && item.archive === `evidence-${index + 1}.tar.gz`
+          && /^[0-9a-f]{64}$/u.test(item.sha256))) {
+    throw new Error('latest manifest evidence is invalid');
+  }
+}
+const database = readExactRegular(
+  databasePath,
+  Number.MAX_SAFE_INTEGER,
+  manifest.dbBytes,
+);
+if (database.sha256 !== manifest.dbSha256) throw new Error('latest database digest differs');
+process.stdout.write([
+  manifest.createdAtUtc, manifest.eventsCount, manifest.dataSchema,
+  manifest.rollbackFloor,
+].join('|'));
+NODE
+  )" || die_code 1 "latest backup $latest is not one exact restorable v2 generation"
+  IFS='|' read -r \
+    created VERIFY_EVENTS_COUNT VERIFY_DATA_SCHEMA VERIFY_ROLLBACK_FLOOR \
+    <<EOF
+$VERIFY_PROOF
+EOF
+  VERIFY_INTEGRITY="$(
+    "$SQLITE" "$BACKUP_EFFECT_DIR/$latest/cosmos.db" \
+      'PRAGMA integrity_check;' 2>/dev/null
+  )" || die_code 1 "latest backup $latest database integrity is unreadable"
+  [ "$VERIFY_INTEGRITY" = ok ] \
+    || die_code 1 "latest backup $latest database integrity check failed"
+  VERIFY_ACTUAL_EVENTS="$(
+    "$SQLITE" "$BACKUP_EFFECT_DIR/$latest/cosmos.db" \
+      'SELECT COUNT(*) FROM events;' 2>/dev/null
+  )" || die_code 1 "latest backup $latest events count is unreadable"
+  [ "$VERIFY_ACTUAL_EVENTS" = "$VERIFY_EVENTS_COUNT" ] \
+    || die_code 1 "latest backup $latest events count differs from its manifest"
+  VERIFY_USER_VERSION="$(
+    "$SQLITE" "$BACKUP_EFFECT_DIR/$latest/cosmos.db" \
+      'PRAGMA user_version;' 2>/dev/null
+  )" || die_code 1 "latest backup $latest user_version is unreadable"
+  VERIFY_COMPATIBILITY_RAW="$(
+    "$SQLITE" "$BACKUP_EFFECT_DIR/$latest/cosmos.db" \
+      'SELECT typeof(singleton), singleton, typeof(current_schema_version), current_schema_version, typeof(rollback_floor), rollback_floor FROM ledger_schema_compatibility ORDER BY singleton;' \
+      2>/dev/null
+  )" || die_code 1 "latest backup $latest compatibility row is unreadable"
+  VERIFY_COMPATIBILITY="$(
+    i00_guard_node -e '
+      const [versionRaw, rowRaw] = process.argv.slice(1);
+      const integer = /^(?:0|[1-9][0-9]*)$/u;
+      const lines = rowRaw.split("\n");
+      if (!/^[1-9][0-9]*$/u.test(versionRaw)
+          || BigInt(versionRaw) > BigInt(Number.MAX_SAFE_INTEGER)
+          || lines.length !== 1) process.exit(1);
+      const fields = lines[0].split("|");
+      if (fields.length !== 6
+          || fields[0] !== "integer" || fields[1] !== "1"
+          || fields[2] !== "integer" || fields[4] !== "integer"
+          || !/^[1-9][0-9]*$/u.test(fields[3]) || !integer.test(fields[5])
+          || BigInt(fields[3]) > BigInt(Number.MAX_SAFE_INTEGER)
+          || BigInt(fields[5]) > BigInt(Number.MAX_SAFE_INTEGER)
+          || fields[3] !== versionRaw || BigInt(fields[5]) > BigInt(fields[3])) {
+        process.exit(1);
+      }
+      process.stdout.write(`${fields[3]}|${fields[5]}`);
+    ' "$VERIFY_USER_VERSION" "$VERIFY_COMPATIBILITY_RAW"
+  )" || die_code 1 "latest backup $latest compatibility row is malformed"
+  [ "$VERIFY_COMPATIBILITY" = \
+      "$VERIFY_DATA_SCHEMA|$VERIFY_ROLLBACK_FLOOR" ] \
+    || die_code 1 "latest backup $latest schema/floor differs from its manifest"
   age_hours="$("$NODE" -e '
     const created = Date.parse(process.argv[1]);
     if (Number.isNaN(created)) process.exit(1);
@@ -185,6 +351,34 @@ case "$BACKUP_DIR" in
   (*"'"*|*"\\"*|*"$BACKUP_DIR_NL"*) die_code 1 "BACKUP_DIR must not contain quotes, backslashes, or newlines: $BACKUP_DIR" ;;
 esac
 
+# Bind the database copy to one exact, steady compatibility generation. The
+# backup lock deliberately does not serialize deployment, so this snapshot is
+# repeated after every source read below. PENDING is a committed-forward
+# deployment state, not a restorable backup generation.
+set +e
+BACKUP_JOURNAL_SNAPSHOT="$(
+  journal_state_snapshot "$JOURNAL_EFFECT_FILE"
+)"
+BACKUP_JOURNAL_SNAPSHOT_RC=$?
+set -e
+case "$BACKUP_JOURNAL_SNAPSHOT_RC" in
+  0) ;;
+  5) die_code 1 "backup refused: journal document or rollbackFloor is invalid" ;;
+  6) die_code 1 "backup refused: journal endpoint is not one bounded single-link regular file" ;;
+  7) die_code 1 "backup refused: journal dataSchema is invalid" ;;
+  8) die_code 1 "backup refused: journal rollbackFloor exceeds dataSchema" ;;
+  *) die_code 1 "backup refused: journal is unreadable or unstable" ;;
+esac
+IFS='|' read -r \
+  BACKUP_JOURNAL_STATE DATA_SCHEMA ROLLBACK_FLOOR \
+  BACKUP_JOURNAL_DEV BACKUP_JOURNAL_INO BACKUP_JOURNAL_BYTES \
+  BACKUP_JOURNAL_MTIME BACKUP_JOURNAL_CTIME BACKUP_JOURNAL_SHA256 \
+  <<EOF
+$BACKUP_JOURNAL_SNAPSHOT
+EOF
+[ "$BACKUP_JOURNAL_STATE" = PRESENT ] \
+  || die_code 1 "backup refused: journal compatibility state is not steady PRESENT"
+
 # SQLite online backup API: consistent snapshot even with a live WAL writer.
 "$SQLITE" "$DB" ".backup '$WORK/cosmos.db'"
 INTEGRITY="$("$SQLITE" "$WORK/cosmos.db" 'PRAGMA integrity_check;')"
@@ -194,6 +388,38 @@ EVENTS_COUNT="$("$SQLITE" "$WORK/cosmos.db" 'SELECT COUNT(*) FROM events;' 2>/de
 # against expectations; publishing it as result=SUCCESS with eventsCount=-1
 # buried the failure. Fail loudly instead.
 [ "$EVENTS_COUNT" != "-1" ] || die_code 1 "events count unreadable on fresh backup; refusing to publish an unverifiable backup"
+DB_USER_VERSION="$(
+  "$SQLITE" "$WORK/cosmos.db" 'PRAGMA user_version;' 2>/dev/null
+)" || die_code 1 "fresh backup user_version is unreadable"
+DB_COMPATIBILITY_RAW="$(
+  "$SQLITE" "$WORK/cosmos.db" \
+    'SELECT typeof(singleton), singleton, typeof(current_schema_version), current_schema_version, typeof(rollback_floor), rollback_floor FROM ledger_schema_compatibility ORDER BY singleton;' \
+    2>/dev/null
+)" || die_code 1 "fresh backup compatibility row is unreadable"
+DB_COMPATIBILITY="$(
+  i00_guard_node -e '
+    const [versionRaw, rowRaw] = process.argv.slice(1);
+    const integer = /^(?:0|[1-9][0-9]*)$/u;
+    if (!integer.test(versionRaw)
+        || BigInt(versionRaw) > BigInt(Number.MAX_SAFE_INTEGER)) process.exit(1);
+    const lines = rowRaw.split("\n");
+    if (lines.length !== 1) process.exit(1);
+    const fields = lines[0].split("|");
+    if (fields.length !== 6
+        || fields[0] !== "integer" || fields[1] !== "1"
+        || fields[2] !== "integer" || fields[4] !== "integer"
+        || !/^[1-9][0-9]*$/u.test(fields[3]) || !integer.test(fields[5])
+        || BigInt(fields[3]) > BigInt(Number.MAX_SAFE_INTEGER)
+        || BigInt(fields[5]) > BigInt(Number.MAX_SAFE_INTEGER)
+        || fields[3] !== versionRaw || BigInt(fields[5]) > BigInt(fields[3])) {
+      process.exit(1);
+    }
+    process.stdout.write(`${fields[3]}|${fields[5]}`);
+  ' "$DB_USER_VERSION" "$DB_COMPATIBILITY_RAW"
+)" || die_code 1 "fresh backup compatibility row is malformed or disagrees with user_version"
+[ "$DB_COMPATIBILITY" = "$DATA_SCHEMA|$ROLLBACK_FLOOR" ] \
+  || die_code 1 \
+    "fresh backup schema/floor does not match the bound journal compatibility generation"
 
 # Evidence/model paths (colon-separated). Policy decides whether a missing
 # path fails the backup (default) or is recorded and skipped.
@@ -236,10 +462,19 @@ $p|MISSING|"
   IFS="$OLD_IFS"
 fi
 
-DATA_SCHEMA="null"
-if [ -f "$JOURNAL_EFFECT_FILE" ]; then
-  DATA_SCHEMA="$(json_get "$JOURNAL_EFFECT_FILE" dataSchema || echo null)"
-fi
+# Refuse publication if deployment changed the journal at any point after the
+# first snapshot, including while the online database copy or evidence reads
+# were in progress.
+set +e
+BACKUP_JOURNAL_SNAPSHOT_AFTER="$(
+  journal_state_snapshot "$JOURNAL_EFFECT_FILE"
+)"
+BACKUP_JOURNAL_SNAPSHOT_AFTER_RC=$?
+set -e
+[ "$BACKUP_JOURNAL_SNAPSHOT_AFTER_RC" -eq 0 ] \
+  && [ "$BACKUP_JOURNAL_SNAPSHOT_AFTER" = "$BACKUP_JOURNAL_SNAPSHOT" ] \
+  || die_code 1 \
+    "backup refused: journal compatibility generation changed during capture"
 DB_SHA="$(sha256_file "$WORK/cosmos.db")"
 DB_BYTES="$(i00_guard_node -e '
   process.stdout.write(String(require("fs").statSync(process.argv[1]).size));
@@ -247,7 +482,10 @@ DB_BYTES="$(i00_guard_node -e '
 
 i00_guard_node -e '
   const fs = require("fs");
-  const [work, backupId, createdAtUtc, dbSha256, dbBytes, eventsCount, dataSchema, evidenceRaw] = process.argv.slice(1);
+  const [
+    work, backupId, createdAtUtc, dbSha256, dbBytes, eventsCount,
+    dataSchema, rollbackFloor, sourceJournalSha256, evidenceRaw,
+  ] = process.argv.slice(1);
   const canonical = (value) => {
     if (Array.isArray(value)) return value.map(canonical);
     if (value !== null && typeof value === "object") {
@@ -264,12 +502,16 @@ i00_guard_node -e '
       : { source, archive, sha256 };
   });
   const manifest = {
+    schemaVersion: 2,
     backupId, createdAtUtc,
     dbFile: "cosmos.db",
     dbSha256,
     dbBytes: Number(dbBytes),
     eventsCount: Number(eventsCount),
-    dataSchema: dataSchema === "null" ? null : Number(dataSchema),
+    journalState: "PRESENT",
+    dataSchema: Number(dataSchema),
+    rollbackFloor: Number(rollbackFloor),
+    sourceJournalSha256,
     integrityCheck: "ok",
     evidence,
   };
@@ -277,7 +519,8 @@ i00_guard_node -e '
     work + "/manifest.json",
     JSON.stringify(canonical(manifest), null, 2) + "\n",
   );
-' "$WORK" "$BACKUP_ID" "$(now_utc)" "$DB_SHA" "$DB_BYTES" "$EVENTS_COUNT" "$DATA_SCHEMA" "$EVIDENCE_ARGS"
+' "$WORK" "$BACKUP_ID" "$(now_utc)" "$DB_SHA" "$DB_BYTES" "$EVENTS_COUNT" \
+  "$DATA_SCHEMA" "$ROLLBACK_FLOOR" "$BACKUP_JOURNAL_SHA256" "$EVIDENCE_ARGS"
 
 # Publish only after every artifact and the working directory are durable. The
 # retained parent directory is fsynced after the rename completeness marker.

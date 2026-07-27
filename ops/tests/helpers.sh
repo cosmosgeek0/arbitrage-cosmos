@@ -27,6 +27,52 @@ trap cleanup EXIT
 
 register_pid() { _CLEANUP_PIDS="$_CLEANUP_PIDS $1"; }
 
+unregister_pid() {
+  local target="$1" pid retained=""
+  for pid in $_CLEANUP_PIDS; do
+    [ "$pid" = "$target" ] || retained="$retained $pid"
+  done
+  _CLEANUP_PIDS="$retained"
+}
+
+run_bounded_capture() { # output-file timeout-seconds command...
+  local output_file="$1" timeout_seconds="$2"
+  local child_pid deadline grace_deadline rc timed_out=0
+  shift 2
+  "$@" > "$output_file" 2>&1 &
+  child_pid=$!
+  register_pid "$child_pid"
+  deadline=$(( $(date -u +%s) + timeout_seconds ))
+  while kill -0 "$child_pid" 2>/dev/null; do
+    if [ "$(date -u +%s)" -ge "$deadline" ]; then
+      timed_out=1
+      break
+    fi
+    sleep 0.1
+  done
+  if [ "$timed_out" = 1 ]; then
+    kill "$child_pid" 2>/dev/null || true
+    grace_deadline=$(( $(date -u +%s) + 2 ))
+    while kill -0 "$child_pid" 2>/dev/null \
+        && [ "$(date -u +%s)" -lt "$grace_deadline" ]; do
+      sleep 0.1
+    done
+    if kill -0 "$child_pid" 2>/dev/null; then
+      kill -KILL "$child_pid" 2>/dev/null || true
+    fi
+    wait "$child_pid" 2>/dev/null || true
+    unregister_pid "$child_pid"
+    fail "bounded command exceeded ${timeout_seconds}s: $*"
+  fi
+  set +e
+  wait "$child_pid"
+  rc=$?
+  set -e
+  unregister_pid "$child_pid"
+  BOUNDED_OUTPUT="$(sed -n '1,240p' "$output_file")"
+  BOUNDED_RC="$rc"
+}
+
 fail() { echo "ASSERT FAIL: $*" >&2; exit 1; }
 note() { echo "  - $*"; }
 

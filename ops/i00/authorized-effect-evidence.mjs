@@ -1,6 +1,5 @@
-import { systemEffectEvidenceRoot } from './deployment-authorization-contract.mjs';
 import { createHash } from 'node:crypto';
-import { dirname, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { compileJsonSchemaFile } from './json-schema.mjs';
@@ -218,25 +217,21 @@ export function validateAuthorizedEffectTerminal(document, startDocument = null)
 // ONE AGREED CONTRACT for the backup write-root inventory, imported by both the effect runner
 // and the outcome recorder so neither can drift from the other.
 //
-// The effect-evidence root is a DIRECT CHILD of the backup write root, and evidence is written
-// into it while the effect runs. Any inventory of that write root therefore sees that one child
-// change on every correct fire. Both programs must exclude exactly that child, by exactly the
-// same rule, or one will hash or compare something the other does not.
-//
-// Defined ONCE here rather than derived independently in each program: two copies of a branch
-// is how the earlier defect in this same area was produced.
-export function backupEffectEvidenceChildName(actionClass) {
-  if (!['BACKUP_CREATE', 'ISOLATED_RESTORE'].includes(actionClass)) return null;
-  // DERIVED, never restated. The root is defined once in the authorization contract; taking its
-  // final component here means this cannot drift from it. Writing the two names as literals - as
-  // an earlier version of this function did - was a third copy of one name, which is the defect
-  // this whole contract exists to end.
-  return systemEffectEvidenceRoot(actionClass).split('/').pop();
-}
-
-// The inventory both sides agree to hash and compare: the write root's direct children with the
-// effect-evidence child removed. A null child name leaves the inventory untouched.
-export function backupComparableInventory(entries, actionClass) {
-  const excluded = backupEffectEvidenceChildName(actionClass);
+// SYSTEM effect evidence is a mutable direct child of the backup write root. TEST/STAGING effect
+// evidence is instead a sibling of that root. Exclude the evidence entry only when the two exact,
+// already-bound paths prove the direct-child relationship; a basename alone is not authority to
+// hide an otherwise ordinary backup-root entry.
+export function backupComparableInventory(entries, {
+  backupRoot,
+  effectEvidenceRoot,
+}) {
+  assert(typeof backupRoot === 'string' && resolve(backupRoot) === backupRoot,
+    'backup comparable inventory root is not canonical absolute');
+  assert(typeof effectEvidenceRoot === 'string'
+    && resolve(effectEvidenceRoot) === effectEvidenceRoot,
+    'backup comparable inventory effect evidence root is not canonical absolute');
+  const excluded = dirname(effectEvidenceRoot) === backupRoot
+    ? basename(effectEvidenceRoot)
+    : null;
   return excluded === null ? entries : entries.filter((entry) => entry.name !== excluded);
 }

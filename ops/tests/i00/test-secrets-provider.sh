@@ -3,6 +3,20 @@ set -euo pipefail
 . "$(dirname "$0")/helpers.sh"
 TEST_TMP="$(node -e 'const fs=require("fs");process.stdout.write(fs.realpathSync(process.argv[1]))' "$TEST_TMP")"
 
+if [ "${I00_MA4_RECORDER_HANG_ONLY:-0}" = 1 ]; then
+  I00_MA4_TIME_ANCHOR_MS="$(node -e 'process.stdout.write(String(Math.floor(Date.now() / 1000) * 1000))')"
+  I00_MA4_RISK_NOW="$(node -e 'process.stdout.write(new Date(Number(process.argv[1]) - 120000).toISOString().replace(".000Z", "Z"))' "$I00_MA4_TIME_ANCHOR_MS")"
+  I00_MA4_APPROVED_AT="$(node -e 'process.stdout.write(new Date(Number(process.argv[1]) - 90000).toISOString().replace(".000Z", "Z"))' "$I00_MA4_TIME_ANCHOR_MS")"
+  I00_MA4_STARTS_AT="$(node -e 'process.stdout.write(new Date(Number(process.argv[1]) - 60000).toISOString().replace(".000Z", "Z"))' "$I00_MA4_TIME_ANCHOR_MS")"
+  I00_MA4_EXPIRES_AT="$(node -e 'process.stdout.write(new Date(Number(process.argv[1]) + 1800000).toISOString().replace(".000Z", "Z"))' "$I00_MA4_TIME_ANCHOR_MS")"
+else
+  I00_MA4_RISK_NOW='2026-07-13T00:00:00Z'
+  I00_MA4_APPROVED_AT='2026-07-13T00:10:00Z'
+  I00_MA4_STARTS_AT='2026-07-13T00:15:00Z'
+  I00_MA4_EXPIRES_AT='2026-07-13T01:00:00Z'
+fi
+export I00_MA4_APPROVED_AT I00_MA4_EXPIRES_AT I00_MA4_RISK_NOW I00_MA4_STARTS_AT
+
 REAL_TMP="$(node -e 'const fs=require("fs");process.stdout.write(fs.realpathSync("/tmp"))')"
 SIMULATION_ROOT="$(node "$I00_ROOT/bin/create-simulation-root.mjs" --root "$REAL_TMP/ip-ops-i00-sim-secrets-$$")"
 cleanup_secrets_test() {
@@ -18,6 +32,9 @@ PROVIDER_CONFIG_ROOT="$SIMULATION_ROOT/config"
 cp "$TEST_DIR/fixtures/fake-aws.sh" "$SIMULATION_ROOT/fakes/aws-fixture.sh"
 cp "$TEST_DIR/fixtures/fake-aws.sh" "$SIMULATION_ROOT/fakes/aws-wrong-role.sh"
 chmod +x "$SIMULATION_ROOT/fakes/aws-fixture.sh" "$SIMULATION_ROOT/fakes/aws-wrong-role.sh"
+if [ "${I00_MA4_RECORDER_HANG_ONLY:-0}" = 1 ]; then
+  chmod 0555 "$SIMULATION_ROOT/fakes/aws-fixture.sh" "$SIMULATION_ROOT/fakes/aws-wrong-role.sh"
+fi
 node "$I00_ROOT/bin/seal-simulation-root.mjs" --root "$SIMULATION_ROOT" \
   --commands "$SIMULATION_ROOT/fakes/aws-fixture.sh,$SIMULATION_ROOT/fakes/aws-wrong-role.sh" >/dev/null
 SIMULATION_AWS="$(node -e 'const fs=require("fs");process.stdout.write(fs.realpathSync(process.argv[1]))' "$SIMULATION_ROOT/fakes/aws-fixture.sh")"
@@ -69,18 +86,20 @@ writeFileSync(requestOutput, canonicalJsonBytes({
   operator: 'ops-owner-17',
   approver: 'ops-owner-17',
   approvalReference: 'approval-20260713-001',
-  startsAtUtc: '2026-07-13T00:15:00Z',
-  expiresAtUtc: '2026-07-13T01:00:00Z',
+  startsAtUtc: process.env.I00_MA4_STARTS_AT,
+  expiresAtUtc: process.env.I00_MA4_EXPIRES_AT,
   receiptTargets: {
     result: resultReceiptTarget,
     reconciliation: reconciliationReceiptTarget,
   },
 }), { mode: 0o600 });
 writeFileSync(providerOutput, canonicalJsonBytes({
-	  schemaVersion: 2,
-	  secretArn: 'arn:aws:secretsmanager:ap-south-1:123456789012:secret:cosmos/read-only-Ab12Cd',
-	  secretVersionId: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-	  region: 'ap-south-1',
+  schemaVersion: 2,
+  secretArn: process.env.I00_MA4_RECORDER_HANG_ONLY === '1'
+    ? 'arn:aws:secretsmanager:ap-south-1:123456789012:secret:cosmos/unmatched-Zz99Yy'
+    : 'arn:aws:secretsmanager:ap-south-1:123456789012:secret:cosmos/read-only-Ab12Cd',
+  secretVersionId: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+  region: 'ap-south-1',
   instanceRoleArn: 'arn:aws:iam::123456789012:role/cosmos-instance-role',
   awsCliPath,
   awsCliSha256,
@@ -91,7 +110,7 @@ writeFileSync(providerOutput, canonicalJsonBytes({
   configVersion: 'config-i00-production-17',
   deploymentRisk: `${root}/risk.json`,
   actionPreview: `${root}/preview.json`,
-	  authorizationConsumptionRoot,
+  authorizationConsumptionRoot,
   resultReceiptTarget,
   reconciliationReceiptTarget,
   requiredKeys: ['BINANCE_API_KEY', 'BINANCE_API_SECRET'],
@@ -103,7 +122,7 @@ node "$I00_ROOT/bin/produce-deployment-risk-version.mjs" \
   --credential-output "$CREDENTIAL_OUTPUT" \
   --output "$AUTH_ROOT/risk.json" \
   --root-mode TEST --proof-root "$SIMULATION_ROOT" \
-  --simulation-clock --now 2026-07-13T00:00:00Z \
+  --simulation-clock --now "$I00_MA4_RISK_NOW" \
   --simulation-command-root "$COMMAND_ROOT" \
   --nonce 9f2c712dba93ab3274f6f71be245a76761957cd7d7a557676354264138b8f10e >/dev/null
 node "$I00_ROOT/bin/produce-deployment-action-preview.mjs" \
@@ -148,12 +167,213 @@ writeFileSync(authorizationOutput, canonicalJsonBytes({
   recovery: action.recovery,
   ownerApproval: {
     approver: 'ops-owner-17',
-    approvedAtUtc: '2026-07-13T00:10:00Z',
+    approvedAtUtc: process.env.I00_MA4_APPROVED_AT,
     reference: 'approval-20260713-001',
   },
   receiptTargets: action.receiptTargets,
 }), { mode: 0o600 });
 NODE
+
+if [ "${I00_MA4_RECORDER_HANG_ONLY:-0}" = 1 ]; then
+  [ "$(uname -s)" = Linux ] \
+    || fail_test 'provider-to-wrapper recorder-hang proof requires Linux'
+  RECORDER_HANG_MARKER="$TEST_TMP/ma4-recorder.entered"
+  RECORDER_HANG_HOOK="$TEST_TMP/ma4-recorder-hang-hook.mjs"
+  cat >"$RECORDER_HANG_HOOK" <<'NODE'
+import childProcess from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { syncBuiltinESMExports } from 'node:module';
+
+const recorder = process.env.I00_MA4_OUTCOME_RECORDER;
+const marker = process.env.I00_MA4_RECORDER_MARKER;
+if (typeof recorder !== 'string' || typeof marker !== 'string') {
+  throw new Error('recorder-hang hook requires exact recorder and marker paths');
+}
+const originalSpawnSync = childProcess.spawnSync;
+childProcess.spawnSync = function guardedSpawnSync(command, arguments_, options) {
+  if (command === process.execPath
+      && Array.isArray(arguments_)
+      && arguments_[0] === recorder) {
+    writeFileSync(marker, 'RECORDER_ENTERED\n', { flag: 'wx', mode: 0o600 });
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60_000);
+    throw new Error('recorder-hang sentinel reached its safety deadline');
+  }
+  return Reflect.apply(originalSpawnSync, childProcess, [command, arguments_, options]);
+};
+syncBuiltinESMExports();
+NODE
+  chmod 600 "$RECORDER_HANG_HOOK"
+  set +e
+  node --input-type=module - \
+    "$COMMAND_ROOT/node" \
+    "$I00_ROOT/bin/secret-materialization.mjs" \
+    "$I00_ROOT/bin/record-authorized-action-outcome.mjs" \
+    "$RECORDER_HANG_HOOK" \
+    "$RECORDER_HANG_MARKER" \
+    "$AUTH_ROOT/auth.json" \
+    "$AUTH_ROOT/risk.json" \
+    "$AUTH_ROOT/preview.json" \
+    "$CLAIM_ROOT" \
+    "$CREDENTIAL_OUTPUT" \
+    "$RESULT_RECEIPT" \
+    "$RECONCILIATION_RECEIPT" <<'NODE'
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import {
+  existsSync, readFileSync, readdirSync,
+} from 'node:fs';
+
+const [
+  wrapperNode,
+  wrapper,
+  recorder,
+  hook,
+  marker,
+  authorization,
+  risk,
+  preview,
+  consumptionRoot,
+  credential,
+  resultReceipt,
+  reconciliationReceipt,
+] = process.argv.slice(2);
+const child = spawn(wrapperNode, [
+  '--import', hook,
+  wrapper,
+  '--authorization', authorization,
+  '--deployment-risk', risk,
+  '--action-preview', preview,
+  '--authorization-consumption-root', consumptionRoot,
+], {
+  detached: true,
+  env: {
+    HOME: '/var/empty',
+    LANG: 'C',
+    LC_ALL: 'C',
+    PATH: '/usr/bin:/bin:/usr/sbin:/sbin',
+    TZ: 'UTC',
+    I00_MA4_OUTCOME_RECORDER: recorder,
+    I00_MA4_RECORDER_MARKER: marker,
+  },
+  stdio: ['ignore', 'pipe', 'pipe'],
+});
+
+let stdout = Buffer.alloc(0);
+let stderr = Buffer.alloc(0);
+let spawnError;
+let streamError;
+child.once('error', (error) => {
+  spawnError = error;
+});
+for (const [stream, assign] of [
+  [child.stdout, (value) => { stdout = value; }],
+  [child.stderr, (value) => { stderr = value; }],
+]) {
+  stream.on('data', (chunk) => {
+    const current = stream === child.stdout ? stdout : stderr;
+    if (current.length + chunk.length > 256 * 1024) {
+      streamError = new Error('wrapper output exceeded the bounded proof buffer');
+      return;
+    }
+    const next = Buffer.concat([current, chunk]);
+    assign(next);
+  });
+}
+const closed = new Promise((resolve) => {
+  child.once('close', (code, signal) => resolve({ code, signal }));
+});
+const expected = Buffer.from(
+  '{"status":"PRECREDENTIAL_PROVIDER_FAILURE","stage":"SECRET_FETCH",'
+  + '"cause":"COMMAND_FAILED","credentialPublished":false,'
+  + '"safeRetry":"REFUSED_REQUIRES_FRESH_AUTHORIZATION"}\n',
+);
+const waitForBlockedRecorder = new Promise((resolve, reject) => {
+  let poll;
+  const deadline = setTimeout(() => {
+    clearInterval(poll);
+    reject(new Error('wrapper did not expose its terminal before the recorder deadline'));
+  }, 30_000);
+  poll = setInterval(() => {
+    if (spawnError !== undefined || streamError !== undefined) {
+      clearTimeout(deadline);
+      clearInterval(poll);
+      reject(spawnError ?? streamError);
+      return;
+    }
+    if (child.exitCode !== null || child.signalCode !== null) {
+      clearTimeout(deadline);
+      clearInterval(poll);
+      reject(new Error('wrapper exited before recorder-hang observation'));
+      return;
+    }
+    if (existsSync(marker) && stdout.length >= expected.length) {
+      clearTimeout(deadline);
+      clearInterval(poll);
+      resolve();
+    }
+  }, 5);
+});
+
+let closeResult;
+try {
+  await waitForBlockedRecorder;
+  assert.equal(child.exitCode, null);
+  assert.equal(child.signalCode, null);
+  assert.deepEqual(stdout, expected);
+  assert.deepEqual(stderr, Buffer.alloc(0));
+  assert.equal(readFileSync(marker, 'utf8'), 'RECORDER_ENTERED\n');
+  assert.equal(existsSync(credential), false);
+  assert.equal(existsSync(resultReceipt), false);
+  assert.equal(existsSync(reconciliationReceipt), false);
+  assert.equal(readdirSync(consumptionRoot).length, 1);
+  for (const forbidden of [
+    'unmatched-Zz99Yy',
+    'other-instance-role',
+    'ROLEID',
+    'assumed-role',
+    'FAKE_API_KEY_123456',
+    'FAKE_SECRET_123456',
+    'PRECREDENTIAL_PROVIDER_TERMINAL ',
+  ]) {
+    assert.equal(Buffer.concat([stdout, stderr]).includes(Buffer.from(forbidden)), false);
+  }
+} finally {
+  if (Number.isInteger(child.pid)
+      && child.exitCode === null
+      && child.signalCode === null) {
+    try {
+      process.kill(-child.pid, 'SIGTERM');
+    } catch (error) {
+      if (error?.code !== 'ESRCH') throw error;
+    }
+  }
+  closeResult = await Promise.race([
+    closed,
+    new Promise((resolve) => {
+      setTimeout(() => resolve(null), 1_000);
+    }),
+  ]);
+  if (closeResult === null) {
+    try {
+      process.kill(-child.pid, 'SIGKILL');
+    } catch (error) {
+      if (error?.code !== 'ESRCH') throw error;
+    }
+    closeResult = await closed;
+  }
+}
+assert.equal(closeResult.code, null);
+assert.ok(closeResult.signal === 'SIGTERM' || closeResult.signal === 'SIGKILL');
+assert.deepEqual(stdout, expected);
+NODE
+  RECORDER_HANG_RC=$?
+  set -e
+  [ "$RECORDER_HANG_RC" -eq 0 ] \
+    || fail_test 'provider-to-wrapper recorder-hang supervisor failed'
+  pass_assertion
+  finish
+  exit 0
+fi
 
 note "provider modes and raw config/output paths fail closed before access"
 STAGING_SENTINEL="$SIMULATION_ROOT/credentials/staging-never.json"
@@ -1393,7 +1613,20 @@ assert.equal(contract.providerTerminalLine(valid), `${JSON.stringify(valid)}\n`)
 assert.equal(contract.providerTerminalLine(valid).includes(MARKER), false);
 NODE
 
-note "M-A3: the provider unit refuses automatic retry and routes its terminal to the journal"
+note "M-A4: provider-to-wrapper terminal is observable before a hanging recorder"
+case "$(uname -s)" in
+  Linux)
+    assert_success env I00_TEST_TMP_OVERRIDE= I00_MA4_RECORDER_HANG_ONLY=1 bash "$0"
+    ;;
+  Darwin)
+    note "Linux-only executable recorder-hang proof is not claimed on Darwin"
+    ;;
+  *)
+    fail_test 'provider-to-wrapper recorder-hang proof supports only Linux or Darwin'
+    ;;
+esac
+
+note "M-A4: the provider unit disables automatic restart and routes its terminal to the journal"
 assert_success node --input-type=module - "$PROVIDER_UNIT_TEMPLATE" <<'NODE'
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -1413,10 +1646,9 @@ for (const raw of readFileSync(process.argv[2], 'utf8').split('\n')) {
   const key = line.slice(0, separator);
   service.set(key, [...(service.get(key) ?? []), line.slice(separator + 1)]);
 }
-// Stated, stated once, and stating refusal. The authorization this unit consumes is
-// single-use, so an automatic restart would re-fire the wrapper against an authorization
-// that is already spent: the same refusal the prepublication terminal reports as
-// safeRetry=REFUSED_REQUIRES_FRESH_AUTHORIZATION, held at the platform level too.
+// Restart=no controls systemd's automatic process-exit policy only. An operator-requested
+// start or restart remains possible; every invocation independently passes through the
+// wrapper's single-use authorization validator.
 assert.deepEqual(service.get('Type'), ['oneshot']);
 assert.deepEqual(service.get('Restart'), ['no']);
 // The wrapper's single terminal is what an operator reads, so where it lands is stated

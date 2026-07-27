@@ -687,7 +687,7 @@ test('duplicate start schedules once and duplicate stop clears once', async (t) 
   await new Promise((resolve) => setImmediate(resolve));
 });
 
-test('stop fences an in-flight publication and explicit post-stop refresh can publish', async () => {
+test('stop fences an in-flight publication and queues one explicit post-stop refresh', async () => {
   let release;
   let permissionReads = 0;
   const blocked = new Promise((resolve) => { release = resolve; });
@@ -702,16 +702,53 @@ test('stop fences an in-flight publication and explicit post-stop refresh can pu
 
   const startedBeforeStop = service.refresh();
   service.stop();
+  const refreshedAfterStop = service.refresh();
+  assert.equal(
+    service.refresh(),
+    refreshedAfterStop,
+    'post-stop callers share the one queued current-generation refresh',
+  );
   release();
 
   assert.equal(await startedBeforeStop, before, 'the stopped generation resolves to the published snapshot');
   assert.equal(service.snapshot(), before, 'the stopped generation cannot replace owner-visible state');
 
-  const refreshedAfterStop = await service.refresh();
-  assert.notEqual(refreshedAfterStop, before);
-  assert.equal(service.snapshot(), refreshedAfterStop);
-  assert.equal(refreshedAfterStop.permissionPosture.state, 'VERIFIED_READ_ONLY');
+  const refreshed = await refreshedAfterStop;
+  assert.notEqual(refreshed, before);
+  assert.equal(service.snapshot(), refreshed);
+  assert.equal(refreshed.permissionPosture.state, 'VERIFIED_READ_ONLY');
   assert.equal(permissionReads, 2, 'explicit refresh remains available after stop');
+});
+
+test('a queued refresh superseded by another stop resolves without new transport', async () => {
+  let release;
+  let permissionReads = 0;
+  const blocked = new Promise((resolve) => { release = resolve; });
+  const service = new PrivateReadService(gateway({
+    apiRestrictions: async () => {
+      permissionReads += 1;
+      await blocked;
+      return { ...PERMISSIONS };
+    },
+  }), { now: () => NOW, symbols: ['BTCUSDT'] });
+  const before = service.snapshot();
+
+  const fenced = service.refresh();
+  service.stop();
+  const queued = service.refresh();
+  assert.equal(service.refresh(), queued);
+  service.stop();
+  release();
+
+  assert.equal(await fenced, before);
+  assert.equal(await queued, before);
+  assert.equal(permissionReads, 1, 'superseded queued work spends no private call');
+  assert.equal(service.snapshot(), before);
+
+  const requested = await service.refresh();
+  assert.equal(permissionReads, 2);
+  assert.notEqual(requested, before);
+  assert.equal(service.snapshot(), requested);
 });
 
 test('restart behind a stopped in-flight read schedules one current-generation refresh', async () => {

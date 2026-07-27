@@ -52,6 +52,12 @@ const LEGACY_NULL_ROWS = Object.freeze({
 });
 
 const CANONICAL_ACCOUNT_TRUTH_STATE = makeSupervisor().summaries.capital.accountTruthState;
+const CANONICAL_ACCOUNT_CUT_IDENTITY = [
+  makeSupervisor().revision,
+  makeSupervisor().runtimeGeneration,
+  makeSupervisor().controlGeneration,
+  makeSupervisor().evaluatedAtMs,
+].join(':');
 
 function materialPage() {
   return projectProductMaterialEventPage('0', 10, makeRead().events({ afterCursor: '0', limit: 10 }));
@@ -93,6 +99,9 @@ function availableSurfaceCut(surfaceId, overrides = {}) {
     truthLabel: 'WIRED',
     unavailableReason: null,
     supersedesCanonicalAccountTruthState: surfaceId === 'account' ? CANONICAL_ACCOUNT_TRUTH_STATE : null,
+    supersedesCanonicalAccountCutIdentity: surfaceId === 'account'
+      ? CANONICAL_ACCOUNT_CUT_IDENTITY
+      : null,
     fields: Object.freeze((OWNER_ROWS[surfaceId] ?? []).map(
       (fieldId) => ownerRow(fieldId, `${surfaceId} ${fieldId} owner value`),
     )),
@@ -114,6 +123,7 @@ function unavailableSurfaceCut(surfaceId, unavailableReason, truthLabel = 'NOT_C
     truthLabel,
     unavailableReason,
     supersedesCanonicalAccountTruthState: null,
+    supersedesCanonicalAccountCutIdentity: null,
     fields: Object.freeze([]),
   });
 }
@@ -382,6 +392,16 @@ test('a malformed cut is rejected whole and binds nothing anywhere', () => {
     LOWERCASE_REASON_CODE: makeCut([unavailableSurfaceCut('account', 'private_account_not_configured')]),
     SUPERSESSION_OUTSIDE_ACCOUNT: makeCut([availableSurfaceCut('markets', {
       supersedesCanonicalAccountTruthState: CANONICAL_ACCOUNT_TRUTH_STATE,
+      supersedesCanonicalAccountCutIdentity: CANONICAL_ACCOUNT_CUT_IDENTITY,
+    })]),
+    SUPERSESSION_CUT_IDENTITY_MISSING: makeCut([availableSurfaceCut('account', {
+      supersedesCanonicalAccountCutIdentity: null,
+    })]),
+    SUPERSESSION_STATE_MISSING: makeCut([availableSurfaceCut('account', {
+      supersedesCanonicalAccountTruthState: null,
+    })]),
+    SUPERSESSION_CUT_IDENTITY_INVALID: makeCut([availableSurfaceCut('account', {
+      supersedesCanonicalAccountCutIdentity: 'revision-one',
     })]),
     MISSING_ROW: makeCut([availableSurfaceCut('account', {
       fields: Object.freeze(availableSurfaceCut('account').fields.slice(1)),
@@ -461,7 +481,7 @@ test('a malformed cut is rejected whole and binds nothing anywhere', () => {
   );
 });
 
-test('account truth is raised only while the exact canonical account state still holds', () => {
+test('account truth is raised only while the exact canonical account cut still holds', () => {
   const bound = envelopeWith({ ownerTruthCut: makeCut(), ownerTruthUnavailableReason: null });
   assert.equal(bound.surfaces.account.truthLabel, 'WIRED');
   assert.equal(bound.surfaces.account.bindingState, 'BINDING_READY');
@@ -499,10 +519,48 @@ test('account truth is raised only while the exact canonical account state still
   );
   assert.equal(moved.surfaces.account.bindingState, 'BLOCKED_BACKEND');
 
+  const movedRevision = buildProductRuntimeSupervisorEnvelope({
+    ...OPS_PROJECTION,
+    snapshot: makeSupervisor({ revision: makeSupervisor().revision + 1 }),
+    materialEvents: materialPage(),
+    traces: [],
+    nowMs: T0,
+    ownerTruthCut: makeCut(),
+    ownerTruthUnavailableReason: null,
+  });
+  assert.equal(
+    rows(movedRevision, 'account')['spot-truth'].value,
+    'account spot-truth owner value',
+    'the historical row stays visible while its stale supersession cannot raise the surface',
+  );
+  assert.equal(
+    movedRevision.surfaces.account.bindingState,
+    'BLOCKED_BACKEND',
+    'an unchanged state label on a newer supervisor revision cannot accept the stale cut',
+  );
+
+  const movedEvaluation = buildProductRuntimeSupervisorEnvelope({
+    ...OPS_PROJECTION,
+    snapshot: makeSupervisor({ evaluatedAtMs: makeSupervisor().evaluatedAtMs + 1 }),
+    materialEvents: materialPage(),
+    traces: [],
+    nowMs: T0,
+    ownerTruthCut: makeCut(),
+    ownerTruthUnavailableReason: null,
+  });
+  assert.equal(
+    movedEvaluation.surfaces.account.bindingState,
+    'BLOCKED_BACKEND',
+    'same counters on a different evaluated supervisor cut cannot accept stale Account evidence',
+  );
+
   const noSupersession = envelopeWith({
     ownerTruthCut: makeCut([
       availableSurfaceCut('dashboard'),
-      availableSurfaceCut('account', { supersedesCanonicalAccountTruthState: null }),
+      availableSurfaceCut('account', {
+        supersedesCanonicalAccountTruthState: null,
+        supersedesCanonicalAccountCutIdentity: null,
+      }),
       availableSurfaceCut('markets'),
     ]),
     ownerTruthUnavailableReason: null,

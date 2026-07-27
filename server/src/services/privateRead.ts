@@ -713,6 +713,8 @@ export class PrivateReadService {
   private current: PrivateReadSnapshot;
   private refreshInFlight: Promise<PrivateReadSnapshot> | null = null;
   private refreshInFlightGeneration: number | null = null;
+  private refreshQueued: Promise<PrivateReadSnapshot> | null = null;
+  private refreshQueuedGeneration: number | null = null;
   private timer: NodeJS.Timeout | null = null;
   private publicationGeneration = 0;
 
@@ -740,17 +742,7 @@ export class PrivateReadService {
 
   start(): void {
     if (this.gateway === null || this.timer !== null) return;
-    const publicationGeneration = this.publicationGeneration;
-    const joinedStoppedGeneration = this.refreshInFlight !== null
-      && this.refreshInFlightGeneration !== publicationGeneration;
-    const immediate = this.refresh();
-    void immediate.then(() => {
-      if (joinedStoppedGeneration
-        && this.timer !== null
-        && this.publicationGeneration === publicationGeneration) {
-        void this.refresh().catch(() => undefined);
-      }
-    }, () => undefined);
+    void this.refresh().catch(() => undefined);
     this.timer = setInterval(() => void this.refresh().catch(() => undefined), this.refreshIntervalMs);
     this.timer.unref();
   }
@@ -766,8 +758,55 @@ export class PrivateReadService {
 
   refresh(): Promise<PrivateReadSnapshot> {
     if (this.gateway === null) return Promise.resolve(this.current);
-    if (this.refreshInFlight !== null) return this.refreshInFlight;
-    const publicationGeneration = this.publicationGeneration;
+    if (this.refreshQueued !== null) {
+      // A later lifecycle generation supersedes the generation the queued
+      // refresh was waiting to publish for, without adding transport overlap.
+      this.refreshQueuedGeneration = this.publicationGeneration;
+      return this.refreshQueued;
+    }
+    if (this.refreshInFlight !== null) {
+      if (this.refreshInFlightGeneration === this.publicationGeneration) {
+        return this.refreshInFlight;
+      }
+      return this.queueBehind(this.refreshInFlight);
+    }
+    return this.beginRefresh(this.publicationGeneration);
+  }
+
+  private queueBehind(predecessor: Promise<PrivateReadSnapshot>): Promise<PrivateReadSnapshot> {
+    let queued!: Promise<PrivateReadSnapshot>;
+    const releaseQueue = () => {
+      if (this.refreshQueued === queued) {
+        this.refreshQueued = null;
+        this.refreshQueuedGeneration = null;
+      }
+    };
+    this.refreshQueuedGeneration = this.publicationGeneration;
+    queued = (async () => {
+      try {
+        await predecessor;
+      } catch {
+        // A current-generation request can still proceed after a fenced
+        // predecessor rejects.
+      }
+      while (true) {
+        const generation = this.refreshQueuedGeneration!;
+        if (generation !== this.publicationGeneration) {
+          // No request was made after the last stop. Release before resolving
+          // so the next explicit request starts its own current-generation read.
+          releaseQueue();
+          return this.current;
+        }
+        const snapshot = await this.beginRefresh(generation);
+        if (this.refreshQueuedGeneration === generation) return snapshot;
+      }
+    })();
+    this.refreshQueued = queued;
+    void queued.then(releaseQueue, releaseQueue);
+    return queued;
+  }
+
+  private beginRefresh(publicationGeneration: number): Promise<PrivateReadSnapshot> {
     const inFlight = this.readOnce(publicationGeneration);
     this.refreshInFlight = inFlight;
     this.refreshInFlightGeneration = publicationGeneration;

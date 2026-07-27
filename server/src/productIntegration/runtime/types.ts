@@ -218,11 +218,13 @@ export interface ProductRuntimeOwnerTruthSurfaceCut {
   readonly unavailableReason: string | null;
   /**
    * Account only. The exact canonical `capital.accountTruthState` this cut was
-   * taken against. The projection raises the Account surface label to this cut
-   * only while that canonical state still matches, so a moved Capital owner
-   * fails the surface closed instead of leaving a silent override behind.
+   * taken against, plus the System revision/runtime/control/evaluation identity
+   * of that supervisor cut. The projection raises the Account surface label
+   * only while both still match, so a moved Capital owner fails the surface
+   * closed instead of leaving a silent override behind.
    */
   readonly supersedesCanonicalAccountTruthState: string | null;
+  readonly supersedesCanonicalAccountCutIdentity: string | null;
   /** Exactly the surface's owner-owned rows when available; empty otherwise. */
   readonly fields: readonly Readonly<ProductRuntimeOwnerTruthField>[];
 }
@@ -256,6 +258,7 @@ export interface ProductRuntimeOwnerTruthSurfaceBinding {
   readonly state: 'AVAILABLE' | 'UNAVAILABLE';
   readonly surfaceTruthLabel: ProductRuntimeTruthLabel;
   readonly supersedesCanonicalAccountTruthState: string | null;
+  readonly supersedesCanonicalAccountCutIdentity: string | null;
   readonly fields: Readonly<Record<string, Readonly<ProductRuntimeOwnerTruthDatum>>>;
 }
 

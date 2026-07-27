@@ -957,6 +957,15 @@ function accountTruth(snapshot: Readonly<SystemSupervisorReadModel>): ProductRun
   return 'UNKNOWN';
 }
 
+function canonicalAccountCutIdentity(snapshot: Readonly<SystemSupervisorReadModel>): string {
+  return [
+    snapshot.revision,
+    snapshot.runtimeGeneration,
+    snapshot.controlGeneration,
+    snapshot.evaluatedAtMs,
+  ].join(':');
+}
+
 function weakestSurfaceTruth(labels: readonly ProductRuntimeTruthLabel[]): ProductRuntimeTruthLabel {
   for (const candidate of ['UNKNOWN', 'MISSING', 'UNAVAILABLE', 'NOT_CONFIGURED', 'BLOCKED', 'SYNTHETIC_ONLY', 'BUILT_AND_TESTED', 'IMPORTED', 'WIRED', 'LIVE_PUBLIC'] as const) {
     if (labels.includes(candidate)) return candidate;
@@ -1079,13 +1088,15 @@ function opsDatum(
 
 const OWNER_TRUTH_CODE = /^[A-Z][A-Z0-9_]{0,63}$/;
 const OWNER_TRUTH_SOURCE = /^[A-Za-z][A-Za-z0-9._-]{0,63}$/;
+const OWNER_TRUTH_ACCOUNT_CUT_IDENTITY = /^(?:0|[1-9][0-9]*):(?:0|[1-9][0-9]*):(?:0|[1-9][0-9]*):(?:0|[1-9][0-9]*)$/;
 const OWNER_TRUTH_MAX_VALUE_LENGTH = 240;
 const OWNER_TRUTH_MAX_AGE_CEILING_MS = 86_400_000;
 
 const OWNER_TRUTH_CUT_KEYS = Object.freeze(['schemaVersion', 'source', 'observedAtMs', 'surfaces']);
 const OWNER_TRUTH_SURFACE_KEYS = Object.freeze([
   'surfaceId', 'source', 'state', 'observedAtMs', 'maxAgeMs', 'truthLabel',
-  'unavailableReason', 'supersedesCanonicalAccountTruthState', 'fields',
+  'unavailableReason', 'supersedesCanonicalAccountTruthState',
+  'supersedesCanonicalAccountCutIdentity', 'fields',
 ]);
 const OWNER_TRUTH_FIELD_KEYS = Object.freeze([
   'fieldId', 'source', 'state', 'value', 'truthLabel', 'unavailableReason',
@@ -1138,6 +1149,7 @@ function unavailableOwnerTruthSurface(
     state: 'UNAVAILABLE',
     surfaceTruthLabel: truthLabel,
     supersedesCanonicalAccountTruthState: null,
+    supersedesCanonicalAccountCutIdentity: null,
     fields: Object.freeze(fields),
   });
 }
@@ -1153,6 +1165,7 @@ function ownerTruthBinding(
       state: surface.state,
       surfaceTruthLabel: surface.surfaceTruthLabel,
       supersedesCanonicalAccountTruthState: surface.supersedesCanonicalAccountTruthState,
+      supersedesCanonicalAccountCutIdentity: surface.supersedesCanonicalAccountCutIdentity,
       fields: PRODUCT_RUNTIME_OWNER_TRUTH_FIELDS[surfaceId].map((fieldId) => Object.freeze({
         fieldId,
         ...surface.fields[fieldId],
@@ -1266,11 +1279,17 @@ export function projectProductRuntimeOwnerTruthBinding(
       || Number(entry.maxAgeMs) < 1 || Number(entry.maxAgeMs) > OWNER_TRUTH_MAX_AGE_CEILING_MS
       || !Array.isArray(entry.fields)) return malformed();
     const supersedes = entry.supersedesCanonicalAccountTruthState;
-    if (!(supersedes === null
-      || (surfaceId === 'account' && typeof supersedes === 'string'
-        && PRODUCT_IDENTIFIER.test(supersedes)))) return malformed();
+    const supersedesCut = entry.supersedesCanonicalAccountCutIdentity;
+    const noSupersession = supersedes === null && supersedesCut === null;
+    const exactAccountSupersession = surfaceId === 'account'
+      && typeof supersedes === 'string'
+      && PRODUCT_IDENTIFIER.test(supersedes)
+      && typeof supersedesCut === 'string'
+      && supersedesCut.length <= 96
+      && OWNER_TRUTH_ACCOUNT_CUT_IDENTITY.test(supersedesCut);
+    if (!noSupersession && !exactAccountSupersession) return malformed();
     if (entry.state === 'UNAVAILABLE') {
-      if (entry.fields.length !== 0 || supersedes !== null
+      if (entry.fields.length !== 0 || supersedes !== null || supersedesCut !== null
         || typeof entry.unavailableReason !== 'string'
         || !OWNER_TRUTH_CODE.test(entry.unavailableReason)
         || !OWNER_TRUTH_UNAVAILABLE_LABEL_SET.has(entry.truthLabel)) return malformed();
@@ -1301,6 +1320,7 @@ export function projectProductRuntimeOwnerTruthBinding(
       state: 'AVAILABLE',
       surfaceTruthLabel: entry.truthLabel as ProductRuntimeTruthLabel,
       supersedesCanonicalAccountTruthState: supersedes as string | null,
+      supersedesCanonicalAccountCutIdentity: supersedesCut as string | null,
       fields,
     });
   }
@@ -1386,12 +1406,13 @@ function surfaces(
       : null;
     const canonicalTruthLabel = surfaceTruth(surfaceId, snapshot, incidentSnapshot);
     // Account is the one surface whose canonical label is owned by Capital's
-    // account-truth state. A bound cut raises it only while the exact canonical
-    // state it was taken against still holds; anything else stays canonical.
+    // account-truth state. A bound cut raises it only while both the exact state
+    // and supervisor revision/runtime/control identity still hold.
     const supersededTruthLabel = ownerTruthSurface !== null
       && ownerTruthSurface.state === 'AVAILABLE'
       && ownerTruthSurface.supersedesCanonicalAccountTruthState !== null
       && ownerTruthSurface.supersedesCanonicalAccountTruthState === snapshot.summaries.capital.accountTruthState
+      && ownerTruthSurface.supersedesCanonicalAccountCutIdentity === canonicalAccountCutIdentity(snapshot)
       ? ownerTruthSurface.surfaceTruthLabel
       : null;
     const baseTruthLabel = surfaceId === 'markets' && ownerTruthSurface !== null

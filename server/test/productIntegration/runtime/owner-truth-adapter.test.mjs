@@ -41,6 +41,31 @@ function supervisorWithAvailableCapital() {
   });
 }
 
+function supervisorWithStoppedPublicSources(componentIds) {
+  const source = makeSupervisor();
+  const stopped = new Set(componentIds);
+  return makeSupervisor({
+    components: Object.freeze(source.components.map((component) => (
+      stopped.has(component.componentId)
+        ? Object.freeze({
+            ...component,
+            truthLabel: 'UNAVAILABLE',
+            desiredState: 'STOPPED',
+            phase: 'STOPPED',
+            sourceLifecycle: 'STOPPED',
+            readiness: 'BLOCKED',
+            authority: 'UNAVAILABLE',
+            freshness: Object.freeze({
+              ...component.freshness,
+              state: 'STALE',
+              effectiveAuthority: 'UNAVAILABLE',
+            }),
+          })
+        : component
+    ))),
+  });
+}
+
 function reconciliation(state = 'RECONCILED', observedAt = T0 - 50) {
   return Object.freeze({
     balances: Object.freeze({ state, observedAt, reason: null }),
@@ -158,6 +183,34 @@ function availablePrivateRead() {
       coverage,
     }),
     reconciliation: reconciliation(),
+  });
+}
+
+function producedPrivateRead() {
+  const current = availablePrivateRead();
+  const coverage = Object.freeze({
+    state: 'PARTIAL_SYMBOL_SCOPED',
+    symbols: Object.freeze(['BTCUSDT']),
+    limitation: 'History is limited to the configured symbol scope.',
+  });
+  const partial = Object.freeze({
+    state: 'PARTIAL',
+    observedAt: T0 - 50,
+    reason: 'Provider facts arrived, but no independent account-wide recomputation is available.',
+  });
+  return Object.freeze({
+    ...current,
+    state: 'PARTIAL',
+    spot: Object.freeze({ ...current.spot, state: 'PARTIAL', coverage }),
+    margin: Object.freeze({ ...current.margin, state: 'PARTIAL', coverage }),
+    usdm: Object.freeze({ ...current.usdm, state: 'PARTIAL', coverage }),
+    reconciliation: Object.freeze({
+      balances: partial,
+      orders: partial,
+      fills: partial,
+      positions: partial,
+      liabilities: partial,
+    }),
   });
 }
 
@@ -316,6 +369,10 @@ test('available injected cuts bind every owned row to exact source facts or a sp
     accountSurface.supersedesCanonicalAccountTruthState,
     supervisor.summaries.capital.accountTruthState,
   );
+  assert.equal(
+    accountSurface.supersedesCanonicalAccountCutIdentity,
+    `${supervisor.revision}:${supervisor.runtimeGeneration}:${supervisor.controlGeneration}:${supervisor.evaluatedAtMs}`,
+  );
   assert.match(account['spot-truth'].value, /free=123\.45000000:locked=0\.00000000/);
   assert.match(account['usdm-truth'].value, /balance=55\.25000000:available=44\.50000000/);
   assert.match(account['margin-truth'].value, /totalNetAssetBtc=1\.12500000/);
@@ -329,6 +386,10 @@ test('available injected cuts bind every owned row to exact source facts or a sp
   assert.equal(
     account['foreign-manual'].unavailableReason,
     'FOREIGN_MANUAL_PROVENANCE_NOT_PUBLISHED',
+  );
+  assert.equal(
+    account.reconciliation.unavailableReason,
+    'PRIVATE_ACCOUNT_RECONCILIATION_UNPROVEN',
   );
 
   const markets = fields(surface(cut, 'markets'));
@@ -372,11 +433,160 @@ test('keyless private truth remains explicitly not configured while public Marke
   assert.equal(account.source, 'services.privateRead');
   assert.deepEqual(account.fields, []);
   assert.equal(account.supersedesCanonicalAccountTruthState, null);
+  assert.equal(account.supersedesCanonicalAccountCutIdentity, null);
 
   const markets = surface(cut, 'markets');
   assert.equal(markets.state, 'AVAILABLE');
   assert.equal(fields(markets).basis.state, 'AVAILABLE');
   assert.equal(JSON.stringify(cut).includes('CANONICAL_OWNER_FIELD_NOT_CONFIGURED'), false);
+});
+
+test('the producible symbol-scoped private cut binds returned facts but stays non-green on completeness and reconciliation', () => {
+  const cut = projectProductRuntimeOwnerTruthCut({
+    supervisor: supervisorWithAvailableCapital(),
+    privateRead: producedPrivateRead(),
+    markets: availableMarkets(),
+  });
+  const accountSurface = surface(cut, 'account');
+  const account = fields(accountSurface);
+
+  for (const fieldId of [
+    'spot-truth',
+    'usdm-truth',
+    'margin-truth',
+    'liabilities-interest',
+    'orders-positions',
+  ]) {
+    assert.equal(account[fieldId].state, 'AVAILABLE', fieldId);
+    assert.equal(account[fieldId].unavailableReason, null, fieldId);
+  }
+  assert.match(account['spot-truth'].value, /state=PARTIAL/);
+  assert.match(account['spot-truth'].value, /coverage=PARTIAL_SYMBOL_SCOPED/);
+  assert.match(account['spot-truth'].value, /free=123\.45000000:locked=0\.00000000/);
+  assert.match(account['usdm-truth'].value, /balance=55\.25000000:available=44\.50000000/);
+  assert.match(account['margin-truth'].value, /totalNetAssetBtc=1\.12500000/);
+  assert.match(account['liabilities-interest'].value, /totalLiabilityBtc=0\.12500000/);
+  assert.match(account['liabilities-interest'].value, /borrowed=2\.50000000:interest=0\.01000000/);
+  assert.equal(
+    account['freshness-completeness'].unavailableReason,
+    'PRIVATE_ACCOUNT_HISTORY_SYMBOL_SCOPED_ONLY',
+  );
+  assert.equal(
+    account.reconciliation.unavailableReason,
+    'PRIVATE_ACCOUNT_RECONCILIATION_UNPROVEN',
+  );
+  assert.equal(accountSurface.state, 'AVAILABLE');
+  assert.equal(JSON.stringify(cut).includes('CANONICAL_OWNER_FIELD_NOT_CONFIGURED'), false);
+});
+
+test('symbol-scoped labels do not overclaim history or reconciliation when current facts are missing', () => {
+  const current = producedPrivateRead();
+  const privateRead = Object.freeze({
+    ...current,
+    spot: Object.freeze({
+      ...current.spot,
+      balances: null,
+    }),
+    reconciliation: Object.freeze({
+      ...current.reconciliation,
+      balances: Object.freeze({
+        ...current.reconciliation.balances,
+        reason: 'One or more product balance reads were unavailable.',
+      }),
+    }),
+  });
+  const cut = projectProductRuntimeOwnerTruthCut({
+    supervisor: supervisorWithAvailableCapital(),
+    privateRead,
+    markets: availableMarkets(),
+  });
+  const account = fields(surface(cut, 'account'));
+  assert.equal(account['spot-truth'].state, 'UNAVAILABLE');
+  assert.equal(account['spot-truth'].unavailableReason, 'SPOT_PRIVATE_READ_PARTIAL');
+  assert.equal(
+    account['freshness-completeness'].unavailableReason,
+    'PRIVATE_ACCOUNT_FRESHNESS_OR_COVERAGE_PARTIAL',
+  );
+  assert.equal(
+    account.reconciliation.unavailableReason,
+    'PRIVATE_ACCOUNT_RECONCILIATION_INCOMPLETE',
+  );
+});
+
+test('complete labels stay non-green when an available snapshot omits current account facts', () => {
+  const current = availablePrivateRead();
+  const privateRead = Object.freeze({
+    ...current,
+    spot: Object.freeze({
+      ...current.spot,
+      balances: null,
+    }),
+    reconciliation: Object.freeze(Object.fromEntries(
+      Object.entries(current.reconciliation).map(([fieldId, value]) => [
+        fieldId,
+        Object.freeze({ ...value, state: 'RECONCILED' }),
+      ]),
+    )),
+  });
+  const cut = projectProductRuntimeOwnerTruthCut({
+    supervisor: supervisorWithAvailableCapital(),
+    privateRead,
+    markets: availableMarkets(),
+  });
+  const account = fields(surface(cut, 'account'));
+  assert.equal(account['spot-truth'].unavailableReason, 'SPOT_PRIVATE_READ_INCOMPLETE');
+  assert.equal(
+    account['freshness-completeness'].unavailableReason,
+    'PRIVATE_ACCOUNT_FRESHNESS_OR_COVERAGE_PARTIAL',
+  );
+  assert.equal(
+    account.reconciliation.unavailableReason,
+    'PRIVATE_ACCOUNT_RECONCILIATION_INCOMPLETE',
+  );
+});
+
+test('an unrecognized account state drops supersession atomically without invalidating other owner surfaces', () => {
+  const source = makeSupervisor();
+  const supervisor = makeSupervisor({
+    summaries: Object.freeze({
+      ...source.summaries,
+      capital: Object.freeze({
+        ...source.summaries.capital,
+        accountTruthState: 'OWNER GATED',
+      }),
+    }),
+  });
+  const cut = projectProductRuntimeOwnerTruthCut({
+    supervisor,
+    privateRead: producedPrivateRead(),
+    markets: availableMarkets(),
+  });
+  const accountCut = surface(cut, 'account');
+  assert.equal(accountCut.supersedesCanonicalAccountTruthState, null);
+  assert.equal(accountCut.supersedesCanonicalAccountCutIdentity, null);
+
+  const envelope = buildProductRuntimeSupervisorEnvelope({
+    applicationStartOk: true,
+    snapshot: supervisor,
+    opsReadback: makeOpsReadback(),
+    opsIntakeInterlock: makeOpsInterlock(),
+    materialEvents: projectProductMaterialEventPage(
+      '0',
+      10,
+      makeRead().events({ afterCursor: '0', limit: 10 }),
+    ),
+    traces: [],
+    ownerTruthCut: cut,
+    ownerTruthUnavailableReason: null,
+    nowMs: T0,
+  });
+  for (const surfaceId of ['dashboard', 'account', 'markets']) {
+    for (const field of envelope.surfaces[surfaceId].evidence) {
+      assert.notEqual(field.unavailableReason, 'OWNER_TRUTH_CUT_MALFORMED');
+      assert.notEqual(field.unavailableReason, 'CANONICAL_OWNER_FIELD_NOT_CONFIGURED');
+    }
+  }
+  assert.notEqual(fields(envelope.surfaces.account)['spot-truth'].value, null);
 });
 
 test('partial source cuts preserve the facts that arrived and block only unavailable semantics', () => {
@@ -424,6 +634,13 @@ test('partial source cuts preserve the facts that arrived and block only unavail
   );
 
   const markets = fields(surface(cut, 'markets'));
+  assert.equal(markets.basis.state, 'AVAILABLE');
+  assert.match(markets.basis.value, /reportedBasisPct=0\.55/);
+  assert.equal(markets.basis.value.includes('executableBasisBestPct'), false);
+  assert.match(markets.liquidity.value, /spotTopQuoteUsd=250000/);
+  assert.equal(markets.liquidity.value.includes('perpTopQuoteUsd'), false);
+  assert.match(markets.derivatives.value, /openInterestUsd=2500000000/);
+  assert.equal(markets.derivatives.value.includes('oiToPerpVolume24h'), false);
   assert.equal(markets['source-freshness'].state, 'UNAVAILABLE');
   assert.equal(markets['source-freshness'].unavailableReason, 'MARKET_PUBLIC_SOURCES_PARTIAL');
   assert.equal(markets['data-quality'].state, 'AVAILABLE');
@@ -464,11 +681,100 @@ test('large input arrays and invalid numeric values stay bounded without inventi
   }
 });
 
+test('a total REST outage retains only freshness-filtered stream facts', () => {
+  const cut = projectProductRuntimeOwnerTruthCut({
+    supervisor: makeSupervisor(),
+    privateRead: producedPrivateRead(),
+    markets: availableMarkets({
+      dataSources: Object.freeze({
+        spotBookTicker: 'unavailable',
+        futuresBookTicker: 'unavailable',
+        futures24hTicker: 'unavailable',
+      }),
+    }),
+  });
+  const marketsSurface = surface(cut, 'markets');
+  const markets = fields(marketsSurface);
+  assert.equal(marketsSurface.state, 'AVAILABLE');
+  assert.equal(markets.basis.state, 'AVAILABLE');
+  assert.match(markets.basis.value, /reportedBasisPct=0\.55/);
+  assert.equal(markets.basis.value.includes('executableBasisBestPct'), false);
+  assert.equal(markets.liquidity.state, 'UNAVAILABLE');
+  assert.equal(
+    markets.liquidity.unavailableReason,
+    'MARKET_LIQUIDITY_REST_BOOKS_UNAVAILABLE',
+  );
+  assert.equal(markets.derivatives.state, 'AVAILABLE');
+  assert.match(markets.derivatives.value, /fundingRate=0\.0001/);
+  assert.equal(markets.derivatives.value.includes('oiToPerpVolume24h'), false);
+  assert.equal(
+    markets['source-freshness'].unavailableReason,
+    'MARKET_PUBLIC_SOURCES_UNAVAILABLE',
+  );
+  assert.equal(markets['data-quality'].state, 'AVAILABLE');
+});
+
+test('canonical public-source lifecycle gates retained MarketEngine and REST facts', () => {
+  const usdmStopped = projectProductRuntimeOwnerTruthCut({
+    supervisor: supervisorWithStoppedPublicSources(['public-usdm-source']),
+    privateRead: producedPrivateRead(),
+    markets: availableMarkets(),
+  });
+  const partial = fields(surface(usdmStopped, 'markets'));
+  assert.equal(partial.basis.state, 'UNAVAILABLE');
+  assert.equal(partial.liquidity.state, 'AVAILABLE');
+  assert.match(partial.liquidity.value, /spotTopQuoteUsd=250000/);
+  assert.equal(partial.liquidity.value.includes('perpTopQuoteUsd'), false);
+  assert.equal(partial.derivatives.state, 'UNAVAILABLE');
+  assert.equal(
+    partial['source-freshness'].unavailableReason,
+    'MARKET_PUBLIC_SOURCE_LIFECYCLE_PARTIAL',
+  );
+
+  const allStopped = projectProductRuntimeOwnerTruthCut({
+    supervisor: supervisorWithStoppedPublicSources([
+      'public-spot-source',
+      'public-usdm-source',
+    ]),
+    privateRead: producedPrivateRead(),
+    markets: availableMarkets(),
+  });
+  const stoppedSurface = surface(allStopped, 'markets');
+  assert.equal(stoppedSurface.state, 'UNAVAILABLE');
+  assert.equal(
+    stoppedSurface.unavailableReason,
+    'MARKET_PUBLIC_SOURCE_LIFECYCLE_NOT_LIVE',
+  );
+  assert.deepEqual(stoppedSurface.fields, []);
+
+  const source = makeSupervisor();
+  const missingLifecycle = makeSupervisor({
+    components: Object.freeze(source.components.map((component) => (
+      component.componentId === 'public-spot-source'
+        || component.componentId === 'public-usdm-source'
+        ? Object.freeze({ ...component, sourceLifecycle: null })
+        : component
+    ))),
+  });
+  const missingLifecycleCut = projectProductRuntimeOwnerTruthCut({
+    supervisor: missingLifecycle,
+    privateRead: producedPrivateRead(),
+    markets: availableMarkets(),
+  });
+  const missingLifecycleSurface = surface(missingLifecycleCut, 'markets');
+  assert.equal(missingLifecycleSurface.state, 'UNAVAILABLE');
+  assert.equal(
+    missingLifecycleSurface.unavailableReason,
+    'MARKET_PUBLIC_SOURCE_LIFECYCLE_NOT_LIVE',
+  );
+  assert.deepEqual(missingLifecycleSurface.fields, []);
+});
+
 test('production cuts bind through the final envelope with exact inventories and no generic missing reason', () => {
   const supervisor = supervisorWithAvailableCapital();
   const availableCut = projectProductRuntimeOwnerTruthCut({
     supervisor,
-    privateRead: availablePrivateRead(),
+    privateRead: producedPrivateRead(),
     markets: availableMarkets(),
   });
   const materialEvents = projectProductMaterialEventPage(
@@ -538,6 +844,13 @@ test('unavailable or malformed market and timestamp inputs fail closed with sour
         futuresBookTicker: 'unavailable',
         futures24hTicker: 'unavailable',
       }),
+      rows: Object.freeze([
+        Object.freeze({
+          symbol: 'BTCUSDT',
+          spotSpreadPct: 0.001,
+          spotTopQuoteUsd: 250000,
+        }),
+      ]),
     }),
   });
   const unavailableMarkets = surface(allUnavailable, 'markets');
@@ -578,7 +891,7 @@ test('unavailable or malformed market and timestamp inputs fail closed with sour
     'MARKET_SOURCE_OBSERVED_AT_INVALID',
   );
 
-  const invalidPrivateTime = projectProductRuntimeOwnerTruthCut({
+  const notYetObservedPrivate = projectProductRuntimeOwnerTruthCut({
     supervisor,
     privateRead: Object.freeze({
       ...privateRead,
@@ -588,8 +901,55 @@ test('unavailable or malformed market and timestamp inputs fail closed with sour
     markets: availableMarkets(),
   });
   assert.equal(
+    surface(notYetObservedPrivate, 'account').unavailableReason,
+    'PRIVATE_ACCOUNT_READ_NOT_YET_OBSERVED',
+  );
+
+  const invalidPrivateTime = projectProductRuntimeOwnerTruthCut({
+    supervisor,
+    privateRead: Object.freeze({
+      ...privateRead,
+      observedAt: Number.NaN,
+      permissionPosture: Object.freeze({ ...privateRead.permissionPosture, observedAt: null }),
+    }),
+    markets: availableMarkets(),
+  });
+  assert.equal(
     surface(invalidPrivateTime, 'account').unavailableReason,
     'PRIVATE_ACCOUNT_OBSERVED_AT_INVALID',
+  );
+
+  const invalidNestedPrivate = projectProductRuntimeOwnerTruthCut({
+    supervisor,
+    privateRead: Object.freeze({
+      ...privateRead,
+      permissionPosture: Object.freeze({
+        ...privateRead.permissionPosture,
+        observedAt: Number.NaN,
+      }),
+      spot: Object.freeze({
+        ...privateRead.spot,
+        observedAt: Number.NaN,
+      }),
+    }),
+    markets: availableMarkets(),
+  });
+  const invalidNestedAccount = fields(surface(invalidNestedPrivate, 'account'));
+  assert.equal(
+    invalidNestedAccount['spot-truth'].unavailableReason,
+    'SPOT_PRIVATE_READ_INCOMPLETE',
+  );
+  assert.equal(
+    invalidNestedAccount['permissions-modes'].unavailableReason,
+    'PRIVATE_READ_PERMISSION_FIELDS_INCOMPLETE',
+  );
+  assert.equal(
+    invalidNestedAccount['orders-positions'].unavailableReason,
+    'PRIVATE_ORDERS_POSITIONS_INCOMPLETE',
+  );
+  assert.equal(
+    invalidNestedAccount['freshness-completeness'].unavailableReason,
+    'PRIVATE_ACCOUNT_FRESHNESS_OR_COVERAGE_PARTIAL',
   );
 
   const malformedRows = projectProductRuntimeOwnerTruthCut({

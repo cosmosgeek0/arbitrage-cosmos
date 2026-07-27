@@ -117,7 +117,7 @@ function component(componentId, index) {
     desiredState: 'RUNNING',
     phase: qAbstention ? 'BLOCKED' : 'RUNNING',
     domainObservedState: qAbstention ? 'ABSTAIN_UNKNOWN' : 'READY',
-    sourceLifecycle: null,
+    sourceLifecycle: publicSource ? 'LIVE' : null,
     readiness: qAbstention ? 'BLOCKED' : 'READY',
     authority: qAbstention ? 'UNAVAILABLE' : publicSource ? 'LIVE_PUBLIC' : 'DERIVED_LIVE',
     completeness: qAbstention ? 'UNAVAILABLE' : 'COMPLETE',

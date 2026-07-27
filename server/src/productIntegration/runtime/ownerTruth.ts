@@ -17,7 +17,10 @@ const PRIVATE_READ_SOURCE = 'services.privateRead';
 const MARKET_SOURCE = 'intelligenceRuntime.marketSources';
 const DASHBOARD_MAX_AGE_MS = 60_000;
 const ACCOUNT_MAX_AGE_MS = 45_000;
-const MARKETS_MAX_AGE_MS = 5_000;
+// The current public REST owner internally caches futures 24h facts for 15 s.
+// Leave bounded assembly headroom without claiming a tighter age than the
+// source itself can prove.
+const MARKETS_MAX_AGE_MS = 30_000;
 const MAX_VALUE_CHARS = 240;
 const MAX_MARKET_ROWS = 128;
 const MAX_SYMBOLS_IN_VALUE = 4;
@@ -74,6 +77,34 @@ function validObservedAt(value: unknown): number | null {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
     ? value
     : null;
+}
+
+function canonicalSupervisorCutIdentity(
+  supervisor: Readonly<SystemSupervisorReadModel>,
+): string | null {
+  const values = [
+    supervisor.revision,
+    supervisor.runtimeGeneration,
+    supervisor.controlGeneration,
+    supervisor.evaluatedAtMs,
+  ];
+  return values.every((value) => Number.isSafeInteger(value) && value >= 0)
+    ? values.join(':')
+    : null;
+}
+
+function publicSourceLive(
+  supervisor: Readonly<SystemSupervisorReadModel>,
+  componentId: 'public-spot-source' | 'public-usdm-source',
+): boolean {
+  const source = supervisor.components.find((component) => component.componentId === componentId);
+  return source?.truthLabel === 'LIVE_PUBLIC'
+    && source.authority === 'LIVE_PUBLIC'
+    && source.desiredState === 'RUNNING'
+    && source.phase === 'RUNNING'
+    && source.readiness === 'READY'
+    && source.freshness?.state === 'FRESH'
+    && source.sourceLifecycle === 'LIVE';
 }
 
 function finite(value: unknown): number | null {
@@ -183,6 +214,7 @@ function availableSurface(
   source: string,
   fields: Readonly<Record<string, Readonly<ProductRuntimeOwnerTruthField>>>,
   supersedesCanonicalAccountTruthState: string | null = null,
+  supersedesCanonicalAccountCutIdentity: string | null = null,
   truthLabel: ProductRuntimeOwnerTruthAvailableLabel = 'WIRED',
 ): Readonly<ProductRuntimeOwnerTruthSurfaceCut> {
   return Object.freeze({
@@ -194,6 +226,7 @@ function availableSurface(
     truthLabel,
     unavailableReason: null,
     supersedesCanonicalAccountTruthState,
+    supersedesCanonicalAccountCutIdentity,
     fields: Object.freeze(PRODUCT_RUNTIME_OWNER_TRUTH_FIELDS[surfaceId].map((fieldId) => fields[fieldId]!)),
   });
 }
@@ -215,6 +248,7 @@ function unavailableSurface(
     truthLabel,
     unavailableReason,
     supersedesCanonicalAccountTruthState: null,
+    supersedesCanonicalAccountCutIdentity: null,
     fields: Object.freeze([]),
   });
 }
@@ -328,7 +362,7 @@ function productTruth(
   state: PrivateReadState,
   value: string | null,
   prefix: 'SPOT' | 'MARGIN' | 'USDM',
-  complete: boolean,
+  factsComplete: boolean,
 ): Readonly<ProductRuntimeOwnerTruthField> {
   if (state === 'NOT_CONFIGURED') {
     return unavailable(fieldId, productReason(prefix, state), PRIVATE_READ_SOURCE, 'NOT_CONFIGURED');
@@ -336,12 +370,45 @@ function productTruth(
   if (state === 'UNAVAILABLE') {
     return unavailable(fieldId, productReason(prefix, state), PRIVATE_READ_SOURCE);
   }
-  if (state === 'PARTIAL') {
-    return unavailable(fieldId, productReason(prefix, state), PRIVATE_READ_SOURCE);
-  }
-  return complete
+  return factsComplete
     ? answered(fieldId, value, `${prefix}_PRIVATE_READ_INCOMPLETE`, PRIVATE_READ_SOURCE)
-    : unavailable(fieldId, `${prefix}_PRIVATE_READ_INCOMPLETE`, PRIVATE_READ_SOURCE);
+    : unavailable(
+        fieldId,
+        state === 'PARTIAL' ? productReason(prefix, state) : `${prefix}_PRIVATE_READ_INCOMPLETE`,
+        PRIVATE_READ_SOURCE,
+      );
+}
+
+function spotFactsComplete(snapshot: Readonly<PrivateReadSnapshot>): boolean {
+  return validObservedAt(snapshot.spot.observedAt) !== null
+    && Array.isArray(snapshot.spot.balances)
+    && Array.isArray(snapshot.spot.openOrders)
+    && Array.isArray(snapshot.spot.fills);
+}
+
+function usdmFactsComplete(snapshot: Readonly<PrivateReadSnapshot>): boolean {
+  return validObservedAt(snapshot.usdm.observedAt) !== null
+    && Array.isArray(snapshot.usdm.balances)
+    && Array.isArray(snapshot.usdm.positions)
+    && Array.isArray(snapshot.usdm.openOrders)
+    && Array.isArray(snapshot.usdm.fills);
+}
+
+function marginFactsComplete(snapshot: Readonly<PrivateReadSnapshot>): boolean {
+  return validObservedAt(snapshot.margin.observedAt) !== null
+    && exactDecimal(snapshot.margin.totalAssetBtc) !== null
+    && exactDecimal(snapshot.margin.totalLiabilityBtc) !== null
+    && exactDecimal(snapshot.margin.totalNetAssetBtc) !== null
+    && Array.isArray(snapshot.margin.assets)
+    && Array.isArray(snapshot.margin.openOrders)
+    && Array.isArray(snapshot.margin.fills);
+}
+
+function currentAccountFactsComplete(snapshot: Readonly<PrivateReadSnapshot>): boolean {
+  return validObservedAt(snapshot.observedAt) !== null
+    && spotFactsComplete(snapshot)
+    && marginFactsComplete(snapshot)
+    && usdmFactsComplete(snapshot);
 }
 
 function firstSpotBalance(snapshot: Readonly<PrivateReadSnapshot>): string | null {
@@ -378,6 +445,7 @@ function firstMarginAsset(snapshot: Readonly<PrivateReadSnapshot>): string | nul
 function spotValue(snapshot: Readonly<PrivateReadSnapshot>): string | null {
   return line([
     `state=${snapshot.spot.state}`,
+    `coverage=${snapshot.spot.coverage.state}`,
     `observedAtMs=${snapshot.spot.observedAt ?? 'UNKNOWN'}`,
     `balances=${count(snapshot.spot.balances)}`,
     `openOrders=${count(snapshot.spot.openOrders)}`,
@@ -389,6 +457,7 @@ function spotValue(snapshot: Readonly<PrivateReadSnapshot>): string | null {
 function usdmValue(snapshot: Readonly<PrivateReadSnapshot>): string | null {
   return line([
     `state=${snapshot.usdm.state}`,
+    `coverage=${snapshot.usdm.coverage.state}`,
     `observedAtMs=${snapshot.usdm.observedAt ?? 'UNKNOWN'}`,
     `balances=${count(snapshot.usdm.balances)}`,
     `positions=${count(snapshot.usdm.positions)}`,
@@ -401,6 +470,7 @@ function usdmValue(snapshot: Readonly<PrivateReadSnapshot>): string | null {
 function marginValue(snapshot: Readonly<PrivateReadSnapshot>): string | null {
   return line([
     `state=${snapshot.margin.state}`,
+    `coverage=${snapshot.margin.coverage.state}`,
     `observedAtMs=${snapshot.margin.observedAt ?? 'UNKNOWN'}`,
     `assets=${count(snapshot.margin.assets)}`,
     `openOrders=${count(snapshot.margin.openOrders)}`,
@@ -466,7 +536,8 @@ function permissionField(
     permission.universalTransfer,
     permission.ipRestricted,
   ];
-  return required.every((value) => typeof value === 'boolean')
+  return validObservedAt(permission.observedAt) !== null
+    && required.every((value) => typeof value === 'boolean')
     ? available('permissions-modes', permissionValue(snapshot), PRIVATE_READ_SOURCE)
     : unavailable(
         'permissions-modes',
@@ -500,17 +571,23 @@ function freshnessField(
   snapshot: Readonly<PrivateReadSnapshot>,
 ): Readonly<ProductRuntimeOwnerTruthField> {
   const complete = snapshot.state === 'AVAILABLE'
-    && snapshot.observedAt !== null
+    && currentAccountFactsComplete(snapshot)
     && [snapshot.spot, snapshot.margin, snapshot.usdm].every((family) => (
       family.state === 'AVAILABLE'
-      && family.observedAt !== null
+      && validObservedAt(family.observedAt) !== null
       && family.coverage.state === 'COMPLETE_CURRENT'
+    ));
+  const historyScopedOnly = currentAccountFactsComplete(snapshot)
+    && [snapshot.spot, snapshot.margin, snapshot.usdm].every((family) => (
+      family.coverage.state === 'PARTIAL_SYMBOL_SCOPED'
     ));
   return complete
     ? available('freshness-completeness', freshnessValue(snapshot), PRIVATE_READ_SOURCE)
     : unavailable(
         'freshness-completeness',
-        'PRIVATE_ACCOUNT_FRESHNESS_OR_COVERAGE_PARTIAL',
+        historyScopedOnly
+          ? 'PRIVATE_ACCOUNT_HISTORY_SYMBOL_SCOPED_ONLY'
+          : 'PRIVATE_ACCOUNT_FRESHNESS_OR_COVERAGE_PARTIAL',
         PRIVATE_READ_SOURCE,
       );
 }
@@ -526,7 +603,10 @@ function reconciliationField(
   snapshot: Readonly<PrivateReadSnapshot>,
 ): Readonly<ProductRuntimeOwnerTruthField> {
   const values = Object.values(snapshot.reconciliation);
-  if (values.every((value) => value.state === 'RECONCILED' && value.observedAt !== null)) {
+  if (values.every((value) => (
+    value.state === 'RECONCILED'
+    && validObservedAt(value.observedAt) !== null
+  )) && currentAccountFactsComplete(snapshot)) {
     return available('reconciliation', reconciliationValue(snapshot), PRIVATE_READ_SOURCE);
   }
   if (values.some((value) => value.state === 'NOT_CONFIGURED')) {
@@ -535,6 +615,16 @@ function reconciliationField(
       'PRIVATE_ACCOUNT_RECONCILIATION_NOT_CONFIGURED',
       PRIVATE_READ_SOURCE,
       'NOT_CONFIGURED',
+    );
+  }
+  if (values.every((value) => (
+    (value.state === 'PARTIAL' || value.state === 'RECONCILED')
+    && validObservedAt(value.observedAt) !== null
+  )) && currentAccountFactsComplete(snapshot)) {
+    return unavailable(
+      'reconciliation',
+      'PRIVATE_ACCOUNT_RECONCILIATION_UNPROVEN',
+      PRIVATE_READ_SOURCE,
     );
   }
   return unavailable(
@@ -558,6 +648,12 @@ function liabilitiesValue(snapshot: Readonly<PrivateReadSnapshot>): string | nul
       : null,
     `reconciliation=${snapshot.reconciliation.liabilities.state}`,
   ]);
+}
+
+function liabilitiesFactsComplete(snapshot: Readonly<PrivateReadSnapshot>): boolean {
+  return validObservedAt(snapshot.margin.observedAt) !== null
+    && exactDecimal(snapshot.margin.totalLiabilityBtc) !== null
+    && Array.isArray(snapshot.margin.assets);
 }
 
 function ordersPositionsValue(snapshot: Readonly<PrivateReadSnapshot>): string {
@@ -585,7 +681,13 @@ function ordersPositionsField(
     snapshot.usdm.openOrders,
     snapshot.usdm.positions,
   ];
+  const observed = [
+    snapshot.spot.observedAt,
+    snapshot.margin.observedAt,
+    snapshot.usdm.observedAt,
+  ];
   return required.every(Array.isArray)
+    && observed.every((value) => validObservedAt(value) !== null)
     ? available('orders-positions', ordersPositionsValue(snapshot), PRIVATE_READ_SOURCE)
     : unavailable(
         'orders-positions',
@@ -611,6 +713,10 @@ function accountSurface(
   }
   const privateObservedAt = validObservedAt(snapshot.observedAt)
     ?? validObservedAt(snapshot.permissionPosture.observedAt);
+  const malformedObservedAt = [
+    snapshot.observedAt,
+    snapshot.permissionPosture.observedAt,
+  ].some((value) => value !== null && validObservedAt(value) === null);
   const accountObservedAt = privateObservedAt ?? supervisorObservedAt;
   if (snapshot.state === 'NOT_CONFIGURED') {
     return unavailableSurface(
@@ -627,7 +733,9 @@ function accountSurface(
       'account',
       supervisorObservedAt,
       ACCOUNT_MAX_AGE_MS,
-      'PRIVATE_ACCOUNT_OBSERVED_AT_INVALID',
+      malformedObservedAt
+        ? 'PRIVATE_ACCOUNT_OBSERVED_AT_INVALID'
+        : 'PRIVATE_ACCOUNT_READ_NOT_YET_OBSERVED',
       'UNAVAILABLE',
       PRIVATE_READ_SOURCE,
     );
@@ -635,40 +743,30 @@ function accountSurface(
 
   const allocatable = printable(supervisor.summaries.capital.allocatableAmount);
   const accountTruthState = safeIdentifier(supervisor.summaries.capital.accountTruthState);
+  const accountCutIdentity = canonicalSupervisorCutIdentity(supervisor);
+  const canSupersedeCanonicalAccount = accountTruthState !== null
+    && accountCutIdentity !== null;
   const fields: Record<string, Readonly<ProductRuntimeOwnerTruthField>> = {
     'spot-truth': productTruth(
       'spot-truth',
       snapshot.spot.state,
       spotValue(snapshot),
       'SPOT',
-      snapshot.spot.observedAt !== null
-        && Array.isArray(snapshot.spot.balances)
-        && Array.isArray(snapshot.spot.openOrders)
-        && Array.isArray(snapshot.spot.fills),
+      spotFactsComplete(snapshot),
     ),
     'usdm-truth': productTruth(
       'usdm-truth',
       snapshot.usdm.state,
       usdmValue(snapshot),
       'USDM',
-      snapshot.usdm.observedAt !== null
-        && Array.isArray(snapshot.usdm.balances)
-        && Array.isArray(snapshot.usdm.positions)
-        && Array.isArray(snapshot.usdm.openOrders)
-        && Array.isArray(snapshot.usdm.fills),
+      usdmFactsComplete(snapshot),
     ),
     'margin-truth': productTruth(
       'margin-truth',
       snapshot.margin.state,
       marginValue(snapshot),
       'MARGIN',
-      snapshot.margin.observedAt !== null
-        && exactDecimal(snapshot.margin.totalAssetBtc) !== null
-        && exactDecimal(snapshot.margin.totalLiabilityBtc) !== null
-        && exactDecimal(snapshot.margin.totalNetAssetBtc) !== null
-        && Array.isArray(snapshot.margin.assets)
-        && Array.isArray(snapshot.margin.openOrders)
-        && Array.isArray(snapshot.margin.fills),
+      marginFactsComplete(snapshot),
     ),
     'balances-equity-collateral': unavailable(
       'balances-equity-collateral',
@@ -695,24 +793,26 @@ function accountSurface(
           PRIVATE_READ_SOURCE,
           'NOT_CONFIGURED',
         )
-      : snapshot.margin.state === 'UNAVAILABLE'
-        ? unavailable(
-            'liabilities-interest',
-            'MARGIN_PRIVATE_READ_UNAVAILABLE',
-            PRIVATE_READ_SOURCE,
-          )
-        : snapshot.margin.state === 'PARTIAL'
+        : snapshot.margin.state === 'UNAVAILABLE'
           ? unavailable(
               'liabilities-interest',
-              'MARGIN_PRIVATE_READ_PARTIAL',
+              'MARGIN_PRIVATE_READ_UNAVAILABLE',
               PRIVATE_READ_SOURCE,
             )
-          : answered(
-              'liabilities-interest',
-              liabilitiesValue(snapshot),
-              'MARGIN_LIABILITIES_NOT_AVAILABLE',
-              PRIVATE_READ_SOURCE,
-            ),
+          : liabilitiesFactsComplete(snapshot)
+            ? answered(
+                'liabilities-interest',
+                liabilitiesValue(snapshot),
+                'MARGIN_LIABILITIES_NOT_AVAILABLE',
+                PRIVATE_READ_SOURCE,
+              )
+            : unavailable(
+                'liabilities-interest',
+                snapshot.margin.state === 'PARTIAL'
+                  ? 'MARGIN_PRIVATE_READ_PARTIAL'
+                  : 'MARGIN_LIABILITIES_NOT_AVAILABLE',
+                PRIVATE_READ_SOURCE,
+              ),
     'freshness-completeness': freshnessField(snapshot),
     reconciliation: reconciliationField(snapshot),
     'foreign-manual': unavailable(
@@ -727,7 +827,8 @@ function accountSurface(
     ACCOUNT_MAX_AGE_MS,
     PRIVATE_READ_SOURCE,
     fields,
-    accountTruthState,
+    canSupersedeCanonicalAccount ? accountTruthState : null,
+    canSupersedeCanonicalAccount ? accountCutIdentity : null,
   );
 }
 
@@ -768,11 +869,16 @@ function marketWith(
 
 function basisRow(
   rows: readonly Readonly<ProductRuntimeOwnerTruthMarketRow>[],
+  executableBooksAvailable: boolean,
+  reportedBasisAvailable: boolean,
 ): Readonly<ProductRuntimeOwnerTruthMarketRow> | null {
   let selected: Readonly<ProductRuntimeOwnerTruthMarketRow> | null = null;
   let selectedMagnitude = -1;
   for (const row of rows) {
-    const basis = finite(row.executableBasisBestPct) ?? finite(row.basisPct);
+    const basis = executableBooksAvailable
+      ? finite(row.executableBasisBestPct)
+        ?? (reportedBasisAvailable ? finite(row.basisPct) : null)
+      : reportedBasisAvailable ? finite(row.basisPct) : null;
     if (basis === null || Math.abs(basis) <= selectedMagnitude) continue;
     selected = row;
     selectedMagnitude = Math.abs(basis);
@@ -780,36 +886,55 @@ function basisRow(
   return selected;
 }
 
-function basisValue(row: Readonly<ProductRuntimeOwnerTruthMarketRow> | null): string | null {
+function basisValue(
+  row: Readonly<ProductRuntimeOwnerTruthMarketRow> | null,
+  executableBooksAvailable: boolean,
+  reportedBasisAvailable: boolean,
+): string | null {
   if (row === null) return null;
   return line([
     `symbol=${row.symbol}`,
-    numberFragment('executableBasisBestPct', row.executableBasisBestPct),
-    numberFragment('reportedBasisPct', row.basisPct),
-    row.executableBasisSide === undefined || row.executableBasisSide === null
+    executableBooksAvailable
+      ? numberFragment('executableBasisBestPct', row.executableBasisBestPct)
+      : null,
+    reportedBasisAvailable ? numberFragment('reportedBasisPct', row.basisPct) : null,
+    !executableBooksAvailable
+      || row.executableBasisSide === undefined
+      || row.executableBasisSide === null
       ? null
       : `side=${row.executableBasisSide}`,
   ]);
 }
 
-function liquidityValue(rows: readonly Readonly<ProductRuntimeOwnerTruthMarketRow>[]): string | null {
+function liquidityValue(
+  rows: readonly Readonly<ProductRuntimeOwnerTruthMarketRow>[],
+  spotBookAvailable: boolean,
+  futuresBookAvailable: boolean,
+): string | null {
   const row = marketWith(rows, (candidate) => (
-    finite(candidate.spotSpreadPct) !== null
-    || finite(candidate.perpSpreadPct) !== null
-    || finite(candidate.spotTopQuoteUsd) !== null
-    || finite(candidate.perpTopQuoteUsd) !== null
+    (spotBookAvailable && (
+      finite(candidate.spotSpreadPct) !== null
+      || finite(candidate.spotTopQuoteUsd) !== null
+    ))
+    || (futuresBookAvailable && (
+      finite(candidate.perpSpreadPct) !== null
+      || finite(candidate.perpTopQuoteUsd) !== null
+    ))
   ));
   if (row === null) return null;
   return line([
     `symbol=${row.symbol}`,
-    numberFragment('spotSpreadPct', row.spotSpreadPct),
-    numberFragment('spotTopQuoteUsd', row.spotTopQuoteUsd),
-    numberFragment('perpSpreadPct', row.perpSpreadPct),
-    numberFragment('perpTopQuoteUsd', row.perpTopQuoteUsd),
+    spotBookAvailable ? numberFragment('spotSpreadPct', row.spotSpreadPct) : null,
+    spotBookAvailable ? numberFragment('spotTopQuoteUsd', row.spotTopQuoteUsd) : null,
+    futuresBookAvailable ? numberFragment('perpSpreadPct', row.perpSpreadPct) : null,
+    futuresBookAvailable ? numberFragment('perpTopQuoteUsd', row.perpTopQuoteUsd) : null,
   ]);
 }
 
-function derivativesValue(rows: readonly Readonly<ProductRuntimeOwnerTruthMarketRow>[]): string | null {
+function derivativesValue(
+  rows: readonly Readonly<ProductRuntimeOwnerTruthMarketRow>[],
+  futures24hAvailable: boolean,
+): string | null {
   const row = marketWith(rows, (candidate) => (
     finite(candidate.fundingRate) !== null
     || finite(candidate.openInterestUsd) !== null
@@ -821,16 +946,35 @@ function derivativesValue(rows: readonly Readonly<ProductRuntimeOwnerTruthMarket
     numberFragment('fundingRate', row.fundingRate),
     numberFragment('fundingAnnualPct', row.fundingAnnualPct),
     numberFragment('openInterestUsd', row.openInterestUsd),
-    numberFragment('oiToPerpVolume24h', row.oiToPerpVolume24h),
+    futures24hAvailable ? numberFragment('oiToPerpVolume24h', row.oiToPerpVolume24h) : null,
     numberFragment('liquidations15mUsd', row.liquidations15mUsd),
     numberFragment('longLiquidations15mUsd', row.longLiquidations15mUsd),
     numberFragment('shortLiquidations15mUsd', row.shortLiquidations15mUsd),
   ]);
 }
 
+function retainsStreamFacts(
+  rows: readonly Readonly<ProductRuntimeOwnerTruthMarketRow>[],
+  spotSourceLive: boolean,
+  usdmSourceLive: boolean,
+): boolean {
+  return rows.some((row) => (
+    (spotSourceLive && usdmSourceLive && finite(row.basisPct) !== null)
+    || (usdmSourceLive && [
+      row.fundingRate,
+      row.fundingAnnualPct,
+      row.openInterestUsd,
+      row.liquidations15mUsd,
+      row.longLiquidations15mUsd,
+      row.shortLiquidations15mUsd,
+    ].some((value) => finite(value) !== null))
+  ));
+}
+
 function marketSurface(
   input: Readonly<ProductRuntimeOwnerTruthMarketsInput>,
   fallbackObservedAtMs: number,
+  sourceLifecycle: Readonly<{ spotLive: boolean; usdmLive: boolean }>,
 ): Readonly<ProductRuntimeOwnerTruthSurfaceCut> {
   const observedAtMs = validObservedAt(input.observedAtMs);
   if (observedAtMs === null) {
@@ -858,23 +1002,56 @@ function marketSurface(
     futuresBookTicker: normalizedSourceState(input.dataSources?.futuresBookTicker),
     futures24hTicker: normalizedSourceState(input.dataSources?.futures24hTicker),
   });
-  if (Object.values(sourceStates).every((state) => state === 'unavailable')) {
+  const rows = marketRows(input);
+  if (!sourceLifecycle.spotLive && !sourceLifecycle.usdmLive) {
     return unavailableSurface(
       'markets',
       observedAtMs,
       MARKETS_MAX_AGE_MS,
-      'MARKET_PUBLIC_SOURCES_UNAVAILABLE',
+      'MARKET_PUBLIC_SOURCE_LIFECYCLE_NOT_LIVE',
       'UNAVAILABLE',
       MARKET_SOURCE,
     );
   }
-  const rows = marketRows(input);
-  const strongestBasis = basisRow(rows);
-  const allSourcesFresh = Object.values(sourceStates).every((state) => state === 'fresh');
+  const spotBookAvailable = sourceLifecycle.spotLive
+    && sourceStates.spotBookTicker === 'fresh';
+  const futuresBookAvailable = sourceLifecycle.usdmLive
+    && sourceStates.futuresBookTicker === 'fresh';
+  const futures24hAvailable = sourceLifecycle.usdmLive
+    && sourceStates.futures24hTicker === 'fresh';
+  const freshSourceCount = [
+    spotBookAvailable,
+    futuresBookAvailable,
+    futures24hAvailable,
+  ].filter(Boolean).length;
+  if (freshSourceCount === 0 && !retainsStreamFacts(
+    rows,
+    sourceLifecycle.spotLive,
+    sourceLifecycle.usdmLive,
+  )) {
+    return unavailableSurface(
+      'markets',
+      observedAtMs,
+      MARKETS_MAX_AGE_MS,
+      sourceLifecycle.spotLive && sourceLifecycle.usdmLive
+        ? 'MARKET_PUBLIC_SOURCES_UNAVAILABLE'
+        : 'MARKET_PUBLIC_SOURCE_LIFECYCLE_PARTIAL',
+      'UNAVAILABLE',
+      MARKET_SOURCE,
+    );
+  }
+  // REST book/24h statuses apply only to their enrichment fields. MarketEngine
+  // rows have already nulled stale stream-owned basis/funding/OI facts; retain
+  // those independent facts while refusing any enrichment whose route failed.
+  const reportedBasisAvailable = sourceLifecycle.spotLive && sourceLifecycle.usdmLive;
+  const executableBooksAvailable = spotBookAvailable && futuresBookAvailable;
+  const strongestBasis = basisRow(rows, executableBooksAvailable, reportedBasisAvailable);
   const dataQuality = line([
-    `rowsReceived=${Array.isArray(input.rows) ? input.rows.length : 0}`,
+    `rowsReceived=${input.rows.length}`,
     `rowsBounded=${rows.length}`,
-    `truncated=${Array.isArray(input.rows) && input.rows.length > MAX_MARKET_ROWS ? 'YES' : 'NO'}`,
+    `truncated=${input.rows.length > MAX_MARKET_ROWS ? 'YES' : 'NO'}`,
+    `spotLifecycle=${sourceLifecycle.spotLive ? 'LIVE' : 'NOT_LIVE'}`,
+    `usdmLifecycle=${sourceLifecycle.usdmLive ? 'LIVE' : 'NOT_LIVE'}`,
     `spotBookTicker=${sourceStates.spotBookTicker}`,
     `futuresBookTicker=${sourceStates.futuresBookTicker}`,
     `futures24hTicker=${sourceStates.futures24hTicker}`,
@@ -888,7 +1065,7 @@ function marketSurface(
   const fields: Record<string, Readonly<ProductRuntimeOwnerTruthField>> = {
     basis: publicAnswered(
       'basis',
-      basisValue(strongestBasis),
+      basisValue(strongestBasis, executableBooksAvailable, reportedBasisAvailable),
       'MARKET_BASIS_NOT_AVAILABLE',
     ),
     'wake-up': unavailable(
@@ -903,12 +1080,14 @@ function marketSurface(
     ),
     liquidity: publicAnswered(
       'liquidity',
-      liquidityValue(rows),
-      'MARKET_LIQUIDITY_NOT_AVAILABLE',
+      liquidityValue(rows, spotBookAvailable, futuresBookAvailable),
+      spotBookAvailable || futuresBookAvailable
+        ? 'MARKET_LIQUIDITY_NOT_AVAILABLE'
+        : 'MARKET_LIQUIDITY_REST_BOOKS_UNAVAILABLE',
     ),
     derivatives: publicAnswered(
       'derivatives',
-      derivativesValue(rows),
+      sourceLifecycle.usdmLive ? derivativesValue(rows, futures24hAvailable) : null,
       'MARKET_DERIVATIVES_NOT_AVAILABLE',
     ),
     'data-quality': publicAnswered(
@@ -921,7 +1100,9 @@ function marketSurface(
       'MARKET_CANDIDATE_FOCUS_NOT_PUBLISHED',
       MARKET_SOURCE,
     ),
-    'source-freshness': allSourcesFresh
+    'source-freshness': sourceLifecycle.spotLive
+      && sourceLifecycle.usdmLive
+      && freshSourceCount === 3
       ? publicAnswered(
           'source-freshness',
           sourceFreshness,
@@ -929,7 +1110,11 @@ function marketSurface(
         )
       : unavailable(
           'source-freshness',
-          'MARKET_PUBLIC_SOURCES_PARTIAL',
+          !sourceLifecycle.spotLive || !sourceLifecycle.usdmLive
+            ? 'MARKET_PUBLIC_SOURCE_LIFECYCLE_PARTIAL'
+            : freshSourceCount === 0
+              ? 'MARKET_PUBLIC_SOURCES_UNAVAILABLE'
+              : 'MARKET_PUBLIC_SOURCES_PARTIAL',
           MARKET_SOURCE,
         ),
     'q-assessment': unavailable(
@@ -944,6 +1129,7 @@ function marketSurface(
     MARKETS_MAX_AGE_MS,
     MARKET_SOURCE,
     fields,
+    null,
     null,
     'LIVE_PUBLIC',
   );
@@ -960,7 +1146,10 @@ export function projectProductRuntimeOwnerTruthCut(
   const supervisorObservedAt = validObservedAt(input.supervisor.evaluatedAtMs) ?? 0;
   const dashboard = dashboardSurface(input.supervisor);
   const account = accountSurface(input.supervisor, input.privateRead);
-  const markets = marketSurface(input.markets, supervisorObservedAt);
+  const markets = marketSurface(input.markets, supervisorObservedAt, Object.freeze({
+    spotLive: publicSourceLive(input.supervisor, 'public-spot-source'),
+    usdmLive: publicSourceLive(input.supervisor, 'public-usdm-source'),
+  }));
   const cutObservedAtMs = Math.max(
     dashboard.observedAtMs,
     account.observedAtMs,

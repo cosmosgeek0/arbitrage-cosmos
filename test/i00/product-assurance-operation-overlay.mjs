@@ -71,6 +71,10 @@ const PROFILE_SITE_IDS = Object.freeze([
   'OPSITE_5EA03340B3E6E86C7930',
 ].sort());
 
+const BINANCE_PRIVATE_READ_PATH = 'server/src/binance/privateReadClient.ts';
+const BINANCE_PRIVATE_READ_SOURCE_SHA256 = '0395659688cceec22d32c2fd095fd6edd46fe330d2076b5e04ecdad69b300631';
+const BINANCE_PRIVATE_READ_SITE_ID = 'OPSITE_26D026D9BE4F85360AE7';
+
 const TWIN_RULE = Object.freeze({
   ruleId: 'i00-live-edge-exchange-twin-synthetic-state-v1',
   operationId: 'OP_L07_EXCHANGE_TWIN_SYNTHETIC_STATE_REDUCTION',
@@ -111,11 +115,21 @@ const PROFILE_RULE = Object.freeze({
   symbolPattern: '^profileRequestQueue\\.shift$',
 });
 
+const BINANCE_PRIVATE_READ_RULE = Object.freeze({
+  ruleId: 'outcome2-binance-private-signed-get-v1',
+  operationId: 'OP_BINANCE_PRIVATE_SIGNED_GET_READ',
+  pathExact: Object.freeze([BINANCE_PRIVATE_READ_PATH]),
+  pathPrefixes: Object.freeze([]),
+  kinds: Object.freeze([OPERATION_KINDS.NETWORK_HTTP_REQUEST]),
+  symbolPattern: '^this\\.fetchFn$',
+});
+
 export const I00_OPERATION_MAPPING_OVERLAY = Object.freeze([
   NEWS_CONTEXT_RULE,
   TWIN_RULE,
   ASSESSMENT_RULE,
   PROFILE_RULE,
+  BINANCE_PRIVATE_READ_RULE,
 ]);
 
 function exactMembers(actual, expected) {
@@ -163,6 +177,7 @@ function verifyBaseUncovered(report) {
     ...TWIN_SITE_IDS,
     ...ASSESSMENT_SITE_IDS,
     ...PROFILE_SITE_IDS,
+    BINANCE_PRIVATE_READ_SITE_ID,
   ].sort();
   if (!exactMembers(observed, expected)) {
     throw new Error(`I00_OPERATION_OVERLAY_BASE_SET_DRIFT:${JSON.stringify({ expected, observed })}`);
@@ -201,6 +216,15 @@ function verifyBaseUncovered(report) {
     kindSet: new Set([OPERATION_KINDS.QUEUE_CONSUME]),
     symbolSet: new Set(['profileRequestQueue.shift']),
   })) throw new Error('I00_OPERATION_OVERLAY_PROFILE_SOURCE_DRIFT');
+  if (!exactSites(report, {
+    path: BINANCE_PRIVATE_READ_PATH,
+    sourceSha256: BINANCE_PRIVATE_READ_SOURCE_SHA256,
+    siteIds: [BINANCE_PRIVATE_READ_SITE_ID],
+    kindSet: new Set([OPERATION_KINDS.NETWORK_HTTP_REQUEST]),
+    symbolSet: new Set(['this.fetchFn']),
+    line: 243,
+    column: 30,
+  })) throw new Error('I00_OPERATION_OVERLAY_BINANCE_PRIVATE_READ_SOURCE_DRIFT');
 }
 
 function verifyIntegratedMappings(report) {
@@ -246,6 +270,17 @@ function verifyIntegratedMappings(report) {
     operationId: PROFILE_RULE.operationId,
     mappingRuleId: PROFILE_RULE.ruleId,
   })) throw new Error('I00_OPERATION_OVERLAY_PROFILE_MAPPING_DRIFT');
+  if (!exactSites(report, {
+    path: BINANCE_PRIVATE_READ_PATH,
+    sourceSha256: BINANCE_PRIVATE_READ_SOURCE_SHA256,
+    siteIds: [BINANCE_PRIVATE_READ_SITE_ID],
+    kindSet: new Set([OPERATION_KINDS.NETWORK_HTTP_REQUEST]),
+    symbolSet: new Set(['this.fetchFn']),
+    line: 243,
+    column: 30,
+    operationId: BINANCE_PRIVATE_READ_RULE.operationId,
+    mappingRuleId: BINANCE_PRIVATE_READ_RULE.ruleId,
+  })) throw new Error('I00_OPERATION_OVERLAY_BINANCE_PRIVATE_READ_MAPPING_DRIFT');
   if (report.uncovered !== 0 || report.uncoveredSites.length !== 0) {
     throw new Error(`I00_OPERATION_OVERLAY_UNCOVERED:${report.uncovered}`);
   }

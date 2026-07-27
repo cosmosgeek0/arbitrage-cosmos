@@ -785,7 +785,7 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 3605,
+        "line": 3651,
         "classification": "LEGACY_APP_DELIVERY"
       },
       {
@@ -1180,7 +1180,7 @@
       },
       {
         "file": "web/src/store.tsx",
-        "line": 751,
+        "line": 781,
         "classification": "LOCAL_OPERATOR_DELIVERY"
       }
     ],
@@ -3518,85 +3518,85 @@
         "concept": "control-authority",
         "declaration": "type SystemSupervisorReadModel",
         "file": "server/src/index.ts",
-        "line": 75
+        "line": 82
       },
       {
         "concept": "capital-authority",
         "declaration": "type ProductionCapitalSummaryReadPort",
         "file": "server/src/index.ts",
-        "line": 94
+        "line": 101
       },
       {
         "concept": "control-authority",
         "declaration": "type CanonicalSupervisorOpsReadPort",
         "file": "server/src/index.ts",
-        "line": 105
+        "line": 112
       },
       {
         "concept": "semantic-source",
         "declaration": "type SourceIsolationPhysicalPort",
         "file": "server/src/index.ts",
-        "line": 111
+        "line": 118
       },
       {
         "concept": "semantic-source",
         "declaration": "type SourceLogoEntry",
         "file": "server/src/index.ts",
-        "line": 152
+        "line": 159
       },
       {
         "concept": "semantic-source",
         "declaration": "function legacyScannerSnapshot",
         "file": "server/src/index.ts",
-        "line": 203
+        "line": 210
       },
       {
         "concept": "ledger-authority",
         "declaration": "function pruneEphemeralLedgerEvents",
         "file": "server/src/index.ts",
-        "line": 609
+        "line": 627
       },
       {
         "concept": "control-authority",
         "declaration": "function recordSupervisorReadFailure",
         "file": "server/src/index.ts",
-        "line": 827
+        "line": 846
       },
       {
         "concept": "semantic-source",
         "declaration": "function sendLegacyScannerRetired",
         "file": "server/src/index.ts",
-        "line": 877
+        "line": 896
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketSourceSnapshot",
         "file": "server/src/index.ts",
-        "line": 2060
+        "line": 2088
       },
       {
         "concept": "semantic-source",
         "declaration": "function marketSources",
         "file": "server/src/index.ts",
-        "line": 2069
+        "line": 2097
       },
       {
         "concept": "semantic-source",
         "declaration": "function cachedSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2449
+        "line": 2477
       },
       {
         "concept": "semantic-source",
         "declaration": "function rememberSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2461
+        "line": 2489
       },
       {
         "concept": "semantic-source",
         "declaration": "function loadSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2471
+        "line": 2499
       },
       {
         "concept": "semantic-source",
@@ -8238,12 +8238,12 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 112,
+        "line": 119,
         "target": "./intelligenceRuntime/lifecycle/index.js"
       },
       {
         "file": "server/src/index.ts",
-        "line": 133,
+        "line": 140,
         "target": "./capitalFoundation/contracts/index.js"
       },
       {
@@ -15152,5 +15152,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "53e91739456d9c72cde474ef9cceea3d8db8e8b7a31fc82a6a5ed52bd8ecfd9b"
+  "evidenceSha256": "58dd07d1a7415386f80a12c6f7ec8ada2c72150b1bc2e8edf588ca5d11578202"
 }

@@ -22,6 +22,7 @@ import { useRefreshSignal } from '../lib/refresh';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
 import { formatClockZone } from '../lib/time';
+import { exactOrDash, projectPrivateRead } from '../lib/privateRead';
 import { useStore, type Page } from '../store';
 import { fmtMoney, fmtPrice, signClass, timeAgo } from '../format';
 import type { LedgerEvent } from '../types';
@@ -162,12 +163,13 @@ function Metric({ label, value, detail, tone = 'idle' }: { label: string; value:
 }
 
 export function Dashboard() {
-  const { state, stateStatus, stateLastSuccessAtMs, stateError, prefs, setPage } = useStore();
+  const { state, stateStatus, stateLastSuccessAtMs, stateError, privateRead, prefs, setPage } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
   const [refreshTick, setRefreshTick] = useState(0);
   const [range, setRange] = useState<RangeId>('1M');
   useRefreshSignal(() => setRefreshTick((value) => value + 1));
   const sources = useDashboardSources(refreshTick);
+  const privatePresentation = projectPrivateRead(privateRead);
 
   const historyPoints = useMemo(() => {
     const rows = [...(sources.history.data?.rows ?? [])]
@@ -241,8 +243,8 @@ export function Dashboard() {
   const integrityChecks: IntegrityCheck[] = [
     {
       label: 'Account Sync',
-      detail: 'NOT_CONFIGURED · private account reads are not mounted',
-      tone: 'warn',
+      detail: `${privatePresentation.stateLabel} · ${privatePresentation.observedLabel} · ${privatePresentation.reconciliationLabel}`,
+      tone: privatePresentation.tone,
     },
     {
       label: 'Public Market Feeds',
@@ -272,8 +274,8 @@ export function Dashboard() {
     },
     {
       label: 'API Key Posture',
-      detail: 'OWNER_GATED · no private key posture is projected',
-      tone: 'warn',
+      detail: `${privatePresentation.postureLabel} · ${privatePresentation.identityLabel}`,
+      tone: privatePresentation.postureTone,
     },
   ];
   const passingChecks = integrityChecks.filter((check) => check.tone === 'ok').length;
@@ -391,19 +393,26 @@ export function Dashboard() {
 
         <div className="dcx-summary" aria-label="Executive Summary">
           <Metric
-            label="Account Value"
-            value="UNKNOWN"
-            detail="NOT_CONFIGURED · private account reads are not mounted"
-            tone="warn"
+            label="Private Account"
+            value={privatePresentation.stateLabel}
+            detail={`${privatePresentation.coverageLabel} · ${privatePresentation.observedLabel}`}
+            tone={privatePresentation.tone}
           />
           <Metric
             label="Today’s Account Change"
-            value="UNKNOWN"
-            detail="NOT_CONFIGURED · day-open account truth is unavailable"
+            value="—"
+            detail="Day-open valuation is outside private-read v1"
             tone="warn"
           />
-          <Metric label="Available USDT" value="UNKNOWN" detail="NOT_CONFIGURED · private balance unavailable" tone="warn" />
-          <Metric label="Active Exposure" value="UNKNOWN" detail="NOT_CONFIGURED · positions and open orders are not read" tone="warn" />
+          <Metric label="Available USDT" value={exactOrDash(privatePresentation.spotAvailableUsdt)} detail={`${privateRead.spot.state} · Spot free balance only`} tone={privateRead.spot.balances === null ? 'warn' : 'idle'} />
+          <Metric
+            label="Active Exposure"
+            value={privatePresentation.counts.positions === null || privatePresentation.counts.openOrders === null
+              ? '—'
+              : `${privatePresentation.counts.positions} / ${privatePresentation.counts.openOrders}`}
+            detail="USD-M Positions / All Product Open Orders"
+            tone={privatePresentation.counts.positions === null || privatePresentation.counts.openOrders === null ? 'warn' : 'idle'}
+          />
           <Metric label="Engine Queue" value={queueCount === null ? 'UNKNOWN' : String(queueCount)} detail={proposalCount === null ? 'Proposal count unavailable' : `${proposalCount} Open Proposals`} tone={queueCount === null ? 'warn' : queueCount ? 'warn' : 'idle'} />
           <Metric label="Execution Authority" value={controlState.label} detail={controlState.detail} tone={controlState.tone} />
         </div>
@@ -472,7 +481,7 @@ export function Dashboard() {
                   <span className="dcx-runtime-value" role="cell"><b>{row.watching}</b><small>Canonical Candidates</small></span>
                   <span className="dcx-runtime-value" role="cell"><b>{row.focused}</b><small>Not Published</small></span>
                   <span className="dcx-runtime-value" role="cell"><b>{row.proposals}</b><small>Canonical Proposals</small></span>
-                  <span className="dcx-runtime-constraint" role="cell"><b>{row.constraint}</b><small>{row.id === 'basis' ? 'Private Borrow NOT_CONFIGURED · UNKNOWN' : 'Canonical Component Blocker'}</small></span>
+                  <span className="dcx-runtime-constraint" role="cell"><b>{row.constraint}</b><small>{row.id === 'basis' ? `Private Liabilities ${privateRead.reconciliation.liabilities.state}` : 'Canonical Component Blocker'}</small></span>
                   <span className="dcx-runtime-open" role="cell"><b>{sourceAge(row.updatedAt)}</b><ChevronRight size={14} /></span>
                 </button>
               ))}
@@ -487,9 +496,9 @@ export function Dashboard() {
             </header>
             <div className="dcx-attention-list">
               <button type="button" onClick={() => open('loans')}>
-                <StatusMark tone="warn" />
-                <span><b>Borrow Verification</b><small>NOT_CONFIGURED · private inventory, rate, and maximum-borrowable truth are owner gated</small></span>
-                <em>UNKNOWN</em><ChevronRight size={14} />
+                <StatusMark tone={privateRead.reconciliation.liabilities.state === 'RECONCILED' ? 'ok' : privateRead.reconciliation.liabilities.state === 'PARTIAL' ? 'warn' : 'bad'} />
+                <span><b>Borrow Verification</b><small>{privateRead.reconciliation.liabilities.state} · loan catalog and maximum-borrowable remain outside private-read v1</small></span>
+                <em>{privatePresentation.counts.liabilities === null ? '—' : `${privatePresentation.counts.liabilities} Assets`}</em><ChevronRight size={14} />
               </button>
               <button type="button" onClick={() => open('strategies')}>
                 <StatusMark tone={basisPosture.tone} />
@@ -560,7 +569,7 @@ export function Dashboard() {
         </section>
 
         <footer className="dcx-source-footer">
-          <span><Database size={13} />Sources: Public Market Streams, Engine Snapshots, SQLite Ledger · Private Account NOT_CONFIGURED</span>
+          <span><Database size={13} />Sources: Public Market Streams, Engine Snapshots, SQLite Ledger · Private Account {privatePresentation.stateLabel}</span>
           <span>{productSnapshot
             ? `${productSnapshot.revision} · Machine ${productSnapshot.ownerView.machineReady} · ${productSnapshot.opsIntakeInterlock.state}`
             : `Product Integration ${productBinding.continuity}`}</span>

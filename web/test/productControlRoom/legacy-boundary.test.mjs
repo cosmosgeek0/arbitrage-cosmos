@@ -83,7 +83,7 @@ test('the shared store structurally omits legacy preview and execution capabilit
   assert.doesNotMatch(store, /['"]LIVE_ARMED['"]/);
 });
 
-test('mounted legacy pages cannot claim armed execution or configured private account truth', async () => {
+test('mounted pages cannot claim armed execution while authorized private reads stay facts-only', async () => {
   const paths = [
     'pages/Account.tsx',
     'pages/Dashboard.tsx',
@@ -109,7 +109,7 @@ test('mounted legacy pages cannot claim armed execution or configured private ac
   assert.doesNotMatch(combined, /['"]LIVE_ARMED['"]/);
   assert.match(await read('pages/Account.tsx'), /NOT_CONFIGURED|Not Configured/);
   assert.match(await read('pages/Loans.tsx'), /OWNER_GATED|Owner Gated/);
-  assert.match(await read('pages/SystemHealth.tsx'), /NOT_CONFIGURED|Not Configured/);
+  assert.match(await read('pages/SystemHealth.tsx'), /projectPrivateRead/);
 });
 
 test('header keeps canonical Product truth and structurally omits legacy and AWS actions', async () => {
@@ -147,7 +147,7 @@ test('Header retains one mounted topbar content implementation', async () => {
   assert.equal(header.match(/premiumContent\((?:outgoingContent|contentActive)\)/g)?.length, 2);
 });
 
-test('account recovery and notification routing cannot reintroduce private or AWS green state', async () => {
+test('account recovery and notification routing cannot reintroduce mutation or AWS authority', async () => {
   const [header, notifications, store] = await Promise.all([
     read('components/Header.tsx'),
     read('pages/NotificationsPage.tsx'),
@@ -277,7 +277,9 @@ test('legacy liveness and PnL surfaces cannot imply semantic readiness or valida
   assert.match(header, /direct \/health\/live liveness round trip/);
   assert.match(types, /positions:\s*PositionEntry\[\]\s*\|\s*null/);
   assert.match(types, /openOrders:\s*OpenOrderRow\[\]\s*\|\s*null/);
-  assert.match(account, /useState<OpenOrderRow\[\]\s*\|\s*null>\(null\)/);
+  assert.match(account, /const openOrders = \[/);
+  assert.match(account, /privateRead\.spot\.openOrders/);
+  assert.doesNotMatch(account, /fetchJson<FillRow\[\]>\('\/api\/fills'/);
   assert.match(dashboard, /pnlTruthState === 'UNKNOWN' \? 'Strategy Performance Unavailable'/);
   assert.match(dashboard, /unavailable private\/account truth is not converted into validated zero PnL/);
   assert.match(pnl, /setData\(null\)/);

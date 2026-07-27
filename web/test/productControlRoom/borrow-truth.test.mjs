@@ -10,7 +10,7 @@ import {
 
 const loansUrl = new URL('../../src/pages/Loans.tsx', import.meta.url);
 
-test('Borrow surface names every required owner fact without a private browser transport', async () => {
+test('Borrow preserves canonical preflight evidence and projects sanitized private liabilities through the shared store', async () => {
   assert.deepEqual(REQUIRED_SURFACE_EVIDENCE.borrow, [
     'mode-eligibility',
     'borrow-eligibility',
@@ -34,17 +34,15 @@ test('Borrow surface names every required owner fact without a private browser t
   ]);
 
   const source = await readFile(loansUrl, 'utf8');
-  assert.match(source, /productBinding\.snapshot\?\.surfaces\.borrow/);
-  assert.match(source, /borrowDatum\('current-borrowed'\)/);
-  assert.match(source, /borrowDatum\('accrued-interest'\)/);
-  assert.match(source, /borrowDatum\('collateral-amount'\)/);
-  assert.match(source, /borrowDatum\('current-ltv'\)/);
-  assert.match(source, /currentBorrowed\?\.value \?\? '—'/);
-  assert.match(source, /accruedInterest\?\.value \?\? '—'/);
-  assert.match(source, /collateralAmount\?\.value \?\? '—'/);
-  assert.match(source, /currentLtv\?\.value \?\? '—'/);
+  assert.match(source, /const \{ privateRead, privateReadError, openDetail, setPage \} = useStore\(\)/);
+  assert.match(source, /projectPrivateRead\(privateRead\)/);
+  assert.match(source, /privateRead\.margin\.assets\?\.filter/);
+  assert.match(source, /privateRead\.margin\.totalLiabilityBtc/);
+  assert.match(source, /privateRead\.reconciliation\.liabilities\.state/);
+  assert.match(source, /Borrowed And Accrued Interest Remain In Asset Units/);
   assert.doesNotMatch(source, /\/api\/loans/);
-  assert.doesNotMatch(source, /currentBorrowed[^\n]*\/[^\n]*collateral|collateral[^\n]*\/[^\n]*currentBorrowed/);
+  assert.doesNotMatch(source, /fetchJson[^;]*\/api\/private-account/);
+  assert.doesNotMatch(source, /<button[^>]*>\s*(?:Borrow|Repay|Transfer|Withdraw)/i);
 });
 
 test('isolated liability or LTV values cannot fabricate a ready canonical Borrow surface', () => {

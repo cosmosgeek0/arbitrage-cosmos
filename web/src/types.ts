@@ -231,6 +231,9 @@ export interface ServerState {
   mode: 'HALTED' | 'MANUAL';
   privateAccountTruth: 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
   privateOrderTruth: 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
+  /** Sanitized owner projection. It stays unknown at this transport boundary
+   * until the strict browser decoder accepts the complete v1 contract. */
+  privateRead?: unknown;
   binance: {
     keysPresent: boolean;
     connected: boolean;

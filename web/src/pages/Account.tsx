@@ -1,18 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { TokenIcon } from '../components/TokenIcon';
-import { fmtPct, fmtPrice, fmtQty, timeAgo } from '../format';
-import { apiErrorMessage, fetchJson } from '../lib/http';
-import { createSettledPoll } from '../lib/polling';
-import { useRefreshSignal } from '../lib/refresh';
+import { fmtPrice, timeAgo } from '../format';
+import { exactOrDash, projectPrivateRead } from '../lib/privateRead';
 import { useStore } from '../store';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
-import type { FillRow, OpenOrderRow } from '../types';
 import './Account.css';
 
 export type AccountView = 'overview' | 'execution' | 'orders' | 'positions' | 'fills' | 'pnl';
 type RangeId = '1W' | '1M' | '3M' | '6M';
 
-const PRIVATE_SOURCE_DETAIL = 'NOT_CONFIGURED · private account reads are not mounted in this product.';
 const RANGES: { id: RangeId; ms: number }[] = [
   { id: '1W', ms: 7 * 86_400_000 },
   { id: '1M', ms: 30 * 86_400_000 },
@@ -126,33 +122,78 @@ function SpotBalanceChart({
 }
 
 export function Account({ view = 'overview' }: { readonly view?: AccountView }) {
-  const { prefs, setPage } = useStore();
+  const { privateRead, privateReadError, privateReadSource, setPage } = useStore();
   const [range, setRange] = useState<RangeId>('6M');
   const [mask, setMask] = useState(() => localStorage.getItem('cosmos-balance-mask') === '1');
-  const [fills, setFills] = useState<FillRow[]>([]);
-  const [fillsError, setFillsError] = useState<string | null>(null);
-  const [refreshTick, setRefreshTick] = useState(0);
-  useRefreshSignal(() => setRefreshTick((value) => value + 1));
-
-  useEffect(() => {
-    const poll = createSettledPoll<FillRow[]>({
-      intervalMs: Math.max(5, prefs.dataCadence?.account ?? 10) * 1_000,
-      request: (signal) => fetchJson<FillRow[]>('/api/fills', { cache: 'no-store', signal }),
-      onSuccess: (rows) => {
-        setFills(rows);
-        setFillsError(null);
-      },
-      onError: (error) => {
-        setFillsError(apiErrorMessage(error));
-      },
-    });
-    poll.start();
-    return poll.stop;
-  }, [prefs.dataCadence?.account, refreshTick]);
-
+  const presentation = projectPrivateRead(privateRead);
   const historyPoints: { ts: number; v: number }[] = [];
-  const [openOrders] = useState<OpenOrderRow[] | null>(null);
-  const visibleFills = fills;
+  const openOrders = [
+    ...(privateRead.spot.openOrders ?? []).map((order) => ({ ...order, product: 'Spot', positionSide: null as string | null, reduceOnly: null as boolean | null })),
+    ...(privateRead.margin.openOrders ?? []).map((order) => ({ ...order, product: 'Margin', positionSide: null as string | null, reduceOnly: null as boolean | null })),
+    ...(privateRead.usdm.openOrders ?? []).map((order) => ({ ...order, product: 'USD-M', positionSide: order.positionSide, reduceOnly: order.reduceOnly })),
+  ];
+  const ordersAvailable = privateRead.spot.openOrders !== null
+    && privateRead.margin.openOrders !== null
+    && privateRead.usdm.openOrders !== null;
+  const visibleFills = [
+    ...(privateRead.spot.fills ?? []).map((fill) => ({
+      ...fill, product: 'Spot', side: fill.isBuyer ? 'BUY' : 'SELL', realizedPnl: null as string | null,
+    })),
+    ...(privateRead.margin.fills ?? []).map((fill) => ({
+      ...fill, product: 'Margin', side: fill.isBuyer ? 'BUY' : 'SELL', realizedPnl: null as string | null,
+    })),
+    ...(privateRead.usdm.fills ?? []).map((fill) => ({
+      ...fill, product: 'USD-M', side: fill.side, realizedPnl: fill.realizedPnl,
+    })),
+  ];
+  const fillsAvailable = privateRead.spot.fills !== null
+    && privateRead.margin.fills !== null
+    && privateRead.usdm.fills !== null;
+  const positions = privateRead.usdm.positions;
+  const walletRows = [
+    ...(privateRead.spot.balances ?? []).map((balance) => ({
+      id: `spot-${balance.asset}`,
+      product: 'Spot',
+      asset: balance.asset,
+      first: balance.free,
+      firstLabel: 'Available',
+      second: balance.locked,
+      secondLabel: 'Locked',
+      third: '—',
+      thirdLabel: 'Liability Not Applicable',
+      fourth: privateRead.spot.state,
+      fourthLabel: privateRead.spot.coverage.state.replaceAll('_', ' '),
+    })),
+    ...(privateRead.margin.assets ?? []).map((asset) => ({
+      id: `margin-${asset.asset}`,
+      product: 'Margin',
+      asset: asset.asset,
+      first: asset.free,
+      firstLabel: 'Available',
+      second: asset.locked,
+      secondLabel: 'Locked',
+      third: `${asset.borrowed} / ${asset.interest}`,
+      thirdLabel: 'Borrowed / Interest',
+      fourth: asset.netAsset,
+      fourthLabel: 'Net Asset',
+    })),
+    ...(privateRead.usdm.balances ?? []).map((balance) => ({
+      id: `usdm-${balance.asset}`,
+      product: 'USD-M',
+      asset: balance.asset,
+      first: balance.availableBalance,
+      firstLabel: 'Available',
+      second: balance.crossWalletBalance,
+      secondLabel: 'Cross Wallet',
+      third: balance.crossUnPnl,
+      thirdLabel: 'Cross Unrealized PnL',
+      fourth: balance.balance,
+      fourthLabel: 'Wallet Balance',
+    })),
+  ];
+  const walletRowsAvailable = privateRead.spot.balances !== null
+    || privateRead.margin.assets !== null
+    || privateRead.usdm.balances !== null;
 
   const toggleMask = () => {
     setMask((current) => {
@@ -160,14 +201,21 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
       return !current;
     });
   };
-  const money = (value: number | null | undefined) => mask ? '••••••' : fmtPrice(value);
-  const quantity = (value: number | null | undefined) => mask ? '••••' : fmtQty(value);
+  const exact = (value: string | null | undefined, hidden = '••••') => mask ? hidden : exactOrDash(value);
 
   const currentRange = RANGES.find((item) => item.id === range) ?? RANGES[1];
-  const sourceErrors = [PRIVATE_SOURCE_DETAIL, fillsError].filter(Boolean) as string[];
-  const sourceClass = 'partial';
-  const sourceLabel = 'Private Reads NOT_CONFIGURED';
-  const rowCount = view === 'orders' ? null : view === 'fills' ? visibleFills.length : null;
+  const sourceReason = privateReadError
+    ?? Object.values(privateRead.reconciliation).find((fact) => fact.reason)?.reason
+    ?? presentation.coverageLabel;
+  const sourceClass = presentation.tone === 'ok' ? 'on' : presentation.tone === 'warn' ? 'partial' : 'loading';
+  const sourceLabel = `Private Reads ${presentation.stateLabel}`;
+  const rowCount = view === 'orders'
+    ? ordersAvailable ? openOrders.length : null
+    : view === 'fills'
+      ? fillsAvailable ? visibleFills.length : null
+      : view === 'positions'
+        ? positions?.length ?? null
+        : null;
   const rowLabel = view === 'orders' ? 'Orders' : view === 'fills' ? 'Fills' : null;
 
   return (
@@ -176,7 +224,7 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
         <header className="accountx-toolbar">
           <div className="accountx-identity">
             <span className="accountx-source-mark"><img className="accountx-page-mark" src="/account-wallet.png" alt="" aria-hidden="true" /></span>
-            <span><h1>Account</h1><small>Private Account Reads · NOT_CONFIGURED</small></span>
+            <span><h1>Account</h1><small>Private Account Reads · {presentation.stateLabel} · {presentation.observedLabel}</small></span>
           </div>
           <div className="accountx-tools">
             <button type="button" className="accountx-mask" onClick={toggleMask} title={mask ? 'Show Balances' : 'Hide Balances'} aria-label={mask ? 'Show Balances' : 'Hide Balances'}>
@@ -188,23 +236,23 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
         <section className="accountx-summary" aria-label="Account Summary">
           <article>
             <span>Estimated Total Value</span>
-            <strong>{mask ? '••••••' : 'UNKNOWN'}</strong>
-            <small>NOT_CONFIGURED · no private wallet aggregate is mounted</small>
+            <strong>{mask ? '••••••' : '—'}</strong>
+            <small>No cross-product valuation is published by private-read v1</small>
           </article>
           <article>
-            <span>Available Cash</span>
-            <strong>{mask ? '••••••' : 'UNKNOWN'}</strong>
-            <small>NOT_CONFIGURED · available balance is not read</small>
+            <span>Available USDT</span>
+            <strong>{exact(presentation.spotAvailableUsdt, '••••••')}</strong>
+            <small>{privateRead.spot.state} · Spot free balance only</small>
           </article>
           <article>
-            <span>Liabilities</span>
-            <strong>{mask ? '••••••' : 'UNKNOWN'}</strong>
-            <small>OWNER_GATED · loan and liability reads are not mounted</small>
+            <span>Margin Liabilities</span>
+            <strong>{exact(presentation.marginLiabilityBtc, '••••••')}</strong>
+            <small>{presentation.marginLiabilityBtc === null ? '— · liability aggregate unavailable' : 'BTC-denominated provider aggregate'}</small>
           </article>
           <article>
-            <span>Gross Realized</span>
-            <strong>UNKNOWN</strong>
-            <small>NOT_CONFIGURED · private account PnL is not projected</small>
+            <span>Reconciliation</span>
+            <strong>{presentation.reconciliationLabel}</strong>
+            <small>{presentation.coverageLabel}</small>
           </article>
         </section>
 
@@ -215,9 +263,9 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
             {([
               ['overview', 'Overview', ''],
               ['execution', 'Execution', ''],
-              ['orders', 'Open Orders', '—'],
-              ['positions', 'Positions', ''],
-              ['fills', 'Recent Fills', String(fills.length)],
+              ['orders', 'Open Orders', ordersAvailable ? String(openOrders.length) : '—'],
+              ['positions', 'Positions', positions === null ? '—' : String(positions.length)],
+              ['fills', 'Recent Fills', fillsAvailable ? String(visibleFills.length) : '—'],
               ['pnl', 'PnL', ''],
             ] as [AccountView, string, string][]).map(([id, label, count]) => (
               <button type="button" role="tab" key={id} aria-selected={view === id} onClick={() => setPage(id === 'overview' ? 'account' : id)}>
@@ -225,7 +273,7 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
               </button>
             ))}
           </div>
-          <span className={`accountx-source-state ${sourceClass}`} title={sourceErrors[0] ?? undefined}><i />{sourceLabel}</span>
+          <span className={`accountx-source-state ${sourceClass}`} title={sourceReason}><i />{sourceLabel}</span>
         </nav>
 
         <div className="accountx-workspace">
@@ -240,11 +288,11 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
               <section className="accountx-portfolio-band" aria-label="Balance And Allocation">
                 <div className="accountx-equity">
                   <div className="accountx-section-head">
-                    <span><b>Spot Balance History</b><small>NOT_CONFIGURED · private balance history is not mounted</small></span>
+                    <span><b>Spot Balance History</b><small>History is outside private-read v1 · current balances remain separate</small></span>
                     <div className="accountx-equity-tools">
                       <span className="accountx-spot-change">
                         <em>Spot Change</em>
-                        <b>{mask ? '••••' : 'UNKNOWN'}</b>
+                        <b>{mask ? '••••' : '—'}</b>
                       </span>
                       <div className="accountx-ranges" role="tablist" aria-label="History Range">
                         {RANGES.map((item) => <button type="button" role="tab" aria-selected={range === item.id} key={item.id} onClick={() => setRange(item.id)}>{item.id}</button>)}
@@ -254,20 +302,32 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
                   <SpotBalanceChart points={historyPoints} rangeMs={currentRange.ms} hidden={mask} />
                 </div>
                 <aside className="accountx-allocation">
-                  <div className="accountx-section-head"><span><b>Wallet Allocation</b><small>NOT_CONFIGURED · no private wallet source</small></span></div>
+                  <div className="accountx-section-head"><span><b>Wallet Inventory</b><small>{presentation.coverageLabel}</small></span></div>
                   {mask
                     ? <div className="accountx-private">Balances Hidden</div>
-                    : <div className="accountx-empty compact"><b>Allocation Not Configured</b><span>Private wallet valuation is not mounted.</span></div>}
+                    : <div className="accountx-empty compact"><b>{walletRowsAvailable ? `${walletRows.length} Observed Asset Rows` : 'Wallet Facts Unavailable'}</b><span>Spot, Margin, and USD-M quantities retain their provider units; no cross-product allocation is inferred.</span></div>}
                 </aside>
               </section>
 
               <section className="accountx-wallet-zone" aria-label="Capital Accounts">
               <header className="accountx-wallet-zone-head">
-                <span><b>Capital Accounts</b><small>Private wallet, position, and liability reads are not mounted</small></span>
-                <em>NOT_CONFIGURED</em>
+                <span><b>Capital Accounts</b><small>Current Spot, Cross Margin, And USD-M facts</small></span>
+                <em>{walletRowsAvailable ? `${walletRows.length} Rows` : '—'}</em>
               </header>
               <div className="accountx-wallet-table">
-                <div className="accountx-empty"><b>Private Wallets Not Configured</b><span>No private endpoint is polled from this surface; missing balances are not interpreted as zero.</span></div>
+                {walletRows.map((row) => (
+                  <div className="accountx-wallet-item" key={row.id}>
+                    <div className="accountx-wallet-row">
+                      <span className="accountx-wallet-name"><TokenIcon symbol={`${row.asset}USDT`} size={28} /><span><b>{row.asset}</b><small>{row.product}</small></span></span>
+                      <span><b>{exact(row.first)}</b><small>{row.firstLabel}</small></span>
+                      <span><b>{exact(row.second)}</b><small>{row.secondLabel}</small></span>
+                      <span><b>{exact(row.third)}</b><small>{row.thirdLabel}</small></span>
+                      <span><b>{exact(row.fourth)}</b><small>{row.fourthLabel}</small></span>
+                    </div>
+                  </div>
+                ))}
+                {!walletRowsAvailable && <div className="accountx-empty"><b>Private Wallet Facts Unavailable</b><span>{sourceReason}; missing balances are not interpreted as zero.</span></div>}
+                {walletRowsAvailable && walletRows.length === 0 && <div className="accountx-empty"><b>No Observed Asset Rows</b><span>The configured private read returned exact empty account arrays.</span></div>}
               </div>
             </section>
             </section>
@@ -275,46 +335,66 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
 
           {view === 'orders' && (
             <section className="accountx-table-view" aria-label="Open Orders">
-              <header className="accountx-data-view-head"><span><b>Open Orders</b><small>OWNER_GATED · private order reads are not mounted</small></span><em>UNKNOWN</em></header>
+              <header className="accountx-data-view-head"><span><b>Open Orders</b><small>Current Spot, Cross Margin, And USD-M readback · no action controls</small></span><em>{ordersAvailable ? `${openOrders.length} Orders` : '—'}</em></header>
               <div className="accountx-table-scroll"><table className="accountx-table orders">
                 <thead><tr><th className="l">Order</th><th>Price</th><th>Quantity</th><th>Filled</th><th>Status</th><th>Age</th></tr></thead>
-                <tbody>{openOrders?.map((order: OpenOrderRow) => (
-                  <tr key={`${order.symbol}-${order.orderId}`}>
-                    <td className="l"><span className="accountx-order"><TokenIcon symbol={order.symbol} size={36} /><span><b>{order.symbol}</b><small><em className={order.side === 'BUY' ? 'up' : 'down'}>{order.side}</em> · {order.type}</small></span></span></td>
-                    <td><b>{fmtPrice(order.price)}</b><small>Limit Price</small></td>
-                    <td><b>{quantity(order.origQty)}</b><small>{order.symbol.replace(/USDT$/, '')}</small></td>
-                    <td><b>{fmtPct(order.origQty > 0 ? (order.executedQty / order.origQty) * 100 : 0, 0, false)}</b><small>{quantity(order.executedQty)} Filled</small></td>
-                    <td><b className={order.stale ? 'warn' : 'ok'}>{order.stale ? 'Stale' : order.status}</b><small>Binance Open Order</small></td>
+                <tbody>{openOrders.map((order) => (
+                  <tr key={`${order.product}-${order.symbol}-${order.orderId}`}>
+                    <td className="l"><span className="accountx-order"><TokenIcon symbol={order.symbol} size={36} /><span><b>{order.symbol}</b><small><em className={order.side === 'BUY' ? 'up' : 'down'}>{order.side}</em> · {order.product} · {order.type}</small></span></span></td>
+                    <td><b>{exact(order.price)}</b><small>Limit Price</small></td>
+                    <td><b>{exact(order.origQty)}</b><small>Original Quantity</small></td>
+                    <td><b>{exact(order.executedQty)}</b><small>Executed Quantity</small></td>
+                    <td><b>{order.status}</b><small>Binance Open Order</small></td>
                     <td><b>{timeAgo(order.time)}</b><small>Order {order.orderId}</small></td>
                   </tr>
                 ))}</tbody>
               </table>
-              {openOrders === null && <div className="accountx-empty"><b>Open Orders Not Configured</b><span>This surface does not poll a private order endpoint; absence is not interpreted as zero.</span></div>}
+              {!ordersAvailable && <div className="accountx-empty"><b>Open Order Facts Unavailable</b><span>{sourceReason}; absence is not interpreted as zero.</span></div>}
+              {ordersAvailable && openOrders.length === 0 && <div className="accountx-empty"><b>No Open Orders</b><span>All three configured product reads returned exact empty open-order arrays.</span></div>}
+              </div>
+            </section>
+          )}
+
+          {view === 'positions' && (
+            <section className="accountx-table-view" aria-label="USD-M Positions">
+              <header className="accountx-data-view-head"><span><b>USD-M Positions</b><small>Current position facts only · no leverage or order controls</small></span><em>{positions === null ? '—' : `${positions.length} Positions`}</em></header>
+              <div className="accountx-table-scroll"><table className="accountx-table fills">
+                <thead><tr><th className="l">Position</th><th>Amount</th><th>Entry</th><th>Mark</th><th>Unrealized PnL</th><th>Updated</th></tr></thead>
+                <tbody>{positions?.map((position) => (
+                  <tr key={`${position.symbol}-${position.positionSide}`}>
+                    <td className="l"><span className="accountx-order"><TokenIcon symbol={position.symbol} size={36} /><span><b>{position.symbol}</b><small>{position.positionSide} · {position.marginType}</small></span></span></td>
+                    <td><b>{exact(position.positionAmt)}</b><small>Position Amount</small></td>
+                    <td><b>{exact(position.entryPrice)}</b><small>Entry Price</small></td>
+                    <td><b>{exact(position.markPrice)}</b><small>Mark Price</small></td>
+                    <td><b>{exact(position.unRealizedProfit)}</b><small>USD-M Provider Fact</small></td>
+                    <td><b>{timeAgo(position.updateTime)}</b><small>Leverage {position.leverage}</small></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+              {positions === null && <div className="accountx-empty"><b>Position Facts Unavailable</b><span>{sourceReason}; absence is not interpreted as zero.</span></div>}
+              {positions?.length === 0 && <div className="accountx-empty"><b>No USD-M Positions</b><span>The configured USD-M read returned an exact empty position array.</span></div>}
               </div>
             </section>
           )}
 
           {view === 'fills' && (
             <section className="accountx-table-view" aria-label="Recent Fills">
-              <header className="accountx-data-view-head"><span><b>Recent Fills</b><small>Ledgered Binance executions with price, size, value, and fee evidence</small></span><em>{fillsError ? 'UNKNOWN' : `${visibleFills.length} Fills`}</em></header>
+              <header className="accountx-data-view-head"><span><b>Recent Fills</b><small>Symbol-scoped provider history · coverage remains explicit</small></span><em>{fillsAvailable ? `${visibleFills.length} Fills` : '—'}</em></header>
               <div className="accountx-table-scroll"><table className="accountx-table fills">
                 <thead><tr><th className="l">Fill</th><th>Price</th><th>Quantity</th><th>Value</th><th>Fee</th><th>Time</th></tr></thead>
                 <tbody>{visibleFills.map((fill) => (
-                  <tr key={`${fill.symbol}-${fill.tradeId}`}>
-                    <td className="l"><span className="accountx-order"><TokenIcon symbol={fill.symbol} size={36} /><span><b>{fill.symbol}</b><small><em className={fill.side === 'BUY' ? 'up' : 'down'}>{fill.side}</em> · {fill.source.replaceAll('_', ' ')}</small></span></span></td>
-                    <td><b>{fmtPrice(fill.price)}</b><small>Execution Price</small></td>
-                    <td><b>{quantity(fill.qty)}</b><small>{fill.symbol.replace(/USDT$/, '')}</small></td>
-                    <td><b>{money(fill.quoteQty)}</b><small>Quote Value</small></td>
-                    <td><b>{mask ? '••••' : fmtQty(fill.commission)}</b><small>{fill.commissionAsset ?? 'No Fee Asset'}</small></td>
-                    <td><b>{timeAgo(fill.ts)}</b><small>Trade {fill.tradeId}</small></td>
+                  <tr key={`${fill.product}-${fill.symbol}-${fill.id}`}>
+                    <td className="l"><span className="accountx-order"><TokenIcon symbol={fill.symbol} size={36} /><span><b>{fill.symbol}</b><small><em className={fill.side === 'BUY' ? 'up' : 'down'}>{fill.side}</em> · {fill.product}</small></span></span></td>
+                    <td><b>{exact(fill.price)}</b><small>Execution Price</small></td>
+                    <td><b>{exact(fill.qty)}</b><small>Quantity</small></td>
+                    <td><b>{exact(fill.quoteQty)}</b><small>Quote Value</small></td>
+                    <td><b>{exact(fill.commission)}</b><small>{fill.commissionAsset}</small></td>
+                    <td><b>{timeAgo(fill.time)}</b><small>Trade {fill.id}</small></td>
                   </tr>
                 ))}</tbody>
               </table>
-              {/* F-063: a failed /api/fills request must not render the positive
-                  claim that the ledger contains no fills (same gate pattern as
-                  LedgerPage's empty state). */}
-              {fillsError && visibleFills.length === 0 && <div className="accountx-empty"><b>Fill Evidence Unavailable</b><span>{fillsError}</span></div>}
-              {!fillsError && visibleFills.length === 0 && <div className="accountx-empty"><b>No Ledgered Fill Evidence</b><span>The local ledger currently contains no fill evidence; private streams are not consulted.</span></div>}
+              {!fillsAvailable && <div className="accountx-empty"><b>Fill Facts Unavailable</b><span>{sourceReason}; absence is not interpreted as zero.</span></div>}
+              {fillsAvailable && visibleFills.length === 0 && <div className="accountx-empty"><b>No Scoped Fill Rows</b><span>The configured symbol scopes returned exact empty fill arrays.</span></div>}
               </div>
             </section>
           )}
@@ -322,7 +402,7 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
 
         <footer className="accountx-footer">
           <span>
-            Local Ledger {fillsError ? 'UNAVAILABLE' : 'READABLE'} · Private Account NOT_CONFIGURED · Execution OWNER_GATED
+            Private Read {presentation.stateLabel} · {presentation.reconciliationLabel} · Source {privateReadSource} · Execution BLOCKED
           </span>
           {rowCount !== null && rowLabel && <span>{rowCount} {rowLabel}</span>}
         </footer>

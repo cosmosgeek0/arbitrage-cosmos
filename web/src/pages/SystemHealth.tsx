@@ -8,13 +8,14 @@ import { ProductSurfaceAdapter } from '../features/productControlRoom/components
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { useStore } from '../store';
 import { timeAgo } from '../format';
+import { projectPrivateRead } from '../lib/privateRead';
 import { ComponentOperationalHealthTable } from './ComponentOperationalHealthTable';
 import './Health.css';
 
 type HealthTone = 'healthy' | 'degraded' | 'broken';
 
 export function SystemHealth() {
-  const { setPage } = useStore();
+  const { privateRead, privateReadError, setPage } = useStore();
   const { binding } = useProductControlRoomContext();
   const snapshot = binding.snapshot;
   const healthSurface = snapshot?.surfaces.health;
@@ -29,6 +30,7 @@ export function SystemHealth() {
       : 'degraded';
   const advance = healthSurface?.evidence.find((datum) => datum.fieldId === 'heartbeat-advance');
   const ledgerSchema = healthSurface?.evidence.find((datum) => datum.fieldId === 'ledger-schema-compatibility');
+  const privatePresentation = projectPrivateRead(privateRead);
 
   return (
     <div className="container page healthx-page">
@@ -98,7 +100,7 @@ export function SystemHealth() {
 
             <div className="healthx-alert">
               <ShieldCheck size={14} />
-              Private account health is NOT_CONFIGURED and OWNER_GATED; no signed or private exchange read is inferred.
+              Private Account {privatePresentation.stateLabel} · Permissions {privatePresentation.postureLabel} · {privatePresentation.observedLabel} · {privateReadError ?? privatePresentation.reconciliationLabel}
             </div>
 
             <div className="healthx-filter-actions">

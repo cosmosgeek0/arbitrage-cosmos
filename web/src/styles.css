@@ -43779,6 +43779,8 @@ body::after {
 
 .shared-account-orb.s-live > i { background: var(--ops-green); }
 .shared-account-orb.s-warn > i { background: var(--ops-amber); }
+/* A denied or unsafe private read is never presented as merely quiet. */
+.shared-account-orb.s-bad > i { background: var(--ops-red); }
 
 /* The shell stays mounted while only its inner panes change. */
 .topbar-suite-v4 .smenu {

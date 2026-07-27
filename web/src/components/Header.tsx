@@ -23,7 +23,12 @@ import {
   type ProductComponentProjection,
 } from '../lib/productIntegration';
 import { canonicalRefreshTargetPosture, canonicalWatchmanLauncherPresentation } from '../lib/operatorControlPosture';
-import { projectPrivateRead, type PrivateReadSnapshot } from '../lib/privateRead';
+import {
+  privateReadErrorFact,
+  projectPrivateRead,
+  worstTone,
+  type PrivateReadSnapshot,
+} from '../lib/privateRead';
 import { ACCENTS, CURRENCIES, DATA_CADENCE_DEFAULTS, MARKET_PING_CHOICES, type AccentKey, type DataCadenceKey, type NotificationRuleKey } from '../lib/prefs';
 import { openOverlay, useOverlay } from '../lib/overlay';
 import { TokenIcon } from './TokenIcon';
@@ -441,30 +446,37 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
   },
 ];
 
-// The integration candidate deliberately does not mount private account truth.
-// This sheet is provenance only: it has no credential, session, mutation, or
-// signed-read path and therefore cannot become green from legacy Binance state.
+// The globally visible account status reads the same private-read truth as the
+// rest of the cockpit. This sheet still has no credential, session, or mutation
+// path: it consumes the shared store the shell already provides — no transport,
+// poll, or effect of its own — and reports the admitted state instead of
+// asserting a fixed one, so it can never contradict the cockpit while claiming
+// an account is unmounted.
 function AccountSheet() {
+  const { privateRead, privateReadError } = useStore();
+  const presentation = projectPrivateRead(privateRead);
+  const errorFact = privateReadErrorFact(privateReadError);
+  const tone = [presentation.postureTone, errorFact.guardTone].reduce(worstTone, presentation.guardTone);
   return (
     <div className="ops-sheet ops-account-sheet account-sheet-v3">
       <OpsSheetHeader
         className="account-v3-head"
         icon={<PopupSourceMark tone="#778292"><ApiKeyIdentityMark size={26} /></PopupSourceMark>}
         title="Account Details"
-        subtitle="Private account truth is outside this candidate"
-        status="Not Configured"
-        tone="warn"
+        subtitle={presentation.identityLabel}
+        status={presentation.stateLabel}
+        tone={tone}
       />
-      <div className="ops-section-label"><span>Authority Boundary</span><em>Static provenance</em></div>
+      <div className="ops-section-label"><span>Private Account Truth</span><em>{presentation.observedLabel}</em></div>
       <div className="ops-list ops-control-list">
-        <OpsRow title="Private Account Truth" detail="No signed account adapter is mounted" value="NOT CONFIGURED" tone="warn" />
-        <OpsRow title="Credentials" detail="Owner authorization and server-side configuration required" value="OWNER GATED" tone="idle" />
-        <OpsRow title="Signed Reads" detail="Balances, orders, positions, loans, and sessions are unavailable" value="NOT MOUNTED" tone="idle" />
+        <OpsRow title="Private Account Truth" detail={presentation.freshness.reason} value={presentation.state} tone={presentation.guardTone} />
+        <OpsRow title="Signed Reads" detail={presentation.postureDetail} value={privateRead.permissionPosture.state} tone={presentation.postureTone} />
+        <OpsRow title="Admission" detail={errorFact.detail} value={errorFact.label} tone={errorFact.tone} />
         <OpsRow title="Money Actions" detail="Orders, borrow, repay, transfer, withdrawal, and leverage mutation stay blocked" value="BLOCKED" tone="ok" />
       </div>
       <div className="ops-account-note">
         <IconShield size={15} />
-        <span>This surface does not inspect credentials or imply private exchange connectivity.</span>
+        <span>This surface reads account facts only: no credential material, permission change, or money-action control.</span>
       </div>
     </div>
   );
@@ -1425,7 +1437,7 @@ function AwsOwnerGatedSheet() {
 
 function SharedTopBar() {
   const {
-    state, privateRead, connected, page, prefs, updatePref, setPage,
+    state, privateRead, privateReadError, connected, page, prefs, updatePref, setPage,
     fxTruth, fxBusy: currencyBusy, refreshFx: refreshCurrencyFx,
   } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
@@ -1574,8 +1586,16 @@ function SharedTopBar() {
   const cfg = state?.config;
   const accountProfile = cfg?.profile ?? { name: '', avatar: null };
   const accountAvatar = accountProfile.avatar ?? DEFAULT_PROFILE_LOGO;
-  const accountTone = 'off';
-  const accountSub = 'OWNER GATED · NOT CONFIGURED';
+  // The trigger reports the same admitted private-read truth the sheet and the
+  // shared cockpit rail read. A denial or an unproven key can only downgrade it.
+  const accountErrorFact = privateReadErrorFact(privateReadError);
+  const accountGuardTone = [privateReadPresentation.postureTone, accountErrorFact.guardTone]
+    .reduce(worstTone, privateReadPresentation.guardTone);
+  const accountTone = accountGuardTone === 'ok'
+    ? 'live'
+    : accountGuardTone === 'idle' ? 'off' : accountGuardTone;
+  const accountSub = `${privateReadPresentation.state} · ${privateReadPresentation.freshness.state}`
+    + (accountErrorFact.id === 'NONE' ? '' : ` · ${accountErrorFact.label}`);
   const events = notificationFeedState.archive.events;
   const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[0];
   const activeClock = clockParts(zone.id, now);

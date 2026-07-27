@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { StoreProvider, useStore } from './store';
 import { IconClock } from './components/Icons';
 import { Sidebar, Topbar, BottomNav, Overlays, RefreshDock } from './components/Header';
+import { AccountCockpitRail } from './components/AccountCockpitRail';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Tape } from './components/Tape';
 import { Palette } from './components/Palette';
@@ -88,6 +89,10 @@ function Shell() {
         <div className="app-main">
           {prefs.tape && <Tape />}
           <main ref={mainRef} className={`app-page-main page-${framePage}`}>
+            {/* One shared account cockpit for every route: mounted once here,
+                immediately before the route frame, so no page repeats it and
+                no page can drift from the store's private-read truth. */}
+            <AccountCockpitRail />
             <section
               className={`app-page-frame frame-${framePage}`}
               aria-label={`${framePage} workspace`}

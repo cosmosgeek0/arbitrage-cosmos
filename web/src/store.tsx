@@ -33,7 +33,9 @@ import {
   planReconnectBackoff,
 } from './lib/reconnectBackoff';
 import {
+  PRIVATE_READ_DENIED_REASON,
   decodePrivateReadSnapshot,
+  isPrivateReadDenialStatus,
   unavailablePrivateRead,
   type PrivateReadSnapshot,
 } from './lib/privateRead';
@@ -563,6 +565,18 @@ export function createSerializedWatchlistMutationQueue(
   return Object.freeze({ synchronize, enqueue });
 }
 
+/**
+ * Names a refused private read where the browser already owns the failure. A
+ * 401/403 is a proven denial, not an unreachable transport, and collapsing it
+ * into generic unavailability would let a denied cockpit read as merely quiet.
+ * Classification adds no request, endpoint, or cadence of its own.
+ */
+function privateReadDenialReason(cause: unknown): string | null {
+  return cause instanceof ApiRequestError && isPrivateReadDenialStatus(cause.status)
+    ? PRIVATE_READ_DENIED_REASON
+    : null;
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ServerState | null>(null);
   const [stateTruth, setStateTruth] = useState<CompatibilityStateTruth>(
@@ -753,6 +767,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         .catch((cause) => {
           if (!closed && !controller.signal.aborted) {
             setPrivateReadSource((current) => current === 'STATE' ? current : 'FALLBACK');
+            // A refusal outranks the retained snapshot: once the preferred read
+            // is denied, the browser can no longer prove the rows it holds, so
+            // they are dropped through the same ordered gate every other
+            // private update uses. Other failures keep the existing recovery.
+            const denial = privateReadDenialReason(cause);
+            if (denial) {
+              applyPrivateReadUpdate(requestId, () => {
+                setPrivateRead(unavailablePrivateRead(denial));
+                setPrivateReadError(denial);
+              });
+            }
             setStateTruth((current) => reduceCompatibilityStateTruth(current, {
               kind: 'FAILURE',
               observedAtMs: Date.now(),
@@ -900,7 +925,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       closeCurrent();
       setConnected(false);
     };
-  }, [acceptPrivateReadFromState, nextPrivateReadRequestId]);
+  }, [acceptPrivateReadFromState, applyPrivateReadUpdate, nextPrivateReadRequestId]);
 
   // The canonical socket only speaks when supervisor truth changes, so a
   // signed-in account would otherwise age silently behind a delta-free cockpit.
@@ -936,9 +961,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       onError: (cause) => {
         const contractInvalid = cause instanceof Error && cause.message === 'PRIVATE_READ_FALLBACK_CONTRACT_INVALID';
-        const reason = contractInvalid
-          ? 'PRIVATE_READ_FALLBACK_CONTRACT_INVALID'
-          : 'PRIVATE_READ_FALLBACK_UNAVAILABLE';
+        const reason = privateReadDenialReason(cause)
+          ?? (contractInvalid
+            ? 'PRIVATE_READ_FALLBACK_CONTRACT_INVALID'
+            : 'PRIVATE_READ_FALLBACK_UNAVAILABLE');
         applyPrivateReadUpdate(fallbackRequestId, () => {
           setPrivateRead(unavailablePrivateRead(reason));
           setPrivateReadError(reason);
@@ -1046,6 +1072,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }));
     } catch (cause) {
       issues.push('State snapshot failed');
+      const denial = privateReadDenialReason(cause);
+      if (denial) {
+        applyPrivateReadUpdate(requestId, () => {
+          setPrivateRead(unavailablePrivateRead(denial));
+          setPrivateReadError(denial);
+        });
+      }
       setStateTruth((current) => reduceCompatibilityStateTruth(current, {
         kind: 'FAILURE',
         observedAtMs: Date.now(),
@@ -1082,7 +1115,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       issues,
       ts: Date.now(),
     };
-  }, [acceptPrivateReadFromState, nextPrivateReadRequestId]);
+  }, [acceptPrivateReadFromState, applyPrivateReadUpdate, nextPrivateReadRequestId]);
 
   const store: Store = {
     state,

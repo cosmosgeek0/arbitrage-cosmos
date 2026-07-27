@@ -611,6 +611,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // truth no matter which caller (socket delta, cadence, manual refresh) won.
   const privateReadRequestRef = useRef(0);
   const privateReadAppliedRef = useRef(0);
+  const privateReadStateDecisionRef = useRef(0);
   const nextPrivateReadRequestId = useCallback(() => {
     privateReadRequestRef.current += 1;
     return privateReadRequestRef.current;
@@ -623,15 +624,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const acceptPrivateReadFromState = useCallback((snapshot: ServerState, requestId: number) => {
+    const decoded = decodePrivateReadSnapshot(snapshot.privateRead);
+    // Transport recovery is ordered only against other state responses. A
+    // newer fallback row may outrank this row for display while this valid
+    // state contract must still resume the bounded state cadence.
+    if (requestId > privateReadStateDecisionRef.current) {
+      privateReadStateDecisionRef.current = requestId;
+      setPrivateReadSource(decoded ? 'STATE' : 'FALLBACK');
+    }
     applyPrivateReadUpdate(requestId, () => {
-      const decoded = decodePrivateReadSnapshot(snapshot.privateRead);
       if (decoded) {
         setPrivateRead(decoded);
-        setPrivateReadSource('STATE');
         setPrivateReadError(null);
         return;
       }
-      setPrivateReadSource('FALLBACK');
       if (Object.prototype.hasOwnProperty.call(snapshot, 'privateRead')) {
         setPrivateRead(unavailablePrivateRead('PRIVATE_READ_STATE_CONTRACT_INVALID'));
         setPrivateReadError('PRIVATE_READ_STATE_CONTRACT_INVALID');

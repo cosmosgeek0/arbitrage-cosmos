@@ -243,8 +243,8 @@ export function Dashboard() {
   const integrityChecks: IntegrityCheck[] = [
     {
       label: 'Account Sync',
-      detail: `${privatePresentation.stateLabel} · ${privatePresentation.observedLabel} · ${privatePresentation.reconciliationLabel}`,
-      tone: privatePresentation.tone,
+      detail: `${privatePresentation.stateLabel} · ${privatePresentation.freshness.label} · ${privatePresentation.observedLabel} · ${privatePresentation.reconciliationLabel}`,
+      tone: privatePresentation.guardTone,
     },
     {
       label: 'Public Market Feeds',

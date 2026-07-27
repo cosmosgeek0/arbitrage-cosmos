@@ -1180,7 +1180,7 @@
       },
       {
         "file": "web/src/store.tsx",
-        "line": 805,
+        "line": 811,
         "classification": "LOCAL_OPERATOR_DELIVERY"
       }
     ],
@@ -15152,5 +15152,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "9c8a5f0cdbd9ecb79afe42a0dc009fd1b83bbb310f22485848ed358edc745d6e"
+  "evidenceSha256": "142ff5eb3baa2eed47c924c1b2b811dbddbbff7a2c9eb06f86712c91cd8de72d"
 }

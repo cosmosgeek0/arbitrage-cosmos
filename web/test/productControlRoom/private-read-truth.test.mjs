@@ -699,6 +699,10 @@ test('the private-account surfaces present the freshness guard and never invent 
   for (const source of [account, dashboard, loans]) {
     assert.match(source, /guardTone/, 'a stale snapshot must not keep a green source badge');
   }
+  const accountSync = dashboard.match(/label: 'Account Sync',[\s\S]*?\n\s*},/)?.[0] ?? '';
+  assert.match(accountSync, /privatePresentation\.freshness\.label/);
+  assert.match(accountSync, /tone: privatePresentation\.guardTone/);
+  assert.doesNotMatch(accountSync, /tone: privatePresentation\.tone/);
   assert.match(account, /position\.marginType \?\? 'Margin Mode Not Published'/);
   assert.match(account, /position\.leverage === null/);
   assert.doesNotMatch(account, /position\.leverage \?\? '1'|marginType \?\? 'cross'/i);
@@ -715,6 +719,8 @@ test('the private-account surfaces present the freshness guard and never invent 
   assert.match(store, /window\.clearInterval\(timer\)/);
   assert.match(store, /if \(trigger === 'DELTA'\) stateRefreshQueued = true/);
   assert.match(store, /requestId <= privateReadAppliedRef\.current/);
+  assert.match(store, /requestId > privateReadStateDecisionRef\.current/);
+  assert.match(store, /setPrivateReadSource\(decoded \? 'STATE' : 'FALLBACK'\)/);
   assert.match(store, /stateRefreshController\?\.abort\(\)/);
   assert.equal((store.match(/\/api\/private-account/g) ?? []).length, 1);
 });

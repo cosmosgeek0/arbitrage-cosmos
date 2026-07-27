@@ -29,8 +29,20 @@ mkdir -p "$DATA_DIR" "$OPS_STATE_DIR" "$SOURCE_EVIDENCE" "$MODEL_EVIDENCE"
 sqlite3 "$DATA_DIR/cosmos.db" '
   PRAGMA journal_mode=WAL;
   CREATE TABLE events(id INTEGER PRIMARY KEY, kind TEXT NOT NULL);
+  CREATE TABLE ledger_schema_compatibility(
+    singleton INTEGER PRIMARY KEY,
+    current_schema_version INTEGER NOT NULL,
+    rollback_floor INTEGER NOT NULL
+  );
+  INSERT INTO ledger_schema_compatibility(
+    singleton, current_schema_version, rollback_floor
+  ) VALUES (1, 3, 3);
+  PRAGMA user_version=3;
   INSERT INTO events VALUES (1, "fixture");
 ' >/dev/null
+printf '%s\n' \
+  '{"dataSchema":3,"rollbackFloor":3,"updatedAtUtc":"2026-07-27T00:00:00Z","updatedBy":"test"}' \
+  > "$DATA_DIR/journal-compat.json"
 printf 'original-evidence\n' > "$SOURCE_EVIDENCE/proof.txt"
 printf 'original-model\n' > "$MODEL_EVIDENCE/model.txt"
 printf 'original-single-file\n' > "$FILE_EVIDENCE"

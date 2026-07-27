@@ -834,6 +834,99 @@ export function exactOrDash(value: string | null | undefined): string {
   return value ?? '—';
 }
 
+/**
+ * A provider refusal is a different fact from an absent transport, so it gets
+ * its own stable token instead of collapsing into generic unavailability.
+ */
+export const PRIVATE_READ_DENIED_REASON = 'PRIVATE_READ_DENIED';
+/** The response statuses that prove refusal rather than an unreachable read. */
+export const PRIVATE_READ_DENIAL_STATUSES: readonly number[] = [401, 403];
+/** The token presented when a failure carries no admitted classification. */
+export const PRIVATE_READ_GENERIC_ERROR_REASON = 'PRIVATE_READ_ERROR';
+
+export function isPrivateReadDenialStatus(status: unknown): boolean {
+  return typeof status === 'number' && PRIVATE_READ_DENIAL_STATUSES.includes(status);
+}
+
+export type PrivateReadErrorId = 'NONE' | 'DENIED' | 'CONTRACT_INVALID' | 'UNAVAILABLE' | 'ERROR';
+
+export interface PrivateReadErrorFact {
+  id: PrivateReadErrorId;
+  /** An admitted token only; an unrecognized code never reaches presentation. */
+  code: string;
+  label: string;
+  detail: string;
+  /** The tone this fact presents. An unreported error is neutral, never green. */
+  tone: PrivateReadTone;
+  /**
+   * The downgrade this fact imposes on an overall claim. An absent error proves
+   * nothing, so it imposes none: it can neither lower a read that other guards
+   * proved nor raise one they did not.
+   */
+  guardTone: PrivateReadTone;
+}
+
+type AdmittedErrorFact = Omit<PrivateReadErrorFact, 'code' | 'guardTone'>;
+
+const PRIVATE_READ_ERROR_FACTS: Readonly<Record<string, AdmittedErrorFact>> = {
+  [PRIVATE_READ_DENIED_REASON]: {
+    id: 'DENIED',
+    label: 'DENIED',
+    detail: 'The provider refused the private read; no account truth is admitted.',
+    tone: 'bad',
+  },
+  PRIVATE_READ_STATE_CONTRACT_INVALID: {
+    id: 'CONTRACT_INVALID',
+    label: 'CONTRACT INVALID',
+    detail: 'The state response failed the private-read contract; no rows were admitted.',
+    tone: 'bad',
+  },
+  PRIVATE_READ_FALLBACK_CONTRACT_INVALID: {
+    id: 'CONTRACT_INVALID',
+    label: 'CONTRACT INVALID',
+    detail: 'The bounded fallback response failed the private-read contract.',
+    tone: 'bad',
+  },
+  PRIVATE_READ_FALLBACK_UNAVAILABLE: {
+    id: 'UNAVAILABLE',
+    label: 'UNAVAILABLE',
+    detail: 'The bounded fallback read did not answer; account truth is unavailable.',
+    tone: 'bad',
+  },
+};
+
+/**
+ * Presents a private-read failure as one admitted fact. Only tokens this
+ * candidate authors are ever rendered: an unrecognized code is reported as a
+ * generic error so no provider message, header, or credential text can reach
+ * the screen through the error path.
+ */
+export function privateReadErrorFact(code: string | null | undefined): PrivateReadErrorFact {
+  if (code === null || code === undefined || code === '') {
+    // Silence is not admission. The fact reads neutral because no error was
+    // reported, while its guard stays the neutral element of `worstTone` so it
+    // neither downgrades a proven read nor lifts an unproven one.
+    return {
+      id: 'NONE',
+      code: 'NO_ERROR_REPORTED',
+      label: 'NO ERROR REPORTED',
+      detail: 'No denial or transport error is reported; this is not itself proof of admission.',
+      tone: 'idle',
+      guardTone: 'ok',
+    };
+  }
+  const admitted = PRIVATE_READ_ERROR_FACTS[code];
+  if (admitted) return { ...admitted, code, guardTone: admitted.tone };
+  return {
+    id: 'ERROR',
+    code: PRIVATE_READ_GENERIC_ERROR_REASON,
+    label: 'ERROR',
+    detail: 'A private read failed; no account rows are admitted.',
+    tone: 'bad',
+    guardTone: 'bad',
+  };
+}
+
 export interface PrivateReadFreshness {
   state: PrivateReadFreshnessState;
   label: string;

@@ -1,0 +1,251 @@
+/* Account cockpit rail — one shared read-only truth tape mounted once in the
+   app shell, ahead of every route. It is a single flat surface: hairline facts,
+   no nested cards, no icon tiles, no motion, and no interactive target.
+
+   The 1px grid gap over a line-coloured track paints every hairline, so the
+   fact count must stay divisible by each column count below (12 / 6 / 4 / 3 / 2
+   / 1). An uneven last row would expose the track as a solid block. */
+
+.acr-rail {
+  container-type: inline-size;
+  container-name: account-cockpit-rail;
+  min-width: 0;
+  /* Aligns with the 6px route edge inside the borderless page frame. */
+  margin: 0 6px;
+  overflow: hidden;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow-sm);
+  color: var(--text);
+  font-family: var(--font);
+
+  --acr-ok: var(--up);
+  --acr-warn: #a86408;
+  --acr-bad: var(--down);
+  --acr-idle: var(--faint);
+}
+
+[data-theme="dark"] .acr-rail {
+  box-shadow: none;
+  --acr-warn: #d5962e;
+}
+
+.acr-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px 12px;
+  min-height: 38px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.acr-title {
+  flex: none;
+  color: var(--text);
+  font-size: 10.5px;
+  font-weight: 560;
+  line-height: 14px;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.acr-identity {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 420;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The token carries the state; the dot only repeats it, never replaces it. */
+.acr-status {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--acr-idle);
+  font-size: 10.5px;
+  font-weight: 560;
+  line-height: 14px;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.acr-status > i {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.acr-status.s-ok { color: var(--acr-ok); }
+.acr-status.s-warn { color: var(--acr-warn); }
+.acr-status.s-bad { color: var(--acr-bad); }
+.acr-status.s-idle { color: var(--acr-idle); }
+
+/* The tape is its own bounded canvas: it scrolls sideways inside the rail
+   instead of letting wide evidence reach the document. `auto hidden` keeps the
+   scroll axis horizontal at every width, so the region the surface exposes to
+   the keyboard is always the region that can actually scroll. */
+.acr-facts {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  overflow: auto hidden;
+  overscroll-behavior-x: contain;
+  background: var(--line-2);
+  scrollbar-width: thin;
+}
+
+/* The canvas sits flush with the rail edge, whose radius and clipping would cut
+   an outward ring, so the shared focus colour is drawn just inside it. */
+.acr-facts:focus-visible {
+  outline-offset: -2px;
+}
+
+.acr-fact {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px 14px 10px;
+  background: var(--panel);
+}
+
+.acr-fact > dt {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 560;
+  line-height: 14px;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.acr-fact > dd {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  margin: 0;
+}
+
+/* A safe reading is neutral ink: green is never spent on "nothing is wrong".
+   Only a downgraded fact takes colour, so a denial cannot read as calm. */
+.acr-fact > dd > b {
+  min-width: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 510;
+  line-height: 18px;
+  letter-spacing: -.01em;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.acr-fact > dd > b.s-warn { color: var(--acr-warn); }
+.acr-fact > dd > b.s-bad { color: var(--acr-bad); }
+.acr-fact > dd > b.s-idle { color: var(--muted); }
+
+.acr-fact > dd > small {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 420;
+  line-height: 15px;
+  overflow-wrap: anywhere;
+}
+
+.acr-plan {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  min-height: 34px;
+  margin: 0;
+  padding: 8px 14px 9px;
+  border-top: 1px solid var(--line-2);
+}
+
+.acr-plan > span {
+  flex: none;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 560;
+  line-height: 14px;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.acr-plan > em {
+  flex: none;
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-weight: 560;
+  font-style: normal;
+  line-height: 15px;
+}
+
+.acr-plan > small {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 420;
+  line-height: 15px;
+  overflow-wrap: anywhere;
+}
+
+/* UI zoom does not move the viewport, so the tape reflows on its own inline
+   size rather than on a media query. Each grid step divides the twelve facts
+   into full rows, and the first step stays above the measured desktop rail so
+   a normal window keeps the six-column, two-row tape. */
+@container account-cockpit-rail (max-width: 960px) {
+  .acr-facts { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@container account-cockpit-rail (max-width: 760px) {
+  .acr-facts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* Below three columns a full grid would stack six or twelve rows and run past a
+   short viewport, burying the route. The tape instead stays two short rows and
+   scrolls inside its own canvas. Column flow keeps DOM order, so state,
+   freshness, permission, and admission fill the columns that never scroll. */
+@container account-cockpit-rail (max-width: 620px) {
+  .acr-facts {
+    grid-auto-flow: column;
+    grid-template-columns: none;
+    grid-template-rows: repeat(2, minmax(0, auto));
+    grid-auto-columns: minmax(164px, 1fr);
+  }
+}
+
+/* The narrowest container only tightens the same two-row tape. */
+@container account-cockpit-rail (max-width: 430px) {
+  .acr-head { min-height: 34px; padding: 7px 12px; }
+  .acr-identity { flex-basis: 100%; }
+  .acr-fact { padding: 8px 12px 9px; }
+  .acr-plan { padding: 7px 12px 8px; }
+  /* Labels and values stay whole. Only the supporting sentence clips, and each
+     one leads with its status token, so the truth survives the truncation and
+     the full text stays in the accessibility tree. */
+  .acr-fact > dd > small,
+  .acr-plan > small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

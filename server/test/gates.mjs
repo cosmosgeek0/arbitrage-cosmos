@@ -235,8 +235,10 @@ check(
     && !/permissions\s*:\s*\{[^}]*universalTransfer\s*:\s*true/si.test(serverIndex)
 );
 check(
-  'production composition has no ambient credential or external-control constructor',
-  !/\bcredsFromEnv\b/.test(serverIndex) &&
+  'production composition mounts credentials only in the dedicated GET-only private-read facade',
+  /\bcredsFromEnv\b/.test(serverIndex) &&
+    /new\s+BinancePrivateReadClient\(privateReadCreds\)/.test(serverIndex) &&
+    /new\s+PrivateReadService\(privateReadClient,/.test(serverIndex) &&
     !/new\s+BinanceClient\b/.test(serverIndex) &&
     !/from\s+['"]\.\/binance\/userStream\.js['"]/.test(serverIndex) &&
     !/new\s+UserStream\b/.test(serverIndex) &&
@@ -421,21 +423,19 @@ check(
 );
 
 // ---------- boot server ----------
-console.log('\nBooting server (hostile ambient credentials, isolated data dir)…');
+console.log('\nBooting server (keyless private-read posture, isolated data dir)…');
 const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-gates-'));
 const privateEgressSentinel = path.join(dataDir, 'private-egress-attempts.log');
 const networkEgressSentinel = path.join(dataDir, 'network-egress-attempts.log');
 const child = spawn(process.execPath, ['--import', TRIPWIRE_URL, 'server/dist/index.js'], {
-  // Synthetic credentials are deliberate: the runtime must remain keyless and
-  // owner-gated even if every common ambient credential source is populated.
+  // The deterministic gate intentionally proves credential absence. Configured
+  // private reads have their own injected network-free signer/service proof.
   env: {
     PATH: process.env.PATH,
     PORT: String(PORT),
     HOST,
     DATA_DIR: dataDir,
     SKIP_DOTENV: '1',
-    BINANCE_API_KEY: 'sentinel-binance-api-key-not-a-secret',
-    BINANCE_API_SECRET: 'sentinel-binance-api-secret-not-a-secret',
     AWS_ACCESS_KEY_ID: 'SENTINELACCESSKEY',
     AWS_SECRET_ACCESS_KEY: 'sentinel-aws-secret-not-a-secret',
     AWS_SESSION_TOKEN: 'sentinel-aws-session-not-a-secret',
@@ -887,12 +887,25 @@ const privateReadResponses = [
   await post('/api/loans/refresh', {}),
   await get('/api/orders/history?symbol=BTCUSDT'),
   await get('/api/loans/max-borrowable?asset=BTC'),
-  await post('/api/refresh', { target: 'account' }),
-  await get('/api/apikey'),
 ];
 check(
-  'all private/account compatibility routes are statically NOT_CONFIGURED',
+  'retired private/account compatibility routes remain statically NOT_CONFIGURED',
   privateReadResponses.every((response) => response.status === 503 && response.body?.code === 'NOT_CONFIGURED' && response.body?.available === false)
+);
+const privateAccountResponse = await get('/api/private-account');
+const privateRefreshResponse = await post('/api/refresh', { target: 'account' });
+const apiKeyResponse = await get('/api/apikey');
+check(
+  'keyless private-read contracts return explicit NOT_CONFIGURED truth without egress',
+  privateAccountResponse.status === 200
+    && privateAccountResponse.body?.schemaVersion === 'binance.private-read.v1'
+    && privateAccountResponse.body?.state === 'NOT_CONFIGURED'
+    && privateAccountResponse.body?.permissionPosture?.state === 'NOT_CONFIGURED'
+    && privateRefreshResponse.status === 200
+    && privateRefreshResponse.body?.privateRead?.state === 'NOT_CONFIGURED'
+    && apiKeyResponse.status === 200
+    && apiKeyResponse.body?.schemaVersion === 'binance.api-permissions.v1'
+    && apiKeyResponse.body?.permissionPosture?.state === 'NOT_CONFIGURED'
 );
 
 const retiredMoneyResponses = [

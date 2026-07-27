@@ -33,7 +33,13 @@ import {
   type BookTicker,
   type Futures24hTicker,
 } from './binance/rest.js';
-import { type BinanceClient, keyPosture, rateLimit } from './binance/client.js';
+import {
+  credsFromEnv,
+  type BinanceClient,
+  keyPosture,
+  rateLimit,
+} from './binance/client.js';
+import { BinancePrivateReadClient } from './binance/privateReadClient.js';
 import { resolveIcons, STOCK_TOKENS } from './binance/icons.js';
 import { tokenProfile, warmAllProfiles, profileWarmStatus } from './binance/profile.js';
 import { fetchMoneyFlow, FLOW_WINDOWS } from './binance/moneyflow.js';
@@ -50,6 +56,7 @@ import {
   stopLiquidationProjection,
 } from './binance/liquidations.js';
 import { AccountService } from './services/account.js';
+import { PrivateReadService } from './services/privateRead.js';
 import { RiskService } from './services/risk.js';
 import { OrderService } from './services/orders.js';
 import { BookStreamHub } from './services/bookStream.js';
@@ -558,12 +565,23 @@ const productIntegrationRuntime = createProductIntegrationRuntime({
   }),
 });
 
-// Phase 2 has no accepted signed/private exchange adapter. Keep the legacy
-// read projections mechanically keyless even when ambient credentials exist.
+// The legacy manual services remain mechanically keyless even when a private
+// read credential is configured. Only the dedicated GET-only facade below may
+// hold that credential; OrderService and every money/mutation service receive
+// null and therefore cannot reach its signer or transport.
 function unavailablePrivateBinanceClient(): BinanceClient | null {
   return null;
 }
 const client = unavailablePrivateBinanceClient();
+const privateReadCreds = credsFromEnv();
+const privateReadClient = privateReadCreds === null
+  ? null
+  : new BinancePrivateReadClient(privateReadCreds);
+const privateRead = new PrivateReadService(privateReadClient, {
+  symbols: [...config.allowedSymbols, ...config.watchlist],
+  keyLabel: 'Binance Read Only',
+  keyLast4: privateReadCreds?.apiKey.slice(-4) ?? null,
+});
 function readLocalMutationAuthority(): 'PROVEN_ABSENT' | 'PRESENT' | 'AMBIGUOUS' | 'UNKNOWN' {
   try {
     // This is process-local capability truth only. It never claims that the
@@ -601,7 +619,7 @@ function normalizeLogoDomain(value: string): string | null {
 }
 
 console.log(
-  `cosmos control room: managed market graph booting, signed/private exchange adapter NOT_CONFIGURED, listening ${HOST}:${PORT}`
+  `cosmos control room: managed market graph booting, private reads ${privateReadClient === null ? 'NOT_CONFIGURED' : 'CONFIGURED_GET_ONLY'}, signed mutations NOT_CONFIGURED, listening ${HOST}:${PORT}`
 );
 
 let eventRetentionTimer: NodeJS.Timeout | null = null;
@@ -684,6 +702,7 @@ function buildState(canonicalSupervisor: ReturnType<typeof systemIntegration.sup
     canonicalReadinessEndpoint: '/health/ready' as const,
     canonicalSupervisorEndpoint: '/api/system-integration/supervisor' as const,
     canonicalSupervisor,
+    privateRead: privateRead.snapshot(),
     now: Date.now(),
     mode: config.killSwitch || canonicalSupervisor.control.killSwitchEngaged ? 'HALTED' as const : 'MANUAL' as const,
     privateAccountTruth,
@@ -1268,6 +1287,15 @@ app.get('/api/state', (_req, res) => {
       });
     }
   });
+});
+
+app.get('/api/private-account', (_req, res) => {
+  const snapshot = privateRead.snapshot();
+  if (privateReadClient !== null && snapshot.state === 'UNAVAILABLE') {
+    res.status(503);
+  }
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.json(snapshot);
 });
 
 function integerQuery(
@@ -3232,7 +3260,17 @@ app.post('/api/refresh', (req, res) => {
     }
     const target = requested as ConnectionRefreshTarget;
     if (target === 'account') {
-      sendNotConfigured(res, 'PRIVATE_ACCOUNT_REFRESH');
+      const snapshot = await privateRead.refresh();
+      if (privateReadClient !== null && snapshot.state === 'UNAVAILABLE') {
+        res.status(503);
+      }
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.json({
+        ok: snapshot.state === 'AVAILABLE' || snapshot.state === 'PARTIAL',
+        target,
+        privateRead: snapshot,
+        ts: Date.now(),
+      });
       return;
     }
     if (target === 'all' || target === 'market' || target === 'runtime') {
@@ -3334,7 +3372,15 @@ app.post('/api/refresh', (req, res) => {
 });
 
 app.get('/api/apikey', (_req, res) => {
-  sendNotConfigured(res, 'PRIVATE_API_KEY_POSTURE');
+  const permissionPosture = privateRead.snapshot().permissionPosture;
+  if (privateReadClient !== null && permissionPosture.state === 'UNKNOWN') {
+    res.status(503);
+  }
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.json({
+    schemaVersion: 'binance.api-permissions.v1',
+    permissionPosture,
+  });
 });
 
 app.get('/api/aws-control/status', (_req, res) => {
@@ -3888,6 +3934,7 @@ function startServerTimers(): void {
   // Listener ownership exists before background work is admitted. Product
   // operator events remain dedicated-cursor truth; raw Ledger events and
   // metrics are never exposed on the application WebSocket.
+  privateRead.start();
   pruneEphemeralLedgerEvents(5);
   eventRetentionTimer = setInterval(() => {
     pruneEphemeralLedgerEvents(5);
@@ -4012,6 +4059,7 @@ function gracefulShutdown(signal: NodeJS.Signals): Promise<GracefulShutdownOutco
     eventRetentionTimer = null;
     websocketHeartbeatTimer = null;
     canonicalDeliveryTimer = null;
+    privateRead.stop();
     bookHub.stop();
     for (const socket of pendingWsUpgradeSockets) {
       rejectUpgrade(socket, 503, 'WebSocket service is shutting down.');

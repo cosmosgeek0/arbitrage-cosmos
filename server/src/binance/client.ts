@@ -99,7 +99,10 @@ export interface ApiRestrictions {
   enableSpotAndMarginTrading: boolean;
   enableFutures: boolean;
   permitsUniversalTransfer: boolean;
-  enableVanillaOptions?: boolean;
+  enableVanillaOptions: boolean;
+  enableFixApiTrade: boolean;
+  enableFixReadOnly?: boolean;
+  enablePortfolioMarginTrading: boolean;
   createTime?: number;
 }
 
@@ -116,7 +119,7 @@ function restrictionBool(r: Record<string, unknown>, key: string): boolean {
   }
   return coerceBool(value);
 }
-function normalizeRestrictions(r: Record<string, unknown>): ApiRestrictions {
+export function normalizeApiRestrictions(r: Record<string, unknown>): ApiRestrictions {
   return {
     ipRestrict: restrictionBool(r, 'ipRestrict'),
     enableReading: restrictionBool(r, 'enableReading'),
@@ -126,9 +129,12 @@ function normalizeRestrictions(r: Record<string, unknown>): ApiRestrictions {
     enableSpotAndMarginTrading: restrictionBool(r, 'enableSpotAndMarginTrading'),
     enableFutures: restrictionBool(r, 'enableFutures'),
     permitsUniversalTransfer: restrictionBool(r, 'permitsUniversalTransfer'),
-    enableVanillaOptions: r.enableVanillaOptions === undefined
+    enableVanillaOptions: restrictionBool(r, 'enableVanillaOptions'),
+    enableFixApiTrade: restrictionBool(r, 'enableFixApiTrade'),
+    enableFixReadOnly: r.enableFixReadOnly === undefined
       ? undefined
-      : restrictionBool(r, 'enableVanillaOptions'),
+      : restrictionBool(r, 'enableFixReadOnly'),
+    enablePortfolioMarginTrading: restrictionBool(r, 'enablePortfolioMarginTrading'),
     createTime: typeof r.createTime === 'number' ? r.createTime : undefined,
   };
 }
@@ -152,9 +158,12 @@ export function keyPosture(r: ApiRestrictions | null, keysPresent: boolean): Key
   const ipRestricted = r.ipRestrict;
   if (r.enableWithdrawals) return { level: 'unsafe', label: 'Withdrawals enabled — recreate key', tone: 'bad', ipRestricted };
   if (r.permitsUniversalTransfer || r.enableInternalTransfer) return { level: 'unsafe', label: 'Transfer-out permitted — recreate key', tone: 'bad', ipRestricted };
-  if (r.enableSpotAndMarginTrading) return { level: 'trading', label: 'Trading-capable key', tone: 'warn', ipRestricted };
-  if (r.enableMargin || r.enableFutures || r.enableVanillaOptions) return { level: 'elevated', label: 'Elevated permissions', tone: 'warn', ipRestricted };
-  if (r.enableReading) return { level: 'read_only', label: 'Read-only key OK', tone: 'ok', ipRestricted };
+  if (r.enableSpotAndMarginTrading || r.enableFixApiTrade) return { level: 'trading', label: 'Trading-capable key', tone: 'warn', ipRestricted };
+  if (r.enableMargin || r.enableFutures || r.enableVanillaOptions || r.enablePortfolioMarginTrading) {
+    return { level: 'elevated', label: 'Elevated permissions', tone: 'warn', ipRestricted };
+  }
+  if (r.enableReading && r.ipRestrict) return { level: 'read_only', label: 'Read-only key OK', tone: 'ok', ipRestricted };
+  if (r.enableReading) return { level: 'unknown', label: 'IP restriction missing', tone: 'warn', ipRestricted };
   return { level: 'unknown', label: 'No reading permission', tone: 'warn', ipRestricted };
 }
 
@@ -531,7 +540,7 @@ export class BinanceClient {
   async apiRestrictions(): Promise<ApiRestrictions> {
     const raw = await this.request<unknown>('GET', '/sapi/v1/account/apiRestrictions', {}, true);
     if (!isRecord(raw)) throw new BinanceApiError(502, undefined, 'Binance returned invalid API restrictions');
-    return normalizeRestrictions(raw);
+    return normalizeApiRestrictions(raw);
   }
 
   openOrders(): Promise<OpenOrder[]> {

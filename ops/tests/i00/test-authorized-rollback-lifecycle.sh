@@ -686,16 +686,23 @@ NODE
 }
 
 write_frozen_marker() {
+  local previous_update_state="${1:-COMPLETE}"
+  local current_switched="${2:-true}"
   local marker="$OPS_STATE_DIR/deploy-frozen.json"
-  node - "$marker" "$TARGET_SHA" "$COMPLETED_AT" <<'NODE'
+  node - "$marker" "$TARGET_SHA" "$COMPLETED_AT" \
+    "$previous_update_state" "$current_switched" <<'NODE'
 const fs = require('node:fs');
-const [marker, targetSha, completedAtUtc] = process.argv.slice(2);
+const [
+  marker, targetSha, completedAtUtc, previousUpdateState, currentSwitched,
+] = process.argv.slice(2);
 fs.writeFileSync(marker, `${JSON.stringify({
   ts: completedAtUtc,
   releaseId: `i00-${targetSha}`,
   exposure: 'NONE',
   reason: 'rollback: post-rollback health gate failed',
   operatorAction: 'required',
+  currentSwitched: currentSwitched === 'true' ? true : currentSwitched,
+  previousUpdateState,
 }, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
 NODE
   printf '%s' "$marker"
@@ -1523,15 +1530,6 @@ FROZEN_EFFECT_ARGS=(
   --simulation-clock
   --now "$COMPLETED_AT"
 )
-assert_failure node "$OUTCOME_RECORDER" "${FROZEN_EFFECT_ARGS[@]}"
-assert_eq "$(json_value "$SCENARIO_EFFECT_FINISH" signal)" null
-assert_eq "$(find "$SCENARIO_CLAIM_DIR" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" 1
-assert_file "$SCENARIO_CLAIM_DIR/pre-target-readback.json"
-assert_not_file "$SCENARIO_CLAIM_DIR/post-target-readback.json"
-assert_not_file "$SCENARIO_CLAIM_DIR/frozen-marker.json"
-assert_not_file "$SCENARIO_CLAIM_DIR/rollback-effect.json"
-assert_not_file "$SCENARIO_RESULT"
-assert_not_file "$SCENARIO_RECONCILIATION"
 chmod 400 "$FROZEN_SOURCE"
 assert_eq "$(file_mode "$FROZEN_SOURCE")" 400
 node "$OUTCOME_RECORDER" "${FROZEN_EFFECT_ARGS[@]}" >"$FROZEN_ROOT/effect.json"
@@ -1551,6 +1549,10 @@ assert_eq "$(file_mode "$SCENARIO_CLAIM_DIR/frozen-marker.json")" 600
 assert_eq "$(json_value "$SCENARIO_CLAIM_DIR/rollback-effect.json" status)" \
   ROLLBACK_SWITCHED_FROZEN_PENDING_OWNER_ACTION
 assert_eq "$(json_value "$SCENARIO_CLAIM_DIR/rollback-effect.json" donorExitCode)" 3
+assert_eq "$(json_value "$SCENARIO_CLAIM_DIR/rollback-effect.json" frozenMarkerState)" \
+  SEALED_VALID
+assert_eq "$(json_value "$SCENARIO_CLAIM_DIR/rollback-effect.json" previousUpdateState)" \
+  COMPLETE
 assert_eq \
   "$(json_value "$SCENARIO_CLAIM_DIR/rollback-effect.json" effect.startEvidencePath)" \
   "$SCENARIO_EFFECT_START"
@@ -1604,6 +1606,113 @@ assert_eq "$(sha256_file "$SCENARIO_RESULT")" "$FROZEN_RESULT_SHA"
 assert_eq "$(sha256_file "$SCENARIO_RECONCILIATION")" "$FROZEN_RECONCILIATION_SHA"
 assert_eq "$(sha256_file "$FROZEN_SOURCE")" "$FROZEN_SOURCE_SHA"
 assert_eq "$(file_mode "$FROZEN_SOURCE")" 400
+
+note "degraded exit-3 marker states retain exact links and publish owner action"
+DEGRADED_KINDS=(pending missing unsealed invalid uncertain)
+DEGRADED_NONCES=(
+  2323232323232323232323232323232323232323232323232323232323232323
+  3434343434343434343434343434343434343434343434343434343434343434
+  4545454545454545454545454545454545454545454545454545454545454545
+  5656565656565656565656565656565656565656565656565656565656565656
+  6767676767676767676767676767676767676767676767676767676767676767
+)
+for degraded_index in 0 1 2 3 4; do
+  degraded_kind="${DEGRADED_KINDS[$degraded_index]}"
+  degraded_root="$ROOT/degraded-$degraded_kind"
+  rm -f "$OPS_STATE_DIR/deploy-frozen.json"
+  set_release_links "$CURRENT_RELEASE" "$TARGET_RELEASE"
+  produce_scenario "$degraded_root" "${DEGRADED_NONCES[$degraded_index]}"
+  set_scenario_args "$degraded_root"
+  run_lifecycle_to_verified
+  write_runner_evidence AUTHORIZED_EFFECT_TERMINATED 3
+  degraded_expected_previous="$CURRENT_RELEASE"
+  degraded_expected_previous_state=UNKNOWN
+  degraded_marker_copied=0
+  case "$degraded_kind" in
+    pending)
+      set_release_links "$TARGET_RELEASE" "$TARGET_RELEASE"
+      degraded_expected_previous="$TARGET_RELEASE"
+      degraded_expected_previous_state=PENDING
+      degraded_expected_marker_state=SEALED_VALID
+      degraded_marker_source="$(write_frozen_marker PENDING true)"
+      chmod 400 "$degraded_marker_source"
+      degraded_marker_copied=1
+      ;;
+    missing)
+      set_release_links "$TARGET_RELEASE" "$CURRENT_RELEASE"
+      degraded_expected_marker_state=MISSING
+      ;;
+    unsealed)
+      set_release_links "$TARGET_RELEASE" "$CURRENT_RELEASE"
+      degraded_expected_marker_state=PRESENT_UNSEALED
+      degraded_marker_source="$(write_frozen_marker COMPLETE true)"
+      assert_eq "$(file_mode "$degraded_marker_source")" 600
+      ;;
+    invalid)
+      set_release_links "$TARGET_RELEASE" "$CURRENT_RELEASE"
+      degraded_expected_marker_state=PRESENT_INVALID
+      printf '{"invalid":true}\n' > "$OPS_STATE_DIR/deploy-frozen.json"
+      chmod 400 "$OPS_STATE_DIR/deploy-frozen.json"
+      ;;
+    uncertain)
+      degraded_expected_current="$CURRENT_RELEASE"
+      degraded_expected_previous="$TARGET_RELEASE"
+      degraded_expected_marker_state=SEALED_VALID
+      degraded_marker_source="$(write_frozen_marker NOT_APPLICABLE UNKNOWN)"
+      chmod 400 "$degraded_marker_source"
+      degraded_marker_copied=1
+      ;;
+  esac
+  degraded_expected_current="${degraded_expected_current:-$TARGET_RELEASE}"
+  DEGRADED_EFFECT_ARGS=(
+    --record-rollback-terminal
+    "${AUTHORIZED_ARGS[@]}"
+    --systemctl "$SYSTEMCTL"
+    --curl "$CURL"
+    "${RUNNER_EVIDENCE_ARGS[@]}"
+    --simulation-clock
+    --now "$COMPLETED_AT"
+  )
+  node "$OUTCOME_RECORDER" "${DEGRADED_EFFECT_ARGS[@]}" \
+    >"$degraded_root/effect.json"
+  assert_eq "$(json_value "$degraded_root/effect.json" status)" \
+    ROLLBACK_EFFECT_AMBIGUOUS_RECONCILED
+  assert_eq "$(json_value "$degraded_root/effect.json" terminalDisposition)" \
+    AMBIGUOUS_EFFECT
+  assert_eq "$(json_value "$degraded_root/effect.json" terminalExitCode)" 3
+  assert_eq "$(json_value "$SCENARIO_CLAIM_DIR/rollback-effect.json" status)" \
+    ROLLBACK_EFFECT_AMBIGUOUS_PENDING_OWNER_ACTION
+  assert_eq \
+    "$(json_value "$SCENARIO_CLAIM_DIR/rollback-effect.json" frozenMarkerState)" \
+    "$degraded_expected_marker_state"
+  assert_eq \
+    "$(json_value "$SCENARIO_CLAIM_DIR/rollback-effect.json" previousUpdateState)" \
+    "$degraded_expected_previous_state"
+  assert_eq \
+    "$(json_value "$SCENARIO_CLAIM_DIR/post-target-readback.json" current.path)" \
+    "$degraded_expected_current"
+  assert_eq \
+    "$(json_value "$SCENARIO_CLAIM_DIR/post-target-readback.json" previous.path)" \
+    "$degraded_expected_previous"
+  assert_eq "$(json_value "$SCENARIO_RESULT" status)" ACTION_FAILED_AFTER_EFFECT
+  assert_eq "$(json_value "$SCENARIO_RESULT" outcome.status)" \
+    ROLLBACK_EFFECT_AMBIGUOUS_REQUIRES_OWNER_ACTION
+  assert_eq "$(json_value "$SCENARIO_RECONCILIATION" disposition)" \
+    ROLLBACK_EFFECT_AMBIGUOUS_REQUIRES_OWNER_ACTION
+  if [ "$degraded_marker_copied" = 1 ]; then
+    assert_file "$SCENARIO_CLAIM_DIR/frozen-marker.json"
+    assert_eq \
+      "$(json_value "$SCENARIO_CLAIM_DIR/rollback-effect.json" frozenMarkerSha256)" \
+      "$(sha256_file "$SCENARIO_CLAIM_DIR/frozen-marker.json")"
+  else
+    assert_not_file "$SCENARIO_CLAIM_DIR/frozen-marker.json"
+    assert_eq \
+      "$(json_value "$SCENARIO_CLAIM_DIR/rollback-effect.json" frozenMarkerSha256)" \
+      null
+  fi
+  unset degraded_expected_current
+done
+rm -f "$OPS_STATE_DIR/deploy-frozen.json"
 
 note "unmapped, null, signaled, and timed-out terminals publish ambiguous owner action"
 AMBIGUOUS_CODES=(0 2 null null null 3 3)

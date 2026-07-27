@@ -2,13 +2,13 @@
 
 | item | expected | found | status |
 |---|---|---|---|
-| contract phase | shared byte freeze | final | PASS |
+| contract phase | shared byte freeze | final source/test bytes fixed; receipt-bound rechain | PASS |
 | amendment | one closed successor | `DEPLOY-PORTABILITY-008` | BOUND |
 | base live tree | prior effective tree | retained contract binding | PASS |
-| effective live tree | regenerated from final donor bytes | contract binding | PASS |
+| effective live tree | regenerate from final donor bytes | `b401078e3f708c19a5b47b1b2481020ebcb6dee0` | BOUND |
 | base root digest | prior effective root | retained contract binding | PASS |
-| effective root digest | canonical final donor tree | contract binding | PASS |
-| effective inventory | unchanged regular-file set | 31 files | PASS |
+| effective root digest | canonical final donor tree | `a6e8f98f593b96cfa5109914f9a720e1e0f74b489b814f1c8dd0349e639d4011` | BOUND |
+| effective inventory | unchanged regular-file set | 31 files | BOUND |
 | live transition | modified paths only | 19 paths | PASS |
 | donor-owned test transition | bounded replacements only | 8 paths | PASS |
 | runtime API proof | local authorized-effect harness | 8 assertions | PASS |
@@ -21,12 +21,12 @@
 | null-capability Linux contract | unused effect FDs bind fixed null; provider closes through fd53 | bound and closed | PASS |
 | historical R3 regressions | sealed-base bytes and modes retained at original paths | 2 paths | PASS |
 | R3 successor routing | non-glob current-runtime suites invoked by DF-32 driver | 2 suites | PASS |
-| focused byte proof | final descriptor, policy, and successor regressions | 388 assertions | PASS |
+| focused byte proof | final descriptor, policy, and successor regressions | 389 assertions at exact source hash `…8dae` | PASS |
 | backup publication output | one bounded canonical claim plus EOF | descriptor-bound | PASS |
 | sanitizer proof | hostile environment matrix | 143 assertions | PASS |
-| direct deploy proof | contained donor suite | 158 assertions | PASS |
-| direct rollback proof | contained donor suite | 27 assertions | PASS |
-| direct backup/restore proof | contained donor suite | 53 assertions | PASS |
+| direct deploy proof | contained donor suite | 732 assertions at exact pre-rechain diff | PASS |
+| direct rollback proof | contained donor suite | 411 assertions at exact pre-rechain diff | PASS |
+| direct backup/restore proof | contained donor suite | prior-bound 53 assertions; current adapter proof is recorded below | HISTORICAL PASS |
 | direct watchdog proof | contained donor suite | 35 assertions | PASS |
 | watchdog portability proof | focused I00 suite | 177 assertions | PASS |
 | watchdog whole-pass ceiling | Linux scheduler allowance; one-second hook timeout unchanged | 6000 ms | PASS |
@@ -57,8 +57,8 @@
 | donor test path | modified only | `ops/tests/test-secret-scanner.sh` | FIXED |
 | donor test path | modified only | `ops/tests/test-systemd-units.sh` | FIXED |
 | donor test path | modified only | `ops/tests/test-watchdog.sh` | FIXED |
-| additive regression | exact final byte proof | `ops/tests/i00/test-deploy-portability-008-l15-bytes.sh` | PASS |
-| amendment contract | byte, tree, and runtime binding | `ops/i00/l15-amendment-contract.json` | BOUND |
+| additive regression | exact final byte proof | `ops/tests/i00/test-deploy-portability-008-l15-bytes.sh`; 389 assertions | PASS |
+| amendment contract | byte, tree, and runtime binding | receipt-bound contract plus five current consumers | BOUND |
 | final Linux proof | separate final receipt | `docs/archive/i00-phase4/DEPLOY-PORTABILITY-008_CORRECTION_RECEIPT.md` | DEFERRED |
 
 ## Re-correction 2026-07-25 — usr-merge canonicality of the built-in Bash default
@@ -135,7 +135,7 @@ no second amendment ceremony were created.
 | honest floor behavior | valid floor 7 and safe maximum refuse older schema; valid floor 0 allows | preserved in the hostile matrix | PASS |
 | rollback floor regression | missing/zero, null/non-object root, numeric-string, text, injection-like, negative/negative-zero, fractional precision edges, exponent underflow, safe boundary, unsafe integer, and malformed/unsafe/precision-edge schema cases | deploy 352 assertions; rollback 169 assertions | PASS |
 | unit policy regression | exact app allowlist, backup blocker removal, cadence retention, restore-drill bars | systemd suite 128 assertions | PASS |
-| adjacent journal arithmetic | `dataSchema` is read and compared after the switch without its own type guard | source finding only; not live-measured; separate queue item | NOT IN THIS PATCH |
+| adjacent journal arithmetic | `dataSchema` requires an exact type boundary before compatibility arithmetic | folded into the released post-landing journal re-correction below; no new finding or amendment | FIXED BY RE-CORRECTION |
 | live paths rebound | every changed effective-L15 path | common helper, app unit, backup service/timer, deploy, rollback | BOUND |
 | authorized-effect runtime | executing producer and verifier equal their L15 trust anchors | runner and verifier SHA-256 regenerated | BOUND |
 | effective inventory | same closed regular-file set | 31 files | BOUND |
@@ -144,3 +144,27 @@ no second amendment ceremony were created.
 | live site | no deploy, restart, timer enable, or provider action in this row | source-only landing | UNCHANGED |
 | Linux unit runtime | systemd/netlink execution cannot be proved on this macOS checkout | fresh Linux CI and sealed-bundle proof remain required | NOT MEASURED |
 | cloudflared address-family question | outside the five released patches | retained as `NOT_MEASURED` | OUT OF SCOPE |
+
+## 2026-07-27 queue-row-1 final source re-correction
+
+Earlier counts and `BOUND`/`REPINNED` statuses in this receipt are historical
+evidence for their previously bound bytes unless a row below explicitly names
+the current source hash. Clean-candidate aggregate and integrated gates remain
+pending until their named commands complete after the source commit.
+
+| item | expected | found | status |
+|---|---|---|---|
+| journal endpoint | only true absence defaults safety state to zero | bounded no-follow classification distinguishes absence, regular state, unsafe endpoint, unreadable state, invalid `dataSchema`, and floor/schema conflict | SOURCE IMPLEMENTED |
+| stale-version guard | refuse a changed marker immediately before publication | pre-lock refusal read, authoritative under-lock snapshot, and exact full-token revalidation; the writer reconstructs the current token under the sole-writer lock | SOURCE IMPLEMENTED; NOT KERNEL CAS |
+| journal publication | publish complete bytes atomically after the stale-version guard | exclusive same-directory stage, generated-value validation, mode/ownership preservation, file and parent durability steps, unconditional rename, and final descriptor/name verification | SOURCE IMPLEMENTED |
+| publisher outcome | distinguish refusal from publication uncertainty | rc 1 means no publication observed; rc 2 or unknown status means publication/durability is uncertain and freezes directly | SOURCE IMPLEMENTED |
+| terminal switch classification | no signal or incomplete exit-zero path can report success | deploy maps interrupted/confirmed switch termination or incomplete post-publication exit zero to rc 2; rollback maps them to rc 3; atomic-helper nonzero is classified as exact preimage, exact target, or third-state uncertainty | SOURCE IMPLEMENTED |
+| authorized-effect terminal | success requires every completion predicate, not exit code alone | a signal or incomplete code-zero completion is terminated with possible mutation and is ineligible for success recording | SOURCE IMPLEMENTED |
+| rollback frozen marker | bind exact switch and previous-link evidence | exact seven keys bind switch as `true` or `UNKNOWN` and previous update as `COMPLETE`, `PENDING`, or `NOT_APPLICABLE` | SOURCE IMPLEMENTED |
+| rollback outcome recorder | preserve exit 3 without promoting degraded evidence | records marker state and previous-update state; only sealed `true + COMPLETE` is strong frozen, while every degraded clean exit 3 remains failed-after-effect with owner action | SOURCE IMPLEMENTED |
+| backup-root comparison | exclude only the actual mutable evidence child | one shared path-aware comparator excludes the evidence entry only when its exact parent is the exact backup root; SYSTEM excludes its direct child, while TEST/STAGING sibling evidence roots exclude nothing | SOURCE IMPLEMENTED |
+| focused donor regressions | report stable-hash measurements only | deploy 732 and rollback 411 assertions passed at diff `…bb1ac`; hash matched before and after each | PASS |
+| L15 and dependent I00 regressions | report stable source/test measurements only | L15 389 and authorized rollback lifecycle 685 assertions passed at exact source hash `…8dae`; delegation 35, bound-effect identity 25, and backup/restore adapters 54 passed at exact source hash `…8e1a6`; every named hash was unchanged before and after its runs | PASS |
+| effective L15 | rechain only final unchanged source/test and receipt bytes | amendment index 7 retains 8 amendments, 19 live paths, 8 donor-test paths, 4 focused regressions, and 31 effective files; receipt, tree/root, inventory, runtime anchor, contract digest, and five consumer pins are rebound | BOUND |
+| clean-candidate gates | verify the committed final bytes | final pinned focused rerun, aggregate, integrated donor/static I00, `npm test`, and `npm run test:all` remain to run after the source commit | PENDING |
+| external acceptance | keep source proof separate from runtime acceptance | Linux/systemd, sealed bundle, post-push CI, live host, Cloudflare/AWS, and provider/private-exchange behavior were not exercised | NOT MEASURED |

@@ -1536,20 +1536,10 @@ function inspectBoundBackupOutput({
   document,
   expectedUid,
   expectedGid,
-  evidenceRootChild,
+  inventoryScope,
 }) {
-  // The effect-evidence root is a DIRECT CHILD of this write root, and the start evidence
-  // is written into it AFTER the `before` snapshot is taken. That child therefore differs
-  // between the two snapshots on every correct fire, and the delta check below - which
-  // requires every prior child to be retained UNCHANGED - would reject it.
-  //
-  // Exclude EXACTLY that pinned child from both sides, by its exact name, and nothing
-  // broader. The one added child the check expects is still the backup itself, and every
-  // other child is still compared unchanged.
-  const excludeEvidenceRootChild = (inventory) => inventory
-    .filter((entry) => entry.name !== evidenceRootChild);
-  const before = excludeEvidenceRootChild(rawBefore);
-  const after = excludeEvidenceRootChild(rawAfter);
+  const before = backupComparableInventory(rawBefore, inventoryScope);
+  const after = backupComparableInventory(rawAfter, inventoryScope);
   const beforeByName = new Map(before.map((entry) => [entry.name, entry]));
   const afterByName = new Map(after.map((entry) => [entry.name, entry]));
   const added = after.filter((entry) => !beforeByName.has(entry.name));
@@ -2413,6 +2403,12 @@ const backupWriteRoot = actionClass === 'BACKUP_CREATE'
   : null;
 assert(actionClass !== 'BACKUP_CREATE' || backupWriteRoot !== undefined,
   'backup effect lacks its retained output root');
+const backupInventoryScope = backupWriteRoot === null
+  ? null
+  : Object.freeze({
+      backupRoot: backupWriteRoot.path,
+      effectEvidenceRoot: risk.artifactPolicy.effectEvidenceRoot,
+    });
 let backupInventoryBefore = null;
 if (backupWriteRoot !== null) {
   try {
@@ -3133,7 +3129,7 @@ if (pendingRefusal === null && actionClass === 'BACKUP_CREATE') {
         document: outputDocument,
         expectedUid,
         expectedGid,
-        evidenceRootChild: basename(risk.artifactPolicy.effectEvidenceRoot),
+        inventoryScope: backupInventoryScope,
       });
       const outputEvidence = publishEffectOutputEvidence(
         evidenceParent,
@@ -3141,17 +3137,11 @@ if (pendingRefusal === null && actionClass === 'BACKUP_CREATE') {
         outputDocument,
       );
       const inventoryFinal = snapshotBackupWriteRoot(backupWriteRoot);
-      // The effect-evidence root is a DIRECT CHILD of this write root, and publishing the
-      // output evidence happens between the two snapshots — so that one child necessarily
-      // differs on every fire. Comparing it would report a disturbance on a correct run.
-      //
-      // Exclude EXACTLY that pinned child, by its exact name, and nothing broader. Every
-      // other child is still compared, so a genuine disturbance elsewhere still fails.
-      const evidenceRootChild = basename(risk.artifactPolicy.effectEvidenceRoot);
-      const withoutEvidenceRootChild = (inventory) => inventory
-        .filter((entry) => entry.name !== evidenceRootChild);
       outputRequire(
-        sameJson(withoutEvidenceRootChild(inventoryFinal), withoutEvidenceRootChild(inventoryAfter)),
+        sameJson(
+          backupComparableInventory(inventoryFinal, backupInventoryScope),
+          backupComparableInventory(inventoryAfter, backupInventoryScope),
+        ),
         'backup root changed after exact output verification',
       );
       effectOutput = Object.freeze({
@@ -3167,14 +3157,14 @@ if (pendingRefusal === null && actionClass === 'BACKUP_CREATE') {
         receiptSha256: artifact.receiptSha256,
         databaseSha256: artifact.databaseSha256,
         databaseBytes: artifact.databaseBytes,
-        // Hash the AGREED inventory, not the raw one: the outcome recorder re-derives this
-        // same value later, after more evidence has landed in the effect-evidence child, and
-        // asserts equality. Both sides use the one shared contract so neither can drift.
+        // Hash the AGREED inventory, not an independently filtered one: the outcome recorder
+        // re-derives this value after more evidence may have landed. Both sides use the same
+        // path-aware contract so SYSTEM excludes its mutable child and sibling modes do not.
         beforeInventorySha256: backupInventorySha256(
-          backupComparableInventory(backupInventoryBefore, actionClass),
+          backupComparableInventory(backupInventoryBefore, backupInventoryScope),
         ),
         afterInventorySha256: backupInventorySha256(
-          backupComparableInventory(inventoryAfter, actionClass),
+          backupComparableInventory(inventoryAfter, backupInventoryScope),
         ),
       });
     } catch {

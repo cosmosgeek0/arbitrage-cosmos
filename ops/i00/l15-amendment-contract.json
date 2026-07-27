@@ -20,7 +20,7 @@
   "authorizedEffectRuntime": {
     "nodePath": "/usr/bin/node",
     "runnerPath": "ops/i00/bin/run-bound-effect.mjs",
-    "runnerSha256": "ed69e68bfe8eb9dec9dcc2070bf0072f23b10a86ce765be29bcec25d40650423",
+    "runnerSha256": "22c80b2d6122f105f8947789119382f2e95731a9a473bedf94c1bd5372dd4a22",
     "verifierPath": "ops/i00/bin/verify-authorized-effect-handoff.mjs",
     "verifierSha256": "7397eeae71385bd922e69d6cb9c860984999d31135ee47d136dadafd397232a0"
   },
@@ -423,17 +423,17 @@
     {
       "findingId": "DEPLOY-PORTABILITY-008",
       "baseLiveTree": "a90d108fe7614a00de87e6280089fe0201c8dc3d",
-      "effectiveLiveTree": "c519689f5025fbb69ea8924018a61d8d73fb79d6",
+      "effectiveLiveTree": "b401078e3f708c19a5b47b1b2481020ebcb6dee0",
       "baseRootDigestSha256": "c37e5a80b9591a31ff41af7e07f66bb75a99d13f2d6e6edbcb8726dae7243cc0",
-      "effectiveRootDigestSha256": "1cebb5e58a5c9e643d83da3673d7d6254e6b0a981ec63e32bde066aac3b76608",
+      "effectiveRootDigestSha256": "a6e8f98f593b96cfa5109914f9a720e1e0f74b489b814f1c8dd0349e639d4011",
       "changedFiles": [
         {
           "path": "ops/live/README.md",
           "mode": "100644",
           "beforeGitBlob": "f57872f11e285bfec6280b89c03f6f5eadea8db0",
           "beforeSha256": "e74826fbf31778f3fc37692e62498cd1553734e8d85dd303f4f00caa61ba2502",
-          "afterGitBlob": "c3ef2f6040584321bbbd7d236f853bc2f23505e2",
-          "afterSha256": "7b67ad9c3e8649cd4add24ea424ebbad212db74fe13365b455096c2643b81080"
+          "afterGitBlob": "e5f0de8aa5bfabc8e7ec677d884d6b66ca820a3b",
+          "afterSha256": "f2b22d88cbfa86cf0f5d85fc33a77afac5c04aaf0997cdf820daa2143c8c9dfe"
         },
         {
           "path": "ops/live/bin/alert-log.sh",
@@ -456,16 +456,16 @@
           "mode": "100755",
           "beforeGitBlob": "73f5b58317b56b662c0488ae7cfee793f71e027c",
           "beforeSha256": "2da2ffd952daf2480bde91280f422e5d86d45c471515c390f0592923c52c09b6",
-          "afterGitBlob": "01537660489dd8a646f3b47cd0058f95326913e0",
-          "afterSha256": "7e68e81dd902f0c6a434cc777d1aba49f6140227a355b86ad1c39c56ce946d2d"
+          "afterGitBlob": "de5de8f5d0f2c07d5448057eeece6fb8f47aa1bf",
+          "afterSha256": "acd0a9ec6cd8e07767c6ac785e7a2e35457238371999e641410f441dc1b14949"
         },
         {
           "path": "ops/live/bin/deploy.sh",
           "mode": "100755",
           "beforeGitBlob": "3c4eaf5c445ffd716216e9c27815d0cffee3ef8b",
           "beforeSha256": "9424f10b73fab8b0fa98eb135b758b80282d6c529831b7e7fba3002f3014c02a",
-          "afterGitBlob": "0893ea430861c7bf184cd07b9ff3d82b068ef957",
-          "afterSha256": "c75a51a9a09b1ab97b947c1ae86599c95e287ae4f4c0fa33b163d5a39c0bc959"
+          "afterGitBlob": "b65762df757a35be10c14777d70ddc8c51239dc8",
+          "afterSha256": "dc72d32a29ce03550241b3751b059b9dda155e96b114a6a376b5e11aec100fb1"
         },
         {
           "path": "ops/live/bin/restore-drill.sh",
@@ -488,8 +488,8 @@
           "mode": "100755",
           "beforeGitBlob": "5a0d289c35ed3cb51d7e217e477bd671a409071b",
           "beforeSha256": "c594a483b810073c11a8ec65bdc716ab5e36010146b386a854df601e4cfd1728",
-          "afterGitBlob": "6d7183a1048cf79f65858a01e00857aa5fd2145d",
-          "afterSha256": "484bd7cf62fdcea26ee36c3c9982e3a5c2a7bce9ef832ed143f4c5a7c092a723"
+          "afterGitBlob": "09bba803543bec76f6c78b0f05afac4abfe96aae",
+          "afterSha256": "7ddbee9cb6f1fcb749cbaf768d935b8830416748fa80958b2e7f947bde7532f7"
         },
         {
           "path": "ops/live/bin/watchdog.sh",
@@ -586,8 +586,8 @@
           "mode": "100755",
           "beforeGitBlob": "acc06258e6178d3f8f0253abfc5f1571b8970be6",
           "beforeSha256": "6f23aa5e7e770e4850038f7a228e33fe4e05ad44a3f7c75a7622fbcbd1b6b9bb",
-          "afterGitBlob": "d08d6ee37bcf0269596ed61ad87b1505c3053569",
-          "afterSha256": "b0f29eebb93cac8bd3dc87f5318045ba7b8bb1925514436c670d6338011708e2"
+          "afterGitBlob": "f474e189d1380b49e89c4d273116fa09023c5cc9",
+          "afterSha256": "9effede874722885f652c3f1073c21aeb809215b4fbebdcb5062d99429a8178d"
         },
         {
           "path": "ops/tests/test-backup-restore.sh",
@@ -602,8 +602,8 @@
           "mode": "100755",
           "beforeGitBlob": "700ad6fb184315895672de58ed151ff3c07273fe",
           "beforeSha256": "e2dc8e1c8e714c75ae49052a2f168687ab2d06ff38bf13a8c2d7aadc85c121dd",
-          "afterGitBlob": "81c94eb53b6d3810a3906dc56ebe8dca1dce6bdb",
-          "afterSha256": "a44c80e2d2d1f78fe5cd68c0f97d98f04fff6fc19b139b32f06b016739029ea3"
+          "afterGitBlob": "a7b7a7fb56e2e2c5faa478aa715063b33d5a5061",
+          "afterSha256": "d3d588daf95f3d9135065843b0d779cb1b24dbc0cadaff49b415eabf5a9a1599"
         },
         {
           "path": "ops/tests/test-restore-drill.sh",
@@ -618,8 +618,8 @@
           "mode": "100755",
           "beforeGitBlob": "fce414f0672e80a37e817f19da595647b5f05e44",
           "beforeSha256": "3b204172c9d91042a5c5f8d2f6272eda9efefaa4aba5e348c3c68383582b6df2",
-          "afterGitBlob": "d31de9d7bd76a9cf5a2567a1b687faba0391441f",
-          "afterSha256": "9442350e2597e46655fe938924f38691e6c52690e761fc8b295353fe8d47610b"
+          "afterGitBlob": "a1d74e7680532ba6c87f44b25b380dcb92ed2c08",
+          "afterSha256": "55cff75c1c5ea48b495e21113b1056f35fa44266aaed69e0eb96cf4b4802a577"
         },
         {
           "path": "ops/tests/test-secret-scanner.sh",
@@ -649,15 +649,15 @@
       "correctionReceipt": {
         "path": "docs/archive/i00-phase4/DEPLOY-PORTABILITY-008_L15_AMENDMENT_RECEIPT.md",
         "mode": "100644",
-        "gitBlob": "915e9b762c3d06315f5fb97e1cd9e2a530004f51",
-        "sha256": "a79b3c2040955f895ef405bf450926f1ac34fcb325885396327e2aff42eca7d7"
+        "gitBlob": "10e0004e381cc6a5b2f34b77c51260e2db619ff8",
+        "sha256": "52f127b96b5b6045c287f112a908577fc83212fda43d4b63040b6e113b44ddcb"
       },
       "regressionTests": [
         {
           "path": "ops/tests/i00/test-deploy-portability-008-l15-bytes.sh",
           "mode": "100755",
-          "gitBlob": "96383927e3156bef5fcb9163817fae16a8ba7c8a",
-          "sha256": "db21c0c05911eacb546f9f22998a9368d5dd4d4c87cf5cc368e9bf7069201841"
+          "gitBlob": "b336bac2825abee9bed8f525f34775c9a3c4d346",
+          "sha256": "8ce41c711e4a9b22891ae6069774b10223dde9bbe3ef77ea09a876137c5981af"
         },
         {
           "path": "ops/tests/i00/df32-r3-watchdog-successor.sh",
@@ -681,15 +681,15 @@
     }
   ],
   "effectiveLive": {
-    "tree": "c519689f5025fbb69ea8924018a61d8d73fb79d6",
-    "rootDigestSha256": "1cebb5e58a5c9e643d83da3673d7d6254e6b0a981ec63e32bde066aac3b76608",
+    "tree": "b401078e3f708c19a5b47b1b2481020ebcb6dee0",
+    "rootDigestSha256": "a6e8f98f593b96cfa5109914f9a720e1e0f74b489b814f1c8dd0349e639d4011",
     "fileCount": 31,
     "files": [
       {
         "path": "README.md",
         "mode": "100644",
-        "gitBlob": "c3ef2f6040584321bbbd7d236f853bc2f23505e2",
-        "sha256": "7b67ad9c3e8649cd4add24ea424ebbad212db74fe13365b455096c2643b81080"
+        "gitBlob": "e5f0de8aa5bfabc8e7ec677d884d6b66ca820a3b",
+        "sha256": "f2b22d88cbfa86cf0f5d85fc33a77afac5c04aaf0997cdf820daa2143c8c9dfe"
       },
       {
         "path": "RECEIPT.md",
@@ -736,14 +736,14 @@
       {
         "path": "bin/common.sh",
         "mode": "100755",
-        "gitBlob": "01537660489dd8a646f3b47cd0058f95326913e0",
-        "sha256": "7e68e81dd902f0c6a434cc777d1aba49f6140227a355b86ad1c39c56ce946d2d"
+        "gitBlob": "de5de8f5d0f2c07d5448057eeece6fb8f47aa1bf",
+        "sha256": "acd0a9ec6cd8e07767c6ac785e7a2e35457238371999e641410f441dc1b14949"
       },
       {
         "path": "bin/deploy.sh",
         "mode": "100755",
-        "gitBlob": "0893ea430861c7bf184cd07b9ff3d82b068ef957",
-        "sha256": "c75a51a9a09b1ab97b947c1ae86599c95e287ae4f4c0fa33b163d5a39c0bc959"
+        "gitBlob": "b65762df757a35be10c14777d70ddc8c51239dc8",
+        "sha256": "dc72d32a29ce03550241b3751b059b9dda155e96b114a6a376b5e11aec100fb1"
       },
       {
         "path": "bin/latency-bench.mjs",
@@ -766,8 +766,8 @@
       {
         "path": "bin/rollback.sh",
         "mode": "100755",
-        "gitBlob": "6d7183a1048cf79f65858a01e00857aa5fd2145d",
-        "sha256": "484bd7cf62fdcea26ee36c3c9982e3a5c2a7bce9ef832ed143f4c5a7c092a723"
+        "gitBlob": "09bba803543bec76f6c78b0f05afac4abfe96aae",
+        "sha256": "7ddbee9cb6f1fcb749cbaf768d935b8830416748fa80958b2e7f947bde7532f7"
       },
       {
         "path": "bin/watchdog.sh",

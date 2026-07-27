@@ -291,6 +291,7 @@ case "$1:$2" in
     ;;
   restart:cosmos-app.service)
     [ "$#" -eq 2 ] || exit 9
+    [ ! -e "${root}/systemctl-restart-fail" ] || exit 7
     ;;
   *) exit 9 ;;
 esac

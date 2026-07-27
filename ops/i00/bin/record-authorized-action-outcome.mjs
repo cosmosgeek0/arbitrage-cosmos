@@ -52,7 +52,7 @@ const I00_ROOT = resolve(SCRIPT_DIR, '..');
 const EXPECTED_DONOR_CONTRACT_SHA256 =
   '078cc2a3d8bc79026f1de6985284856794e53ba34ffd7fda5d1140e46e31a1b3';
 const EXPECTED_AMENDMENT_CONTRACT_SHA256 =
-  '6b749cc288e5a0a89baa6344aa67f1b14159f0b0b67beb2090f775fbaefe5445';
+  '4606553dee2af349eb55593fee8563184cb73d6945f1a1bfb57ce176c4c19c9d';
 const INSTALL_RECEIPT_KEYS = Object.freeze([
   'schemaVersion', 'testedSha', 'sourceReleaseId', 'installedTreeDigestSha256',
   'effectiveOpsRoot', 'immutableDonorCommit', 'immutableDonorLiveTree',
@@ -932,7 +932,7 @@ function backupRootEntryIdentity(stat) {
   });
 }
 
-function backupRootInventorySha256(path, label, actionClass) {
+function backupRootInventorySha256(path, label, effectEvidenceRoot) {
   const root = canonicalDirectory(path, label);
   const entries = readdirSync(root.absolute).sort().map((name) => {
     assert(name.length > 0 && name !== '.' && name !== '..'
@@ -949,12 +949,15 @@ function backupRootInventorySha256(path, label, actionClass) {
   assert(sameStatIdentity(root.stat, after)
     && realpathSync(root.absolute) === root.absolute,
   `${label} changed while inventorying`);
-  // Hash the AGREED inventory, via the one shared contract the effect runner also uses. The
-  // effect-evidence child changes between the runner's snapshot and this re-derivation, so
-  // comparing raw inventories would fail on every correct fire.
+  // Hash the AGREED inventory via the runner's shared path-aware contract. SYSTEM evidence is a
+  // mutable direct child and must be excluded; TEST/STAGING evidence is a sibling, so every
+  // backup-root child remains comparable.
   return createHash('sha256')
     .update('I00_BACKUP_WRITE_ROOT_INVENTORY_V1\0')
-    .update(canonicalJsonBytes(backupComparableInventory(entries, actionClass)))
+    .update(canonicalJsonBytes(backupComparableInventory(entries, {
+      backupRoot: root.absolute,
+      effectEvidenceRoot,
+    })))
     .digest('hex');
 }
 
@@ -1210,7 +1213,7 @@ function validateInstalledBundle(destination, evidenceFile, action) {
   });
 }
 
-function validateOutcomeEvidence(actionClass, action, args, effect) {
+function validateOutcomeEvidence(actionClass, action, artifactPolicy, args, effect) {
   if (actionClass === 'OPS_BUNDLE_INSTALL') {
     const primaryPath = resolve(args['primary-path']);
     assert(primaryPath === args['primary-path'],
@@ -1251,7 +1254,7 @@ function validateOutcomeEvidence(actionClass, action, args, effect) {
     const rootInventoryBefore = backupRootInventorySha256(
       backupDirectory,
       'authorized backup directory',
-      actionClass,
+      artifactPolicy.effectEvidenceRoot,
     );
     assert(rootInventoryBefore === output.afterInventorySha256,
       'authorized backup root differs from the runner-bound post inventory');
@@ -1283,7 +1286,7 @@ function validateOutcomeEvidence(actionClass, action, args, effect) {
     const rootInventoryAfter = backupRootInventorySha256(
       backupDirectory,
       'authorized backup directory',
-      actionClass,
+      artifactPolicy.effectEvidenceRoot,
     );
     assert(rootInventoryAfter === output.afterInventorySha256,
       'authorized backup root changed during independent outcome verification');
@@ -2148,12 +2151,19 @@ function captureRollbackReadback({
   clockArgs,
   requireActiveWindow = true,
   frozen = false,
+  switchConfirmed = false,
+  previousUpdateState = phase === 'POST' ? 'COMPLETE' : 'UNKNOWN',
   terminalTestFallback = undefined,
 }) {
   assert(['PRE', 'POST', 'AMBIGUOUS'].includes(phase),
     'rollback readback phase is invalid');
   assert(phase === 'POST' || frozen === false,
     'only a post-rollback readback may be frozen');
+  assert(['COMPLETE', 'PENDING', 'UNKNOWN'].includes(previousUpdateState),
+    'rollback previous update state is invalid');
+  assert(phase !== 'PRE' || (
+    switchConfirmed === false && previousUpdateState === 'UNKNOWN'
+  ), 'pre-rollback readback cannot claim a completed switch');
   const ambiguous = phase === 'AMBIGUOUS';
   const sanitized = readSanitizedRollbackEnv(envPath, action);
   const env = sanitized.values;
@@ -2193,11 +2203,11 @@ function captureRollbackReadback({
       action,
       'current-',
     );
-  } else if (phase === 'POST') {
+  } else if (phase === 'POST' || switchConfirmed) {
     assert(sameJson(releaseBindingFromReadback(current), target),
       'post-rollback current release differs from the authorized target');
     requireBoundAppUnit(action, env, systemctlPath, risk);
-    if (!frozen) {
+    if (phase === 'POST' && !frozen) {
       requireActiveService(action, env, systemctlPath);
       requireRollbackHealth(action, env, curlPath);
     }
@@ -2216,7 +2226,9 @@ function captureRollbackReadback({
     deployedSha: current.testedSha,
     releaseId: current.releaseId,
     blocker: ambiguous
-      ? 'AUTHORIZED_EFFECT_TERMINATED_STATE_UNRESOLVED'
+      ? (switchConfirmed
+          ? 'ROLLBACK_SWITCHED_EVIDENCE_DEGRADED'
+          : 'AUTHORIZED_EFFECT_TERMINATED_STATE_UNRESOLVED')
       : (frozen ? 'POST_SWITCH_GATE_FAILED' : null),
     observedAtUtc,
     current: readbackRelease(current),
@@ -2243,6 +2255,8 @@ function captureRollbackReadback({
 function validateRollbackReadback(value, phase, label, {
   frozen = false,
   ambiguous = false,
+  switchConfirmed = false,
+  previousUpdateState = phase === 'POST' ? 'COMPLETE' : 'UNKNOWN',
 } = {}) {
   const commonKeys = [
     'schemaVersion', 'kind', 'phase', 'status', 'testedSha', 'deployedSha',
@@ -2255,13 +2269,20 @@ function validateRollbackReadback(value, phase, label, {
   );
   assert(ambiguous === (phase === 'AMBIGUOUS'),
     `${label} ambiguous phase option is invalid`);
+  assert(['COMPLETE', 'PENDING', 'UNKNOWN'].includes(previousUpdateState),
+    `${label} previous update state is invalid`);
+  assert(phase !== 'PRE' || (
+    switchConfirmed === false && previousUpdateState === 'UNKNOWN'
+  ), `${label} pre-rollback state cannot claim a completed switch`);
   assert(value.schemaVersion === 1 && value.kind === 'ROLLBACK_TARGET_READBACK'
     && value.phase === phase
     && value.status === (ambiguous
       ? 'DEPLOYMENT_EFFECT_STATE_AMBIGUOUS'
       : (frozen ? 'DEPLOYMENT_SWITCHED_FROZEN' : 'DEPLOYMENT_READBACK_VALID'))
     && value.blocker === (ambiguous
-      ? 'AUTHORIZED_EFFECT_TERMINATED_STATE_UNRESOLVED'
+      ? (switchConfirmed
+          ? 'ROLLBACK_SWITCHED_EVIDENCE_DEGRADED'
+          : 'AUTHORIZED_EFFECT_TERMINATED_STATE_UNRESOLVED')
       : (frozen ? 'POST_SWITCH_GATE_FAILED' : null))
     && value.testedSha === value.deployedSha
     && value.releaseId === `i00-${value.deployedSha}`,
@@ -2283,10 +2304,19 @@ function validateRollbackReadback(value, phase, label, {
     && !Array.isArray(value.previous), `${label}.previous must be an object`);
   if (value.previous.state === 'ABSENT') {
     exactObjectKeys(value.previous, ['link', 'state'], `${label}.previous`);
+    assert(previousUpdateState !== 'COMPLETE',
+      `${label}.previous is absent after a claimed complete update`);
   } else {
     exactObjectKeys(value.previous, [...releaseKeys, 'state'], `${label}.previous`);
     assert(value.previous.state === 'PRESENT'
-      && value.previous.path !== value.current.path,
+      && (
+        phase !== 'PRE'
+        || value.previous.path !== value.current.path
+      )
+      && (
+        previousUpdateState !== 'COMPLETE'
+        || value.previous.path !== value.current.path
+      ),
     `${label}.previous is invalid`);
   }
   if (phase !== 'PRE') {
@@ -2319,16 +2349,25 @@ function sameRollbackLinkState(left, right) {
   return sameJson(comparable(left), comparable(right));
 }
 
-function validateRollbackTransition(pre, post, target) {
+function validateRollbackTransition(
+  pre,
+  post,
+  target,
+  previousUpdateState = 'COMPLETE',
+) {
   assert(pre.current.path !== target.path
     && sameJson(releaseBindingFromReadback(post.current), target),
   'rollback transition does not move from a distinct release to the authorized target');
-  assert(post.previous.state === 'PRESENT'
-    && sameJson(
-      releaseBindingFromReadback(post.previous),
-      releaseBindingFromReadback(pre.current),
-    ),
-  'rollback previous link does not retain the exact pre-rollback release');
+  assert(['COMPLETE', 'PENDING', 'UNKNOWN'].includes(previousUpdateState),
+    'rollback transition previous update state is invalid');
+  if (previousUpdateState === 'COMPLETE') {
+    assert(post.previous.state === 'PRESENT'
+      && sameJson(
+        releaseBindingFromReadback(post.previous),
+        releaseBindingFromReadback(pre.current),
+      ),
+    'rollback previous link does not retain the exact pre-rollback release');
+  }
   assert(Date.parse(pre.observedAtUtc) <= Date.parse(post.observedAtUtc),
     'rollback post-target readback predates the pre-target readback');
 }
@@ -2747,35 +2786,83 @@ function assertRollbackEvidenceStable(chain, ...extraEvidence) {
   }
 }
 
-function readRollbackFrozenMarker(env, target, chain, completedAtUtc) {
-  const source = stableRegular(
-    env.FROZEN_MARKER,
-    'rollback frozen marker',
-    { maximumBytes: 16 * 1024, requireOwner: true },
-  );
-  const mode = source.stat.mode & 0o7777n;
-  assert(mode === 0o400n,
-    'rollback frozen marker must be sealed mode 0400');
-  const document = parseEvidenceJson(source, 'rollback frozen marker');
-  exactObjectKeys(
-    document,
-    ['ts', 'releaseId', 'exposure', 'reason', 'operatorAction'],
-    'rollback frozen marker',
-  );
-  exactUtcSeconds(document.ts, 'rollback frozen marker.ts');
-  assert(document.releaseId === target.releaseId
-    && document.exposure === 'NONE'
-    && document.operatorAction === 'required'
-    && [
-      'rollback: systemctl ' + 'restart cosmos-app.service failed',
-      'rollback: post-rollback health gate failed',
-    ].includes(document.reason),
-  'rollback frozen marker does not describe the exact authorized failed effect');
-  const markerAt = Date.parse(document.ts);
-  assert(Date.parse(chain.consumption.document.consumedAtUtc) <= markerAt
-    && markerAt <= Date.parse(completedAtUtc),
-  'rollback frozen marker chronology is invalid');
-  return Object.freeze({ source, document });
+function inspectRollbackFrozenMarker(env, target, chain, effectFinishedAtUtc) {
+  const unavailable = (frozenMarkerState) => Object.freeze({
+    frozenMarkerState,
+    previousUpdateState: 'UNKNOWN',
+    switchConfirmed: false,
+    source: null,
+    document: null,
+  });
+  let named;
+  try {
+    named = lstatSync(env.FROZEN_MARKER, {
+      bigint: true,
+      throwIfNoEntry: false,
+    });
+  } catch {
+    return unavailable('PRESENT_INVALID');
+  }
+  if (named === undefined) return unavailable('MISSING');
+  try {
+    const invokingUid =
+      typeof process.getuid === 'function' ? BigInt(process.getuid()) : named.uid;
+    assert(named.isFile() && !named.isSymbolicLink() && named.nlink === 1n
+      && named.uid === invokingUid && named.size > 0n
+      && named.size <= 16n * 1024n
+      && realpathSync(env.FROZEN_MARKER) === env.FROZEN_MARKER,
+    'rollback frozen marker endpoint is invalid');
+    if ((named.mode & 0o7777n) !== 0o400n) {
+      return unavailable('PRESENT_UNSEALED');
+    }
+    const source = stableRegular(
+      env.FROZEN_MARKER,
+      'rollback frozen marker',
+      { maximumBytes: 16 * 1024, requireOwner: true },
+    );
+    assert((source.stat.mode & 0o7777n) === 0o400n,
+      'rollback frozen marker must remain sealed mode 0400');
+    const document = parseEvidenceJson(source, 'rollback frozen marker');
+    exactObjectKeys(
+      document,
+      [
+        'ts', 'releaseId', 'exposure', 'reason', 'operatorAction',
+        'currentSwitched', 'previousUpdateState',
+      ],
+      'rollback frozen marker',
+    );
+    assertExactJsonSerialization(source, document, 'rollback frozen marker');
+    exactUtcSeconds(document.ts, 'rollback frozen marker.ts');
+    assert(document.releaseId === target.releaseId
+      && document.exposure === 'NONE'
+      && document.operatorAction === 'required'
+      && (document.currentSwitched === true
+        || document.currentSwitched === 'UNKNOWN')
+      && ['COMPLETE', 'PENDING', 'NOT_APPLICABLE']
+        .includes(document.previousUpdateState)
+      && typeof document.reason === 'string'
+      && document.reason.startsWith('rollback: ')
+      && document.reason.length <= 4_096,
+    'rollback frozen marker does not describe the exact authorized failed effect');
+    assert(document.currentSwitched !== 'UNKNOWN'
+      || ['PENDING', 'NOT_APPLICABLE'].includes(document.previousUpdateState),
+    'uncertain rollback current switch cannot claim a complete previous update');
+    const markerAt = Date.parse(document.ts);
+    assert(Date.parse(chain.consumption.document.consumedAtUtc) <= markerAt
+      && markerAt <= Date.parse(effectFinishedAtUtc),
+    'rollback frozen marker chronology is invalid');
+    return Object.freeze({
+      frozenMarkerState: 'SEALED_VALID',
+      previousUpdateState: document.previousUpdateState === 'NOT_APPLICABLE'
+        ? 'UNKNOWN'
+        : document.previousUpdateState,
+      switchConfirmed: document.currentSwitched === true,
+      source,
+      document,
+    });
+  } catch {
+    return unavailable('PRESENT_INVALID');
+  }
 }
 
 function validateRollbackEffectRecord(
@@ -2796,11 +2883,32 @@ function validateRollbackEffectRecord(
       'authorized rollback effect donor disposition is unexpected');
   }
   const completed = effect.terminal.status === 'AUTHORIZED_EFFECT_COMPLETED';
-  const frozen = effect.terminal.status === 'AUTHORIZED_EFFECT_TERMINATED'
+  const cleanExitThree = effect.terminal.status === 'AUTHORIZED_EFFECT_TERMINATED'
     && effect.donorExitCode === 3
     && effect.terminal.signal === null
     && effect.terminal.forced === false
     && effect.terminal.timedOut === false;
+  const hasMarkerState = Object.hasOwn(effect, 'frozenMarkerState');
+  const hasPreviousUpdateState = Object.hasOwn(effect, 'previousUpdateState');
+  assert(cleanExitThree === (hasMarkerState && hasPreviousUpdateState),
+    'authorized rollback exit-3 evidence state is incomplete');
+  if (cleanExitThree) {
+    assert([
+      'SEALED_VALID', 'MISSING', 'PRESENT_UNSEALED', 'PRESENT_INVALID',
+    ].includes(effect.frozenMarkerState)
+      && ['COMPLETE', 'PENDING', 'UNKNOWN']
+        .includes(effect.previousUpdateState),
+    'authorized rollback exit-3 evidence state is invalid');
+    assert((effect.frozenMarkerState === 'SEALED_VALID')
+      === /^[0-9a-f]{64}$/u.test(effect.frozenMarkerSha256 ?? ''),
+    'authorized rollback frozen marker state differs from its digest');
+  } else {
+    assert(effect.frozenMarkerSha256 === null,
+      'non-exit-3 rollback effect cannot bind a frozen marker');
+  }
+  const frozen = cleanExitThree
+    && effect.frozenMarkerState === 'SEALED_VALID'
+    && effect.previousUpdateState === 'COMPLETE';
   const ambiguous = effect.terminal.status === 'AUTHORIZED_EFFECT_TERMINATED'
     && !frozen;
   assert(effect.donorExitCode === effect.terminal.exitCode,
@@ -2815,7 +2923,6 @@ function validateRollbackEffectRecord(
       && post.status === 'DEPLOYMENT_READBACK_VALID')
     || (ambiguous
       && effect.status === 'ROLLBACK_EFFECT_AMBIGUOUS_PENDING_OWNER_ACTION'
-      && effect.frozenMarkerSha256 === null
       && post.status === 'DEPLOYMENT_EFFECT_STATE_AMBIGUOUS'),
   'authorized rollback effect status differs from its donor disposition');
   assert(effect.authorizationId === chain.authorization.document.authorizationId
@@ -2836,7 +2943,14 @@ function validateRollbackEffectRecord(
     && effect.preTargetReadbackSha256 === sha256Bytes(canonicalJsonBytes(pre))
     && effect.postTargetReadbackSha256 === sha256Bytes(canonicalJsonBytes(post)),
   'authorized rollback effect release/readback binding is contradictory');
-  if (!ambiguous) validateRollbackTransition(pre, post, target);
+  if (!ambiguous) {
+    validateRollbackTransition(
+      pre,
+      post,
+      target,
+      cleanExitThree ? effect.previousUpdateState : 'COMPLETE',
+    );
+  }
   validateCompletionChronology(
     effect.completedAtUtc,
     chain.authorization.document,
@@ -3227,12 +3341,11 @@ function recordRollbackEffect(args) {
     authorizedEffect,
     receiptRootBinding(chain.risk.document),
   );
-  const frozen = !authorizedEffect.success
+  const cleanExitThree = !authorizedEffect.success
     && donorExitCode === 3
     && authorizedEffect.terminal.document.signal === null
     && authorizedEffect.terminal.document.forced === false
     && authorizedEffect.terminal.document.timedOut === false;
-  const ambiguous = !authorizedEffect.success && !frozen;
   const pre = readPrivateCanonicalJson(
     paths.evidence.preTargetReadback,
     'pre-rollback target readback',
@@ -3246,6 +3359,27 @@ function recordRollbackEffect(args) {
     'authorized rollback target',
   );
   assertReleaseEndpointBinding(target, chain.preview.document.action);
+  const markerInspection = cleanExitThree
+    ? inspectRollbackFrozenMarker(
+        readSanitizedRollbackEnv(
+          resolve(args['env-file']),
+          chain.preview.document.action,
+        ).values,
+        target,
+        chain,
+        authorizedEffect.terminal.document.effectFinishedAtUtc,
+      )
+    : null;
+  const frozen = cleanExitThree
+    && markerInspection.frozenMarkerState === 'SEALED_VALID'
+    && markerInspection.switchConfirmed === true
+    && markerInspection.previousUpdateState === 'COMPLETE';
+  const ambiguous = !authorizedEffect.success && !frozen;
+  const previousUpdateState = cleanExitThree
+    ? markerInspection.previousUpdateState
+    : (authorizedEffect.success ? 'COMPLETE' : 'UNKNOWN');
+  const switchConfirmed = cleanExitThree
+    && markerInspection.switchConfirmed === true;
   const post = captureRollbackReadback({
     phase: ambiguous ? 'AMBIGUOUS' : 'POST',
     action: chain.preview.document.action,
@@ -3256,6 +3390,8 @@ function recordRollbackEffect(args) {
     curlPath: resolve(args.curl),
     clockArgs: args,
     frozen,
+    switchConfirmed,
+    previousUpdateState,
     terminalTestFallback:
       authorizedEffect.terminal.document.effectFinishedAtUtc,
   });
@@ -3271,7 +3407,14 @@ function recordRollbackEffect(args) {
     && Date.parse(authorizedEffect.terminal.document.effectFinishedAtUtc)
       <= Date.parse(completedAtUtc),
   'rollback effect start/completion chronology is invalid');
-  if (!ambiguous) validateRollbackTransition(pre.document, post, target);
+  if (!ambiguous) {
+    validateRollbackTransition(
+      pre.document,
+      post,
+      target,
+      previousUpdateState,
+    );
+  }
   const confirmation = captureRollbackReadback({
     phase: ambiguous ? 'AMBIGUOUS' : 'POST',
     action: chain.preview.document.action,
@@ -3282,24 +3425,19 @@ function recordRollbackEffect(args) {
     curlPath: resolve(args.curl),
     clockArgs: args,
     frozen,
+    switchConfirmed,
+    previousUpdateState,
     terminalTestFallback:
       authorizedEffect.terminal.document.effectFinishedAtUtc,
   });
   assert(sameRollbackLinkState(post, confirmation),
     'post-rollback release state changed before effect recording');
   assertRollbackEvidenceStable(chain, pre);
-  const frozenMarker = frozen
-    ? readRollbackFrozenMarker(
-        readSanitizedRollbackEnv(
-          resolve(args['env-file']),
-          chain.preview.document.action,
-        ).values,
-        target,
-        chain,
-        completedAtUtc,
-      )
+  const frozenMarker = cleanExitThree
+    && markerInspection.frozenMarkerState === 'SEALED_VALID'
+    ? markerInspection
     : null;
-  const frozenMarkerSha256 = frozen === true
+  const frozenMarkerSha256 = frozenMarker !== null
     ? sha256Bytes(canonicalJsonBytes(frozenMarker.document))
     : null;
   const effect = {
@@ -3323,6 +3461,12 @@ function recordRollbackEffect(args) {
     preTargetReadbackSha256: pre.sha256,
     postTargetReadbackSha256: sha256Bytes(canonicalJsonBytes(post)),
     frozenMarkerSha256,
+    ...(cleanExitThree
+      ? {
+          frozenMarkerState: markerInspection.frozenMarkerState,
+          previousUpdateState,
+        }
+      : {}),
     donorExitCode,
     startedAtUtc,
     completedAtUtc,
@@ -3381,11 +3525,11 @@ function recordRollbackEffect(args) {
     ROLLBACK_EVIDENCE_FILES.postTargetReadback,
     ROLLBACK_EVIDENCE_FILES.authorization,
     ROLLBACK_EFFECT_FILE,
-    ...(frozen ? [ROLLBACK_FROZEN_MARKER_FILE] : []),
+    ...(frozenMarker !== null ? [ROLLBACK_FROZEN_MARKER_FILE] : []),
   ];
   requireClaimInventory(paths, pendingInventory, 'pending rollback claim evidence');
   if (frozen || ambiguous) {
-    const copiedMarker = frozen
+    const copiedMarker = frozenMarker !== null
       ? readPrivateCanonicalJson(
           resolve(paths.claimDirectory, ROLLBACK_FROZEN_MARKER_FILE),
           'rollback frozen marker evidence',
@@ -3402,18 +3546,24 @@ function recordRollbackEffect(args) {
     const copiedPost = readPrivateCanonicalJson(
       paths.evidence.postTargetReadback,
       'terminal post-rollback target readback',
-      (document) => validateRollbackReadback(
-        document,
-        ambiguous ? 'AMBIGUOUS' : 'POST',
-        'terminal post-rollback target readback',
-        { frozen, ambiguous },
-      ),
+        (document) => validateRollbackReadback(
+          document,
+          ambiguous ? 'AMBIGUOUS' : 'POST',
+          'terminal post-rollback target readback',
+          {
+            frozen,
+            ambiguous,
+            switchConfirmed,
+            previousUpdateState,
+          },
+        ),
     );
     const copiedAuthorization = readPrivateCanonicalJson(
       paths.evidence.authorization,
       'rollback authorization evidence',
     );
-    assert((!frozen || copiedMarker.sha256 === frozenMarkerEvidence.sha256)
+    assert((frozenMarker === null
+      || copiedMarker.sha256 === frozenMarkerEvidence.sha256)
       && copiedEffect.sha256 === effectEvidence.sha256
       && copiedPost.sha256 === postEvidence.sha256
       && copiedAuthorization.sha256 === authorizationEvidence.sha256,
@@ -3447,7 +3597,9 @@ function recordRollbackEffect(args) {
         primaryPath: paths.effect,
         evidenceSha256: effectEvidence.sha256,
         detail: ambiguous
-          ? 'authorized rollback runner terminated; live link evidence retained; owner action required'
+          ? (cleanExitThree
+              ? 'authorized rollback returned exit 3 with degraded switch evidence; exact live links retained; owner action required'
+              : 'authorized rollback runner terminated; live link evidence retained; owner action required')
           : 'exact rollback target switched; post-switch gate failed; frozen owner action required',
       },
       effect: effectBinding,
@@ -3535,10 +3687,7 @@ function recordRollbackTerminal(args) {
     ...result,
     terminalDisposition: authorizedEffect.success
       ? 'COMPLETED'
-      : (donorExitCode === 3
-          && terminal.signal === null
-          && terminal.forced === false
-          && terminal.timedOut === false
+      : (result.status === 'ROLLBACK_SWITCHED_FROZEN_RECONCILED'
           ? 'FROZEN'
           : 'AMBIGUOUS_EFFECT'),
     terminalExitCode: donorExitCode,
@@ -4200,7 +4349,13 @@ try {
     'authorized action receipt targets must be distinct');
 
   const evidence = effect.success
-    ? validateOutcomeEvidence(args.class, preview.document.action, args, effect)
+    ? validateOutcomeEvidence(
+        args.class,
+        preview.document.action,
+        risk.document.artifactPolicy,
+        args,
+        effect,
+      )
     : Object.freeze({
         primaryPath: effect.terminal.absolute,
         evidenceSha256: effect.terminal.sha256,

@@ -84,6 +84,7 @@ case "\$1:\$2" in
     ;;
   restart:cosmos-app.service)
     [ "\$#" -eq 2 ] || exit 9
+    [ ! -e "$SIMULATION_ROOT/systemctl-restart-fail" ] || exit 7
     ;;
   *) exit 9 ;;
 esac
@@ -744,6 +745,61 @@ assert_eq "$(readlink "$SIMULATION_ROOT/cosmos/current")" "$SIMULATION_ROOT/cosm
 assert_file "$SIMULATION_ROOT/data/mutable-state"
 assert_eq "$(node -e 'const fs=require("fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).status)' "$ROLLBACK_RESULT_RECEIPT")" ROLLED_BACK_PROVED
 assert_eq "$(node -e 'const fs=require("fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).status)' "$ROLLBACK_RECONCILIATION_RECEIPT")" RECONCILED
+
+note "rollback preserves donor exit 3 after a confirmed switch and records seven-key frozen evidence"
+FROZEN_ROLLBACK_TARGET="$SIMULATION_ROOT/cosmos/releases/i00-$SHA_B"
+FROZEN_ROLLBACK_COMMON=(
+  --env-file "$RAW_ENV"
+  --runtime-env "$RUNTIME_ENV_B"
+  --host "$HOST_JSON"
+  --supervisor "$SUPERVISOR_JSON"
+  --evidence-root "$SIMULATION_ROOT/rollback-evidence"
+  --simulation
+  --simulation-root "$SIMULATION_ROOT"
+)
+make_action_chain SERVICE_ROLLBACK rollback-to-b-frozen "$FROZEN_ROLLBACK_TARGET" \
+  "$RUNTIME_ENV_B" "$RAW_ENV"
+FROZEN_ROLLBACK_AUTH_ARGS=("${ACTION_AUTH_ARGS[@]}")
+FROZEN_ROLLBACK_RESULT_RECEIPT="$ACTION_RESULT_RECEIPT"
+FROZEN_ROLLBACK_RECONCILIATION_RECEIPT="$ACTION_RECONCILIATION_RECEIPT"
+FROZEN_ROLLBACK_CONSUMPTION_RECEIPT="$ACTION_CONSUMPTION_RECEIPT"
+touch "$SIMULATION_ROOT/systemctl-restart-fail"
+set +e
+"${COMMON_ENV[@]}" "$INSTALLED_I00/bin/rollback-switch.sh" \
+  --release "$FROZEN_ROLLBACK_TARGET" "${FROZEN_ROLLBACK_COMMON[@]}" \
+  --now "$EFFECT_NOW" \
+  "${FROZEN_ROLLBACK_AUTH_ARGS[@]}" >/dev/null 2>&1
+FROZEN_ROLLBACK_RC=$?
+set -e
+rm "$SIMULATION_ROOT/systemctl-restart-fail"
+assert_eq "$FROZEN_ROLLBACK_RC" 3
+assert_eq "$(readlink "$SIMULATION_ROOT/cosmos/current")" \
+  "$SIMULATION_ROOT/cosmos/releases/i00-$SHA_B"
+assert_eq "$(readlink "$SIMULATION_ROOT/cosmos/previous")" \
+  "$SIMULATION_ROOT/cosmos/releases/i00-$SHA_A"
+assert_file "$FROZEN_ROLLBACK_CONSUMPTION_RECEIPT"
+assert_eq \
+  "$(node -e 'const fs=require("fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).status)' "$FROZEN_ROLLBACK_RESULT_RECEIPT")" \
+  ACTION_FAILED_AFTER_EFFECT
+assert_eq \
+  "$(node -e 'const fs=require("fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).outcome.status)' "$FROZEN_ROLLBACK_RESULT_RECEIPT")" \
+  ROLLBACK_SWITCHED_FROZEN_REQUIRES_OWNER_ACTION
+assert_eq \
+  "$(node -e 'const fs=require("fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).disposition)' "$FROZEN_ROLLBACK_RECONCILIATION_RECEIPT")" \
+  ROLLBACK_SWITCHED_FROZEN_REQUIRES_OWNER_ACTION
+FROZEN_ROLLBACK_EFFECT="$SIMULATION_ROOT/rollback-evidence/$(node -e 'const fs=require("fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).singleUse.claimKey)' "$SIMULATION_ROOT/authorization/rollback-to-b-frozen.preview.json")/rollback-effect.json"
+assert_eq \
+  "$(node -e 'const fs=require("fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).frozenMarkerState)' "$FROZEN_ROLLBACK_EFFECT")" \
+  SEALED_VALID
+assert_eq \
+  "$(node -e 'const fs=require("fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1],"utf8")).previousUpdateState)' "$FROZEN_ROLLBACK_EFFECT")" \
+  COMPLETE
+rm "$SIMULATION_ROOT/ops-state/deploy-frozen.json" \
+  "$SIMULATION_ROOT/cosmos/current" "$SIMULATION_ROOT/cosmos/previous"
+ln -s "$SIMULATION_ROOT/cosmos/releases/i00-$SHA_A" \
+  "$SIMULATION_ROOT/cosmos/current"
+ln -s "$SIMULATION_ROOT/cosmos/releases/i00-$SHA_B" \
+  "$SIMULATION_ROOT/cosmos/previous"
 
 note "established current release is untouched by every canonical freeze input"
 CURRENT_BEFORE="$(readlink "$SIMULATION_ROOT/cosmos/current")"

@@ -19,7 +19,7 @@
 #   0  rolled back and healthy
 #   1  refused/failed before the switch (no target, bad target, dirty host)
 #   2  reserved (kept distinct from deploy.sh FROZEN)
-#   3  switched but post-switch gate failed — CRITICAL, frozen marker written
+#   3  switch attempted; safe completion is failed or uncertain — CRITICAL
 #   4  deploy lock busy
 #   5  target is behind the non-rollback barrier (schema-incompatible)
 #   6  exposure/money-readiness policy refused the rollback
@@ -175,6 +175,89 @@ log_event() { # RESULT DETAIL
     "releaseId=$TARGET_ID" "result=$1" "detail=$2"
 }
 
+ROLLBACK_SWITCHED=0
+ROLLBACK_SWITCH_ATTEMPTED=0
+ROLLBACK_CURRENT_SWITCHED=UNKNOWN
+PREVIOUS_UPDATE_STATE=NOT_APPLICABLE
+ROLLBACK_TERMINAL=0
+ROLLBACK_FAILURE_REASON=""
+ROLLBACK_COMPLETED=0
+
+record_rollback_frozen_evidence() { # REASON
+  local reason="$1" event_time marker_written=0
+  if ! event_time="$(now_utc)"; then
+    event_time=UNKNOWN_TIME
+  fi
+  if ( json_write "$FROZEN_EFFECT_MARKER" \
+      "ts=$event_time" "releaseId=$TARGET_ID" "exposure=$EXPOSURE" \
+      "reason=rollback: $reason" "operatorAction=required" \
+      "currentSwitched=$ROLLBACK_CURRENT_SWITCHED" \
+      "previousUpdateState=$PREVIOUS_UPDATE_STATE" ); then
+    marker_written=1
+  else
+    reason="$reason; FROZEN MARKER WRITE FAILED"
+    ( ops_log "rollback frozen marker could not be published; continuing independent critical evidence" ) \
+      || :
+  fi
+  if [ "$marker_written" = 1 ] \
+      && ! ( fs_seal_file_readonly \
+        "$FROZEN_EFFECT_MARKER" "$OPS_EFFECT_STATE_DIR" ); then
+    reason="$reason; FROZEN MARKER SEAL FAILED"
+    ( ops_log "rollback frozen marker could not be sealed; continuing independent critical evidence" ) \
+      || :
+  fi
+  if ! (require_authorized_write_root_binding opsStateDir "$OPS_STATE_DIR"); then
+    reason="$reason; WRITE-ROOT BINDING RECHECK FAILED"
+    ( ops_log "rollback write-root binding recheck failed; continuing independent critical evidence" ) \
+      || :
+  fi
+  (alert critical ROLLBACK_GATE_FAILED \
+    "$reason after switching to $TARGET_ID") \
+    || ( ops_log "could not emit ROLLBACK_GATE_FAILED alert" ) || :
+  (log_event CRITICAL "$reason") \
+    || ( ops_log "could not append CRITICAL rollback audit event" ) || :
+  ROLLBACK_FAILURE_REASON="$reason"
+  return 0
+}
+
+rollback_post_switch_failure() { # REASON
+  local reason="$1"
+  if [ "$ROLLBACK_SWITCHED" != 1 ]; then
+    ( ops_log "FATAL: internal rollback failure handler invoked before the current switch: $reason" ) \
+      || :
+    exit 1
+  fi
+  ROLLBACK_TERMINAL=1
+  record_rollback_frozen_evidence "$reason" || :
+  ( ops_log "FATAL: rollback switched to $TARGET_ID but did not complete safely ($ROLLBACK_FAILURE_REASON); frozen for incident handling" ) \
+    || :
+  exit 3
+}
+
+# Refuse an occupied or corrupt safety-state endpoint before publishing or
+# reusing a deploy lock. The authoritative state is read again under that lock.
+set +e
+JOURNAL_PREFLIGHT_SNAPSHOT="$(
+  journal_state_snapshot "$JOURNAL_EFFECT_FILE"
+)"
+JOURNAL_PREFLIGHT_RC=$?
+set -e
+case "$JOURNAL_PREFLIGHT_RC" in
+  0)
+    case "$JOURNAL_PREFLIGHT_SNAPSHOT" in
+      PENDING\|*)
+        die_code 5 \
+          "rollback is refused while a prestart barrier is pending; complete a compatible fix-forward deployment"
+        ;;
+    esac
+    ;;
+  7|8) : ;;
+  5) die_code 1 "journal document or rollbackFloor is invalid" ;;
+  6) die_code 1 "journal path is occupied by a non-regular or linked endpoint, or exceeds the size limit: $JOURNAL_FILE" ;;
+  *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to assume a zero rollback floor" ;;
+esac
+unset JOURNAL_PREFLIGHT_SNAPSHOT
+
 # --- lock (deploy.sh already holds it when it calls us with --auto) -----------
 LOCK_HELD=0
 if [ "$REUSE_DEPLOY_LOCK" != 1 ]; then
@@ -182,8 +265,49 @@ if [ "$REUSE_DEPLOY_LOCK" != 1 ]; then
     || die_code 4 "deploy lock busy: $DEPLOY_LOCK (another deploy/rollback in progress)"
   LOCK_HELD=1
 fi
-cleanup() { if [ "$LOCK_HELD" = 1 ]; then release_lock "$DEPLOY_EFFECT_LOCK"; fi; }
+cleanup() {
+  local rc=$? release_failed=0
+  trap - EXIT HUP INT TERM
+  if [ "$ROLLBACK_SWITCH_ATTEMPTED" = 1 ] \
+      && [ "$ROLLBACK_SWITCHED" != 1 ]; then
+    ROLLBACK_TERMINAL=1
+    ( record_rollback_frozen_evidence \
+      "current rollback pointer publication is uncertain after an interrupted atomic switch (rc=$rc)" ) || :
+    rc=3
+  elif [ "$ROLLBACK_SWITCHED" = 1 ] \
+      && [ "$ROLLBACK_COMPLETED" != 1 ] && [ "$rc" -ne 3 ]; then
+    ROLLBACK_TERMINAL=1
+    ( record_rollback_frozen_evidence \
+      "unexpected failure after the current rollback switch (rc=$rc)" ) || :
+    rc=3
+  fi
+  if [ "$LOCK_HELD" = 1 ] \
+      && ! ( release_lock "$DEPLOY_EFFECT_LOCK" ); then
+    release_failed=1
+  fi
+  if [ "$release_failed" = 1 ]; then
+    if [ "$ROLLBACK_SWITCHED" = 1 ] \
+        || [ "$ROLLBACK_SWITCH_ATTEMPTED" = 1 ]; then
+      if [ "$ROLLBACK_TERMINAL" != 1 ]; then
+        ROLLBACK_TERMINAL=1
+        ( record_rollback_frozen_evidence \
+          "deploy lock release failed after the current rollback switch" ) || :
+      else
+        ( ops_log "could not release the deploy lock after terminal rollback handling" ) \
+          || :
+      fi
+      rc=3
+    else
+      ( ops_log "could not release the deploy lock" ) || :
+      [ "$rc" -ne 0 ] || rc=1
+    fi
+  fi
+  exit "$rc"
+}
 trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # --- resolve and validate the target release ----------------------------------
 assert_link_sane "$CURRENT_EFFECT_LINK"
@@ -240,18 +364,34 @@ case "$TARGET_SCHEMA_RC" in
 esac
 
 # --- journal/schema compatibility: absolute ------------------------------------
-ROLLBACK_FLOOR=0
-if [ -f "$JOURNAL_EFFECT_FILE" ]; then
-  # Part 4 #6: a corrupt journal must never default the non-rollback barrier
-  # to its most permissive value.
-  set +e; FLOOR_VALUE="$(json_get_nonnegative_safe_integer "$JOURNAL_EFFECT_FILE" rollbackFloor)"; FLOOR_RC=$?; set -e
-  case "$FLOOR_RC" in
-    0) ROLLBACK_FLOOR="$FLOOR_VALUE" ;;
-    3) ROLLBACK_FLOOR=0 ;;
-    5) die_code 1 "journal rollbackFloor is not a nonnegative integer - refusing to evaluate the non-rollback barrier against an uncomparable value" ;;
-    *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to assume a zero rollback floor" ;;
-  esac
-fi
+# Part 4 #6: bind the barrier and exact endpoint version from one under-lock
+# read. Missing fields and true absence default to zero; corrupt or occupied
+# state never defaults to the most permissive value.
+set +e
+JOURNAL_SNAPSHOT="$(
+  journal_state_snapshot "$JOURNAL_EFFECT_FILE"
+)"
+JOURNAL_SNAPSHOT_RC=$?
+set -e
+case "$JOURNAL_SNAPSHOT_RC" in
+  0)
+    case "$JOURNAL_SNAPSHOT" in
+      PENDING\|*)
+        die_code 5 \
+          "rollback is refused while a prestart barrier is pending; complete a compatible fix-forward deployment"
+        ;;
+    esac
+    ;;
+  7) ops_log "journal dataSchema is invalid; rollback is using the independently valid rollbackFloor" ;;
+  8) ops_log "journal rollbackFloor exceeds dataSchema; rollback is enforcing the independently valid rollbackFloor" ;;
+  5) die_code 1 "journal document or rollbackFloor is invalid - refusing to evaluate the non-rollback barrier against an uncomparable value" ;;
+  6) die_code 1 "journal path is occupied by a non-regular or linked endpoint, or exceeds the size limit: $JOURNAL_FILE" ;;
+  *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to assume a zero rollback floor" ;;
+esac
+JOURNAL_SNAPSHOT_REST="${JOURNAL_SNAPSHOT#*|}"
+JOURNAL_SNAPSHOT_REST="${JOURNAL_SNAPSHOT_REST#*|}"
+ROLLBACK_FLOOR="${JOURNAL_SNAPSHOT_REST%%|*}"
+unset JOURNAL_SNAPSHOT_REST
 set +e
 [ "$TARGET_SCHEMA" -lt "$ROLLBACK_FLOOR" ]
 BARRIER_COMPARISON_RC=$?
@@ -288,16 +428,63 @@ else
 fi
 
 # --- atomic switch + restart + gate --------------------------------------------
+rollback_pointer_matches_pre_switch_state() {
+  if [ -n "$OLD_TARGET" ]; then
+    [ -L "$CURRENT_EFFECT_LINK" ] \
+      && [ "$(read_symlink "$CURRENT_EFFECT_LINK")" = "$OLD_TARGET" ]
+  else
+    [ ! -e "$CURRENT_EFFECT_LINK" ] && [ ! -L "$CURRENT_EFFECT_LINK" ]
+  fi
+}
+
+rollback_pointer_matches_target() {
+  [ -L "$CURRENT_EFFECT_LINK" ] \
+    && [ "$(read_symlink "$CURRENT_EFFECT_LINK")" = "$TARGET_DIR" ]
+}
+
 OLD_TARGET=""
 if [ -L "$CURRENT_EFFECT_LINK" ]; then
   OLD_TARGET="$(read_symlink "$CURRENT_EFFECT_LINK")"
+  PREVIOUS_UPDATE_STATE=PENDING
 fi
-atomic_symlink "$TARGET_DIR" "$CURRENT_EFFECT_LINK"
+set +e
+JOURNAL_SWITCH_SNAPSHOT="$(
+  journal_state_snapshot "$JOURNAL_EFFECT_FILE"
+)"
+JOURNAL_SWITCH_SNAPSHOT_RC=$?
+set -e
+[ "$JOURNAL_SWITCH_SNAPSHOT_RC" -eq "$JOURNAL_SNAPSHOT_RC" ] \
+  && [ "$JOURNAL_SWITCH_SNAPSHOT" = "$JOURNAL_SNAPSHOT" ] \
+  || die_code 1 "journal changed after under-lock validation - refusing to switch releases"
+ROLLBACK_SWITCH_ATTEMPTED=1
+if atomic_symlink "$TARGET_DIR" "$CURRENT_EFFECT_LINK"; then
+  ROLLBACK_CURRENT_SWITCHED=true ROLLBACK_SWITCHED=1
+  ROLLBACK_SWITCH_ATTEMPTED=0
+else
+  if ( rollback_pointer_matches_pre_switch_state ); then
+    ROLLBACK_SWITCH_ATTEMPTED=0
+    die_code 1 "current rollback pointer update failed before the switch"
+  elif ( rollback_pointer_matches_target ); then
+    ROLLBACK_CURRENT_SWITCHED=true ROLLBACK_SWITCHED=1
+    ROLLBACK_SWITCH_ATTEMPTED=0
+    rollback_post_switch_failure \
+      "current rollback pointer update reported failure after publication"
+  fi
+  die_code 1 \
+    "current rollback pointer update failed with publication state uncertain"
+fi
 if [ -n "$OLD_TARGET" ]; then
-  atomic_symlink "$OLD_TARGET" "$PREVIOUS_EFFECT_LINK"
+  if ! atomic_symlink "$OLD_TARGET" "$PREVIOUS_EFFECT_LINK"; then
+    rollback_post_switch_failure \
+      "current switched to $TARGET_ID but previous pointer update failed"
+  fi
+  PREVIOUS_UPDATE_STATE=COMPLETE
 fi
-require_all_authorized_write_root_bindings
-ops_log "current -> $TARGET_DIR (previous -> ${OLD_TARGET:-none})"
+if ! (require_all_authorized_write_root_bindings); then
+  rollback_post_switch_failure \
+    "authorized write-root binding changed after the rollback switch"
+fi
+( ops_log "current -> $TARGET_DIR (previous -> ${OLD_TARGET:-none})" ) || :
 
 GATE_FAIL_REASON=""
 if ! "$SYSTEMCTL" restart "$APP_UNIT"; then
@@ -307,18 +494,19 @@ elif ! gate_wait "$HEALTH_BASE" "$POST_SWITCH_GATE_PATHS" "$GATE_TIMEOUT_SEC"; t
 fi
 
 if [ -n "$GATE_FAIL_REASON" ]; then
-  json_write "$FROZEN_EFFECT_MARKER" "ts=$(now_utc)" "releaseId=$TARGET_ID" \
-    "exposure=$EXPOSURE" "reason=rollback: $GATE_FAIL_REASON" "operatorAction=required"
-  fs_seal_file_readonly "$FROZEN_EFFECT_MARKER" "$OPS_EFFECT_STATE_DIR" \
-    || die_code 3 "rollback switched to $TARGET_ID but its frozen marker could not be sealed"
-  require_authorized_write_root_binding opsStateDir "$OPS_STATE_DIR"
-  alert critical ROLLBACK_GATE_FAILED "$GATE_FAIL_REASON after switching to $TARGET_ID"
-  log_event CRITICAL "$GATE_FAIL_REASON"
-  die_code 3 "rollback switched to $TARGET_ID but the system is not healthy ($GATE_FAIL_REASON); frozen for incident handling"
+  rollback_post_switch_failure "$GATE_FAIL_REASON"
 fi
 
-require_authorized_release_source_binding "$TARGET_DIR"
-require_all_authorized_write_root_bindings
-log_event ROLLBACK_OK "healthy on $POST_SWITCH_GATE_PATHS"
-ops_log "rollback to $TARGET_ID complete"
+if ! authorized_release_source_binding_is_exact "$TARGET_DIR"; then
+  rollback_post_switch_failure \
+    "authorized release source binding changed after the rollback switch"
+fi
+if ! (require_all_authorized_write_root_bindings); then
+  rollback_post_switch_failure \
+    "authorized write-root binding changed after the healthy rollback gate"
+fi
+( log_event ROLLBACK_OK "healthy on $POST_SWITCH_GATE_PATHS" ) \
+  || ( ops_log "could not append ROLLBACK_OK audit event" ) || :
+( ops_log "rollback to $TARGET_ID complete" ) || :
+ROLLBACK_COMPLETED=1
 exit 0

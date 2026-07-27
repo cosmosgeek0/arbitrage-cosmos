@@ -5,7 +5,8 @@
 #   - immutable release directories under $RELEASES_DIR;
 #   - readiness gate BEFORE the switch (candidate booted on a probe port);
 #   - atomic `current` symlink switch (rename(2), never rm+ln);
-#   - journal/schema compatibility recorded in $DATA_DIR/journal-compat.json;
+#   - a floor-raising rollback barrier recorded durably before `current` can
+#     expose the candidate to production startup;
 #   - automatic rollback ONLY before money readiness and only when the
 #     exposure state is literally NONE; anything else (ACTIVE, AMBIGUOUS,
 #     RECOVERY_REQUIRED, UNKNOWN, or no exposure source) FREEZES deployment
@@ -182,6 +183,33 @@ log_event() { # RESULT DETAIL
     "releaseId=$RELEASE_ID" "result=$1" "detail=$2"
 }
 
+POST_SWITCH_ACTIVE=0
+POST_SWITCH_HANDLING=0
+ROLLBACK_BARRIER_ARMED=0
+DEPLOY_FAILURE_REASON=""
+
+post_switch_progress() {
+  ( ops_log "$@" ) || :
+}
+
+record_deploy_frozen_evidence() { # REASON EXPOSURE
+  local reason="$1" exposure="$2"
+  DEPLOY_FAILURE_REASON="$reason"
+  if ! ( json_write "$FROZEN_EFFECT_MARKER" \
+      "ts=$(now_utc)" "releaseId=$RELEASE_ID" \
+      "exposure=$exposure" "reason=$reason" "operatorAction=required" ); then
+    reason="$reason; FROZEN MARKER WRITE FAILED"
+    post_switch_progress \
+      "could not publish the deploy-frozen marker; continuing the critical alert path"
+  fi
+  ( alert critical DEPLOY_FROZEN "$reason (exposure=$exposure)" ) || :
+  if ! ( log_event FROZEN "$reason; exposure=$exposure" ); then
+    post_switch_progress "could not append FROZEN audit event"
+  fi
+  DEPLOY_FAILURE_REASON="$reason"
+  return 0
+}
+
 # --- 1. validate the release source (before taking the lock: read-only) ------
 RELEASE_SRC="$(exact_existing_directory_path "$RELEASE_SRC")" \
   || die_code 1 "release source must be one exact raw canonical non-symlink directory"
@@ -202,7 +230,19 @@ case "$SCHEMA_VERSION_RC" in
   5) die_code 1 "schemaVersion must be a non-negative integer within the exact comparison range: '$SCHEMA_VERSION'" ;;
   *) die_code 1 "release.json: schemaVersion validation failed" ;;
 esac
-BARRIER="$(json_get "$RELEASE_READ_SRC/release.json" rollbackBarrier || echo false)"
+set +e
+CANDIDATE_ROLLBACK_FLOOR="$(json_get_nonnegative_safe_integer \
+  "$RELEASE_READ_SRC/release.json" rollbackFloor)"
+CANDIDATE_ROLLBACK_FLOOR_RC=$?
+set -e
+case "$CANDIDATE_ROLLBACK_FLOOR_RC" in
+  0) : ;;
+  3|4) die_code 1 "release.json: rollbackFloor missing" ;;
+  5) die_code 1 "rollbackFloor must be a non-negative integer within the exact comparison range: '$CANDIDATE_ROLLBACK_FLOOR'" ;;
+  *) die_code 1 "release.json: rollbackFloor validation failed" ;;
+esac
+BARRIER="$(json_get "$RELEASE_READ_SRC/release.json" rollbackBarrier)" \
+  || die_code 1 "release.json: rollbackBarrier missing"
 case "$RELEASE_ID" in
   ""|"."|".."|*[!A-Za-z0-9._-]*) die_code 1 "releaseId must be one non-dot [A-Za-z0-9._-] name: '$RELEASE_ID'" ;;
 esac
@@ -210,8 +250,36 @@ case "$BARRIER" in
   true|false) : ;;
   *) die_code 1 "rollbackBarrier must be true or false: '$BARRIER'" ;;
 esac
+if [ "$CANDIDATE_ROLLBACK_FLOOR" -gt "$SCHEMA_VERSION" ] \
+    || { [ "$CANDIDATE_ROLLBACK_FLOOR" -ne 0 ] \
+      && [ "$CANDIDATE_ROLLBACK_FLOOR" -ne "$SCHEMA_VERSION" ]; }; then
+  die_code 1 "release rollbackFloor is not representable by its schemaVersion"
+fi
+if { [ "$BARRIER" = true ] && [ "$CANDIDATE_ROLLBACK_FLOOR" -eq 0 ]; } \
+    || { [ "$BARRIER" = false ] && [ "$CANDIDATE_ROLLBACK_FLOOR" -ne 0 ]; }; then
+  die_code 1 "release rollbackBarrier does not match its rollbackFloor"
+fi
 [ -f "$RELEASE_READ_SRC/server/dist/index.js" ] \
   || die_code 1 "release payload incomplete: server/dist/index.js missing (partial build?)"
+
+# Refuse a corrupt or occupied safety-state endpoint before lock publication.
+# The state is read again under the lock below; this pass is ordering proof
+# only, but it intentionally validates both safety-bearing integer fields.
+set +e
+JOURNAL_PREFLIGHT_SNAPSHOT="$(
+  journal_state_snapshot "$JOURNAL_EFFECT_FILE"
+)"
+JOURNAL_PREFLIGHT_RC=$?
+set -e
+case "$JOURNAL_PREFLIGHT_RC" in
+  0) : ;;
+  5) die_code 1 "journal document or rollbackFloor is invalid" ;;
+  6) die_code 1 "journal path is occupied by a non-regular or linked endpoint, or exceeds the size limit: $JOURNAL_FILE" ;;
+  7) die_code 1 "journal dataSchema is not a nonnegative integer" ;;
+  8) die_code 1 "journal rollbackFloor exceeds dataSchema" ;;
+  *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to assume a zero rollback floor" ;;
+esac
+unset JOURNAL_PREFLIGHT_SNAPSHOT
 
 # --- 2. lock -----------------------------------------------------------------
 acquire_lock "$DEPLOY_EFFECT_LOCK" \
@@ -221,16 +289,68 @@ PROBE_PID=""
 PROBE_DATA_TMP=""
 PROBE_LEASES_TMP=""
 STAGING=""
+CURRENT_SWITCH_ATTEMPTED=0
+DEPLOY_COMPLETED=0
 cleanup() {
+  local rc=$? reason exposure=UNKNOWN
+  trap - EXIT HUP INT TERM
+  if [ "${CURRENT_SWITCH_ATTEMPTED:-0}" = 1 ] \
+      && [ "${POST_SWITCH_ACTIVE:-0}" != 1 ]; then
+    reason="current release pointer publication is uncertain after an interrupted atomic switch"
+    if ! exposure="$(get_exposure)"; then
+      exposure=UNKNOWN
+    fi
+    ( record_deploy_frozen_evidence "$reason" "$exposure" ) || :
+    ( ops_log "FATAL: deployment FROZEN: $reason (exposure=$exposure); operator incident handling required" ) \
+      || :
+    rc=2
+  elif [ "${ROLLBACK_BARRIER_ARMED:-0}" = 1 ] \
+      && [ "${POST_SWITCH_ACTIVE:-0}" != 1 ] \
+      && [ "${DEPLOY_COMPLETED:-0}" != 1 ] \
+      && [ "$rc" -ne 2 ]; then
+    reason="unexpected failure after the rollback barrier was armed but before the current release switch (rc=$rc)"
+    if ! exposure="$(get_exposure)"; then
+      exposure=UNKNOWN
+    fi
+    ( record_deploy_frozen_evidence "$reason" "$exposure" ) || :
+    ( ops_log "FATAL: deployment FROZEN: $reason (exposure=$exposure); operator incident handling required" ) \
+      || :
+    rc=2
+  elif [ "${POST_SWITCH_ACTIVE:-0}" = 1 ] \
+      && [ "${DEPLOY_COMPLETED:-0}" != 1 ] \
+      && [ "$rc" -ne 2 ] && [ "$rc" -ne 3 ]; then
+    reason="unexpected failure after the current release switch (rc=$rc)"
+    if ! exposure="$(get_exposure)"; then
+      exposure=UNKNOWN
+    fi
+    ( record_deploy_frozen_evidence "$reason" "$exposure" ) || :
+    ( ops_log "FATAL: deployment FROZEN: $reason (exposure=$exposure); operator incident handling required" ) \
+      || :
+    rc=2
+  fi
   # If the deploy is interrupted mid-probe, the candidate process and its
   # throwaway data dir must not outlive us.
-  if [ -n "${PROBE_PID:-}" ]; then kill "$PROBE_PID" 2>/dev/null || true; fi
-  if [ -n "${PROBE_DATA_TMP:-}" ]; then fs_remove_tree "$PROBE_DATA_TMP"; fi
-  if [ -n "${PROBE_LEASES_TMP:-}" ]; then fs_remove_tree "$PROBE_LEASES_TMP"; fi
-  if [ -n "${STAGING:-}" ]; then fs_remove_tree "$STAGING"; fi
-  if [ "${LOCK_HELD:-0}" = 1 ]; then release_lock "$DEPLOY_EFFECT_LOCK"; fi
+  if [ -n "${PROBE_PID:-}" ]; then
+    ( kill "$PROBE_PID" 2>/dev/null ) || :
+  fi
+  if [ -n "${PROBE_DATA_TMP:-}" ]; then
+    ( fs_remove_tree "$PROBE_DATA_TMP" ) || :
+  fi
+  if [ -n "${PROBE_LEASES_TMP:-}" ]; then
+    ( fs_remove_tree "$PROBE_LEASES_TMP" ) || :
+  fi
+  if [ -n "${STAGING:-}" ]; then
+    ( fs_remove_tree "$STAGING" ) || :
+  fi
+  if [ "${LOCK_HELD:-0}" = 1 ]; then
+    ( release_lock "$DEPLOY_EFFECT_LOCK" ) || :
+  fi
+  exit "$rc"
 }
 trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 # FIRST-HOST-001: the I00 wrapper may request an additional under-lock proof
 # that this is still a clean first host. The marker is refusal-only: it cannot
@@ -252,19 +372,39 @@ fi
 assert_link_sane "$CURRENT_EFFECT_LINK"
 assert_link_sane "$PREVIOUS_EFFECT_LINK"
 
-ROLLBACK_FLOOR=0
-if [ -f "$JOURNAL_EFFECT_FILE" ]; then
-  # Part 4 #6: a corrupt journal must never default a SAFETY BARRIER to its
-  # most permissive value. Key absent (rc 3) legitimately means floor 0; an
-  # unreadable journal (any other failure) refuses the deploy.
-  set +e; FLOOR_VALUE="$(json_get_nonnegative_safe_integer "$JOURNAL_EFFECT_FILE" rollbackFloor)"; FLOOR_RC=$?; set -e
-  case "$FLOOR_RC" in
-    0) ROLLBACK_FLOOR="$FLOOR_VALUE" ;;
-    3) ROLLBACK_FLOOR=0 ;;
-    5) die_code 1 "journal rollbackFloor is not a nonnegative integer - refusing to evaluate the non-rollback barrier against an uncomparable value" ;;
-    *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to assume a zero rollback floor" ;;
-  esac
+# Part 4 #6: bind both safety-bearing fields and the exact endpoint version
+# from one under-lock read. Missing fields and true absence default to zero;
+# every occupied non-regular, unreadable, or invalid endpoint refuses.
+set +e
+JOURNAL_SNAPSHOT="$(
+  journal_state_snapshot "$JOURNAL_EFFECT_FILE"
+)"
+JOURNAL_SNAPSHOT_RC=$?
+set -e
+case "$JOURNAL_SNAPSHOT_RC" in
+  0) : ;;
+  5) die_code 1 "journal document or rollbackFloor is invalid - refusing to evaluate the non-rollback barrier against an uncomparable value" ;;
+  6) die_code 1 "journal path is occupied by a non-regular or linked endpoint, or exceeds the size limit: $JOURNAL_FILE" ;;
+  7) die_code 1 "journal dataSchema is not a nonnegative integer - refusing to derive post-switch compatibility state" ;;
+  8) die_code 1 "journal rollbackFloor exceeds dataSchema - refusing to derive post-switch compatibility state" ;;
+  *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to assume a zero rollback floor" ;;
+esac
+JOURNAL_SNAPSHOT_REST="${JOURNAL_SNAPSHOT#*|}"
+DATA_SCHEMA="${JOURNAL_SNAPSHOT_REST%%|*}"
+JOURNAL_SNAPSHOT_REST="${JOURNAL_SNAPSHOT_REST#*|}"
+ROLLBACK_FLOOR="${JOURNAL_SNAPSHOT_REST%%|*}"
+unset JOURNAL_SNAPSHOT_REST
+INITIAL_BARRIER_ARMED=0
+case "$JOURNAL_SNAPSHOT" in
+  PENDING\|*) INITIAL_BARRIER_ARMED=1 ;;
+esac
+ROLLBACK_BARRIER_ARMED="$INITIAL_BARRIER_ARMED"
+if [ "$INITIAL_BARRIER_ARMED" = 1 ] \
+    && [ "$CANDIDATE_ROLLBACK_FLOOR" -lt "$ROLLBACK_FLOOR" ]; then
+  die_code 1 \
+    "pending rollback barrier requires a fix-forward candidate whose rollbackFloor preserves the armed floor"
 fi
+
 set +e
 [ "$SCHEMA_VERSION" -lt "$ROLLBACK_FLOOR" ]
 BARRIER_COMPARISON_RC=$?
@@ -278,14 +418,113 @@ case "$BARRIER_COMPARISON_RC" in
   *) die_code 1 "release schemaVersion and journal rollbackFloor are not safely comparable - refusing to evaluate the non-rollback barrier" ;;
 esac
 
+# Compute the compatibility publication from the one under-lock snapshot
+# before any release switch. A newly raised floor first commits as an exact
+# PENDING state with the still-applied dataSchema, then finalizes dataSchema
+# only after the candidate is healthy.
+NEW_SCHEMA="$DATA_SCHEMA"
+[ "$SCHEMA_VERSION" -gt "$NEW_SCHEMA" ] && NEW_SCHEMA="$SCHEMA_VERSION"
+NEW_FLOOR="$ROLLBACK_FLOOR"
+if [ "$CANDIDATE_ROLLBACK_FLOOR" -gt "$NEW_FLOOR" ]; then
+  NEW_FLOOR="$CANDIDATE_ROLLBACK_FLOOR"
+fi
+PRESTART_BARRIER_REQUIRED=0
+if [ "$NEW_FLOOR" -gt "$ROLLBACK_FLOOR" ]; then
+  PRESTART_BARRIER_REQUIRED=1
+fi
+
 # --- 4. install into an immutable release directory --------------------------
+installed_release_matches_source() {
+  if [ "$_I00_AUTHORIZED_EFFECT_PRESENT" = 1 ]; then
+    authorized_release_source_binding_is_exact "$RELEASE_SRC" \
+      && authorized_release_destination_tree_is_exact "$RELEASE_DIR"
+    return
+  fi
+  i00_guard_node - "$RELEASE_READ_SRC" "$RELEASE_EFFECT_DIR" <<'NODE'
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const path = require('node:path');
+const roots = process.argv.slice(2);
+const snapshot = (root) => {
+  const rootStat = fs.lstatSync(root, { bigint: true });
+  if (!rootStat.isDirectory() || rootStat.isSymbolicLink()
+      || fs.realpathSync.native(root) !== root) process.exit(1);
+  const entries = [];
+  const visit = (relative) => {
+    const directory = relative === '' ? root : path.join(root, relative);
+    for (const name of fs.readdirSync(directory).sort()) {
+      if (!name || name === '.' || name === '..' || name.includes('/')) process.exit(1);
+      const next = relative === '' ? name : `${relative}/${name}`;
+      const target = path.join(root, next);
+      const before = fs.lstatSync(target, { bigint: true });
+      if (before.isSymbolicLink()) process.exit(1);
+      if (before.isDirectory()) {
+        entries.push(`d\0${next}`);
+        visit(next);
+        continue;
+      }
+      if (!before.isFile() || before.nlink < 1n || before.size > 1073741824n
+          || (before.mode & 0o7000n) !== 0n) process.exit(1);
+      const executable = before.mode & 0o111n;
+      if (executable !== 0n && executable !== 0o111n) process.exit(1);
+      const descriptor = fs.openSync(target, fs.constants.O_RDONLY | fs.constants.O_NOFOLLOW);
+      try {
+        const opened = fs.fstatSync(descriptor, { bigint: true });
+        if (opened.dev !== before.dev || opened.ino !== before.ino
+            || opened.size !== before.size || opened.mtimeNs !== before.mtimeNs
+            || opened.ctimeNs !== before.ctimeNs) process.exit(1);
+        const bytes = fs.readFileSync(descriptor);
+        const after = fs.fstatSync(descriptor, { bigint: true });
+        const named = fs.lstatSync(target, { bigint: true });
+        if (after.dev !== before.dev || after.ino !== before.ino
+            || after.size !== before.size || after.mtimeNs !== before.mtimeNs
+            || after.ctimeNs !== before.ctimeNs || named.dev !== before.dev
+            || named.ino !== before.ino || named.size !== before.size
+            || named.mtimeNs !== before.mtimeNs || named.ctimeNs !== before.ctimeNs) {
+          process.exit(1);
+        }
+        entries.push([
+          'f', next, executable === 0o111n ? '100755' : '100644',
+          crypto.createHash('sha256').update(bytes).digest('hex'),
+        ].join('\0'));
+      } finally {
+        fs.closeSync(descriptor);
+      }
+      if (entries.length > 100000) process.exit(1);
+    }
+  };
+  visit('');
+  return entries;
+};
+const left = snapshot(roots[0]);
+const right = snapshot(roots[1]);
+if (JSON.stringify(left) !== JSON.stringify(right)) process.exit(1);
+NODE
+}
+
 RELEASE_DIR="$RELEASES_DIR/$RELEASE_ID"
 RELEASE_DIR="$(require_exact_direct_child \
   "$RELEASES_DIR/$RELEASE_ID" "$RELEASES_DIR" "$RELEASE_ID")" \
   || die_code 1 "release target is outside the canonical release root"
 RELEASE_EFFECT_DIR="$(authorized_write_effect_path releasesDir "$RELEASE_DIR")"
+RESUME_INSTALLED_RELEASE=0
+RESUME_CURRENT_IS_CANDIDATE=0
 if [ -e "$RELEASE_EFFECT_DIR" ] || [ -L "$RELEASE_EFFECT_DIR" ]; then
-  if [ "$REINSTALL" = 1 ]; then
+  if [ "$INITIAL_BARRIER_ARMED" = 1 ] \
+      && installed_release_matches_source; then
+    RESUME_INSTALLED_RELEASE=1
+    if [ -L "$CURRENT_EFFECT_LINK" ] \
+        && [ "$(read_symlink "$CURRENT_EFFECT_LINK")" = "$RELEASE_DIR" ]; then
+      RESUME_CURRENT_IS_CANDIDATE=1
+    fi
+    ops_log "resuming exact installed release $RELEASE_ID under the pending rollback barrier"
+  elif [ "$REINSTALL" = 1 ]; then
+    if { [ -L "$CURRENT_EFFECT_LINK" ] \
+          && [ "$(read_symlink "$CURRENT_EFFECT_LINK")" = "$RELEASE_DIR" ]; } \
+        || { [ -L "$PREVIOUS_EFFECT_LINK" ] \
+          && [ "$(read_symlink "$PREVIOUS_EFFECT_LINK")" = "$RELEASE_DIR" ]; }; then
+      die_code 1 "reinstall refuses to replace a release selected by current or previous"
+    fi
     ops_log "reinstall: replacing existing $RELEASE_EFFECT_DIR"
     fs_adjust_tree_write_bits "$RELEASE_EFFECT_DIR" owner-write
     fs_remove_tree "$RELEASE_EFFECT_DIR"
@@ -293,20 +532,22 @@ if [ -e "$RELEASE_EFFECT_DIR" ] || [ -L "$RELEASE_EFFECT_DIR" ]; then
     die_code 1 "release directory already exists (dirty target): $RELEASE_EFFECT_DIR — pass --reinstall to replace it"
   fi
 fi
-fs_mkdir_p "$RELEASES_EFFECT_DIR"
-# We hold the exclusive deploy lock, so any leftover staging dir is debris
-# from a crashed deploy on a dirty host — clear it.
-fs_remove_release_staging "$RELEASES_EFFECT_DIR"
-STAGING_NAMED="$RELEASES_DIR/.staging-$RELEASE_ID-$$"
-STAGING="$(authorized_write_effect_path releasesDir "$STAGING_NAMED")"
-require_authorized_release_source_binding "$RELEASE_SRC"
-copy_authorized_release_source "$RELEASE_SRC" "$STAGING" "$STAGING_NAMED"
-fs_rename "$STAGING" "$RELEASE_EFFECT_DIR"
-STAGING=""
-fs_adjust_tree_write_bits "$RELEASE_EFFECT_DIR" remove-write
-require_authorized_release_source_binding "$RELEASE_SRC"
-require_authorized_release_destination_tree "$RELEASE_DIR"
-ops_log "installed immutable release $RELEASE_ID at $RELEASE_DIR"
+if [ "$RESUME_INSTALLED_RELEASE" != 1 ]; then
+  fs_mkdir_p "$RELEASES_EFFECT_DIR"
+  # We hold the exclusive deploy lock, so any leftover staging dir is debris
+  # from a crashed deploy on a dirty host — clear it.
+  fs_remove_release_staging "$RELEASES_EFFECT_DIR"
+  STAGING_NAMED="$RELEASES_DIR/.staging-$RELEASE_ID-$$"
+  STAGING="$(authorized_write_effect_path releasesDir "$STAGING_NAMED")"
+  require_authorized_release_source_binding "$RELEASE_SRC"
+  copy_authorized_release_source "$RELEASE_SRC" "$STAGING" "$STAGING_NAMED"
+  fs_rename "$STAGING" "$RELEASE_EFFECT_DIR"
+  STAGING=""
+  fs_adjust_tree_write_bits "$RELEASE_EFFECT_DIR" remove-write
+  require_authorized_release_source_binding "$RELEASE_SRC"
+  require_authorized_release_destination_tree "$RELEASE_DIR"
+  ops_log "installed immutable release $RELEASE_ID at $RELEASE_DIR"
+fi
 
 # --- 5. readiness gate BEFORE the switch --------------------------------------
 # The candidate is booted on a probe port against a throwaway data dir; the
@@ -526,38 +767,47 @@ run_probe_gate() {
 }
 run_probe_gate
 
-# --- 6. atomic switch ----------------------------------------------------------
-require_authorized_release_source_binding "$RELEASE_SRC"
-require_authorized_release_destination_tree "$RELEASE_DIR"
-OLD_TARGET=""
-if [ -L "$CURRENT_EFFECT_LINK" ]; then
-  OLD_TARGET="$(read_symlink "$CURRENT_EFFECT_LINK")"
-fi
-atomic_symlink "$RELEASE_DIR" "$CURRENT_EFFECT_LINK"
-if [ -n "$OLD_TARGET" ]; then
-  atomic_symlink "$OLD_TARGET" "$PREVIOUS_EFFECT_LINK"
-fi
-require_all_authorized_write_root_bindings
-ops_log "current -> $RELEASE_DIR (previous -> ${OLD_TARGET:-none})"
+# Once `current` moves, every failure must pass through the §24.2 policy. Keep
+# progress-only stderr best-effort, contain helpers that may call `exit`, and
+# make the terminal freeze code independent of marker/log/alert availability.
+ROLLBACK_BARRIER_ARMED="$INITIAL_BARRIER_ARMED"
 
-# --- 7. restart + post-switch gate, with §24.2 failure policy -----------------
 post_switch_failure() {
-  local reason="$1" exposure
-  exposure="$(get_exposure)"
-  if [ ! -e "$MONEY_READY_EFFECT_MARKER" ] && [ "$exposure" = "NONE" ] && [ -n "$OLD_TARGET" ]; then
-    local rollback_ok=0
-    log_event AUTO_ROLLBACK "$reason; exposure=NONE; money readiness not reached"
+  local reason="$1" allow_rollback="${2:-1}" exposure=UNKNOWN rollback_ok=0
+  if [ "$POST_SWITCH_ACTIVE" != 1 ]; then
+    post_switch_progress "FATAL: post-switch handler invoked before current moved: $reason"
+    exit 1
+  fi
+  if [ "$POST_SWITCH_HANDLING" = 1 ]; then
+    post_switch_progress "FATAL: recursive post-switch failure: $reason"
+    exit 2
+  fi
+  if [ "${ROLLBACK_BARRIER_ARMED:-0}" = 1 ]; then
+    allow_rollback=0
+    reason="$reason; rollback barrier was armed before candidate start"
+  fi
+  POST_SWITCH_HANDLING=1
+  if ! exposure="$(get_exposure)"; then
+    exposure=UNKNOWN
+  fi
+  if [ "$allow_rollback" = 1 ] \
+      && [ ! -e "$MONEY_READY_EFFECT_MARKER" ] \
+      && [ "$exposure" = "NONE" ] && [ -n "$OLD_TARGET" ]; then
+    if ! ( log_event AUTO_ROLLBACK \
+      "$reason; exposure=NONE; money readiness not reached" ); then
+      post_switch_progress "could not append AUTO_ROLLBACK audit event"
+    fi
     set -- --auto
     [ -n "$ENV_FILE" ] && set -- "$@" --env-file "$ENV_FILE"
     if [ "$_I00_AUTHORIZED_EFFECT_PRESENT" = 1 ]; then
-      if run_authorized_automatic_rollback; then
+      if ( run_authorized_automatic_rollback ); then
         rollback_ok=1
       fi
     else
       # A caller-supplied DEPLOY_LOCK_HELD marker is never trusted by the
       # staging rollback donor. Relinquish this staging lock and let rollback
       # acquire its own exact owner-bound lock.
-      if release_lock "$DEPLOY_EFFECT_LOCK"; then
+      if ( release_lock "$DEPLOY_EFFECT_LOCK" ); then
         LOCK_HELD=0
         if "$I00_BASH" -p "$SCRIPT_DIR/rollback.sh" "$@"; then
           rollback_ok=1
@@ -565,53 +815,240 @@ post_switch_failure() {
       fi
     fi
     if [ "$rollback_ok" = 1 ]; then
-      die_code 3 "deploy of $RELEASE_ID failed ($reason); automatically rolled back to previous release"
+      post_switch_progress \
+        "FATAL: deploy of $RELEASE_ID failed ($reason); automatically rolled back to previous release"
+      exit 3
     fi
     reason="$reason; AUTOMATIC ROLLBACK ALSO FAILED"
   fi
-  json_write "$FROZEN_EFFECT_MARKER" "ts=$(now_utc)" "releaseId=$RELEASE_ID" \
-    "exposure=$exposure" "reason=$reason" "operatorAction=required"
-  alert critical DEPLOY_FROZEN "$reason (exposure=$exposure)"
-  log_event FROZEN "$reason; exposure=$exposure"
-  die_code 2 "deployment FROZEN: $reason (exposure=$exposure); no automatic rollback; halt new entries and begin incident handling"
+  record_deploy_frozen_evidence "$reason" "$exposure" || :
+  reason="$DEPLOY_FAILURE_REASON"
+  post_switch_progress \
+    "FATAL: deployment FROZEN: $reason (exposure=$exposure); no automatic rollback; halt new entries and begin incident handling"
+  exit 2
 }
 
+post_switch_required() { # REASON ALLOW_ROLLBACK COMMAND...
+  local reason="$1" allow_rollback="$2"
+  shift 2
+  if ! ( "$@" ); then
+    post_switch_failure "$reason" "$allow_rollback"
+  fi
+}
+
+publish_bound_journal_compatibility() { # DATA_SCHEMA ROLLBACK_FLOOR UPDATED_BY
+  local published_schema="$1" published_floor="$2" updated_by="$3"
+  json_write_exact_regular_or_absent \
+    "$JOURNAL_EFFECT_FILE" "$JOURNAL_SNAPSHOT" \
+    "dataSchema=$published_schema" "rollbackFloor=$published_floor" \
+    "updatedAtUtc=$(now_utc)" "updatedBy=$updated_by"
+}
+
+pre_switch_barrier_failure() {
+  local reason="$1" exposure=UNKNOWN
+  ROLLBACK_BARRIER_ARMED=1
+  if [ "$POST_SWITCH_HANDLING" = 1 ]; then
+    post_switch_progress "FATAL: recursive pre-switch barrier failure: $reason"
+    exit 2
+  fi
+  POST_SWITCH_HANDLING=1
+  if ! exposure="$(get_exposure)"; then
+    exposure=UNKNOWN
+  fi
+  record_deploy_frozen_evidence "$reason" "$exposure" || :
+  reason="$DEPLOY_FAILURE_REASON"
+  post_switch_progress \
+    "FATAL: deployment FROZEN: $reason (exposure=$exposure); rollback barrier may be live while current is still the prior release; operator completion is required"
+  exit 2
+}
+
+post_switch_release_binding_is_exact() {
+  authorized_release_source_binding_is_exact "$RELEASE_SRC" \
+    && authorized_release_destination_tree_is_exact "$RELEASE_DIR"
+}
+
+current_pointer_matches_pre_switch_state() {
+  if [ -n "$OLD_TARGET" ]; then
+    [ -L "$CURRENT_EFFECT_LINK" ] \
+      && [ "$(read_symlink "$CURRENT_EFFECT_LINK")" = "$OLD_TARGET" ]
+  else
+    [ ! -e "$CURRENT_EFFECT_LINK" ] && [ ! -L "$CURRENT_EFFECT_LINK" ]
+  fi
+}
+
+current_pointer_matches_candidate() {
+  [ -L "$CURRENT_EFFECT_LINK" ] \
+    && [ "$(read_symlink "$CURRENT_EFFECT_LINK")" = "$RELEASE_DIR" ]
+}
+
+# --- 6. atomic switch ----------------------------------------------------------
+require_authorized_release_source_binding "$RELEASE_SRC"
+require_authorized_release_destination_tree "$RELEASE_DIR"
+OLD_TARGET=""
+if [ "$RESUME_CURRENT_IS_CANDIDATE" = 1 ]; then
+  if [ -L "$PREVIOUS_EFFECT_LINK" ]; then
+    OLD_TARGET="$(read_symlink "$PREVIOUS_EFFECT_LINK")"
+    [ "$OLD_TARGET" != "$RELEASE_DIR" ] \
+      || pre_switch_barrier_failure \
+        "pending-barrier resume found previous pointing at the candidate"
+  fi
+elif [ -L "$CURRENT_EFFECT_LINK" ]; then
+  OLD_TARGET="$(read_symlink "$CURRENT_EFFECT_LINK")"
+fi
+set +e
+JOURNAL_SWITCH_SNAPSHOT="$(
+  journal_state_snapshot "$JOURNAL_EFFECT_FILE"
+)"
+JOURNAL_SWITCH_SNAPSHOT_RC=$?
+set -e
+[ "$JOURNAL_SWITCH_SNAPSHOT_RC" -eq 0 ] \
+  && [ "$JOURNAL_SWITCH_SNAPSHOT" = "$JOURNAL_SNAPSHOT" ] \
+  || die_code 1 "journal changed after under-lock validation - refusing to switch releases"
+
+# A reboot can start whichever release `current` names without returning
+# control to this shell. For a newly raised floor, commit the barrier before
+# changing that pointer. A crash in the resulting conservative availability
+# window leaves the prior release selected but unable to restart; it never
+# exposes a migration-capable candidate behind a stale rollback floor.
+if [ "$PRESTART_BARRIER_REQUIRED" = 1 ]; then
+  PRESTART_JOURNAL_STATE=PRESENT
+  PRESTART_UPDATED_BY=deploy.sh
+  if [ "$NEW_FLOOR" -gt "$DATA_SCHEMA" ]; then
+    PRESTART_JOURNAL_STATE=PENDING
+    PRESTART_UPDATED_BY=deploy.sh.prestart-barrier
+  fi
+  # From this point until the writer proves rc1/no publication, a signal may
+  # arrive after the atomic rename. Cleanup must therefore treat the floor as
+  # potentially live before invoking the mutating writer.
+  ROLLBACK_BARRIER_ARMED=1
+  set +e
+  publish_bound_journal_compatibility \
+    "$DATA_SCHEMA" "$NEW_FLOOR" "$PRESTART_UPDATED_BY"
+  JOURNAL_PUBLICATION_RC=$?
+  set -e
+  case "$JOURNAL_PUBLICATION_RC" in
+    0)
+      set +e
+      JOURNAL_SNAPSHOT="$(
+        journal_state_snapshot "$JOURNAL_EFFECT_FILE"
+      )"
+      JOURNAL_SNAPSHOT_RC=$?
+      set -e
+      if [ "$JOURNAL_SNAPSHOT_RC" -ne 0 ]; then
+        pre_switch_barrier_failure \
+          "armed rollback barrier could not be rebound before the current switch"
+      fi
+      case "$JOURNAL_SNAPSHOT" in
+        "$PRESTART_JOURNAL_STATE|$DATA_SCHEMA|$NEW_FLOOR|"*) : ;;
+        *)
+          pre_switch_barrier_failure \
+            "armed rollback barrier did not rebind as the exact committed-forward state"
+          ;;
+      esac
+      post_switch_progress \
+        "rollback barrier armed before current switch (appliedDataSchema=$DATA_SCHEMA rollbackFloor=$NEW_FLOOR)"
+      ;;
+    1)
+      ROLLBACK_BARRIER_ARMED="$INITIAL_BARRIER_ARMED"
+      die_code 1 \
+        "rollback-barrier publication failed before atomic replacement; current release pointer remains untouched"
+      ;;
+    2)
+      pre_switch_barrier_failure \
+        "rollback-barrier atomic replacement completed but durability or final verification failed before the current switch"
+      ;;
+    *)
+      pre_switch_barrier_failure \
+        "rollback-barrier publisher returned an unknown failure before the current switch"
+      ;;
+  esac
+fi
+
+if [ "$RESUME_CURRENT_IS_CANDIDATE" = 1 ]; then
+  POST_SWITCH_ACTIVE=1
+  post_switch_progress \
+    "resuming with current already bound to $RELEASE_DIR (previous -> ${OLD_TARGET:-none})"
+else
+  # Once a barrier is armed, preserve the old current in `previous` before
+  # making the candidate boot-selectable. A crash on either side of the
+  # current rename therefore retains the true recovery lineage.
+  if [ "$ROLLBACK_BARRIER_ARMED" = 1 ] && [ -n "$OLD_TARGET" ]; then
+    if ! atomic_symlink "$OLD_TARGET" "$PREVIOUS_EFFECT_LINK"; then
+      pre_switch_barrier_failure \
+        "previous release pointer could not be durably prepared before the current switch"
+    fi
+  fi
+  CURRENT_SWITCH_ATTEMPTED=1
+  if atomic_symlink "$RELEASE_DIR" "$CURRENT_EFFECT_LINK"; then
+    POST_SWITCH_ACTIVE=1
+    CURRENT_SWITCH_ATTEMPTED=0
+  else
+    if ( current_pointer_matches_pre_switch_state ); then
+      CURRENT_SWITCH_ATTEMPTED=0
+      if [ "$ROLLBACK_BARRIER_ARMED" = 1 ]; then
+        pre_switch_barrier_failure \
+          "current release pointer update failed after the rollback barrier was armed"
+      fi
+      die_code 1 "current release pointer update failed before the switch"
+    elif ( current_pointer_matches_candidate ); then
+      POST_SWITCH_ACTIVE=1
+      CURRENT_SWITCH_ATTEMPTED=0
+      post_switch_failure \
+        "current release pointer update reported failure after publication" 0
+    fi
+    die_code 1 \
+      "current release pointer update failed with publication state uncertain"
+  fi
+  if [ -n "$OLD_TARGET" ] && [ "$ROLLBACK_BARRIER_ARMED" != 1 ]; then
+    post_switch_required \
+      "previous release pointer update failed after the current switch" 0 \
+      atomic_symlink "$OLD_TARGET" "$PREVIOUS_EFFECT_LINK"
+  fi
+fi
+post_switch_required \
+  "authorized write-root binding changed after the current switch" 0 \
+  require_all_authorized_write_root_bindings
+post_switch_progress "current -> $RELEASE_DIR (previous -> ${OLD_TARGET:-none})"
+
+# --- 7. restart + post-switch gate, with §24.2 failure policy -----------------
 if ! "$SYSTEMCTL" restart "$APP_UNIT"; then
   post_switch_failure "systemctl restart $APP_UNIT failed"
 fi
 if ! gate_wait "$HEALTH_BASE" "$POST_SWITCH_GATE_PATHS" "$GATE_TIMEOUT_SEC"; then
   post_switch_failure "post-switch health gate failed"
 fi
-if ! authorized_release_source_binding_is_exact "$RELEASE_SRC" \
-    || ! authorized_release_destination_tree_is_exact "$RELEASE_DIR"; then
-  post_switch_failure "authorized release source/destination binding changed after switch"
-fi
+post_switch_required \
+  "authorized release source/destination binding changed after switch" 0 \
+  post_switch_release_binding_is_exact
 
-# --- 8. success: record journal compatibility ---------------------------------
-DATA_SCHEMA=0
-if [ -f "$JOURNAL_EFFECT_FILE" ]; then
-  # Part 4 #6: an unreadable journal must not be rewritten from defaults.
-  set +e; SCHEMA_VALUE="$(json_get "$JOURNAL_EFFECT_FILE" dataSchema)"; SCHEMA_RC=$?; set -e
-  case "$SCHEMA_RC" in
-    0) DATA_SCHEMA="$SCHEMA_VALUE" ;;
-    3) DATA_SCHEMA=0 ;;
-    *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to rewrite it from defaults after the switch" ;;
-  esac
-fi
-NEW_SCHEMA="$DATA_SCHEMA"
-[ "$SCHEMA_VERSION" -gt "$NEW_SCHEMA" ] && NEW_SCHEMA="$SCHEMA_VERSION"
-NEW_FLOOR="$ROLLBACK_FLOOR"
-if [ "$BARRIER" = "true" ] && [ "$SCHEMA_VERSION" -gt "$NEW_FLOOR" ]; then
-  NEW_FLOOR="$SCHEMA_VERSION"
-fi
-json_write "$JOURNAL_EFFECT_FILE" "dataSchema=$NEW_SCHEMA" "rollbackFloor=$NEW_FLOOR" \
-  "updatedAtUtc=$(now_utc)" "updatedBy=deploy.sh"
+# --- 8. success: finalize the pre-switch-bound compatibility -----------------
+set +e
+publish_bound_journal_compatibility "$NEW_SCHEMA" "$NEW_FLOOR" deploy.sh
+JOURNAL_PUBLICATION_RC=$?
+set -e
+case "$JOURNAL_PUBLICATION_RC" in
+  0) : ;;
+  1) post_switch_failure \
+       "journal publication failed before atomic replacement after the release switch" ;;
+  2) post_switch_failure \
+       "journal atomic replacement completed but durability or final verification failed" 0 ;;
+  *) post_switch_failure \
+       "journal publisher returned an unknown failure after the release switch" 0 ;;
+esac
 
 if [ -e "$FROZEN_EFFECT_MARKER" ]; then
-  ops_log "clearing stale deploy-frozen marker after healthy deploy"
-  fs_remove_file "$FROZEN_EFFECT_MARKER"
+  post_switch_progress "clearing stale deploy-frozen marker after healthy deploy"
+  post_switch_required \
+    "stale deploy-frozen marker removal failed after journal publication" 0 \
+    fs_remove_file "$FROZEN_EFFECT_MARKER"
 fi
-require_all_authorized_write_root_bindings
-log_event SUCCESS "healthy on $POST_SWITCH_GATE_PATHS; dataSchema=$NEW_SCHEMA rollbackFloor=$NEW_FLOOR"
-ops_log "deploy of $RELEASE_ID complete"
+post_switch_required \
+  "authorized write-root binding changed after journal publication" 0 \
+  require_all_authorized_write_root_bindings
+post_switch_required \
+  "SUCCESS audit publication failed after journal publication" 0 \
+  log_event SUCCESS \
+  "healthy on $POST_SWITCH_GATE_PATHS; dataSchema=$NEW_SCHEMA rollbackFloor=$NEW_FLOOR prestartBarrier=$PRESTART_BARRIER_REQUIRED"
+post_switch_progress "deploy of $RELEASE_ID complete"
+DEPLOY_COMPLETED=1
 exit 0

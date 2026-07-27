@@ -164,6 +164,7 @@ export const LEDGER_ROLLBACK_FLOOR = 3;
 const LEDGER_SCHEMA_COMPATIBILITY_TABLE = 'ledger_schema_compatibility';
 const LEGACY_JOURNAL_COMPATIBILITY_FILE = 'journal-compat.json';
 const LEGACY_JOURNAL_COMPATIBILITY_MAX_BYTES = 4 * 1_024;
+const LEGACY_PRESTART_BARRIER_WRITER = 'deploy.sh.prestart-barrier';
 const SQLITE_MAX_ROWID = 9_223_372_036_854_775_807n;
 const SQLITE_CURSOR = /^(0|[1-9][0-9]{0,18})$/;
 const SIX_HOURS_MS = 6 * 60 * 60 * 1_000;
@@ -287,6 +288,7 @@ interface LedgerSchemaCompatibilityRow {
 interface LegacyJournalCompatibility {
   readonly dataSchema: number;
   readonly rollbackFloor: number;
+  readonly prestartBarrier: boolean;
 }
 
 function failedSchemaCompatibility(
@@ -348,9 +350,13 @@ function readLegacyJournalCompatibility(dataDir: string): LegacyJournalCompatibi
     throw new Error('LEDGER_LEGACY_SCHEMA_COMPATIBILITY_MALFORMED');
   }
   const { dataSchema, rollbackFloor, updatedAtUtc, updatedBy } = record;
+  const prestartBarrier = updatedBy === LEGACY_PRESTART_BARRIER_WRITER;
   if (!Number.isSafeInteger(dataSchema) || (dataSchema as number) < 0
       || !Number.isSafeInteger(rollbackFloor) || (rollbackFloor as number) < 0
-      || (rollbackFloor as number) > (dataSchema as number)
+      || (prestartBarrier
+        ? (rollbackFloor as number) <= (dataSchema as number)
+          || (rollbackFloor as number) < LEDGER_ROLLBACK_FLOOR
+        : (rollbackFloor as number) > (dataSchema as number))
       || !canonicalLegacyUtc(updatedAtUtc)
       || typeof updatedBy !== 'string'
       || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(updatedBy)) {
@@ -363,6 +369,7 @@ function readLegacyJournalCompatibility(dataDir: string): LegacyJournalCompatibi
   return Object.freeze({
     dataSchema: dataSchema as number,
     rollbackFloor: rollbackFloor as number,
+    prestartBarrier,
   });
 }
 
@@ -1657,6 +1664,21 @@ export class Ledger extends EventEmitter {
       }
       const startupEventShape = eventTableShape(this.db);
       const allowFreshEventV3 = (() => {
+        const requireEmptyFreshStorage = () => {
+          if (startupEventShape !== 'MISSING') {
+            throw new Error('LEDGER_EVENT_SCHEMA_VERSION_MISMATCH');
+          }
+          const existingSchemaObjects = this.db.prepare(`
+            SELECT COUNT(*) AS count
+            FROM sqlite_master
+            WHERE type IN ('table', 'index', 'trigger', 'view')
+              AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'
+          `).get() as { count: unknown };
+          if (existingSchemaObjects.count !== 0) {
+            throw new Error('LEDGER_EVENT_SCHEMA_MISSING');
+          }
+          return true;
+        };
         const version = startupSchemaVersion as number;
         if (version === LEDGER_SCHEMA_VERSION) {
           if (startupEventShape === 'MISSING') throw new Error('LEDGER_EVENT_SCHEMA_MISSING');
@@ -1673,6 +1695,10 @@ export class Ledger extends EventEmitter {
           return false;
         }
         if (legacyCompatibility !== null) {
+          if (legacyCompatibility.prestartBarrier
+              && legacyCompatibility.dataSchema === 0) {
+            return requireEmptyFreshStorage();
+          }
           if (startupEventShape === 'MISSING') throw new Error('LEDGER_EVENT_SCHEMA_MISSING');
           if (legacyCompatibility.dataSchema !== 1 || startupEventShape === 'V3') {
             throw new Error('LEDGER_EVENT_SCHEMA_VERSION_MISMATCH');
@@ -1701,17 +1727,7 @@ export class Ledger extends EventEmitter {
           assertMigratableEventTriggers(this.db);
           return false;
         }
-        if (startupEventShape !== 'MISSING') {
-          throw new Error('LEDGER_EVENT_SCHEMA_VERSION_MISMATCH');
-        }
-        const existingSchemaObjects = this.db.prepare(`
-          SELECT COUNT(*) AS count
-          FROM sqlite_master
-          WHERE type IN ('table', 'index', 'trigger', 'view')
-            AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\'
-        `).get() as { count: unknown };
-        if (existingSchemaObjects.count !== 0) throw new Error('LEDGER_EVENT_SCHEMA_MISSING');
-        return true;
+        return requireEmptyFreshStorage();
       })();
 
       this.db.pragma('journal_mode = WAL');

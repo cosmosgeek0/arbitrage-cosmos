@@ -78,6 +78,19 @@
       "type": ["string", "null"],
       "pattern": "^[0-9a-f]{64}$"
     },
+    "frozenMarkerState": {
+      "type": "string",
+      "enum": [
+        "SEALED_VALID",
+        "MISSING",
+        "PRESENT_UNSEALED",
+        "PRESENT_INVALID"
+      ]
+    },
+    "previousUpdateState": {
+      "type": "string",
+      "enum": ["COMPLETE", "PENDING", "UNKNOWN"]
+    },
     "donorExitCode": { "type": ["integer", "null"] },
     "startedAtUtc": { "type": "string", "format": "date-time" },
     "completedAtUtc": { "type": "string", "format": "date-time" },
@@ -120,7 +133,14 @@
     },
     {
       "type": "object",
-      "required": ["status", "donorExitCode", "frozenMarkerSha256", "terminal"],
+      "required": [
+        "status",
+        "donorExitCode",
+        "frozenMarkerSha256",
+        "frozenMarkerState",
+        "previousUpdateState",
+        "terminal"
+      ],
       "properties": {
         "status": {
           "const": "ROLLBACK_SWITCHED_FROZEN_PENDING_OWNER_ACTION"
@@ -130,6 +150,8 @@
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
         },
+        "frozenMarkerState": { "const": "SEALED_VALID" },
+        "previousUpdateState": { "const": "COMPLETE" },
         "terminal": {
           "type": "object",
           "required": ["status", "exitCode"],
@@ -147,7 +169,7 @@
         "status": {
           "const": "ROLLBACK_EFFECT_AMBIGUOUS_PENDING_OWNER_ACTION"
         },
-        "frozenMarkerSha256": { "type": "null" },
+        "frozenMarkerSha256": { "type": ["string", "null"] },
         "terminal": {
           "type": "object",
           "required": ["status"],

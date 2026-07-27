@@ -6,10 +6,10 @@ amendment L-B for the latency harness). **Nothing here executes against
 AWS, Cloudflare, Secrets Manager, systemd, or any remote system.** Every
 external interaction is behind an injectable seam (`SYSTEMCTL`, `CURL`,
 `NODE`, `SQLITE`), every hostname/credential is a documented
-`REPLACE_ME_*` placeholder, and the whole set is proven by local tests:
+`REPLACE_ME_*` placeholder. The loopback-and-mock local test entry point is:
 
 ```sh
-bash ops/tests/run-all.sh      # loopback + mocks only; passes on macOS/Linux
+bash ops/tests/run-all.sh      # loopback + mocks only
 ```
 
 The live deployment PROOF itself (real EC2/tunnel/secrets activation) is
@@ -94,11 +94,15 @@ requires exactly one new direct child under the retained backup root, opens it
 without following links, and binds its identity, manifest, database, tree, and
 pre/post inventory evidence before a successful terminal outcome exists.
 
-On a rollback post-switch gate failure, the bound donor writes the frozen
-marker through its retained `opsStateDir` capability, opens that exact file
-without following a link, changes it to mode `0400`, fsyncs the file and
-directory capability, and only then exits `3`. The wrapper records the already
-sealed marker; it does not mutate the named marker or own the donor lock.
+On any failure after the rollback current switch that prevents safe completion,
+the bound donor independently attempts frozen-marker publication and sealing,
+the critical alert, and the audit event. Marker, seal, and retained write-root
+failures extend the incident reason; alert and audit failures are best-effort
+diagnostics. None replaces the explicit switched-state exit `3`. A failed
+`ROLLBACK_OK` audit after an otherwise healthy rollback remains exit `0`. The
+wrapper records a valid sealed marker when available and otherwise records
+degraded switched-state evidence requiring owner action; it does not mutate the
+named marker or own the donor lock.
 
 No ratified action class exists for direct production `restore-drill.sh` or
 `watchdog.sh`. The backup, restore-drill, and watchdog services and timers keep
@@ -159,13 +163,28 @@ schema deployed with `rollbackBarrier:true`). Rollback to any release whose
 `schemaVersion` is below the floor is refused absolutely — that is the
 explicit non-rollback barrier of §24.2. Ownership of this marker should
 move into the app/ledger at integration (see `docs/archive/i00-phase2/L15_OPS_INTEGRATION_NOTES.md`).
+Until that migration, `deploy.sh` is the sole supported marker publisher.
+`deploy.sh` and `rollback.sh` share the deploy lock, so publication is serialized
+with every authoritative rollback compatibility decision. The application reads
+the legacy marker only during startup, and `backup.sh` reads it only as backup
+metadata; those reads are read-only and are not claimed to be deploy-lock
+serialized. Deployment rejects an invalid `dataSchema` or a floor greater than
+that schema. Rollback compatibility evaluation remains available when
+`rollbackFloor` itself is a valid exact integer: rollback enforces that floor,
+binds the full marker version, leaves corrupt schema evidence untouched, and
+never repairs it. Publication rechecks that bound version immediately before
+the path-based atomic rename and verifies the published result afterward. The
+rename itself is unconditional; stale-version refusal therefore relies on this
+documented sole-writer/lock boundary and is not a kernel compare-and-swap.
 
 ## Deploy failure policy (§24.2, exact)
 
-| condition after a failed post-switch gate | action | exit |
+| condition after the release switch | action | exit |
 |---|---|---|
-| money-readiness never reached AND exposure == `NONE` AND a previous release exists | automatic rollback | 3 |
-| anything else (`ACTIVE`/`AMBIGUOUS`/`RECOVERY_REQUIRED`/`UNKNOWN`, money reached, no previous, or the auto-rollback itself fails) | FREEZE: marker + alert, state preserved for incident handling | 2 |
+| journal publisher reports post-rename failure or any unknown status, or a later operation fails after successful journal publication | FREEZE without automatic rollback: compatibility state may already be live | 2 |
+| previous-pointer publication or post-switch capability validation fails | FREEZE without automatic rollback: the rollback target or effect authority is not trustworthy | 2 |
+| any other post-switch failure known before journal replacement, including publication refusal known before rename, AND money-readiness never reached AND exposure == `NONE` AND a previous release exists | automatic rollback | 3 |
+| all remaining post-switch failures (`ACTIVE`/`AMBIGUOUS`/`RECOVERY_REQUIRED`/`UNKNOWN`, money reached, no previous, or the auto-rollback itself fails) | FREEZE: marker + alert, state preserved for incident handling | 2 |
 
 Exposure comes from `EXPOSURE_CMD` (unset/failed ⇒ `UNKNOWN` ⇒ freeze-safe).
 The deploy gate uses `/health/live` + `/health/ready` only — **never**

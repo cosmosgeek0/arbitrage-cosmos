@@ -4,6 +4,32 @@ import { mapAggTrade, type RawAggTrade } from '../engine/volume/adapters.js';
 import type { VolumeConfig } from '../engine/volume/config.js';
 import { deriveVolumeConfigVersion } from '../engine/volume/config.js';
 import { VolumeEngine } from '../engine/volume/engine.js';
+import {
+  assessVolumeEconomics,
+  VOLUME_CURRENT_CONDITIONAL_PROXY,
+  type VolumeEconomicsAssessment,
+} from '../engine/volume/strategyEconomics.js';
+import {
+  createVolumeStrategyLedgerCoordinator,
+  type VolumeStrategyLedgerCoordinator,
+  type VolumeStrategyLedgerCoordinatorSnapshot,
+} from '../engine/volume/strategyLedger.js';
+import {
+  buildVolumeStrategyObservation,
+  VOLUME_PUBLIC_REST_BASE_URL,
+  VOLUME_PUBLIC_SOURCE_ID,
+  VOLUME_PUBLIC_WEBSOCKET_BASE_URL,
+  VOLUME_STRATEGY_OBSERVATION_MAX_AGE_MS,
+  type VolumeObservationContinuity,
+} from '../engine/volume/strategyObservation.js';
+import {
+  buildVolumeValidateOnlyObservationProposal,
+  createVolumeStrategySlice,
+  type VolumeStrategyEvaluation,
+  type VolumeStrategyProposalBinding,
+  type VolumeStrategySlice,
+  type VolumeStrategySliceControls,
+} from '../engine/volume/strategySlice.js';
 import type {
   StrategyDecayCoordinatorRequest,
   StrategyDecayCoordinatorResult,
@@ -35,6 +61,45 @@ interface MarketUniverseRow {
   hasPerp: boolean;
 }
 
+interface VolumeRuntimeStrategyTradeCut {
+  readonly generation: number;
+  readonly revision: number;
+  readonly receivedAtMs: number;
+  readonly continuity: VolumeObservationContinuity;
+  readonly raw: Readonly<RawAggTrade>;
+}
+
+interface VolumeRuntimeStrategyBookCut {
+  readonly symbol: string;
+  readonly bidPrice: string;
+  readonly askPrice: string;
+  readonly bidQuantity: string;
+  readonly askQuantity: string;
+  readonly receivedAtMs: number;
+}
+
+interface VolumeRuntimeStrategyCandidate {
+  readonly proposal: Readonly<VolumeStrategyProposalBinding>;
+  readonly tradeCut: Readonly<VolumeRuntimeStrategyTradeCut>;
+  readonly bookCut: Readonly<VolumeRuntimeStrategyBookCut>;
+}
+
+export interface VolumeRuntimeStrategySliceSnapshot {
+  readonly controls: Readonly<VolumeStrategySliceControls>;
+  readonly economics: Readonly<VolumeEconomicsAssessment>;
+  readonly latestEvaluation: Readonly<VolumeStrategyEvaluation> | null;
+  readonly lifecycle: Readonly<{
+    mode: 'VALIDATE_ONLY_RECORD';
+    checkpointScope: 'LATEST_ONLY';
+    persistence: VolumeStrategyLedgerCoordinatorSnapshot;
+    restoreAttempts: number;
+    commitAttempts: number;
+    durablePublications: number;
+    directObservationMinIntervalMs: number;
+    nextDirectObservationAtMs: number;
+  }>;
+}
+
 export interface VolumeRuntimeIntegrationSnapshot {
   /** Capture time only. Never use this field as source-observation freshness. */
   capturedAtMs: number;
@@ -42,6 +107,7 @@ export interface VolumeRuntimeIntegrationSnapshot {
   config: VolumeConfig;
   decisions: Decision[];
   proposals: VolumeProposal[];
+  strategySlice: Readonly<VolumeRuntimeStrategySliceSnapshot>;
   ownerSummary: {
     candidateCount: number;
     opportunityCount: number;
@@ -91,6 +157,7 @@ export interface VolumeRuntimeOptions {
 const STREAM_CHUNK = 140;
 const UNIVERSE_REFRESH_MS = 15 * 60_000;
 const BOOK_REFRESH_MS = 2_750;
+const DIRECT_PUBLIC_OBSERVATION_MIN_INTERVAL_MS = 60 * 60_000;
 // BinanceStream deliberately latches after its bounded retry campaign. The
 // runtime that owns the producer therefore re-arms it on a bounded,
 // de-synchronised supervisory schedule until an open proves recovery.
@@ -104,8 +171,54 @@ function chunks<T>(rows: T[], size: number): T[][] {
   return out;
 }
 
+function positivePlainDecimal(value: number): string | null {
+  if (!Number.isFinite(value) || value <= 0) return null;
+  const source = String(value);
+  const exponentIndex = source.search(/[eE]/);
+  if (exponentIndex < 0) return source;
+  const coefficient = source.slice(0, exponentIndex);
+  const exponent = Number(source.slice(exponentIndex + 1));
+  if (!Number.isSafeInteger(exponent)) return null;
+  const sign = coefficient.startsWith('-') ? '-' : '';
+  const unsigned = sign.length === 0 ? coefficient : coefficient.slice(1);
+  const [whole, fraction = ''] = unsigned.split('.');
+  const digits = whole + fraction;
+  const point = whole.length + exponent;
+  if (point <= 0) return `${sign}0.${'0'.repeat(-point)}${digits}`;
+  if (point >= digits.length) return `${sign}${digits}${'0'.repeat(point - digits.length)}`;
+  return `${sign}${digits.slice(0, point)}.${digits.slice(point)}`;
+}
+
+function strategyProposalEvaluationKey(
+  proposal: Readonly<Pick<
+    VolumeProposalRiskCut,
+    | 'proposalId'
+    | 'proposalRevision'
+    | 'proposalDigest'
+    | 'configurationRevision'
+    | 'correlationId'
+  >>,
+): string {
+  return JSON.stringify([
+    proposal.proposalId,
+    proposal.proposalRevision,
+    proposal.proposalDigest,
+    proposal.configurationRevision,
+    proposal.correlationId,
+  ]);
+}
+
 export class VolumeRuntime {
   private readonly engine: VolumeEngine;
+  private readonly strategySlice: Readonly<VolumeStrategySlice>;
+  private readonly strategyEconomics: Readonly<VolumeEconomicsAssessment>;
+  private readonly strategyLedgerCoordinator: VolumeStrategyLedgerCoordinator | null;
+  private latestStrategyEvaluation: Readonly<VolumeStrategyEvaluation> | null = null;
+  private strategyRestoreAttempts = 0;
+  private strategyCommitAttempts = 0;
+  private strategyDurablePublications = 0;
+  private strategyPersistenceBlocked = false;
+  private strategyNextDirectObservationAtMs = 0;
   private readonly observedOrderFocusCoordinator: DurableObservedOrderFocusCoordinator | null;
   private streams: VolumeStreamHandle[] = [];
   private readonly streamStopQuarantine = new Set<VolumeStreamHandle>();
@@ -142,6 +255,13 @@ export class VolumeRuntime {
   private symbolLastTradeTs = new Map<string, number>();
   private lastAggTradeId = new Map<string, number>();
   private lastRawTradeId = new Map<string, number>();
+  private sourceContinuityLatch = new Map<
+    string,
+    Extract<VolumeObservationContinuity, 'GAP' | 'RECONNECTING'>
+  >();
+  private strategyTradeCuts = new Map<string, Readonly<VolumeRuntimeStrategyTradeCut>>();
+  private strategyBookCuts = new Map<string, Readonly<VolumeRuntimeStrategyBookCut>>();
+  private strategyEvaluationKeyBySymbol = new Map<string, string>();
   private tradeMessages = 0;
   private evidenceRevision = 0;
   private evidenceObserver: ((cut: VolumeRuntimeEvidenceCut) => void) | null = null;
@@ -196,6 +316,12 @@ export class VolumeRuntime {
     this.engine = new VolumeEngine(systemClock, undefined, {
       emit: (event) => this.persistEvent(event),
     });
+    this.strategySlice = createVolumeStrategySlice();
+    this.strategyEconomics = assessVolumeEconomics(VOLUME_CURRENT_CONDITIONAL_PROXY);
+    this.strategyLedgerCoordinator = typeof ledger?.getConfigValue === 'function'
+      && typeof ledger?.compareAndSetConfigValueAndLogEvents === 'function'
+      ? createVolumeStrategyLedgerCoordinator(ledger)
+      : null;
     this.observedOrderFocusCoordinator = typeof ledger?.getConfigValue === 'function'
       && typeof ledger?.compareAndSetConfigValueAndLogEvents === 'function'
       ? new DurableObservedOrderFocusCoordinator(
@@ -217,6 +343,7 @@ export class VolumeRuntime {
   async start(): Promise<void> {
     if (this.stopping) return;
     if (this.running) return this.startPromise ?? Promise.resolve();
+    this.restoreStrategySlice();
     const restoration = this.observedOrderFocusCoordinator?.restore();
     if (restoration !== undefined
         && (restoration.state === 'UNAVAILABLE'
@@ -226,7 +353,12 @@ export class VolumeRuntime {
     }
     const generation = ++this.generation;
     this.evidenceRevision = 0;
+    this.lastAggTradeId.clear();
     this.lastRawTradeId.clear();
+    this.sourceContinuityLatch.clear();
+    this.strategyTradeCuts.clear();
+    this.strategyBookCuts.clear();
+    this.strategyEvaluationKeyBySymbol.clear();
     this.running = true;
     this.engine.start();
     const promise = this.startGeneration(generation);
@@ -278,7 +410,12 @@ export class VolumeRuntime {
       this.eligibleSymbols = [];
       this.eligibleSymbolSet.clear();
       this.eligibleBaseBySymbol.clear();
+      this.lastAggTradeId.clear();
       this.lastRawTradeId.clear();
+      this.sourceContinuityLatch.clear();
+      this.strategyTradeCuts.clear();
+      this.strategyBookCuts.clear();
+      this.strategyEvaluationKeyBySymbol.clear();
       if (this.tickTimer) clearInterval(this.tickTimer);
       if (this.bookTimer) clearInterval(this.bookTimer);
       if (this.universeTimer) clearInterval(this.universeTimer);
@@ -347,7 +484,10 @@ export class VolumeRuntime {
       }
       this.engine.tick();
       const tickAtMs = this.engine.lastTick();
-      if (tickAtMs !== null) this.tickStrategyDecay(tickAtMs);
+      if (tickAtMs !== null) {
+        this.evaluateStrategySlice();
+        this.tickStrategyDecay(tickAtMs);
+      }
     } catch (error) {
       this.safeLog('error_event', null, {
         source: 'volume-runtime.tick',
@@ -429,11 +569,317 @@ export class VolumeRuntime {
       config: this.engine.cfg,
       decisions: this.engine.decisions(2_000),
       proposals: this.engine.proposalStore.all().slice(-2_000),
+      strategySlice: this.strategySliceSnapshot(),
       ownerSummary: {
         candidateCount: this.engine.focusMgr.candidateList().length,
         opportunityCount: this.engine.proposalStore.openProposals().length,
         cooldownCount: this.engine.focusMgr.activeCooldownCount(),
       },
+    });
+  }
+
+  private restoreStrategySlice(): void {
+    // The production slice remains OFF with its kill switch engaged, but its
+    // rejected record-only plans still require exact durability/reconciliation.
+    // Legacy test ledgers without the canonical CAS surface cannot publish.
+    if (this.strategyLedgerCoordinator === null) return;
+    this.strategyRestoreAttempts += 1;
+    const restoration = this.strategyLedgerCoordinator.restore();
+    if (restoration.status === 'CORRUPT' || restoration.status === 'UNAVAILABLE') {
+      this.latestStrategyEvaluation = null;
+      this.strategyEvaluationKeyBySymbol.clear();
+      this.strategyPersistenceBlocked = true;
+      return;
+    }
+    this.strategyPersistenceBlocked = false;
+    this.latestStrategyEvaluation = restoration.status === 'RESTORED'
+      ? restoration.checkpoint.lastEvaluation
+      : null;
+    const restoredDirectEvaluation = this.latestStrategyEvaluation?.proposal.correlationId
+      .startsWith('vroc:') === true
+      ? this.latestStrategyEvaluation
+      : null;
+    this.strategyNextDirectObservationAtMs = restoredDirectEvaluation === null
+      ? 0
+      : Math.min(
+          4_102_444_800_000,
+          restoredDirectEvaluation.evaluatedAtMs
+            + DIRECT_PUBLIC_OBSERVATION_MIN_INTERVAL_MS,
+        );
+  }
+
+  private evaluateStrategySlice(): void {
+    // Evaluation is record-only. OFF and kill-ON are immutable rejection
+    // inputs; no provider, private endpoint, signer, submitter, or order port
+    // exists in this path.
+    if (this.strategyLedgerCoordinator === null || this.strategyPersistenceBlocked) return;
+    const evaluatedAtMs = this.latchedNowMs();
+    if (
+      !Number.isSafeInteger(evaluatedAtMs)
+      || evaluatedAtMs < 0
+    ) return;
+
+    const candidates: VolumeRuntimeStrategyCandidate[] = [];
+    const addCandidate = (
+      proposal: Readonly<VolumeStrategyProposalBinding>,
+    ): void => {
+      const tradeCut = this.strategyTradeCuts.get(proposal.symbol);
+      const bookCut = this.strategyBookCuts.get(proposal.symbol);
+      if (
+        tradeCut === undefined
+        || bookCut === undefined
+        || tradeCut.generation !== this.generation
+        || tradeCut.revision < 1
+        || tradeCut.raw.s !== proposal.symbol
+        || this.lastAggTradeId.get(proposal.symbol) !== tradeCut.raw.a
+        || this.lastRawTradeId.get(proposal.symbol) !== tradeCut.raw.l
+        || bookCut.symbol !== proposal.symbol
+        || proposal.updatedTs > evaluatedAtMs
+        || evaluatedAtMs - proposal.updatedTs > VOLUME_STRATEGY_OBSERVATION_MAX_AGE_MS
+        || proposal.expiresAtMs <= evaluatedAtMs
+      ) return;
+      const sourceTimes = [
+        tradeCut.raw.E,
+        tradeCut.raw.T,
+        tradeCut.receivedAtMs,
+        bookCut.receivedAtMs,
+      ];
+      if (sourceTimes.some((value) => (
+        !Number.isSafeInteger(value)
+        || value < 0
+        || value > evaluatedAtMs
+        || evaluatedAtMs - value > VOLUME_STRATEGY_OBSERVATION_MAX_AGE_MS
+      ))) return;
+      candidates.push(Object.freeze({ proposal, tradeCut, bookCut }));
+    };
+
+    for (const proposal of this.engine.proposalStore.openProposals().slice(-2_000)) {
+      const proposalCut = this.engine.readProposalRiskCut(proposal.id);
+      if (proposalCut !== null) addCandidate(proposalCut);
+    }
+
+    let configurationRevision: string | null = null;
+    try {
+      configurationRevision = deriveVolumeConfigVersion(this.engine.cfg);
+    } catch {
+      // A non-canonical mutable configuration cannot produce a proposal record.
+    }
+    if (configurationRevision !== null) {
+      for (const decision of this.engine.decisions(2_000)) {
+        const direction = decision.evidence.direction;
+        if (
+          decision.strategy !== 'volume_spike'
+          || decision.kind !== 'reject'
+          || decision.rejectCode !== 'kill_switch_on'
+          || !isCanonicalSymbol(decision.symbol)
+          || (direction !== 'long' && direction !== 'short')
+          || decision.ts > evaluatedAtMs
+          || evaluatedAtMs - decision.ts > VOLUME_STRATEGY_OBSERVATION_MAX_AGE_MS
+        ) continue;
+        const expiresAtMs = decision.ts + this.engine.cfg.proposalTtlMs;
+        if (
+          !Number.isSafeInteger(expiresAtMs)
+          || expiresAtMs <= decision.ts
+          || expiresAtMs > 4_102_444_800_000
+        ) continue;
+        try {
+          addCandidate(buildVolumeValidateOnlyObservationProposal({
+            decision,
+            configurationRevision,
+            expiresAtMs,
+          }));
+        } catch {
+          // The builder owns strict verified-decision validation.
+        }
+      }
+
+      for (
+        const tradeCut of evaluatedAtMs >= this.strategyNextDirectObservationAtMs
+          ? this.strategyTradeCuts.values()
+          : []
+      ) {
+        const symbol = tradeCut.raw.s;
+        const continuity = this.sourceContinuityLatch.get(symbol) ?? tradeCut.continuity;
+        if (
+          tradeCut.generation !== this.generation
+          || tradeCut.revision < 1
+          || this.lastAggTradeId.get(symbol) !== tradeCut.raw.a
+          || this.lastRawTradeId.get(symbol) !== tradeCut.raw.l
+          || tradeCut.raw.E > tradeCut.receivedAtMs
+          || tradeCut.raw.T > tradeCut.receivedAtMs
+          || tradeCut.receivedAtMs > evaluatedAtMs
+          || evaluatedAtMs - tradeCut.receivedAtMs > VOLUME_STRATEGY_OBSERVATION_MAX_AGE_MS
+        ) continue;
+        const expiresAtMs = tradeCut.receivedAtMs + this.engine.cfg.proposalTtlMs;
+        if (
+          !Number.isSafeInteger(expiresAtMs)
+          || expiresAtMs <= tradeCut.receivedAtMs
+          || expiresAtMs > 4_102_444_800_000
+        ) continue;
+        try {
+          addCandidate(buildVolumeValidateOnlyObservationProposal({
+            decision: {
+              symbol,
+              ts: tradeCut.receivedAtMs,
+              strategy: 'volume_spike',
+              kind: 'reject',
+              rejectCode: 'kill_switch_on',
+              humanReason: 'public aggregate trade observed under default-OFF validate-only posture',
+              correlationId: [
+                'vroc',
+                tradeCut.generation,
+                tradeCut.revision,
+                symbol,
+                tradeCut.raw.a,
+              ].join(':'),
+              evidence: {
+                direction: tradeCut.raw.m ? 'short' : 'long',
+                sourceId: VOLUME_PUBLIC_SOURCE_ID,
+                authentication: 'NONE',
+                publicOnly: true,
+                transport: 'SPOT_AGG_TRADE',
+                generation: tradeCut.generation,
+                revision: tradeCut.revision,
+                aggregateTradeId: tradeCut.raw.a,
+                firstTradeId: tradeCut.raw.f,
+                lastTradeId: tradeCut.raw.l,
+                eventTimeMs: tradeCut.raw.E,
+                tradeTimeMs: tradeCut.raw.T,
+                receivedAtMs: tradeCut.receivedAtMs,
+                continuity,
+                buyerIsMaker: tradeCut.raw.m,
+              },
+            },
+            configurationRevision,
+            expiresAtMs,
+          }));
+        } catch {
+          // The builder owns exact data-only decision identity.
+        }
+      }
+    }
+
+    candidates.sort((left, right) => {
+      if (left.proposal.updatedTs !== right.proposal.updatedTs) {
+        return right.proposal.updatedTs - left.proposal.updatedTs;
+      }
+      return left.proposal.proposalId < right.proposal.proposalId
+        ? -1
+        : left.proposal.proposalId > right.proposal.proposalId
+          ? 1
+          : 0;
+    });
+    const candidate = candidates[0];
+    if (candidate === undefined) return;
+
+    const { proposal, tradeCut, bookCut } = candidate;
+    const evaluationKey = strategyProposalEvaluationKey(proposal);
+    if (
+      this.latestStrategyEvaluation !== null
+      && strategyProposalEvaluationKey(this.latestStrategyEvaluation.proposal) === evaluationKey
+    ) {
+      this.strategyEvaluationKeyBySymbol.set(proposal.symbol, evaluationKey);
+      return;
+    }
+    if (this.strategyEvaluationKeyBySymbol.get(proposal.symbol) === evaluationKey) return;
+    const continuity = this.sourceContinuityLatch.get(proposal.symbol) ?? tradeCut.continuity;
+    let observation: ReturnType<typeof buildVolumeStrategyObservation>;
+    try {
+      observation = buildVolumeStrategyObservation({
+        proposal: {
+          proposalId: proposal.proposalId,
+          proposalRevision: proposal.proposalRevision,
+          proposalDigest: proposal.proposalDigest,
+          configurationRevision: proposal.configurationRevision,
+          correlationId: proposal.correlationId,
+          symbol: proposal.symbol,
+          direction: proposal.direction,
+          expiresAtMs: proposal.expiresAtMs,
+        },
+        source: {
+          sourceId: VOLUME_PUBLIC_SOURCE_ID,
+          restBaseUrl: VOLUME_PUBLIC_REST_BASE_URL,
+          websocketBaseUrl: VOLUME_PUBLIC_WEBSOCKET_BASE_URL,
+          authentication: 'NONE',
+          timeUnit: 'MILLISECOND',
+          generation: tradeCut.generation,
+          revision: tradeCut.revision,
+          continuity,
+        },
+        aggregateTrade: {
+          symbol: tradeCut.raw.s,
+          aggregateTradeId: tradeCut.raw.a,
+          firstTradeId: tradeCut.raw.f,
+          lastTradeId: tradeCut.raw.l,
+          eventTimeMs: tradeCut.raw.E,
+          tradeTimeMs: tradeCut.raw.T,
+          receivedAtMs: tradeCut.receivedAtMs,
+        },
+        book: {
+          symbol: bookCut.symbol,
+          bidPrice: bookCut.bidPrice,
+          askPrice: bookCut.askPrice,
+          bidQuantity: bookCut.bidQuantity,
+          askQuantity: bookCut.askQuantity,
+          sourceTimeMs: null,
+          receivedAtMs: bookCut.receivedAtMs,
+          freshnessBasis: 'RECEIVE_TIME',
+          numericFidelity: 'NORMALIZED_FROM_PARSED_NUMBER',
+          scope: 'TOP_OF_BOOK',
+          depth: null,
+        },
+        evaluatedAtMs,
+      });
+    } catch {
+      return;
+    }
+    const evaluation = this.strategySlice.evaluate({
+      proposal,
+      observation,
+      economics: VOLUME_CURRENT_CONDITIONAL_PROXY,
+    });
+    this.strategyCommitAttempts += 1;
+    const committed = this.strategyLedgerCoordinator.commit({ evaluation });
+    if (
+      committed.disposition !== 'COMMITTED_NEW'
+      && committed.disposition !== 'ALREADY_COMMITTED'
+    ) {
+      this.latestStrategyEvaluation = null;
+      this.strategyPersistenceBlocked = true;
+      throw new Error(`volume strategy ledger commit failed: ${committed.disposition}`);
+    }
+    this.latestStrategyEvaluation = committed.checkpoint.lastEvaluation;
+    this.strategyEvaluationKeyBySymbol.set(proposal.symbol, evaluationKey);
+    if (proposal.correlationId.startsWith('vroc:')) {
+      this.strategyNextDirectObservationAtMs = Math.min(
+        4_102_444_800_000,
+        evaluatedAtMs + DIRECT_PUBLIC_OBSERVATION_MIN_INTERVAL_MS,
+      );
+    }
+    if (committed.disposition === 'COMMITTED_NEW') {
+      this.strategyDurablePublications += 1;
+    }
+  }
+
+  private strategySliceSnapshot(): Readonly<VolumeRuntimeStrategySliceSnapshot> {
+    return Object.freeze({
+      controls: this.strategySlice.controls,
+      economics: this.strategyEconomics,
+      latestEvaluation: this.latestStrategyEvaluation,
+      lifecycle: Object.freeze({
+        mode: 'VALIDATE_ONLY_RECORD' as const,
+        checkpointScope: 'LATEST_ONLY' as const,
+        persistence: this.strategyLedgerCoordinator?.snapshot() ?? Object.freeze({
+          status: 'BLOCKED' as const,
+          checkpoint: null,
+          reasonCode: 'VOLUME_STRATEGY_LEDGER_UNAVAILABLE',
+        }),
+        restoreAttempts: this.strategyRestoreAttempts,
+        commitAttempts: this.strategyCommitAttempts,
+        durablePublications: this.strategyDurablePublications,
+        directObservationMinIntervalMs: DIRECT_PUBLIC_OBSERVATION_MIN_INTERVAL_MS,
+        nextDirectObservationAtMs: this.strategyNextDirectObservationAtMs,
+      }),
     });
   }
 
@@ -582,6 +1028,21 @@ export class VolumeRuntime {
     for (const symbol of this.lastAggTradeId.keys()) {
       if (!this.eligibleSymbolSet.has(symbol)) this.lastAggTradeId.delete(symbol);
     }
+    for (const symbol of this.lastRawTradeId.keys()) {
+      if (!this.eligibleSymbolSet.has(symbol)) this.lastRawTradeId.delete(symbol);
+    }
+    for (const symbol of this.sourceContinuityLatch.keys()) {
+      if (!this.eligibleSymbolSet.has(symbol)) this.sourceContinuityLatch.delete(symbol);
+    }
+    for (const symbol of this.strategyTradeCuts.keys()) {
+      if (!this.eligibleSymbolSet.has(symbol)) this.strategyTradeCuts.delete(symbol);
+    }
+    for (const symbol of this.strategyBookCuts.keys()) {
+      if (!this.eligibleSymbolSet.has(symbol)) this.strategyBookCuts.delete(symbol);
+    }
+    for (const symbol of this.strategyEvaluationKeyBySymbol.keys()) {
+      if (!this.eligibleSymbolSet.has(symbol)) this.strategyEvaluationKeyBySymbol.delete(symbol);
+    }
     for (const symbol of this.warmingSymbols.keys()) {
       if (!this.eligibleSymbolSet.has(symbol)) this.warmingSymbols.delete(symbol);
     }
@@ -621,6 +1082,18 @@ export class VolumeRuntime {
   private restartTradeStreams(symbols: string[], generation: number): boolean {
     if (!this.isActive(generation)) return false;
     const requestedKey = symbols.join(',');
+    // A physical producer replacement within one runtime generation cannot
+    // prove that no aggregate trade was missed. Preserve GAP precedence and
+    // latch every previously-cursored requested symbol RECONNECTING until the
+    // next explicit generation; brand-new symbols retain UNKNOWN bootstrap.
+    for (const symbol of symbols) {
+      if (
+        (this.lastAggTradeId.has(symbol) || this.lastRawTradeId.has(symbol))
+        && this.sourceContinuityLatch.get(symbol) !== 'GAP'
+      ) {
+        this.sourceContinuityLatch.set(symbol, 'RECONNECTING');
+      }
+    }
     const previousStreams = [...this.streams];
     const turnEpoch = ++this.streamEpoch;
     const turn: VolumeStreamHandle[] = [];
@@ -692,7 +1165,7 @@ export class VolumeRuntime {
         const names = group.map((symbol) => symbol.toLowerCase() + '@aggTrade').join('/');
         const stream = this.streamFactory(
           'volume-aggtrade-' + String(index + 1),
-          'wss://stream.binance.com:443/stream?streams=' + names,
+          VOLUME_PUBLIC_WEBSOCKET_BASE_URL + '/stream?streams=' + names,
           (data) => this.onTradeMessage(data, generation, turnEpoch),
           (name, status) => this.onStreamStatus(name, status, generation, turnEpoch),
         );
@@ -788,6 +1261,12 @@ export class VolumeRuntime {
     const candidate = raw as Partial<RawAggTrade>;
     if (!isCanonicalSymbol(candidate.s) || !this.eligibleSymbolSet.has(candidate.s)) return;
     if (!Number.isSafeInteger(candidate.a) || (candidate.a as number) < 0) return;
+    if (!Number.isSafeInteger(candidate.E) || (candidate.E as number) < 0) return;
+    if (
+      !Number.isSafeInteger(candidate.T)
+      || (candidate.T as number) < 0
+      || (candidate.E as number) < (candidate.T as number)
+    ) return;
     const previousId = this.lastAggTradeId.get(candidate.s);
     if (previousId !== undefined && (candidate.a as number) <= previousId) return;
     let mapped: ReturnType<typeof mapAggTrade>;
@@ -796,28 +1275,53 @@ export class VolumeRuntime {
     } catch {
       return;
     }
-    if (!this.engine.onTrade(mapped.tick, mapped.printCount)) return;
     const previousRawTradeId = this.lastRawTradeId.get(mapped.tick.symbol);
-    const continuity = previousRawTradeId === undefined
-      ? 'UNKNOWN' as const
-      : candidate.f === previousRawTradeId + 1
-        ? 'CONTIGUOUS' as const
-        : 'GAP' as const;
+    const latchedContinuity = this.sourceContinuityLatch.get(mapped.tick.symbol);
+    let continuity: VolumeObservationContinuity;
+    if (latchedContinuity !== undefined) {
+      continuity = latchedContinuity;
+    } else if (previousId === undefined || previousRawTradeId === undefined) {
+      continuity = 'UNKNOWN';
+    } else if (
+      candidate.a === previousId + 1
+      && candidate.f === previousRawTradeId + 1
+    ) {
+      continuity = 'CONTIGUOUS';
+    } else {
+      continuity = 'GAP';
+      this.sourceContinuityLatch.set(mapped.tick.symbol, 'GAP');
+    }
     this.lastAggTradeId.set(mapped.tick.symbol, candidate.a as number);
     this.lastRawTradeId.set(mapped.tick.symbol, candidate.l as number);
+    // A GAP or RECONNECTING cut can update the diagnostic cursor but cannot
+    // enter the proposal-bearing feature engine. With no public backfill in
+    // this milestone, the latch remains fail-closed for this generation.
+    if (continuity === 'CONTIGUOUS') {
+      if (!this.engine.onTrade(mapped.tick, mapped.printCount)) return;
+    }
     this.lastTradeTs = mapped.tick.ts;
     this.symbolLastTradeTs.set(mapped.tick.symbol, mapped.tick.ts);
     this.tradeMessages += 1;
     const baseAsset = this.eligibleBaseBySymbol.get(mapped.tick.symbol);
     if (baseAsset !== undefined) {
+      const receivedAtMs = this.latchedNowMs();
+      const revision = this.nextEvidenceRevision();
+      const rawCut = Object.freeze({ ...(raw as RawAggTrade) });
+      this.strategyTradeCuts.set(mapped.tick.symbol, Object.freeze({
+        generation,
+        revision,
+        receivedAtMs,
+        continuity,
+        raw: rawCut,
+      }));
       this.publishEvidence(Object.freeze({
         kind: 'SPOT_AGG_TRADE' as const,
         generation,
-        revision: this.nextEvidenceRevision(),
-        receivedAtMs: this.latchedNowMs(),
-        continuity,
+        revision,
+        receivedAtMs,
+        continuity: continuity === 'RECONNECTING' ? 'GAP' : continuity,
         baseAsset,
-        raw: Object.freeze({ ...(raw as RawAggTrade) }),
+        raw: rawCut,
       }));
     }
   }
@@ -851,6 +1355,9 @@ export class VolumeRuntime {
       if (status === 'exhausted') this.scheduleStreamRecovery(name, generation, streamEpoch);
       return;
     }
+    if (previous === 'open' && status !== 'open') {
+      this.latchStreamReconnecting(name);
+    }
     if (status === 'connecting') return;
     const event = status === 'open'
       ? 'ws.open'
@@ -872,6 +1379,19 @@ export class VolumeRuntime {
     const currentStatus = this.streamStatus.get(name);
     if (currentStatus === 'open') this.clearStreamRecovery(name);
     if (currentStatus === 'exhausted') this.scheduleStreamRecovery(name, generation, streamEpoch);
+  }
+
+  private latchStreamReconnecting(name: string): void {
+    const match = /^volume-aggtrade-(\d+)$/.exec(name);
+    if (match === null) return;
+    const index = Number(match[1]) - 1;
+    if (!Number.isSafeInteger(index) || index < 0) return;
+    const group = chunks(this.eligibleSymbols, STREAM_CHUNK)[index] ?? [];
+    for (const symbol of group) {
+      if (this.sourceContinuityLatch.get(symbol) !== 'GAP') {
+        this.sourceContinuityLatch.set(symbol, 'RECONNECTING');
+      }
+    }
   }
 
   private scheduleStreamRecovery(name: string, generation: number, streamEpoch: number): void {
@@ -1002,7 +1522,28 @@ export class VolumeRuntime {
           bidQty: book.bidQty,
           askQty: book.askQty,
           ts: receivedTs,
-        })) accepted += 1;
+        })) {
+          const bidPrice = positivePlainDecimal(book.bidPrice);
+          const askPrice = positivePlainDecimal(book.askPrice);
+          const bidQuantity = positivePlainDecimal(book.bidQty);
+          const askQuantity = positivePlainDecimal(book.askQty);
+          if (
+            bidPrice !== null
+            && askPrice !== null
+            && bidQuantity !== null
+            && askQuantity !== null
+          ) {
+            this.strategyBookCuts.set(symbol, Object.freeze({
+              symbol: book.symbol,
+              bidPrice,
+              askPrice,
+              bidQuantity,
+              askQuantity,
+              receivedAtMs: receivedTs,
+            }));
+          }
+          accepted += 1;
+        }
       }
       if (accepted > 0) this.lastBookTs = receivedTs;
     } catch (error) {
@@ -1312,6 +1853,7 @@ export class VolumeRuntime {
         minDepthScore: this.engine.cfg.minDepthScore,
         baselineMinutes: this.engine.cfg.baselineMinSamples,
       },
+      strategySlice: this.strategySliceSnapshot(),
       rows,
     };
   }

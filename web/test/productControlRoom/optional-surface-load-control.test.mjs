@@ -332,6 +332,13 @@ test('sidebar switches are sibling controls and token discovery closes when Toke
     /<section className="optional-surface-inert" aria-disabled="true"[\s\S]*<\/section>\s*<OptionalSurfaceSwitch surfaceId=\{surfaceId\} \/>/,
     'the active switch must sit outside the inert visual panel',
   );
+  assert.doesNotMatch(
+    gate,
+    /feed, polling, subscriptions, and workers are stopped/i,
+    'generic OFF copy must not claim that retained shared/core owners stop',
+  );
+  assert.match(gate, /passive market cut remains available to Opportunities/);
+  assert.match(gate, /durable ledger and canonical incident retention remain active/);
   assert.match(
     styles,
     /\.optional-surface-gate\.closed > \.optional-surface-switch\s*\{[^}]*position:\s*absolute;[^}]*top:\s*24px;[^}]*right:\s*24px;/s,

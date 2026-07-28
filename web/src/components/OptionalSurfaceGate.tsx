@@ -12,6 +12,14 @@ const LABELS: Readonly<Record<OptionalSurfaceId, string>> = Object.freeze({
   calendar: 'Calendar',
 });
 
+const OFF_DETAILS: Readonly<Record<OptionalSurfaceId, string>> = Object.freeze({
+  markets: 'Markets enrichment routes and owned demand are closed; the passive market cut remains available to Opportunities.',
+  token: 'Token optional routes, book subscriptions, and owned source work are stopped.',
+  logs: 'Logs page and API admission are closed; the durable ledger and canonical incident retention remain active.',
+  news: 'News optional routes, streams, and source refresh work are stopped.',
+  calendar: 'Calendar optional routes and in-flight refresh work are stopped.',
+});
+
 function surfaceState(id: OptionalSurfaceId, input: ReturnType<typeof useOptionalSurface>): {
   label: string;
   detail: string;
@@ -34,7 +42,7 @@ function surfaceState(id: OptionalSurfaceId, input: ReturnType<typeof useOptiona
   if (input.enabled) {
     return { label: 'ON', detail: `${LABELS[id]} optional backend work is admitted.` };
   }
-  return { label: 'DEFAULT OFF', detail: `${LABELS[id]} feed, polling, subscriptions, and workers are stopped.` };
+  return { label: 'DEFAULT OFF', detail: OFF_DETAILS[id] };
 }
 
 export function OptionalSurfaceSwitch({

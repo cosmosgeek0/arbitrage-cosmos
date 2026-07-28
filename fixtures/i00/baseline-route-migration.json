@@ -302,7 +302,7 @@
       "sourceFacts": [
         {
           "path": "server/src/index.ts",
-          "needle": "const { spotBookRes, perpBookRes, perp24hRes } = await marketSources()",
+          "needle": "const snapshot = readPublishedMarketCut();",
           "expectedOccurrences": 1
         }
       ],

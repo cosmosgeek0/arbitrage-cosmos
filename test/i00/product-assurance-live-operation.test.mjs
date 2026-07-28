@@ -103,6 +103,42 @@ test('assembled production operation scan matches the final manifest denominator
       .includes('server/src/liveEdge/integration/assessmentBridge.ts'),
     true,
   );
+  const spotSignedTransport = policyById.get('OP_BINANCE_SPOT_SIGNED_TRANSPORT_DORMANT_BLOCKED');
+  assert.deepEqual(
+    spotSignedTransport?.implementationPaths,
+    ['server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts'],
+  );
+  assert.equal(spotSignedTransport?.canonicalOwnerId, 'BINANCE_SPOT_EXECUTION_ADAPTER');
+  assert.equal(spotSignedTransport?.operationClass, 'NON_IDEMPOTENT_MUTATION');
+  assert.equal(spotSignedTransport?.wiringState, 'DORMANT_BLOCKED');
+  assert.equal(spotSignedTransport?.idempotency.identityField, 'clientOrderId');
+  assert.equal(
+    spotSignedTransport?.authoritativeReconciliationLookup,
+    'SPOT_ORDER_QUERY_BY_ORIGINAL_CLIENT_ORDER_ID',
+  );
+  assert.equal(spotSignedTransport?.blockedResult, 'SPOT_EXECUTION_ADAPTER_UNMOUNTED');
+  assert.equal(
+    policyById.get('OP_LEGACY_SIGNED_MONEY_PATH_DORMANT_BLOCKED')?.implementationPaths
+      .includes('server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts'),
+    false,
+  );
+
+  const withoutSpotPolicy = policyCoverage.policies
+    .filter((policy) => policy.operationId !== 'OP_BINANCE_SPOT_SIGNED_TRANSPORT_DORMANT_BLOCKED');
+  const missingSpotCoverage = scanOperationCoverage(withoutSpotPolicy, report.sites);
+  assert.equal(missingSpotCoverage.verdict, 'FAIL');
+  assert.deepEqual(
+    missingSpotCoverage.unknownPolicyIds,
+    ['OP_BINANCE_SPOT_SIGNED_TRANSPORT_DORMANT_BLOCKED'],
+  );
+  assert.deepEqual(
+    missingSpotCoverage.uncoveredSites.map((site) => site.siteId).sort(),
+    [
+      'OPSITE_41207E8089FCA59F9EC3',
+      'OPSITE_5C70114C64727E66FC9A',
+      'OPSITE_85D71B839C490D05B2BB',
+    ].sort(),
+  );
 
   const withoutPrivatePolicy = policyCoverage.policies
     .filter((policy) => policy.operationId !== 'OP_BINANCE_PRIVATE_SIGNED_GET_READ');

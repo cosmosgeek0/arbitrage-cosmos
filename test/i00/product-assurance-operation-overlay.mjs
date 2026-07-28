@@ -44,12 +44,12 @@ const ASSESSMENT_SITE_IDS = Object.freeze([
 ].sort());
 
 const NEWS_CONTEXT_PATH = 'server/src/services/newsContext.ts';
-const NEWS_CONTEXT_SOURCE_SHA256 = '691109a948e0da6dd953326e995a0f889a7be70cf472999e5dcf8e0ec3e7e9b8';
+const NEWS_CONTEXT_SOURCE_SHA256 = '1fda1631c69a12f30768a7f220d558e1779ec3c65b13544cd8489fc50c68e819';
 const NEWS_CONTEXT_SITE_ID = 'OPSITE_FD086559819579DF346A';
 
 export const NEWS_CONTEXT_OVERLAY_AUTHORITY = Object.freeze({
-  sourceCommit: '45478ebcf439ef00120c9b2d7f0d9e1aad40d021',
-  sourceBlob: '198ed76b472a5749cd9464eafb21d97191909a90',
+  sourceCommit: 'b77875b24d7182b2a6c3eb99eba1b20cfb6785f4',
+  sourceBlob: 'b12e6b1394beb48f2c9c032d184b01a92af93b47',
   sourceDigestAlgorithm: 'sha256',
   sourceSha256: NEWS_CONTEXT_SOURCE_SHA256,
   rulingCommit: 'c57610cb5f7d56efb61e53ae27057fbe92a6a2f6',
@@ -59,7 +59,7 @@ export const NEWS_CONTEXT_OVERLAY_AUTHORITY = Object.freeze({
   operationId: 'OP_NEWS_CONTEXT_PUBLIC_READ',
   siteId: NEWS_CONTEXT_SITE_ID,
   path: NEWS_CONTEXT_PATH,
-  line: 2319,
+  line: 2504,
   column: 25,
   rawKind: OPERATION_KINDS.MUTATION_CALL,
   rawSymbol: 'fetch:DYNAMIC_METHOD',
@@ -68,7 +68,7 @@ export const NEWS_CONTEXT_OVERLAY_AUTHORITY = Object.freeze({
 });
 
 const PROFILE_PATH = 'server/src/binance/profile.ts';
-const PROFILE_SOURCE_SHA256 = '07dae80c72e88b8334c54d7632931e61253adf0eb90dc7d309368e012d84947b';
+const PROFILE_SOURCE_SHA256 = '0f94b5b55162cd4c2393c435ae89ddab67996b9d0e9106cc8febf79f3fdaccef';
 const PROFILE_SITE_IDS = Object.freeze([
   'OPSITE_5EA03340B3E6E86C7930',
 ].sort());
@@ -76,6 +76,14 @@ const PROFILE_SITE_IDS = Object.freeze([
 const BINANCE_PRIVATE_READ_PATH = 'server/src/binance/privateReadClient.ts';
 const BINANCE_PRIVATE_READ_SOURCE_SHA256 = '748052ec4943f547739b79c71824bfaf3a6ccac5c7a79608c9105dc587f8cbce';
 const BINANCE_PRIVATE_READ_SITE_ID = 'OPSITE_26D026D9BE4F85360AE7';
+
+const BINANCE_SPOT_EXECUTION_PATH = 'server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts';
+const BINANCE_SPOT_EXECUTION_SOURCE_SHA256 = 'd2d3fd76d4d8b50da57114045eed85771be0c9de6372377022d0f5ad020474a5';
+const BINANCE_SPOT_EXECUTION_SITE_IDS = Object.freeze([
+  'OPSITE_41207E8089FCA59F9EC3',
+  'OPSITE_5C70114C64727E66FC9A',
+  'OPSITE_85D71B839C490D05B2BB',
+].sort());
 
 const TWIN_RULE = Object.freeze({
   ruleId: 'i00-live-edge-exchange-twin-synthetic-state-v1',
@@ -126,12 +134,22 @@ const BINANCE_PRIVATE_READ_RULE = Object.freeze({
   symbolPattern: '^this\\.fetchFn$',
 });
 
+const BINANCE_SPOT_EXECUTION_RULE = Object.freeze({
+  ruleId: 'm0-binance-spot-signed-transport-v1',
+  operationId: 'OP_BINANCE_SPOT_SIGNED_TRANSPORT_DORMANT_BLOCKED',
+  pathExact: Object.freeze([BINANCE_SPOT_EXECUTION_PATH]),
+  pathPrefixes: Object.freeze([]),
+  kinds: Object.freeze([OPERATION_KINDS.STREAM_SEND]),
+  symbolPattern: '^transport\\.send$',
+});
+
 export const I00_OPERATION_MAPPING_OVERLAY = Object.freeze([
   NEWS_CONTEXT_RULE,
   TWIN_RULE,
   ASSESSMENT_RULE,
   PROFILE_RULE,
   BINANCE_PRIVATE_READ_RULE,
+  BINANCE_SPOT_EXECUTION_RULE,
 ]);
 
 function exactMembers(actual, expected) {
@@ -190,6 +208,7 @@ function verifyBaseUncovered(report) {
     ...ASSESSMENT_SITE_IDS,
     ...PROFILE_SITE_IDS,
     BINANCE_PRIVATE_READ_SITE_ID,
+    ...BINANCE_SPOT_EXECUTION_SITE_IDS,
   ].sort();
   const missing = expected.filter((siteId) => !observed.includes(siteId));
   if (missing.length > 0) {
@@ -238,6 +257,13 @@ function verifyBaseUncovered(report) {
     line: 248,
     column: 30,
   })) throw new Error('I00_OPERATION_OVERLAY_BINANCE_PRIVATE_READ_SOURCE_DRIFT');
+  if (!exactSites(report, {
+    path: BINANCE_SPOT_EXECUTION_PATH,
+    sourceSha256: BINANCE_SPOT_EXECUTION_SOURCE_SHA256,
+    siteIds: BINANCE_SPOT_EXECUTION_SITE_IDS,
+    kindSet: new Set([OPERATION_KINDS.STREAM_SEND]),
+    symbolSet: new Set(['transport.send']),
+  })) throw new Error('I00_OPERATION_OVERLAY_BINANCE_SPOT_EXECUTION_SOURCE_DRIFT');
 }
 
 function verifyIntegratedMappings(report) {
@@ -294,6 +320,15 @@ function verifyIntegratedMappings(report) {
     operationId: BINANCE_PRIVATE_READ_RULE.operationId,
     mappingRuleId: BINANCE_PRIVATE_READ_RULE.ruleId,
   })) throw new Error('I00_OPERATION_OVERLAY_BINANCE_PRIVATE_READ_MAPPING_DRIFT');
+  if (!exactSites(report, {
+    path: BINANCE_SPOT_EXECUTION_PATH,
+    sourceSha256: BINANCE_SPOT_EXECUTION_SOURCE_SHA256,
+    siteIds: BINANCE_SPOT_EXECUTION_SITE_IDS,
+    kindSet: new Set([OPERATION_KINDS.STREAM_SEND]),
+    symbolSet: new Set(['transport.send']),
+    operationId: BINANCE_SPOT_EXECUTION_RULE.operationId,
+    mappingRuleId: BINANCE_SPOT_EXECUTION_RULE.ruleId,
+  })) throw new Error('I00_OPERATION_OVERLAY_BINANCE_SPOT_EXECUTION_MAPPING_DRIFT');
   if (report.uncovered !== 0 || report.uncoveredSites.length !== 0) {
     throw new Error(`I00_OPERATION_OVERLAY_UNCOVERED:${report.uncovered}`);
   }
@@ -341,8 +376,10 @@ export function buildIntegratedOperationPolicyRegistry(canonicalRegistry) {
   if (!Array.isArray(canonicalRegistry)) throw new TypeError('canonical operation policy registry is required');
   const runtimeQueue = exactPolicy(canonicalRegistry, 'OP_RUNTIME_IN_MEMORY_QUEUE');
   const publicHttpRead = exactPolicy(canonicalRegistry, 'OP_PUBLIC_HTTP_READ');
+  const legacySignedMoney = exactPolicy(canonicalRegistry, 'OP_LEGACY_SIGNED_MONEY_PATH_DORMANT_BLOCKED');
   for (const operationId of [
     'OP_BINANCE_PRIVATE_SIGNED_GET_READ',
+    BINANCE_SPOT_EXECUTION_RULE.operationId,
     'OP_L07_EXCHANGE_TWIN_SYNTHETIC_STATE_REDUCTION',
   ]) {
     if (canonicalRegistry.some((policy) => policy.operationId === operationId)) {
@@ -372,6 +409,52 @@ export function buildIntegratedOperationPolicyRegistry(canonicalRegistry) {
       runbookId: 'RUNBOOK_BINANCE_PRIVATE_READ',
       cockpitLocation: 'health.sources.binance_private_read',
       faultTestIds: ['FAULT_BINANCE_PRIVATE_READ_TIMEOUT', 'FAULT_BINANCE_PRIVATE_READ_PERMISSION'],
+    },
+  });
+  const spotSignedTransport = integratedPolicy(legacySignedMoney, {
+    operationId: BINANCE_SPOT_EXECUTION_RULE.operationId,
+    canonicalOwnerId: 'BINANCE_SPOT_EXECUTION_ADAPTER',
+    implementationPaths: [BINANCE_SPOT_EXECUTION_PATH],
+    overrides: {
+      operationClass: 'NON_IDEMPOTENT_MUTATION',
+      wiringState: 'DORMANT_BLOCKED',
+      transientErrorCodes: [],
+      permanentErrorCodes: [
+        'SPOT_EXECUTION_ADAPTER_UNMOUNTED',
+        'SIGNED_TRANSPORT_NOT_COMPOSED',
+      ],
+      ambiguousErrorCodes: ['UNKNOWN_SUBMISSION'],
+      maximumAttempts: 1,
+      backoff: {
+        baseDelayMs: 0,
+        maximumDelayMs: 0,
+        jitterRatio: 0,
+        totalRetryBudgetMs: 0,
+      },
+      idempotency: {
+        required: true,
+        identityField: 'clientOrderId',
+        lifetimeMs: 86_400_000,
+        durability: 'DURABLE',
+      },
+      authoritativeReconciliationLookup: 'SPOT_ORDER_QUERY_BY_ORIGINAL_CLIENT_ORDER_ID',
+      concurrencyLimit: 1,
+      fallbackEligibility: 'NONE',
+      degradedResult: 'DORMANT_BLOCKED',
+      blockedResult: 'SPOT_EXECUTION_ADAPTER_UNMOUNTED',
+      durableRestartCheckpoint: null,
+      automaticRemediationAllowed: false,
+      escalationControlId: 'OWNER_M0_SPOT_EXECUTION_REVIEW',
+      runbookId: 'RUNBOOK_M0_SPOT_EXECUTION_UNMOUNTED',
+      cockpitLocation: 'risk.execution_authority.spot',
+      costResourceEvidence: {
+        required: true,
+        missingBehavior: 'BLOCK_OPERATION',
+      },
+      faultTestIds: [
+        'FAULT_SIGNED_EGRESS_TRIPWIRE',
+        'FAULT_DIAGNOSTIC_MONEY_MUTATION',
+      ],
     },
   });
   const syntheticTwinReduction = integratedPolicy(runtimeQueue, {
@@ -414,6 +497,7 @@ export function buildIntegratedOperationPolicyRegistry(canonicalRegistry) {
     ...canonicalRegistry.filter((policy) => policy.operationId !== runtimeQueue.operationId),
     integratedRuntimeQueue,
     privateSignedGet,
+    spotSignedTransport,
     syntheticTwinReduction,
   ].sort((left, right) => left.operationId.localeCompare(right.operationId, 'en')));
 }

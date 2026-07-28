@@ -36,9 +36,10 @@ function exactPhysicalDirectory(raw, label, { privateMode = false } = {}) {
       || realpathSync.native(raw) !== raw
       || (stat.mode & 0o022n) !== 0n
       || (stat.mode & 0o7000n) !== 0n
-      || (privateMode && (stat.mode & 0o777n) !== 0o700n)
+      || (privateMode && (stat.mode & 0o777n) !== 0o500n
+        && (stat.mode & 0o777n) !== 0o700n)
       || (invokingUid !== null && stat.uid !== 0n && stat.uid !== invokingUid)) {
-    fail(`${label} must be one trusted physical${privateMode ? ' mode-0700' : ''} directory`);
+    fail(`${label} must be one trusted physical${privateMode ? ' mode-0500-or-0700' : ''} directory`);
   }
   return Object.freeze({ path: raw, stat });
 }

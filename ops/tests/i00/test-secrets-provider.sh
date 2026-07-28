@@ -1282,31 +1282,55 @@ printf '{}' > "$KEYLESS_ROOT/creds/app-secrets"
 chmod 700 "$KEYLESS_ROOT" "$KEYLESS_ROOT/server" "$KEYLESS_ROOT/server/dist" \
   "$KEYLESS_ROOT/creds"
 chmod 600 "$KEYLESS_ROOT/server/dist/index.js" "$KEYLESS_ROOT/creds/app-secrets"
-KEYLESS_OUT="$(cd "$KEYLESS_ROOT" && CREDENTIALS_DIRECTORY="$KEYLESS_ROOT/creds" node "$I00_ROOT/bin/app-entrypoint.mjs" 2>&1)"
+run_entrypoint() {
+  local credential_directory="$1"
+  (
+    cd "$KEYLESS_ROOT"
+    CREDENTIALS_DIRECTORY="$credential_directory" \
+      node "$I00_ROOT/bin/app-entrypoint.mjs"
+  )
+}
+
+note "entrypoint accepts exact same-owner credential directory modes 0700 and 0500"
+KEYLESS_OUT="$(run_entrypoint "$KEYLESS_ROOT/creds" 2>&1)"
 assert_contains "$KEYLESS_OUT" 'stub-app-booted'
 assert_contains "$KEYLESS_OUT" 'keyless posture'
+chmod 400 "$KEYLESS_ROOT/creds/app-secrets"
+chmod 500 "$KEYLESS_ROOT/creds"
+KEYLESS_0500_OUT="$(run_entrypoint "$KEYLESS_ROOT/creds" 2>&1)"
+assert_contains "$KEYLESS_0500_OUT" 'stub-app-booted'
+assert_contains "$KEYLESS_0500_OUT" 'keyless posture'
+chmod 700 "$KEYLESS_ROOT/creds"
+chmod 600 "$KEYLESS_ROOT/creds/app-secrets"
 printf '{"BINANCE_API_KEY":"x","BINANCE_API_SECRET":"y"}' > "$KEYLESS_ROOT/creds/app-secrets"
 chmod 600 "$KEYLESS_ROOT/creds/app-secrets"
-assert_failure_contains 'required credential field' bash -c "cd '$KEYLESS_ROOT' && CREDENTIALS_DIRECTORY='$KEYLESS_ROOT/creds' node '$I00_ROOT/bin/app-entrypoint.mjs'"
+assert_failure_contains 'required credential field' \
+  run_entrypoint "$KEYLESS_ROOT/creds"
 printf '{}' > "$KEYLESS_ROOT/creds/app-secrets"
 chmod 600 "$KEYLESS_ROOT/creds/app-secrets"
 
-note "entrypoint binds the physical working release and credential paths"
-assert_failure_contains 'absolute lexical canonical path' bash -c \
-  "cd '$KEYLESS_ROOT' && CREDENTIALS_DIRECTORY='$KEYLESS_ROOT/./creds' node '$I00_ROOT/bin/app-entrypoint.mjs'"
+note "entrypoint rejects non-approved writable, group/world-accessible, and non-physical credential directories"
+for unsafe_mode in 0400 0501 0510 0550 0600 0705 0770 0707; do
+  chmod "$unsafe_mode" "$KEYLESS_ROOT/creds"
+  assert_failure_contains 'mode-0500-or-0700 directory' \
+    run_entrypoint "$KEYLESS_ROOT/creds"
+done
+chmod 700 "$KEYLESS_ROOT/creds"
+assert_failure_contains 'absolute lexical canonical path' \
+  run_entrypoint "$KEYLESS_ROOT/./creds"
 ln -s "$KEYLESS_ROOT/creds" "$KEYLESS_ROOT/creds-alias"
-assert_failure_contains 'trusted physical mode-0700 directory' bash -c \
-  "cd '$KEYLESS_ROOT' && CREDENTIALS_DIRECTORY='$KEYLESS_ROOT/creds-alias' node '$I00_ROOT/bin/app-entrypoint.mjs'"
+assert_failure_contains 'mode-0500-or-0700 directory' \
+  run_entrypoint "$KEYLESS_ROOT/creds-alias"
 mv "$KEYLESS_ROOT/creds/app-secrets" "$KEYLESS_ROOT/creds/app-secrets.saved"
 ln -s "$KEYLESS_ROOT/creds/app-secrets.saved" "$KEYLESS_ROOT/creds/app-secrets"
-assert_failure_contains 'single-link regular file' bash -c \
-  "cd '$KEYLESS_ROOT' && CREDENTIALS_DIRECTORY='$KEYLESS_ROOT/creds' node '$I00_ROOT/bin/app-entrypoint.mjs'"
+assert_failure_contains 'single-link regular file' \
+  run_entrypoint "$KEYLESS_ROOT/creds"
 rm "$KEYLESS_ROOT/creds/app-secrets"
 mv "$KEYLESS_ROOT/creds/app-secrets.saved" "$KEYLESS_ROOT/creds/app-secrets"
 mv "$KEYLESS_ROOT/server/dist/index.js" "$KEYLESS_ROOT/server/dist/index.saved.js"
 ln -s "$KEYLESS_ROOT/server/dist/index.saved.js" "$KEYLESS_ROOT/server/dist/index.js"
-assert_failure_contains 'single-link regular file' bash -c \
-  "cd '$KEYLESS_ROOT' && CREDENTIALS_DIRECTORY='$KEYLESS_ROOT/creds' node '$I00_ROOT/bin/app-entrypoint.mjs'"
+assert_failure_contains 'single-link regular file' \
+  run_entrypoint "$KEYLESS_ROOT/creds"
 rm "$KEYLESS_ROOT/server/dist/index.js"
 mv "$KEYLESS_ROOT/server/dist/index.saved.js" "$KEYLESS_ROOT/server/dist/index.js"
 OUTSIDE_RELEASE="$TEST_TMP/entrypoint-outside-release"

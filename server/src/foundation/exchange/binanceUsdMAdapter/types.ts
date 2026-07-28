@@ -124,12 +124,14 @@ export interface BinanceUsdMBasisWireIntent {
   readonly positionMode: 'ONE_WAY';
   readonly positionSide: 'BOTH';
   readonly reduceOnly: boolean;
+  readonly closePosition: false;
   readonly requestFields: Readonly<{
     readonly symbol: string;
     readonly side: BinanceUsdMBasisOrderSide;
     readonly type: BinanceUsdMBasisOrderType;
     readonly positionSide: 'BOTH';
     readonly reduceOnly: boolean;
+    readonly closePosition: false;
     readonly quantity: string;
     readonly price: string | null;
     readonly timeInForce: 'GTC' | null;
@@ -148,8 +150,10 @@ export interface BinanceUsdMBasisWireIntent {
     readonly positionModeAuthority:
       | 'SYNTHETIC_TEST'
       | 'RECORDED_REPLAY';
-    readonly positionModeScope: 'ACCOUNT' | 'SYMBOL';
-    readonly positionModeSymbol: string | null;
+    readonly positionModeScope: 'ACCOUNT';
+    readonly positionModeSymbol: null;
+    readonly positionModeSourceId: string;
+    readonly positionModeRevision: string;
     readonly positionModeObservedAtMs: number;
     readonly positionModeReceivedAtMs: number;
     readonly positionModeMaxAgeMs: number;
@@ -260,8 +264,13 @@ export interface BinanceUsdMBasisConfirmedOrder {
   readonly origQty: string;
   readonly executedQty: string;
   readonly price: string;
+  /** Normalized request semantics; MARKET omits timeInForce. */
+  readonly timeInForce: 'GTC' | null;
+  /** Raw venue response enum retained after equivalence validation. */
+  readonly venueTimeInForce: 'GTC';
   readonly positionSide: 'BOTH';
   readonly reduceOnly: boolean;
+  readonly closePosition: false;
   readonly status: BinanceUsdMBasisObservedOrderStatus;
   readonly terminal: boolean;
 }

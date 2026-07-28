@@ -29,6 +29,7 @@ import {
 const SYMBOL_PATTERN = /^[A-Z0-9._-]{1,40}$/;
 const CLIENT_ORDER_ID_PATTERN = /^[.A-Z:/a-z0-9_-]{1,36}$/;
 const CAPABILITY_PATTERN = /^[A-Z0-9_]{1,64}$/;
+const PROVENANCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/;
 const QUERY_STATUSES = new Set([
   'NEW',
   'PARTIALLY_FILLED',
@@ -100,9 +101,11 @@ interface FreshEvidenceTiming {
 }
 
 interface PositionModeEvidence extends FreshEvidenceTiming {
-  readonly mode: 'ONE_WAY' | 'HEDGE' | 'UNKNOWN';
-  readonly scope: 'ACCOUNT' | 'SYMBOL';
-  readonly symbol: string | null;
+  readonly mode: 'ONE_WAY';
+  readonly scope: 'ACCOUNT';
+  readonly symbol: null;
+  readonly sourceId: string;
+  readonly revision: string;
 }
 
 interface ConfigSnapshot {
@@ -251,6 +254,37 @@ function canonicalDecimal(
   }
 }
 
+/**
+ * Binance query responses commonly right-pad exact decimal strings. Preserve
+ * exact arithmetic while accepting that wire representation and rejecting
+ * exponent syntax, signs on positive values, and negative zero.
+ */
+function normalizedResponseDecimal(
+  value: unknown,
+  rule: 'NON_NEGATIVE' | 'POSITIVE',
+): string | null {
+  if (
+    typeof value !== 'string' ||
+    value.startsWith('+') ||
+    /^-0(?:\.0+)?$/.test(value)
+  ) {
+    return null;
+  }
+  try {
+    const normalized = normalizeDecimalString(value);
+    const compared = compareDecimalStrings(normalized, '0');
+    if (
+      (rule === 'POSITIVE' && compared <= 0) ||
+      (rule === 'NON_NEGATIVE' && compared < 0)
+    ) {
+      return null;
+    }
+    return normalized;
+  } catch {
+    return null;
+  }
+}
+
 function parseTimestampIdentity(value: unknown): TimestampIdentity | null {
   const record = plainDataRecord(value);
   if (record === null) return null;
@@ -370,7 +404,6 @@ function parseFreshEvidenceTiming(
 
 function parsePositionModeEvidence(
   value: unknown,
-  symbol: string,
   nowMs: number,
   codes: BinanceUsdMBasisAdapterBlockingCode[],
 ): PositionModeEvidence | null {
@@ -393,9 +426,12 @@ function parsePositionModeEvidence(
     return null;
   }
   if (
-    (record.scope !== 'ACCOUNT' && record.scope !== 'SYMBOL') ||
-    (record.scope === 'ACCOUNT' && record.symbol !== null) ||
-    (record.scope === 'SYMBOL' && record.symbol !== symbol) ||
+    record.scope !== 'ACCOUNT' ||
+    record.symbol !== null ||
+    typeof record.sourceId !== 'string' ||
+    !PROVENANCE_PATTERN.test(record.sourceId) ||
+    typeof record.revision !== 'string' ||
+    !PROVENANCE_PATTERN.test(record.revision) ||
     (record.mode !== 'ONE_WAY' &&
       record.mode !== 'HEDGE' &&
       record.mode !== 'UNKNOWN')
@@ -414,8 +450,10 @@ function parsePositionModeEvidence(
   return Object.freeze({
     ...timing.value,
     mode: 'ONE_WAY',
-    scope: record.scope,
-    symbol: record.scope === 'SYMBOL' ? symbol : null,
+    scope: 'ACCOUNT',
+    symbol: null,
+    sourceId: record.sourceId,
+    revision: record.revision,
   });
 }
 
@@ -691,6 +729,7 @@ function validateFilters(
   quantity: string,
   price: string | null,
   type: BinanceUsdMBasisOrderType,
+  side: 'BUY' | 'SELL',
   context: PublicContext,
   codes: BinanceUsdMBasisAdapterBlockingCode[],
 ): void {
@@ -727,8 +766,8 @@ function validateFilters(
       context.multiplierUp,
     );
     if (
-      compareDecimalStrings(price, lower) < 0 ||
-      compareDecimalStrings(price, upper) > 0
+      (side === 'BUY' && compareDecimalStrings(price, upper) > 0) ||
+      (side === 'SELL' && compareDecimalStrings(price, lower) < 0)
     ) {
       codes.push('PERCENT_PRICE_OUT_OF_RANGE');
     }
@@ -845,12 +884,15 @@ function parseFoundOrder(
     codes.push('QUERY_EVIDENCE_INVALID');
     return null;
   }
-  const origQty = canonicalDecimal(order.origQty, 'POSITIVE');
-  const executedQty = canonicalDecimal(
+  const origQty = normalizedResponseDecimal(order.origQty, 'POSITIVE');
+  const executedQty = normalizedResponseDecimal(
     order.executedQty,
     'NON_NEGATIVE',
   );
-  const price = canonicalDecimal(order.price, 'NON_NEGATIVE');
+  const price = normalizedResponseDecimal(
+    order.price,
+    'NON_NEGATIVE',
+  );
   if (
     typeof order.status !== 'string' ||
     !QUERY_STATUSES.has(order.status)
@@ -867,8 +909,10 @@ function parseFoundOrder(
     order.side !== intent.side ||
     order.type !== intent.type ||
     origQty !== intent.quantity ||
+    order.timeInForce !== 'GTC' ||
     order.positionSide !== intent.positionSide ||
     order.reduceOnly !== intent.reduceOnly ||
+    order.closePosition !== false ||
     (intent.type === 'LIMIT' && price !== intent.price) ||
     compareDecimalStrings(executedQty, origQty) > 0
   ) {
@@ -885,8 +929,11 @@ function parseFoundOrder(
     origQty,
     executedQty,
     price,
+    timeInForce: intent.timeInForce,
+    venueTimeInForce: 'GTC',
     positionSide: 'BOTH',
     reduceOnly: intent.reduceOnly,
+    closePosition: false,
     status,
     terminal: TERMINAL_QUERY_STATUSES.has(status),
   });
@@ -993,7 +1040,6 @@ export function createBinanceUsdMBasisValidateOnlyAdapter(
         typeof value.symbol === 'string' && validUtcMillis(nowMs)
           ? parsePositionModeEvidence(
               value.positionModeEvidence,
-              value.symbol,
               nowMs,
               codes,
             )
@@ -1013,10 +1059,18 @@ export function createBinanceUsdMBasisValidateOnlyAdapter(
       if (
         quantity !== null &&
         context !== null &&
-        (value.type === 'LIMIT' || value.type === 'MARKET')
+        (value.type === 'LIMIT' || value.type === 'MARKET') &&
+        (value.leg === 'PERP_OPEN' || value.leg === 'PERP_CLOSE')
       ) {
         try {
-          validateFilters(quantity, price, value.type, context, codes);
+          validateFilters(
+            quantity,
+            price,
+            value.type,
+            value.leg === 'PERP_OPEN' ? 'SELL' : 'BUY',
+            context,
+            codes,
+          );
         } catch {
           codes.push('PUBLIC_FILTER_MALFORMED');
         }
@@ -1043,6 +1097,7 @@ export function createBinanceUsdMBasisValidateOnlyAdapter(
         type,
         positionSide: 'BOTH' as const,
         reduceOnly,
+        closePosition: false as const,
         quantity,
         price,
         timeInForce,
@@ -1067,6 +1122,7 @@ export function createBinanceUsdMBasisValidateOnlyAdapter(
         positionMode: 'ONE_WAY',
         positionSide: 'BOTH',
         reduceOnly,
+        closePosition: false,
         requestFields,
         localValidation: Object.freeze({
           publicFilterSubsetPassed: true,
@@ -1080,6 +1136,8 @@ export function createBinanceUsdMBasisValidateOnlyAdapter(
           positionModeAuthority: positionModeEvidence.authority,
           positionModeScope: positionModeEvidence.scope,
           positionModeSymbol: positionModeEvidence.symbol,
+          positionModeSourceId: positionModeEvidence.sourceId,
+          positionModeRevision: positionModeEvidence.revision,
           positionModeObservedAtMs:
             positionModeEvidence.observedAtMs,
           positionModeReceivedAtMs:

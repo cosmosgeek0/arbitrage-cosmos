@@ -735,6 +735,11 @@ export type BinanceSpotObservedOrderStatus =
   | 'NEW'
   | 'PARTIALLY_FILLED'
   | 'FILLED'
+  /**
+   * Binance's wire spelling is intentionally preserved here. The lifecycle's
+   * reconciliation projection is the sole mapping point to internal
+   * `CANCELLED`; adapters must not silently rewrite venue evidence.
+   */
   | 'CANCELED'
   | 'PENDING_CANCEL'
   | 'REJECTED'
@@ -773,6 +778,7 @@ export const BINANCE_SPOT_QUERY_REASON_CODES = [
   'QUERY_EVIDENCE_INVALID',
   'QUERY_EVIDENCE_STALE',
   'QUERY_EVIDENCE_CLOCK_SKEWED',
+  'QUERY_STATUS_FILL_INCOHERENT',
   'QUERY_AMBIGUOUS',
   'QUERY_NOT_FOUND_AFTER_MUTATION',
   'QUERY_NOT_FOUND_AFTER_UNCERTAIN_MUTATION',
@@ -848,10 +854,21 @@ function unknownQueryResolution(
   });
 }
 
+interface FoundEvidenceNormalization {
+  readonly observation:
+    | Readonly<BinanceSpotNormalizedOrderObservation>
+    | null;
+  readonly failure:
+    | 'QUERY_EVIDENCE_INVALID'
+    | 'QUERY_IDENTITY_MISMATCH'
+    | 'QUERY_STATUS_FILL_INCOHERENT'
+    | null;
+}
+
 function normalizeFoundEvidence(
   intent: Readonly<BinanceSpotOrderWireIntent>,
   evidence: Record<string, unknown>,
-): Readonly<BinanceSpotNormalizedOrderObservation> | null {
+): Readonly<FoundEvidenceNormalization> {
   if (
     !hasExactKeys(evidence, [
       'outcome',
@@ -887,7 +904,10 @@ function normalizeFoundEvidence(
     typeof evidence.quantity !== 'string' ||
     typeof evidence.executedQuantity !== 'string'
   ) {
-    return null;
+    return Object.freeze({
+      observation: null,
+      failure: 'QUERY_EVIDENCE_INVALID',
+    });
   }
   let quantity: string;
   let executedQuantity: string;
@@ -906,7 +926,10 @@ function normalizeFoundEvidence(
             'evidence.price',
           );
   } catch {
-    return null;
+    return Object.freeze({
+      observation: null,
+      failure: 'QUERY_EVIDENCE_INVALID',
+    });
   }
   if (
     evidence.symbol !== intent.symbol ||
@@ -914,12 +937,39 @@ function normalizeFoundEvidence(
     evidence.side !== intent.side ||
     evidence.type !== intent.type ||
     quantity !== intent.quantity ||
-    price !== intent.price ||
-    compareSpotDecimals(executedQuantity, quantity) > 0
+    price !== intent.price
   ) {
-    return null;
+    return Object.freeze({
+      observation: null,
+      failure: 'QUERY_IDENTITY_MISMATCH',
+    });
   }
-  return Object.freeze({
+  const fillComparedToZero = compareSpotDecimals(executedQuantity, '0');
+  const fillComparedToQuantity = compareSpotDecimals(
+    executedQuantity,
+    quantity,
+  );
+  const status = evidence.status as BinanceSpotObservedOrderStatus;
+  const coherent =
+    (status === 'FILLED' && fillComparedToQuantity === 0) ||
+    ((status === 'NEW' || status === 'REJECTED') &&
+      fillComparedToZero === 0) ||
+    (status === 'PARTIALLY_FILLED' &&
+      fillComparedToZero > 0 &&
+      fillComparedToQuantity < 0) ||
+    ((status === 'PENDING_CANCEL' ||
+      status === 'CANCELED' ||
+      status === 'EXPIRED' ||
+      status === 'EXPIRED_IN_MATCH') &&
+      fillComparedToZero >= 0 &&
+      fillComparedToQuantity < 0);
+  if (!coherent) {
+    return Object.freeze({
+      observation: null,
+      failure: 'QUERY_STATUS_FILL_INCOHERENT',
+    });
+  }
+  const observation = Object.freeze({
     venue: 'BINANCE_SPOT',
     observedAt: Object.freeze({
       ...(evidence.observedAt as unknown as SourcedTimestamp),
@@ -932,8 +982,9 @@ function normalizeFoundEvidence(
     quantity,
     price,
     executedQuantity,
-    status: evidence.status as BinanceSpotObservedOrderStatus,
+    status,
   });
+  return Object.freeze({ observation, failure: null });
 }
 
 /**
@@ -1075,11 +1126,11 @@ export function normalizeBinanceSpotInjectedQueryEvidence(
       'QUERY_EVIDENCE_INVALID',
     );
   }
-  const observation = normalizeFoundEvidence(intent, evidence);
-  if (observation === null) {
+  const normalized = normalizeFoundEvidence(intent, evidence);
+  if (normalized.observation === null) {
     return unknownQueryResolution(
       intent.clientOrderId,
-      'QUERY_IDENTITY_MISMATCH',
+      normalized.failure ?? 'QUERY_EVIDENCE_INVALID',
     );
   }
   return freezeQueryResolution({
@@ -1091,6 +1142,6 @@ export function normalizeBinanceSpotInjectedQueryEvidence(
     resubmitAllowed: false,
     replacementClientOrderId: null,
     reasonCodes: Object.freeze([]),
-    observation,
+    observation: normalized.observation,
   });
 }

@@ -390,6 +390,82 @@ test('query evidence is normalized only when full exchange identity matches', ()
   assert.equal(mismatched.resubmitAllowed, false);
 });
 
+test('query status and cumulative fill must describe one coherent venue state', () => {
+  const prepared = prepare();
+  const resolve = (status, executedQuantity) =>
+    normalizeBinanceSpotInjectedQueryEvidence(prepared, {
+      evaluatedAtMs: T0,
+      mutationKnowledge: 'KNOWN_SUBMITTED',
+      evidence: {
+        outcome: 'FOUND',
+        observedAt: QUERY_OBSERVED_AT,
+        symbol: 'BTCUSDT',
+        clientOrderId: CLIENT_ORDER_ID,
+        venueOrderId: '918273645',
+        side: 'BUY',
+        type: 'LIMIT',
+        quantity: '0.01',
+        price: '50000',
+        executedQuantity,
+        status,
+      },
+    });
+
+  for (const [status, executedQuantity] of [
+    ['FILLED', '0'],
+    ['FILLED', '0.009'],
+    ['FILLED', '0.011'],
+    ['REJECTED', '0.001'],
+    ['NEW', '0.001'],
+    ['PARTIALLY_FILLED', '0'],
+    ['PARTIALLY_FILLED', '0.01'],
+    ['PARTIALLY_FILLED', '0.011'],
+    ['PENDING_CANCEL', '0.01'],
+    ['CANCELED', '0.01'],
+    ['EXPIRED', '0.01'],
+    ['EXPIRED_IN_MATCH', '0.01'],
+  ]) {
+    const resolution = resolve(status, executedQuantity);
+    assert.equal(resolution.state, 'UNKNOWN');
+    assert.equal(resolution.recoveryAction, 'QUERY_REQUIRED');
+    assert.equal(resolution.observation, null);
+    assert.deepEqual(
+      resolution.reasonCodes,
+      ['QUERY_STATUS_FILL_INCOHERENT'],
+      `${status}/${executedQuantity}`,
+    );
+    assert.equal(resolution.resubmitAllowed, false);
+    assert.equal(resolution.replacementClientOrderId, null);
+  }
+
+  for (const [status, executedQuantity] of [
+    ['FILLED', '0.01'],
+    ['REJECTED', '0'],
+    ['NEW', '0'],
+    ['PARTIALLY_FILLED', '0.001'],
+    ['PENDING_CANCEL', '0'],
+    ['PENDING_CANCEL', '0.001'],
+    ['CANCELED', '0'],
+    ['CANCELED', '0.001'],
+    ['EXPIRED', '0'],
+    ['EXPIRED', '0.001'],
+    ['EXPIRED_IN_MATCH', '0'],
+    ['EXPIRED_IN_MATCH', '0.001'],
+  ]) {
+    const resolution = resolve(status, executedQuantity);
+    assert.equal(resolution.state, 'OBSERVED', `${status}/${executedQuantity}`);
+    assert.equal(resolution.observation?.status, status);
+    assert.equal(
+      resolution.observation?.executedQuantity,
+      executedQuantity,
+    );
+  }
+
+  // Venue spelling is preserved; the lifecycle projection owns CANCELED ->
+  // reconciliation CANCELLED.
+  assert.equal(resolve('CANCELED', '0.001').observation?.status, 'CANCELED');
+});
+
 test('ambiguous and post-mutation not-found evidence stay UNKNOWN and query-first', () => {
   const prepared = prepare();
   for (const [evidence, mutationKnowledge, expectedReason] of [

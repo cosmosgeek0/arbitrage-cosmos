@@ -8,6 +8,7 @@ import type {
   BinanceUsdMExchangeInfo,
   BinanceUsdMExchangeSymbol,
   BinanceUsdMFundingRate,
+  BinanceUsdMFundingRateType,
   BinanceUsdMLotSizeFilter,
   BinanceUsdMMarkFunding,
   BinanceUsdMOrder,
@@ -32,6 +33,7 @@ const ORDER_TYPES = new Set([
   'LIMIT', 'MARKET', 'STOP', 'STOP_MARKET', 'TAKE_PROFIT', 'TAKE_PROFIT_MARKET', 'TRAILING_STOP_MARKET',
   'LIQUIDATION',
 ]);
+const FUNDING_RATE_TYPES = new Set<BinanceUsdMFundingRateType>(['Regular', 'Special']);
 
 function record(value: unknown, label: string): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
@@ -62,11 +64,38 @@ function decimal(value: unknown, label: string): string {
   }
 }
 
+/**
+ * Validate a venue decimal without changing its lexical representation.
+ * Public filter and funding strings are evidence: trailing zeroes and signed
+ * zero remain exactly as Binance supplied them.
+ */
+function exactDecimal(value: unknown, label: string): string {
+  if (typeof value !== 'string') throw new TypeError(`${label} must be a decimal string`);
+  try {
+    normalizeDecimalString(value);
+    return value;
+  } catch {
+    throw new TypeError(`${label} must be a decimal string`);
+  }
+}
+
 function integer(value: unknown, label: string, minimum = 0): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum) {
     throw new TypeError(`${label} must be a safe integer`);
   }
   return value;
+}
+
+function flexibleInteger(value: unknown, label: string, minimum = 0): number {
+  if (typeof value === 'number') return integer(value, label, minimum);
+  if (typeof value !== 'string' || !/^(?:0|[1-9]\d*)$/.test(value)) {
+    throw new TypeError(`${label} must be a safe integer or integer string`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < minimum) {
+    throw new TypeError(`${label} must be a safe integer or integer string`);
+  }
+  return parsed;
 }
 
 function utc(value: unknown, label: string): number {
@@ -91,9 +120,9 @@ function stringArray(value: unknown, label: string): readonly string[] {
 }
 
 function parsePriceFilter(value: Record<string, unknown>, label: string): BinanceUsdMPriceFilter {
-  const minPrice = decimal(value.minPrice, `${label}.minPrice`);
-  const maxPrice = decimal(value.maxPrice, `${label}.maxPrice`);
-  const tickSize = decimal(value.tickSize, `${label}.tickSize`);
+  const minPrice = exactDecimal(value.minPrice, `${label}.minPrice`);
+  const maxPrice = exactDecimal(value.maxPrice, `${label}.maxPrice`);
+  const tickSize = exactDecimal(value.tickSize, `${label}.tickSize`);
   if (
     compareDecimalStrings(minPrice, '0') < 0 ||
     compareDecimalStrings(maxPrice, '0') < 0 ||
@@ -104,9 +133,9 @@ function parsePriceFilter(value: Record<string, unknown>, label: string): Binanc
 }
 
 function parseLotFilter(value: Record<string, unknown>, label: string): BinanceUsdMLotSizeFilter {
-  const minQty = decimal(value.minQty, `${label}.minQty`);
-  const maxQty = decimal(value.maxQty, `${label}.maxQty`);
-  const stepSize = decimal(value.stepSize, `${label}.stepSize`);
+  const minQty = exactDecimal(value.minQty, `${label}.minQty`);
+  const maxQty = exactDecimal(value.maxQty, `${label}.maxQty`);
+  const stepSize = exactDecimal(value.stepSize, `${label}.stepSize`);
   if (
     compareDecimalStrings(minQty, '0') <= 0 ||
     compareDecimalStrings(maxQty, '0') <= 0 ||
@@ -117,14 +146,15 @@ function parseLotFilter(value: Record<string, unknown>, label: string): BinanceU
 }
 
 function parsePercentPriceFilter(value: Record<string, unknown>, label: string): BinanceUsdMPercentPriceFilter {
-  const multiplierUp = decimal(value.multiplierUp, `${label}.multiplierUp`);
-  const multiplierDown = decimal(value.multiplierDown, `${label}.multiplierDown`);
+  const multiplierUp = exactDecimal(value.multiplierUp, `${label}.multiplierUp`);
+  const multiplierDown = exactDecimal(value.multiplierDown, `${label}.multiplierDown`);
+  const multiplierDecimal = flexibleInteger(value.multiplierDecimal, `${label}.multiplierDecimal`);
   if (
     compareDecimalStrings(multiplierUp, '0') <= 0 ||
     compareDecimalStrings(multiplierDown, '0') <= 0 ||
     compareDecimalStrings(multiplierDown, multiplierUp) > 0
   ) throw new TypeError(`${label} has a non-positive or incoherent domain`);
-  return Object.freeze({ multiplierUp, multiplierDown });
+  return Object.freeze({ multiplierUp, multiplierDown, multiplierDecimal });
 }
 
 function parseSymbol(
@@ -138,25 +168,33 @@ function parseSymbol(
   let marketLotSize: BinanceUsdMLotSizeFilter | null = null;
   let minNotional: string | null = null;
   let percentPrice: BinanceUsdMPercentPriceFilter | null = null;
+  let maxNumOrders: number | null = null;
+  const unsupportedFilterTypes: string[] = [];
+  const seenFilterTypes = new Set<string>();
   for (const [filterIndex, rawFilter] of rows(row.filters, `symbols[${index}].filters`).entries()) {
     const filter = record(rawFilter, `symbols[${index}].filters[${filterIndex}]`);
     const type = text(filter.filterType, `symbols[${index}].filters[${filterIndex}].filterType`);
+    if (seenFilterTypes.has(type)) throw new TypeError(`duplicate ${type}`);
+    seenFilterTypes.add(type);
     if (type === 'PRICE_FILTER') {
-      if (price !== null) throw new TypeError('duplicate PRICE_FILTER');
       price = parsePriceFilter(filter, `symbols[${index}].filters[${filterIndex}]`);
     } else if (type === 'LOT_SIZE') {
-      if (lotSize !== null) throw new TypeError('duplicate LOT_SIZE');
       lotSize = parseLotFilter(filter, `symbols[${index}].filters[${filterIndex}]`);
     } else if (type === 'MARKET_LOT_SIZE') {
-      if (marketLotSize !== null) throw new TypeError('duplicate MARKET_LOT_SIZE');
       marketLotSize = parseLotFilter(filter, `symbols[${index}].filters[${filterIndex}]`);
     } else if (type === 'MIN_NOTIONAL') {
-      if (minNotional !== null) throw new TypeError('duplicate MIN_NOTIONAL');
-      minNotional = decimal(filter.notional, `symbols[${index}].filters[${filterIndex}].notional`);
+      minNotional = exactDecimal(filter.notional, `symbols[${index}].filters[${filterIndex}].notional`);
       if (compareDecimalStrings(minNotional, '0') < 0) throw new TypeError('MIN_NOTIONAL cannot be negative');
     } else if (type === 'PERCENT_PRICE') {
-      if (percentPrice !== null) throw new TypeError('duplicate PERCENT_PRICE');
       percentPrice = parsePercentPriceFilter(filter, `symbols[${index}].filters[${filterIndex}]`);
+    } else if (type === 'MAX_NUM_ORDERS') {
+      maxNumOrders = integer(
+        filter.limit,
+        `symbols[${index}].filters[${filterIndex}].limit`,
+        1,
+      );
+    } else {
+      unsupportedFilterTypes.push(type);
     }
   }
   return Object.freeze({
@@ -167,7 +205,15 @@ function parseSymbol(
     marginAsset: text(row.marginAsset, `symbols[${index}].marginAsset`),
     orderTypes: stringArray(row.orderTypes, `symbols[${index}].orderTypes`),
     timeInForce: stringArray(row.timeInForce, `symbols[${index}].timeInForce`),
-    filters: Object.freeze({ price, lotSize, marketLotSize, minNotional, percentPrice }),
+    filters: Object.freeze({
+      price,
+      lotSize,
+      marketLotSize,
+      minNotional,
+      percentPrice,
+      maxNumOrders,
+      unsupportedFilterTypes: Object.freeze(unsupportedFilterTypes),
+    }),
     observedAt,
   });
 }
@@ -207,11 +253,11 @@ export function parseMarkFunding(body: unknown, expectedSymbol: string): Binance
   if (symbol !== expectedSymbol) throw new TypeError('mark/funding symbol does not match request');
   return Object.freeze({
     symbol,
-    markPrice: decimal(source.markPrice, 'markPrice'),
-    indexPrice: decimal(source.indexPrice, 'indexPrice'),
-    estimatedSettlePrice: decimal(source.estimatedSettlePrice, 'estimatedSettlePrice'),
-    lastFundingRate: decimal(source.lastFundingRate, 'lastFundingRate'),
-    interestRate: decimal(source.interestRate, 'interestRate'),
+    markPrice: exactDecimal(source.markPrice, 'markPrice'),
+    indexPrice: exactDecimal(source.indexPrice, 'indexPrice'),
+    estimatedSettlePrice: exactDecimal(source.estimatedSettlePrice, 'estimatedSettlePrice'),
+    lastFundingRate: exactDecimal(source.lastFundingRate, 'lastFundingRate'),
+    interestRate: exactDecimal(source.interestRate, 'interestRate'),
     nextFundingTimeMs: utc(source.nextFundingTime, 'nextFundingTime'),
     sourceTimeMs: utc(source.time, 'time'),
   });
@@ -224,9 +270,16 @@ export function parseFundingRates(body: unknown, expectedSymbol: string | null):
     if (expectedSymbol !== null && symbol !== expectedSymbol) throw new TypeError('funding-rate symbol does not match request');
     return Object.freeze({
       symbol,
-      fundingRate: decimal(row.fundingRate, `fundingRates[${index}].fundingRate`),
+      fundingRate: exactDecimal(row.fundingRate, `fundingRates[${index}].fundingRate`),
       fundingTimeMs: utc(row.fundingTime, `fundingRates[${index}].fundingTime`),
-      markPrice: row.markPrice === undefined ? null : decimal(row.markPrice, `fundingRates[${index}].markPrice`),
+      markPrice: row.markPrice === undefined
+        ? null
+        : exactDecimal(row.markPrice, `fundingRates[${index}].markPrice`),
+      rateType: enumeration(
+        row.rateType,
+        `fundingRates[${index}].rateType`,
+        FUNDING_RATE_TYPES,
+      ) as BinanceUsdMFundingRateType,
     });
   });
   return Object.freeze(parsed);

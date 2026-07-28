@@ -172,6 +172,7 @@ export interface BinanceUsdMLotSizeFilter {
 export interface BinanceUsdMPercentPriceFilter {
   readonly multiplierUp: string;
   readonly multiplierDown: string;
+  readonly multiplierDecimal: number;
 }
 
 export interface BinanceUsdMSymbolFilters {
@@ -180,6 +181,13 @@ export interface BinanceUsdMSymbolFilters {
   readonly marketLotSize: BinanceUsdMLotSizeFilter | null;
   readonly minNotional: string | null;
   readonly percentPrice: BinanceUsdMPercentPriceFilter | null;
+  /** Public venue limit; evaluation also requires current private open-order truth. */
+  readonly maxNumOrders: number | null;
+  /**
+   * Venue filter families this boundary cannot enforce from public facts.
+   * Any entry makes local order validation unavailable rather than permissive.
+   */
+  readonly unsupportedFilterTypes: readonly string[];
 }
 
 export interface BinanceUsdMRateLimitRule {
@@ -218,11 +226,14 @@ export interface BinanceUsdMMarkFunding {
   readonly sourceTimeMs: number;
 }
 
+export type BinanceUsdMFundingRateType = 'Regular' | 'Special';
+
 export interface BinanceUsdMFundingRate {
   readonly symbol: string;
   readonly fundingRate: string;
   readonly fundingTimeMs: number;
   readonly markPrice: string | null;
+  readonly rateType: BinanceUsdMFundingRateType;
 }
 
 export interface BinanceUsdMAccountAsset {

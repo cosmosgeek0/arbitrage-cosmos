@@ -725,7 +725,7 @@ html body .hdr .topbar-suite-v4 > button[data-topbar-key="basisu"] .rail-icon-co
   text-align: right !important;
 }
 
-.smenu-bar.topbar-suite-v4 .ops-basis-conversion-label {
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-basis-sheet .ops-basis-conversion-label {
   flex: 0 0 30px !important;
   height: 30px !important;
   min-height: 30px !important;

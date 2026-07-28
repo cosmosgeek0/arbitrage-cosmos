@@ -598,6 +598,7 @@ export const BINANCE_USDM_PUBLIC_GROUNDWORK_BLOCKING_CODES = Object.freeze([
   'FUNDING_HISTORY_INVALID',
   'FUNDING_HISTORY_SYMBOL_MISMATCH',
   'FUNDING_HISTORY_STALE',
+  'FUNDING_HISTORY_POST_CAPTURE',
   'FUNDING_HISTORY_DUPLICATE',
   'FUNDING_HISTORY_CONFLICT',
 ] as const);
@@ -1072,6 +1073,13 @@ function copyFundingHistory(
     }
     if (row.symbol !== symbol) {
       blockingCodes.push('FUNDING_HISTORY_SYMBOL_MISMATCH');
+    }
+    if (
+      row.fundingTimeMs >
+      (evidence.observedAt as SourcedTimestamp).receivedAtMs
+    ) {
+      blockingCodes.push('FUNDING_HISTORY_POST_CAPTURE');
+      return null;
     }
     const scopeIdentity =
       `${row.symbol}\u0000${row.fundingTimeMs}\u0000${row.rateType}`;

@@ -321,6 +321,19 @@ test('filter, forecast, and history provenance fail closed when stale, future, p
       }),
       'FUNDING_HISTORY_STALE',
     ],
+    [
+      'post-capture funding row',
+      groundworkInput({
+        fundingHistory: fundingHistory({
+          observedAt: observedAt('binance.usdm.funding-history.fixture', {
+            sourceTimeMs: null,
+            receivedAtMs: T0 - 2,
+          }),
+          rows: [fundingRow({ fundingTimeMs: T0 - 1 })],
+        }),
+      }),
+      'FUNDING_HISTORY_POST_CAPTURE',
+    ],
   ];
 
   for (const [name, input, code] of cases) {

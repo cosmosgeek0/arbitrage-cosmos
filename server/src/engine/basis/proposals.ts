@@ -4,6 +4,12 @@
  * here places orders), machine-checkable invalidation specs, and an
  * explainable priority. The store owns the open→updated→expired lifecycle and
  * ledgers every transition.
+ *
+ * It also owns explicit acceptance: the frozen record of ONE exact proposal
+ * revision an acceptor named, plus the single-shot claim that hands it to the
+ * handoff lifecycle. Acceptance emits no engine event — the frozen v0
+ * EngineEventKind union has no acceptance kind, and reusing a proposal kind
+ * would ledger a lie. The acceptance record is the frozen fact this store owns.
  */
 import type { Clock } from '../v0/types.js';
 import { EventEmitter } from './events.js';
@@ -19,9 +25,78 @@ import type {
 
 let proposalSeq = 0;
 
-export class BasisProposalStore {
+/** Bounded opaque acceptor label. Never a credential, never an address. */
+const ACCEPTOR_MAX_LENGTH = 64;
+
+/**
+ * One explicit acceptance of one exact proposal revision, frozen at the moment
+ * it is recorded. Nothing downstream may re-derive, refresh, or widen these
+ * facts: the acceptor names the proposal, so this store never selects one, and
+ * `acceptedNotionalUsd` is a ceiling copied down from the proposal — never a
+ * new grant.
+ */
+export interface BasisProposalAcceptance {
+  readonly proposalId: string;
+  readonly correlationId: string;
+  readonly symbol: string;
+  readonly direction: BasisDirection;
+  readonly acceptedBy: string;
+  readonly acceptedTs: number;
+  /** The exact revision (`proposal.updatedTs`) the acceptor saw. */
+  readonly acceptedRevisionTs: number;
+  readonly acceptedNetEdgePct: number;
+  /**
+   * USD notional the acceptance was recorded against. It is an acceptance FACT,
+   * never a fill bound: base quantities live in a different unit and are never
+   * compared with it.
+   */
+  readonly acceptedNotionalUsd: number;
+}
+
+export interface BasisAcceptanceRequest {
+  proposalId: string;
+  acceptedBy: string;
+  acceptedRevisionTs: number;
+  acceptedNetEdgePct: number;
+  acceptedNotionalUsd: number;
+}
+
+export type BasisAcceptanceRefusal =
+  | 'UNKNOWN_PROPOSAL'
+  | 'PROPOSAL_NOT_OPEN'
+  | 'PROPOSAL_EXPIRED'
+  | 'ACCEPTOR_INVALID'
+  | 'REVISION_MISMATCH'
+  | 'EDGE_MISMATCH'
+  | 'NOTIONAL_OUT_OF_BOUNDS'
+  | 'ACCEPTANCE_CAPACITY';
+
+export type BasisAcceptanceResult =
+  | { ok: true; acceptance: BasisProposalAcceptance }
+  | { ok: false; refusal: BasisAcceptanceRefusal };
+
+export type BasisAcceptanceConsumeRefusal =
+  | 'NOT_ACCEPTED'
+  | 'ALREADY_CONSUMED'
+  | 'BOUND_TIME_REGRESSION';
+
+export type BasisAcceptanceConsumeResult =
+  | { ok: true; acceptance: BasisProposalAcceptance }
+  | { ok: false; refusal: BasisAcceptanceConsumeRefusal };
+
+/**
+ * The ONLY way an acceptance leaves this store: a single-shot claim addressed
+ * by proposal id. A second claim for the same proposal is always refused.
+ */
+export interface BasisAcceptanceConsumerPort {
+  consumeAcceptance(proposalId: string, boundTs: number): BasisAcceptanceConsumeResult;
+}
+
+export class BasisProposalStore implements BasisAcceptanceConsumerPort {
   private byId = new Map<string, BasisProposal>();
   private openBySymbol = new Map<string, string>();
+  private acceptedById = new Map<string, BasisProposalAcceptance>();
+  private consumedAcceptanceIds = new Set<string>();
 
   constructor(
     private clock: Clock,
@@ -203,9 +278,101 @@ export class BasisProposalStore {
     return p;
   }
 
+  /** The frozen acceptance for a proposal, if one was ever recorded. */
+  acceptanceFor(proposalId: string): BasisProposalAcceptance | null {
+    return this.acceptedById.get(proposalId) ?? null;
+  }
+
+  acceptanceConsumed(proposalId: string): boolean {
+    return this.consumedAcceptanceIds.has(proposalId);
+  }
+
+  /**
+   * Record one explicit acceptance of one exact proposal revision. The caller
+   * names the proposal and restates what it saw; every restated fact must match
+   * the live proposal or the acceptance is refused. This mints no authority:
+   * the notional may only be equal to or below the proposal's own suggestion,
+   * and an accepted proposal leaves the open set instead of gaining powers.
+   */
+  accept(request: BasisAcceptanceRequest): BasisAcceptanceResult {
+    const p = this.byId.get(request.proposalId);
+    if (!p) return { ok: false, refusal: 'UNKNOWN_PROPOSAL' };
+    if (p.status !== 'open' && p.status !== 'updated') return { ok: false, refusal: 'PROPOSAL_NOT_OPEN' };
+    const now = this.clock.now();
+    if (
+      !Number.isSafeInteger(now) ||
+      now < 0 ||
+      !Number.isSafeInteger(p.updatedTs) ||
+      p.updatedTs < 0 ||
+      now < p.updatedTs
+    ) {
+      throw new RangeError('proposal acceptance clock must be a non-regressing safe-integer timestamp');
+    }
+    // a proposal past its own TTL is dead whether or not sweep() has run yet
+    if (now >= p.invalidationSpec.expiresTs) return { ok: false, refusal: 'PROPOSAL_EXPIRED' };
+    const acceptedBy = typeof request.acceptedBy === 'string' ? request.acceptedBy.trim() : '';
+    if (acceptedBy.length === 0 || acceptedBy.length > ACCEPTOR_MAX_LENGTH) {
+      return { ok: false, refusal: 'ACCEPTOR_INVALID' };
+    }
+    // accept exactly what was seen: a refresh since the acceptor looked is a
+    // different opportunity, never a silently upgraded one
+    if (request.acceptedRevisionTs !== p.updatedTs) return { ok: false, refusal: 'REVISION_MISMATCH' };
+    if (p.netEdgePct === null || request.acceptedNetEdgePct !== p.netEdgePct) {
+      return { ok: false, refusal: 'EDGE_MISMATCH' };
+    }
+    const notional = request.acceptedNotionalUsd;
+    if (
+      p.suggestedNotionalUsd === null ||
+      !Number.isFinite(notional) ||
+      notional <= 0 ||
+      notional > p.suggestedNotionalUsd
+    ) {
+      return { ok: false, refusal: 'NOTIONAL_OUT_OF_BOUNDS' };
+    }
+    if (this.unconsumedAcceptanceCount() >= this.cfg.maxUniverseSize) {
+      return { ok: false, refusal: 'ACCEPTANCE_CAPACITY' };
+    }
+
+    const acceptance: BasisProposalAcceptance = Object.freeze({
+      proposalId: p.id,
+      correlationId: p.correlationId,
+      symbol: p.symbol,
+      direction: p.direction,
+      acceptedBy,
+      acceptedTs: now,
+      acceptedRevisionTs: request.acceptedRevisionTs,
+      acceptedNetEdgePct: request.acceptedNetEdgePct,
+      acceptedNotionalUsd: notional,
+    });
+    p.status = 'approved_manual';
+    p.updatedTs = now;
+    p.reason = `${p.reason} | accepted`;
+    if (this.openBySymbol.get(p.symbol) === p.id) this.openBySymbol.delete(p.symbol);
+    this.acceptedById.set(p.id, acceptance);
+    return { ok: true, acceptance };
+  }
+
+  /**
+   * Single-shot claim of one already-accepted proposal (BasisAcceptanceConsumerPort).
+   * Exactly one caller can ever win; every later claim is refused, so a handoff
+   * can never be opened twice from the same acceptance.
+   */
+  consumeAcceptance(proposalId: string, boundTs: number): BasisAcceptanceConsumeResult {
+    const acceptance = this.acceptedById.get(proposalId);
+    if (!acceptance) return { ok: false, refusal: 'NOT_ACCEPTED' };
+    if (this.consumedAcceptanceIds.has(proposalId)) return { ok: false, refusal: 'ALREADY_CONSUMED' };
+    if (!Number.isSafeInteger(boundTs) || boundTs < acceptance.acceptedTs) {
+      return { ok: false, refusal: 'BOUND_TIME_REGRESSION' };
+    }
+    this.consumedAcceptanceIds.add(proposalId);
+    return { ok: true, acceptance };
+  }
+
   expire(id: string, why: string): void {
     const p = this.byId.get(id);
-    if (!p || p.status === 'expired' || p.status === 'rejected') return;
+    // 'approved_manual' is terminal here: expiry must never rewrite the facts
+    // an acceptance was frozen against.
+    if (!p || p.status === 'expired' || p.status === 'rejected' || p.status === 'approved_manual') return;
     p.status = 'expired';
     p.updatedTs = this.clock.now();
     p.reason = `${p.reason} | expired: ${why}`;
@@ -314,15 +481,28 @@ export class BasisProposalStore {
     return expired;
   }
 
+  private unconsumedAcceptanceCount(): number {
+    let count = 0;
+    for (const id of this.acceptedById.keys()) {
+      if (!this.consumedAcceptanceIds.has(id)) count += 1;
+    }
+    return count;
+  }
+
   private pruneHistory(): void {
     if (this.byId.size <= this.cfg.proposalHistoryKeep) return;
     const closed = [...this.byId.values()]
       .filter((proposal) => proposal.status !== 'open' && proposal.status !== 'updated')
+      // an accepted-but-unclaimed proposal is a live claim, not history
+      .filter((proposal) => !this.acceptedById.has(proposal.id) || this.consumedAcceptanceIds.has(proposal.id))
       .sort((left, right) => left.updatedTs - right.updatedTs);
     let remove = this.byId.size - this.cfg.proposalHistoryKeep;
     for (const proposal of closed) {
       if (remove <= 0) break;
       this.byId.delete(proposal.id);
+      // acceptance bookkeeping never outlives the proposal it describes
+      this.acceptedById.delete(proposal.id);
+      this.consumedAcceptanceIds.delete(proposal.id);
       remove -= 1;
     }
   }

@@ -2771,6 +2771,42 @@
         "line": 35
       },
       {
+        "concept": "ledger-authority",
+        "declaration": "interface PublicBasisOpportunityObservationLedgerEventInput",
+        "file": "server/src/engine/basis/publicOpportunityObservationStore.ts",
+        "line": 26
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface PublicBasisOpportunityObservationLedgerEvent",
+        "file": "server/src/engine/basis/publicOpportunityObservationStore.ts",
+        "line": 40
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface PublicBasisOpportunityObservationLedgerPort",
+        "file": "server/src/engine/basis/publicOpportunityObservationStore.ts",
+        "line": 52
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface Rolling24hEdgeLedgerEvent",
+        "file": "server/src/engine/basis/rolling24hEdgeStatistic.ts",
+        "line": 49
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface Rolling24hEdgeLedgerPort",
+        "file": "server/src/engine/basis/rolling24hEdgeStatistic.ts",
+        "line": 58
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function validLedgerIdentity",
+        "file": "server/src/engine/basis/rolling24hEdgeStatistic.ts",
+        "line": 354
+      },
+      {
         "concept": "semantic-source",
         "declaration": "class BasisScanner",
         "file": "server/src/engine/basis/scanner.ts",
@@ -8500,6 +8536,16 @@
         "file": "server/src/config.ts",
         "line": 2,
         "target": "./ledger.js"
+      },
+      {
+        "file": "server/src/engine/basis/publicOpportunityObservation.ts",
+        "line": 14,
+        "target": "../../capitalFoundation/contracts/decimal.js"
+      },
+      {
+        "file": "server/src/engine/basis/rolling24hEdgeStatistic.ts",
+        "line": 5,
+        "target": "../../capitalFoundation/contracts/decimal.js"
       },
       {
         "file": "server/src/engine/decay/coordinator.ts",
@@ -15452,5 +15498,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "6202d38349328872f4cfa2edd0f6ae33e084149d9701689e7653deaaa8111982"
+  "evidenceSha256": "676816c367e7ec961aebde2b4bd8ab40311a08988e6089ca580f83f691127de9"
 }

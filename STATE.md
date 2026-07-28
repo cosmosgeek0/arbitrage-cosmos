@@ -1,5 +1,13 @@
 # STATE.md — current product state
 
+## AI Operations passive staging truth (2026-07-28)
+
+- The containing candidate adds one source-bound, read-only AI Operations status projection and a props-only web feature/page. The projection consumes only the checked-in unfinished-interface and reliability-target contracts, and pins `SHADOW_SPECULATIVE` as ineligible provenance; it has no caller input, clock, provider, process, persistence, money, action, or mutation seam.
+- Current source truth is `NOT_CONFIGURED` and `NOT_MOUNTED`. Overall activity is `UNKNOWN`; Active, Paused, Completed, and Failed counts are all `null`, not zero. Existing `SHADOW_SPECULATIVE` runtime and AI Operations incident shapes are provenance only and are explicitly ineligible to populate operational status.
+- Reliability targets remain `UNSIGNED_INACTIVE` with authority false. Exact unfinished-interface rows are exposed as blocker evidence, including the separately named AI Operations incident-owner dependency; they do not override or reinterpret the Product connection-incident owner.
+- The page is intentionally unmounted: no endpoint, route, `App`, `Header`, store, polling, provider, subscription, desktop-task, self-heal, or control path was added. A separate local preview exists only for rendered desktop and 398×486 browser inspection and remains visibly `SOURCE-BOUND · PASSIVE`.
+- Final focused proof on the containing source is green: server build and passive projection 2/2; web typecheck, passive page 5/5, and web build. Local rendered inspection at 2940×1654, 1920×1080, 1728×1117, 1440×900, and 398×486 found an uncapped full-width frame, adaptive three/two-column blocker evidence, nine exact blocker rows without clipped truth, zero horizontal overflow, zero browser warnings/errors, zero controls/live regions, scrollable mobile evidence, and computed title typography 22/540/30. No host, provider, private API, money, push, landing, or deployment action was performed.
+
 ## Outcome 2 private-read source overlay (2026-07-27)
 
 - The containing candidate wires existing server-side Binance credentials into one exact-path, GET-only private-read facade. Every refresh reads signed GET `/sapi/v1/account/apiRestrictions` first and performs no other private request unless that current answer is exactly `VERIFIED_READ_ONLY`; unsafe or unproven posture remains visible while every private row is withheld. Legacy Account, Order, Loan, and every mutation-capable service remain credentialless, and the existing money routes continue to reject locally.

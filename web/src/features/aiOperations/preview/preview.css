@@ -1,0 +1,15 @@
+html,
+body,
+#root {
+  min-height: 100%;
+  height: auto;
+}
+
+body {
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.aiop-preview-main {
+  min-height: 100vh;
+}

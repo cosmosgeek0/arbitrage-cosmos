@@ -685,6 +685,70 @@ test('green runtime posture requires bounded source time and complete live cover
       lastBookTs: NOW + 1,
     },
   }, NOW), false);
+
+  const actionableBasisRow = (dataQuality) => {
+    const row = basisRow();
+    row.state = 'PROPOSED';
+    row.decisionKind = 'proposal';
+    row.proposal = basisProposal();
+    row.dataQuality = dataQuality;
+    return row;
+  };
+  const boundaryRow = actionableBasisRow({
+    score: 1,
+    spotStalenessMs: 5_000,
+    perpStalenessMs: 5_000,
+    legSkewMs: 2_500,
+    markDivergenceBps: 1,
+    suspectReasons: [],
+  });
+  const boundary = decodeBasisRuntimeSnapshot(basisSnapshot([boundaryRow]));
+  assert.ok(boundary);
+  assert.equal(basisRuntimeCurrent(boundary, NOW), true);
+
+  const honestStaleRow = actionableBasisRow({
+    score: 0.1,
+    spotStalenessMs: 5_001,
+    perpStalenessMs: 100,
+    legSkewMs: 4_901,
+    markDivergenceBps: 1,
+    suspectReasons: ['leg_timestamp_skew'],
+  });
+  const honestStale = decodeBasisRuntimeSnapshot(basisSnapshot([honestStaleRow]));
+  assert.ok(honestStale);
+  assert.equal(basisRuntimeCurrent(honestStale, NOW), true);
+
+  for (const dataQuality of [
+    {
+      score: 1,
+      spotStalenessMs: null,
+      perpStalenessMs: 100,
+      legSkewMs: null,
+      markDivergenceBps: 1,
+      suspectReasons: [],
+    },
+    {
+      score: 1,
+      spotStalenessMs: 5_001,
+      perpStalenessMs: 100,
+      legSkewMs: 4_901,
+      markDivergenceBps: 1,
+      suspectReasons: [],
+    },
+    {
+      score: 1,
+      spotStalenessMs: 100,
+      perpStalenessMs: 100,
+      legSkewMs: 2_501,
+      markDivergenceBps: 1,
+      suspectReasons: [],
+    },
+  ]) {
+    const hostileRow = actionableBasisRow(dataQuality);
+    const hostileSnapshot = basisSnapshot([hostileRow]);
+    assert.equal(decodeBasisRuntimeSnapshot(hostileSnapshot), null);
+    assert.equal(basisRuntimeCurrent(hostileSnapshot, NOW), false);
+  }
 });
 
 test('scanner rows expose one real disclosure control and stale watch mutation is disabled', async () => {

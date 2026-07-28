@@ -102,6 +102,8 @@ export interface DashboardPnlData {
 }
 
 export const MONEY_SURFACE_SOURCE_FRESH_MS = 10_000;
+const BASIS_MAX_BOOK_STALENESS_MS = 5_000;
+const BASIS_MAX_LEG_SKEW_MS = 2_500;
 const VOLUME_OBSERVED_FRESH_MS = 60_000;
 const VOLUME_MAX_FUTURE_SKEW_MS = 5_000;
 
@@ -225,6 +227,20 @@ function sourceFreshAt(timestamp: number | null, nowMs: number, maximumAgeMs = M
   if (timestamp === null || !timestampOrNull(timestamp) || !timestampOrNull(nowMs)) return false;
   const ageMs = nowMs - timestamp;
   return ageMs >= 0 && ageMs < maximumAgeMs;
+}
+
+function basisLegEvidenceCurrent(row: BasisRow): boolean {
+  const { spotStalenessMs, perpStalenessMs, legSkewMs } = row.dataQuality;
+  return spotStalenessMs !== null
+    && spotStalenessMs <= BASIS_MAX_BOOK_STALENESS_MS
+    && perpStalenessMs !== null
+    && perpStalenessMs <= BASIS_MAX_BOOK_STALENESS_MS
+    && legSkewMs !== null
+    && legSkewMs <= BASIS_MAX_LEG_SKEW_MS;
+}
+
+function basisLegEvidenceCoherent(row: BasisRow, minDataQuality: number): boolean {
+  return row.dataQuality.score < minDataQuality || basisLegEvidenceCurrent(row);
 }
 
 function calendarDay(value: unknown): value is string {
@@ -424,6 +440,7 @@ export function decodeBasisRuntimeSnapshot(value: unknown): BasisSnapshot | null
   const rows = snapshot.rows as unknown as BasisRow[];
   if (!uniqueSymbols(rows)
       || rows.some((row) => !timestampAtOrBefore(row.decisionTs, updatedAt))
+      || rows.some((row) => !basisLegEvidenceCoherent(row, thresholds.minDataQuality as number))
       || status.watching !== rows.filter((row) => row.state === 'WATCHING').length
       || status.focused !== rows.filter((row) => row.state === 'FOCUS').length
       || status.openProposals !== rows.filter((row) => row.state === 'PROPOSED').length
@@ -578,6 +595,7 @@ export function decodeDashboardPnlData(value: unknown): DashboardPnlData | null 
 
 export function basisRuntimeCurrent(snapshot: BasisSnapshot, nowMs = Date.now()): boolean {
   return snapshot.rows.every((row) => (row.state === 'PROPOSED') === hasAttachedOpenProposal(row))
+    && snapshot.rows.every((row) => basisLegEvidenceCoherent(row, snapshot.thresholds.minDataQuality))
     && snapshot.status.running
     && snapshot.status.bookState === 'fresh'
     && snapshot.status.markState === 'fresh'

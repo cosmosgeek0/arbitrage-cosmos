@@ -12,11 +12,18 @@ import type {
   ApplicationSummaryReadPort,
 } from '../application/types.js';
 import type {
+  CanonicalReadModelView,
+} from '../../foundation/readModel/index.js';
+import type {
   CoreRuntimePorts,
   UtcClock,
 } from '../composition/types.js';
 import type { QAdvisoryObservationBinding } from '../adapters/qAdvisory.js';
-import type { SystemSourceRegistrySnapshot } from '../contracts/types.js';
+import type {
+  DialectLoss,
+  OpaqueIdentityAlias,
+  SystemSourceRegistrySnapshot,
+} from '../contracts/types.js';
 import type { VolumeEvidenceRoutingSnapshot } from '../../intelligenceRuntime/routing/index.js';
 import type {
   VolumeEvidenceSymbolRoutingSnapshot,
@@ -38,6 +45,15 @@ import type {
   ObservedOrderFocusApplyResult,
   ObservedOrderFocusSnapshot,
 } from '../../engine/volume/observedOrderFocus.js';
+
+type ProductionDeepReadonly<T> =
+  T extends (...args: never[]) => unknown
+    ? T
+    : T extends readonly unknown[]
+      ? { readonly [TKey in keyof T]: ProductionDeepReadonly<T[TKey]> }
+      : T extends object
+        ? { readonly [TKey in keyof T]: ProductionDeepReadonly<T[TKey]> }
+        : T;
 
 export type ProductionFeedStatus = 'connecting' | 'open' | 'closed' | 'cooldown' | 'exhausted';
 
@@ -318,6 +334,112 @@ export interface ProductionCapitalSummaryReadPort {
   readCapitalSummary(): Readonly<ProductionCapitalSummaryCut> | null;
 }
 
+export interface ProductionOpportunityDecisionOwnerRecord {
+  readonly symbol: string;
+  readonly ts: number;
+  readonly kind: Decision['kind'];
+  readonly rejectCode: Decision['rejectCode'];
+  readonly reasonCode: 'OWNER_ADVISORY_RECORD';
+  readonly correlationId: string;
+  readonly direction: EngineProposal['direction'] | null;
+  readonly netEdgePct: number | null;
+  readonly confidence: number | null;
+  readonly borrowStatus: 'not_needed' | 'unknown' | null;
+}
+
+export interface ProductionOpportunityProposalOwnerRecord {
+  readonly id: string;
+  readonly correlationId: string;
+  readonly symbol: string;
+  readonly direction: EngineProposal['direction'];
+  readonly createdTs: number;
+  readonly updatedTs: number;
+  readonly status: EngineProposal['status'];
+  readonly reasonCode: 'OWNER_ADVISORY_RECORD';
+  readonly netEdgePct: number | null;
+  readonly confidence: number | null;
+  readonly borrowStatus: 'not_needed' | 'unknown';
+  readonly expiresAtMs: number | null;
+}
+
+/**
+ * Closed, ordinary-data strategy-owner cut. System Integration supplies
+ * acquisition metadata at the read boundary; the owner supplies only its
+ * exact ordered public-strategy records and source time. Arbitrary evidence,
+ * account/capital facts, risk attachments, and executable sizing are outside
+ * this contract.
+ */
+export interface ProductionOpportunitySourceOwnerCut {
+  readonly schemaVersion: 'production-opportunity-owner-cut.v1';
+  readonly sourceTimeMs: number | null;
+  readonly decisions: readonly Readonly<ProductionOpportunityDecisionOwnerRecord>[];
+  readonly proposals: readonly Readonly<ProductionOpportunityProposalOwnerRecord>[];
+}
+
+export interface ProductionOpportunitySourceOwner {
+  /** Must be a separately audited passive read over an immutable owner cut. */
+  readonly readOpportunitySourceCut: (
+    this: void,
+  ) => Readonly<ProductionOpportunitySourceOwnerCut> | null;
+}
+
+export interface ProductionOpportunityOwners {
+  readonly basis: Readonly<ProductionOpportunitySourceOwner> | null;
+  readonly volume: Readonly<ProductionOpportunitySourceOwner> | null;
+}
+
+interface ProductionOpportunitiesReadAuthority {
+  /** The read model may advise; it can never reserve capital or execute. */
+  readonly maximumActionAuthority: 'ADVISORY';
+  readonly capitalReservationAuthority: 'NONE';
+  readonly executionAuthority: 'NONE';
+}
+
+export type ProductionOpportunitiesReadResult = Readonly<
+  | (ProductionOpportunitiesReadAuthority & {
+      /**
+       * AVAILABLE requires two present, fresh, valid owner cuts. DEGRADED
+       * retains a trustworthy sibling/canonical view while naming every
+       * absent, stale, invalid, or rejected part.
+       */
+      readonly state: 'AVAILABLE' | 'DEGRADED';
+      readonly evaluatedAtMs: number;
+      readonly reasonCodes: readonly string[];
+      readonly view: ProductionDeepReadonly<CanonicalReadModelView>;
+      readonly identities: readonly ProductionDeepReadonly<OpaqueIdentityAlias>[];
+      readonly losses: readonly ProductionDeepReadonly<DialectLoss>[];
+      readonly ownerOrderedCanonicalIds: ProductionDeepReadonly<{
+        readonly basis: {
+          readonly decisions: readonly string[];
+          readonly proposals: readonly string[];
+        };
+        readonly volume: {
+          readonly decisions: readonly string[];
+          readonly proposals: readonly string[];
+        };
+      }>;
+    })
+  | (ProductionOpportunitiesReadAuthority & {
+      /** No trustworthy canonical view survived the guarded capture/build. */
+      readonly state: 'UNAVAILABLE';
+      /** Null only when no valid independent evaluation cut was admitted. */
+      readonly evaluatedAtMs: number | null;
+      readonly reasonCodes: readonly string[];
+      readonly view: null;
+      readonly identities: readonly [];
+      readonly losses: readonly ProductionDeepReadonly<DialectLoss>[];
+      readonly ownerOrderedCanonicalIds: null;
+    })
+>;
+
+/**
+ * Passive canonical Basis + Volume opportunity readback. Evaluation time is
+ * explicit; no clock or legacy strategy runtime is read by this port.
+ */
+export interface ProductionOpportunitiesReadPort {
+  readSnapshot(evaluatedAtMs: number): ProductionOpportunitiesReadResult;
+}
+
 export interface ProductionSystemIntegrationInput {
   readonly clock: UtcClock;
   readonly market: ProductionMarketEnginePort;
@@ -333,7 +455,9 @@ export interface ProductionSystemIntegrationInput {
   readonly volumeRiskEvidenceOwner?: ProductionVolumeRiskEvidenceOwner | null;
   /** Cached normalized Foundation owner; absent in today's real server assembly. */
   readonly observedOrderFocusEvidenceOwner?: ProductionObservedOrderFocusEvidenceOwner | null;
-  /** One freshness law for existing public market observations. */
+  /** Optional passive strategy-owner seam; omission remains explicitly unwired. */
+  readonly opportunityOwners?: Readonly<ProductionOpportunityOwners> | null;
+  /** One freshness law for public observations and passive owner cuts. */
   readonly sourceMaxAgeMs?: number;
   /**
    * Optional stricter per-record bound for the existing canonical evidence
@@ -350,6 +474,8 @@ export interface ProductionSystemIntegrationPorts {
   readonly components: ApplicationComponentReadPorts;
   /** Exact owner counts only; this adapter never computes strategy scores. */
   readonly summaries: ApplicationSummaryReadPort;
+  /** Canonical advisory-only Basis + Volume read model over existing owner cuts. */
+  readonly opportunities: Readonly<ProductionOpportunitiesReadPort>;
   /** Read-only truth from the one production router; no strategy or transport authority. */
   readonly intelligenceEvidence: Readonly<{
     readRoutingSnapshot(): Readonly<VolumeEvidenceRoutingSnapshot>;

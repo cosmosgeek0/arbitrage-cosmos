@@ -4,7 +4,6 @@ import test from 'node:test';
 
 import {
   TOKEN_EVIDENCE_CAPABILITIES,
-  parseSymbolAccountContext,
   parseTokenIntelligence,
   parseTokenNewsContext,
 } from '../../src/lib/tokenIntelligence.ts';
@@ -224,22 +223,7 @@ test('strict Token owner parser rejects wrong symbols, extras, incomplete capabi
   assert.equal(parseTokenIntelligence(null, 'BTCUSDT', NOW), null);
 });
 
-test('context parsers preserve unavailable states and reject false-zero contradictions', () => {
-  const account = parseSymbolAccountContext({
-    accountTruthState: 'AVAILABLE',
-    orderTruthState: 'AVAILABLE',
-    borrowTruthState: 'NOT_CONFIGURED',
-    openOrders: [],
-    balances: { base: 0, usdtFree: 0 },
-    fills: [], signals: [], allowlisted: true, blocklisted: false,
-  });
-  assert.deepEqual(account, {
-    accountTruthState: 'AVAILABLE', orderTruthState: 'AVAILABLE', borrowTruthState: 'NOT_CONFIGURED', openOrders: [], balances: { base: 0, usdtFree: 0 },
-  });
-  assert.equal(parseSymbolAccountContext({
-    accountTruthState: 'UNAVAILABLE', orderTruthState: 'UNAVAILABLE', borrowTruthState: 'NOT_CONFIGURED', openOrders: null, balances: { base: 0, usdtFree: 0 },
-  }), null);
-
+test('news context parser preserves explicit owner freshness and rejects contradictions', () => {
   const newsRaw = {
     source: 'primary+venue+protocol+issuer+tree+rss+lookonchain',
     fetchedAt: NOW,
@@ -264,17 +248,17 @@ test('context parsers preserve unavailable states and reject false-zero contradi
   }, NOW + 1_000), 'archive bootstrap may truthfully be delayed with unknown source age');
   assert.equal(parseTokenNewsContext({ ...newsRaw, items: [...newsRaw.items, { ...newsRaw.items[0] }] }, NOW + 1_000), null);
   assert.equal(parseTokenNewsContext(newsRaw, NOW + 5 * 60_000 + 1)?.freshness, 'STALE');
-  assert.equal(account?.borrowTruthState, 'NOT_CONFIGURED');
 });
 
-test('Token consumes canonical owner readbacks without browser-owned OI truth', async () => {
+test('Token consumes canonical public owners and centralized privateRead without duplicate account polling', async () => {
   const source = await readSource('pages/TokenDetail.tsx');
   for (const endpoint of [
     '/api/intelligence/token?symbol=',
-    '/api/symbol/context?symbol=',
     '/api/news-context?limit=220',
   ]) assert.match(source, new RegExp(endpoint.replaceAll('/', '\\/').replace('?', '\\?')));
   assert.doesNotMatch(source, /\/api\/loans/);
+  assert.doesNotMatch(source, /\/api\/symbol\/context|SymbolAccountContext|parseSymbolAccountContext|accountContext/);
+  assert.doesNotMatch(source, /createSettledPoll<[^>]*(?:Account|Balance|Order)/);
 
   assert.doesNotMatch(source, /\/api\/futures\/oi-hist/);
   assert.doesNotMatch(source, /openInterestSnapshot|setOpenInterestSnapshot|latest\.notional|previous\.notional/);
@@ -285,9 +269,32 @@ test('Token consumes canonical owner readbacks without browser-owned OI truth', 
   assert.match(source, /anyFreshEvidence/);
   for (const capabilityId of TOKEN_EVIDENCE_CAPABILITIES) assert.match(source, new RegExp(capabilityId));
   for (const truth of ['UNKNOWN', 'UNAVAILABLE', 'EVIDENCE_ONLY']) assert.match(source, new RegExp(truth));
-  assert.match(source, /borrowTruthState/);
+  assert.match(source, /projectPrivateReadGuard\(\{/);
+  assert.match(source, /snapshot:\s*privateRead/);
+  assert.match(source, /source:\s*privateReadSource/);
+  assert.match(source, /error:\s*privateReadError/);
+  assert.match(source, /symbolOpenOrderCount\(privateRead, symbol\)/);
+  assert.match(source, /baseBalance\.free/);
+  assert.match(source, /usdtBalance\?\.free/);
   assert.equal((source.match(/<ProductSurfaceAdapter surfaceId="token" \/>/g) ?? []).length, 1);
   assert.ok(source.indexOf('<TokenEvidenceWorkspace') > source.indexOf('<ProductSurfaceAdapter surfaceId="token" />'));
+});
+
+test('legacy symbol context keeps public and ledger context but owns no private balance or order state', async () => {
+  const source = await readServerSource('index.ts');
+  const start = source.indexOf("app.get('/api/symbol/context'");
+  const end = source.indexOf("\napp.post('/api/orders/cancel-all'", start);
+  assert.ok(start > 0 && end > start, 'symbol context route must remain mounted');
+  const route = source.slice(start, end);
+
+  assert.match(route, /schemaVersion:\s*'symbol\.public-context\.v1'/);
+  for (const field of ['fills', 'signals', 'allowlisted', 'blocklisted']) {
+    assert.match(route, new RegExp(`\\b${field}:`));
+  }
+  assert.doesNotMatch(
+    route,
+    /accountTruthState|orderTruthState|borrowTruthState|openOrders|balances|account\.equity|openOrdersCache/,
+  );
 });
 
 test('news readback repairs owner identifier collisions on GET, refresh, and stream paths', async () => {

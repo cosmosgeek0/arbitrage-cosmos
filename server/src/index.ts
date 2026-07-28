@@ -3201,36 +3201,20 @@ app.get('/api/intelligence/token', (req, res) => {
   }
 });
 
-// Everything the app knows about ONE symbol (for the token detail page).
+// Legacy exact-symbol context remains a non-account readback for public/ledger
+// evidence and local policy only. Private balances and orders are owned by the
+// centralized `state.privateRead` tuple and must never be duplicated here.
 app.get('/api/symbol/context', (req, res) => {
   const symbol = String(req.query.symbol ?? '');
   if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
     res.status(400).json({ error: 'bad symbol' });
     return;
   }
-  const base = symbol.replace(/USDT$/, '');
-  const accountTruthState = privateAccountTruthState();
-  const orderTruthState = privateOrderTruthState(accountTruthState);
-  const eq = accountTruthState === 'AVAILABLE' ? account.equity() : null;
-  const baseBal = eq?.entries.find((e) => e.asset === base);
   res.json({
-    orderTruthState,
-    // Private borrow truth has no mounted owner in this validate-only build.
-    // Publish that boundary with the existing exact-symbol account context so
-    // browser consumers never query a retired loan capability.
-    borrowTruthState: 'NOT_CONFIGURED',
-    openOrders: orderTruthState === 'AVAILABLE'
-      ? orders.openOrdersCache.filter((o) => o.symbol === symbol)
-      : null,
+    schemaVersion: 'symbol.public-context.v1',
+    symbol,
     fills: ledger.listFills(20, symbol),
     signals: ledger.listSignalsForSymbol(symbol, 10),
-    accountTruthState,
-    // Configured absence is an observed zero. Unconfigured account truth is
-    // null so callers cannot turn missing private data into a flat balance.
-    balances: eq === null ? null : {
-      base: baseBal ? baseBal.free + baseBal.locked : 0,
-      usdtFree: eq.availableUsdt,
-    },
     allowlisted: config.allowedSymbols.includes(symbol),
     blocklisted: config.blockedSymbols.includes(symbol),
   });

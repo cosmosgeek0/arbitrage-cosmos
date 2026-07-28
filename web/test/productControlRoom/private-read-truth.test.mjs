@@ -15,6 +15,7 @@ import {
   permissionViolations,
   privateReadFreshness,
   projectPrivateRead,
+  projectPrivateReadGuard,
   unavailablePrivateRead,
 } from '../../src/lib/privateRead.ts';
 
@@ -597,9 +598,37 @@ test('partial and not-configured contracts remain non-green and preserve explici
   }
   const decodedPartial = decodePrivateReadSnapshot(partial);
   assert.ok(decodedPartial);
-  assert.equal(projectPrivateRead(decodedPartial).tone, 'warn');
-  assert.equal(projectPrivateRead(decodedPartial).coverageLabel, 'Partial Symbol-Scoped History');
+  const nonzeroProjection = projectPrivateRead(decodedPartial);
+  const nonzeroGuard = projectPrivateReadGuard({
+    snapshot: decodedPartial,
+    source: 'STATE',
+    error: null,
+    now: decodedPartial.observedAt + 1,
+  });
+  assert.equal(nonzeroProjection.tone, 'warn');
+  assert.equal(nonzeroProjection.coverageLabel, 'Partial Symbol-Scoped History');
+  assert.equal(nonzeroProjection.counts.openOrders, 1, 'PARTIAL keeps an observed nonzero order count');
+  assert.equal(nonzeroProjection.spotAvailableUsdt, '12.50000000', 'PARTIAL keeps an observed nonzero balance');
+  assert.equal(nonzeroGuard.overallTone, 'warn', 'an observed nonzero does not upgrade PARTIAL');
+  assert.match(nonzeroGuard.statusLabel, /^PARTIAL/);
   assert.equal(decodedPartial.spot.coverage.symbols[0], 'BTCUSDT');
+
+  const partialZero = structuredClone(partial);
+  partialZero.spot.openOrders = [];
+  partialZero.spot.balances[0].free = '0.00000000';
+  const decodedPartialZero = decodePrivateReadSnapshot(partialZero);
+  assert.ok(decodedPartialZero);
+  const zeroProjection = projectPrivateRead(decodedPartialZero);
+  const zeroGuard = projectPrivateReadGuard({
+    snapshot: decodedPartialZero,
+    source: 'STATE',
+    error: null,
+    now: decodedPartialZero.observedAt + 1,
+  });
+  assert.equal(zeroProjection.counts.openOrders, 0, 'PARTIAL keeps an observed exact zero distinct from unknown');
+  assert.equal(zeroProjection.spotAvailableUsdt, '0.00000000', 'PARTIAL keeps an observed fixed-scale zero balance');
+  assert.equal(zeroGuard.overallTone, 'warn', 'an observed zero does not become a green absence claim');
+  assert.match(zeroGuard.statusLabel, /^PARTIAL/);
 
   const decodedNotConfigured = decodePrivateReadSnapshot(notConfiguredFixture());
   assert.ok(decodedNotConfigured);
@@ -647,6 +676,31 @@ test('API permission envelope is exact and last-4 is the only key fragment prese
     schemaVersion: 'binance.api-permissions.v1',
     permissionPosture: { ...posture, keyLast4: 'A1B2C3' },
   }), null);
+});
+
+test('Risk and Token reuse the centralized privateRead tuple without a legacy account poll', async () => {
+  const [risk, token] = await Promise.all([
+    read('pages/Risk.tsx'),
+    read('pages/TokenDetail.tsx'),
+  ]);
+
+  for (const source of [risk, token]) {
+    assert.match(source, /projectPrivateReadGuard\(\{/);
+    assert.match(source, /snapshot:\s*privateRead/);
+    assert.match(source, /source:\s*privateReadSource/);
+    assert.match(source, /error:\s*privateReadError/);
+  }
+  assert.match(risk, /const openOrdersCount = privatePresentation\.counts\.openOrders/);
+  assert.match(risk, /Observed zero is retained; a partial guard does not prove current absence/);
+  assert.match(risk, /OBSERVED.*privateRead\.reconciliation\.orders\.state.*privateReadGuard\.statusLabel/s);
+  assert.match(token, /symbolOpenOrderCount\(privateRead, symbol\)/);
+  assert.match(token, /privateRead\.reconciliation\.orders\.state/);
+  assert.match(token, /privateRead\.reconciliation\.balances\.state/);
+  assert.doesNotMatch(
+    token,
+    /\/api\/symbol\/context|SymbolAccountContext|parseSymbolAccountContext|accountContext|setAccountContext/,
+  );
+  assert.doesNotMatch(token, /createSettledPoll<[^>]*(?:Account|Balance|Order)/);
 });
 
 test('mounted private-read surfaces consume one projection and retain no money-action controls', async () => {

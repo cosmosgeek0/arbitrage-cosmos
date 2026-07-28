@@ -58,7 +58,9 @@ test('the bounded private-account cadence adds no browser transport, credential,
     read('pages/Account.tsx'),
     read('pages/Dashboard.tsx'),
     read('pages/Loans.tsx'),
+    read('pages/Risk.tsx'),
     read('pages/SystemHealth.tsx'),
+    read('pages/TokenDetail.tsx'),
   ]);
   const combined = surfaces.join('\n');
 
@@ -70,6 +72,7 @@ test('the bounded private-account cadence adds no browser transport, credential,
   assert.deepEqual(new Set(privateEndpoints), new Set(['/api/state', '/api/private-account']));
   assert.equal(privateEndpoints.filter((endpoint) => endpoint === '/api/private-account').length, 1);
   assert.doesNotMatch(combined, /fetchJson[^;]*\/api\/(?:state|private-account)/);
+  assert.doesNotMatch(combined, /\/api\/symbol\/context/, 'Token cannot retain a second account/order poll');
 
   // No permission or key mutation may enter through the private-read path.
   for (const token of ['apiRestrictions', 'apiSecret', 'secretKey', 'X-MBX-APIKEY', 'enableWithdrawals']) {

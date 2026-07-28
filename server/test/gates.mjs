@@ -223,9 +223,9 @@ const dataDirLeaseSource = readFileSync(
   'utf8',
 );
 check(
-  'Token current OI comes only from the canonical owner read model',
+  'Token current OI and private account facts come only from canonical owners',
   /\/api\/intelligence\/token\?symbol=/.test(tokenDetailSource) &&
-    /\/api\/symbol\/context\?symbol=/.test(tokenDetailSource) &&
+    !/\/api\/symbol\/context\?symbol=/.test(tokenDetailSource) &&
     !/\/api\/futures\/oi-hist/.test(tokenDetailSource) &&
     !/openInterestSnapshot|setOpenInterestSnapshot/.test(tokenDetailSource) &&
     !/latest\.notional|previous\.notional/.test(tokenDetailSource)
@@ -1137,14 +1137,22 @@ check(
 );
 
 const sctx = (await get('/api/symbol/context?symbol=BTCUSDT')).body;
-check('symbol context responds', Array.isArray(sctx?.fills) && Array.isArray(sctx?.signals));
 check(
-  'symbol context keeps unconfigured balances, private orders, and borrow truth explicit instead of fabricating zero',
-  sctx?.accountTruthState === 'NOT_CONFIGURED' &&
-    sctx?.orderTruthState === 'NOT_CONFIGURED' &&
-    sctx?.borrowTruthState === 'NOT_CONFIGURED' &&
-    sctx?.balances === null &&
-    sctx?.openOrders === null
+  'public symbol context responds',
+  sctx?.schemaVersion === 'symbol.public-context.v1' &&
+    sctx?.symbol === 'BTCUSDT' &&
+    Array.isArray(sctx?.fills) &&
+    Array.isArray(sctx?.signals) &&
+    typeof sctx?.allowlisted === 'boolean' &&
+    typeof sctx?.blocklisted === 'boolean'
+);
+check(
+  'public symbol context cannot duplicate centralized private balance or order truth',
+  !Object.hasOwn(sctx ?? {}, 'accountTruthState') &&
+    !Object.hasOwn(sctx ?? {}, 'orderTruthState') &&
+    !Object.hasOwn(sctx ?? {}, 'borrowTruthState') &&
+    !Object.hasOwn(sctx ?? {}, 'balances') &&
+    !Object.hasOwn(sctx ?? {}, 'openOrders')
 );
 
 const tokenIntelligenceResponse = await get('/api/intelligence/token?symbol=BTCUSDT');

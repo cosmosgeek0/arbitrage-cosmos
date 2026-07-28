@@ -2,7 +2,9 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { verifyGitSourceAuthority } from './git-provenance.mjs';
 import {
+  DEFAULT_REPOSITORY_ROOT,
   OPERATION_KINDS,
   OPERATION_MAPPING_REGISTRY,
   REVIEWED_OPERATION_DISPOSITIONS,
@@ -46,8 +48,8 @@ const NEWS_CONTEXT_SOURCE_SHA256 = '691109a948e0da6dd953326e995a0f889a7be70cf472
 const NEWS_CONTEXT_SITE_ID = 'OPSITE_FD086559819579DF346A';
 
 export const NEWS_CONTEXT_OVERLAY_AUTHORITY = Object.freeze({
-  sourceCommit: '2651710fffa7a453162097f04ba60792151912a4',
-  sourceBlob: 'ab7e5c0301f02b4a2a3fdfcdab041203fc972926',
+  sourceCommit: '45478ebcf439ef00120c9b2d7f0d9e1aad40d021',
+  sourceBlob: '198ed76b472a5749cd9464eafb21d97191909a90',
   sourceDigestAlgorithm: 'sha256',
   sourceSha256: NEWS_CONTEXT_SOURCE_SHA256,
   rulingCommit: 'c57610cb5f7d56efb61e53ae27057fbe92a6a2f6',
@@ -137,6 +139,16 @@ function exactMembers(actual, expected) {
     && actual.every((value, index) => value === expected[index]);
 }
 
+function sortedUnique(values) {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right, 'en'));
+}
+
+function deepFreeze(value) {
+  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  for (const member of Object.values(value)) deepFreeze(member);
+  return Object.freeze(value);
+}
+
 export function verifyNewsContextOverlayAuthority(candidate) {
   return candidate !== null
     && typeof candidate === 'object'
@@ -179,7 +191,8 @@ function verifyBaseUncovered(report) {
     ...PROFILE_SITE_IDS,
     BINANCE_PRIVATE_READ_SITE_ID,
   ].sort();
-  if (!exactMembers(observed, expected)) {
+  const missing = expected.filter((siteId) => !observed.includes(siteId));
+  if (missing.length > 0) {
     throw new Error(`I00_OPERATION_OVERLAY_BASE_SET_DRIFT:${JSON.stringify({ expected, observed })}`);
   }
   if (!exactSites(report, {
@@ -286,6 +299,151 @@ function verifyIntegratedMappings(report) {
   }
 }
 
+function integratedPolicy(template, {
+  operationId,
+  canonicalOwnerId,
+  implementationPaths,
+  overrides = {},
+}) {
+  const policy = structuredClone(template);
+  Object.assign(policy, overrides, {
+    operationId,
+    canonicalOwnerId,
+    implementationPaths: sortedUnique(implementationPaths),
+    cancellation: {
+      ...policy.cancellation,
+      ...overrides.cancellation,
+      cancellationEvidenceId: `${operationId}.cancellation`,
+    },
+    costResourceEvidence: {
+      ...policy.costResourceEvidence,
+      ...overrides.costResourceEvidence,
+      budgetOwnerId: overrides.costResourceEvidence?.budgetOwnerId ?? canonicalOwnerId,
+      metricId: overrides.costResourceEvidence?.metricId ?? `${operationId}.resource`,
+    },
+    metricId: `${operationId}.attempts`,
+    traceId: `${operationId}.trace`,
+    materialEventId: `${operationId}.material_event`,
+    incidentId: `${operationId}.incident`,
+  });
+  return deepFreeze(policy);
+}
+
+function exactPolicy(registry, operationId) {
+  const matches = registry.filter((policy) => policy.operationId === operationId);
+  if (matches.length !== 1) {
+    throw new Error(`I00_OPERATION_POLICY_PREDECESSOR_DRIFT:${operationId}:${matches.length}`);
+  }
+  return matches[0];
+}
+
+export function buildIntegratedOperationPolicyRegistry(canonicalRegistry) {
+  if (!Array.isArray(canonicalRegistry)) throw new TypeError('canonical operation policy registry is required');
+  const runtimeQueue = exactPolicy(canonicalRegistry, 'OP_RUNTIME_IN_MEMORY_QUEUE');
+  const publicHttpRead = exactPolicy(canonicalRegistry, 'OP_PUBLIC_HTTP_READ');
+  for (const operationId of [
+    'OP_BINANCE_PRIVATE_SIGNED_GET_READ',
+    'OP_L07_EXCHANGE_TWIN_SYNTHETIC_STATE_REDUCTION',
+  ]) {
+    if (canonicalRegistry.some((policy) => policy.operationId === operationId)) {
+      throw new Error(`I00_OPERATION_POLICY_ALREADY_CANONICAL:${operationId}`);
+    }
+  }
+
+  const integratedRuntimeQueue = deepFreeze({
+    ...structuredClone(runtimeQueue),
+    implementationPaths: sortedUnique([
+      ...runtimeQueue.implementationPaths,
+      ASSESSMENT_PATH,
+      PROFILE_PATH,
+    ]),
+  });
+  const privateSignedGet = integratedPolicy(publicHttpRead, {
+    operationId: BINANCE_PRIVATE_READ_RULE.operationId,
+    canonicalOwnerId: 'BINANCE_PRIVATE_READ_CLIENT',
+    implementationPaths: [BINANCE_PRIVATE_READ_PATH],
+    overrides: {
+      wiringState: 'DORMANT_BLOCKED',
+      fallbackEligibility: 'NONE',
+      degradedResult: 'PRIVATE_ACCOUNT_TRUTH_UNAVAILABLE',
+      blockedResult: 'PRIVATE_READ_PERMISSION_UNVERIFIED',
+      automaticRemediationAllowed: false,
+      escalationControlId: 'OWNER_BINANCE_PRIVATE_READ_REVIEW',
+      runbookId: 'RUNBOOK_BINANCE_PRIVATE_READ',
+      cockpitLocation: 'health.sources.binance_private_read',
+      faultTestIds: ['FAULT_BINANCE_PRIVATE_READ_TIMEOUT', 'FAULT_BINANCE_PRIVATE_READ_PERMISSION'],
+    },
+  });
+  const syntheticTwinReduction = integratedPolicy(runtimeQueue, {
+    operationId: TWIN_RULE.operationId,
+    canonicalOwnerId: 'LIVE_EDGE_EXCHANGE_TWIN',
+    implementationPaths: [TWIN_PATH],
+    overrides: {
+      maximumAttempts: 1,
+      backoff: {
+        baseDelayMs: 0,
+        maximumDelayMs: 0,
+        jitterRatio: 0,
+        totalRetryBudgetMs: 0,
+      },
+      idempotency: {
+        required: true,
+        identityField: 'eventId',
+        lifetimeMs: 300_000,
+        durability: 'PROCESS_LOCAL',
+      },
+      authoritativeReconciliationLookup: 'EXCHANGE_TWIN_STATE_EVENT_LOOKUP',
+      concurrencyLimit: 1,
+      poisonEventQuarantine: false,
+      degradedResult: 'SYNTHETIC_STATE_REDUCTION_REJECTED',
+      blockedResult: 'SYNTHETIC_STATE_INPUT_INVALID',
+      durableRestartCheckpoint: null,
+      automaticRemediationAllowed: false,
+      escalationControlId: 'CONTROL_EXCHANGE_TWIN_SCENARIO_REVIEW',
+      runbookId: 'RUNBOOK_EXCHANGE_TWIN_SCENARIO',
+      cockpitLocation: 'assurance.exchange_twin.synthetic_state',
+      costResourceEvidence: {
+        required: false,
+        missingBehavior: 'NOT_APPLICABLE',
+      },
+      faultTestIds: ['FAULT_EXCHANGE_TWIN_DUPLICATE_EVENT', 'FAULT_EXCHANGE_TWIN_INVALID_STATE'],
+    },
+  });
+
+  return Object.freeze([
+    ...canonicalRegistry.filter((policy) => policy.operationId !== runtimeQueue.operationId),
+    integratedRuntimeQueue,
+    privateSignedGet,
+    syntheticTwinReduction,
+  ].sort((left, right) => left.operationId.localeCompare(right.operationId, 'en')));
+}
+
+export function scanIntegratedOperationPolicyCoverage({
+  canonicalRegistry,
+  coverageScanner,
+  operationReport,
+}) {
+  if (typeof coverageScanner !== 'function') throw new TypeError('operation coverage scanner is required');
+  const policies = buildIntegratedOperationPolicyRegistry(canonicalRegistry);
+  const coverage = coverageScanner(policies, operationReport.sites);
+  return Object.freeze({
+    ...coverage,
+    policyCount: policies.length,
+    policies,
+  });
+}
+
+function applyReviewedEffectiveSemantics(report) {
+  const sites = report.sites.map((site) => site.siteId === NEWS_CONTEXT_OVERLAY_AUTHORITY.siteId
+    ? Object.freeze({
+      ...site,
+      kind: NEWS_CONTEXT_OVERLAY_AUTHORITY.effectiveKind,
+      symbol: NEWS_CONTEXT_OVERLAY_AUTHORITY.effectiveSymbol,
+    })
+    : site);
+  return Object.freeze({ ...report, sites: Object.freeze(sites) });
+}
+
 /**
  * Integration-owned overlay for the exact accepted L source bytes. It does not
  * modify A-CORE's immutable scanner and refuses source drift, a twentieth
@@ -294,22 +452,25 @@ function verifyIntegratedMappings(report) {
  * command, persistence, exchange, or money authority.
  */
 export function scanIntegratedProductionOperations(options = {}) {
-  if (!verifyNewsContextOverlayAuthority(
-    options.newsContextAuthority ?? NEWS_CONTEXT_OVERLAY_AUTHORITY,
-  )) throw new Error('I00_OPERATION_OVERLAY_NEWS_AUTHORITY_DRIFT');
+  const repositoryRoot = resolve(options.repositoryRoot ?? DEFAULT_REPOSITORY_ROOT);
+  const newsContextAuthority = options.newsContextAuthority ?? NEWS_CONTEXT_OVERLAY_AUTHORITY;
+  if (!verifyNewsContextOverlayAuthority(newsContextAuthority)
+    || !verifyGitSourceAuthority({ repositoryRoot, ...newsContextAuthority })) {
+    throw new Error('I00_OPERATION_OVERLAY_NEWS_AUTHORITY_DRIFT');
+  }
   const baseReport = scanProductionOperations({
-    repositoryRoot: options.repositoryRoot,
+    repositoryRoot,
     registry: OPERATION_MAPPING_REGISTRY,
     reviewedDispositions: REVIEWED_OPERATION_DISPOSITIONS,
   });
   verifyBaseUncovered(baseReport);
   const report = scanProductionOperations({
-    repositoryRoot: options.repositoryRoot,
+    repositoryRoot,
     registry: Object.freeze([...OPERATION_MAPPING_REGISTRY, ...I00_OPERATION_MAPPING_OVERLAY]),
     reviewedDispositions: REVIEWED_OPERATION_DISPOSITIONS,
   });
   verifyIntegratedMappings(report);
-  return report;
+  return applyReviewedEffectiveSemantics(report);
 }
 
 function printHumanReport(report) {

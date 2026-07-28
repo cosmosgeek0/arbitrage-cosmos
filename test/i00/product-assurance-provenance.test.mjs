@@ -12,6 +12,10 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
+  OPERATION_POLICY_REGISTRY,
+  scanOperationCoverage,
+} from '../../server/dist/productAssurance/index.js';
+import {
   listProductAssuranceTrackedTestFiles,
   validateProductAssuranceManifest,
   verifyProductAssuranceDonor,
@@ -19,6 +23,10 @@ import {
   verifyProductAssuranceOperationReport,
   verifyProductAssuranceSuiteInventory,
 } from './git-provenance.mjs';
+import {
+  scanIntegratedOperationPolicyCoverage,
+  scanIntegratedProductionOperations,
+} from './product-assurance-operation-overlay.mjs';
 import { runGitEvidence } from './verify-scope.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -238,6 +246,10 @@ test('manifest selection and operation coverage mutations fail closed without ex
     (document) => { document.donors[0].postIntegrationReplacements[0].replacementBlob = '0'.repeat(40); },
     (document) => { document.donors[0].postIntegrationReplacements[0].unknown = true; },
     (document) => { document.contextProofPolicy = 'SIX_SKIPPED_CALLBACKS'; },
+    (document) => { document.operationScan.minimumFilesScanned = 0; },
+    (document) => { document.operationScan.mapped -= 1; },
+    (document) => { document.operationScan.policyCount = 0; },
+    (document) => { document.operationScan.policyCovered -= 1; },
   ];
   for (const mutate of manifestMutations) {
     const hostile = clone(manifest);
@@ -245,26 +257,52 @@ test('manifest selection and operation coverage mutations fail closed without ex
     assert.equal(validateProductAssuranceManifest(hostile).passed, false);
   }
 
-  const report = Object.freeze({
-    schemaVersion: manifest.operationScan.schemaVersion,
-    scannedRoot: 'server/src',
-    filesScanned: manifest.operationScan.filesScanned,
-    discovered: manifest.operationScan.discovered,
-    covered: manifest.operationScan.covered,
-    uncovered: manifest.operationScan.uncovered,
-    sites: Object.freeze(Array.from({ length: manifest.operationScan.discovered }, (_, index) => Object.freeze({
-      siteId: `HOSTILE_PROOF_SITE_${index}`,
-      operationId: 'REGISTERED_FOR_VERIFIER_FIXTURE',
-    }))),
-    uncoveredSites: Object.freeze([]),
+  const report = scanIntegratedProductionOperations();
+  const policyCoverage = scanIntegratedOperationPolicyCoverage({
+    canonicalRegistry: OPERATION_POLICY_REGISTRY,
+    coverageScanner: scanOperationCoverage,
+    operationReport: report,
   });
-  assert.equal(verifyProductAssuranceOperationReport(manifest, report).passed, true);
+  assert.equal(verifyProductAssuranceOperationReport(manifest, report, policyCoverage).passed, true);
+  assert.equal(verifyProductAssuranceOperationReport(
+    manifest,
+    { ...report, filesScanned: report.filesScanned + 1 },
+    policyCoverage,
+  ).passed, true);
   for (const hostile of [
     { ...report, schemaVersion: 'production-operation-scan.v2' },
-    { ...report, filesScanned: report.filesScanned + 1 },
+    { ...report, filesScanned: manifest.operationScan.minimumFilesScanned - 1 },
     { ...report, discovered: report.discovered + 1 },
     { ...report, covered: report.covered - 1, uncovered: 1 },
     { ...report, uncoveredSites: [{ operationId: null }] },
     { ...report, sites: report.sites.slice(1) },
-  ]) assert.equal(verifyProductAssuranceOperationReport(manifest, hostile).passed, false);
+    { ...report, sites: Object.freeze([report.sites[0], ...report.sites.slice(0, -1)]) },
+    { ...report, operationCounts: { ...report.operationCounts, OP_G1_HOSTILE: 1 } },
+  ]) assert.equal(verifyProductAssuranceOperationReport(manifest, hostile, policyCoverage).passed, false);
+
+  for (const hostileCoverage of [
+    { ...policyCoverage, policyCount: policyCoverage.policyCount - 1 },
+    { ...policyCoverage, registeredSiteCount: policyCoverage.registeredSiteCount - 1 },
+    { ...policyCoverage, verdict: 'FAIL', reasonCodes: ['PRODUCTION_OPERATION_UNCOVERED'] },
+    { ...policyCoverage, unknownPolicyIds: ['OP_G1_UNKNOWN'] },
+    { ...policyCoverage, duplicateOperationIds: [policyCoverage.policies[0].operationId] },
+  ]) assert.equal(verifyProductAssuranceOperationReport(manifest, report, hostileCoverage).passed, false);
+
+  const unknownPolicyReport = Object.freeze({
+    ...report,
+    sites: Object.freeze([
+      Object.freeze({ ...report.sites[0], operationId: 'OP_G1_UNKNOWN' }),
+      ...report.sites.slice(1),
+    ]),
+  });
+  const unknownCoverageBase = scanOperationCoverage(policyCoverage.policies, unknownPolicyReport.sites);
+  const unknownPolicyCoverage = Object.freeze({
+    ...unknownCoverageBase,
+    policyCount: policyCoverage.policyCount,
+    policies: policyCoverage.policies,
+  });
+  assert.equal(
+    verifyProductAssuranceOperationReport(manifest, unknownPolicyReport, unknownPolicyCoverage).passed,
+    false,
+  );
 });

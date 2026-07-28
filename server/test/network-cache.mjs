@@ -171,6 +171,135 @@ test('Binance REST rejects redirects, wrong media types, and oversized bodies wi
   await assert.rejects(rest.fetchFundingHist('OVERSIZEUSDT', 100), /fundingRate response too large/);
 });
 
+test('Markets generation abort fences late REST cache publication and next-generation single-flight', { concurrency: false }, async () => {
+  const controlled = controlledJsonFetch({ settleOnAbort: false });
+  globalThis.fetch = controlled.fetch;
+  const rest = await import(`${modulePath('binance/rest')}?markets-generation=${Date.now()}`);
+  const firstController = new AbortController();
+  const secondController = new AbortController();
+  const firstContext = Object.freeze({
+    cacheScope: 'markets',
+    generation: 1,
+    signal: firstController.signal,
+  });
+  const secondContext = Object.freeze({
+    cacheScope: 'markets',
+    generation: 2,
+    signal: secondController.signal,
+  });
+
+  const first = rest.fetchAllBookTickers('spot', firstContext);
+  await flushMicrotasks();
+  assert.equal(controlled.pending.length, 1);
+
+  const second = rest.fetchAllBookTickers('spot', secondContext);
+  await flushMicrotasks();
+  assert.equal(
+    controlled.pending.length,
+    2,
+    'the next Markets generation must not join prior-generation REST work',
+  );
+
+  firstController.abort(new Error('markets generation stopped'));
+  assert.equal(controlled.pending[0].aborted, true);
+  controlled.pending[0].resolve([{
+    symbol: 'OLDUSDT',
+    bidPrice: '1',
+    bidQty: '2',
+    askPrice: '1.1',
+    askQty: '3',
+  }]);
+  await assert.rejects(first, /markets generation stopped/);
+
+  controlled.pending[1].resolve([{
+    symbol: 'NEWUSDT',
+    bidPrice: '2',
+    bidQty: '3',
+    askPrice: '2.1',
+    askQty: '4',
+  }]);
+  const current = await second;
+  assert.deepEqual([...current.keys()], ['NEWUSDT']);
+
+  const shared = rest.fetchAllBookTickers('spot');
+  await flushMicrotasks();
+  assert.equal(
+    controlled.pending.length,
+    3,
+    'lifecycle-bound results must not publish into the reusable shared REST cache',
+  );
+  controlled.pending[2].resolve([{
+    symbol: 'SHAREDUSDT',
+    bidPrice: '3',
+    bidQty: '4',
+    askPrice: '3.1',
+    askQty: '5',
+  }]);
+  assert.deepEqual([...(await shared).keys()], ['SHAREDUSDT']);
+});
+
+test('optional leaf sources boot OFF and reject or suppress work without dispatch', { concurrency: false }, async () => {
+  let calls = 0;
+  globalThis.fetch = async () => {
+    calls += 1;
+    throw new Error('OFF source dispatched');
+  };
+  const nonce = Date.now();
+  const [moneyflow, profile, news, icons] = await Promise.all([
+    import(`${modulePath('binance/moneyflow')}?off=${nonce}`),
+    import(`${modulePath('binance/profile')}?off=${nonce}`),
+    import(`${modulePath('services/newsContext')}?off=${nonce}`),
+    import(`${modulePath('binance/icons')}?off=${nonce}`),
+  ]);
+
+  assert.deepEqual(moneyflow.moneyFlowLifecycle(), {
+    running: false,
+    generation: 0,
+    activeWalks: 0,
+  });
+  await assert.rejects(
+    moneyflow.fetchMoneyFlow('OFFFLOWUSDT', '15m'),
+    /money flow stopped/,
+  );
+
+  assert.equal(profile.profileSourceLifecycle().state, 'STOPPED');
+  assert.equal(await profile.tokenProfile('OFFPROFILE'), null);
+  assert.deepEqual({
+    activeRequests: profile.profileSourceLifecycle().activeRequests,
+    queuedRequests: profile.profileSourceLifecycle().queuedRequests,
+    inFlightKeys: profile.profileSourceLifecycle().inFlightKeys,
+  }, {
+    activeRequests: 0,
+    queuedRequests: 0,
+    inFlightKeys: 0,
+  });
+
+  assert.equal(news.newsContextLifecycle().state, 'STOPPED');
+  await assert.rejects(news.refreshNewsContextNow(), /news context source stopped/);
+  assert.deepEqual({
+    refreshing: news.newsContextLifecycle().refreshing,
+    bodyInFlight: news.newsContextLifecycle().bodyInFlight,
+  }, {
+    refreshing: false,
+    bodyInFlight: 0,
+  });
+
+  assert.equal(icons.iconSourceLifecycle().state, 'STOPPED');
+  assert.deepEqual(icons.resolveIcons(['OFFICON']), {});
+  assert.deepEqual({
+    queued: icons.iconSourceLifecycle().queued,
+    pending: icons.iconSourceLifecycle().pending,
+    draining: icons.iconSourceLifecycle().draining,
+    activeRequest: icons.iconSourceLifecycle().activeRequest,
+  }, {
+    queued: 0,
+    pending: 0,
+    draining: false,
+    activeRequest: false,
+  });
+  assert.equal(calls, 0);
+});
+
 test('money flow shares one bounded pagination walk and preserves its response schema', { concurrency: false }, async () => {
   let calls = 0;
   globalThis.fetch = async () => {
@@ -183,6 +312,7 @@ test('money flow shares one bounded pagination walk and preserves its response s
     }]);
   };
   const moneyflow = await import(`${modulePath('binance/moneyflow')}?singleflight=${Date.now()}`);
+  moneyflow.startMoneyFlow();
   const [first, second] = await Promise.all([
     moneyflow.fetchMoneyFlow('BTCUSDT', '15m'),
     moneyflow.fetchMoneyFlow('BTCUSDT', '15m'),
@@ -205,6 +335,7 @@ test('money flow bounds active walkers without evicting duplicate work', { concu
     requests.push({ input: String(input), resolve });
   });
   const moneyflow = await import(`${modulePath('binance/moneyflow')}?capacity=${Date.now()}`);
+  moneyflow.startMoneyFlow();
   const active = Array.from({ length: capacity }, (_, index) => (
     moneyflow.fetchMoneyFlow(`FLOW${index}USDT`, '15m')
   ));
@@ -241,6 +372,7 @@ test('money flow cancellation is subscriber-safe and abandons work only after th
     requests.push({ input: String(input), resolve, signal: init.signal });
   });
   const moneyflow = await import(`${modulePath('binance/moneyflow')}?abort=${Date.now()}`);
+  moneyflow.startMoneyFlow();
   const firstController = new AbortController();
   const first = moneyflow.fetchMoneyFlow('SHAREDUSDT', '15m', firstController.signal);
   const survivor = moneyflow.fetchMoneyFlow('SHAREDUSDT', '15m');
@@ -285,6 +417,7 @@ test('money flow never reports stale cache as a successful refresh', { concurren
       return jsonResponse([{ p: '100', q: '2', T: now - 16 * 60_000, m: false }]);
     };
     const moneyflow = await import(`${modulePath('binance/moneyflow')}?stale=${now}`);
+    moneyflow.startMoneyFlow();
     const first = await moneyflow.fetchMoneyFlow('STALEUSDT', '15m');
     assert.equal(first.fetchedAt, now);
 
@@ -307,6 +440,7 @@ test('money flow reports call-cap truncation through coverage fields', { concurr
     return jsonResponse(Array.from({ length: 1_000 }, () => row));
   };
   const moneyflow = await import(`${modulePath('binance/moneyflow')}?coverage=${Date.now()}`);
+  moneyflow.startMoneyFlow();
   const flow = await moneyflow.fetchMoneyFlow('COVERAGEUSDT', '1d');
   assert.equal(calls, 60);
   assert.equal(flow.sampled, true);
@@ -323,6 +457,7 @@ test('profile lookup single-flights misses and honors its negative cache', { con
     return jsonResponse({ coins: [] });
   };
   const profile = await import(`${modulePath('binance/profile')}?negative=${Date.now()}`);
+  profile.startProfileSource();
   const base = 'ZZZNEGATIVECACHE';
   const [first, second] = await Promise.all([profile.tokenProfile(base), profile.tokenProfile(base)]);
   assert.equal(first, null);
@@ -334,6 +469,7 @@ test('profile lookup single-flights misses and honors its negative cache', { con
   const persisted = JSON.parse(await readFile(suiteProfileCache, 'utf8'));
   assert.equal(Object.keys(persisted).length, 1);
   assert.equal((await stat(suiteProfileCache)).size <= 16 * 1024 * 1024, true);
+  await profile.stopProfileSource();
 });
 
 test('profile outbound admission is bounded, single-flight, paced FIFO work', { concurrency: false }, async (t) => {
@@ -347,6 +483,7 @@ test('profile outbound admission is bounded, single-flight, paced FIFO work', { 
   });
 
   profile = await import(`${modulePath('binance/profile')}?bounded-fifo`);
+  profile.startProfileSource();
   const initial = profile.profileWarmStatus();
   const capacity = initial.outbound.queueCapacity;
   assert.equal(initial.outbound.activeCapacity, 1);
@@ -413,6 +550,7 @@ test('profile deadline covers queue wait plus fetch and does not poison later ad
   });
 
   profile = await import(`${modulePath('binance/profile')}?end-to-end-deadline`);
+  profile.startProfileSource();
   const active = profile.tokenProfile('DEADLINEACTIVE');
   const queued = profile.tokenProfile('DEADLINEQUEUED');
   await flushMicrotasks();
@@ -447,6 +585,7 @@ test('profile retains its active permit until a timed-out transport actually set
   });
 
   profile = await import(`${modulePath('binance/profile')}?retain-active-permit`);
+  profile.startProfileSource();
   const active = profile.tokenProfile('PERMITACTIVE');
   await flushMicrotasks();
   t.mock.timers.tick(1_000);
@@ -501,6 +640,7 @@ test('profile cache delivery reports stale fallback and lite truncation without 
   });
 
   profile = await import(`${modulePath('binance/profile')}?delivery-truth`);
+  profile.startProfileSource();
   const stale = await profile.tokenProfile('STALECACHE');
   assert.equal(stale.fetchedAt, staleTs);
   assert.deepEqual(stale.delivery, {
@@ -568,12 +708,14 @@ test('news archive sanitizes retained strings and URLs and never follows a disal
     return new Response('<rss></rss>', { headers: { 'content-type': 'application/rss+xml' } });
   };
   const news = await import(`${modulePath('services/newsContext')}?sanitize=${Date.now()}`);
+  news.startNewsContext();
   const payload = await news.getNewsContext(false);
   assert.equal(payload.items[0].title.length, 320);
   assert.equal(payload.items[0].url, null);
   assert.notEqual(payload.items[0].timeLabel, 'stale');
   await news.refreshNewsContextNow();
   assert.equal(disallowedFollow, false);
+  await news.stopNewsContext();
 });
 
 test('news context upstream policy rejects non-GET methods before fetch state and forces normalized GET', { concurrency: false }, async () => {
@@ -596,7 +738,7 @@ test('news context upstream policy rejects non-GET methods before fetch state an
   );
   assert.match(
     source,
-    /async function fetchBodyOnce[\s\S]*?\{\s*const method = normalizeNewsContextRequestMethod\([^;]+;[\s\S]*?await fetch\(current, \{\s*\.\.\.init,\s*method,/,
+    /async function fetchBodyOnce[\s\S]*?\{\s*assertNewsContextRun\(run\);\s*const method = normalizeNewsContextRequestMethod\([^;]+;[\s\S]*?await fetch\(current, \{\s*\.\.\.init,\s*method,/,
     'the private fetch call must use only the normalized literal GET result',
   );
 });

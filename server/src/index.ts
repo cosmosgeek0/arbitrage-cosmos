@@ -13,7 +13,10 @@ import {
   MarketEngine,
   type MarketLiquidationProjectionPort,
 } from './engine/marketData.js';
-import { projectMarketApiRow } from './engine/marketApiProjection.js';
+import {
+  projectMarketApiRow,
+  type MarketApiOwnerRow,
+} from './engine/marketApiProjection.js';
 import { Ledger, type LedgerEvent } from './ledger.js';
 import { loadConfig, saveConfig } from './config.js';
 import {
@@ -30,6 +33,7 @@ import {
   fetchKlineCandles,
   fetchKlines,
   fetchTrades,
+  type BinanceRestLifecycleContext,
   type BookTicker,
   type Futures24hTicker,
 } from './binance/rest.js';
@@ -40,9 +44,25 @@ import {
   rateLimit,
 } from './binance/client.js';
 import { BinancePrivateReadClient } from './binance/privateReadClient.js';
-import { resolveIcons, STOCK_TOKENS } from './binance/icons.js';
-import { tokenProfile, warmAllProfiles, profileWarmStatus } from './binance/profile.js';
-import { fetchMoneyFlow, FLOW_WINDOWS } from './binance/moneyflow.js';
+import {
+  resolveIcons,
+  startIconSource,
+  stopIconSource,
+  STOCK_TOKENS,
+} from './binance/icons.js';
+import {
+  tokenProfile,
+  warmAllProfiles,
+  profileWarmStatus,
+  startProfileSource,
+  stopProfileSource,
+} from './binance/profile.js';
+import {
+  fetchMoneyFlow,
+  FLOW_WINDOWS,
+  startMoneyFlow,
+  stopMoneyFlow,
+} from './binance/moneyflow.js';
 import {
   deterministicOfflinePublicSourcesEnabled,
   publicSourceStartupEgressAdmitted,
@@ -60,6 +80,14 @@ import { PrivateReadService } from './services/privateRead.js';
 import { RiskService } from './services/risk.js';
 import { OrderService } from './services/orders.js';
 import { BookStreamHub } from './services/bookStream.js';
+import {
+  OPTIONAL_SURFACE_IDS,
+  OptionalSurfaceControl,
+  OptionalSurfaceOffError,
+  isOptionalSurfaceId,
+  type OptionalSurfaceId,
+  type OptionalSurfaceLease,
+} from './services/optionalSurfaceControl.js';
 import { BasisRuntime } from './services/basisRuntime.js';
 import { VolumeRuntime } from './services/volumeRuntime.js';
 import {
@@ -134,7 +162,15 @@ import {
   createProductIncidentOwner,
   createProductIncidentRouter,
 } from './productIntegration/incidents/index.js';
-import { getNewsContext, newsContextStatus, refreshNewsContextNow, scoreNewsImpact, subscribeNewsContext } from './services/newsContext.js';
+import {
+  getNewsContext,
+  newsContextStatus,
+  refreshNewsContextNow,
+  scoreNewsImpact,
+  startNewsContext,
+  stopNewsContext,
+  subscribeNewsContext,
+} from './services/newsContext.js';
 import { disambiguateNewsItemIds } from './services/newsIdentity.js';
 import { OperatorAccess } from './security/access.js';
 import type { AppConfig } from './types.js';
@@ -778,6 +814,70 @@ function buildState(canonicalSupervisor: ReturnType<typeof systemIntegration.sup
 
 const app = express();
 const operatorAccess = new OperatorAccess();
+const optionalSurfaceControl = new OptionalSurfaceControl();
+const createBookHub = () => new BookStreamHub((symbol) => engine.filters.has(symbol));
+let bookHub = createBookHub();
+const bookSurfaceLeases = new Map<WebSocket, Readonly<{
+  hub: BookStreamHub;
+  lease: OptionalSurfaceLease;
+}>>();
+
+function validBookSubscriptionSymbol(raw: unknown): string | null {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const message = raw as Record<string, unknown>;
+  if (message.type !== 'sub-book' || typeof message.symbol !== 'string') return null;
+  const symbol = message.symbol.toUpperCase();
+  if (!/^[A-Z0-9]{5,20}$/.test(symbol)) return null;
+  try {
+    return engine.filters.has(symbol) ? symbol : null;
+  } catch {
+    return null;
+  }
+}
+
+function releaseBookSubscription(ws: WebSocket): void {
+  const binding = bookSurfaceLeases.get(ws);
+  if (!binding) {
+    bookHub.drop(ws);
+    return;
+  }
+  binding.hub.drop(ws);
+  bookSurfaceLeases.delete(ws);
+  binding.lease.release();
+}
+
+function handleBookStreamMessage(ws: WebSocket, raw: unknown): void {
+  if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
+    const message = raw as Record<string, unknown>;
+    if (message.type === 'unsub-book') {
+      releaseBookSubscription(ws);
+      return;
+    }
+  }
+
+  if (validBookSubscriptionSymbol(raw) !== null && !bookSurfaceLeases.has(ws)) {
+    let lease: OptionalSurfaceLease;
+    try {
+      lease = optionalSurfaceControl.acquire('token');
+    } catch (error) {
+      if (error instanceof OptionalSurfaceOffError) return;
+      throw error;
+    }
+    bookSurfaceLeases.set(ws, Object.freeze({ hub: bookHub, lease }));
+  }
+  (bookSurfaceLeases.get(ws)?.hub ?? bookHub).handleMessage(ws, raw);
+}
+
+function resetBookStreamRuntime(): void {
+  const drainingHub = bookHub;
+  drainingHub.stop();
+  for (const [ws, binding] of bookSurfaceLeases) {
+    binding.hub.drop(ws);
+    bookSurfaceLeases.delete(ws);
+    binding.lease.release();
+  }
+  bookHub = createBookHub();
+}
 app.disable('x-powered-by');
 app.disable('etag');
 
@@ -878,18 +978,31 @@ registerI00HealthRoutes(app, Object.freeze({
 }));
 
 function runAsync(res: express.Response, task: () => Promise<void>): void {
-  void task().catch((error) => {
-    try {
-      ledger.logEvent('error_event', null, { source: 'http.async', message: error instanceof Error ? error.message : String(error) });
-    } catch {
-      // Response containment must not depend on the event sink being healthy.
-    }
-    if (!res.headersSent) {
-      res.status(500).json({ ok: false, code: 'REQUEST_FAILED', error: 'Request could not be completed.' });
-    } else {
-      res.end();
-    }
-  });
+  const release = res.locals.optionalSurfaceRelease as (() => void) | undefined;
+  if (release) res.locals.optionalSurfaceAsyncPending = true;
+  void task()
+    .catch((error) => {
+      if (!(error instanceof OptionalSurfaceOffError)) {
+        try {
+          ledger.logEvent('error_event', null, { source: 'http.async', message: error instanceof Error ? error.message : String(error) });
+        } catch {
+          // Response containment must not depend on the event sink being healthy.
+        }
+      }
+      if (!res.headersSent) {
+        const shed = error instanceof OptionalSurfaceOffError;
+        res.status(shed ? 503 : 500).json(shed
+          ? { ok: false, code: error.code, surface: error.surface, error: error.message }
+          : { ok: false, code: 'REQUEST_FAILED', error: 'Request could not be completed.' });
+      } else {
+        res.end();
+      }
+    })
+    .finally(() => {
+      if (!release) return;
+      res.locals.optionalSurfaceAsyncPending = false;
+      release();
+    });
 }
 
 function sendLiveExecutionNotImplemented(res: express.Response, operation: string): void {
@@ -1013,6 +1126,162 @@ function notificationRoutingSnapshot() {
 
 // Every mounted API route shares one operator admission boundary.
 app.use('/api', operatorAccess.middleware());
+
+app.get('/api/optional-surfaces', (req, res) => {
+  if (Object.keys(req.query).length !== 0) {
+    res.status(400).json({
+      ok: false,
+      code: 'INVALID_OPTIONAL_SURFACE_QUERY',
+      error: 'Optional surface policy does not accept query parameters.',
+    });
+    return;
+  }
+  res.json({ surfaces: optionalSurfaceControl.snapshots() });
+});
+
+app.put('/api/optional-surfaces/:surface', (req, res) => {
+  runAsync(res, async () => {
+    const surface = String(req.params.surface ?? '');
+    if (!isOptionalSurfaceId(surface)) {
+      res.status(400).json({
+        ok: false,
+        code: 'INVALID_OPTIONAL_SURFACE',
+        error: `Optional surface must be one of: ${OPTIONAL_SURFACE_IDS.join(', ')}.`,
+      });
+      return;
+    }
+    if (!req.is('application/json')) {
+      res.status(415).json({
+        ok: false,
+        code: 'UNSUPPORTED_MEDIA_TYPE',
+        error: 'Optional surface changes require application/json.',
+      });
+      return;
+    }
+    const body = req.body as Record<string, unknown> | null;
+    if (body === null
+        || Array.isArray(body)
+        || typeof body !== 'object'
+        || Object.keys(body).length !== 1
+        || typeof body.enabled !== 'boolean') {
+      res.status(400).json({
+        ok: false,
+        code: 'INVALID_OPTIONAL_SURFACE_REQUEST',
+        error: 'Request body must be exactly {"enabled": boolean}.',
+      });
+      return;
+    }
+    const result = await optionalSurfaceControl.setEnabled(surface, body.enabled);
+    res.status(result.snapshot.phase === 'FAILED' ? 503 : 200).json(result);
+  });
+});
+
+function optionalSurfaceForRequest(pathname: string): OptionalSurfaceId | null {
+  if (pathname === '/api/events' || pathname === '/api/events/count') return 'logs';
+  if (pathname === '/api/calendar' || pathname === '/api/calendar/refresh') return 'calendar';
+  if (pathname === '/api/news'
+      || pathname === '/api/news/refresh'
+      || pathname === '/api/news-context'
+      || pathname === '/api/news-context/refresh'
+      || pathname === '/api/news-stream'
+      || pathname === '/api/source-logo') return 'news';
+  if (pathname === '/api/markets/enrichment') return 'markets';
+  if (pathname.startsWith('/api/token/')
+      || pathname === '/api/intelligence/token'
+      || pathname === '/api/market/detail'
+      || pathname === '/api/market/quote'
+      || pathname === '/api/market/depth'
+      || pathname === '/api/market/trades'
+      || pathname === '/api/klines'
+      || pathname === '/api/candles'
+      || pathname === '/api/funding/history'
+      || pathname === '/api/futures/telemetry'
+      || pathname === '/api/futures/funding-hist'
+      || pathname === '/api/futures/liquidations'
+      || pathname === '/api/futures/liquidations/stats'
+      || pathname === '/api/futures/oi-hist'
+      || pathname === '/api/futures/basis-hist'
+      || pathname === '/api/symbol/context') return 'token';
+  return null;
+}
+
+function canonicalOptionalSurfacePath(pathname: string): string {
+  const canonical = pathname.toLowerCase().replace(/\/+$/u, '');
+  return canonical.length === 0 ? '/' : canonical;
+}
+
+type IconSurfaceOwner = 'token' | 'markets';
+
+function iconSurfaceOwner(value: unknown): IconSurfaceOwner | null {
+  return value === 'token' || value === 'markets' ? value : null;
+}
+
+app.use('/api', (req, res, next) => {
+  const pathname = canonicalOptionalSurfacePath(`/api${req.path === '/' ? '' : req.path}`);
+  const mappedSurface = optionalSurfaceForRequest(pathname);
+  const requestedIconOwner = pathname === '/api/icons'
+    ? iconSurfaceOwner(req.query.owner)
+    : null;
+  if (pathname === '/api/icons' && requestedIconOwner === null) {
+    res.status(400).json({
+      ok: false,
+      code: 'INVALID_ICON_OWNER',
+      error: 'Icon requests require exactly one owner: token or markets.',
+    });
+    return;
+  }
+  const candidateSurfaces: readonly OptionalSurfaceId[] = requestedIconOwner !== null
+    ? [requestedIconOwner]
+    : mappedSurface === null
+      ? []
+      : [mappedSurface];
+  if (candidateSurfaces.length === 0) {
+    next();
+    return;
+  }
+
+  let lease: OptionalSurfaceLease | null = null;
+  for (const surface of candidateSurfaces) {
+    try {
+      lease = optionalSurfaceControl.acquire(surface);
+      break;
+    } catch (error) {
+      if (!(error instanceof OptionalSurfaceOffError)) {
+        next(error);
+        return;
+      }
+    }
+  }
+  if (lease === null) {
+    const surface = candidateSurfaces.join('|');
+    res.status(503).json({
+      ok: false,
+      code: 'OPTIONAL_SURFACE_OFF',
+      surface,
+      error: `${candidateSurfaces.join(' or ')} is off; enable at least one authoritative control-room surface first.`,
+    });
+    return;
+  }
+  const surface = lease.id;
+  res.locals.optionalSurface = Object.freeze({
+    id: surface,
+    generation: lease.generation,
+    signal: lease.signal,
+  });
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    lease.release();
+  };
+  res.locals.optionalSurfaceRelease = release;
+  res.locals.optionalSurfaceAsyncPending = false;
+  res.once('finish', release);
+  res.once('close', () => {
+    if (res.locals.optionalSurfaceAsyncPending !== true) release();
+  });
+  next();
+});
 
 // Ambient bearer material cannot widen Phase 2 authority. This route remains
 // present only as an explicit owner-gated boundary and performs no
@@ -1403,11 +1672,17 @@ const NEWS_CATALOGS = new Set([48, 49, 93, 50, 161, 157, 51, 128]);
 const NEWS_AGGREGATE_CATALOGS = [48, 49, 93, 50, 161, 157, 51, 128];
 const newsCache = new Map<number, { at: number; items: NewsItem[] }>();
 const newsInFlight = new Map<number, Promise<boolean>>();
+const newsCatalogControllers = new Set<AbortController>();
 
 async function refreshNews(catalogId: number): Promise<void> {
   if (deterministicOfflinePublicSourcesEnabled()) throw new Error('binance announcements unavailable');
+  const lifecycleSignal = optionalSurfaceControl.signal('news');
+  if (lifecycleSignal.aborted) throw new OptionalSurfaceOffError('news');
   const url = `https://www.binance.com/bapi/apex/v1/public/apex/cms/article/catalog/list/query?catalogId=${catalogId}&pageNo=1&pageSize=16`;
   const ctrl = new AbortController();
+  const abortForLifecycle = () => ctrl.abort(lifecycleSignal.reason);
+  lifecycleSignal.addEventListener('abort', abortForLifecycle, { once: true });
+  newsCatalogControllers.add(ctrl);
   const timer = setTimeout(() => ctrl.abort(), 10_000);
   try {
     const res = await fetch(url, {
@@ -1417,6 +1692,9 @@ async function refreshNews(catalogId: number): Promise<void> {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await readBoundedJson<{ data?: { articles?: { id: number; code: string; title: string }[] } }>(res, 512 * 1024);
+    if (ctrl.signal.aborted || lifecycleSignal.aborted || !optionalSurfaceControl.enabled('news')) {
+      throw new OptionalSurfaceOffError('news');
+    }
     const items: NewsItem[] = (json.data?.articles ?? []).map((a) => {
       const m = a.title.match(/\s*\((\d{4}-\d{2}-\d{2})\)\s*$/);
       const title = m ? a.title.slice(0, m.index).trim() : a.title.trim();
@@ -1431,6 +1709,8 @@ async function refreshNews(catalogId: number): Promise<void> {
     newsCache.set(catalogId, { at: Date.now(), items });
   } finally {
     clearTimeout(timer);
+    lifecycleSignal.removeEventListener('abort', abortForLifecycle);
+    newsCatalogControllers.delete(ctrl);
   }
 }
 
@@ -1448,7 +1728,9 @@ async function ensureNewsCatalog(catalogId: number, force: boolean): Promise<boo
     const p = refreshNews(catalogId)
       .then(() => true)
       .catch((err) => {
-        safeLogEvent('error_event', null, { source: 'news.fetch', message: String(err), catalogId });
+        if (optionalSurfaceControl.enabled('news')) {
+          safeLogEvent('error_event', null, { source: 'news.fetch', message: String(err), catalogId });
+        }
         return false;
       })
       .finally(() => newsInFlight.delete(catalogId));
@@ -1549,7 +1831,9 @@ app.get('/api/news-context', (req, res) => {
       const canonical = canonicalNewsContextRead(payload);
       res.json({ ...canonical, items: canonical.items.slice(0, limit) });
     } catch (err) {
-      safeLogEvent('error_event', null, { source: 'news-context.fetch', message: String(err) });
+      if (optionalSurfaceControl.enabled('news')) {
+        safeLogEvent('error_event', null, { source: 'news-context.fetch', message: String(err) });
+      }
       res.status(503).json({ error: 'news context unavailable', source: 'primary+venue+protocol+issuer+tree+rss+lookonchain', items: [], sources: [] });
     }
   });
@@ -1571,7 +1855,9 @@ app.post('/api/news-context/refresh', (req, res) => {
       const canonical = canonicalNewsContextRead(payload);
       res.json({ ok: true, ...canonical, items: canonical.items.slice(0, limit) });
     } catch (err) {
-      safeLogEvent('error_event', null, { source: 'news-context.refresh', message: String(err) });
+      if (optionalSurfaceControl.enabled('news')) {
+        safeLogEvent('error_event', null, { source: 'news-context.refresh', message: String(err) });
+      }
       res.status(503).json({ ok: false, error: 'news context unavailable', items: [], sources: [] });
     }
   });
@@ -1579,6 +1865,7 @@ app.post('/api/news-context/refresh', (req, res) => {
 
 let newsStreamClients = 0;
 const NEWS_STREAM_MAX_CLIENTS = 16;
+const newsStreamClosers = new Set<() => void>();
 
 app.get('/api/news-stream', (req, res) => {
   const limit = integerQuery(req.query.limit, 220, 20, 600);
@@ -1622,7 +1909,13 @@ app.get('/api/news-stream', (req, res) => {
     newsStreamClients--;
     clearInterval(heartbeat);
     unsubscribe();
+    newsStreamClosers.delete(terminate);
   };
+  const terminate = () => {
+    if (!closed) res.end();
+    close();
+  };
+  newsStreamClosers.add(terminate);
   req.on('close', close);
   res.on('close', close);
 });
@@ -1636,9 +1929,12 @@ type CalItem = {
 };
 let calCache: { at: number; items: CalItem[] } | null = null;
 let calInFlight: Promise<boolean> | null = null;
+const calendarControllers = new Set<AbortController>();
 
 async function refreshCalendar(): Promise<void> {
   if (deterministicOfflinePublicSourcesEnabled()) throw new Error('calendar unavailable');
+  const lifecycleSignal = optionalSurfaceControl.signal('calendar');
+  if (lifecycleSignal.aborted) throw new OptionalSurfaceOffError('calendar');
   const now = new Date();
   const day = now.getDay();
   const mondayOffset = day === 0 ? -6 : 1 - day;
@@ -1648,6 +1944,9 @@ async function refreshCalendar(): Promise<void> {
   const countries = 'US,EU,GB,JP,CN,IN,DE,CA,AU,FR,KR,ID,TR,IT,MX,BR,CH,NZ,ZA,SA';
   const url = `https://economic-calendar.tradingview.com/events?from=${from}&to=${to}&countries=${countries}`;
   const ctrl = new AbortController();
+  const abortForLifecycle = () => ctrl.abort(lifecycleSignal.reason);
+  lifecycleSignal.addEventListener('abort', abortForLifecycle, { once: true });
+  calendarControllers.add(ctrl);
   const timer = setTimeout(() => ctrl.abort(), 10_000);
   try {
     const res = await fetch(url, {
@@ -1657,6 +1956,9 @@ async function refreshCalendar(): Promise<void> {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await readBoundedJson<{ result?: Record<string, unknown>[] }>(res, 2 * 1024 * 1024);
+    if (ctrl.signal.aborted || lifecycleSignal.aborted || !optionalSurfaceControl.enabled('calendar')) {
+      throw new OptionalSurfaceOffError('calendar');
+    }
     const items: CalItem[] = (json.result ?? []).map((e) => ({
       id: String(e.id),
       title: String(e.title ?? ''),
@@ -1679,6 +1981,8 @@ async function refreshCalendar(): Promise<void> {
     calCache = { at: Date.now(), items };
   } finally {
     clearTimeout(timer);
+    lifecycleSignal.removeEventListener('abort', abortForLifecycle);
+    calendarControllers.delete(ctrl);
   }
 }
 
@@ -1687,7 +1991,9 @@ function startCalendarRefresh(): Promise<boolean> {
     calInFlight = refreshCalendar()
       .then(() => true)
       .catch((err) => {
-        safeLogEvent('error_event', null, { source: 'calendar.fetch', message: String(err) });
+        if (optionalSurfaceControl.enabled('calendar')) {
+          safeLogEvent('error_event', null, { source: 'calendar.fetch', message: String(err) });
+        }
         return false;
       })
       .finally(() => { calInFlight = null; });
@@ -2098,13 +2404,22 @@ type ObservedMarketSourceResult<T> = PromiseSettledResult<T> & {
 };
 
 type MarketSourceSnapshot = {
+  generation: number;
   at: number;
   spotBookRes: ObservedMarketSourceResult<Map<string, BookTicker>>;
   perpBookRes: ObservedMarketSourceResult<Map<string, BookTicker>>;
   perp24hRes: ObservedMarketSourceResult<Map<string, Futures24hTicker>>;
 };
 let marketSourceCache: MarketSourceSnapshot | null = null;
-let marketSourceInFlight: Promise<MarketSourceSnapshot> | null = null;
+let marketSourceInFlight: {
+  generation: number;
+  promise: Promise<MarketSourceSnapshot>;
+} | null = null;
+
+type MarketSurfaceRequestContext = Readonly<{
+  generation: number;
+  signal: AbortSignal;
+}>;
 
 function observedMarketSourceResult<T>(
   result: PromiseSettledResult<T>,
@@ -2113,17 +2428,41 @@ function observedMarketSourceResult<T>(
   return Object.freeze({ ...result, observedAtMs });
 }
 
-async function marketSources(): Promise<MarketSourceSnapshot> {
+function assertCurrentMarketGeneration(context: MarketSurfaceRequestContext): void {
+  if (context.signal.aborted
+      || !optionalSurfaceControl.enabled('markets')
+      || optionalSurfaceControl.snapshot('markets').generation !== context.generation) {
+    throw new OptionalSurfaceOffError('markets');
+  }
+}
+
+async function marketSources(context: MarketSurfaceRequestContext): Promise<MarketSourceSnapshot> {
+  assertCurrentMarketGeneration(context);
   const now = Date.now();
-  if (marketSourceCache && now - marketSourceCache.at < 2_000) return marketSourceCache;
-  if (marketSourceInFlight) return marketSourceInFlight;
-  marketSourceInFlight = Promise.allSettled([
-    fetchAllBookTickers('spot'),
-    fetchAllBookTickers('futures'),
-    fetchAllFutures24hTickers(),
+  if (marketSourceCache
+      && marketSourceCache.generation === context.generation
+      && now - marketSourceCache.at < 2_000) {
+    return marketSourceCache;
+  }
+  if (marketSourceInFlight?.generation === context.generation) {
+    return marketSourceInFlight.promise;
+  }
+  if (marketSourceInFlight) throw new OptionalSurfaceOffError('markets');
+
+  const restLifecycle = Object.freeze({
+    cacheScope: 'markets',
+    generation: context.generation,
+    signal: context.signal,
+  } satisfies BinanceRestLifecycleContext);
+  const promise = Promise.allSettled([
+    fetchAllBookTickers('spot', restLifecycle),
+    fetchAllBookTickers('futures', restLifecycle),
+    fetchAllFutures24hTickers(restLifecycle),
   ]).then(([spotBookRes, perpBookRes, perp24hRes]) => {
+    assertCurrentMarketGeneration(context);
     const at = Date.now();
     const snapshot = {
+      generation: context.generation,
       at,
       spotBookRes: observedMarketSourceResult(spotBookRes, at),
       perpBookRes: observedMarketSourceResult(perpBookRes, at),
@@ -2132,13 +2471,64 @@ async function marketSources(): Promise<MarketSourceSnapshot> {
     marketSourceCache = snapshot;
     return snapshot;
   }).finally(() => {
-    marketSourceInFlight = null;
+    if (marketSourceInFlight?.promise === promise) marketSourceInFlight = null;
   });
-  return marketSourceInFlight;
+  marketSourceInFlight = { generation: context.generation, promise };
+  return promise;
 }
 
-async function readMarketOwnerSnapshot() {
-  const { spotBookRes, perpBookRes, perp24hRes } = await marketSources();
+type PublishedMarketCut = Readonly<{
+  observedAtMs: number;
+  ownerRows: readonly Readonly<MarketApiOwnerRow>[];
+  rows: readonly ReturnType<typeof projectMarketApiRow>[];
+}>;
+
+function readPublishedMarketCut(): PublishedMarketCut {
+  const ownerRows = engine.allRows();
+  let observedAtMs = 0;
+  const rows = ownerRows
+    .map((row) => {
+      for (const observed of [
+        engine.priceUpdatedAt(row.symbol),
+        engine.markEventTimestamp(row.symbol),
+        row.openInterestUpdatedAt,
+        engine.liquidationEventTimestamp(row.symbol),
+      ]) {
+        if (typeof observed === 'number'
+            && Number.isSafeInteger(observed)
+            && observed >= 0
+            && observed > observedAtMs) {
+          observedAtMs = observed;
+        }
+      }
+      return projectMarketApiRow({
+        row,
+        spark: engine.sparkOf(row.symbol, 36),
+      });
+    })
+    .sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0));
+  return Object.freeze({
+    observedAtMs,
+    ownerRows: Object.freeze(ownerRows),
+    rows: Object.freeze(rows),
+  });
+}
+
+function publishedMarketOwnerTruth(cut: Readonly<PublishedMarketCut>) {
+  return Object.freeze({
+    observedAtMs: cut.observedAtMs,
+    dataSources: Object.freeze({
+      spotBookTicker: 'unavailable' as const,
+      futuresBookTicker: 'unavailable' as const,
+      futures24hTicker: 'unavailable' as const,
+    }),
+    rows: cut.rows,
+  });
+}
+
+async function readMarketEnrichmentSnapshot(context: MarketSurfaceRequestContext) {
+  const { spotBookRes, perpBookRes, perp24hRes } = await marketSources(context);
+  assertCurrentMarketGeneration(context);
   const at = spotBookRes.observedAtMs;
   const spotBooks = spotBookRes.status === 'fulfilled'
     ? spotBookRes.value
@@ -2175,7 +2565,7 @@ async function readMarketOwnerSnapshot() {
 async function readProductOwnerTruth(
   supervisor: Readonly<SystemSupervisorReadModel>,
 ) {
-  const markets = await readMarketOwnerSnapshot();
+  const markets = publishedMarketOwnerTruth(readPublishedMarketCut());
   // The private reader owns its cadence and single-flight transport. Product
   // samples the one immutable published snapshot exactly once and never
   // triggers a credential-bearing refresh from a read route.
@@ -2188,10 +2578,25 @@ async function readProductOwnerTruth(
 }
 
 app.get('/api/markets', (_req, res) => {
+  const snapshot = readPublishedMarketCut();
+  res.json({
+    updatedAt: snapshot.observedAtMs,
+    dataSources: {
+      spotBookTicker: 'unavailable',
+      futuresBookTicker: 'unavailable',
+      futures24hTicker: 'unavailable',
+    },
+    rows: snapshot.rows,
+  });
+});
+
+app.get('/api/markets/enrichment', (_req, res) => {
   runAsync(res, async () => {
-    const snapshot = await readMarketOwnerSnapshot();
+    const context = res.locals.optionalSurface as MarketSurfaceRequestContext | undefined;
+    if (!context) throw new OptionalSurfaceOffError('markets');
+    const snapshot = await readMarketEnrichmentSnapshot(context);
     res.json({
-      updatedAt: Date.now(),
+      updatedAt: snapshot.observedAtMs,
       dataSources: snapshot.dataSources,
       rows: snapshot.rows,
     });
@@ -2481,12 +2886,24 @@ app.get('/api/token/profile', (req, res) => {
 });
 
 app.get('/api/icons', (req, res) => {
-  const bases = String(req.query.bases ?? '')
-    .split(',')
-    .map((s) => s.trim().toUpperCase())
-    .filter((b) => /^[A-Z0-9\u3400-\u9fff]{1,24}$/u.test(b))
-    .slice(0, 200);
-  res.json(resolveIcons(bases));
+  runAsync(res, async () => {
+    const owner = iconSurfaceOwner(req.query.owner);
+    const admission = res.locals.optionalSurface as { id?: unknown } | undefined;
+    if (owner === null || admission?.id !== owner) {
+      res.status(400).json({
+        ok: false,
+        code: 'INVALID_ICON_OWNER',
+        error: 'Icon requests require exactly one owner: token or markets.',
+      });
+      return;
+    }
+    const bases = String(req.query.bases ?? '')
+      .split(',')
+      .map((s) => s.trim().toUpperCase())
+      .filter((b) => /^[A-Z0-9\u3400-\u9fff]{1,24}$/u.test(b))
+      .slice(0, 200);
+    res.json(resolveIcons(bases));
+  });
 });
 
 async function readBoundedBody(response: Response, maximumBytes: number): Promise<Buffer> {
@@ -3382,16 +3799,45 @@ app.post('/api/refresh', (req, res) => {
         steps.push({ key, ok: false, durationMs: Date.now() - stepStartedAt, detail: message });
       }
     };
+    const runOptionalStep = async (
+      surface: 'news' | 'calendar',
+      key: string,
+      fn: () => Promise<string> | string,
+    ) => {
+      let lease: OptionalSurfaceLease;
+      try {
+        lease = optionalSurfaceControl.acquire(surface);
+      } catch (error) {
+        if (!(error instanceof OptionalSurfaceOffError)) throw error;
+        steps.push({
+          key,
+          ok: true,
+          durationMs: 0,
+          detail: `skipped: ${surface} optional surface is OFF`,
+        });
+        return;
+      }
+      try {
+        await runStep(key, async () => {
+          if (lease.signal.aborted) throw new OptionalSurfaceOffError(surface);
+          const detail = await fn();
+          if (lease.signal.aborted) throw new OptionalSurfaceOffError(surface);
+          return detail;
+        });
+      } finally {
+        lease.release();
+      }
+    };
 
     try {
       if (target === 'news') {
-        await runStep('news-context', async () => {
+        await runOptionalStep('news', 'news-context', async () => {
           const payload = await refreshNewsContextNow();
           return `${payload.sources.length} source states refreshed`;
         });
       }
       if (target === 'calendar') {
-        await runStep('economic-calendar', async () => {
+        await runOptionalStep('calendar', 'economic-calendar', async () => {
           if (!(await startCalendarRefresh())) throw new Error('Economic calendar refresh failed');
           return `${calCache?.items.length ?? 0} events cached`;
         });
@@ -3637,6 +4083,81 @@ app.post('/api/orders/cancel', (_req, res) => {
   sendLiveExecutionNotImplemented(res, 'ORDER_CANCEL');
 });
 
+const iconSurfaceOwners = new Set<IconSurfaceOwner>();
+let iconSurfaceTransition: Promise<void> = Promise.resolve();
+
+function startSharedIconSource(owner: IconSurfaceOwner): Promise<void> {
+  iconSurfaceOwners.add(owner);
+  const transition = iconSurfaceTransition
+    .catch(() => undefined)
+    .then(() => {
+      if (iconSurfaceOwners.size > 0) startIconSource();
+    });
+  iconSurfaceTransition = transition;
+  return transition;
+}
+
+function stopSharedIconSource(owner: IconSurfaceOwner): Promise<void> {
+  iconSurfaceOwners.delete(owner);
+  const otherOwner: IconSurfaceOwner = owner === 'token' ? 'markets' : 'token';
+  const transition = iconSurfaceTransition
+    .catch(() => undefined)
+    .then(async () => {
+      await stopIconSource();
+      if (iconSurfaceOwners.has(otherOwner)) startIconSource();
+    });
+  iconSurfaceTransition = transition;
+  return transition;
+}
+
+optionalSurfaceControl.registerRuntime('news', {
+  start: () => {
+    startNewsContext();
+  },
+  stop: async () => {
+    for (const controller of newsCatalogControllers) controller.abort(new OptionalSurfaceOffError('news'));
+    for (const close of [...newsStreamClosers]) close();
+    await Promise.all([...newsInFlight.values()]);
+    await stopNewsContext();
+  },
+});
+optionalSurfaceControl.registerRuntime('calendar', {
+  stop: async () => {
+    for (const controller of calendarControllers) controller.abort(new OptionalSurfaceOffError('calendar'));
+    if (calInFlight) await calInFlight;
+  },
+});
+optionalSurfaceControl.registerRuntime('logs', {});
+optionalSurfaceControl.registerRuntime('token', {
+  start: async () => {
+    startProfileSource();
+    startMoneyFlow();
+    await startSharedIconSource('token');
+  },
+  stop: async () => {
+    resetBookStreamRuntime();
+    await Promise.all([
+      stopProfileSource(),
+      stopMoneyFlow(),
+      stopSharedIconSource('token'),
+    ]);
+  },
+});
+optionalSurfaceControl.registerRuntime('markets', {
+  start: () => startSharedIconSource('markets'),
+  stop: async () => {
+    if (marketSourceInFlight) {
+      try {
+        await marketSourceInFlight.promise;
+      } catch (error) {
+        if (!(error instanceof OptionalSurfaceOffError)) throw error;
+      }
+    }
+    marketSourceCache = null;
+    await stopSharedIconSource('markets');
+  },
+});
+
 // Conventional probe paths — the defaults of ALB target groups, k8s probes,
 // Cloudflare health checks, and uptime monitors — are deliberately NOT routes.
 // Without this guard the SPA fallback below answered 200 text/html on every
@@ -3832,7 +4353,6 @@ server.on('upgrade', (request, socket, head) => {
 });
 
 // Live order-book/trade fan-out (public market data only, symbol-validated).
-const bookHub = new BookStreamHub((s) => engine.filters.has(s));
 wss.on('connection', (ws, request) => {
   const afterCursor = parseProductRuntimeMaterialDeliveryAfterCursor(request.url);
   if (afterCursor === null) {
@@ -3846,7 +4366,7 @@ wss.on('connection', (ws, request) => {
   });
   wsAlive.set(ws, true);
   ws.on('error', () => {
-    bookHub.drop(ws);
+    releaseBookSubscription(ws);
     try { ws.terminate(); } catch { /* already closed */ }
   });
   ws.on('pong', () => wsAlive.set(ws, true));
@@ -3881,12 +4401,13 @@ wss.on('connection', (ws, request) => {
           return;
         }
       }
-      bookHub.handleMessage(ws, decoded);
+      handleBookStreamMessage(ws, decoded);
     } catch {
+      releaseBookSubscription(ws);
       ws.close(1007, 'invalid message');
     }
   });
-  ws.on('close', () => bookHub.drop(ws));
+  ws.on('close', () => releaseBookSubscription(ws));
 });
 
 function sendBoundedWebSocketJson(client: WebSocket, message: unknown): boolean {
@@ -4126,6 +4647,7 @@ function gracefulShutdown(signal: NodeJS.Signals): Promise<GracefulShutdownOutco
     eventRetentionTimer = null;
     websocketHeartbeatTimer = null;
     canonicalDeliveryTimer = null;
+    await optionalSurfaceControl.stopAll();
     privateRead.stop();
     bookHub.stop();
     for (const socket of pendingWsUpgradeSockets) {

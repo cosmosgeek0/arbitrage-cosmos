@@ -1,24 +1,20 @@
-import { useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect, useRef } from 'react';
 import { StoreProvider, useStore } from './store';
 import { IconClock } from './components/Icons';
 import { Sidebar, Topbar, BottomNav, Overlays, RefreshDock } from './components/Header';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Tape } from './components/Tape';
 import { Palette } from './components/Palette';
+import { OptionalSurfaceGate } from './components/OptionalSurfaceGate';
 import { Dashboard } from './pages/Dashboard';
-import { Markets } from './pages/Markets';
-import { TokenDetail } from './pages/TokenDetail';
 import { Loans } from './pages/Loans';
 import { Account } from './pages/Account';
 import { Strategies } from './pages/Strategies';
 import { VolumeScanner } from './pages/VolumeScanner';
 import { Opportunities } from './pages/Opportunities';
 import { Risk } from './pages/Risk';
-import { LedgerPage } from './pages/LedgerPage';
 import { SystemHealth } from './pages/SystemHealth';
 import { NotificationsPage } from './pages/NotificationsPage';
-import { News } from './pages/News';
-import { CalendarPage } from './pages/CalendarPage';
 import {
   ProductControlRoomProvider,
   ProductControlRoomRoute,
@@ -31,7 +27,14 @@ import {
   type ProductIntegrationEndpoints,
 } from './lib/productIntegration';
 import { NotificationFeedProvider } from './lib/notificationFeed';
+import { OptionalSurfaceControlProvider } from './lib/optionalSurfaceControl';
 import './pages/MetricTiles.css';
+
+const LazyMarkets = lazy(() => import('./pages/Markets').then((module) => ({ default: module.Markets })));
+const LazyTokenDetail = lazy(() => import('./pages/TokenDetail').then((module) => ({ default: module.TokenDetail })));
+const LazyLedgerPage = lazy(() => import('./pages/LedgerPage').then((module) => ({ default: module.LedgerPage })));
+const LazyNews = lazy(() => import('./pages/News').then((module) => ({ default: module.News })));
+const LazyCalendarPage = lazy(() => import('./pages/CalendarPage').then((module) => ({ default: module.CalendarPage })));
 
 const PRODUCT_INTEGRATION_ENDPOINTS: Readonly<ProductIntegrationEndpoints> = Object.freeze({
   supervisor: '/api/product-integration/v1/supervisor',
@@ -46,6 +49,15 @@ const productIntegrationClient = createProductIntegrationClient(
   createHttpProductIntegrationTransport(PRODUCT_INTEGRATION_ENDPOINTS),
 );
 const durableResumeCursor = readDurableMaterialCursor();
+
+function OptionalPageLoading({ label }: { label: string }) {
+  return (
+    <div className="optional-page-loading" role="status" aria-live="polite">
+      <span />
+      <b>Loading {label}</b>
+    </div>
+  );
+}
 
 function MutationFailureAlert() {
   const { mutationError } = useStore();
@@ -109,8 +121,20 @@ function Shell() {
                 {page === 'control-room' && <ProductControlRoomRoute />}
                 {page === 'account' && <Account view="overview" />}
                 {page === 'wallets' && <Account view="overview" />}
-                {page === 'markets' && <Markets />}
-                {page === 'detail' && <TokenDetail symbol={detailSymbol} />}
+                {page === 'markets' && (
+                  <OptionalSurfaceGate surfaceId="markets">
+                    <Suspense fallback={<OptionalPageLoading label="Markets" />}>
+                      <LazyMarkets />
+                    </Suspense>
+                  </OptionalSurfaceGate>
+                )}
+                {page === 'detail' && (
+                  <OptionalSurfaceGate surfaceId="token">
+                    <Suspense fallback={<OptionalPageLoading label="Token" />}>
+                      <LazyTokenDetail symbol={detailSymbol} />
+                    </Suspense>
+                  </OptionalSurfaceGate>
+                )}
                 {page === 'loans' && <Loans />}
                 {page === 'execution' && <Account view="execution" />}
                 {page === 'orders' && <Account view="orders" />}
@@ -121,11 +145,29 @@ function Shell() {
                 {page === 'volume' && <VolumeScanner />}
                 {page === 'opportunities' && <Opportunities />}
                 {page === 'risk' && <Risk />}
-                {page === 'ledger' && <LedgerPage />}
+                {page === 'ledger' && (
+                  <OptionalSurfaceGate surfaceId="logs">
+                    <Suspense fallback={<OptionalPageLoading label="Logs" />}>
+                      <LazyLedgerPage />
+                    </Suspense>
+                  </OptionalSurfaceGate>
+                )}
                 {page === 'system' && <SystemHealth />}
                 {page === 'notifications' && <NotificationsPage />}
-                {page === 'news' && <News />}
-                {page === 'calendar' && <CalendarPage />}
+                {page === 'news' && (
+                  <OptionalSurfaceGate surfaceId="news">
+                    <Suspense fallback={<OptionalPageLoading label="News" />}>
+                      <LazyNews />
+                    </Suspense>
+                  </OptionalSurfaceGate>
+                )}
+                {page === 'calendar' && (
+                  <OptionalSurfaceGate surfaceId="calendar">
+                    <Suspense fallback={<OptionalPageLoading label="Calendar" />}>
+                      <LazyCalendarPage />
+                    </Suspense>
+                  </OptionalSurfaceGate>
+                )}
               </ErrorBoundary>
             </section>
             <footer className="footer">
@@ -160,12 +202,14 @@ function Shell() {
 
 export default function App() {
   return (
-    <StoreProvider>
-      <ProductControlRoomProvider client={productIntegrationClient} initialMaterialCursor={durableResumeCursor}>
-        <NotificationFeedProvider>
-          <Shell />
-        </NotificationFeedProvider>
-      </ProductControlRoomProvider>
-    </StoreProvider>
+    <OptionalSurfaceControlProvider>
+      <StoreProvider>
+        <ProductControlRoomProvider client={productIntegrationClient} initialMaterialCursor={durableResumeCursor}>
+          <NotificationFeedProvider>
+            <Shell />
+          </NotificationFeedProvider>
+        </ProductControlRoomProvider>
+      </StoreProvider>
+    </OptionalSurfaceControlProvider>
   );
 }

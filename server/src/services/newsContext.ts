@@ -863,6 +863,60 @@ let archivePersistTail: Promise<void> = Promise.resolve();
 const bodyInFlight = new Map<string, Promise<string>>();
 const bodyFailures = new Map<string, { until: number; message: string }>();
 let configuredFetchHosts: Set<string> | null = null;
+let lifecycleState: NewsContextLifecycleState = 'STOPPED';
+let lifecycleGeneration = 0;
+let lifecycleStartCount = 0;
+let lifecycleStopCount = 0;
+let lifecycleCancelled = 0;
+let activeRun: NewsContextRun | null = null;
+let stopSettlement: Promise<void> | null = null;
+
+export type NewsContextLifecycleState = 'STARTED' | 'STOPPING' | 'STOPPED';
+
+export interface NewsContextLifecycleStatus {
+  state: NewsContextLifecycleState;
+  generation: number;
+  startCount: number;
+  stopCount: number;
+  lifecycleCancelled: number;
+  refreshing: boolean;
+  bodyInFlight: number;
+}
+
+interface NewsContextRun {
+  readonly generation: number;
+  readonly controller: AbortController;
+}
+
+class NewsContextLifecycleAbort extends Error {
+  constructor() {
+    super('news context source stopped');
+    this.name = 'NewsContextLifecycleAbort';
+  }
+}
+
+function incrementBoundedCounter(value: number): number {
+  return value < Number.MAX_SAFE_INTEGER ? value + 1 : value;
+}
+
+function newsContextRunActive(run: NewsContextRun): boolean {
+  return lifecycleState === 'STARTED'
+    && lifecycleGeneration === run.generation
+    && activeRun === run
+    && !run.controller.signal.aborted;
+}
+
+function assertNewsContextRun(run: NewsContextRun): void {
+  if (!newsContextRunActive(run)) throw new NewsContextLifecycleAbort();
+}
+
+function isNewsContextLifecycleAbort(value: unknown): value is NewsContextLifecycleAbort {
+  return value instanceof NewsContextLifecycleAbort;
+}
+
+function generationScopedKey(run: NewsContextRun, identity: string): string {
+  return `${run.generation}\u0000${identity}`;
+}
 
 function bootstrapNewsSources(): NewsContextSource[] {
   const configured = [
@@ -910,17 +964,20 @@ function loadNewsArchive(): NewsContextItem[] {
   }
 }
 
-function persistNewsArchive(snapshot: NewsContextItem[]): void {
+function persistNewsArchive(snapshot: NewsContextItem[], run: NewsContextRun): void {
   const payload = JSON.stringify(snapshot.slice(0, NEWS_ARCHIVE_MAX_ITEMS));
   archivePersistTail = archivePersistTail
     .catch(() => undefined)
     .then(async () => {
+      assertNewsContextRun(run);
       const temp = `${NEWS_ARCHIVE_PATH}.${process.pid}.${Date.now()}.tmp`;
       try {
         assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, NEWS_ARCHIVE_PATH);
         await mkdir(path.dirname(NEWS_ARCHIVE_PATH), { recursive: true });
+        assertNewsContextRun(run);
         assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, NEWS_ARCHIVE_PATH);
         await writeFile(temp, payload, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+        assertNewsContextRun(run);
         assertDataDirCachePathHeld(DATA_DIR_AUTHORITY, NEWS_ARCHIVE_PATH);
         await rename(temp, NEWS_ARCHIVE_PATH);
       } finally {
@@ -930,7 +987,8 @@ function persistNewsArchive(snapshot: NewsContextItem[]): void {
     .catch(() => undefined);
 }
 
-function commitNewsArchive(currentItems: NewsContextItem[]): NewsContextItem[] {
+function commitNewsArchive(currentItems: NewsContextItem[], run: NewsContextRun): NewsContextItem[] {
+  assertNewsContextRun(run);
   const cutoff = Date.now() - NEWS_ARCHIVE_RETENTION_MS;
   const seen = new Set<string>();
   archive = [...currentItems, ...archive]
@@ -947,8 +1005,9 @@ function commitNewsArchive(currentItems: NewsContextItem[]): NewsContextItem[] {
     .slice(0, NEWS_ARCHIVE_MAX_ITEMS);
 
   if (Date.now() - archivePersistedAt >= 60_000) {
+    assertNewsContextRun(run);
     archivePersistedAt = Date.now();
-    persistNewsArchive(archive);
+    persistNewsArchive(archive, run);
   }
 
   const undated = currentItems.filter((item) => item.ts === null);
@@ -957,13 +1016,19 @@ function commitNewsArchive(currentItems: NewsContextItem[]): NewsContextItem[] {
 
 export async function getNewsContext(force = false): Promise<NewsContextPayload> {
   if (cache) {
-    if (force || Date.now() - cache.fetchedAt >= CACHE_MS) void startRefresh().catch(() => undefined);
+    if (lifecycleState === 'STARTED' && (force || Date.now() - cache.fetchedAt >= CACHE_MS)) {
+      void startRefresh().catch(() => undefined);
+    }
     return cache;
   }
   return startRefresh();
 }
 
 export function subscribeNewsContext(listener: (payload: NewsContextPayload) => void): () => void {
+  if (lifecycleState !== 'STARTED') {
+    if (cache) listener(cache);
+    return () => undefined;
+  }
   subscribers.add(listener);
   if (cache) listener(cache);
   return () => subscribers.delete(listener);
@@ -994,10 +1059,79 @@ export function refreshNewsContextNow(): Promise<NewsContextPayload> {
   return startRefresh();
 }
 
+export function newsContextLifecycle(): Readonly<NewsContextLifecycleStatus> {
+  return Object.freeze({
+    state: lifecycleState,
+    generation: lifecycleGeneration,
+    startCount: lifecycleStartCount,
+    stopCount: lifecycleStopCount,
+    lifecycleCancelled,
+    refreshing: inFlight !== null,
+    bodyInFlight: bodyInFlight.size,
+  });
+}
+
+export function newsContextRunState(): Readonly<NewsContextLifecycleStatus> {
+  return newsContextLifecycle();
+}
+
+export function startNewsContext(): Readonly<NewsContextLifecycleStatus> {
+  if (lifecycleState === 'STARTED' || stopSettlement) return newsContextLifecycle();
+  lifecycleGeneration = incrementBoundedCounter(lifecycleGeneration);
+  lifecycleStartCount = incrementBoundedCounter(lifecycleStartCount);
+  lifecycleState = 'STARTED';
+  bodyInFlight.clear();
+  bodyFailures.clear();
+  return newsContextLifecycle();
+}
+
+export function stopNewsContext(): Promise<Readonly<NewsContextLifecycleStatus>> {
+  if (stopSettlement) return stopSettlement.then(newsContextLifecycle);
+  if (lifecycleState === 'STOPPED') return archivePersistTail.then(newsContextLifecycle);
+  lifecycleState = 'STOPPING';
+  lifecycleGeneration = incrementBoundedCounter(lifecycleGeneration);
+  const owner = lifecycleGeneration;
+  lifecycleStopCount = incrementBoundedCounter(lifecycleStopCount);
+  const run = activeRun;
+  if (run) {
+    lifecycleCancelled = incrementBoundedCounter(lifecycleCancelled);
+    run.controller.abort(new NewsContextLifecycleAbort());
+  }
+  subscribers.clear();
+  const owned = [
+    ...(inFlight ? [inFlight] : []),
+    ...bodyInFlight.values(),
+    archivePersistTail,
+  ];
+  let settle!: () => void;
+  const settlement = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
+  stopSettlement = settlement;
+  void Promise.allSettled(owned).then(() => {
+    if (stopSettlement === settlement) {
+      if (lifecycleGeneration === owner) lifecycleState = 'STOPPED';
+      activeRun = null;
+      inFlight = null;
+      bodyInFlight.clear();
+      stopSettlement = null;
+    }
+    settle();
+  });
+  return settlement.then(newsContextLifecycle);
+}
+
 function startRefresh(): Promise<NewsContextPayload> {
+  if (lifecycleState !== 'STARTED') return Promise.reject(new NewsContextLifecycleAbort());
   if (!inFlight) {
-    const refresh = refreshNewsContext()
+    const run: NewsContextRun = {
+      generation: lifecycleGeneration,
+      controller: new AbortController(),
+    };
+    activeRun = run;
+    const refresh = refreshNewsContext(run)
       .then((payload) => {
+        assertNewsContextRun(run);
         cache = payload;
         subscribers.forEach((listener) => {
           try { listener(payload); } catch { /* stream disconnected */ }
@@ -1011,23 +1145,31 @@ function startRefresh(): Promise<NewsContextPayload> {
     // unhandled secondary rejection (the common `.finally()` footgun).
     void refresh.catch(() => undefined);
     void refresh.then(
-      () => { if (inFlight === refresh) inFlight = null; },
-      () => { if (inFlight === refresh) inFlight = null; },
+      () => {
+        if (inFlight === refresh) inFlight = null;
+        if (activeRun === run) activeRun = null;
+      },
+      () => {
+        if (inFlight === refresh) inFlight = null;
+        if (activeRun === run) activeRun = null;
+      },
     );
   }
   return inFlight;
 }
 
-async function refreshNewsContext(): Promise<NewsContextPayload> {
+async function refreshNewsContext(run: NewsContextRun): Promise<NewsContextPayload> {
+  assertNewsContextRun(run);
   const [primary, venue, protocol, issuer, tree, rss, lookonchain] = await Promise.all([
-    fetchPrimarySources(),
-    fetchVenueSources(),
-    fetchProtocolSources(),
-    fetchIssuerSources(),
-    fetchTree(),
-    fetchRssBundle(),
-    fetchLookonchain(),
+    fetchPrimarySources(run),
+    fetchVenueSources(run),
+    fetchProtocolSources(run),
+    fetchIssuerSources(run),
+    fetchTree(run),
+    fetchRssBundle(run),
+    fetchLookonchain(run),
   ]);
+  assertNewsContextRun(run);
   const seen = new Set<string>();
   // First-party and original-publisher rows win over relay copies.
   const currentItems = [...primary.items, ...venue.items, ...protocol.items, ...issuer.items, ...rss.items, ...lookonchain.items, ...tree.items]
@@ -1040,8 +1182,9 @@ async function refreshNewsContext(): Promise<NewsContextPayload> {
     })
     .sort(compareContextItems)
     .slice(0, NEWS_ARCHIVE_MAX_ITEMS);
-  const items = commitNewsArchive(currentItems);
+  const items = commitNewsArchive(currentItems, run);
 
+  assertNewsContextRun(run);
   return {
     source: 'primary+venue+protocol+issuer+tree+rss+lookonchain',
     fetchedAt: Date.now(),
@@ -1050,20 +1193,20 @@ async function refreshNewsContext(): Promise<NewsContextPayload> {
   };
 }
 
-async function fetchPrimarySources(): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
-  return fetchOfficialSources(PRIMARY_SOURCES, 'primary', primarySourceCache, PRIMARY_DEFAULT_MIN_FETCH_MS, 180);
+async function fetchPrimarySources(run: NewsContextRun): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
+  return fetchOfficialSources(PRIMARY_SOURCES, 'primary', primarySourceCache, PRIMARY_DEFAULT_MIN_FETCH_MS, 180, run);
 }
 
-async function fetchVenueSources(): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
-  return fetchOfficialSources(VENUE_SOURCES, 'venue', venueSourceCache, VENUE_DEFAULT_MIN_FETCH_MS, 160);
+async function fetchVenueSources(run: NewsContextRun): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
+  return fetchOfficialSources(VENUE_SOURCES, 'venue', venueSourceCache, VENUE_DEFAULT_MIN_FETCH_MS, 160, run);
 }
 
-async function fetchProtocolSources(): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
-  return fetchOfficialSources(PROTOCOL_SOURCES, 'protocol', protocolSourceCache, PROTOCOL_DEFAULT_MIN_FETCH_MS, 320);
+async function fetchProtocolSources(run: NewsContextRun): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
+  return fetchOfficialSources(PROTOCOL_SOURCES, 'protocol', protocolSourceCache, PROTOCOL_DEFAULT_MIN_FETCH_MS, 320, run);
 }
 
-async function fetchIssuerSources(): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
-  return fetchOfficialSources(ISSUER_SOURCES, 'issuer', issuerSourceCache, ISSUER_DEFAULT_MIN_FETCH_MS, 80);
+async function fetchIssuerSources(run: NewsContextRun): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
+  return fetchOfficialSources(ISSUER_SOURCES, 'issuer', issuerSourceCache, ISSUER_DEFAULT_MIN_FETCH_MS, 80, run);
 }
 
 async function fetchOfficialSources(
@@ -1072,13 +1215,16 @@ async function fetchOfficialSources(
   sourceCache: Map<string, RssFetchResult & { fetchedAt: number }>,
   defaultMinFetchMs: number,
   maxItems: number,
+  run: NewsContextRun,
 ): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
+  assertNewsContextRun(run);
   const fetchedAt = Date.now();
   const settled = await mapWithConcurrency(
     sources,
     OFFICIAL_SOURCE_CONCURRENCY,
-    (source) => fetchOfficialSource(source, fetchedAt, channel, sourceCache, defaultMinFetchMs),
+    (source) => fetchOfficialSource(source, fetchedAt, channel, sourceCache, defaultMinFetchMs, run),
   );
+  assertNewsContextRun(run);
   const items = settled
     .flatMap((res) => res.items)
     .sort(compareContextItems)
@@ -1095,7 +1241,9 @@ async function fetchOfficialSource(
   channel: NewsContextChannel,
   sourceCache: Map<string, RssFetchResult & { fetchedAt: number }>,
   defaultMinFetchMs: number,
+  run: NewsContextRun,
 ): Promise<RssFetchResult> {
+  assertNewsContextRun(run);
   const cached = sourceCache.get(source.key);
   const minFetchMs = source.minFetchMs ?? defaultMinFetchMs;
   if (cached && Date.now() - cached.fetchedAt < minFetchMs) {
@@ -1134,7 +1282,8 @@ async function fetchOfficialSource(
           Accept: 'application/rss+xml, application/atom+xml, application/xml, text/xml, */*',
           Referer: source.url,
         },
-      });
+      }, run);
+      assertNewsContextRun(run);
       return parseFeed(xml, feed, channel);
     }
     if (endpoint.kind === 'json') {
@@ -1143,7 +1292,8 @@ async function fetchOfficialSource(
           Accept: 'application/json, text/plain, */*',
           Referer: source.url,
         },
-      });
+      }, run);
+      assertNewsContextRun(run);
       return parseOfficialJson(data, source, endpoint, channel);
     }
     const html = await fetchText(endpoint.url, {
@@ -1151,10 +1301,12 @@ async function fetchOfficialSource(
         Accept: 'text/html,application/xhtml+xml,*/*',
         Referer: source.url,
       },
-    });
+    }, run);
+    assertNewsContextRun(run);
     return parseOfficialPage(html, source, endpoint, channel);
   }));
 
+  assertNewsContextRun(run);
   const errors = settled
     .filter((result): result is PromiseRejectedResult => result.status === 'rejected')
     .map((result) => errorMessage(result.reason));
@@ -1202,11 +1354,13 @@ async function fetchOfficialSource(
       domain: source.domain,
     },
   };
+  assertNewsContextRun(run);
   if (items.length || successCount) sourceCache.set(source.key, { ...result, fetchedAt });
   return result;
 }
 
-async function fetchTree(): Promise<{ items: NewsContextItem[]; source: NewsContextSource }> {
+async function fetchTree(run: NewsContextRun): Promise<{ items: NewsContextItem[]; source: NewsContextSource }> {
+  assertNewsContextRun(run);
   const fetchedAt = Date.now();
   if (treeSourceCache && fetchedAt - treeSourceCache.fetchedAt < TREE_MIN_FETCH_MS) {
     return {
@@ -1222,7 +1376,8 @@ async function fetchTree(): Promise<{ items: NewsContextItem[]; source: NewsCont
   const refreshHistory = !treeSourceCache || fetchedAt - treeHistoryFetchedAt >= TREE_HISTORY_FETCH_MS;
   const endpoint = refreshHistory ? TREE_HISTORY_URL : TREE_URL;
   try {
-    const data = await fetchJson<unknown[]>(endpoint, { headers: { Accept: 'application/json' } });
+    const data = await fetchJson<unknown[]>(endpoint, { headers: { Accept: 'application/json' } }, run);
+    assertNewsContextRun(run);
     const fresh = Array.isArray(data)
       ? data.slice(0, 5_000).map((row) => normalizeTree(row)).filter((row): row is NewsContextItem => Boolean(row)).filter(isUsefulNewsItem)
       : [];
@@ -1251,9 +1406,11 @@ async function fetchTree(): Promise<{ items: NewsContextItem[]; source: NewsCont
         domain: 'treeofalpha.com',
       },
     };
+    assertNewsContextRun(run);
     if (items.length) treeSourceCache = { ...result, fetchedAt };
     return result;
   } catch (err) {
+    assertNewsContextRun(run);
     if (treeSourceCache) {
       return {
         items: treeSourceCache.items,
@@ -1269,7 +1426,8 @@ async function fetchTree(): Promise<{ items: NewsContextItem[]; source: NewsCont
   }
 }
 
-async function fetchLookonchain(): Promise<{ items: NewsContextItem[]; source: NewsContextSource }> {
+async function fetchLookonchain(run: NewsContextRun): Promise<{ items: NewsContextItem[]; source: NewsContextSource }> {
+  assertNewsContextRun(run);
   const fetchedAt = Date.now();
   if (lookonchainSourceCache && fetchedAt - lookonchainSourceCache.fetchedAt < LOOKONCHAIN_MIN_FETCH_MS) {
     return {
@@ -1288,7 +1446,8 @@ async function fetchLookonchain(): Promise<{ items: NewsContextItem[]; source: N
 	        Referer: 'https://www.lookonchain.com/feeds',
 	        'User-Agent': USER_AGENT,
 	      },
-    });
+    }, run);
+    assertNewsContextRun(run);
     const data = parseLooseJson<{ success?: string; time?: string; content?: unknown[] }>(text);
     const sourceNow = parseLookonchainDate(String(data.time ?? '')) ?? Date.now();
     const items = data.success === 'Y' && Array.isArray(data.content)
@@ -1307,9 +1466,11 @@ async function fetchLookonchain(): Promise<{ items: NewsContextItem[]; source: N
 	        domain: 'lookonchain.com',
 	      },
     };
+    assertNewsContextRun(run);
     if (items.length) lookonchainSourceCache = { ...result, fetchedAt };
     return result;
   } catch (err) {
+    assertNewsContextRun(run);
 	  if (lookonchainSourceCache) {
       return {
         items: lookonchainSourceCache.items,
@@ -1320,9 +1481,11 @@ async function fetchLookonchain(): Promise<{ items: NewsContextItem[]; source: N
   }
 }
 
-async function fetchRssBundle(): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
+async function fetchRssBundle(run: NewsContextRun): Promise<{ items: NewsContextItem[]; sources: NewsContextSource[] }> {
+  assertNewsContextRun(run);
   const fetchedAt = Date.now();
-  const settled = await mapWithConcurrency(RSS_FEEDS, RSS_SOURCE_CONCURRENCY, (feed) => fetchRssFeed(feed, fetchedAt));
+  const settled = await mapWithConcurrency(RSS_FEEDS, RSS_SOURCE_CONCURRENCY, (feed) => fetchRssFeed(feed, fetchedAt, run));
+  assertNewsContextRun(run);
   const items = settled
     .flatMap((res) => res.items)
     .sort((a, b) => (b.ts ?? 0) - (a.ts ?? 0))
@@ -1333,7 +1496,8 @@ async function fetchRssBundle(): Promise<{ items: NewsContextItem[]; sources: Ne
   };
 }
 
-async function fetchRssFeed(feed: RssFeed, fetchedAt: number): Promise<RssFetchResult> {
+async function fetchRssFeed(feed: RssFeed, fetchedAt: number, run: NewsContextRun): Promise<RssFetchResult> {
+  assertNewsContextRun(run);
   const cached = rssSourceCache.get(feed.key);
   const minFetchMs = feed.minFetchMs ?? RSS_DEFAULT_MIN_FETCH_MS;
   if (cached && minFetchMs && Date.now() - cached.fetchedAt < minFetchMs) {
@@ -1356,7 +1520,8 @@ async function fetchRssFeed(feed: RssFeed, fetchedAt: number): Promise<RssFetchR
           Accept: 'text/html,application/xhtml+xml,*/*',
           Referer: `https://${feed.domain}/`,
         },
-      });
+      }, run);
+      assertNewsContextRun(run);
       const items = parseMediaPage(html, feed).slice(0, 80);
       const result: RssFetchResult = {
         items,
@@ -1371,6 +1536,7 @@ async function fetchRssFeed(feed: RssFeed, fetchedAt: number): Promise<RssFetchR
           domain: feed.domain,
         },
       };
+      assertNewsContextRun(run);
       if (items.length) rssSourceCache.set(feed.key, { ...result, fetchedAt });
       return result;
     }
@@ -1380,10 +1546,11 @@ async function fetchRssFeed(feed: RssFeed, fetchedAt: number): Promise<RssFetchR
         Accept: 'application/rss+xml, application/xml, text/xml, */*',
         Referer: `https://${feed.domain}/`,
       },
-    });
+    }, run);
+    assertNewsContextRun(run);
     const items = parseFeed(xml, feed).slice(0, 80);
     if (!items.length) {
-      const fallback = await fetchRssFallback(feed, fetchedAt, 'Feed returned no rows.');
+      const fallback = await fetchRssFallback(feed, fetchedAt, 'Feed returned no rows.', run);
       if (fallback) return fallback;
     }
     const result: RssFetchResult = {
@@ -1399,10 +1566,12 @@ async function fetchRssFeed(feed: RssFeed, fetchedAt: number): Promise<RssFetchR
         domain: feed.domain,
       },
     };
+    assertNewsContextRun(run);
     if (items.length) rssSourceCache.set(feed.key, { ...result, fetchedAt });
     return result;
   } catch (err) {
-    const fallback = await fetchRssFallback(feed, fetchedAt, errorMessage(err));
+    assertNewsContextRun(run);
+    const fallback = await fetchRssFallback(feed, fetchedAt, errorMessage(err), run);
     if (fallback) return fallback;
     if (cached) {
       return {
@@ -1420,7 +1589,8 @@ async function fetchRssFeed(feed: RssFeed, fetchedAt: number): Promise<RssFetchR
   }
 }
 
-async function fetchRssFallback(feed: RssFeed, fetchedAt: number, reason: string): Promise<RssFetchResult | null> {
+async function fetchRssFallback(feed: RssFeed, fetchedAt: number, reason: string, run: NewsContextRun): Promise<RssFetchResult | null> {
+  assertNewsContextRun(run);
   if (!feed.fallbackUrl) return null;
   try {
     const fallbackUrl = feed.fallbackUrl;
@@ -1429,7 +1599,8 @@ async function fetchRssFallback(feed: RssFeed, fetchedAt: number, reason: string
         Accept: 'text/html,application/xhtml+xml,*/*',
         Referer: `https://${feed.domain}/`,
       },
-    });
+    }, run);
+    assertNewsContextRun(run);
     const items = parseFallbackPage(html, feed);
     if (!items.length) return null;
     const result: RssFetchResult = {
@@ -1445,9 +1616,11 @@ async function fetchRssFallback(feed: RssFeed, fetchedAt: number, reason: string
         domain: feed.domain,
       },
     };
+    assertNewsContextRun(run);
     rssSourceCache.set(feed.key, { ...result, fetchedAt });
     return result;
-  } catch {
+  } catch (error) {
+    if (isNewsContextLifecycleAbort(error)) throw error;
     return null;
   }
 }
@@ -2184,31 +2357,35 @@ function parseLooseJson<T>(text: string): T {
   }
 }
 
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
+async function fetchJson<T>(url: string, init: RequestInit | undefined, run: NewsContextRun): Promise<T> {
+  assertNewsContextRun(run);
   const parseKey = `parse:${validateFetchUrl(url).toString()}`;
   const failure = bodyFailures.get(parseKey);
   if (failure && failure.until > Date.now()) throw new Error(failure.message);
   if (failure) bodyFailures.delete(parseKey);
-  const text = await fetchBodyWithRetry(url, init, 'json');
+  const text = await fetchBodyWithRetry(url, init, 'json', run);
+  assertNewsContextRun(run);
   try {
     const parsed = JSON.parse(text) as T;
     bodyFailures.delete(parseKey);
     return parsed;
   } catch {
+    assertNewsContextRun(run);
     const message = 'Invalid upstream JSON';
     boundedStateSet(bodyFailures, parseKey, { until: Date.now() + FETCH_FAILURE_TTL_MS, message });
     throw new Error(message);
   }
 }
 
-async function fetchText(url: string, init?: RequestInit): Promise<string> {
+async function fetchText(url: string, init: RequestInit | undefined, run: NewsContextRun): Promise<string> {
+  assertNewsContextRun(run);
   const accept = new Headers(init?.headers).get('accept')?.toLowerCase() ?? '';
   const expected = accept.includes('json') && !accept.includes('html') && !accept.includes('xml')
     ? 'json'
     : accept.includes('html')
       ? 'html'
       : 'xml';
-  return fetchBodyWithRetry(url, init, expected);
+  return fetchBodyWithRetry(url, init, expected, run);
 }
 
 type ExpectedBody = 'json' | 'html' | 'xml';
@@ -2307,12 +2484,20 @@ async function readBoundedText(res: Response): Promise<string> {
   return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
 }
 
-async function fetchBodyOnce(urlValue: string, init: RequestInit | undefined, expected: ExpectedBody): Promise<string> {
+async function fetchBodyOnce(
+  urlValue: string,
+  init: RequestInit | undefined,
+  expected: ExpectedBody,
+  run: NewsContextRun,
+): Promise<string> {
+  assertNewsContextRun(run);
   const method = normalizeNewsContextRequestMethod((init as { method?: unknown } | undefined)?.method);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
   const onCallerAbort = (): void => ctrl.abort();
+  const onLifecycleAbort = (): void => ctrl.abort(run.controller.signal.reason);
   init?.signal?.addEventListener('abort', onCallerAbort, { once: true });
+  run.controller.signal.addEventListener('abort', onLifecycleAbort, { once: true });
   try {
     let current = validateFetchUrl(urlValue);
     for (let redirects = 0; redirects <= 3; redirects += 1) {
@@ -2342,10 +2527,13 @@ async function fetchBodyOnce(urlValue: string, init: RequestInit | undefined, ex
         await res.body?.cancel().catch(() => undefined);
         throw new Error('Unexpected upstream content type');
       }
-      return await readBoundedText(res);
+      const body = await readBoundedText(res);
+      assertNewsContextRun(run);
+      return body;
     }
     throw new Error('Disallowed upstream redirect');
   } catch (err) {
+    assertNewsContextRun(run);
     if (ctrl.signal.aborted) throw new Error('Upstream timeout');
     if (err instanceof Error && (/^Upstream HTTP \d{3}$/.test(err.message)
       || err.message === 'Upstream response too large'
@@ -2355,6 +2543,7 @@ async function fetchBodyOnce(urlValue: string, init: RequestInit | undefined, ex
   } finally {
     clearTimeout(timer);
     init?.signal?.removeEventListener('abort', onCallerAbort);
+    run.controller.signal.removeEventListener('abort', onLifecycleAbort);
   }
 }
 
@@ -2365,16 +2554,23 @@ function retryableFetchError(err: unknown): boolean {
   return status === 408 || status === 429 || status >= 500;
 }
 
-async function fetchBodyWithRetry(urlValue: string, init: RequestInit | undefined, expected: ExpectedBody): Promise<string> {
+async function fetchBodyWithRetry(
+  urlValue: string,
+  init: RequestInit | undefined,
+  expected: ExpectedBody,
+  run: NewsContextRun,
+): Promise<string> {
   // Reject before URL/cache/single-flight handling so a hostile method cannot
   // join an already-running GET or create policy state without owner approval.
+  assertNewsContextRun(run);
   normalizeNewsContextRequestMethod((init as { method?: unknown } | undefined)?.method);
   const url = validateFetchUrl(urlValue);
   const accept = new Headers(init?.headers).get('accept') ?? '';
-  const key = `${expected}:${url.toString()}:${accept.slice(0, 256)}`;
-  const failure = bodyFailures.get(key);
+  const identity = `${expected}:${url.toString()}:${accept.slice(0, 256)}`;
+  const key = generationScopedKey(run, identity);
+  const failure = bodyFailures.get(identity);
   if (failure && failure.until > Date.now()) throw new Error(failure.message);
-  if (failure) bodyFailures.delete(key);
+  if (failure) bodyFailures.delete(identity);
   const existing = bodyInFlight.get(key);
   if (existing) return existing;
 
@@ -2382,29 +2578,45 @@ async function fetchBodyWithRetry(urlValue: string, init: RequestInit | undefine
     let lastErr: unknown;
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        const body = await fetchBodyOnce(url.toString(), init, expected);
-        bodyFailures.delete(key);
+        const body = await fetchBodyOnce(url.toString(), init, expected, run);
+        assertNewsContextRun(run);
+        bodyFailures.delete(identity);
         return body;
       } catch (err) {
+        if (isNewsContextLifecycleAbort(err)) throw err;
+        assertNewsContextRun(run);
         lastErr = err;
         if (!retryableFetchError(err) || attempt === 1) break;
-        await sleep(350 * (attempt + 1));
+        await sleep(350 * (attempt + 1), run);
       }
     }
+    assertNewsContextRun(run);
     const message = errorMessage(lastErr);
-    boundedStateSet(bodyFailures, key, { until: Date.now() + FETCH_FAILURE_TTL_MS, message });
+    boundedStateSet(bodyFailures, identity, { until: Date.now() + FETCH_FAILURE_TTL_MS, message });
     throw new Error(message);
   })();
   boundedStateSet(bodyInFlight, key, work);
   try {
     return await work;
   } finally {
-    bodyInFlight.delete(key);
+    if (bodyInFlight.get(key) === work) bodyInFlight.delete(key);
   }
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function sleep(ms: number, run: NewsContextRun): Promise<void> {
+  if (!newsContextRunActive(run)) return Promise.reject(new NewsContextLifecycleAbort());
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      run.controller.signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      run.controller.signal.removeEventListener('abort', onAbort);
+      reject(new NewsContextLifecycleAbort());
+    };
+    run.controller.signal.addEventListener('abort', onAbort, { once: true });
+  });
 }
 
 function sourceError(key: string, label: string, err: unknown, url: string | null = null, domain: string | null = null): NewsContextSource {

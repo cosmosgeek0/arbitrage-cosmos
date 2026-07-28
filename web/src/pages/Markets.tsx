@@ -1,11 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { resolveMarketFreshness, useStore } from '../store';
+import {
+  normalizeMarketSourceTime,
+  resolveMarketFreshness,
+  useStore,
+  type CompatibilityStateStatus,
+} from '../store';
 import { TokenIcon, brandColor } from '../components/TokenIcon';
 import { Num } from '../components/Num';
 import { EmptyState } from '../components/ui';
 import { IconSearch } from '../components/Icons';
 import { fmtPrice, fmtPct, fmtBasis, fmtMoney, fmtFunding, signClass } from '../format';
 import { primeIcons } from '../lib/iconManifest';
+import { apiErrorMessage, fetchJson } from '../lib/http';
+import { useOptionalSurface } from '../lib/optionalSurfaceControl';
+import { createSettledPoll } from '../lib/polling';
 import { tokenName } from '../lib/tokenNames';
 import { PillSelect, pageList, Star } from '../components/PillSelect';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
@@ -34,6 +42,13 @@ type SortKey =
   | 'sparkGrowth';
 
 const VIEW_STORAGE = 'cosmos-market-view-v2';
+const ICON_BASE_PATTERN = /^[A-Z0-9\u3400-\u9fff]{1,24}$/u;
+const ICON_BASE_SEPARATOR = ',';
+
+interface MarketEnrichmentResponse {
+  readonly updatedAt?: number;
+  readonly rows: MarketRow[];
+}
 
 const VIEWS: { id: View; label: string; sort: SortKey }[] = [
   { id: 'overview', label: 'Overview', sort: 'quoteVolume24h' },
@@ -63,6 +78,13 @@ function readMarketView(): View {
 }
 
 const finite = (value: number | null | undefined): value is number => typeof value === 'number' && Number.isFinite(value);
+
+function iconBaseSetIdentity(markets: readonly MarketRow[]): string {
+  const bases = markets
+    .map((market) => market.base.trim().toUpperCase())
+    .filter((base) => ICON_BASE_PATTERN.test(base));
+  return [...new Set(bases)].sort().join(ICON_BASE_SEPARATOR);
+}
 
 function fmtLiveAge(ms: number | null): string {
   if (ms === null || !Number.isFinite(ms)) return '—';
@@ -212,17 +234,23 @@ function ChangeCell({ value }: { value: number | null | undefined }) {
 
 export function Markets() {
   const {
-    markets,
-    marketStatus,
-    marketsLastSuccessAtMs,
-    marketsUpdatedAt,
-    marketsError,
+    markets: leanMarkets,
+    marketStatus: leanMarketStatus,
+    marketsLastSuccessAtMs: leanMarketsLastSuccessAtMs,
+    marketsUpdatedAt: leanMarketsUpdatedAt,
+    marketsError: leanMarketsError,
     connected,
     state,
     prefs,
     openDetail,
     toggleWatch,
   } = useStore();
+  const marketsSurface = useOptionalSurface('markets');
+  const [enrichedMarkets, setEnrichedMarkets] = useState<MarketRow[]>([]);
+  const [enrichmentStatus, setEnrichmentStatus] = useState<CompatibilityStateStatus>('LOADING');
+  const [enrichmentLastSuccessAtMs, setEnrichmentLastSuccessAtMs] = useState<number | null>(null);
+  const [enrichmentUpdatedAt, setEnrichmentUpdatedAt] = useState<number | null>(null);
+  const [enrichmentError, setEnrichmentError] = useState<string | null>(null);
   const initialView = readMarketView();
   const [view, setView] = useState<View>(initialView);
   const [filter, setFilter] = useState<Filter>('all');
@@ -233,12 +261,89 @@ export function Markets() {
   const [pageSize, setPageSize] = useState(25);
   const [now, setNow] = useState(() => Date.now());
 
+  const enrichmentCurrent = marketsSurface.enabled
+    && enrichmentStatus === 'CURRENT'
+    && enrichmentLastSuccessAtMs !== null;
+  // Select one complete snapshot. The passive Store cut keeps first render
+  // useful; current enrichment replaces it wholesale and is never field-merged.
+  const markets = !marketsSurface.enabled
+    ? []
+    : enrichmentCurrent
+      ? enrichedMarkets
+      : leanMarkets;
+  const marketStatus = enrichmentCurrent ? 'CURRENT' : leanMarketStatus;
+  const marketsLastSuccessAtMs = enrichmentCurrent
+    ? enrichmentLastSuccessAtMs
+    : leanMarketsLastSuccessAtMs;
+  const marketsUpdatedAt = enrichmentCurrent ? enrichmentUpdatedAt : leanMarketsUpdatedAt;
+  const marketsError = enrichmentCurrent ? enrichmentError : leanMarketsError;
+  const marketDatasetLabel = enrichmentCurrent
+    ? 'On-Demand Enriched Snapshot'
+    : enrichmentStatus === 'LOADING'
+      ? 'Lean Published Cut · Enrichment Loading'
+      : enrichmentStatus === 'STALE'
+        ? 'Lean Published Cut · Enrichment Stale'
+        : 'Lean Published Cut · Enrichment Unavailable';
   const watchlist = state?.config.watchlist ?? [];
   const feesPct = state?.config.feesPct ?? 0;
   const marketReadSucceeded = marketsLastSuccessAtMs !== null;
-  const iconBases = useMemo(() => [...new Set(markets.map((market) => market.base))], [markets]);
+  const iconBasesIdentity = useMemo(() => iconBaseSetIdentity(markets), [markets]);
 
-  useEffect(() => { primeIcons(iconBases); }, [iconBases]);
+  useEffect(
+    () => primeIcons(iconBasesIdentity ? iconBasesIdentity.split(ICON_BASE_SEPARATOR) : []),
+    [iconBasesIdentity],
+  );
+  useEffect(() => {
+    if (!marketsSurface.enabled) {
+      setEnrichedMarkets([]);
+      setEnrichmentStatus(marketsSurface.controlStatus === 'LOADING' ? 'LOADING' : 'UNAVAILABLE');
+      setEnrichmentLastSuccessAtMs(null);
+      setEnrichmentUpdatedAt(null);
+      setEnrichmentError(marketsSurface.controlError
+        ?? marketsSurface.snapshot.failureCode
+        ?? 'OPTIONAL_SURFACE_OFF');
+      return;
+    }
+
+    setEnrichedMarkets([]);
+    setEnrichmentStatus('LOADING');
+    setEnrichmentLastSuccessAtMs(null);
+    setEnrichmentUpdatedAt(null);
+    setEnrichmentError(null);
+    const marketSec = prefs.dataCadence?.market ?? prefs.refreshSec;
+    const poll = createSettledPoll<MarketEnrichmentResponse>({
+      intervalMs: Math.max(0.5, marketSec) * 1_000,
+      request: (signal) => fetchJson<MarketEnrichmentResponse>(
+        '/api/markets/enrichment',
+        { cache: 'no-store', signal },
+        10_000,
+      ),
+      onSuccess: (payload) => {
+        if (!Array.isArray(payload.rows)) throw new Error('Invalid market enrichment response');
+        setEnrichedMarkets(payload.rows);
+        setEnrichmentUpdatedAt(normalizeMarketSourceTime(payload.updatedAt));
+        setEnrichmentLastSuccessAtMs(Date.now());
+        setEnrichmentError(null);
+        setEnrichmentStatus('CURRENT');
+      },
+      onError: (cause) => {
+        setEnrichmentStatus((current) => current === 'CURRENT' || current === 'STALE'
+          ? 'STALE'
+          : 'UNAVAILABLE');
+        setEnrichmentError(apiErrorMessage(cause, 'Market enrichment unavailable'));
+      },
+    });
+    poll.start();
+    return poll.stop;
+  }, [
+    marketsSurface.controlError,
+    marketsSurface.controlStatus,
+    marketsSurface.enabled,
+    marketsSurface.snapshot.failureCode,
+    marketsSurface.snapshot.generation,
+    prefs.dataCadence?.market,
+    prefs.refreshSec,
+  ]);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
@@ -384,7 +489,7 @@ export function Markets() {
             <div className="mkx-source-mark"><img className="mkx-market-mark" src="/markets-chart.png" alt="" aria-hidden="true" /></div>
             <span>
               <h1>Markets</h1>
-              <small>Binance Spot + USD-M Reference Universe</small>
+              <small>Binance Spot + USD-M Reference Universe · {marketDatasetLabel}</small>
             </span>
           </div>
           <div className="mkx-tools">
@@ -453,7 +558,7 @@ export function Markets() {
         </div>
 
         <footer className="mkx-footer">
-          <span>Source: Binance Public Market Data · Native Charts Use Tracked Market Samples</span>
+          <span>Source: {marketDatasetLabel} · Native Charts Use Tracked Market Samples</span>
           {pages > 1 && (
             <nav className="mkx-pager" aria-label="Market Pagination">
               <button type="button" disabled={safePage === 0} onClick={() => setPageN(safePage - 1)} aria-label="Previous Page">‹</button>

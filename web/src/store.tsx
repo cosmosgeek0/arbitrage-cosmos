@@ -949,8 +949,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return poll.stop;
   }, [applyPrivateReadUpdate, nextPrivateReadRequestId, prefs.dataCadence?.account, privateReadSource]);
 
-  // markets poll at the preferred source cadence. `refreshSec` is retained as
-  // the legacy market value; `dataCadence.market` is the new source map.
+  // The shared poll reads only the passive published market cut. Expensive
+  // REST enrichment belongs exclusively to the admitted Markets page.
+  // `refreshSec` is retained as the legacy market value.
   useEffect(() => {
     const marketSec = prefs.dataCadence?.market ?? prefs.refreshSec;
     const poll = createSettledPoll<{ updatedAt?: number; rows: MarketRow[] }>({
@@ -1031,6 +1032,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   // Read-only browser snapshot refresh retained for compatibility consumers.
+  // Its market read is the same passive cut and never bypasses Markets
+  // optional-surface admission through the enrichment route.
   // It never calls the managed-runtime /api/refresh targets: those require the
   // canonical Product preview/digest/revision/receipt protocol.
   const refresh = useCallback(async (): Promise<RefreshResult> => {

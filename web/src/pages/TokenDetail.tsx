@@ -13,6 +13,7 @@ import { TradingViewWidget } from '../components/TradingViewWidget';
 import type { BasisRow as BasisEngineRow, BasisSnapshot as BasisEngineSnapshot } from '../lib/basisRuntime';
 import { BoundedTtlCache } from '../lib/boundedTtlCache';
 import { apiErrorMessage, fetchJson } from '../lib/http';
+import { useOptionalSurface } from '../lib/optionalSurfaceControl';
 import { createSettledPoll } from '../lib/polling';
 import {
   parseSymbolAccountContext,
@@ -1242,6 +1243,7 @@ function TokenEvidenceWorkspace({
 
 export function TokenDetail({ symbol }: { symbol: string }) {
   const { markets, state, prefs, toggleWatch, setPage, openDetail } = useStore();
+  const newsSurface = useOptionalSurface('news');
   const [range, setRange] = useState<RangeKey>('1D');
   const [ivl, setIvl] = useState<'auto' | IntervalKey>('auto');
   const [tv, setTv] = useState(false);
@@ -1266,6 +1268,11 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   const name = profile?.name ?? tokenName(base);
   const watchlisted = state?.config.watchlist.includes(symbol) ?? false;
   const hasPerp = live?.hasPerp ?? false;
+  const newsAdmissionError = newsSurface.enabled || newsSurface.controlStatus === 'LOADING'
+    ? null
+    : newsSurface.controlError
+      ?? newsSurface.snapshot.failureCode
+      ?? 'OPTIONAL_SURFACE_OFF';
 
   // The shell keeps one scroll container across routes. A symbol workspace
   // must always open at its identity and live snapshot, never halfway down a
@@ -1421,7 +1428,9 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   // explicit owner-supplied symbol tags, never title heuristics.
   useEffect(() => {
     setNewsContext(null);
-    setNewsContextError(null);
+    setNewsContextError(newsAdmissionError);
+    if (!newsSurface.enabled) return;
+
     const poll = createSettledPoll<TokenNewsContext>({
       intervalMs: 15_000,
       request: async (signal) => {
@@ -1441,7 +1450,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
     });
     poll.start();
     return poll.stop;
-  }, [symbol]);
+  }, [newsAdmissionError, newsSurface.enabled, symbol]);
 
   const points = useMemo(() => {
     if (candles.length) return candles.map((c) => ({ t: c.t, v: c.c }));

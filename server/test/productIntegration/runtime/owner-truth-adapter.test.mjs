@@ -348,7 +348,7 @@ test('available injected cuts bind every owned row to exact source facts or a sp
         assert.match(field.unavailableReason, /^[A-Z][A-Z0-9_]{0,63}$/);
         assert.notEqual(field.unavailableReason, 'CANONICAL_OWNER_FIELD_NOT_CONFIGURED');
       }
-      assert.match(field.source, /^(systemIntegration\.supervisor|services\.privateRead|intelligenceRuntime\.marketSources)$/);
+      assert.match(field.source, /^(systemIntegration\.supervisor|services\.privateRead|intelligenceRuntime\.publishedMarketState)$/);
     }
   }
 

@@ -100,6 +100,7 @@ export type TokenProfileRefreshErrorCode =
   | 'TOKEN_PROFILE_CAPACITY_REACHED'
   | 'TOKEN_PROFILE_DEADLINE_EXCEEDED'
   | 'TOKEN_PROFILE_ID_UNAVAILABLE'
+  | 'TOKEN_PROFILE_SOURCE_STOPPED'
   | 'TOKEN_PROFILE_SOURCE_UNAVAILABLE';
 
 export interface TokenProfileDelivery {
@@ -122,8 +123,11 @@ interface CacheEntry {
   profileTs: number;
 }
 
-type ProfileRequestFailureCode = 'TOKEN_PROFILE_CAPACITY_REACHED' | 'TOKEN_PROFILE_DEADLINE_EXCEEDED';
-type ProfileRequestState = 'QUEUED' | 'ACTIVE' | 'EXPIRED_ACTIVE' | 'SETTLED';
+type ProfileRequestFailureCode =
+  | 'TOKEN_PROFILE_CAPACITY_REACHED'
+  | 'TOKEN_PROFILE_DEADLINE_EXCEEDED'
+  | 'TOKEN_PROFILE_SOURCE_STOPPED';
+type ProfileRequestState = 'QUEUED' | 'ACTIVE' | 'DETACHED_ACTIVE' | 'SETTLED';
 
 interface ProfileRequestHandle<T> {
   readonly result: Promise<T>;
@@ -138,6 +142,7 @@ interface ProfileRequestJob {
   deadlineTimer: NodeJS.Timeout | null;
   readonly resolve: (value: unknown) => void;
   readonly reject: (reason: unknown) => void;
+  readonly transportSettled: Promise<void>;
   readonly resolveTransportSettled: () => void;
 }
 
@@ -167,6 +172,48 @@ let persistTimer: NodeJS.Timeout | null = null;
 let persistDirty = false;
 let persistSequence = 0;
 let persistTail: Promise<void> = Promise.resolve();
+let warmRun: Promise<void> | null = null;
+
+export type ProfileSourceLifecycleState = 'STARTED' | 'STOPPING' | 'STOPPED';
+
+export interface ProfileSourceLifecycleStatus {
+  state: ProfileSourceLifecycleState;
+  generation: number;
+  startCount: number;
+  stopCount: number;
+  lifecycleCancelled: number;
+  activeRequests: number;
+  queuedRequests: number;
+  inFlightKeys: number;
+  warming: boolean;
+}
+
+let lifecycleState: ProfileSourceLifecycleState = 'STOPPED';
+let lifecycleGeneration = 0;
+let lifecycleStartCount = 0;
+let lifecycleStopCount = 0;
+let lifecycleCancelled = 0;
+let stopSettlement: Promise<void> | null = null;
+
+function profileSourceAdmits(): boolean {
+  return lifecycleState === 'STARTED';
+}
+
+function profileSourceGenerationActive(owner: number): boolean {
+  return profileSourceAdmits() && lifecycleGeneration === owner;
+}
+
+function stoppedFailure(): ProfileRequestFailure {
+  return new ProfileRequestFailure('TOKEN_PROFILE_SOURCE_STOPPED', 'token profile source stopped');
+}
+
+function assertProfileSourceGeneration(owner: number): void {
+  if (!profileSourceGenerationActive(owner)) throw stoppedFailure();
+}
+
+function generationScopedKey(owner: number, identity: string): string {
+  return `${owner}\u0000${identity}`;
+}
 
 function canonicalBase(value: string): string | null {
   const base = value.trim().toUpperCase();
@@ -291,12 +338,12 @@ function clearProfilePaceTimer(): void {
 }
 
 function completeActiveProfileRequest(job: ProfileRequestJob, value: unknown, rejected: boolean): void {
-  if (job.state !== 'ACTIVE' && job.state !== 'EXPIRED_ACTIVE') return;
-  const expired = job.state === 'EXPIRED_ACTIVE';
+  if (job.state !== 'ACTIVE' && job.state !== 'DETACHED_ACTIVE') return;
+  const detached = job.state === 'DETACHED_ACTIVE';
   if (activeProfileRequest === job) activeProfileRequest = null;
   job.state = 'SETTLED';
   clearProfileRequestDeadline(job);
-  if (!expired) {
+  if (!detached) {
     if (rejected) job.reject(value);
     else job.resolve(value);
   }
@@ -309,7 +356,7 @@ function expireProfileRequest(job: ProfileRequestJob): void {
   profileDeadlineExceeded = incrementBoundedCounter(profileDeadlineExceeded);
   const failure = deadlineFailure();
   if (job.state === 'ACTIVE') {
-    job.state = 'EXPIRED_ACTIVE';
+    job.state = 'DETACHED_ACTIVE';
     clearProfileRequestDeadline(job);
     job.reject(failure);
     job.controller.abort(failure);
@@ -325,6 +372,25 @@ function expireProfileRequest(job: ProfileRequestJob): void {
   pumpProfileRequestQueue();
 }
 
+function cancelProfileRequestForLifecycle(job: ProfileRequestJob): void {
+  if (job.state !== 'QUEUED' && job.state !== 'ACTIVE') return;
+  lifecycleCancelled = incrementBoundedCounter(lifecycleCancelled);
+  const failure = stoppedFailure();
+  if (job.state === 'ACTIVE') {
+    job.state = 'DETACHED_ACTIVE';
+    clearProfileRequestDeadline(job);
+    job.reject(failure);
+    job.controller.abort(failure);
+    return;
+  }
+  removeQueuedProfileRequest(job);
+  job.state = 'SETTLED';
+  clearProfileRequestDeadline(job);
+  job.controller.abort(failure);
+  job.reject(failure);
+  job.resolveTransportSettled();
+}
+
 function startProfileRequest(job: ProfileRequestJob): void {
   job.state = 'ACTIVE';
   activeProfileRequest = job;
@@ -336,6 +402,7 @@ function startProfileRequest(job: ProfileRequestJob): void {
 }
 
 function pumpProfileRequestQueue(): void {
+  if (!profileSourceAdmits()) return;
   if (activeProfileRequest || profilePaceTimer) return;
   const job = profileRequestQueue[0];
   if (!job) return;
@@ -379,6 +446,7 @@ function enqueueProfileRequest<T>(url: URL): ProfileRequestHandle<T> {
     deadlineTimer: null,
     resolve,
     reject,
+    transportSettled,
     resolveTransportSettled,
   };
   job.deadlineTimer = setTimeout(() => expireProfileRequest(job), FETCH_TIMEOUT_MS);
@@ -388,8 +456,9 @@ function enqueueProfileRequest<T>(url: URL): ProfileRequestHandle<T> {
   return { result: result as Promise<T>, transportSettled };
 }
 
-async function politeJson<T>(urlValue: string): Promise<T> {
+async function politeJson<T>(urlValue: string, owner: number): Promise<T> {
   if (deterministicOfflinePublicSourcesEnabled()) throw new Error('CoinGecko unavailable');
+  assertProfileSourceGeneration(owner);
   const url = new URL(urlValue);
   if (url.protocol !== 'https:' || url.hostname !== 'api.coingecko.com' || !url.pathname.startsWith('/api/v3/')) {
     throw new Error('CoinGecko unavailable');
@@ -398,19 +467,21 @@ async function politeJson<T>(urlValue: string): Promise<T> {
   const failure = fetchFailures.get(key);
   if (failure && failure.until > Date.now()) throw new Error(failure.message);
   if (failure) fetchFailures.delete(key);
-  const existing = fetchInFlight.get(key);
+  const flightKey = generationScopedKey(owner, key);
+  const existing = fetchInFlight.get(flightKey);
   if (existing) return existing as Promise<T>;
 
   const queued = enqueueProfileRequest<T>(url);
   const work = queued.result.catch((err) => {
     if (isProfileRequestFailure(err)) throw err;
+    assertProfileSourceGeneration(owner);
     const message = safeFetchMessage(err);
     boundedSet(fetchFailures, key, { until: Date.now() + FETCH_FAILURE_TTL_MS, message }, 512);
     throw new Error(message);
   });
-  fetchInFlight.set(key, work);
+  fetchInFlight.set(flightKey, work);
   void queued.transportSettled.then(() => {
-    if (fetchInFlight.get(key) === work) fetchInFlight.delete(key);
+    if (fetchInFlight.get(flightKey) === work) fetchInFlight.delete(flightKey);
   });
   return work;
 }
@@ -538,7 +609,7 @@ function enqueueProfilePersist(): Promise<void> {
 
 function persist(): void {
   persistDirty = true;
-  if (persistTimer) return;
+  if (persistTimer || !profileSourceAdmits()) return;
   persistTimer = setTimeout(() => {
     persistTimer = null;
     void enqueueProfilePersist();
@@ -555,10 +626,85 @@ export async function flushProfileCache(): Promise<void> {
   } while (persistDirty);
 }
 
-async function resolveId(base: string): Promise<string | null> {
+export function profileSourceLifecycle(): Readonly<ProfileSourceLifecycleStatus> {
+  return Object.freeze({
+    state: lifecycleState,
+    generation: lifecycleGeneration,
+    startCount: lifecycleStartCount,
+    stopCount: lifecycleStopCount,
+    lifecycleCancelled,
+    activeRequests: activeProfileRequest ? 1 : 0,
+    queuedRequests: profileRequestQueue.length,
+    inFlightKeys: fetchInFlight.size + profileInFlight.size,
+    warming: warmRun !== null,
+  });
+}
+
+export function startProfileSource(): Readonly<ProfileSourceLifecycleStatus> {
+  if (lifecycleState === 'STARTED' || stopSettlement) return profileSourceLifecycle();
+  lifecycleGeneration = incrementBoundedCounter(lifecycleGeneration);
+  lifecycleStartCount = incrementBoundedCounter(lifecycleStartCount);
+  lifecycleState = 'STARTED';
+  fetchInFlight.clear();
+  profileInFlight.clear();
+  if (persistDirty) persist();
+  pumpProfileRequestQueue();
+  return profileSourceLifecycle();
+}
+
+async function drainProfileSource(owner: number): Promise<void> {
+  clearProfilePaceTimer();
+  const queued = [...profileRequestQueue];
+  for (const job of queued) cancelProfileRequestForLifecycle(job);
+  const active = activeProfileRequest;
+  if (active) cancelProfileRequestForLifecycle(active);
+  const pending: Promise<unknown>[] = [
+    ...fetchInFlight.values(),
+    ...profileInFlight.values(),
+  ];
+  if (active) pending.push(active.transportSettled);
+  if (warmRun) pending.push(warmRun);
+  await Promise.allSettled(pending);
+  await flushProfileCache();
+  if (lifecycleGeneration === owner) {
+    fetchInFlight.clear();
+    profileInFlight.clear();
+    lifecycleState = 'STOPPED';
+  }
+}
+
+export function stopProfileSource(): Promise<Readonly<ProfileSourceLifecycleStatus>> {
+  if (stopSettlement) return stopSettlement.then(profileSourceLifecycle);
+  if (lifecycleState === 'STOPPED') {
+    return (persistDirty ? flushProfileCache() : Promise.resolve()).then(profileSourceLifecycle);
+  }
+  lifecycleGeneration = incrementBoundedCounter(lifecycleGeneration);
+  const owner = lifecycleGeneration;
+  lifecycleStopCount = incrementBoundedCounter(lifecycleStopCount);
+  lifecycleState = 'STOPPING';
+  let settle!: () => void;
+  const settlement = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
+  stopSettlement = settlement;
+  void drainProfileSource(owner)
+    .catch(() => undefined)
+    .then(() => {
+      if (stopSettlement === settlement) {
+        if (lifecycleGeneration === owner) lifecycleState = 'STOPPED';
+        stopSettlement = null;
+      }
+      settle();
+    });
+  return settlement.then(profileSourceLifecycle);
+}
+
+async function resolveId(base: string, owner: number): Promise<string | null> {
+  assertProfileSourceGeneration(owner);
   const hit = cache.get(base);
   const directId = DIRECT_IDS[base];
   if (directId) {
+    assertProfileSourceGeneration(owner);
     if (hit?.id !== directId || (hit.profile && hit.profile.id !== directId)) {
       boundedSet(cache, base, {
         id: directId,
@@ -575,7 +721,9 @@ async function resolveId(base: string): Promise<string | null> {
   const q = QUERY_ALIASES[base] ?? base;
   const data = await politeJson<{ coins?: { id: string; symbol: string; market_cap_rank: number | null }[] }>(
     `${CG}/search?query=${encodeURIComponent(q)}`,
+    owner,
   );
+  assertProfileSourceGeneration(owner);
   const want = (MATCH_ALIASES[base] ?? base).toUpperCase();
   let matches = (Array.isArray(data.coins) ? data.coins : [])
     .slice(0, 1_000)
@@ -589,7 +737,9 @@ async function resolveId(base: string): Promise<string | null> {
     if (bare && bare !== want) {
       const d2 = await politeJson<{ coins?: { id: string; symbol: string; market_cap_rank: number | null }[] }>(
         `${CG}/search?query=${encodeURIComponent(bare)}`,
+        owner,
       );
+      assertProfileSourceGeneration(owner);
       matches = (Array.isArray(d2.coins) ? d2.coins : [])
         .slice(0, 1_000)
         .filter((c) => typeof c?.symbol === 'string'
@@ -599,6 +749,7 @@ async function resolveId(base: string): Promise<string | null> {
     }
   }
   const best = matches.sort((a, b) => (a.market_cap_rank ?? 1e9) - (b.market_cap_rank ?? 1e9))[0] ?? null;
+  assertProfileSourceGeneration(owner);
   const entry: CacheEntry = cache.get(base) ?? { id: null, idTs: 0, profile: null, profileTs: 0 };
   entry.id = cappedString(best?.id, 128);
   entry.idTs = Date.now();
@@ -620,17 +771,19 @@ function num(v: unknown): number | null {
   return typeof v === 'number' && Number.isFinite(v) ? v : null;
 }
 
-async function loadDominance(): Promise<Record<string, number>> {
+async function loadDominance(owner: number): Promise<Record<string, number>> {
   if (globalDominance && Date.now() - globalDominance.ts < PROFILE_TTL) return globalDominance.pct;
   try {
-    const data = await politeJson<{ data?: { market_cap_percentage?: Record<string, number> } }>(`${CG}/global`);
+    const data = await politeJson<{ data?: { market_cap_percentage?: Record<string, number> } }>(`${CG}/global`, owner);
+    assertProfileSourceGeneration(owner);
     const raw = data.data?.market_cap_percentage;
     const pct = raw && typeof raw === 'object'
       ? Object.fromEntries(Object.entries(raw).slice(0, 512).filter(([, value]) => Number.isFinite(value)))
       : {};
     globalDominance = { ts: Date.now(), pct };
     return globalDominance.pct;
-  } catch {
+  } catch (error) {
+    if (isProfileRequestFailure(error)) throw error;
     return globalDominance?.pct ?? {};
   }
 }
@@ -681,8 +834,14 @@ export async function tokenProfile(base: string, opts?: { forceFull?: boolean })
   if (hit?.profile && cachedIdentityIsCanonical && cachedAgeMs !== null && cachedAgeMs < PROFILE_TTL && (hit.profile.full || !opts?.forceFull)) {
     return servedProfile(hit.profile, hit.profileTs, 'CACHE', 'NOT_REQUIRED', null);
   }
+  if (!profileSourceAdmits()) {
+    return hit?.profile
+      ? servedProfile(hit.profile, hit.profileTs, 'CACHE', 'FAILED', 'TOKEN_PROFILE_SOURCE_STOPPED')
+      : null;
+  }
 
-  const flightKey = `${key}:${opts?.forceFull ? 'full' : 'any'}`;
+  const owner = lifecycleGeneration;
+  const flightKey = generationScopedKey(owner, `${key}:${opts?.forceFull ? 'full' : 'any'}`);
   const existing = profileInFlight.get(flightKey);
   if (existing) return existing;
   if (profileInFlight.size >= MAX_PROFILE_IN_FLIGHT) {
@@ -693,7 +852,8 @@ export async function tokenProfile(base: string, opts?: { forceFull?: boolean })
   }
   const work = (async (): Promise<ServedTokenProfile | null> => {
     try {
-      const id = await resolveId(key);
+      assertProfileSourceGeneration(owner);
+      const id = await resolveId(key, owner);
       if (!id) {
         return hit?.profile
           ? servedProfile(hit.profile, hit.profileTs, 'CACHE', 'FAILED', 'TOKEN_PROFILE_ID_UNAVAILABLE')
@@ -701,9 +861,12 @@ export async function tokenProfile(base: string, opts?: { forceFull?: boolean })
       }
       const c = await politeJson<Record<string, any>>(
         `${CG}/coins/${id}?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`,
+        owner,
       );
+      assertProfileSourceGeneration(owner);
       const md = c.market_data ?? {};
-      const dominance = await loadDominance();
+      const dominance = await loadDominance(owner);
+      assertProfileSourceGeneration(owner);
       const desc = typeof c.description?.en === 'string' && c.description.en.trim()
         ? cappedString(firstSentences(stripHtml(c.description.en), 3), 1_200)
         : null;
@@ -756,6 +919,7 @@ export async function tokenProfile(base: string, opts?: { forceFull?: boolean })
         watchlistUsers: num(c.watchlist_portfolio_users),
         fetchedAt,
       };
+      assertProfileSourceGeneration(owner);
       const entry: CacheEntry = cache.get(key) ?? { id, idTs: Date.now(), profile: null, profileTs: 0 };
       entry.profile = profile;
       entry.profileTs = fetchedAt;
@@ -856,8 +1020,10 @@ export function profileWarmStatus(): WarmStatus & {
  * /coins/markets pages (250 ids a call) fill market facts for the whole
  * universe in a handful of requests. Profiles land as full=false ("lite") —
  * the deep pass upgrades them one by one with description/links/platforms. */
-async function bulkWarm(bases: string[], priceOf: (base: string) => number | null): Promise<void> {
-  const listRaw = await politeJson<{ id: string; symbol: string; name: string }[]>(`${CG}/coins/list`);
+async function bulkWarm(bases: string[], priceOf: (base: string) => number | null, owner: number): Promise<void> {
+  assertProfileSourceGeneration(owner);
+  const listRaw = await politeJson<{ id: string; symbol: string; name: string }[]>(`${CG}/coins/list`, owner);
+  assertProfileSourceGeneration(owner);
   const list = Array.isArray(listRaw) ? listRaw.slice(0, 50_000) : [];
   const bySymbol = new Map<string, string[]>();
   for (const c of list) {
@@ -884,16 +1050,20 @@ async function bulkWarm(bases: string[], priceOf: (base: string) => number | nul
   const allIds = [...new Set([...candidates.values()].flat())].slice(0, 15_000);
   const rows = new Map<string, Record<string, any>>();
   for (let i = 0; i < allIds.length; i += 250) {
+    assertProfileSourceGeneration(owner);
     const page = allIds.slice(i, i + 250);
     const dataRaw = await politeJson<Record<string, any>[]>(
       `${CG}/coins/markets?vs_currency=usd&ids=${page.join(',')}&per_page=250&price_change_percentage=7d,14d,30d,200d,1y`,
+      owner,
     );
+    assertProfileSourceGeneration(owner);
     const data = Array.isArray(dataRaw) ? dataRaw.slice(0, 250) : [];
     for (const r of data) {
       if (typeof r?.id === 'string' && /^[a-z0-9][a-z0-9-]{0,127}$/i.test(r.id)) rows.set(r.id, r);
     }
   }
   for (const [b, ids] of candidates) {
+    assertProfileSourceGeneration(owner);
     const hit = cache.get(b);
     if (hit?.profile?.full && Date.now() - hit.profileTs < 24 * 60 * 60 * 1000) continue;
     const best = ids
@@ -947,9 +1117,11 @@ async function bulkWarm(bases: string[], priceOf: (base: string) => number | nul
       entry.profile = lite;
       entry.profileTs = Date.now();
     }
+    assertProfileSourceGeneration(owner);
     boundedSet(cache, b, entry);
     warm.lite++;
   }
+  assertProfileSourceGeneration(owner);
   persist();
 }
 
@@ -962,42 +1134,64 @@ export async function warmAllProfiles(
   stockTokens: Set<string>,
 ): Promise<void> {
   if (deterministicOfflinePublicSourcesEnabled()) throw new Error('profile warming unavailable');
-  if (warm.running) return;
+  if (!profileSourceAdmits() || warmRun) return;
+  const owner = lifecycleGeneration;
   const uniq = [...new Set(bases.map(canonicalBase).filter((b): b is string => Boolean(b)))].sort().slice(0, MAX_PROFILE_CACHE_ENTRIES);
-  warm = { running: true, phase: 'bulk', startedAt: Date.now(), finishedAt: null, total: uniq.length, done: 0, ok: 0, na: 0, lite: 0, current: null, failed: [], suspect: [] };
-  try {
-    await bulkWarm(uniq.filter((b) => !stockTokens.has(b)), priceOf);
-  } catch {
-    // bulk is an accelerator — the deep walk still covers everything
-  }
-  warm.phase = 'deep';
-  for (const b of uniq) {
-    warm.current = b;
+  const work = (async (): Promise<void> => {
+    warm = { running: true, phase: 'bulk', startedAt: Date.now(), finishedAt: null, total: uniq.length, done: 0, ok: 0, na: 0, lite: 0, current: null, failed: [], suspect: [] };
     try {
-      if (stockTokens.has(b) || FIAT_BASES.has(b)) {
-        warm.na++;
-      } else {
-        const hit = cache.get(b);
-        const fresh = hit?.profile?.full && Date.now() - hit.profileTs < 24 * 60 * 60 * 1000 ? hit.profile : await tokenProfile(b, { forceFull: true });
-        if (!fresh) {
-          warm.failed.push({ base: b, reason: cache.get(b)?.id ? 'Profile Fetch Failed' : 'No Exact CoinGecko Match' });
+      await bulkWarm(uniq.filter((b) => !stockTokens.has(b)), priceOf, owner);
+    } catch (error) {
+      if (isProfileRequestFailure(error) && error.code === 'TOKEN_PROFILE_SOURCE_STOPPED') return;
+      // bulk is an accelerator — the deep walk still covers everything
+    }
+    if (!profileSourceGenerationActive(owner)) return;
+    warm.phase = 'deep';
+    for (const b of uniq) {
+      if (!profileSourceGenerationActive(owner)) return;
+      warm.current = b;
+      try {
+        if (stockTokens.has(b) || FIAT_BASES.has(b)) {
+          warm.na++;
         } else {
-          const price = priceOf(b);
-          if (fresh.marketCapUsd && fresh.circSupply && price && price > 0) {
-            const ratio = fresh.marketCapUsd / (fresh.circSupply * price);
-            if (ratio < 0.7 || ratio > 1.3) warm.suspect.push({ base: b, reason: `Mcap ${ratio.toFixed(2)}× Supply×Price` });
-            else warm.ok++;
+          const hit = cache.get(b);
+          const fresh = hit?.profile?.full && Date.now() - hit.profileTs < 24 * 60 * 60 * 1000 ? hit.profile : await tokenProfile(b, { forceFull: true });
+          if (!profileSourceGenerationActive(owner)) return;
+          if (!fresh) {
+            warm.failed.push({ base: b, reason: cache.get(b)?.id ? 'Profile Fetch Failed' : 'No Exact CoinGecko Match' });
           } else {
-            warm.ok++;
+            const price = priceOf(b);
+            if (fresh.marketCapUsd && fresh.circSupply && price && price > 0) {
+              const ratio = fresh.marketCapUsd / (fresh.circSupply * price);
+              if (ratio < 0.7 || ratio > 1.3) warm.suspect.push({ base: b, reason: `Mcap ${ratio.toFixed(2)}× Supply×Price` });
+              else warm.ok++;
+            } else {
+              warm.ok++;
+            }
           }
         }
+      } catch (error) {
+        if (!profileSourceGenerationActive(owner)) return;
+        warm.failed.push({ base: b, reason: 'Profile Fetch Failed' });
       }
-    } catch {
-      warm.failed.push({ base: b, reason: 'Profile Fetch Failed' });
+      warm.done++;
     }
-    warm.done++;
+    if (profileSourceGenerationActive(owner)) {
+      warm.current = null;
+      warm.running = false;
+      warm.finishedAt = Date.now();
+    }
+  })();
+  warmRun = work;
+  try {
+    await work;
+  } finally {
+    if (warmRun === work) {
+      warmRun = null;
+      if (!profileSourceGenerationActive(owner)) {
+        warm.current = null;
+        warm.running = false;
+      }
+    }
   }
-  warm.current = null;
-  warm.running = false;
-  warm.finishedAt = Date.now();
 }

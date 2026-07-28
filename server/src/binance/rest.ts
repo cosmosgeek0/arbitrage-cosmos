@@ -25,6 +25,25 @@ const jsonInFlight = new Map<string, Promise<unknown>>();
 const jsonFailures = new Map<string, { until: number; message: string }>();
 const hostRateLimitBans = new Map<string, { until: number; strikes: number }>();
 
+export interface BinanceRestLifecycleContext {
+  readonly cacheScope: string;
+  readonly generation: number;
+  readonly signal: AbortSignal;
+}
+
+function lifecycleRequestKey(url: URL, lifecycle?: Readonly<BinanceRestLifecycleContext>): string {
+  return lifecycle
+    ? `${lifecycle.cacheScope}:${lifecycle.generation}:${url.toString()}`
+    : url.toString();
+}
+
+function throwIfLifecycleAborted(lifecycle?: Readonly<BinanceRestLifecycleContext>): void {
+  if (!lifecycle?.signal.aborted) return;
+  throw lifecycle.signal.reason instanceof Error
+    ? lifecycle.signal.reason
+    : new Error('Binance REST lifecycle aborted');
+}
+
 function retryAfterMs(res: Response): number | null {
   const header = res.headers.get('retry-after');
   if (header === null) return null;
@@ -100,11 +119,17 @@ async function readBoundedBody(res: Response, maxBytes: number): Promise<string>
   return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
 }
 
-async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAULT_JSON_LIMIT_BYTES): Promise<T> {
+async function requestJson<T>(
+  urlValue: string,
+  label: string,
+  maxBytes = DEFAULT_JSON_LIMIT_BYTES,
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
+): Promise<T> {
   if (deterministicOfflinePublicSourcesEnabled()) throw new Error(`${label} unavailable`);
+  throwIfLifecycleAborted(lifecycle);
   const url = new URL(urlValue);
   if (url.protocol !== 'https:' || !BINANCE_HOSTS.has(url.hostname)) throw new Error(`${label} unavailable`);
-  const key = url.toString();
+  const key = lifecycleRequestKey(url, lifecycle);
   const hostBan = hostRateLimitBans.get(url.hostname);
   if (hostBan && hostBan.until > Date.now()) {
     throw new Error(`${label} unavailable (upstream rate limit cooldown)`);
@@ -121,6 +146,8 @@ async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAUL
 
   const work = (async (): Promise<T> => {
     const ctrl = new AbortController();
+    const abortForLifecycle = () => ctrl.abort(lifecycle?.signal.reason);
+    lifecycle?.signal.addEventListener('abort', abortForLifecycle, { once: true });
     const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
     try {
       const res = await fetch(url, {
@@ -143,11 +170,17 @@ async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAUL
       }
       const text = await readBoundedBody(res, maxBytes);
       try {
-        return JSON.parse(text) as T;
+        const decoded = JSON.parse(text) as T;
+        throwIfLifecycleAborted(lifecycle);
+        return decoded;
       } catch {
+        throwIfLifecycleAborted(lifecycle);
         throw new Error(`${label} invalid JSON`);
       }
     } catch (err) {
+      if (lifecycle?.signal.aborted) {
+        throwIfLifecycleAborted(lifecycle);
+      }
       const message = err instanceof Error && /^(?:[\w -]+) (?:HTTP \d{3}|invalid content type|invalid JSON)$/.test(err.message)
         ? err.message
         : err instanceof Error && err.message === 'Binance response too large'
@@ -157,6 +190,7 @@ async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAUL
       throw new Error(message);
     } finally {
       clearTimeout(timer);
+      lifecycle?.signal.removeEventListener('abort', abortForLifecycle);
     }
   })();
   jsonInFlight.set(key, work);
@@ -328,12 +362,21 @@ export async function fetchBookTicker(symbol: string): Promise<BookTicker> {
   return data;
 }
 
-export async function fetchAllBookTickers(market: 'spot' | 'futures'): Promise<Map<string, BookTicker>> {
-  const cached = allBookCache.get(market);
+export async function fetchAllBookTickers(
+  market: 'spot' | 'futures',
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
+): Promise<Map<string, BookTicker>> {
+  throwIfLifecycleAborted(lifecycle);
+  const cached = lifecycle ? undefined : allBookCache.get(market);
   if (cached && Date.now() - cached.fetchedAt < ALL_BOOK_CACHE_MS) return cached.data;
 
   const url = market === 'futures' ? `${FAPI}/fapi/v1/ticker/bookTicker` : `${SPOT_API}/api/v3/ticker/bookTicker`;
-  const raw = await requestJson<RawBookTicker[]>(url, `${market} bookTicker`, LARGE_JSON_LIMIT_BYTES);
+  const raw = await requestJson<RawBookTicker[]>(
+    url,
+    `${market} bookTicker`,
+    LARGE_JSON_LIMIT_BYTES,
+    lifecycle,
+  );
   if (!Array.isArray(raw)) throw new Error(`${market} bookTicker invalid JSON`);
   const data = new Map<string, BookTicker>();
   const rows = raw.slice(0, 20_000);
@@ -351,7 +394,8 @@ export async function fetchAllBookTickers(market: 'spot' | 'futures'): Promise<M
   if (rows.length > 0 && skipped > rows.length / 2) {
     throw new Error(`${market} bookTicker schema mismatch: ${skipped} of ${rows.length} rows malformed`);
   }
-  allBookCache.set(market, { fetchedAt: Date.now(), data });
+  throwIfLifecycleAborted(lifecycle);
+  if (!lifecycle) allBookCache.set(market, { fetchedAt: Date.now(), data });
   return data;
 }
 
@@ -380,10 +424,18 @@ type RawFutures24hTicker = {
 const futures24hCache = new Map<'all', { fetchedAt: number; data: Map<string, Futures24hTicker> }>();
 const FUTURES_24H_CACHE_MS = 15_000;
 
-export async function fetchAllFutures24hTickers(): Promise<Map<string, Futures24hTicker>> {
-  const cached = futures24hCache.get('all');
+export async function fetchAllFutures24hTickers(
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
+): Promise<Map<string, Futures24hTicker>> {
+  throwIfLifecycleAborted(lifecycle);
+  const cached = lifecycle ? undefined : futures24hCache.get('all');
   if (cached && Date.now() - cached.fetchedAt < FUTURES_24H_CACHE_MS) return cached.data;
-  const raw = await requestJson<RawFutures24hTicker[]>(`${FAPI}/fapi/v1/ticker/24hr`, 'futures 24hr', LARGE_JSON_LIMIT_BYTES);
+  const raw = await requestJson<RawFutures24hTicker[]>(
+    `${FAPI}/fapi/v1/ticker/24hr`,
+    'futures 24hr',
+    LARGE_JSON_LIMIT_BYTES,
+    lifecycle,
+  );
   if (!Array.isArray(raw)) throw new Error('futures 24hr invalid JSON');
   const data = new Map<string, Futures24hTicker>();
   for (const row of raw.slice(0, 20_000)) {
@@ -407,7 +459,8 @@ export async function fetchAllFutures24hTickers(): Promise<Map<string, Futures24
       count,
     });
   }
-  futures24hCache.set('all', { fetchedAt: Date.now(), data });
+  throwIfLifecycleAborted(lifecycle);
+  if (!lifecycle) futures24hCache.set('all', { fetchedAt: Date.now(), data });
   return data;
 }
 

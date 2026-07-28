@@ -26,8 +26,15 @@ import { canonicalRefreshTargetPosture, canonicalWatchmanLauncherPresentation } 
 import { projectPrivateRead, type PrivateReadSnapshot } from '../lib/privateRead';
 import { ACCENTS, CURRENCIES, DATA_CADENCE_DEFAULTS, MARKET_PING_CHOICES, type AccentKey, type DataCadenceKey, type NotificationRuleKey } from '../lib/prefs';
 import { openOverlay, useOverlay } from '../lib/overlay';
+import {
+  optionalSurfaceAllowsOverlay,
+  optionalSurfaceForPage,
+  useOptionalSurface,
+  useOptionalSurfaceControl,
+} from '../lib/optionalSurfaceControl';
 import { TokenIcon } from './TokenIcon';
 import { PillSelect } from './PillSelect';
+import { OptionalSurfaceSwitch } from './OptionalSurfaceGate';
 import { AWS_CONTROL_POSTURE } from './AwsRunnerControl';
 import {
   BadgeCheck as LucideAdvisorClear,
@@ -632,6 +639,7 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
     marketsUpdatedAt,
     openDetail,
   } = useStore();
+  const tokenSurface = useOptionalSurface('token');
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
   const [tab, setTab] = useState<SearchTab>('top');
@@ -648,7 +656,8 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
   // letter finds tokens across the whole app (not just the menu).
   const index = useMemo(() => {
     const pages = buildIndex();
-    const tokens: SearchEntry[] = markets.filter((m) => m.hasSpot || m.spot !== null).map((m) => ({
+    const tokens: SearchEntry[] = tokenSurface.enabled
+      ? markets.filter((m) => m.hasSpot || m.spot !== null).map((m) => ({
       label: m.base,
       hint: `${m.symbol} · Crypto`,
       symbol: m.symbol,
@@ -659,8 +668,10 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
       kind: 'token' as const,
       marketTruth,
       keywords: `${m.base} ${m.symbol} crypto spot token asset coin`.toLowerCase(),
-    }));
-    const perps: SearchEntry[] = markets.filter((m) => m.hasPerp || m.perpMark !== null).map((m) => {
+      }))
+      : [];
+    const perps: SearchEntry[] = tokenSurface.enabled
+      ? markets.filter((m) => m.hasPerp || m.perpMark !== null).map((m) => {
       const facts = marketTruth.factsAvailable
         ? projectPerpetualSearchFacts(m)
         : { perpMark: null, volume: null, changePct: null, fundingRate: null };
@@ -674,9 +685,10 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
         marketTruth,
         keywords: `${m.base} ${m.symbol} perp perpetual futures funding`.toLowerCase(),
       };
-    });
+      })
+      : [];
     return [...pages, ...tokens, ...perps];
-  }, [markets, marketTruth]);
+  }, [markets, marketTruth, tokenSurface.enabled]);
   // Close on outside click even when the query is empty. The panel opens on
   // focus, so tying outside-close only to `q` leaves an empty focused search
   // stuck open.
@@ -746,6 +758,7 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
   }), [results]);
 
   const go = (e: SearchEntry) => {
+    if (e.symbol && !tokenSurface.enabled) return;
     if (e.symbol && e.marketTruth && !e.marketTruth.factsAvailable) return;
     if (e.symbol) openDetail(e.symbol);
     else if (e.overlay) openOverlay(e.overlay);
@@ -881,19 +894,24 @@ export function Sidebar() {
         {NAV.map((g, i) => (
           <div key={i} className="snav-group" data-nav-group={g.group?.toLowerCase() ?? 'utility'}>
             {g.group && <div className="snav-group-title">{g.group}</div>}
-            {g.items.map((n) => (
-              <button
-                key={n.id}
-                className={`snav-item ${page === n.id || n.match?.includes(page) ? 'active' : ''}`}
-                data-nav-id={n.id}
-                onClick={() => setPage(n.id!)}
-                title={n.label}
-                aria-current={page === n.id || n.match?.includes(page) ? 'page' : undefined}
-              >
-                <span className="snav-ic">{n.icon}</span>
-                <span className="snav-label">{n.label}</span>
-              </button>
-            ))}
+            {g.items.map((n) => {
+              const optionalSurface = optionalSurfaceForPage(n.id ?? '');
+              return (
+                <div className="snav-optional-row" key={n.id}>
+                  <button
+                    className={`snav-item ${page === n.id || n.match?.includes(page) ? 'active' : ''}`}
+                    data-nav-id={n.id}
+                    onClick={() => setPage(n.id!)}
+                    title={n.label}
+                    aria-current={page === n.id || n.match?.includes(page) ? 'page' : undefined}
+                  >
+                    <span className="snav-ic">{n.icon}</span>
+                    <span className="snav-label">{n.label}</span>
+                  </button>
+                  {optionalSurface && <OptionalSurfaceSwitch surfaceId={optionalSurface} compact />}
+                </div>
+              );
+            })}
           </div>
         ))}
       </nav>
@@ -3073,6 +3091,12 @@ function CalendarModal({ onClose }: { onClose: () => void }) {
 // Rendered once at the app root so fixed overlays escape the sidebar box.
 export function Overlays() {
   const [kind, set] = useOverlay();
+  const optionalSurfaces = useOptionalSurfaceControl();
+  const allowed = kind === null || optionalSurfaceAllowsOverlay(optionalSurfaces, kind);
+  useEffect(() => {
+    if (kind !== null && !allowed) set(null);
+  }, [allowed, kind, set]);
+  if (!allowed) return null;
   if (kind === 'news') return <NewsModal onClose={() => set(null)} />;
   if (kind === 'calendar') return <CalendarModal onClose={() => set(null)} />;
   return null;

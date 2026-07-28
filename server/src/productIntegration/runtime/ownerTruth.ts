@@ -14,12 +14,11 @@ import {
 const OWNER_SOURCE = 'server.ownerTruth';
 const SUPERVISOR_SOURCE = 'systemIntegration.supervisor';
 const PRIVATE_READ_SOURCE = 'services.privateRead';
-const MARKET_SOURCE = 'intelligenceRuntime.marketSources';
+const MARKET_SOURCE = 'intelligenceRuntime.publishedMarketState';
 const DASHBOARD_MAX_AGE_MS = 60_000;
 const ACCOUNT_MAX_AGE_MS = 45_000;
-// The current public REST owner internally caches futures 24h facts for 15 s.
-// Leave bounded assembly headroom without claiming a tighter age than the
-// source itself can prove.
+// Published MarketEngine observations already own their source timestamps.
+// Leave bounded assembly headroom without substituting request time.
 const MARKETS_MAX_AGE_MS = 30_000;
 const MAX_VALUE_CHARS = 240;
 const MAX_MARKET_ROWS = 128;

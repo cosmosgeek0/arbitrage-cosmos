@@ -17,6 +17,7 @@ import {
 
 const T0 = 1_800_000_000_000;
 const MAX_AGE_MS = 60_000;
+const FORECAST_MAX_AGE_MS = 15_000;
 
 function observedAt(sourceId, overrides = {}) {
   return Object.freeze({
@@ -92,7 +93,9 @@ function fundingForecast(overrides = {}) {
     revision: overrides.revision ?? 'forecast-revision-1',
     observedAt:
       overrides.observedAt ??
-      observedAt('binance.usdm.mark-price.adapter-fixture'),
+      observedAt('binance.usdm.mark-price.adapter-fixture', {
+        maxAgeMs: FORECAST_MAX_AGE_MS,
+      }),
     value: Object.freeze({
       symbol: overrides.symbol ?? 'BTCUSDT',
       markPrice: overrides.markPrice ?? '50000.1',
@@ -131,7 +134,7 @@ function publicEvidence(overrides = {}) {
     sourceEnabled: true,
     allowedSymbols: Object.freeze(['BTCUSDT']),
     maximumFilterAgeMs: MAX_AGE_MS,
-    maximumForecastAgeMs: MAX_AGE_MS,
+    maximumForecastAgeMs: FORECAST_MAX_AGE_MS,
     maximumHistoryCaptureAgeMs: MAX_AGE_MS,
   }));
   const groundwork = seam.validate(Object.freeze({
@@ -146,9 +149,55 @@ function publicEvidence(overrides = {}) {
   return Object.freeze({
     groundwork,
     orderCapabilities: Object.freeze({
+      revision: 'exchange-info-capabilities-revision-1',
       observedAt: groundwork.filters.observedAt,
       orderTypes: symbolFacts.orderTypes,
       timeInForce: symbolFacts.timeInForce,
+    }),
+  });
+}
+
+function forgedPublicEvidence(overrides = {}) {
+  const valid = publicEvidence();
+  const filterObservedAt = Object.freeze({
+    ...valid.groundwork.filters.observedAt,
+    ...(overrides.filterObservedAt ?? {}),
+  });
+  const capabilityObservedAt = Object.freeze({
+    ...filterObservedAt,
+    ...(overrides.capabilityObservedAt ?? {}),
+  });
+  const forecastObservedAt = Object.freeze({
+    ...valid.groundwork.fundingForecast.observedAt,
+    ...(overrides.forecastObservedAt ?? {}),
+  });
+  const forecastValue = Object.freeze({
+    ...valid.groundwork.fundingForecast.value,
+    ...(overrides.forecastValue ?? {}),
+  });
+  const forecast = Object.freeze({
+    ...valid.groundwork.fundingForecast,
+    observedAt: forecastObservedAt,
+    value: forecastValue,
+    ...(overrides.forecast ?? {}),
+  });
+  const filters = Object.freeze({
+    ...valid.groundwork.filters,
+    observedAt: filterObservedAt,
+  });
+  const groundwork = Object.freeze({
+    ...valid.groundwork,
+    filters,
+    fundingForecast: forecast,
+  });
+  return Object.freeze({
+    groundwork,
+    orderCapabilities: Object.freeze({
+      ...valid.orderCapabilities,
+      revision:
+        overrides.capabilityRevision ??
+        valid.orderCapabilities.revision,
+      observedAt: capabilityObservedAt,
     }),
   });
 }
@@ -308,6 +357,34 @@ test('builds immutable non-callable one-way open and close descriptors', () => {
     'MATCHING_ENGINE_ACCEPTANCE_UNPROVEN',
   ]);
   assert.equal(open.intent.localValidation.publicMaxNumOrders, 200);
+  assert.equal(
+    open.intent.localValidation.publicEvidenceSourceTimeMs,
+    T0 - 1,
+  );
+  assert.equal(
+    open.intent.localValidation.publicEvidenceMaxAgeMs,
+    MAX_AGE_MS,
+  );
+  assert.equal(
+    open.intent.localValidation.publicEvidenceAuthority,
+    'SYNTHETIC_TEST',
+  );
+  assert.equal(
+    open.intent.localValidation.referenceMarkPriceRevision,
+    'forecast-revision-1',
+  );
+  assert.equal(
+    open.intent.localValidation.referenceMarkPriceSourceId,
+    'binance.usdm.mark-price.adapter-fixture',
+  );
+  assert.equal(
+    open.intent.localValidation.referenceMarkPriceSourceTimeMs,
+    T0 - 1,
+  );
+  assert.equal(
+    open.intent.localValidation.referenceMarkPriceMaxAgeMs,
+    FORECAST_MAX_AGE_MS,
+  );
   assert.equal(
     open.intent.localValidation.privateOpenOrderCountEvaluated,
     false,
@@ -475,6 +552,127 @@ test('applies official side-directed PERCENT_PRICE bounds', () => {
   );
 });
 
+test('independently rejects forged public filter, capability, and mark provenance', () => {
+  const adapter = enabledAdapter();
+  const cases = [
+    [
+      'filter source stale despite fresh receipt',
+      forgedPublicEvidence({
+        filterObservedAt: { sourceTimeMs: T0 - MAX_AGE_MS - 1 },
+      }),
+    ],
+    [
+      'filter private authority',
+      forgedPublicEvidence({
+        filterObservedAt: { authority: 'LIVE_PRIVATE' },
+      }),
+    ],
+    [
+      'filter partial completeness',
+      forgedPublicEvidence({
+        filterObservedAt: { completeness: 'PARTIAL' },
+      }),
+    ],
+    [
+      'filter maxAge exceeds adapter ceiling',
+      forgedPublicEvidence({
+        filterObservedAt: { maxAgeMs: MAX_AGE_MS + 1 },
+      }),
+    ],
+    [
+      'filter source time follows receipt',
+      forgedPublicEvidence({
+        filterObservedAt: {
+          sourceTimeMs: T0,
+          receivedAtMs: T0 - 1,
+        },
+      }),
+    ],
+    [
+      'filter source id is unbounded',
+      forgedPublicEvidence({
+        filterObservedAt: { sourceId: `x${'y'.repeat(256)}` },
+      }),
+    ],
+    [
+      'capability revision is malformed',
+      forgedPublicEvidence({ capabilityRevision: 'bad revision' }),
+    ],
+    [
+      'capability timestamp is stale',
+      forgedPublicEvidence({
+        capabilityObservedAt: {
+          sourceTimeMs: T0 - MAX_AGE_MS - 1,
+        },
+      }),
+    ],
+    [
+      'forecast source stale despite fresh receipt',
+      forgedPublicEvidence({
+        forecastObservedAt: {
+          sourceTimeMs: T0 - FORECAST_MAX_AGE_MS - 1,
+        },
+        forecastValue: {
+          sourceTimeMs: T0 - FORECAST_MAX_AGE_MS - 1,
+        },
+      }),
+    ],
+    [
+      'forecast private authority',
+      forgedPublicEvidence({
+        forecastObservedAt: { authority: 'LIVE_PRIVATE' },
+      }),
+    ],
+    [
+      'forecast partial completeness',
+      forgedPublicEvidence({
+        forecastObservedAt: { completeness: 'PARTIAL' },
+      }),
+    ],
+    [
+      'forecast maxAge exceeds adapter ceiling',
+      forgedPublicEvidence({
+        forecastObservedAt: {
+          maxAgeMs: FORECAST_MAX_AGE_MS + 1,
+        },
+      }),
+    ],
+    [
+      'forecast revision is malformed',
+      forgedPublicEvidence({
+        forecast: { evidenceRevision: 'bad revision' },
+      }),
+    ],
+    [
+      'forecast source time is unavailable',
+      forgedPublicEvidence({
+        forecastObservedAt: { sourceTimeMs: null },
+        forecastValue: { sourceTimeMs: null },
+      }),
+    ],
+    [
+      'forecast value source time conflicts with provenance',
+      forgedPublicEvidence({
+        forecastValue: { sourceTimeMs: T0 - 2 },
+      }),
+    ],
+  ];
+
+  for (const [label, evidence] of cases) {
+    const result = adapter.buildOrderIntent(intentInput({
+      publicEvidence: evidence,
+    }));
+    assert.equal(result.ok, false, label);
+    assert.equal(result.intent, null, label);
+    assert.equal(
+      result.blockingCodes.some((code) =>
+        code.startsWith('PUBLIC_')),
+      true,
+      label,
+    );
+  }
+});
+
 test('rejects proxy and accessor input at every parsed boundary without invoking traps', () => {
   const adapter = enabledAdapter();
   let trapCalls = 0;
@@ -525,6 +723,56 @@ test('rejects proxy and accessor input at every parsed boundary without invoking
     true,
   );
   assert.equal(trapCalls, 0);
+
+  const revokedObject = Proxy.revocable({}, {});
+  revokedObject.revoke();
+  let revokedObjectResult;
+  assert.doesNotThrow(() => {
+    revokedObjectResult = adapter.buildOrderIntent(revokedObject.proxy);
+  });
+  assert.deepEqual(revokedObjectResult.blockingCodes, ['INPUT_INVALID']);
+
+  const revokedArray = Proxy.revocable([], {});
+  revokedArray.revoke();
+  let revokedArrayResult;
+  assert.doesNotThrow(() => {
+    revokedArrayResult = adapter.buildOrderIntent(revokedArray.proxy);
+  });
+  assert.deepEqual(revokedArrayResult.blockingCodes, ['INPUT_INVALID']);
+
+  const revokedSymbols = Proxy.revocable([], {});
+  revokedSymbols.revoke();
+  let revokedConfigAdapter;
+  assert.doesNotThrow(() => {
+    revokedConfigAdapter = createBinanceUsdMBasisValidateOnlyAdapter({
+      enabled: true,
+      sourceEnabled: true,
+      killSwitchEngaged: false,
+      authority: 'NONE',
+      allowedSymbols: revokedSymbols.proxy,
+    });
+  });
+  assert.equal(revokedConfigAdapter.enabled, false);
+
+  const overWide = {};
+  for (let index = 0; index < 65; index += 1) {
+    overWide[`field${index}`] = index;
+  }
+  const overWideResult = adapter.buildOrderIntent(overWide);
+  assert.deepEqual(overWideResult.blockingCodes, ['INPUT_INVALID']);
+
+  const oversizedSymbols = Array.from(
+    { length: 501 },
+    (_, index) => `S${index}`,
+  );
+  const oversizedConfig = createBinanceUsdMBasisValidateOnlyAdapter({
+    enabled: true,
+    sourceEnabled: true,
+    killSwitchEngaged: false,
+    authority: 'NONE',
+    allowedSymbols: oversizedSymbols,
+  });
+  assert.equal(oversizedConfig.enabled, false);
 });
 
 test('query descriptor reuses the existing client ID and is never callable', () => {

@@ -79,7 +79,8 @@ export interface BinanceUsdMBasisPublicEvidence {
   /**
    * Capabilities copied from the same exchangeInfo symbol snapshot. N-11's
    * result guarantees MARKET but does not project the complete capability
-   * arrays, so LIMIT remains blocked unless these facts are supplied.
+   * arrays, so LIMIT remains blocked unless bounded `revision`, `observedAt`,
+   * `orderTypes`, and `timeInForce` facts are supplied.
    */
   readonly orderCapabilities: unknown;
 }
@@ -143,8 +144,23 @@ export interface BinanceUsdMBasisWireIntent {
     readonly publicEvidenceSchema:
       'cosmos.foundation.binance-usdm-public-groundwork.v1';
     readonly publicEvidenceSourceId: string;
+    readonly publicEvidenceSourceTimeMs: number | null;
     readonly publicEvidenceReceivedAtMs: number;
+    readonly publicEvidenceMaxAgeMs: number;
+    readonly publicEvidenceAuthority:
+      | 'LIVE_PUBLIC'
+      | 'SYNTHETIC_TEST'
+      | 'RECORDED_REPLAY';
     readonly referenceMarkPrice: string;
+    readonly referenceMarkPriceRevision: string;
+    readonly referenceMarkPriceSourceId: string;
+    readonly referenceMarkPriceSourceTimeMs: number;
+    readonly referenceMarkPriceReceivedAtMs: number;
+    readonly referenceMarkPriceMaxAgeMs: number;
+    readonly referenceMarkPriceAuthority:
+      | 'LIVE_PUBLIC'
+      | 'SYNTHETIC_TEST'
+      | 'RECORDED_REPLAY';
     readonly publicMaxNumOrders: number | null;
     readonly privateOpenOrderCountEvaluated: false;
     readonly matchingEngineAcceptanceProven: false;

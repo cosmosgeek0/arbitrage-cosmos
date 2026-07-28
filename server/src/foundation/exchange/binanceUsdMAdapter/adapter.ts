@@ -6,7 +6,10 @@ import {
   multiplyDecimalStrings,
   normalizeDecimalString,
 } from '../binanceUsdM/decimal.js';
-import { BINANCE_USDM_PUBLIC_GROUNDWORK_SCHEMA } from '../binanceUsdM/validation.js';
+import {
+  BINANCE_USDM_PUBLIC_GROUNDWORK_SCHEMA,
+  DEFAULT_BINANCE_USDM_PUBLIC_GROUNDWORK_CONFIG,
+} from '../binanceUsdM/validation.js';
 import {
   BINANCE_USDM_BASIS_ADAPTER_SCHEMA,
   BINANCE_USDM_BASIS_QUERY_DESCRIPTOR_SCHEMA,
@@ -30,6 +33,12 @@ const SYMBOL_PATTERN = /^[A-Z0-9._-]{1,40}$/;
 const CLIENT_ORDER_ID_PATTERN = /^[.A-Z:/a-z0-9_-]{1,36}$/;
 const CAPABILITY_PATTERN = /^[A-Z0-9_]{1,64}$/;
 const PROVENANCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$/;
+const PUBLIC_AUTHORITIES = new Set([
+  'LIVE_PUBLIC',
+  'RECORDED_REPLAY',
+  'SYNTHETIC_TEST',
+]);
+const MAX_DATA_RECORD_KEYS = 64;
 const QUERY_STATUSES = new Set([
   'NEW',
   'PARTIALLY_FILLED',
@@ -66,8 +75,8 @@ interface TimestampIdentity {
   readonly sourceTimeMs: number | null;
   readonly receivedAtMs: number;
   readonly maxAgeMs: number;
-  readonly authority: string;
-  readonly completeness: string;
+  readonly authority: 'LIVE_PUBLIC' | 'RECORDED_REPLAY' | 'SYNTHETIC_TEST';
+  readonly completeness: 'COMPLETE';
   readonly sourceId: string;
 }
 
@@ -79,8 +88,15 @@ interface DecimalRange {
 
 interface PublicContext {
   readonly sourceId: string;
+  readonly sourceTimeMs: number | null;
   readonly receivedAtMs: number;
+  readonly maxAgeMs: number;
+  readonly authority: TimestampIdentity['authority'];
   readonly referenceMarkPrice: string;
+  readonly referenceMarkPriceRevision: string;
+  readonly referenceMarkPriceObservedAt: TimestampIdentity & {
+    readonly sourceTimeMs: number;
+  };
   readonly price: DecimalRange;
   readonly lotSize: DecimalRange;
   readonly marketLotSize: DecimalRange;
@@ -118,6 +134,10 @@ interface ConfigSnapshot {
 }
 
 const MAX_INJECTED_EVIDENCE_AGE_MS = 300_000;
+const MAX_PUBLIC_FILTER_AGE_MS =
+  DEFAULT_BINANCE_USDM_PUBLIC_GROUNDWORK_CONFIG.maximumFilterAgeMs;
+const MAX_PUBLIC_FORECAST_AGE_MS =
+  DEFAULT_BINANCE_USDM_PUBLIC_GROUNDWORK_CONFIG.maximumForecastAgeMs;
 
 export const DEFAULT_BINANCE_USDM_BASIS_ADAPTER_CONFIG:
   Readonly<BinanceUsdMBasisAdapterConfig> = Object.freeze({
@@ -129,25 +149,24 @@ export const DEFAULT_BINANCE_USDM_BASIS_ADAPTER_CONFIG:
   });
 
 function plainDataRecord(value: unknown): SafeRecord | null {
-  if (
-    value === null ||
-    typeof value !== 'object' ||
-    Array.isArray(value) ||
-    nodeTypes.isProxy(value)
-  ) {
+  if (value === null || typeof value !== 'object') {
     return null;
   }
   try {
+    if (nodeTypes.isProxy(value) || Array.isArray(value)) return null;
     const prototype = Object.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) return null;
+    const keys = Reflect.ownKeys(value);
+    if (
+      keys.length > MAX_DATA_RECORD_KEYS ||
+      keys.some((key) => typeof key !== 'string')
+    ) {
+      return null;
+    }
     const descriptors = Object.getOwnPropertyDescriptors(
       value,
     ) as Record<string, PropertyDescriptor>;
-    const keys = Reflect.ownKeys(value);
-    if (
-      keys.some((key) => typeof key !== 'string') ||
-      keys.length !== Object.keys(descriptors).length
-    ) {
+    if (keys.length !== Object.keys(descriptors).length) {
       return null;
     }
     const copy: Record<string, unknown> = Object.create(null);
@@ -170,10 +189,25 @@ function plainDataRecord(value: unknown): SafeRecord | null {
 }
 
 function plainDataArray(value: unknown, maximum = 256): readonly unknown[] | null {
-  if (!Array.isArray(value) || nodeTypes.isProxy(value)) return null;
   try {
+    if (nodeTypes.isProxy(value) || !Array.isArray(value)) return null;
     const prototype = Object.getPrototypeOf(value);
     if (prototype !== Array.prototype) return null;
+    const length = value.length;
+    if (
+      !Number.isSafeInteger(length) ||
+      length < 0 ||
+      length > maximum
+    ) {
+      return null;
+    }
+    const keys = Reflect.ownKeys(value);
+    if (
+      keys.some((key) => typeof key !== 'string') ||
+      keys.length !== length + 1
+    ) {
+      return null;
+    }
     const descriptors = Object.getOwnPropertyDescriptors(
       value,
     ) as Record<string, PropertyDescriptor>;
@@ -182,17 +216,7 @@ function plainDataArray(value: unknown, maximum = 256): readonly unknown[] | nul
       lengthDescriptor === undefined ||
       !Object.hasOwn(lengthDescriptor, 'value') ||
       typeof lengthDescriptor.value !== 'number' ||
-      !Number.isSafeInteger(lengthDescriptor.value) ||
-      lengthDescriptor.value < 0 ||
-      lengthDescriptor.value > maximum
-    ) {
-      return null;
-    }
-    const length = lengthDescriptor.value;
-    const keys = Reflect.ownKeys(value);
-    if (
-      keys.some((key) => typeof key !== 'string') ||
-      keys.length !== length + 1
+      lengthDescriptor.value !== length
     ) {
       return null;
     }
@@ -285,7 +309,12 @@ function normalizedResponseDecimal(
   }
 }
 
-function parseTimestampIdentity(value: unknown): TimestampIdentity | null {
+function parseTimestampIdentity(
+  value: unknown,
+  nowMs: number,
+  maximumAgeMs: number,
+  sourceTimeRequirement: 'ANY' | 'REQUIRED',
+): TimestampIdentity | null {
   const record = plainDataRecord(value);
   if (record === null) return null;
   const sourceTimeMs = record.sourceTimeMs;
@@ -307,11 +336,17 @@ function parseTimestampIdentity(value: unknown): TimestampIdentity | null {
     typeof maxAgeMs !== 'number' ||
     !Number.isSafeInteger(maxAgeMs) ||
     maxAgeMs <= 0 ||
+    maxAgeMs > maximumAgeMs ||
     typeof authority !== 'string' ||
-    typeof completeness !== 'string' ||
+    !PUBLIC_AUTHORITIES.has(authority) ||
+    completeness !== 'COMPLETE' ||
     typeof sourceId !== 'string' ||
-    sourceId.length === 0 ||
-    sourceId.length > 256
+    !PROVENANCE_PATTERN.test(sourceId) ||
+    (sourceTimeRequirement === 'REQUIRED' && sourceTimeMs === null) ||
+    receivedAtMs > nowMs ||
+    (sourceTimeMs !== null &&
+      (sourceTimeMs > receivedAtMs || sourceTimeMs > nowMs)) ||
+    nowMs - (sourceTimeMs ?? receivedAtMs) > maxAgeMs
   ) {
     return null;
   }
@@ -319,8 +354,12 @@ function parseTimestampIdentity(value: unknown): TimestampIdentity | null {
     sourceTimeMs,
     receivedAtMs,
     maxAgeMs,
-    authority,
-    completeness,
+    authority:
+      authority as
+        | 'LIVE_PUBLIC'
+        | 'RECORDED_REPLAY'
+        | 'SYNTHETIC_TEST',
+    completeness: 'COMPLETE',
     sourceId,
   });
 }
@@ -589,10 +628,19 @@ function parsePublicContext(
     codes.push('PUBLIC_FILTER_UNAVAILABLE');
     return null;
   }
-  const filterTimestamp = parseTimestampIdentity(filters.observedAt);
+  const filterTimestamp = parseTimestampIdentity(
+    filters.observedAt,
+    nowMs,
+    MAX_PUBLIC_FILTER_AGE_MS,
+    'ANY',
+  );
   const capabilityTimestamp = parseTimestampIdentity(
     orderCapabilities.observedAt,
+    nowMs,
+    MAX_PUBLIC_FILTER_AGE_MS,
+    'ANY',
   );
+  const capabilityRevision = orderCapabilities.revision;
   const orderTypes = exactStringArray(orderCapabilities.orderTypes, 64);
   const timeInForce = exactStringArray(
     orderCapabilities.timeInForce,
@@ -600,12 +648,10 @@ function parsePublicContext(
   );
   if (
     filterTimestamp === null ||
-    filterTimestamp.receivedAtMs > nowMs ||
-    (filterTimestamp.sourceTimeMs !== null &&
-      filterTimestamp.sourceTimeMs > nowMs) ||
-    nowMs - filterTimestamp.receivedAtMs > filterTimestamp.maxAgeMs ||
     capabilityTimestamp === null ||
     !sameTimestamp(filterTimestamp, capabilityTimestamp) ||
+    typeof capabilityRevision !== 'string' ||
+    !PROVENANCE_PATTERN.test(capabilityRevision) ||
     orderTypes === null ||
     timeInForce === null ||
     !orderTypes.includes(type) ||
@@ -673,6 +719,13 @@ function parsePublicContext(
     return null;
   }
   const forecastValue = plainDataRecord(forecast.value);
+  const forecastTimestamp = parseTimestampIdentity(
+    forecast.observedAt,
+    nowMs,
+    MAX_PUBLIC_FORECAST_AGE_MS,
+    'REQUIRED',
+  );
+  const forecastRevision = forecast.evidenceRevision;
   const referenceMarkPrice =
     forecastValue === null
       ? null
@@ -680,7 +733,12 @@ function parsePublicContext(
   if (
     forecast.kind !== 'FORECAST_ONLY' ||
     forecast.capturedAsSettlement !== false ||
+    typeof forecastRevision !== 'string' ||
+    !PROVENANCE_PATTERN.test(forecastRevision) ||
+    forecastTimestamp === null ||
+    forecastTimestamp.sourceTimeMs === null ||
     forecastValue?.symbol !== symbol ||
+    forecastValue.sourceTimeMs !== forecastTimestamp.sourceTimeMs ||
     referenceMarkPrice === null
   ) {
     codes.push('PUBLIC_VALIDATION_INVALID');
@@ -688,8 +746,16 @@ function parsePublicContext(
   }
   return Object.freeze({
     sourceId: filterTimestamp.sourceId,
+    sourceTimeMs: filterTimestamp.sourceTimeMs,
     receivedAtMs: filterTimestamp.receivedAtMs,
+    maxAgeMs: filterTimestamp.maxAgeMs,
+    authority: filterTimestamp.authority,
     referenceMarkPrice,
+    referenceMarkPriceRevision: forecastRevision,
+    referenceMarkPriceObservedAt: Object.freeze({
+      ...forecastTimestamp,
+      sourceTimeMs: forecastTimestamp.sourceTimeMs,
+    }),
     price,
     lotSize,
     marketLotSize,
@@ -1149,8 +1215,23 @@ export function createBinanceUsdMBasisValidateOnlyAdapter(
           publicFilterSubsetPassed: true,
           publicEvidenceSchema: BINANCE_USDM_PUBLIC_GROUNDWORK_SCHEMA,
           publicEvidenceSourceId: context.sourceId,
+          publicEvidenceSourceTimeMs: context.sourceTimeMs,
           publicEvidenceReceivedAtMs: context.receivedAtMs,
+          publicEvidenceMaxAgeMs: context.maxAgeMs,
+          publicEvidenceAuthority: context.authority,
           referenceMarkPrice: context.referenceMarkPrice,
+          referenceMarkPriceRevision:
+            context.referenceMarkPriceRevision,
+          referenceMarkPriceSourceId:
+            context.referenceMarkPriceObservedAt.sourceId,
+          referenceMarkPriceSourceTimeMs:
+            context.referenceMarkPriceObservedAt.sourceTimeMs,
+          referenceMarkPriceReceivedAtMs:
+            context.referenceMarkPriceObservedAt.receivedAtMs,
+          referenceMarkPriceMaxAgeMs:
+            context.referenceMarkPriceObservedAt.maxAgeMs,
+          referenceMarkPriceAuthority:
+            context.referenceMarkPriceObservedAt.authority,
           publicMaxNumOrders: context.publicMaxNumOrders,
           privateOpenOrderCountEvaluated: false,
           matchingEngineAcceptanceProven: false,

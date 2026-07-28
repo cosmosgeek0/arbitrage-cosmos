@@ -33,11 +33,15 @@ import {
   planReconnectBackoff,
 } from './lib/reconnectBackoff';
 import {
-  PRIVATE_READ_DENIED_REASON,
+  INITIAL_PRIVATE_READ_APPLIED_TRUTH,
   decodePrivateReadSnapshot,
-  isPrivateReadDenialStatus,
+  privateReadAccessReasonForStatus,
+  reducePrivateReadAppliedTruth,
   unavailablePrivateRead,
+  type PrivateReadAppliedTruth,
+  type PrivateReadAppliedUpdate,
   type PrivateReadSnapshot,
+  type PrivateReadSourceId,
 } from './lib/privateRead';
 import type {
   AppConfig,
@@ -179,7 +183,7 @@ interface Store {
   stateLastSuccessAtMs: number | null;
   stateError: string | null;
   privateRead: PrivateReadSnapshot;
-  privateReadSource: 'PENDING' | 'STATE' | 'FALLBACK';
+  privateReadSource: PrivateReadSourceId;
   privateReadError: string | null;
   markets: MarketRow[];
   marketStatus: CompatibilityStateStatus;
@@ -566,14 +570,13 @@ export function createSerializedWatchlistMutationQueue(
 }
 
 /**
- * Names a refused private read where the browser already owns the failure. A
- * 401/403 is a proven denial, not an unreachable transport, and collapsing it
- * into generic unavailability would let a denied cockpit read as merely quiet.
- * Classification adds no request, endpoint, or cadence of its own.
+ * Names a refused browser-to-application request. A same-origin 401/403 does
+ * not identify the upstream provider, so provider permission truth remains
+ * owned exclusively by a decoded private-read snapshot.
  */
-function privateReadDenialReason(cause: unknown): string | null {
-  return cause instanceof ApiRequestError && isPrivateReadDenialStatus(cause.status)
-    ? PRIVATE_READ_DENIED_REASON
+function privateReadAccessReason(cause: unknown): string | null {
+  return cause instanceof ApiRequestError
+    ? privateReadAccessReasonForStatus(cause.status)
     : null;
 }
 
@@ -582,11 +585,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [stateTruth, setStateTruth] = useState<CompatibilityStateTruth>(
     INITIAL_COMPATIBILITY_STATE_TRUTH,
   );
-  const [privateRead, setPrivateRead] = useState<PrivateReadSnapshot>(
-    () => unavailablePrivateRead('PRIVATE_READ_PENDING'),
+  const [privateReadApplied, setPrivateReadApplied] = useState<PrivateReadAppliedTruth>(
+    () => INITIAL_PRIVATE_READ_APPLIED_TRUTH,
   );
-  const [privateReadSource, setPrivateReadSource] = useState<'PENDING' | 'STATE' | 'FALLBACK'>('PENDING');
-  const [privateReadError, setPrivateReadError] = useState<string | null>(null);
+  // Transport cadence remains separate from displayed provenance. Retaining
+  // this established internal name keeps the existing single-transport
+  // contracts stable while the applied tuple owns what the UI labels.
+  const [privateReadSource, setPrivateReadSource] = useState<PrivateReadSourceId>('PENDING');
+  const {
+    snapshot: privateRead,
+    source: privateReadAppliedSource,
+    error: privateReadError,
+  } = privateReadApplied;
   const [markets, setMarkets] = useState<MarketRow[]>([]);
   const [marketTruth, setMarketTruth] = useState<MarketStateTruth>(INITIAL_MARKET_STATE_TRUTH);
   const [marketsUpdatedAt, setMarketsUpdatedAt] = useState<number | null>(null);
@@ -620,9 +630,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const privateReadCadenceRef = useRef<(() => void) | null>(null);
   const watchlistMutationQueueRef = useRef<SerializedWatchlistMutationQueue | null>(null);
 
-  // Private snapshots are ordered by the id assigned when their request left
-  // the browser, so a slow earlier answer can never overwrite newer account
-  // truth no matter which caller (socket delta, cadence, manual refresh) won.
+  // Private results are ordered by the id assigned when their request left the
+  // browser. Snapshot, error, and displayed provenance cross one atomic gate;
+  // transport mode remains separate because it controls cadence, not truth.
   const privateReadRequestRef = useRef(0);
   const privateReadAppliedRef = useRef(0);
   const privateReadStateDecisionRef = useRef(0);
@@ -631,10 +641,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return privateReadRequestRef.current;
   }, []);
 
-  const applyPrivateReadUpdate = useCallback((requestId: number, apply: () => void) => {
+  const applyPrivateReadUpdate = useCallback((update: PrivateReadAppliedUpdate) => {
+    const { requestId } = update;
     if (requestId <= privateReadAppliedRef.current) return;
     privateReadAppliedRef.current = requestId;
-    apply();
+    setPrivateReadApplied((current) => reducePrivateReadAppliedTruth(current, update));
   }, []);
 
   const acceptPrivateReadFromState = useCallback((snapshot: ServerState, requestId: number) => {
@@ -646,17 +657,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       privateReadStateDecisionRef.current = requestId;
       setPrivateReadSource(decoded ? 'STATE' : 'FALLBACK');
     }
-    applyPrivateReadUpdate(requestId, () => {
-      if (decoded) {
-        setPrivateRead(decoded);
-        setPrivateReadError(null);
-        return;
-      }
-      if (Object.prototype.hasOwnProperty.call(snapshot, 'privateRead')) {
-        setPrivateRead(unavailablePrivateRead('PRIVATE_READ_STATE_CONTRACT_INVALID'));
-        setPrivateReadError('PRIVATE_READ_STATE_CONTRACT_INVALID');
-      }
-    });
+    if (decoded) {
+      applyPrivateReadUpdate({
+        requestId,
+        snapshot: decoded,
+        error: null,
+        source: 'STATE',
+      });
+      return;
+    }
+    if (Object.prototype.hasOwnProperty.call(snapshot, 'privateRead')) {
+      applyPrivateReadUpdate({
+        requestId,
+        snapshot: unavailablePrivateRead('PRIVATE_READ_STATE_CONTRACT_INVALID'),
+        error: 'PRIVATE_READ_STATE_CONTRACT_INVALID',
+        source: 'STATE',
+      });
+    }
   }, [applyPrivateReadUpdate]);
 
   // One FX owner feeds both global formatters and the operator sheet. Cached
@@ -766,16 +783,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
         .catch((cause) => {
           if (!closed && !controller.signal.aborted) {
-            setPrivateReadSource((current) => current === 'STATE' ? current : 'FALLBACK');
-            // A refusal outranks the retained snapshot: once the preferred read
-            // is denied, the browser can no longer prove the rows it holds, so
-            // they are dropped through the same ordered gate every other
-            // private update uses. Other failures keep the existing recovery.
-            const denial = privateReadDenialReason(cause);
-            if (denial) {
-              applyPrivateReadUpdate(requestId, () => {
-                setPrivateRead(unavailablePrivateRead(denial));
-                setPrivateReadError(denial);
+            if (requestId > privateReadStateDecisionRef.current) {
+              privateReadStateDecisionRef.current = requestId;
+              setPrivateReadSource((current) => current === 'STATE' ? current : 'FALLBACK');
+            }
+            // A request refusal outranks retained rows, but it proves only that
+            // the application boundary denied this STATE request. The applied
+            // tuple keeps that endpoint provenance and provider truth UNKNOWN.
+            const accessReason = privateReadAccessReason(cause);
+            if (accessReason) {
+              applyPrivateReadUpdate({
+                requestId,
+                snapshot: unavailablePrivateRead(accessReason),
+                error: accessReason,
+                source: 'STATE',
               });
             }
             setStateTruth((current) => reduceCompatibilityStateTruth(current, {
@@ -954,20 +975,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       onSuccess: (payload) => {
         const decoded = decodePrivateReadSnapshot(payload);
         if (!decoded) throw new Error('PRIVATE_READ_FALLBACK_CONTRACT_INVALID');
-        applyPrivateReadUpdate(fallbackRequestId, () => {
-          setPrivateRead(decoded);
-          setPrivateReadError(null);
+        applyPrivateReadUpdate({
+          requestId: fallbackRequestId,
+          snapshot: decoded,
+          error: null,
+          source: 'FALLBACK',
         });
       },
       onError: (cause) => {
         const contractInvalid = cause instanceof Error && cause.message === 'PRIVATE_READ_FALLBACK_CONTRACT_INVALID';
-        const reason = privateReadDenialReason(cause)
+        const reason = privateReadAccessReason(cause)
           ?? (contractInvalid
             ? 'PRIVATE_READ_FALLBACK_CONTRACT_INVALID'
             : 'PRIVATE_READ_FALLBACK_UNAVAILABLE');
-        applyPrivateReadUpdate(fallbackRequestId, () => {
-          setPrivateRead(unavailablePrivateRead(reason));
-          setPrivateReadError(reason);
+        applyPrivateReadUpdate({
+          requestId: fallbackRequestId,
+          snapshot: unavailablePrivateRead(reason),
+          error: reason,
+          source: 'FALLBACK',
         });
       },
     });
@@ -1075,11 +1100,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }));
     } catch (cause) {
       issues.push('State snapshot failed');
-      const denial = privateReadDenialReason(cause);
-      if (denial) {
-        applyPrivateReadUpdate(requestId, () => {
-          setPrivateRead(unavailablePrivateRead(denial));
-          setPrivateReadError(denial);
+      if (requestId > privateReadStateDecisionRef.current) {
+        privateReadStateDecisionRef.current = requestId;
+        setPrivateReadSource((current) => current === 'STATE' ? current : 'FALLBACK');
+      }
+      const accessReason = privateReadAccessReason(cause);
+      if (accessReason) {
+        applyPrivateReadUpdate({
+          requestId,
+          snapshot: unavailablePrivateRead(accessReason),
+          error: accessReason,
+          source: 'STATE',
         });
       }
       setStateTruth((current) => reduceCompatibilityStateTruth(current, {
@@ -1126,7 +1157,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     stateLastSuccessAtMs: stateTruth.lastSuccessAtMs,
     stateError: stateTruth.error,
     privateRead,
-    privateReadSource,
+    privateReadSource: privateReadAppliedSource,
     privateReadError,
     markets,
     marketStatus: marketTruth.status,

@@ -7,11 +7,14 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import {
-  PRIVATE_READ_DENIED_REASON,
+  INITIAL_PRIVATE_READ_APPLIED_TRUTH,
+  PRIVATE_READ_ACCESS_DENIED_REASON,
+  PRIVATE_READ_AUTH_REQUIRED_REASON,
   PRIVATE_READ_STALE_AFTER_MS,
   decodePrivateReadSnapshot,
-  isPrivateReadDenialStatus,
+  privateReadAccessReasonForStatus,
   privateReadErrorFact,
+  reducePrivateReadAppliedTruth,
   unavailablePrivateRead,
 } from '../../src/lib/privateRead.ts';
 import {
@@ -303,8 +306,10 @@ test('the cockpit is a labelled complementary landmark with semantic facts and n
   assert.doesNotMatch(html, /\b(?:Trade|Cancel|Borrow now|Repay|Transfer|Withdraw)\b/);
 });
 
-test('the scrollable fact canvas answers the keyboard without becoming a control', async () => {
-  // The measured 398x486 canvas: 295px visible of 989px of facts.
+test('the pure scroll target advances only through its synthetic horizontal range', async () => {
+  // Synthetic geometry exercises the navigation math only. Responsive layout,
+  // focus visibility, and event cancellation are proved separately in a real
+  // rendered browser by the integration owner.
   const canvas = { scrollLeft: 0, clientWidth: 295, scrollWidth: 989 };
   const maximum = canvas.scrollWidth - canvas.clientWidth;
 
@@ -312,41 +317,54 @@ test('the scrollable fact canvas answers the keyboard without becoming a control
   assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'ArrowRight' }), 295);
   assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'PageDown', scrollLeft: 295 }), 590);
   assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'ArrowRight', scrollLeft: 590 }), maximum);
-  assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'ArrowRight', scrollLeft: maximum }), maximum);
 
   // One visible canvas back, then clamped at the start.
   assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'ArrowLeft', scrollLeft: maximum }), 399);
   assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'PageUp', scrollLeft: 399 }), 104);
   assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'ArrowLeft', scrollLeft: 104 }), 0);
-  assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'ArrowLeft', scrollLeft: 0 }), 0);
 
   assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'Home', scrollLeft: maximum }), 0);
   assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'End' }), maximum);
-
-  // Unrecognized keys keep their native behaviour, so nothing is prevented.
-  for (const key of ['ArrowDown', 'ArrowUp', 'Tab', 'Enter', ' ', 'a', 'Escape']) {
-    assert.equal(accountCockpitScrollTarget({ ...canvas, key }), null, `${key} must stay native`);
-  }
-
-  // Untrusted measurements fail closed to no movement rather than a guess.
-  for (const broken of [
-    { clientWidth: Number.NaN, scrollWidth: 989 },
-    { clientWidth: 295, scrollWidth: Number.NaN },
-    { clientWidth: 295, scrollWidth: Number.POSITIVE_INFINITY },
-    { clientWidth: 989, scrollWidth: 989 },
-  ]) {
-    assert.equal(accountCockpitScrollTarget({ scrollLeft: 0, key: 'ArrowRight', ...broken }), 0);
-    assert.equal(accountCockpitScrollTarget({ scrollLeft: 0, key: 'End', ...broken }), 0);
-  }
-  assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'ArrowRight', scrollLeft: Number.NaN }), 295);
 
   // The handler belongs to the labelled canvas itself; no control is added.
   const view = await read('components/AccountCockpitRailView.tsx');
   assert.match(view, /<dl className="acr-facts" tabIndex=\{0\} aria-label="Account facts" onKeyDown=\{scrollFactCanvas\}>/);
   assert.equal((view.match(/onKeyDown=/g) ?? []).length, 1);
-  assert.match(view, /canvas\.scrollLeft = target;/);
+  assert.match(view, /if \(target === null\) return;\s*event\.preventDefault\(\);\s*canvas\.scrollLeft = target;/);
   assert.doesNotMatch(view, /behavior: 'smooth'|scrollIntoView|scrollBy\(/);
   assert.doesNotMatch(view, /onClick|<button/);
+});
+
+test('no-movement keys stay native at boundaries, without overflow, and with invalid geometry', () => {
+  const canvas = { scrollLeft: 0, clientWidth: 295, scrollWidth: 989 };
+  const maximum = canvas.scrollWidth - canvas.clientWidth;
+
+  // Recognized navigation is not swallowed when it cannot move the canvas.
+  assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'ArrowLeft' }), null);
+  assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'Home' }), null);
+  assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'ArrowRight', scrollLeft: maximum }), null);
+  assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'End', scrollLeft: maximum }), null);
+
+  // Unrecognized keys keep their native behaviour.
+  for (const key of ['ArrowDown', 'ArrowUp', 'Tab', 'Enter', ' ', 'a', 'Escape']) {
+    assert.equal(accountCockpitScrollTarget({ ...canvas, key }), null, `${key} must stay native`);
+  }
+
+  // Untrusted or non-scrollable measurements fail closed to native behaviour.
+  for (const broken of [
+    { clientWidth: Number.NaN, scrollWidth: 989 },
+    { clientWidth: 295, scrollWidth: Number.NaN },
+    { clientWidth: 295, scrollWidth: Number.POSITIVE_INFINITY },
+    { clientWidth: 989, scrollWidth: 989 },
+    { clientWidth: 1_000, scrollWidth: 989 },
+    { clientWidth: 0, scrollWidth: 989 },
+    { clientWidth: -1, scrollWidth: 989 },
+  ]) {
+    assert.equal(accountCockpitScrollTarget({ scrollLeft: 0, key: 'ArrowRight', ...broken }), null);
+    assert.equal(accountCockpitScrollTarget({ scrollLeft: 0, key: 'End', ...broken }), null);
+  }
+  assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'ArrowRight', scrollLeft: Number.NaN }), null);
+  assert.equal(accountCockpitScrollTarget({ ...canvas, key: 'ArrowRight', scrollLeft: Number.NEGATIVE_INFINITY }), null);
 });
 
 test('the cockpit consumes the existing store and projector without a transport of its own', async () => {
@@ -415,29 +433,58 @@ test('a null collection stays unknown and an exact empty array keeps its observe
   }
 });
 
-test('a denied private read is explicit and can never read as a safe cockpit', () => {
-  assert.ok(isPrivateReadDenialStatus(401));
-  assert.ok(isPrivateReadDenialStatus(403));
-  assert.equal(isPrivateReadDenialStatus(500), false);
-  assert.equal(isPrivateReadDenialStatus(404), false);
-  const denial = privateReadErrorFact(PRIVATE_READ_DENIED_REASON);
-  assert.equal(denial.id, 'DENIED');
-  assert.equal(denial.label, 'DENIED');
-  assert.equal(denial.tone, 'bad');
-  assert.equal(denial.guardTone, 'bad');
+test('a 401 is application authentication required with provider state unknown', () => {
+  assert.equal(privateReadAccessReasonForStatus(401), PRIVATE_READ_AUTH_REQUIRED_REASON);
+  assert.equal(privateReadAccessReasonForStatus(500), null);
+  assert.equal(privateReadAccessReasonForStatus('401'), null);
+  const authentication = privateReadErrorFact(PRIVATE_READ_AUTH_REQUIRED_REASON);
+  assert.equal(authentication.id, 'AUTH_REQUIRED');
+  assert.equal(authentication.label, 'AUTH REQUIRED');
+  assert.equal(authentication.tone, 'bad');
+  assert.equal(authentication.guardTone, 'bad');
+  assert.match(authentication.detail, /Application authentication is required/);
+  assert.match(authentication.detail, /provider state is UNKNOWN/);
+  assert.doesNotMatch(authentication.detail, /provider (?:refused|denied|rejected|requires authentication)/i);
 
   const html = render(
-    unavailablePrivateRead(PRIVATE_READ_DENIED_REASON),
+    unavailablePrivateRead(PRIVATE_READ_AUTH_REQUIRED_REASON),
     'STATE',
-    PRIVATE_READ_DENIED_REASON,
+    PRIVATE_READ_AUTH_REQUIRED_REASON,
   );
-  assert.equal(attribute(html, 'data-acr-error'), PRIVATE_READ_DENIED_REASON);
+  assert.equal(attribute(html, 'data-acr-error'), PRIVATE_READ_AUTH_REQUIRED_REASON);
   assert.equal(attribute(html, 'data-acr-tone'), 'bad');
   assert.equal(attribute(html, 'data-acr-state'), 'UNAVAILABLE');
-  assert.match(factCell(html, 'admission'), /<b class="s-bad">DENIED<\/b>/);
+  assert.match(factCell(html, 'admission'), /<b class="s-bad">AUTH REQUIRED<\/b>/);
   assert.match(html, /class="acr-status s-bad"/);
-  assert.match(html, /UNAVAILABLE · DENIED/);
-  // Not one fact may present a safe reading while the read is denied.
+  assert.match(html, /UNAVAILABLE · AUTH REQUIRED/);
+  assert.doesNotMatch(html, /data-acr-fact-tone="ok"/);
+  assert.doesNotMatch(html, /class="acr-status s-ok"/);
+});
+
+test('a 403 is application access denied with provider state unknown', () => {
+  assert.equal(privateReadAccessReasonForStatus(403), PRIVATE_READ_ACCESS_DENIED_REASON);
+  assert.equal(privateReadAccessReasonForStatus(404), null);
+  assert.equal(privateReadAccessReasonForStatus('403'), null);
+  const access = privateReadErrorFact(PRIVATE_READ_ACCESS_DENIED_REASON);
+  assert.equal(access.id, 'ACCESS_DENIED');
+  assert.equal(access.label, 'ACCESS DENIED');
+  assert.equal(access.tone, 'bad');
+  assert.equal(access.guardTone, 'bad');
+  assert.match(access.detail, /Application access is denied/);
+  assert.match(access.detail, /provider state is UNKNOWN/);
+  assert.doesNotMatch(access.detail, /provider (?:refused|denied|rejected|access)/i);
+
+  const html = render(
+    unavailablePrivateRead(PRIVATE_READ_ACCESS_DENIED_REASON),
+    'STATE',
+    PRIVATE_READ_ACCESS_DENIED_REASON,
+  );
+  assert.equal(attribute(html, 'data-acr-error'), PRIVATE_READ_ACCESS_DENIED_REASON);
+  assert.equal(attribute(html, 'data-acr-tone'), 'bad');
+  assert.equal(attribute(html, 'data-acr-state'), 'UNAVAILABLE');
+  assert.match(factCell(html, 'admission'), /<b class="s-bad">ACCESS DENIED<\/b>/);
+  assert.match(html, /class="acr-status s-bad"/);
+  assert.match(html, /UNAVAILABLE · ACCESS DENIED/);
   assert.doesNotMatch(html, /data-acr-fact-tone="ok"/);
   assert.doesNotMatch(html, /class="acr-status s-ok"/);
 
@@ -452,19 +499,58 @@ test('a denied private read is explicit and can never read as a safe cockpit', (
   assert.equal(attribute(opaqueHtml, 'data-acr-error'), 'PRIVATE_READ_ERROR');
 });
 
-test('the store classifies a refused private read without adding a transport', async () => {
+test('reverse completion keeps snapshot, source, and error behind one ordered gate', () => {
+  const preferred = admitted(exactEmptyFixture(Date.now()));
+  const fallback = unavailablePrivateRead('PRIVATE_READ_FALLBACK_UNAVAILABLE');
+  const newerFallback = reducePrivateReadAppliedTruth(INITIAL_PRIVATE_READ_APPLIED_TRUTH, {
+    requestId: 2,
+    snapshot: fallback,
+    source: 'FALLBACK',
+    error: 'PRIVATE_READ_FALLBACK_UNAVAILABLE',
+  });
+  const staleState = reducePrivateReadAppliedTruth(newerFallback, {
+    requestId: 1,
+    snapshot: preferred,
+    source: 'STATE',
+    error: null,
+  });
+  assert.strictEqual(staleState, newerFallback);
+  assert.strictEqual(staleState.snapshot, fallback);
+  assert.equal(staleState.source, 'FALLBACK');
+  assert.equal(staleState.error, 'PRIVATE_READ_FALLBACK_UNAVAILABLE');
+
+  const recoveredState = reducePrivateReadAppliedTruth(newerFallback, {
+    requestId: 3,
+    snapshot: preferred,
+    source: 'STATE',
+    error: null,
+  });
+  assert.notStrictEqual(recoveredState, newerFallback);
+  assert.strictEqual(recoveredState.snapshot, preferred);
+  assert.equal(recoveredState.source, 'STATE');
+  assert.equal(recoveredState.error, null);
+
+  const staleAccessFailure = reducePrivateReadAppliedTruth(recoveredState, {
+    requestId: 2,
+    snapshot: unavailablePrivateRead(PRIVATE_READ_ACCESS_DENIED_REASON),
+    source: 'FALLBACK',
+    error: PRIVATE_READ_ACCESS_DENIED_REASON,
+  });
+  assert.strictEqual(staleAccessFailure, recoveredState);
+  assert.strictEqual(staleAccessFailure.snapshot, preferred);
+  assert.equal(staleAccessFailure.source, 'STATE');
+  assert.equal(staleAccessFailure.error, null);
+});
+
+test('the store classifies application access failures without adding a transport', async () => {
   const store = await read('store.tsx');
-  assert.match(store, /function privateReadDenialReason\(cause: unknown\): string \| null \{/);
-  assert.match(store, /cause instanceof ApiRequestError && isPrivateReadDenialStatus\(cause\.status\)/);
-  // Both private paths classify a refusal, and both write through the ordered
-  // request gate so an older denial can never overwrite newer account truth.
-  assert.equal((store.match(/privateReadDenialReason\(cause\)/g) ?? []).length, 3);
-  assert.equal(
-    (store.match(/applyPrivateReadUpdate\(requestId, \(\) => \{\s*setPrivateRead\(unavailablePrivateRead\(denial\)\);/g) ?? []).length,
-    2,
-  );
-  assert.match(store, /const reason = privateReadDenialReason\(cause\)\s*\?\?/);
-  assert.doesNotMatch(store, /PRIVATE_READ_DENIED'/, 'the denial token stays owned by the projector module');
+  assert.match(store, /function privateReadAccessReason\(cause: unknown\): string \| null \{/);
+  assert.match(store, /cause instanceof ApiRequestError\s*\?\s*privateReadAccessReasonForStatus\(cause\.status\)/);
+  assert.equal((store.match(/privateReadAccessReason\(cause\)/g) ?? []).length, 3);
+  assert.match(store, /setPrivateReadApplied\(\(current\) => reducePrivateReadAppliedTruth\(current, update\)\)/);
+  assert.match(store, /source: 'STATE'/);
+  assert.match(store, /source: 'FALLBACK'/);
+  assert.doesNotMatch(store, /PRIVATE_READ_(?:REQUEST_)?DENIED|provider refused/i);
 });
 
 test('an unreported error is neutral truth, never a green admission and never a downgrade', () => {
@@ -563,7 +649,7 @@ test('the globally visible header account status reads the same store truth', as
   assert.doesNotMatch(header, /Private account truth is outside this candidate/);
 });
 
-test('the cockpit is one restrained surface that reflows on its own inline size', async () => {
+test('static CSS declarations preserve the restrained container-query contract', async () => {
   const [css, shell] = await Promise.all([
     read('components/AccountCockpitRail.css'),
     read('styles.css'),
@@ -586,8 +672,9 @@ test('the cockpit is one restrained surface that reflows on its own inline size'
   assert.match(css, /overflow-wrap: anywhere;/);
   assert.match(css, /min-width: 0;/);
 
-  // The measured 1280px desktop leaves the rail about 1090px, which must keep
-  // the default six-column, two-row tape.
+  // The declaration contract leaves rail widths above the largest breakpoint
+  // on the default six-column, two-row tape. Actual reflow and overflow are
+  // verified separately in a rendered browser.
   const breakpoints = [...css.matchAll(/@container account-cockpit-rail \(max-width: (\d+)px\)/g)]
     .map(([, width]) => Number(width));
   assert.equal(breakpoints.length, 4);

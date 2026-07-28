@@ -6,6 +6,7 @@ import {
   worstTone,
   type CoverageState,
   type PrivateReadSnapshot,
+  type PrivateReadSourceId,
   type PrivateReadState,
   type PrivateReadTone,
   type ReconciliationState,
@@ -17,9 +18,6 @@ import {
  * effect, timer, or endpoint of its own: `projectPrivateRead` stays the single
  * projection owner, so this surface can only re-present proven facts.
  */
-
-/** The transports the store owns, named exactly as it publishes them. */
-export type PrivateReadSourceId = 'PENDING' | 'STATE' | 'FALLBACK';
 
 interface CockpitFact {
   id: string;
@@ -60,13 +58,14 @@ const RECONCILIATION_TONE: Record<ReconciliationState, PrivateReadTone> = {
 };
 
 /**
- * Provenance, not health: naming the transport in use is never a claim that the
- * read succeeded, so only a degraded transport takes a tone of its own.
+ * Provenance, not health: naming the response that supplied the displayed
+ * truth is never a claim that the read succeeded, so only a fallback response
+ * takes a tone of its own.
  */
 const SOURCE_FACT: Record<PrivateReadSourceId, { detail: string; tone: PrivateReadTone }> = {
-  PENDING: { detail: 'No private read has settled yet.', tone: 'idle' },
-  STATE: { detail: 'Preferred compatibility state read.', tone: 'idle' },
-  FALLBACK: { detail: 'Bounded fallback account read is active.', tone: 'warn' },
+  PENDING: { detail: 'No account result has been applied yet.', tone: 'idle' },
+  STATE: { detail: 'Applied from the preferred compatibility state endpoint.', tone: 'idle' },
+  FALLBACK: { detail: 'Applied from the bounded fallback account endpoint.', tone: 'warn' },
 };
 
 /**
@@ -98,9 +97,9 @@ export interface AccountCockpitScrollMetrics {
  *
  * The target runtime does not scroll a focused container from the arrow keys on
  * its own, so the off-screen facts would otherwise be unreachable by keyboard.
- * Every measurement is treated as untrusted: a non-finite one fails closed to no
- * movement, and the result is always clamped into the real scrollable range, so
- * the canvas can never be driven past its own content.
+ * Every measurement is treated as untrusted: invalid or non-scrollable geometry
+ * fails closed to native key behaviour, and an in-range target is returned only
+ * when the canvas can actually move.
  */
 export function accountCockpitScrollTarget({
   key,
@@ -108,13 +107,28 @@ export function accountCockpitScrollTarget({
   clientWidth,
   scrollWidth,
 }: AccountCockpitScrollMetrics): number | null {
-  // Both measurements are needed to know the range; either one missing leaves
-  // the canvas unmovable rather than guessing at a distance.
-  const measured = Number.isFinite(clientWidth) && Number.isFinite(scrollWidth);
-  const current = Number.isFinite(scrollLeft) ? scrollLeft : 0;
+  const recognized = key === 'ArrowRight'
+    || key === 'PageDown'
+    || key === 'ArrowLeft'
+    || key === 'PageUp'
+    || key === 'Home'
+    || key === 'End';
+  if (!recognized) return null;
+
+  // Without complete, positive, overflowing geometry there is no custom
+  // movement to own, so the browser keeps the key for its native behaviour.
+  if (
+    !Number.isFinite(scrollLeft)
+    || !Number.isFinite(clientWidth)
+    || !Number.isFinite(scrollWidth)
+    || clientWidth <= 0
+    || scrollWidth <= clientWidth
+  ) return null;
+
+  const maximum = scrollWidth - clientWidth;
+  const current = Math.min(maximum, Math.max(0, scrollLeft));
   // One step is one visible canvas, which is also the paging distance.
-  const step = measured ? Math.max(0, clientWidth) : 0;
-  const maximum = measured ? Math.max(0, scrollWidth - clientWidth) : 0;
+  const step = clientWidth;
   const target = key === 'ArrowRight' || key === 'PageDown'
     ? current + step
     : key === 'ArrowLeft' || key === 'PageUp'
@@ -123,8 +137,9 @@ export function accountCockpitScrollTarget({
         ? 0
         : key === 'End'
           ? maximum
-          : null;
-  return target === null ? null : Math.min(maximum, Math.max(0, target));
+          : current;
+  const clamped = Math.min(maximum, Math.max(0, target));
+  return clamped === current ? null : clamped;
 }
 
 /**
@@ -140,7 +155,8 @@ function scrollFactCanvas(event: KeyboardEvent<HTMLDListElement>): void {
     clientWidth: canvas.clientWidth,
     scrollWidth: canvas.scrollWidth,
   });
-  // An unrecognized key keeps its native behaviour, including page scrolling.
+  // Unrecognized and no-movement keys keep their native behaviour, including
+  // ancestor page scrolling at either edge of the fact canvas.
   if (target === null) return;
   event.preventDefault();
   canvas.scrollLeft = target;

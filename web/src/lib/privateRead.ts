@@ -793,6 +793,52 @@ export function unavailablePrivateRead(reason = 'PRIVATE_READ_UNAVAILABLE'): Pri
   };
 }
 
+/**
+ * The endpoint whose result supplied the currently presented private-read
+ * truth. This is provenance only; the store keeps its active transport mode
+ * separately so changing cadence cannot relabel an older applied snapshot.
+ */
+export type PrivateReadSourceId = 'PENDING' | 'STATE' | 'FALLBACK';
+
+export type PrivateReadAppliedTruth = Readonly<{
+  requestId: number;
+  snapshot: PrivateReadSnapshot;
+  error: string | null;
+  source: PrivateReadSourceId;
+}>;
+
+export type PrivateReadAppliedUpdate = Readonly<{
+  requestId: number;
+  snapshot: PrivateReadSnapshot;
+  error: string | null;
+  source: Exclude<PrivateReadSourceId, 'PENDING'>;
+}>;
+
+export const INITIAL_PRIVATE_READ_APPLIED_TRUTH: PrivateReadAppliedTruth = Object.freeze({
+  requestId: 0,
+  snapshot: unavailablePrivateRead('PRIVATE_READ_PENDING'),
+  error: null,
+  source: 'PENDING',
+});
+
+/**
+ * Atomically admits one private-read result by request issue order. React may
+ * queue several updater functions before rendering, so the request id, data,
+ * error, and presented provenance must cross the same pure monotonic gate.
+ */
+export function reducePrivateReadAppliedTruth(
+  current: PrivateReadAppliedTruth,
+  update: PrivateReadAppliedUpdate,
+): PrivateReadAppliedTruth {
+  if (!Number.isSafeInteger(update.requestId) || update.requestId <= current.requestId) return current;
+  return Object.freeze({
+    requestId: update.requestId,
+    snapshot: update.snapshot,
+    error: update.error,
+    source: update.source,
+  });
+}
+
 function titleState(value: string): string {
   return value.toLowerCase().replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
@@ -835,20 +881,32 @@ export function exactOrDash(value: string | null | undefined): string {
 }
 
 /**
- * A provider refusal is a different fact from an absent transport, so it gets
- * its own stable token instead of collapsing into generic unavailability.
+ * The application boundary refused the browser request. HTTP status alone
+ * carries no provider provenance, so provider permission truth stays UNKNOWN
+ * unless a valid decoded private-read snapshot explicitly publishes it.
  */
-export const PRIVATE_READ_DENIED_REASON = 'PRIVATE_READ_DENIED';
-/** The response statuses that prove refusal rather than an unreachable read. */
-export const PRIVATE_READ_DENIAL_STATUSES: readonly number[] = [401, 403];
+export const PRIVATE_READ_AUTH_REQUIRED_REASON = 'PRIVATE_READ_AUTH_REQUIRED';
+export const PRIVATE_READ_ACCESS_DENIED_REASON = 'PRIVATE_READ_ACCESS_DENIED';
 /** The token presented when a failure carries no admitted classification. */
 export const PRIVATE_READ_GENERIC_ERROR_REASON = 'PRIVATE_READ_ERROR';
 
-export function isPrivateReadDenialStatus(status: unknown): boolean {
-  return typeof status === 'number' && PRIVATE_READ_DENIAL_STATUSES.includes(status);
+export type PrivateReadAccessReason =
+  | typeof PRIVATE_READ_AUTH_REQUIRED_REASON
+  | typeof PRIVATE_READ_ACCESS_DENIED_REASON;
+
+export function privateReadAccessReasonForStatus(status: unknown): PrivateReadAccessReason | null {
+  if (status === 401) return PRIVATE_READ_AUTH_REQUIRED_REASON;
+  if (status === 403) return PRIVATE_READ_ACCESS_DENIED_REASON;
+  return null;
 }
 
-export type PrivateReadErrorId = 'NONE' | 'DENIED' | 'CONTRACT_INVALID' | 'UNAVAILABLE' | 'ERROR';
+export type PrivateReadErrorId =
+  | 'NONE'
+  | 'AUTH_REQUIRED'
+  | 'ACCESS_DENIED'
+  | 'CONTRACT_INVALID'
+  | 'UNAVAILABLE'
+  | 'ERROR';
 
 export interface PrivateReadErrorFact {
   id: PrivateReadErrorId;
@@ -869,10 +927,16 @@ export interface PrivateReadErrorFact {
 type AdmittedErrorFact = Omit<PrivateReadErrorFact, 'code' | 'guardTone'>;
 
 const PRIVATE_READ_ERROR_FACTS: Readonly<Record<string, AdmittedErrorFact>> = {
-  [PRIVATE_READ_DENIED_REASON]: {
-    id: 'DENIED',
-    label: 'DENIED',
-    detail: 'The provider refused the private read; no account truth is admitted.',
+  [PRIVATE_READ_AUTH_REQUIRED_REASON]: {
+    id: 'AUTH_REQUIRED',
+    label: 'AUTH REQUIRED',
+    detail: 'Application authentication is required for this browser read; provider state is UNKNOWN and no account truth is admitted.',
+    tone: 'bad',
+  },
+  [PRIVATE_READ_ACCESS_DENIED_REASON]: {
+    id: 'ACCESS_DENIED',
+    label: 'ACCESS DENIED',
+    detail: 'Application access is denied for this browser read; provider state is UNKNOWN and no account truth is admitted.',
     tone: 'bad',
   },
   PRIVATE_READ_STATE_CONTRACT_INVALID: {

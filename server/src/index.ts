@@ -90,6 +90,7 @@ import {
 } from './services/optionalSurfaceControl.js';
 import { BasisRuntime } from './services/basisRuntime.js';
 import { VolumeRuntime } from './services/volumeRuntime.js';
+import { createM0SpotRuntimeMount } from './systemIntegration/production/m0SpotRuntime.js';
 import {
   StrategyDecayCoordinator,
   StrategyDecayLedgerAdapter,
@@ -268,6 +269,7 @@ const volumeRuntime = new VolumeRuntime(ledger, () => config, () => engine.allRo
 let shuttingDown = false;
 const ordinaryShutdownAdmission = new OrdinaryShutdownAdmission();
 const systemIntegrationClock = createSystemUtcClock();
+const m0SpotRuntimeMount = createM0SpotRuntimeMount();
 const bootReleasePersistence = createSystemBootReleasePersistenceAdapter({
   ledger,
   clock: systemIntegrationClock,
@@ -1297,6 +1299,7 @@ app.use('/api/system-integration', createSystemIntegrationRouter({
   validateOnly: {
     executeValidateOnly: (input) => systemIntegration.executeValidateOnly(input),
   },
+  m0SpotCanary: m0SpotRuntimeMount,
   clock: systemIntegrationClock,
   opsReadback: canonicalOpsReadPort,
 }));

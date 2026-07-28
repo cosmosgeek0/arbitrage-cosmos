@@ -77,7 +77,20 @@ export function runAuthorityScan(catalog) {
 
   const rules = catalog.staticRules.map((rule) => {
     const hits = scanRule(rule);
-    return { id: rule.id, expectedHits: rule.expectedHits, hits, passed: hits.length === rule.expectedHits };
+    const observedFiles = [...new Set(hits.map((hit) => hit.file))].sort();
+    const expectedFiles = Array.isArray(rule.expectedFiles)
+      ? [...rule.expectedFiles].sort()
+      : null;
+    return {
+      id: rule.id,
+      expectedHits: rule.expectedHits,
+      expectedFiles,
+      observedFiles,
+      hits,
+      passed: hits.length === rule.expectedHits
+        && (expectedFiles === null
+          || JSON.stringify(observedFiles) === JSON.stringify(expectedFiles)),
+    };
   });
 
   const conflicts = catalog.knownConflicts.map((conflict) => {

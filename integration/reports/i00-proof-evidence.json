@@ -637,42 +637,58 @@
       {
         "id": "NO_INTEGRATION_SOCKET",
         "expectedHits": 0,
+        "expectedFiles": null,
+        "observedFiles": [],
         "hits": [],
         "passed": true
       },
       {
         "id": "NO_INTEGRATION_DATABASE",
         "expectedHits": 0,
+        "expectedFiles": null,
+        "observedFiles": [],
         "hits": [],
         "passed": true
       },
       {
         "id": "NO_BROWSER_PRIVATE_BINANCE",
         "expectedHits": 0,
+        "expectedFiles": null,
+        "observedFiles": [],
         "hits": [],
         "passed": true
       },
       {
         "id": "NO_IP_PROOF_PRODUCTION_IMPORT",
         "expectedHits": 0,
+        "expectedFiles": null,
+        "observedFiles": [],
         "hits": [],
         "passed": true
       },
       {
         "id": "NO_BROWSER_TOKEN_EXCHANGE_SOCKET",
         "expectedHits": 0,
+        "expectedFiles": null,
+        "observedFiles": [],
         "hits": [],
         "passed": true
       },
       {
         "id": "NO_BROWSER_TOKEN_FALLBACK_CDN",
         "expectedHits": 0,
+        "expectedFiles": null,
+        "observedFiles": [],
         "hits": [],
         "passed": true
       },
       {
         "id": "ONE_PHYSICAL_USDM_LIQUIDATION_TRANSPORT_URL",
         "expectedHits": 1,
+        "expectedFiles": null,
+        "observedFiles": [
+          "server/src/engine/marketData.ts"
+        ],
         "hits": [
           {
             "file": "server/src/engine/marketData.ts",
@@ -685,6 +701,77 @@
       {
         "id": "NO_LIQUIDATION_PROJECTION_TRANSPORT_OR_RAW_FRAME",
         "expectedHits": 0,
+        "expectedFiles": null,
+        "observedFiles": [],
+        "hits": [],
+        "passed": true
+      },
+      {
+        "id": "M0_SPOT_ADAPTER_CONSUMERS_EXACT",
+        "expectedHits": 2,
+        "expectedFiles": [
+          "server/src/binance/m0SpotSignedTransport.ts",
+          "server/src/systemIntegration/production/m0SpotRuntime.ts"
+        ],
+        "observedFiles": [
+          "server/src/binance/m0SpotSignedTransport.ts",
+          "server/src/systemIntegration/production/m0SpotRuntime.ts"
+        ],
+        "hits": [
+          {
+            "file": "server/src/binance/m0SpotSignedTransport.ts",
+            "line": 26,
+            "ruleId": "M0_SPOT_ADAPTER_CONSUMERS_EXACT"
+          },
+          {
+            "file": "server/src/systemIntegration/production/m0SpotRuntime.ts",
+            "line": 25,
+            "ruleId": "M0_SPOT_ADAPTER_CONSUMERS_EXACT"
+          }
+        ],
+        "passed": true
+      },
+      {
+        "id": "ONE_M0_RUNTIME_PRODUCTION_IMPORT",
+        "expectedHits": 1,
+        "expectedFiles": [
+          "server/src/index.ts"
+        ],
+        "observedFiles": [
+          "server/src/index.ts"
+        ],
+        "hits": [
+          {
+            "file": "server/src/index.ts",
+            "line": 93,
+            "ruleId": "ONE_M0_RUNTIME_PRODUCTION_IMPORT"
+          }
+        ],
+        "passed": true
+      },
+      {
+        "id": "M0_RUNTIME_HARD_DENY_MARKER",
+        "expectedHits": 1,
+        "expectedFiles": [
+          "server/src/systemIntegration/production/m0SpotRuntime.ts"
+        ],
+        "observedFiles": [
+          "server/src/systemIntegration/production/m0SpotRuntime.ts"
+        ],
+        "hits": [
+          {
+            "file": "server/src/systemIntegration/production/m0SpotRuntime.ts",
+            "line": 136,
+            "ruleId": "M0_RUNTIME_HARD_DENY_MARKER"
+          }
+        ],
+        "passed": true
+      },
+      {
+        "id": "NO_INTEGRATION_M0_SIGNED_OR_AMBIENT_TRANSPORT",
+        "expectedHits": 0,
+        "expectedFiles": null,
+        "observedFiles": [],
         "hits": [],
         "passed": true
       }
@@ -729,6 +816,16 @@
         "evidence": "fixtures/i00/living-director-input-acceptance.json",
         "impact": "accepted Q remains advisory ABSTAIN_UNKNOWN until production transport and schema-hash handshake are configured",
         "observed": false
+      },
+      {
+        "id": "M0_SOURCE_ONLY_SPOT_ADAPTER_MOUNT",
+        "path": "server/src/systemIntegration/production/m0SpotRuntime.ts",
+        "needle": "createBinanceSpotExecutionAdapter",
+        "classification": "RESOLVED_HARD_DENY_SOURCE_MOUNT",
+        "resolutionState": "RESOLVED",
+        "evidence": "server/test/systemIntegration/evidence/m0-spot-canary-source-boundary.test.mjs",
+        "impact": "the sole System Integration composer may inspect the accepted coordinator and adapter only behind frozen OFF, kill ON, empty allowlist, and injected hard-deny effect ports; no signed transport, credential, private read, dispatch, ticket issue, persistence write, or money authority is composed",
+        "observed": true
       }
     ],
     "boundaryFindings": [],
@@ -785,7 +882,7 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 4223,
+        "line": 4226,
         "classification": "LEGACY_APP_DELIVERY"
       },
       {
@@ -3974,121 +4071,121 @@
         "concept": "control-authority",
         "declaration": "type SystemSupervisorReadModel",
         "file": "server/src/index.ts",
-        "line": 110
+        "line": 111
       },
       {
         "concept": "capital-authority",
         "declaration": "type ProductionCapitalSummaryReadPort",
         "file": "server/src/index.ts",
-        "line": 129
+        "line": 130
       },
       {
         "concept": "control-authority",
         "declaration": "type CanonicalSupervisorOpsReadPort",
         "file": "server/src/index.ts",
-        "line": 140
+        "line": 141
       },
       {
         "concept": "semantic-source",
         "declaration": "type SourceIsolationPhysicalPort",
         "file": "server/src/index.ts",
-        "line": 146
+        "line": 147
       },
       {
         "concept": "semantic-source",
         "declaration": "type SourceLogoEntry",
         "file": "server/src/index.ts",
-        "line": 196
+        "line": 197
       },
       {
         "concept": "semantic-source",
         "declaration": "function legacyScannerSnapshot",
         "file": "server/src/index.ts",
-        "line": 247
+        "line": 248
       },
       {
         "concept": "ledger-authority",
         "declaration": "function pruneEphemeralLedgerEvents",
         "file": "server/src/index.ts",
-        "line": 671
+        "line": 673
       },
       {
         "concept": "semantic-source",
         "declaration": "function handleBookStreamMessage",
         "file": "server/src/index.ts",
-        "line": 849
+        "line": 851
       },
       {
         "concept": "semantic-source",
         "declaration": "function resetBookStreamRuntime",
         "file": "server/src/index.ts",
-        "line": 871
+        "line": 873
       },
       {
         "concept": "control-authority",
         "declaration": "function recordSupervisorReadFailure",
         "file": "server/src/index.ts",
-        "line": 954
+        "line": 956
       },
       {
         "concept": "semantic-source",
         "declaration": "function sendLegacyScannerRetired",
         "file": "server/src/index.ts",
-        "line": 1017
+        "line": 1019
       },
       {
         "concept": "semantic-source",
         "declaration": "type ObservedMarketSourceResult",
         "file": "server/src/index.ts",
-        "line": 2402
+        "line": 2405
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketSourceSnapshot",
         "file": "server/src/index.ts",
-        "line": 2406
+        "line": 2409
       },
       {
         "concept": "semantic-source",
         "declaration": "function observedMarketSourceResult",
         "file": "server/src/index.ts",
-        "line": 2424
+        "line": 2427
       },
       {
         "concept": "semantic-source",
         "declaration": "function marketSources",
         "file": "server/src/index.ts",
-        "line": 2439
+        "line": 2442
       },
       {
         "concept": "semantic-source",
         "declaration": "function cachedSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2951
+        "line": 2954
       },
       {
         "concept": "semantic-source",
         "declaration": "function rememberSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2963
+        "line": 2966
       },
       {
         "concept": "semantic-source",
         "declaration": "function loadSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2973
+        "line": 2976
       },
       {
         "concept": "semantic-source",
         "declaration": "function startSharedIconSource",
         "file": "server/src/index.ts",
-        "line": 4073
+        "line": 4076
       },
       {
         "concept": "semantic-source",
         "declaration": "function stopSharedIconSource",
         "file": "server/src/index.ts",
-        "line": 4084
+        "line": 4087
       },
       {
         "concept": "semantic-source",
@@ -8436,6 +8533,24 @@
       },
       {
         "concept": "semantic-source",
+        "declaration": "type M0SpotCanarySourceMountInput",
+        "file": "server/src/systemIntegration/production/m0SpotRuntime.ts",
+        "line": 31
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "type M0SpotCanarySourceMountPort",
+        "file": "server/src/systemIntegration/production/m0SpotRuntime.ts",
+        "line": 32
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "type M0SpotCanarySourceMountResult",
+        "file": "server/src/systemIntegration/production/m0SpotRuntime.ts",
+        "line": 33
+      },
+      {
+        "concept": "semantic-source",
         "declaration": "type SystemSemanticStream",
         "file": "server/src/systemIntegration/production/sourceAdmission.ts",
         "line": 4
@@ -8577,6 +8692,24 @@
         "declaration": "function createProductionVolumeRiskPort",
         "file": "server/src/systemIntegration/production/volumeRisk.ts",
         "line": 387
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface M0SpotCanarySourceMountInput",
+        "file": "server/src/systemIntegration/routes/types.ts",
+        "line": 69
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface M0SpotCanarySourceMountResult",
+        "file": "server/src/systemIntegration/routes/types.ts",
+        "line": 75
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface M0SpotCanarySourceMountPort",
+        "file": "server/src/systemIntegration/routes/types.ts",
+        "line": 100
       },
       {
         "concept": "control-authority",
@@ -8841,12 +8974,12 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 147,
+        "line": 148,
         "target": "./intelligenceRuntime/lifecycle/index.js"
       },
       {
         "file": "server/src/index.ts",
-        "line": 177,
+        "line": 178,
         "target": "./capitalFoundation/contracts/index.js"
       },
       {
@@ -9130,6 +9263,21 @@
         "target": "../../foundation/control/index.js"
       },
       {
+        "file": "server/src/systemIntegration/production/m0SpotRuntime.ts",
+        "line": 14,
+        "target": "../../foundation/execution/spotValidateOnly.js"
+      },
+      {
+        "file": "server/src/systemIntegration/production/m0SpotRuntime.ts",
+        "line": 19,
+        "target": "../../foundation/execution/spotTransportCoordinator.js"
+      },
+      {
+        "file": "server/src/systemIntegration/production/m0SpotRuntime.ts",
+        "line": 22,
+        "target": "../../foundation/risk/spotRiskPolicy.js"
+      },
+      {
         "file": "server/src/systemIntegration/production/observedOrderFocus.ts",
         "line": 1,
         "target": "../../foundation/reconciliation/index.js"
@@ -9158,6 +9306,11 @@
         "file": "server/src/systemIntegration/production/volumeRisk.ts",
         "line": 17,
         "target": "../../foundation/risk/index.js"
+      },
+      {
+        "file": "server/src/systemIntegration/routes/types.ts",
+        "line": 12,
+        "target": "../../foundation/execution/spotTransportCoordinator.js"
       },
       {
         "file": "server/src/systemIntegration/supervisor/operatingMetrics.ts",
@@ -9282,6 +9435,12 @@
       "method": "POST",
       "route": "/api/system-integration/validate-only",
       "sourceNeedle": "router.post('/validate-only'",
+      "observed": true
+    },
+    {
+      "method": "POST",
+      "route": "/api/system-integration/m0/spot-canary",
+      "sourceNeedle": "router.post('/m0/spot-canary'",
       "observed": true
     },
     {
@@ -11273,9 +11432,9 @@
         "requirement": "Preserve the owner hierarchy from broad universe monitoring to specialist attention guarded execution complete control and no routine CLI dependence",
         "owner": "MISSION.md plus I00 director",
         "code": "canonical domain owners, all 16 accepted donors, the source-built Product runtime, and mounted Product Control application",
-        "runtime": "fifteen authenticated System/Product Integration routes and four exact fail-closed Product controls are source-wired; runtime and browser measurements remain pending",
+        "runtime": "sixteen authenticated System/Product Integration routes and four exact fail-closed Product controls are source-wired; runtime and browser measurements remain pending",
         "persistence": "existing Ledger plus bounded product_operator_events and canonical System Control CAS/idempotency/receipt paths are source-built",
-        "api": "fifteen canonical System/Product Integration routes are source-mounted",
+        "api": "sixteen canonical System/Product Integration routes are source-mounted",
         "cockpit": "Dashboard and Control Room mounted",
         "control": "four exact fail-closed controls are source-wired; every broader or reverse mutation remains disabled",
         "test": "server/test/i00Acceptance/closure-evidence.test.mjs; web/test/productControlRoom/mount.test.mjs; server/test/systemIntegration/persistence/product-operator-events.test.mjs",
@@ -15380,6 +15539,40 @@
         "scope": "server/src/binance/liquidations.ts",
         "pattern": "new\\s+WebSocket|from\\s+['\"]ws['\"]|wss://|!forceOrder@arr|ForceOrder|ingestFrame|BinanceStream|socketFactory|last-filled quantity|cumulative filled quantity",
         "expectedHits": 0
+      },
+      {
+        "id": "M0_SPOT_ADAPTER_CONSUMERS_EXACT",
+        "scope": "server/src",
+        "pattern": "from\\s+['\"][^'\"]*liveEdge/adapters/binanceSpotExecution/adapter\\.js['\"]",
+        "expectedHits": 2,
+        "expectedFiles": [
+          "server/src/binance/m0SpotSignedTransport.ts",
+          "server/src/systemIntegration/production/m0SpotRuntime.ts"
+        ]
+      },
+      {
+        "id": "ONE_M0_RUNTIME_PRODUCTION_IMPORT",
+        "scope": "server/src/index.ts",
+        "pattern": "from\\s+['\"]\\./systemIntegration/production/m0SpotRuntime\\.js['\"]",
+        "expectedHits": 1,
+        "expectedFiles": [
+          "server/src/index.ts"
+        ]
+      },
+      {
+        "id": "M0_RUNTIME_HARD_DENY_MARKER",
+        "scope": "server/src/systemIntegration/production/m0SpotRuntime.ts",
+        "pattern": "signedTransport:\\s*['\"]HARD_DENY_NOT_CONFIGURED['\"]",
+        "expectedHits": 1,
+        "expectedFiles": [
+          "server/src/systemIntegration/production/m0SpotRuntime.ts"
+        ]
+      },
+      {
+        "id": "NO_INTEGRATION_M0_SIGNED_OR_AMBIENT_TRANSPORT",
+        "scope": "server/src/systemIntegration",
+        "pattern": "binance/m0SpotSignedTransport|binanceSignedKernel|process\\.env|globalThis\\.fetch|from\\s+['\"]node:https?['\"]|new\\s+BinanceClient",
+        "expectedHits": 0
       }
     ],
     "knownConflicts": [
@@ -15418,6 +15611,15 @@
         "resolutionState": "LIMITATION",
         "evidence": "fixtures/i00/living-director-input-acceptance.json",
         "impact": "accepted Q remains advisory ABSTAIN_UNKNOWN until production transport and schema-hash handshake are configured"
+      },
+      {
+        "id": "M0_SOURCE_ONLY_SPOT_ADAPTER_MOUNT",
+        "path": "server/src/systemIntegration/production/m0SpotRuntime.ts",
+        "needle": "createBinanceSpotExecutionAdapter",
+        "classification": "RESOLVED_HARD_DENY_SOURCE_MOUNT",
+        "resolutionState": "RESOLVED",
+        "evidence": "server/test/systemIntegration/evidence/m0-spot-canary-source-boundary.test.mjs",
+        "impact": "the sole System Integration composer may inspect the accepted coordinator and adapter only behind frozen OFF, kill ON, empty allowlist, and injected hard-deny effect ports; no signed transport, credential, private read, dispatch, ticket issue, persistence write, or money authority is composed"
       }
     ],
     "messageValidityCases": [
@@ -15780,5 +15982,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "508db6125761a1a8ed1a1e785c2574db5a89c78b80c6cc915b208b4e8bb56be7"
+  "evidenceSha256": "f0754542bf85324c13c8aef3a71e8819f8d409d2a8131d8b7e04224d0af6aee6"
 }

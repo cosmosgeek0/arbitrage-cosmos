@@ -6,6 +6,18 @@ Checked: `2026-07-12T04:23:40Z`
 
 Posture: public official documentation and the official Binance Spot documentation repository only. No private/account endpoint, signed request, test order or exchange mutation was called. This is the dated L00 research/source inventory; L02 still owns the machine-readable fixture, content hashes and negative route-contract tests.
 
+## M0-I2 Spot runtime-mount recheck — 2026-07-28
+
+The M0-I2 source mount was checked against the current official Binance developer catalog before implementation. Research used public documentation only: no credential was read, no private endpoint was called, no signed payload was sent, and no order, test order, cancel, transfer, withdrawal, provider, host, or money action occurred.
+
+- [Spot REST API](https://developers.binance.com/en/docs/products/spot/rest-api): signed request payloads must be percent-encoded before signing; timestamp and `recvWindow` remain request-validity controls; HTTP 5xx, `-1006`, and `-1007` can leave execution state unknown and therefore require authoritative reconciliation rather than an automatic mutation retry.
+- [Spot trading REST catalog](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/rest-api/trade): M0's accepted tuples remain `POST /api/v3/order/test`, `POST|GET|DELETE /api/v3/order`, and `GET /api/v3/myTrades`. Test-order and order mutation routes require `TRADE`; order and fill reads require `USER_DATA`. `newClientOrderId` is not durable once-only authority, and a successful cancel alone is not proof that the account is flat.
+- [Spot account REST catalog](https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/rest-api/account), [Spot enums](https://developers.binance.com/en/docs/products/spot/enums), and [Spot errors](https://developers.binance.com/en/docs/products/spot/errors): query/reconciliation truth must remain exact and exhaustive; unknown status, error, or the current `CANCEL_ONLY` symbol status fails closed.
+- [API key types](https://developers.binance.com/en/docs/products/spot/faqs/api_key_types): Binance recommends Ed25519 keys; HMAC remains supported but is deprecated. This recheck does not silently change the accepted audited HMAC construction seam, and M0-I2 does not mount a key, signer, dispatcher, or production transport.
+- [API key permission readback](https://developers.binance.com/en/docs/catalog/core-trading-wallet/api/rest-api/account) and [Spot changelog](https://developers.binance.com/en/docs/products/spot/CHANGELOG): trading is not enabled by default on a new key, and execution permission must be established from current signed permission truth rather than inferred from credential presence. M0-I2 records execution permission as `NOT_PROVED`; withdrawals and transfers remain disabled.
+
+Implementation consequence: the only production route accepts one exact owner `YES` as an acknowledgement, never as ticket or send authority. It reaches the coordinator's frozen default-OFF, kill-ON, empty-allowlist admission and a hard-deny adapter, then returns a `SOURCE_MOUNTED_NOT_ACTIVATED` receipt with flat, reconciliation, and disarm all `NOT_PROVED`. The pure signed-request mapper authorizes zero dispatches and is not imported by production.
+
 ## Dated drift that changes the implementation
 
 - Official Spot documentation head observed as `31643ed390e2aa450ce872981556186acf96a195`. The July 2026 changelog adds symbol status `CANCEL_ONLY` and advances current SBE to 3:5. Unknown status/schema/filter values must fail closed.

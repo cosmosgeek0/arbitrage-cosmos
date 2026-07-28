@@ -1,5 +1,12 @@
 # STATE.md — current product state
 
+## M0-I2 Spot runtime-mount source overlay (2026-07-28)
+
+- Relative to exact C-1 base `c245bf5f64caa6ddf960f6ddcd520ec571033a18`, the containing candidate source-mounts one exact `POST /api/system-integration/m0/spot-canary` boundary behind the existing operator admission. Its only accepted body is the closed one-field object `{ "ownerConfirmation": "YES" }` with a valid idempotency key. That `YES` is recorded only as `ACKNOWLEDGED_NOT_AUTHORITY`; it creates no ticket, send authority, permission proof, runtime activation, or host provision.
+- The route reaches the accepted Spot coordinator and adapter only through their frozen default-OFF, kill-ON, empty-allowlist first admission. The production adapter is hard-deny, owns no signer, credential, dispatcher, private read, persistence writer, ticket issuer, authority issuer, or external-action seam, and reports zero signed tests, authority consumptions, submits, queries, cancels, flattens, and ledger appends.
+- A separate pure signed-request mapper recognizes only the accepted six operation tuples over five Binance Spot contracts and delegates canonical signing construction to the audited kernel. It authorizes zero dispatches and zero external actions, performs no I/O or retry, and is not imported or constructed by production.
+- Source truth is `SOURCE_MOUNTED_NOT_ACTIVATED` and `NEVER_FIREABLE`. The maximum canary envelope remains exactly 10 quote units; withdrawals and transfers remain disabled; execution-key permission, flatness, reconciliation, and disarm are all `NOT_PROVED`. No host, provider, credential, private API, order, transfer, withdrawal, deployment, landing, or money action is established by this source candidate.
+
 ## AI Operations passive staging truth (2026-07-28)
 
 - The containing candidate adds one source-bound, read-only AI Operations status projection and a props-only web feature/page. The projection consumes only the checked-in unfinished-interface and reliability-target contracts, and pins `SHADOW_SPECULATIVE` as ineligible provenance; it has no caller input, clock, provider, process, persistence, money, action, or mutation seam.

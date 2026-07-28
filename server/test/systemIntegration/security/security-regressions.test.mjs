@@ -11,6 +11,11 @@ const DIST_ROOT = path.resolve('server/dist/systemIntegration');
 const DATA_DIR_LEASE_SOURCE = path.resolve(
   'server/src/systemIntegration/persistence/dataDirLease.ts',
 );
+const M0_SPOT_RUNTIME_SOURCE = path.resolve(
+  'server/src/systemIntegration/production/m0SpotRuntime.ts',
+);
+const M0_SPOT_ADAPTER_SPECIFIER =
+  '../../liveEdge/adapters/binanceSpotExecution/adapter.js';
 const DATA_DIR_LEASE_FS_CAPABILITIES = Object.freeze([
   'Stats',
   'closeSync',
@@ -151,6 +156,12 @@ function forbiddenImportReason(specifier) {
   if (/(?:^|\/)binance\/(?:client|signed[^/]*)(?:\/|\.|$)/i.test(specifier)) {
     return 'imports a Binance signed/private client';
   }
+  if (/(?:^|\/)(?:binance\/m0SpotSignedTransport|liveEdge\/adapters\/binanceSignedKernel)(?:\/|\.|$)/i.test(specifier)) {
+    return 'imports the M0 signed mapper or signed-request kernel';
+  }
+  if (/(?:^|\/)liveEdge\/adapters\/binanceSpotExecution\/adapter(?:\/|\.|$)/i.test(specifier)) {
+    return 'imports the accepted Spot execution adapter outside its exact hard-deny composer';
+  }
   if (/(?:^|\/)services\/(?:orders|loans|account|userStream)(?:\/|\.|$)/i.test(specifier)) {
     return 'imports an audited private account/order/loan/user-stream service';
   }
@@ -175,6 +186,27 @@ function approvedDataDirLeaseFsImport(file, node, specifier) {
   importedNames.sort();
   return importedNames.length === DATA_DIR_LEASE_FS_CAPABILITIES.length
     && importedNames.every((name, index) => name === DATA_DIR_LEASE_FS_CAPABILITIES[index]);
+}
+
+function approvedM0SpotAdapterImport(file, node, specifier) {
+  if (
+    path.resolve(file) !== M0_SPOT_RUNTIME_SOURCE
+    || specifier !== M0_SPOT_ADAPTER_SPECIFIER
+    || !ts.isImportDeclaration(node)
+    || node.importClause === undefined
+    || node.importClause.isTypeOnly
+    || node.importClause.name !== undefined
+    || node.importClause.namedBindings === undefined
+    || !ts.isNamedImports(node.importClause.namedBindings)
+    || node.importClause.namedBindings.elements.length !== 1
+  ) return false;
+  const [element] = node.importClause.namedBindings.elements;
+  return (
+    element !== undefined
+    && !element.isTypeOnly
+    && element.propertyName === undefined
+    && element.name.text === 'createBinanceSpotExecutionAdapter'
+  );
 }
 
 function isProcessEnv(node) {
@@ -223,7 +255,11 @@ function productionViolations(files) {
         const specifier = moduleName(node.moduleSpecifier);
         if (specifier === null) return;
         const reason = forbiddenImportReason(specifier);
-        if (reason && !approvedDataDirLeaseFsImport(file, node, specifier)) {
+        if (
+          reason
+          && !approvedDataDirLeaseFsImport(file, node, specifier)
+          && !approvedM0SpotAdapterImport(file, node, specifier)
+        ) {
           report(node.moduleSpecifier, reason);
         }
         if (ts.isImportDeclaration(node) && node.importClause) {
@@ -404,6 +440,94 @@ test('production convergence source has no private, signed, money-moving, ambien
   const files = filesUnder(SOURCE_ROOT, ['.ts', '.tsx']);
   assert.ok(files.length >= 30, 'expected the complete system-integration production source tree');
   assert.deepEqual(productionViolations(files), []);
+});
+
+test('M0 Spot adapter composition is one exact named import with hard-deny effect ports', () => {
+  const { source, tree } = parse(M0_SPOT_RUNTIME_SOURCE);
+  const declaration = tree.statements.find((statement) => (
+    ts.isImportDeclaration(statement)
+    && moduleName(statement.moduleSpecifier) === M0_SPOT_ADAPTER_SPECIFIER
+  ));
+  assert.ok(declaration && ts.isImportDeclaration(declaration));
+  assert.equal(
+    approvedM0SpotAdapterImport(
+      M0_SPOT_RUNTIME_SOURCE,
+      declaration,
+      M0_SPOT_ADAPTER_SPECIFIER,
+    ),
+    true,
+  );
+  assert.match(source, /async\s+send\(\)\s*\{\s*return\s+forbidden\(\);\s*\}/su);
+  assert.match(source, /verifyLiveSubmitIntent:\s*\(\)\s*=>\s*false/u);
+  assert.match(source, /verifyFlattenIntent:\s*\(\)\s*=>\s*false/u);
+  assert.match(source, /verifyCancelIntent:\s*\(\)\s*=>\s*false/u);
+  assert.doesNotMatch(
+    source,
+    /m0SpotSignedTransport|binanceSignedKernel|constructSignedRequest/u,
+  );
+
+  const importText = declaration.getText(tree);
+  const mutations = [
+    {
+      file: path.resolve('server/src/systemIntegration/production/other.ts'),
+      text: importText,
+    },
+    {
+      file: M0_SPOT_RUNTIME_SOURCE,
+      text: importText.replace(
+        M0_SPOT_ADAPTER_SPECIFIER,
+        '../liveEdge/adapters/binanceSpotExecution/adapter.js',
+      ),
+    },
+    {
+      file: M0_SPOT_RUNTIME_SOURCE,
+      text: importText.replace(
+        'createBinanceSpotExecutionAdapter',
+        'createBinanceSpotExecutionAdapter as adapter',
+      ),
+    },
+    {
+      file: M0_SPOT_RUNTIME_SOURCE,
+      text: `import createBinanceSpotExecutionAdapter from '${M0_SPOT_ADAPTER_SPECIFIER}';`,
+    },
+    {
+      file: M0_SPOT_RUNTIME_SOURCE,
+      text: `import * as adapter from '${M0_SPOT_ADAPTER_SPECIFIER}';`,
+    },
+    {
+      file: M0_SPOT_RUNTIME_SOURCE,
+      text: importText.replace(
+        'createBinanceSpotExecutionAdapter,',
+        'createBinanceSpotExecutionAdapter, BINANCE_SPOT_EXECUTION_ADAPTER_SCHEMA,',
+      ),
+    },
+  ];
+  for (const mutation of mutations) {
+    const mutationTree = ts.createSourceFile(
+      mutation.file,
+      mutation.text,
+      ts.ScriptTarget.ESNext,
+      true,
+      ts.ScriptKind.TS,
+    );
+    const mutationDeclaration = mutationTree.statements.find(ts.isImportDeclaration);
+    assert.ok(mutationDeclaration);
+    assert.equal(
+      approvedM0SpotAdapterImport(
+        mutation.file,
+        mutationDeclaration,
+        moduleName(mutationDeclaration.moduleSpecifier),
+      ),
+      false,
+      mutation.text,
+    );
+  }
+  for (const specifier of [
+    '../../binance/m0SpotSignedTransport.js',
+    '../../liveEdge/adapters/binanceSignedKernel/request.js',
+  ]) {
+    assert.match(forbiddenImportReason(specifier), /signed/u);
+  }
 });
 
 test('DATA_DIR lease filesystem capability is exact-path, exact-module, and exact-name only', () => {

@@ -79,13 +79,18 @@
     { "id": "NO_BROWSER_TOKEN_EXCHANGE_SOCKET", "scope": "web/src/pages/TokenDetail.tsx", "pattern": "new\\s+WebSocket|wss://", "expectedHits": 0 },
     { "id": "NO_BROWSER_TOKEN_FALLBACK_CDN", "scope": "web/src/components/TokenIcon.tsx", "pattern": "cdn\\.jsdelivr\\.net|assets\\.coincap\\.io", "expectedHits": 0 },
     { "id": "ONE_PHYSICAL_USDM_LIQUIDATION_TRANSPORT_URL", "scope": "server/src", "pattern": "wss://fstream\\.binance\\.com/market/ws/!forceOrder@arr", "expectedHits": 1 },
-    { "id": "NO_LIQUIDATION_PROJECTION_TRANSPORT_OR_RAW_FRAME", "scope": "server/src/binance/liquidations.ts", "pattern": "new\\s+WebSocket|from\\s+['\"]ws['\"]|wss://|!forceOrder@arr|ForceOrder|ingestFrame|BinanceStream|socketFactory|last-filled quantity|cumulative filled quantity", "expectedHits": 0 }
+    { "id": "NO_LIQUIDATION_PROJECTION_TRANSPORT_OR_RAW_FRAME", "scope": "server/src/binance/liquidations.ts", "pattern": "new\\s+WebSocket|from\\s+['\"]ws['\"]|wss://|!forceOrder@arr|ForceOrder|ingestFrame|BinanceStream|socketFactory|last-filled quantity|cumulative filled quantity", "expectedHits": 0 },
+    { "id": "M0_SPOT_ADAPTER_CONSUMERS_EXACT", "scope": "server/src", "pattern": "from\\s+['\"][^'\"]*liveEdge/adapters/binanceSpotExecution/adapter\\.js['\"]", "expectedHits": 2, "expectedFiles": ["server/src/binance/m0SpotSignedTransport.ts", "server/src/systemIntegration/production/m0SpotRuntime.ts"] },
+    { "id": "ONE_M0_RUNTIME_PRODUCTION_IMPORT", "scope": "server/src/index.ts", "pattern": "from\\s+['\"]\\./systemIntegration/production/m0SpotRuntime\\.js['\"]", "expectedHits": 1, "expectedFiles": ["server/src/index.ts"] },
+    { "id": "M0_RUNTIME_HARD_DENY_MARKER", "scope": "server/src/systemIntegration/production/m0SpotRuntime.ts", "pattern": "signedTransport:\\s*['\"]HARD_DENY_NOT_CONFIGURED['\"]", "expectedHits": 1, "expectedFiles": ["server/src/systemIntegration/production/m0SpotRuntime.ts"] },
+    { "id": "NO_INTEGRATION_M0_SIGNED_OR_AMBIENT_TRANSPORT", "scope": "server/src/systemIntegration", "pattern": "binance/m0SpotSignedTransport|binanceSignedKernel|process\\.env|globalThis\\.fetch|from\\s+['\"]node:https?['\"]|new\\s+BinanceClient", "expectedHits": 0 }
   ],
   "knownConflicts": [
     { "id": "LEGACY_LIVE_ROUTE", "path": "server/src/index.ts", "needle": "app.post('/api/live'", "classification": "RESOLVED_RETIRED_TOMBSTONE", "resolutionState": "RESOLVED", "evidence": "fixtures/i00/baseline-route-migration.json", "impact": "registered only as a fail-closed LIVE_EXECUTION_NOT_IMPLEMENTED tombstone with zero production consumers" },
     { "id": "LEGACY_TRADE_SEND_ROUTE", "path": "server/src/index.ts", "needle": "app.post('/api/trade/send'", "classification": "RESOLVED_RETIRED_TOMBSTONE", "resolutionState": "RESOLVED", "evidence": "fixtures/i00/baseline-route-migration.json", "impact": "registered only as a fail-closed LIVE_EXECUTION_NOT_IMPLEMENTED tombstone with zero production consumers" },
     { "id": "LEGACY_MARGIN_MUTATION_ROUTES", "path": "server/src/index.ts", "needle": "app.post('/api/loans/borrow'", "classification": "RESOLVED_RESTRICTED_FAIL_CLOSED", "resolutionState": "RESOLVED", "evidence": "fixtures/i00/baseline-route-migration.json", "impact": "legacy margin mutations are fail-closed and have zero production consumers" },
-    { "id": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED", "path": null, "needle": null, "classification": "NOT_CONFIGURED", "resolutionState": "LIMITATION", "evidence": "fixtures/i00/living-director-input-acceptance.json", "impact": "accepted Q remains advisory ABSTAIN_UNKNOWN until production transport and schema-hash handshake are configured" }
+    { "id": "Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED", "path": null, "needle": null, "classification": "NOT_CONFIGURED", "resolutionState": "LIMITATION", "evidence": "fixtures/i00/living-director-input-acceptance.json", "impact": "accepted Q remains advisory ABSTAIN_UNKNOWN until production transport and schema-hash handshake are configured" },
+    { "id": "M0_SOURCE_ONLY_SPOT_ADAPTER_MOUNT", "path": "server/src/systemIntegration/production/m0SpotRuntime.ts", "needle": "createBinanceSpotExecutionAdapter", "classification": "RESOLVED_HARD_DENY_SOURCE_MOUNT", "resolutionState": "RESOLVED", "evidence": "server/test/systemIntegration/evidence/m0-spot-canary-source-boundary.test.mjs", "impact": "the sole System Integration composer may inspect the accepted coordinator and adapter only behind frozen OFF, kill ON, empty allowlist, and injected hard-deny effect ports; no signed transport, credential, private read, dispatch, ticket issue, persistence write, or money authority is composed" }
   ],
   "canonicalRoutes": [
     { "method": "GET", "route": "/api/system-integration/supervisor", "sourceNeedle": "router.get('/supervisor'" },
@@ -96,6 +101,7 @@
     { "method": "GET", "route": "/api/system-integration/controls", "sourceNeedle": "router.get('/controls'" },
     { "method": "GET", "route": "/api/system-integration/traces/:correlationId", "sourceNeedle": "router.get('/traces/:correlationId'" },
     { "method": "POST", "route": "/api/system-integration/validate-only", "sourceNeedle": "router.post('/validate-only'" },
+    { "method": "POST", "route": "/api/system-integration/m0/spot-canary", "sourceNeedle": "router.post('/m0/spot-canary'" },
     { "method": "POST", "route": "/api/system-integration/controls", "sourceNeedle": "router.post('/controls'" },
     { "method": "GET", "route": "/api/product-integration/v1/supervisor", "sourceNeedle": "router.get('/v1/supervisor'" },
     { "method": "GET", "route": "/api/product-integration/v1/material-events", "sourceNeedle": "router.get('/v1/material-events'" },

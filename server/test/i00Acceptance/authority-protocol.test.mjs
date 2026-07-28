@@ -152,12 +152,83 @@ test('one owner and producer registry passes scoped rules with conflicts classif
   assert.equal(scan.authorityConverged, true);
   assert.equal(scan.unresolvedConflictCount, 0);
   assert.equal(scan.conflictClassificationPassed, true);
-  assert.equal(scan.conflicts.filter((conflict) => conflict.observed).length, 3);
-  assert.equal(scan.conflicts.filter((conflict) => conflict.resolutionState === 'RESOLVED').length, 3);
+  assert.equal(scan.conflicts.filter((conflict) => conflict.observed).length, 4);
+  assert.equal(scan.conflicts.filter((conflict) => conflict.resolutionState === 'RESOLVED').length, 4);
   assert.deepEqual(scan.conflicts.filter((conflict) => conflict.resolutionState === 'LIMITATION').map((conflict) => conflict.id), [
     'Q_PRODUCTION_TRANSPORT_NOT_CONFIGURED',
   ]);
   assert.deepEqual(scan.boundaryFindings, []);
+  assert.deepEqual(
+    scan.conflicts.find(
+      (conflict) => conflict.id === 'M0_SOURCE_ONLY_SPOT_ADAPTER_MOUNT',
+    ),
+    {
+      id: 'M0_SOURCE_ONLY_SPOT_ADAPTER_MOUNT',
+      path: 'server/src/systemIntegration/production/m0SpotRuntime.ts',
+      needle: 'createBinanceSpotExecutionAdapter',
+      classification: 'RESOLVED_HARD_DENY_SOURCE_MOUNT',
+      resolutionState: 'RESOLVED',
+      evidence: 'server/test/systemIntegration/evidence/m0-spot-canary-source-boundary.test.mjs',
+      impact: 'the sole System Integration composer may inspect the accepted coordinator and adapter only behind frozen OFF, kill ON, empty allowlist, and injected hard-deny effect ports; no signed transport, credential, private read, dispatch, ticket issue, persistence write, or money authority is composed',
+      observed: true,
+    },
+  );
+  assert.deepEqual(
+    scan.rules
+      .filter((rule) => [
+        'M0_SPOT_ADAPTER_CONSUMERS_EXACT',
+        'ONE_M0_RUNTIME_PRODUCTION_IMPORT',
+        'M0_RUNTIME_HARD_DENY_MARKER',
+        'NO_INTEGRATION_M0_SIGNED_OR_AMBIENT_TRANSPORT',
+      ].includes(rule.id))
+      .map((rule) => ({
+        id: rule.id,
+        expectedHits: rule.expectedHits,
+        expectedFiles: rule.expectedFiles,
+        observedFiles: rule.observedFiles,
+        passed: rule.passed,
+      })),
+    [
+      {
+        id: 'M0_SPOT_ADAPTER_CONSUMERS_EXACT',
+        expectedHits: 2,
+        expectedFiles: [
+          'server/src/binance/m0SpotSignedTransport.ts',
+          'server/src/systemIntegration/production/m0SpotRuntime.ts',
+        ],
+        observedFiles: [
+          'server/src/binance/m0SpotSignedTransport.ts',
+          'server/src/systemIntegration/production/m0SpotRuntime.ts',
+        ],
+        passed: true,
+      },
+      {
+        id: 'ONE_M0_RUNTIME_PRODUCTION_IMPORT',
+        expectedHits: 1,
+        expectedFiles: ['server/src/index.ts'],
+        observedFiles: ['server/src/index.ts'],
+        passed: true,
+      },
+      {
+        id: 'M0_RUNTIME_HARD_DENY_MARKER',
+        expectedHits: 1,
+        expectedFiles: [
+          'server/src/systemIntegration/production/m0SpotRuntime.ts',
+        ],
+        observedFiles: [
+          'server/src/systemIntegration/production/m0SpotRuntime.ts',
+        ],
+        passed: true,
+      },
+      {
+        id: 'NO_INTEGRATION_M0_SIGNED_OR_AMBIENT_TRANSPORT',
+        expectedHits: 0,
+        expectedFiles: null,
+        observedFiles: [],
+        passed: true,
+      },
+    ],
+  );
   assert.deepEqual(
     scan.rules
       .filter((rule) => ['NO_BROWSER_TOKEN_EXCHANGE_SOCKET', 'NO_BROWSER_TOKEN_FALLBACK_CDN'].includes(rule.id))
@@ -233,7 +304,7 @@ test('truth labels distinguish live synthetic replay and unknown without upgradi
 
 test('canonical system-integration route contract is present without registering routes here', () => {
   const routes = routeContractScan(catalog);
-  assert.equal(routes.length, 15);
+  assert.equal(routes.length, 16);
   assert.deepEqual(
     routes.map(({ method, route }) => `${method} ${route}`),
     [
@@ -245,6 +316,7 @@ test('canonical system-integration route contract is present without registering
       'GET /api/system-integration/controls',
       'GET /api/system-integration/traces/:correlationId',
       'POST /api/system-integration/validate-only',
+      'POST /api/system-integration/m0/spot-canary',
       'POST /api/system-integration/controls',
       'GET /api/product-integration/v1/supervisor',
       'GET /api/product-integration/v1/material-events',

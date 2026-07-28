@@ -160,7 +160,7 @@ test('default admission blocks adapter-to-coordinator composition before effects
   assert.equal(result.externalActionAuthorization, 'NONE');
 });
 
-test('Spot canary action sources remain absent from shared barrels and runtime bootstrap', async () => {
+test('Spot canary has one source-only runtime owner and remains absent from shared barrels', async () => {
   const sharedBarrelUrls = [
     '../../../src/foundation/execution/index.ts',
     '../../../src/liveEdge/index.ts',
@@ -173,6 +173,18 @@ test('Spot canary action sources remain absent from shared barrels and runtime b
     new URL('../../../src/index.ts', import.meta.url),
     'utf8',
   );
+  const runtimeOwner = await readFile(
+    new URL('../../../src/systemIntegration/production/m0SpotRuntime.ts', import.meta.url),
+    'utf8',
+  );
+  const routeSource = await readFile(
+    new URL('../../../src/systemIntegration/routes/router.ts', import.meta.url),
+    'utf8',
+  );
+  const proofCatalog = JSON.parse(await readFile(
+    new URL('../../../../fixtures/i00/proof-catalog.json', import.meta.url),
+    'utf8',
+  ));
 
   for (const forbiddenSourceName of [
     'spotTransportCoordinator',
@@ -188,6 +200,40 @@ test('Spot canary action sources remain absent from shared barrels and runtime b
     assert.doesNotMatch(runtimeBootstrap, new RegExp(forbiddenSourceName, 'u'));
   }
 
+  assert.equal(
+    (runtimeBootstrap.match(/createM0SpotRuntimeMount/gu) ?? []).length,
+    2,
+  );
+  assert.match(runtimeBootstrap, /m0SpotCanary:\s*m0SpotRuntimeMount/u);
+  assert.match(runtimeOwner, /runSpotTransportCoordinator/u);
+  assert.match(runtimeOwner, /createBinanceSpotExecutionAdapter/u);
+  assert.match(runtimeOwner, /generateM0AutomaticReceipt/u);
+  assert.doesNotMatch(
+    runtimeOwner,
+    /process\.env|globalThis\.fetch|node:http|node:https|new\s+BinanceClient|m0SpotSignedTransport|binanceSignedKernel|constructSignedRequest/u,
+  );
+  assert.equal(
+    (routeSource.match(/router\.post\('\/m0\/spot-canary'/gu) ?? []).length,
+    1,
+  );
+  const sourceM0Routes = [...routeSource.matchAll(
+    /router\.(get|post|put|delete)\(\s*['"](\/m0\/[^'"]+)['"]/gu,
+  )].map((match) => `${match[1].toUpperCase()} /api/system-integration${match[2]}`);
+  const catalogM0Routes = proofCatalog.canonicalRoutes
+    .filter((route) => route.route.startsWith('/api/system-integration/m0/'))
+    .map((route) => `${route.method} ${route.route}`);
+  assert.deepEqual(catalogM0Routes, sourceM0Routes);
+  assert.deepEqual(
+    proofCatalog.canonicalRoutes.find(
+      (route) => route.route === '/api/system-integration/m0/spot-canary',
+    ),
+    {
+      method: 'POST',
+      route: '/api/system-integration/m0/spot-canary',
+      sourceNeedle: "router.post('/m0/spot-canary'",
+    },
+  );
+  assert.doesNotMatch(routeSource, /\/m0\/spot-canary\/(?:send|test|cancel)/u);
   assert.doesNotMatch(
     runtimeBootstrap,
     /spotValidateOnly|DEFAULT_SPOT_VALIDATE_ONLY_SEAM_CONFIG/u,

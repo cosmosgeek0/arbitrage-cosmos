@@ -105,10 +105,10 @@ async function browserGet(p, deviceId = 'gate-primary-device-2026') {
   return { status: res.status, headers: res.headers, body: await res.json().catch(() => null) };
 }
 
-async function post(p, body) {
+async function post(p, body, headers = {}) {
   const res = await request(p, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
   });
   return { status: res.status, body: await res.json().catch(() => null) };
@@ -222,6 +222,14 @@ const dataDirLeaseSource = readFileSync(
   'server/src/systemIntegration/persistence/dataDirLease.ts',
   'utf8',
 );
+const m0SpotRuntimeSource = readFileSync(
+  'server/src/systemIntegration/production/m0SpotRuntime.ts',
+  'utf8',
+);
+const m0SpotSignedTransportSource = readFileSync(
+  'server/src/binance/m0SpotSignedTransport.ts',
+  'utf8',
+);
 check(
   'Token current OI and private account facts come only from canonical owners',
   /\/api\/intelligence\/token\?symbol=/.test(tokenDetailSource) &&
@@ -265,6 +273,17 @@ check(
   'legacy signed services receive only a mechanically unavailable client',
   /function\s+unavailablePrivateBinanceClient\(\):\s*BinanceClient\s*\|\s*null\s*\{\s*return\s+null;\s*\}/s.test(serverIndex) &&
     /const\s+client\s*=\s*unavailablePrivateBinanceClient\(\);/.test(serverIndex)
+);
+check(
+  'M0 Spot source mount owns one hard-deny route and no production signed transport',
+  /import\s+\{\s*createM0SpotRuntimeMount\s*\}\s+from\s+['"]\.\/systemIntegration\/production\/m0SpotRuntime\.js['"]/.test(serverIndex) &&
+    /const\s+m0SpotRuntimeMount\s*=\s*createM0SpotRuntimeMount\(\);/.test(serverIndex) &&
+    /m0SpotCanary:\s*m0SpotRuntimeMount/.test(serverIndex) &&
+    /sourceEnabled:\s*DEFAULT_SPOT_VALIDATE_ONLY_SEAM_CONFIG\.sourceEnabled/.test(m0SpotRuntimeSource) &&
+    /killSwitchEngaged:\s*DEFAULT_SPOT_VALIDATE_ONLY_SEAM_CONFIG\.killSwitchEngaged/.test(m0SpotRuntimeSource) &&
+    /signedTransport:\s*['"]HARD_DENY_NOT_CONFIGURED['"]/.test(m0SpotRuntimeSource) &&
+    !/m0SpotSignedTransport/.test(serverIndex) &&
+    !/\bfetch\s*\(|\bhttps?:\/\//.test(m0SpotSignedTransportSource)
 );
 check(
   'calendar and fx GET responses declare their own freshness state and TTL',
@@ -881,6 +900,39 @@ const testOrder = await post('/api/trade/test', { symbol: 'BTCUSDT', side: 'BUY'
 check(
   'signed test-order route is retired',
   testOrder.status === 410 && testOrder.body?.code === 'LIVE_EXECUTION_NOT_IMPLEMENTED'
+);
+const m0SpotSourceMount = await post(
+  '/api/system-integration/m0/spot-canary',
+  { ownerConfirmation: 'YES' },
+  { 'Idempotency-Key': 'm0.gates.source-mount.0001' },
+);
+check(
+  'owner YES reaches only the inert $10 M0 Spot source mount',
+  m0SpotSourceMount.status === 409 &&
+    m0SpotSourceMount.body?.schema === 'cosmos.system-integration.m0-spot-canary-route.v1' &&
+    m0SpotSourceMount.body?.code === 'M0_SOURCE_MOUNT_BLOCKED' &&
+    m0SpotSourceMount.body?.state === 'SOURCE_MOUNTED_NOT_ACTIVATED' &&
+    m0SpotSourceMount.body?.sourceMounted === true &&
+    m0SpotSourceMount.body?.runtimeActivated === false &&
+    m0SpotSourceMount.body?.hostProvisioned === false &&
+    m0SpotSourceMount.body?.liveExecutionPermitted === false &&
+    m0SpotSourceMount.body?.maximumOrderNotionalQuote === '10' &&
+    m0SpotSourceMount.body?.ownerConfirmation === 'ACKNOWLEDGED_NOT_AUTHORITY' &&
+    m0SpotSourceMount.body?.ticketAuthority === 'NONE' &&
+    m0SpotSourceMount.body?.authorityConsumption === 'NOT_ATTEMPTED' &&
+    m0SpotSourceMount.body?.executionKeyPermissions === 'NOT_PROVED' &&
+    m0SpotSourceMount.body?.signedTransport === 'HARD_DENY_NOT_CONFIGURED' &&
+    m0SpotSourceMount.body?.withdrawalPolicy === 'DISABLED' &&
+    m0SpotSourceMount.body?.transferPolicy === 'DISABLED' &&
+    m0SpotSourceMount.body?.flat === 'NOT_PROVED' &&
+    m0SpotSourceMount.body?.reconciliation === 'NOT_PROVED' &&
+    m0SpotSourceMount.body?.disarm === 'NOT_PROVED' &&
+    m0SpotSourceMount.body?.coordinator?.status === 'BLOCKED' &&
+    m0SpotSourceMount.body?.coordinator?.calls?.admissions === 1 &&
+    Object.entries(m0SpotSourceMount.body?.coordinator?.calls ?? {})
+      .every(([name, value]) => name === 'admissions' ? value === 1 : value === 0) &&
+    m0SpotSourceMount.body?.inertEvidenceReceipt?.disposition === 'NOT_PROVED' &&
+    m0SpotSourceMount.body?.inertEvidenceReceipt?.moneyMovementProven === false
 );
 
 // Legacy config is display-only. Operational policy belongs to canonical

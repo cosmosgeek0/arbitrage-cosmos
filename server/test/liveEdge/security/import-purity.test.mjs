@@ -682,7 +682,7 @@ test('Binance endpoint and provenance literals are confined to inert closed docu
   assert.deepEqual(exports, BINANCE_DOCUMENTARY_DATA_EXPORTS);
 });
 
-test('the Binance Spot execution adapter capability is exact-file, exact-contract, and unmounted', () => {
+test('the Binance Spot execution adapter capability is exact-file, exact-contract, and source-mounted only through M0', () => {
   const tree = parse(BINANCE_SPOT_EXECUTION_SOURCE);
   const executionImports = tree.statements.filter((statement) => (
     ts.isImportDeclaration(statement)
@@ -772,18 +772,24 @@ test('the Binance Spot execution adapter capability is exact-file, exact-contrac
   ]);
 
   const runtimeSurfaceMentions = filesUnder(SERVER_SOURCE_ROOT, '.ts')
-    .filter((file) => {
-      const relative = path.relative(SERVER_SOURCE_ROOT, file);
-      const segments = relative.split(path.sep);
-      return path.basename(file) === 'index.ts'
-        || segments.includes('bootstrap')
-        || segments.includes('composition')
-        || segments.includes('application')
-        || segments.includes('production');
-    })
+    .filter((file) => file !== BINANCE_SPOT_EXECUTION_SOURCE)
     .filter((file) => fs.readFileSync(file, 'utf8').includes('binanceSpotExecution'))
     .map((file) => path.relative(process.cwd(), file));
-  assert.deepEqual(runtimeSurfaceMentions, [], 'Spot execution adapter must stay absent from barrels and bootstrap');
+  assert.deepEqual(runtimeSurfaceMentions, [
+    'server/src/binance/m0SpotSignedTransport.ts',
+    'server/src/systemIntegration/production/m0SpotRuntime.ts',
+  ], 'Spot execution adapter consumers must remain the pure mapper and hard-deny M0 source mount only');
+  const productionMount = fs.readFileSync(
+    path.join(SERVER_SOURCE_ROOT, 'systemIntegration/production/m0SpotRuntime.ts'),
+    'utf8',
+  );
+  assert.match(productionMount, /sourceEnabled:\s*DEFAULT_SPOT_VALIDATE_ONLY_SEAM_CONFIG\.sourceEnabled/u);
+  assert.match(productionMount, /killSwitchEngaged:\s*[\r\n\s]*DEFAULT_SPOT_VALIDATE_ONLY_SEAM_CONFIG\.killSwitchEngaged/u);
+  assert.match(productionMount, /verifyLiveSubmitIntent:\s*\(\)\s*=>\s*false/u);
+  assert.doesNotMatch(
+    productionMount,
+    /process\.env|globalThis\.fetch|node:http|node:https|new\s+BinanceClient|m0SpotSignedTransport|binanceSignedKernel|constructSignedRequest/u,
+  );
   assert.equal(
     fs.existsSync(path.join(path.dirname(BINANCE_SPOT_EXECUTION_SOURCE), 'index.ts')),
     false,

@@ -626,8 +626,8 @@
           "mode": "100755",
           "beforeGitBlob": "777e76b9b83b363e19bc96e695e91ba90b4d9057",
           "beforeSha256": "40ce005c8e55c6aae57a385ab6f577c3b7c3c7630cac56a8fba41ecd8bd38e1f",
-          "afterGitBlob": "907ef988c59b2361779d85da81761c058e154bb1",
-          "afterSha256": "7e56e09ed1e9c384aa92df31bf062a8bb713dbeb040f7a265fe28d1fed692005"
+          "afterGitBlob": "787d1d55a2263bdc7419344f6cdbce9eb2251038",
+          "afterSha256": "ba8b1540a45755699110df69bc9023d338e0f317f711a137a74ed692b42a57da"
         },
         {
           "path": "ops/tests/test-rollback.sh",

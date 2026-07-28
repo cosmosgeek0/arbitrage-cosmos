@@ -23,7 +23,7 @@ import { expectedBuildAttestation, verifyBuildAttestation } from './verify-build
 import { requireAssemblyOutputDisjoint } from './assembly-output-policy.mjs';
 import { loadProtectedOwnerDirectiveBundle } from '../../../test/i00/performance/contract.mjs';
 
-const EXPECTED_AMENDMENT_CONTRACT_SHA256 = 'b8dc1b4351973c832250d1ded9d8cf0427a3574dbbc7be99dd4e150c84742295';
+const EXPECTED_AMENDMENT_CONTRACT_SHA256 = '7b89f74e236cc54f30a0d4a218efd761acd0b0fa4a5577fb0b0ce04b27672e57';
 const GIT_SAFE_PATH = '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin';
 const GIT_CANDIDATES = Object.freeze(GIT_SAFE_PATH.split(':').map((directory) => resolve(directory, 'git')));
 const XCODE_SELECT_PATH = '/usr/bin/xcode-select';

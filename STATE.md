@@ -147,7 +147,7 @@ These are measured results for the final merged staging tree; they do not alter 
 | `npm test` | 459 = 3 hostile perimeter + 456 AI-Ops | Exit 0; 459/459 passed; AI-Ops reported 456 passed, 0 failed, and 0 skipped. |
 | `npm run test:all` | 3,668 = 3 hostile perimeter + 456 AI-Ops + 3,209 Quant | Exit 0; `CANONICAL_GATE_COVERAGE PASS`; `CANONICAL_TEST_ALL PASS`; Quant reported 3,203 passed plus the six exact allowed Q08/Q15 donor-branch skips. |
 | `npm run test:i00:commands` | 29 | Exit 0; 29/29 passed, including receipt-pinned post-landing ancestry and hostile topology mutations. |
-| Product Assurance operation scan | 611-file additive floor / 277 discovered | 277/277 mapped and semantically policy-covered; 0 uncovered; all 167 database sites resolve only to `server/src/ledger.ts` / `OP_LEDGER_SQLITE`; 802 behavior checks and 4 provenance checks. |
+| Product Assurance operation scan | 620-file additive floor / 280 discovered | 280/280 mapped and semantically policy-covered; 0 uncovered; all 167 database sites resolve only to `server/src/ledger.ts` / `OP_LEDGER_SQLITE`; 802 behavior checks and 4 provenance checks. |
 
 ## Real-gap campaign state
 
@@ -251,7 +251,7 @@ These are historical Account A builder measurements. They are not exact-C9 evide
 - CI hotfix `6c6d1edd3e7bd7aecb3330d4cca3df087659f5dd` is in Main and candidate ancestry. Hotfix #2 `53c6da81` is `REFERENCE_ONLY`; its useful behavior was independently adapted without admitting its stale branch assumptions.
 - The candidate has exact second-parent merges for egress, A1-A5, observability, operations, replay, runbooks, A-FORMAL, and S2. Their sealed donor tips are candidate ancestors.
 - The Product Assurance historical merge-cut proof remains 193/193 blobs. Current source records seven explicit post-integration replacements, leaving 186 donor-identical HEAD blobs.
-- Product Assurance now enforces a 611-file additive floor and exactly 277 discovered operations; all 277 are mapped and semantically policy-covered, with zero uncovered.
+- Product Assurance now enforces a 620-file additive floor and exactly 280 discovered operations; all 280 are mapped and semantically policy-covered, with zero uncovered.
 - The five protected owner-directive root files remain untracked and untouched; they are absent from the candidate commit. Their exact committed verifier bundle remains verification-only and cannot impersonate live owner input.
 - The retired Role 3 C2 receipt is historical `REFERENCE_ONLY` evidence for C2R. The campaign preserves its exact untracked bytes in a tracked evidence-only descendant; it does not reclassify that receipt as current-candidate verification.
 

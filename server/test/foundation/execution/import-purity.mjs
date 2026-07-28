@@ -2,6 +2,10 @@
 /** Import-time purity and compiled-I/O proof for Lane C. */
 import { installFoundationFetchDenial } from '../import-purity-network-denial.mjs';
 
+// Preload the coordinator's declared Node built-in before project-code tripwires
+// so Node's own color-policy environment probe is not attributed to the module.
+await import('node:util');
+
 const results = [];
 function check(name, pass, detail = '') {
   results.push({ name, pass });

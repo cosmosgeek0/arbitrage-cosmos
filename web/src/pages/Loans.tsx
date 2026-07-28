@@ -6,7 +6,7 @@ import { TokenIcon } from '../components/TokenIcon';
 import { IconSearch } from '../components/Icons';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { fmtBasis, fmtMoney, timeAgo } from '../format';
-import { exactOrDash, hasMarginLiability, projectPrivateRead } from '../lib/privateRead';
+import { exactOrDash, hasMarginLiability, projectPrivateReadGuard } from '../lib/privateRead';
 import type { BasisRow, BasisSnapshot } from '../lib/basisRuntime';
 import './Markets.css';
 import './Loans.css';
@@ -27,7 +27,7 @@ function decisionLabel(row: BasisRow): string {
 }
 
 export function Loans() {
-  const { privateRead, privateReadError, openDetail, setPage } = useStore();
+  const { privateRead, privateReadError, privateReadSource, openDetail, setPage } = useStore();
   const [basis, setBasis] = useState<BasisSnapshot | null>(null);
   const [basisError, setBasisError] = useState<string | null>(null);
   const [view, setView] = useState<LoanView>('overview');
@@ -57,29 +57,52 @@ export function Loans() {
 
   const basisRuntimeError = basisError ?? basis?.status.lastError ?? null;
   const basisLive = !!basis && !basisRuntimeError;
-  const privatePresentation = projectPrivateRead(privateRead);
+  const privateReadGuard = projectPrivateReadGuard({
+    snapshot: privateRead,
+    source: privateReadSource,
+    error: privateReadError,
+  });
+  const privatePresentation = privateReadGuard.presentation;
   // Server-normalized fixed-scale zeros stay zeros: `0.00000000` borrowed and
   // interest is an observed no-liability row, not an outstanding loan.
   const liabilityRows = privateRead.margin.assets?.filter(hasMarginLiability) ?? null;
+  const currentExactEmptyLiabilities = liabilityRows !== null
+    && liabilityRows.length === 0
+    && privateReadGuard.commonTone === 'ok'
+    && privateReadGuard.sourceGuardTone === 'ok'
+    && privateRead.margin.coverage.state === 'COMPLETE_CURRENT'
+    && privateRead.reconciliation.liabilities.state === 'RECONCILED';
+  const liabilityCount = liabilityRows === null || (liabilityRows.length === 0 && !currentExactEmptyLiabilities)
+    ? null
+    : liabilityRows.length;
+  const privateObservationLabel = privatePresentation.freshness.state === 'CURRENT'
+    ? 'CURRENT'
+    : privatePresentation.freshness.state === 'STALE'
+      ? 'STALE LAST-KNOWN'
+      : `FRESHNESS ${privatePresentation.freshness.state}`;
   const sourceTone = view === 'preflight'
     ? (basisLive ? 'on' : basis ? 'partial' : '')
-    : privatePresentation.guardTone === 'ok' ? 'on' : privatePresentation.guardTone === 'warn' ? 'partial' : '';
+    : privateReadGuard.overallTone === 'ok' ? 'on' : privateReadGuard.overallTone === 'warn' ? 'partial' : '';
   const sourceText = view === 'preflight'
     ? basisRuntimeError
       ? `Public Source Error · ${basis ? 'Cached' : 'No Data'}`
       : basis
         ? `Public Basis · ${timeAgo(basis.updatedAt)}`
         : 'Loading Public Basis'
-    : `Binance Private Read · ${privatePresentation.stateLabel} · ${privatePresentation.freshness.label}`;
-  // A stale observation outranks coverage wording: the age is why the shown
-  // liabilities cannot be trusted, whatever the coverage says about scope.
-  const privateSourceReason = privateReadError
-    ?? (privatePresentation.freshness.state === 'CURRENT'
-      ? privateRead.margin.coverage.limitation ?? privatePresentation.reconciliationLabel
-      : privatePresentation.freshness.reason);
+    : `Binance Private Read · ${privateReadGuard.statusLabel} · ${privateReadSource}`;
+  const privateSourceReason = privateReadGuard.errorFact.id !== 'NONE'
+    ? privateReadGuard.errorFact.detail
+    : privatePresentation.freshness.state !== 'CURRENT'
+      ? privatePresentation.freshness.reason
+      : privateRead.margin.coverage.limitation
+        ?? privateRead.reconciliation.liabilities.reason
+        ?? privateReadGuard.statusLabel;
   const viewCounts: Record<LoanView, string> = {
-    overview: liabilityRows === null ? '—' : String(liabilityRows.length),
-    assets: privateRead.margin.assets === null ? '—' : String(privateRead.margin.assets.length),
+    overview: liabilityCount === null ? '—' : String(liabilityCount),
+    assets: privateRead.margin.assets === null
+      || (privateRead.margin.assets.length === 0 && !currentExactEmptyLiabilities)
+      ? '—'
+      : String(privateRead.margin.assets.length),
     preflight: basis ? String(preflightRows.length) : '—',
     activity: '—',
   };
@@ -90,7 +113,7 @@ export function Loans() {
         <header className="borrowx-toolbar">
           <div className="borrowx-identity">
             <span className="borrowx-source-mark"><img className="borrowx-page-mark" src="/borrow-money-bag.png" alt="" aria-hidden="true" /></span>
-            <span><h1>Borrow</h1><small>Public Preflight · Private Liabilities {privatePresentation.stateLabel}</small></span>
+            <span><h1>Borrow</h1><small>Public Preflight · Private Liabilities {privateReadGuard.statusLabel}</small></span>
           </div>
           <div className="borrowx-tools">
             <label className="borrowx-search"><IconSearch size={15} /><input aria-label="Search Borrow" placeholder="Search" value={search} onChange={(event) => setSearch(event.target.value)} spellCheck={false} />{search && <button type="button" aria-label="Clear Search" onClick={() => setSearch('')}>×</button>}</label>
@@ -102,10 +125,10 @@ export function Loans() {
         </header>
 
         <div className="borrowx-summary" aria-label="Borrow Summary">
-          <article><span>Margin Liability</span><strong>{exactOrDash(privateRead.margin.totalLiabilityBtc)}</strong><small>{privateRead.margin.totalLiabilityBtc === null ? '— · provider aggregate unavailable' : 'BTC-denominated provider aggregate'}</small></article>
-          <article><span>Liability Assets</span><strong>{liabilityRows === null ? '—' : String(liabilityRows.length)}</strong><small>{privateRead.reconciliation.liabilities.state} · {privateRead.reconciliation.liabilities.reason ?? privatePresentation.observedLabel}</small></article>
-          <article><span>Total Margin Assets</span><strong>{exactOrDash(privateRead.margin.totalAssetBtc)}</strong><small>{privateRead.margin.totalAssetBtc === null ? '— · aggregate unavailable' : 'BTC-denominated provider aggregate'}</small></article>
-          <article><span>Net Margin Assets</span><strong>{exactOrDash(privateRead.margin.totalNetAssetBtc)}</strong><small>{privateRead.margin.state} · {privateRead.margin.coverage.state.replaceAll('_', ' ')}</small></article>
+          <article><span>Margin Liability</span><strong>{exactOrDash(privateRead.margin.totalLiabilityBtc)}</strong><small>{privateRead.margin.totalLiabilityBtc === null ? '— · provider aggregate unavailable' : `${privateObservationLabel} · BTC-denominated provider aggregate`}</small></article>
+          <article><span>Liability Assets</span><strong>{liabilityCount === null ? '—' : String(liabilityCount)}</strong><small>{privateObservationLabel} · {privateRead.reconciliation.liabilities.state} · {privateRead.reconciliation.liabilities.reason ?? privatePresentation.observedLabel}</small></article>
+          <article><span>Total Margin Assets</span><strong>{exactOrDash(privateRead.margin.totalAssetBtc)}</strong><small>{privateRead.margin.totalAssetBtc === null ? '— · aggregate unavailable' : `${privateObservationLabel} · BTC-denominated provider aggregate`}</small></article>
+          <article><span>Net Margin Assets</span><strong>{exactOrDash(privateRead.margin.totalNetAssetBtc)}</strong><small>{privateObservationLabel} · {privateRead.margin.state} · {privateRead.margin.coverage.state.replaceAll('_', ' ')}</small></article>
         </div>
 
         <ProductSurfaceAdapter surfaceId="borrow" />
@@ -135,9 +158,11 @@ export function Loans() {
                   <span>{privateRead.margin.state} · {privatePresentation.observedLabel} · {privatePresentation.freshness.label}</span>
                 </header>
                 {liabilityRows === null ? (
-                  <div className="borrowx-empty compact"><span><b>Liability Facts Unavailable</b><small>{privateReadError ?? privateRead.reconciliation.liabilities.reason ?? 'Unavailable account truth is not reported as zero liabilities.'}</small></span></div>
-                ) : liabilityRows.length === 0 ? (
+                  <div className="borrowx-empty compact"><span><b>Liability Facts Unavailable</b><small>{privateSourceReason ?? 'Unavailable account truth is not reported as zero liabilities.'}</small></span></div>
+                ) : currentExactEmptyLiabilities ? (
                   <div className="borrowx-empty compact"><span><b>No Margin Liabilities</b><small>The configured Cross Margin read returned exact observed zero borrowed and interest rows.</small></span></div>
+                ) : liabilityRows.length === 0 ? (
+                  <div className="borrowx-empty compact"><span><b>Current Liability Absence Unknown</b><small>{privateObservationLabel} · current absence UNKNOWN; the last admitted Cross Margin collection contained exact zero liability rows.</small></span></div>
                 ) : (
                   <div className="borrowx-table-scroll">
                     <table className="borrowx-table preflight">
@@ -170,7 +195,7 @@ export function Loans() {
 
           {view === 'assets' && (
             privateRead.margin.assets === null ? (
-              <div className="borrowx-empty"><span><b>Margin Asset Facts Unavailable</b><small>{privateReadError ?? privateRead.margin.coverage.limitation ?? 'The private owner did not publish margin asset rows.'}</small></span></div>
+              <div className="borrowx-empty"><span><b>Margin Asset Facts Unavailable</b><small>{privateSourceReason ?? 'The private owner did not publish margin asset rows.'}</small></span></div>
             ) : (
               <div className="borrowx-table-scroll">
                 <table className="borrowx-table preflight">
@@ -187,7 +212,14 @@ export function Loans() {
                     </tr>
                   ))}</tbody>
                 </table>
-                {privateRead.margin.assets.length === 0 && <div className="borrowx-empty"><span><b>No Margin Asset Rows</b><small>The configured read returned an exact empty array.</small></span></div>}
+                {privateRead.margin.assets.length === 0 && (
+                  <div className="borrowx-empty">
+                    <span>
+                      <b>{currentExactEmptyLiabilities ? 'No Margin Asset Rows' : 'Last Admitted Margin Asset Set Was Empty'}</b>
+                      <small>{currentExactEmptyLiabilities ? 'The current configured read returned an exact empty array.' : `${privateObservationLabel} · current absence UNKNOWN; the last admitted collection was exact empty.`}</small>
+                    </span>
+                  </div>
+                )}
               </div>
             )
           )}
@@ -218,8 +250,8 @@ export function Loans() {
         </div>
 
         <footer className="borrowx-footer">
-          <span>{view === 'preflight' ? basisRuntimeError ? `Public Borrow Source Error: ${basisRuntimeError}` : `Public Borrow Source: ${basis?.status.borrowSource ?? 'Loading'}` : `Private Liability Truth: ${privateRead.reconciliation.liabilities.state} · Money Actions Blocked`}</span>
-          <span>{view === 'preflight' ? basis ? `${preflightRows.length} Public Rows` : 'Public Rows Unknown' : liabilityRows === null ? 'Private Counts Unknown' : `${liabilityRows.length} Liability Assets`}</span>
+          <span>{view === 'preflight' ? basisRuntimeError ? `Public Borrow Source Error: ${basisRuntimeError}` : `Public Borrow Source: ${basis?.status.borrowSource ?? 'Loading'}` : `Private Liability Truth: ${privateReadGuard.statusLabel} · Source ${privateReadSource} · Money Actions Blocked`}</span>
+          <span>{view === 'preflight' ? basis ? `${preflightRows.length} Public Rows` : 'Public Rows Unknown' : liabilityCount === null ? 'Private Counts Unknown' : `${liabilityCount} Liability Assets`}</span>
           {view === 'preflight' && <button type="button" onClick={() => setPage('strategies')}>Open Basis</button>}
         </footer>
       </section>

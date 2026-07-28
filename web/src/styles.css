@@ -49760,8 +49760,53 @@ body::after {
 .smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet .ops-clock-zones { grid-template-rows: repeat(5, minmax(0, 1fr)) !important; }
 .smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet .ops-advisor-list { grid-auto-rows: minmax(0, 1fr) !important; }
 .smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet .ops-control-list { grid-template-rows: repeat(5, minmax(0, 1fr)) !important; }
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet.account-sheet-v3 > .account-v3-head {
+  height: 84px !important;
+  min-height: 84px !important;
+  max-height: 84px !important;
+  padding: 11px var(--popover-rail) !important;
+  flex: 0 0 84px !important;
+}
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet.account-sheet-v3 > .account-v3-head .ops-sheet-status {
+  max-width: 132px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet.account-sheet-v3 .ops-control-list {
+  height: 322px !important;
+  min-height: 322px !important;
+  max-height: 322px !important;
+  flex: 0 0 322px !important;
+  grid-template-rows: repeat(7, 46px) !important;
+  border-block: 0 !important;
+  box-shadow: inset 0 1px var(--line), inset 0 -1px var(--line) !important;
+}
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet.account-sheet-v3 .ops-control-list > .ops-row {
+  height: 46px !important;
+  min-height: 46px !important;
+  max-height: 46px !important;
+  padding-block: 5px !important;
+}
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet.account-sheet-v3 > .ops-account-note.ops-note-row {
+  height: 48px !important;
+  min-height: 48px !important;
+  max-height: 48px !important;
+  padding-block: 6px !important;
+  flex: 0 0 48px !important;
+  overflow: hidden !important;
+}
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet.account-sheet-v3 > .ops-account-note.ops-note-row > span {
+  display: -webkit-box !important;
+  overflow: hidden !important;
+  font-size: 10.5px !important;
+  font-weight: 400 !important;
+  line-height: 14px !important;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
 .smenu-bar.topbar-suite-v4 .smenu-pane .api-key-sheet-v2 .api-permission-list { grid-template-rows: repeat(7, minmax(0, 1fr)) !important; }
 .smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet.ops-currency-sheet > .ops-list { grid-template-rows: repeat(6, minmax(0, 1fr)) !important; }
+.accountx-source-state.bad i { background: var(--down); }
 .smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet .ops-notification-list {
   display: grid !important;
   grid-auto-rows: minmax(56px, 1fr) !important;

@@ -25,7 +25,7 @@ import { useRefreshSignal } from '../lib/refresh';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
 import { formatClockZone } from '../lib/time';
-import { projectPrivateRead } from '../lib/privateRead';
+import { projectPrivateReadGuard } from '../lib/privateRead';
 import { useStore, type Page } from '../store';
 import { fmtMoney, fmtPrice, timeAgo } from '../format';
 import type { LedgerEvent } from '../types';
@@ -108,10 +108,21 @@ function latestKnown(values: readonly (number | null | undefined)[]): number | n
   return known.length ? Math.max(...known) : null;
 }
 
-function useDashboardSources(refreshTick: number) {
+function useDashboardSources(
+  refreshTick: number,
+  pnlReadEnabled: boolean,
+  pnlReadBlocker: string | null,
+) {
   const [pnl, setPnl] = useState<Source<DashboardPnlData>>(source);
 
   useEffect(() => {
+    if (!pnlReadEnabled) {
+      setPnl({
+        data: null,
+        error: pnlReadBlocker ?? 'PnL read not admitted',
+      });
+      return;
+    }
     const slow = createSettledPoll<DashboardPnlData>({
       intervalMs: 30_000,
       request: async (signal) => {
@@ -126,7 +137,7 @@ function useDashboardSources(refreshTick: number) {
     });
     slow.start();
     return slow.stop;
-  }, [refreshTick]);
+  }, [pnlReadBlocker, pnlReadEnabled, refreshTick]);
 
   return { pnl };
 }
@@ -146,25 +157,48 @@ function Metric({ label, value, detail, tone = 'idle' }: { label: string; value:
 }
 
 export function Dashboard() {
-  const { state, stateStatus, stateLastSuccessAtMs, stateError, privateRead, prefs, setPage } = useStore();
+  const {
+    state,
+    stateStatus,
+    stateLastSuccessAtMs,
+    stateError,
+    privateRead,
+    privateReadError,
+    privateReadSource,
+    prefs,
+    setPage,
+  } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
   const [refreshTick, setRefreshTick] = useState(0);
   useRefreshSignal(() => setRefreshTick((value) => value + 1));
-  const sources = useDashboardSources(refreshTick);
-  const privatePresentation = projectPrivateRead(privateRead);
+  const privateReadGuard = projectPrivateReadGuard({
+    snapshot: privateRead,
+    source: privateReadSource,
+    error: privateReadError,
+  });
+  const privatePresentation = privateReadGuard.presentation;
   const compatibilityCurrent = stateStatus === 'CURRENT';
   const compatibilityTruthLabel = stateStatus === 'STALE' ? 'STALE LAST-KNOWN' : stateStatus === 'CURRENT' ? 'CURRENT' : 'UNAVAILABLE';
-  const privateFactsCurrent = privatePresentation.freshness.state === 'CURRENT';
-  const privateGuardCurrent = privateFactsCurrent && privatePresentation.guardTone === 'ok';
-  const apiPostureTone: Tone = privateGuardCurrent
-    ? privatePresentation.postureTone
-    : privatePresentation.guardTone === 'bad' ? 'bad' : 'warn';
-  const liabilitiesState = privateRead.reconciliation.liabilities.state;
-  const borrowTone: Tone = privateGuardCurrent && liabilitiesState === 'RECONCILED'
-    ? 'ok'
-    : liabilitiesState === 'PARTIAL'
-      ? 'warn'
-      : privatePresentation.guardTone === 'bad' ? 'bad' : 'warn';
+  const privateGuardCurrent = privateReadGuard.overallTone === 'ok';
+  // The legacy compatibility cut is the authority used by /api/pnl. Do not
+  // issue a request that this owner already proves cannot return admitted
+  // evidence; that response is an intentional 503 truth envelope, not a
+  // resource the browser should repeatedly fail to load.
+  const pnlReadEnabled = compatibilityCurrent
+    && state?.privateAccountTruth === 'AVAILABLE';
+  const pnlReadBlocker = !compatibilityCurrent
+    ? `Compatibility ${compatibilityTruthLabel} · PnL read not admitted`
+    : state?.privateAccountTruth !== 'AVAILABLE'
+      ? `Private account ${state?.privateAccountTruth ?? 'UNKNOWN'} · PnL read not admitted`
+      : 'Private account PnL read not admitted';
+  const sources = useDashboardSources(refreshTick, pnlReadEnabled, pnlReadEnabled ? null : pnlReadBlocker);
+  const apiPostureTone: Tone = privateReadGuard.permissionGuardTone;
+  const liabilitiesState = privateGuardCurrent
+    ? privateRead.reconciliation.liabilities.state
+    : 'UNKNOWN';
+  const borrowTone: Tone = privateReadGuard.overallTone === 'idle'
+    ? 'warn'
+    : privateReadGuard.overallTone;
 
   const retainedProductSnapshot = productBinding.snapshot;
   const productCurrent = retainedProductSnapshot !== null && productBinding.continuity === 'PROVEN';
@@ -215,8 +249,8 @@ export function Dashboard() {
   const integrityChecks: IntegrityCheck[] = [
     {
       label: 'Account Sync',
-      detail: `${privatePresentation.stateLabel} · ${privatePresentation.freshness.label} · ${privatePresentation.observedLabel} · ${privatePresentation.reconciliationLabel}`,
-      tone: privatePresentation.guardTone,
+      detail: `${privateReadGuard.statusLabel} · ${privatePresentation.observedLabel} · Source ${privateReadSource}`,
+      tone: privateReadGuard.overallTone,
     },
     {
       label: 'Public Market Feeds',
@@ -246,7 +280,7 @@ export function Dashboard() {
     },
     {
       label: 'API Key Posture',
-      detail: `${privatePresentation.postureLabel} · ${privatePresentation.identityLabel} · ${privatePresentation.freshness.label}`,
+      detail: `${privateReadGuard.permissionStatusLabel} · ${privateReadGuard.permissionObservedLabel} · ${privatePresentation.identityLabel} · Source ${privateReadSource}`,
       tone: apiPostureTone,
     },
   ];
@@ -435,7 +469,7 @@ export function Dashboard() {
                   <span className="dcx-runtime-value" role="cell"><b>{row.watching}</b><small>Canonical Candidates</small></span>
                   <span className="dcx-runtime-value" role="cell"><b>{row.focused}</b><small>Not Published</small></span>
                   <span className="dcx-runtime-value" role="cell"><b>{row.proposals}</b><small>Canonical Proposals</small></span>
-                  <span className="dcx-runtime-constraint" role="cell"><b>{row.constraint}</b><small>{row.id === 'basis' ? `Private Liabilities ${privateRead.reconciliation.liabilities.state}` : 'Canonical Component Blocker'}</small></span>
+                  <span className="dcx-runtime-constraint" role="cell"><b>{row.constraint}</b><small>{row.id === 'basis' ? `Private Liabilities ${liabilitiesState}` : 'Canonical Component Blocker'}</small></span>
                   <span className="dcx-runtime-open" role="cell">
                     <button type="button" aria-label={`Open ${row.name}; updated ${sourceAge(row.updatedAt)}`} onClick={() => open(row.page)}>
                       <b>{sourceAge(row.updatedAt)}</b><ChevronRight size={14} />
@@ -470,8 +504,8 @@ export function Dashboard() {
             <div className="dcx-attention-list">
               <button type="button" onClick={() => open('loans')}>
                 <StatusMark tone={borrowTone} />
-                <span><b>Borrow Verification</b><small>{privatePresentation.freshness.label} · {liabilitiesState} · loan catalog and maximum-borrowable remain outside private-read v1</small></span>
-                <em>{!privateFactsCurrent || privatePresentation.counts.liabilities === null ? 'UNKNOWN' : `${privatePresentation.counts.liabilities} Assets`}</em><ChevronRight size={14} />
+                <span><b>Borrow Verification</b><small>{privateReadGuard.statusLabel} · Liabilities {liabilitiesState} · loan catalog and maximum-borrowable remain outside private-read v1</small></span>
+                <em>{!privateGuardCurrent || privatePresentation.counts.liabilities === null ? 'UNKNOWN' : `${privatePresentation.counts.liabilities} Assets`}</em><ChevronRight size={14} />
               </button>
               <button type="button" onClick={() => open('strategies')}>
                 <StatusMark tone={basisQueueTone} />
@@ -545,7 +579,7 @@ export function Dashboard() {
         </section>
 
         <footer className="dcx-source-footer">
-          <span><Database size={13} />Sources: Public Market Streams, Engine Snapshots, SQLite Ledger · Private Account {privatePresentation.stateLabel}</span>
+          <span><Database size={13} />Sources: Public Market Streams, Engine Snapshots, SQLite Ledger · Private Account {privateReadGuard.statusLabel} · {privateReadSource}</span>
           <span>{productSnapshot
             ? `${productSnapshot.revision} · Machine ${productSnapshot.ownerView.machineReady} · ${productSnapshot.opsIntakeInterlock.state}`
             : retainedProductSnapshot

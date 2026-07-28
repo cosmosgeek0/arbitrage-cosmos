@@ -8,14 +8,14 @@ import { ProductSurfaceAdapter } from '../features/productControlRoom/components
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { useStore } from '../store';
 import { timeAgo } from '../format';
-import { projectPrivateRead } from '../lib/privateRead';
+import { projectPrivateReadGuard } from '../lib/privateRead';
 import { ComponentOperationalHealthTable } from './ComponentOperationalHealthTable';
 import './Health.css';
 
 type HealthTone = 'healthy' | 'degraded' | 'broken';
 
 export function SystemHealth() {
-  const { privateRead, privateReadError, setPage } = useStore();
+  const { privateRead, privateReadError, privateReadSource, setPage } = useStore();
   const { binding } = useProductControlRoomContext();
   const snapshot = binding.snapshot;
   const healthSurface = snapshot?.surfaces.health;
@@ -30,15 +30,23 @@ export function SystemHealth() {
       : 'degraded';
   const advance = healthSurface?.evidence.find((datum) => datum.fieldId === 'heartbeat-advance');
   const ledgerSchema = healthSurface?.evidence.find((datum) => datum.fieldId === 'ledger-schema-compatibility');
-  const privatePresentation = projectPrivateRead(privateRead);
-  // Transport error first, then the freshness guard, then why the key posture
-  // is what it is. Health never reports a reason it cannot substantiate.
-  const privateReadReason = privateReadError
-    ?? (privateRead.permissionPosture.state === 'UNSAFE'
-      ? `${privatePresentation.postureDetail} · ${privatePresentation.freshness.reason}`
+  const privateReadGuard = projectPrivateReadGuard({
+    snapshot: privateRead,
+    source: privateReadSource,
+    error: privateReadError,
+  });
+  const privatePresentation = privateReadGuard.presentation;
+  // Admitted error fact first, then the independent permission/account
+  // freshness guards. Health never renders a raw transport/provider string.
+  const privateReadReason = privateReadGuard.errorFact.id !== 'NONE'
+    ? privateReadGuard.errorFact.detail
+    : privateRead.permissionPosture.state === 'UNSAFE'
+      || privateReadGuard.permissionFreshness.state === 'STALE'
+      || privateReadGuard.permissionFreshness.state === 'UNKNOWN'
+      ? `${privatePresentation.postureDetail} · ${privateReadGuard.permissionFreshness.reason}`
       : privatePresentation.freshness.state === 'CURRENT'
         ? privatePresentation.postureDetail
-        : privatePresentation.freshness.reason);
+        : privatePresentation.freshness.reason;
 
   return (
     <div className="container page healthx-page">
@@ -106,9 +114,9 @@ export function SystemHealth() {
 
             <ComponentOperationalHealthTable components={snapshot.components} />
 
-            <div className="healthx-alert" title={privatePresentation.postureDetail}>
+            <div className="healthx-alert" title={`${privatePresentation.postureDetail} · Source ${privateReadSource}`}>
               <ShieldCheck size={14} />
-              Private Account {privatePresentation.stateLabel} · Permissions {privatePresentation.postureLabel} · {privatePresentation.freshness.label} · {privateReadReason}
+              Private Account {privateReadGuard.statusLabel} · Permissions {privateReadGuard.permissionStatusLabel} · {privateReadGuard.permissionFreshness.label} · Source {privateReadSource} · {privateReadReason}
             </div>
 
             <div className="healthx-filter-actions">

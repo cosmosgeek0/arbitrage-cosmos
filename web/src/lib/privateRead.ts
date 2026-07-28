@@ -222,7 +222,9 @@ const PERMISSION_FLAG_LABELS: Record<PermissionFlagId, string> = {
 };
 
 /** A private snapshot older than this bound is presented as stale, not current. */
-export const PRIVATE_READ_STALE_AFTER_MS = 120_000;
+// Match the canonical Product account owner-truth cut. The browser must never
+// remain CURRENT after Product has already declared the same observation stale.
+export const PRIVATE_READ_STALE_AFTER_MS = 45_000;
 const MINIMUM_STALE_AFTER_MS = 15_000;
 const MAXIMUM_STALE_AFTER_MS = 600_000;
 
@@ -1078,11 +1080,106 @@ export function privateReadFreshness(
   };
 }
 
+/** Permission posture has its own provider observation clock. A fresh account
+ * payload cannot renew an older permission readback by association. */
+export function privateReadPermissionFreshness(
+  snapshot: PrivateReadSnapshot,
+  now = Date.now(),
+  staleAfterMs = PRIVATE_READ_STALE_AFTER_MS,
+): PrivateReadFreshness {
+  const bounded = boundedStaleAfterMs(staleAfterMs);
+  const seconds = Math.round(bounded / 1_000);
+  const posture = snapshot.permissionPosture;
+  if (posture.state === 'NOT_CONFIGURED') {
+    return {
+      state: 'NOT_CONFIGURED',
+      label: 'Permission Freshness Not Configured',
+      reason: 'No private key is configured, so no permission observation time exists.',
+      tone: 'idle',
+      ageMs: null,
+      staleAfterMs: bounded,
+    };
+  }
+  if (posture.state === 'UNKNOWN' || posture.observedAt === null || !Number.isFinite(now)) {
+    return {
+      state: 'UNKNOWN',
+      label: 'Permission Freshness Unknown',
+      reason: 'No permission readback time was admitted; permission age cannot be proven.',
+      tone: 'warn',
+      ageMs: null,
+      staleAfterMs: bounded,
+    };
+  }
+  if (now < posture.observedAt) {
+    return {
+      state: 'UNKNOWN',
+      label: 'Permission Freshness Unknown',
+      reason: 'The permission observation time is ahead of the browser clock; permission age cannot be proven.',
+      tone: 'warn',
+      ageMs: null,
+      staleAfterMs: bounded,
+    };
+  }
+  const ageMs = now - posture.observedAt;
+  if (ageMs >= bounded) {
+    return {
+      state: 'STALE',
+      label: 'Stale Permission Truth',
+      reason: `Permission posture observed ${privateReadAge(posture.observedAt, now)}, beyond the ${seconds}s account freshness bound.`,
+      tone: 'warn',
+      ageMs,
+      staleAfterMs: bounded,
+    };
+  }
+  return {
+    state: 'CURRENT',
+    label: 'Current Permission Truth',
+    reason: `Permission posture observed ${privateReadAge(posture.observedAt, now)}, within the ${seconds}s account freshness bound.`,
+    tone: 'ok',
+    ageMs,
+    staleAfterMs: bounded,
+  };
+}
+
 const TONE_SEVERITY: Record<PrivateReadTone, number> = { ok: 0, idle: 1, warn: 2, bad: 3 };
 
 /** The worse of two tones, so a guard can only ever downgrade a claim. */
 export function worstTone(left: PrivateReadTone, right: PrivateReadTone): PrivateReadTone {
   return TONE_SEVERITY[right] > TONE_SEVERITY[left] ? right : left;
+}
+
+const PRIVATE_READ_COVERAGE_TONE: Record<CoverageState, PrivateReadTone> = {
+  COMPLETE_CURRENT: 'ok',
+  PARTIAL_SYMBOL_SCOPED: 'warn',
+  UNAVAILABLE: 'bad',
+  NOT_CONFIGURED: 'idle',
+};
+
+const PRIVATE_READ_RECONCILIATION_TONE: Record<ReconciliationState, PrivateReadTone> = {
+  RECONCILED: 'ok',
+  PARTIAL: 'warn',
+  UNAVAILABLE: 'bad',
+  NOT_CONFIGURED: 'idle',
+};
+
+export function privateReadCoverageStateTone(state: CoverageState): PrivateReadTone {
+  return PRIVATE_READ_COVERAGE_TONE[state];
+}
+
+export function privateReadReconciliationStateTone(state: ReconciliationState): PrivateReadTone {
+  return PRIVATE_READ_RECONCILIATION_TONE[state];
+}
+
+export function privateReadCoverageTone(snapshot: PrivateReadSnapshot): PrivateReadTone {
+  return [snapshot.spot, snapshot.margin, snapshot.usdm]
+    .map((product) => privateReadCoverageStateTone(product.coverage.state))
+    .reduce(worstTone, 'ok' as PrivateReadTone);
+}
+
+export function privateReadReconciliationTone(snapshot: PrivateReadSnapshot): PrivateReadTone {
+  return Object.values(snapshot.reconciliation)
+    .map((fact) => privateReadReconciliationStateTone(fact.state))
+    .reduce(worstTone, 'ok' as PrivateReadTone);
 }
 
 export interface PermissionPresentationRow {
@@ -1140,7 +1237,7 @@ function permissionRow(
     detail: fact === null
       ? 'Provider permission readback unavailable'
       : verified
-        ? 'Verified by current provider readback'
+        ? 'Verified by the admitted provider readback; freshness is guarded separately'
         : fact === expected
           ? `Fact observed; overall posture is ${titleState(posture.state)}`
           : `Expected ${expected ? enabled : disabled}`,
@@ -1196,19 +1293,23 @@ export function projectPrivateRead(
   const reconciliationStates = Object.values(snapshot.reconciliation).map((fact) => fact.state);
   const reconciliationLabel = reconciliationStates.every((state) => state === 'RECONCILED')
     ? 'All Facts Reconciled'
-    : reconciliationStates.some((state) => state === 'PARTIAL')
-      ? 'Partial Reconciliation'
-      : reconciliationStates.every((state) => state === 'NOT_CONFIGURED')
-        ? 'Reconciliation Not Configured'
-        : 'Reconciliation Unavailable';
+    : reconciliationStates.some((state) => state === 'UNAVAILABLE')
+      ? 'Reconciliation Unavailable'
+      : reconciliationStates.some((state) => state === 'PARTIAL')
+        ? 'Partial Reconciliation'
+        : reconciliationStates.every((state) => state === 'NOT_CONFIGURED')
+          ? 'Reconciliation Not Configured'
+          : 'Reconciliation Partially Not Configured';
   const coverage = [snapshot.spot.coverage, snapshot.margin.coverage, snapshot.usdm.coverage];
   const coverageLabel = coverage.every((item) => item.state === 'COMPLETE_CURRENT')
     ? 'Complete Current Coverage'
-    : coverage.some((item) => item.state === 'PARTIAL_SYMBOL_SCOPED')
-      ? 'Partial Symbol-Scoped History'
-      : coverage.every((item) => item.state === 'NOT_CONFIGURED')
-        ? 'Coverage Not Configured'
-        : 'Coverage Unavailable';
+    : coverage.some((item) => item.state === 'UNAVAILABLE')
+      ? 'Coverage Unavailable'
+      : coverage.some((item) => item.state === 'PARTIAL_SYMBOL_SCOPED')
+        ? 'Partial Symbol-Scoped History'
+        : coverage.every((item) => item.state === 'NOT_CONFIGURED')
+          ? 'Coverage Not Configured'
+          : 'Coverage Partially Not Configured';
   const identityLabel = permissionPosture.keyLast4
     ? `${permissionPosture.keyLabel} · Ending ${permissionPosture.keyLast4}`
     : permissionPosture.keyLabel;
@@ -1253,4 +1354,145 @@ export function projectPrivateRead(
     coverageLabel,
     reconciliationLabel,
   };
+}
+
+export interface PrivateReadGuardProjection {
+  readonly presentation: PrivateReadPresentation;
+  readonly errorFact: PrivateReadErrorFact;
+  readonly commonTone: PrivateReadTone;
+  readonly permissionGuardTone: PrivateReadTone;
+  readonly permissionStatusLabel: string;
+  readonly permissionFreshness: PrivateReadFreshness;
+  readonly permissionObservedLabel: string;
+  readonly coverageTone: PrivateReadTone;
+  readonly reconciliationTone: PrivateReadTone;
+  readonly coverageFactTone: PrivateReadTone;
+  readonly reconciliationFactTone: PrivateReadTone;
+  readonly sourceGuardTone: PrivateReadTone;
+  readonly sourceFactTone: PrivateReadTone;
+  readonly overallTone: PrivateReadTone;
+  readonly statusLabel: string;
+}
+
+/**
+ * One shared account guard for every global shell presentation. State,
+ * freshness, permission, application admission, coverage, reconciliation, and
+ * displayed provenance are evaluated once so the rail, sheet, and trigger
+ * cannot disagree about whether the same applied tuple is green.
+ */
+export function projectPrivateReadGuard({
+  snapshot,
+  source,
+  error,
+  now = Date.now(),
+  staleAfterMs = PRIVATE_READ_STALE_AFTER_MS,
+}: {
+  readonly snapshot: PrivateReadSnapshot;
+  readonly source: PrivateReadSourceId;
+  readonly error: string | null | undefined;
+  readonly now?: number;
+  readonly staleAfterMs?: number;
+}): PrivateReadGuardProjection {
+  const presentation = projectPrivateRead(snapshot, now, staleAfterMs);
+  const permissionFreshness = privateReadPermissionFreshness(snapshot, now, staleAfterMs);
+  const errorFact = privateReadErrorFact(error);
+  const commonTone = [presentation.postureTone, permissionFreshness.tone, errorFact.guardTone]
+    .reduce(worstTone, presentation.guardTone);
+  const coverageTone = privateReadCoverageTone(snapshot);
+  const reconciliationTone = privateReadReconciliationTone(snapshot);
+  // Preferred STATE provenance is neutral. A valid FALLBACK is still truthful
+  // evidence, but it cannot claim the same green posture as the preferred cut.
+  const sourceGuardTone: PrivateReadTone = source === 'FALLBACK' ? 'warn' : 'ok';
+  const sourceFactTone: PrivateReadTone = source === 'FALLBACK' ? 'warn' : 'idle';
+  // Permission readback has a deliberately narrower guard than whole-account
+  // truth. Coverage and reconciliation do not change an observed permission
+  // flag, while stale evidence, admission failure, and fallback provenance do.
+  const permissionGuardTone = [
+    permissionFreshness.tone,
+    errorFact.guardTone,
+    sourceGuardTone,
+  ].reduce(worstTone, presentation.postureTone);
+  const permissionStatusLabel = errorFact.id !== 'NONE'
+    ? `${presentation.postureLabel} · ${errorFact.label}`
+    : snapshot.permissionPosture.state === 'UNSAFE'
+      ? 'Unsafe'
+      : snapshot.permissionPosture.state === 'UNKNOWN'
+        ? 'Permission Unknown'
+        : permissionFreshness.state === 'STALE' || permissionFreshness.state === 'UNKNOWN'
+          ? `${presentation.postureLabel} · ${permissionFreshness.state}`
+          : source === 'FALLBACK'
+            ? `${presentation.postureLabel} · FALLBACK SOURCE`
+            : presentation.postureLabel;
+  const overallTone = [coverageTone, reconciliationTone, sourceGuardTone]
+    .reduce(worstTone, commonTone);
+  const reasonCandidates: ReadonlyArray<{
+    readonly active: boolean;
+    readonly tone: PrivateReadTone;
+    readonly label: string;
+  }> = [
+    { active: errorFact.id !== 'NONE', tone: errorFact.guardTone, label: errorFact.label },
+    {
+      active: snapshot.permissionPosture.state === 'UNSAFE' || snapshot.permissionPosture.state === 'UNKNOWN',
+      tone: presentation.postureTone,
+      label: snapshot.permissionPosture.state === 'UNSAFE' ? 'UNSAFE' : 'PERMISSION UNKNOWN',
+    },
+    {
+      active: presentation.freshness.state === 'STALE' || presentation.freshness.state === 'UNKNOWN',
+      tone: presentation.freshness.tone,
+      label: presentation.freshness.state,
+    },
+    {
+      active: permissionFreshness.state === 'STALE' || permissionFreshness.state === 'UNKNOWN',
+      tone: permissionFreshness.tone,
+      label: `PERMISSION ${permissionFreshness.state}`,
+    },
+    {
+      active: reconciliationTone === 'bad'
+        || reconciliationTone === 'warn'
+        || (presentation.state !== 'NOT_CONFIGURED' && reconciliationTone === 'idle'),
+      tone: reconciliationTone,
+      label: presentation.reconciliationLabel.toUpperCase(),
+    },
+    {
+      active: coverageTone === 'bad'
+        || coverageTone === 'warn'
+        || (presentation.state !== 'NOT_CONFIGURED' && coverageTone === 'idle'),
+      tone: coverageTone,
+      label: presentation.coverageLabel.toUpperCase(),
+    },
+    { active: source === 'FALLBACK', tone: sourceGuardTone, label: 'FALLBACK SOURCE' },
+    {
+      active: presentation.tone === 'bad' || presentation.tone === 'warn',
+      tone: presentation.tone,
+      label: `STATE ${presentation.state}`,
+    },
+  ];
+  const statusReason = reasonCandidates.reduce<(typeof reasonCandidates)[number] | null>(
+    (selected, candidate) => {
+      if (!candidate.active) return selected;
+      if (selected === null || TONE_SEVERITY[candidate.tone] > TONE_SEVERITY[selected.tone]) return candidate;
+      return selected;
+    },
+    null,
+  );
+  const statusLabel = statusReason === null
+    ? presentation.state
+    : `${presentation.state} · ${statusReason.label}`;
+  return Object.freeze({
+    presentation,
+    errorFact,
+    commonTone,
+    permissionGuardTone,
+    permissionStatusLabel,
+    permissionFreshness,
+    permissionObservedLabel: privateReadAge(snapshot.permissionPosture.observedAt, now),
+    coverageTone,
+    reconciliationTone,
+    coverageFactTone: worstTone(coverageTone, commonTone),
+    reconciliationFactTone: worstTone(reconciliationTone, commonTone),
+    sourceGuardTone,
+    sourceFactTone,
+    overallTone,
+    statusLabel,
+  });
 }

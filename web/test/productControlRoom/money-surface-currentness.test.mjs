@@ -228,7 +228,27 @@ test('Dashboard withholds retained supervisor and private facts from current pre
 
   assert.match(source, /const productCurrent = retainedProductSnapshot !== null && productBinding\.continuity === 'PROVEN'/);
   assert.match(source, /const productSnapshot = productCurrent \? retainedProductSnapshot : null/);
-  assert.match(source, /label: 'Account Sync',[\s\S]*?tone: privatePresentation\.guardTone/);
+  assert.match(source, /const privateReadGuard = projectPrivateReadGuard\(\{[\s\S]*?source: privateReadSource,[\s\S]*?error: privateReadError/);
+  assert.match(source, /const privateGuardCurrent = privateReadGuard\.overallTone === 'ok'/);
+  assert.match(source, /const pnlReadEnabled = compatibilityCurrent[\s\S]*?state\?\.privateAccountTruth === 'AVAILABLE'/);
+  assert.match(source, /useDashboardSources\(refreshTick, pnlReadEnabled, pnlReadEnabled \? null : pnlReadBlocker\)/);
+  const pnlHook = source.slice(
+    source.indexOf('function useDashboardSources'),
+    source.indexOf('function StatusMark'),
+  );
+  assert.match(pnlHook, /if \(!pnlReadEnabled\) \{[\s\S]*?data: null,[\s\S]*?error: pnlReadBlocker[\s\S]*?return;/);
+  assert.ok(
+    pnlHook.indexOf('if (!pnlReadEnabled)') < pnlHook.indexOf("fetchJson<unknown>('/api/pnl'"),
+    'the compatibility/private guard must block a known-unavailable PnL request before the poll is created',
+  );
+  assert.match(pnlHook, /\[pnlReadBlocker, pnlReadEnabled, refreshTick\]/);
+  assert.match(source, /label: 'Account Sync',[\s\S]*?privateReadGuard\.statusLabel[\s\S]*?tone: privateReadGuard\.overallTone/);
+  assert.match(source, /const apiPostureTone: Tone = privateReadGuard\.permissionGuardTone/);
+  assert.match(source, /const liabilitiesState = privateGuardCurrent[\s\S]*?: 'UNKNOWN'/);
+  assert.match(source, /!privateGuardCurrent \|\| privatePresentation\.counts\.liabilities === null \? 'UNKNOWN'/);
+  assert.match(source, /row\.id === 'basis' \? `Private Liabilities \$\{liabilitiesState\}`/);
+  assert.doesNotMatch(source, /Private Liabilities \$\{privateRead\.reconciliation\.liabilities\.state\}/);
+  assert.doesNotMatch(source, /projectPrivateRead\(privateRead\)/);
   assert.match(source, /label="Strategy Runtime"/);
   assert.doesNotMatch(source, /label="Available USDT"/);
   assert.match(source, /tone=\{compatibilityCurrent \? eventTone\(event\) : 'warn'\}/);

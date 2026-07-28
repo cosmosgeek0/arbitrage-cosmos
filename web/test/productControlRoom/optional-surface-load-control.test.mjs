@@ -449,6 +449,45 @@ test('Token News polling follows authoritative News admission and stops while Ne
   );
 });
 
+test('Volume exact-symbol intelligence follows authoritative Token admission and stops while Token is OFF', async () => {
+  const volume = await read('pages/VolumeScanner.tsx');
+  const tokenOwnerMatch = volume.match(
+    /const\s+([A-Za-z_$][\w$]*)\s*=\s*useOptionalSurface\(\s*['"]token['"]\s*\)/,
+  );
+  assert.ok(tokenOwnerMatch, 'Volume must consume the authoritative Token optional-surface owner');
+
+  const tokenOwner = tokenOwnerMatch[1];
+  const intelligenceEffectStart = volume.lastIndexOf(
+    'useEffect(() => {',
+    volume.indexOf('/api/intelligence/token?symbol='),
+  );
+  const intelligenceEffectEnd = volume.indexOf('\n\n  const rows =', intelligenceEffectStart);
+  assert.ok(
+    intelligenceEffectStart >= 0 && intelligenceEffectEnd > intelligenceEffectStart,
+    'Volume exact-symbol intelligence effect boundary is missing',
+  );
+  const intelligenceEffect = volume.slice(intelligenceEffectStart, intelligenceEffectEnd);
+
+  const clearAt = intelligenceEffect.indexOf('setExpandedIntelligence(null)');
+  const offGuardAt = intelligenceEffect.search(
+    new RegExp(`if\\s*\\([^)]*!${tokenOwner}\\.enabled\\s*\\)\\s*return`),
+  );
+  const pollAt = intelligenceEffect.indexOf('createSettledPoll<TokenIntelligenceRead>');
+  assert.ok(clearAt >= 0, 'Token OFF must clear retained Volume intelligence');
+  assert.ok(offGuardAt > clearAt, 'retained intelligence must clear before the Token OFF return');
+  assert.ok(pollAt > offGuardAt, 'Token admission must be checked before the Volume intelligence poll is created');
+  assert.match(intelligenceEffect, /setExpandedIntelligenceError\(expanded === null \? null : tokenIntelligenceAdmissionError\)/);
+  assert.match(intelligenceEffect, /return poll\.stop/);
+  assert.match(
+    intelligenceEffect,
+    new RegExp(`\\[[^\\]]*${tokenOwner}\\.enabled[^\\]]*${tokenOwner}\\.snapshot\\.generation[^\\]]*\\]`),
+    'Token state or generation transitions must tear down and re-evaluate the Volume intelligence poll',
+  );
+  assert.match(volume, /tokenIntelligenceAdmissionPending\s*=\s*tokenSurface\.controlStatus === 'LOADING'/);
+  assert.match(volume, /tokenIntelligenceAdmissionPending[\s\S]*?'ADMISSION PENDING'/);
+  assert.match(volume, /No exact-symbol owner request is mounted until control truth is current\./);
+});
+
 test('Markets admission cannot awaken TokenIcon demand, and requester release retires it', async (t) => {
   const priorFetch = globalThis.fetch;
   const hadWindow = Object.hasOwn(globalThis, 'window');

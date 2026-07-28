@@ -506,18 +506,18 @@ test('RECONCILED is admitted only where the decoder contract can support it', ()
 test('the freshness guard is bounded, explicit, and can only downgrade a claim', () => {
   const decoded = decodePrivateReadSnapshot(availableFixture());
   assert.ok(decoded);
-  assert.equal(PRIVATE_READ_STALE_AFTER_MS, 120_000);
+  assert.equal(PRIVATE_READ_STALE_AFTER_MS, 45_000);
 
   const current = privateReadFreshness(decoded, decoded.observedAt + 5_000);
   assert.equal(current.state, 'CURRENT');
   assert.equal(current.tone, 'ok');
   assert.equal(current.ageMs, 5_000);
-  assert.match(current.reason, /within the 120s account freshness bound/);
+  assert.match(current.reason, /within the 45s account freshness bound/);
 
   const atBound = privateReadFreshness(decoded, decoded.observedAt + PRIVATE_READ_STALE_AFTER_MS);
   assert.equal(atBound.state, 'STALE');
   assert.equal(atBound.tone, 'warn');
-  assert.match(atBound.reason, /beyond the 120s account freshness bound/);
+  assert.match(atBound.reason, /beyond the 45s account freshness bound/);
 
   const future = privateReadFreshness(decoded, decoded.observedAt - 1);
   assert.equal(future.state, 'UNKNOWN');
@@ -664,6 +664,11 @@ test('mounted private-read surfaces consume one projection and retain no money-a
   for (const source of [account, dashboard, loans, health, header]) {
     assert.match(source, /projectPrivateRead/);
   }
+  for (const source of [account, dashboard, loans, health]) {
+    assert.match(source, /projectPrivateReadGuard\(\{/);
+    assert.match(source, /source:\s*privateReadSource/);
+    assert.match(source, /error:\s*privateReadError/);
+  }
   assert.match(store, /decodePrivateReadSnapshot\(snapshot\.privateRead\)/);
   assert.match(store, /privateReadSource !== 'FALLBACK'/);
   assert.match(store, /createSettledPoll<unknown>/);
@@ -681,7 +686,9 @@ test('mounted private-read surfaces consume one projection and retain no money-a
   assert.doesNotMatch(combined, /clientOrderId|apiSecret|secretKey|signatureValue|whitelistContents/);
   assert.match(account, /No cross-product valuation is published/);
   assert.match(loans, /Borrowed And Accrued Interest Remain In Asset Units/);
-  assert.match(health, /Private Account \{privatePresentation\.stateLabel\}/);
+  assert.match(health, /Private Account \{privateReadGuard\.statusLabel\}/);
+  assert.match(health, /Permissions \{privateReadGuard\.permissionStatusLabel\}/);
+  assert.match(health, /Source \{privateReadSource\}/);
 });
 
 test('the private-account surfaces present the freshness guard and never invent position facts', async () => {
@@ -693,23 +700,38 @@ test('the private-account surfaces present the freshness guard and never invent 
     read('store.tsx'),
   ]);
 
-  for (const source of [account, dashboard, loans, health]) {
+  for (const source of [account, loans, health]) {
     assert.match(source, /freshness\.(?:label|reason|state)/);
   }
+  assert.match(dashboard, /privateReadGuard\.statusLabel/);
+  for (const source of [account, dashboard, loans, health]) {
+    assert.match(source, /projectPrivateReadGuard\(\{/, 'private/account pages must consume the shared full-truth guard');
+  }
   for (const source of [account, dashboard, loans]) {
-    assert.match(source, /guardTone/, 'a stale snapshot must not keep a green source badge');
+    assert.match(source, /(?:guard|privateReadGuard)\.overallTone/, 'a partial, stale, denied, or fallback tuple must not keep a green source badge');
   }
   const accountSync = dashboard.match(/label: 'Account Sync',[\s\S]*?\n\s*},/)?.[0] ?? '';
-  assert.match(accountSync, /privatePresentation\.freshness\.label/);
-  assert.match(accountSync, /tone: privatePresentation\.guardTone/);
+  assert.match(accountSync, /privateReadGuard\.statusLabel/);
+  assert.match(accountSync, /Source \$\{privateReadSource\}/);
+  assert.match(accountSync, /tone: privateReadGuard\.overallTone/);
+  assert.doesNotMatch(accountSync, /tone: privatePresentation\.guardTone/);
   assert.doesNotMatch(accountSync, /tone: privatePresentation\.tone/);
+  assert.match(account, /const sourceLabel = `Private Reads \$\{guard\.statusLabel\}`/);
+  assert.match(account, /const accountFactsAuthoritative = guard\.overallTone === 'ok'/);
+  assert.doesNotMatch(account, /sourceReason = privateReadError/);
   assert.match(account, /position\.marginType \?\? 'Margin Mode Not Published'/);
   assert.match(account, /position\.leverage === null/);
   assert.doesNotMatch(account, /position\.leverage \?\? '1'|marginType \?\? 'cross'/i);
-  assert.match(health, /privateRead\.permissionPosture\.state === 'UNSAFE'/);
+  assert.match(health, /privateReadGuard\.permissionFreshness\.label/);
+  assert.match(health, /privateReadGuard\.permissionStatusLabel/);
+  assert.match(health, /privateReadGuard\.errorFact\.detail/);
+  assert.doesNotMatch(health, /privateReadReason = privateReadError/);
   assert.match(health, /privatePresentation\.postureDetail/);
   assert.match(loans, /hasMarginLiability/);
   assert.doesNotMatch(loans, /borrowed !== '0'|interest !== '0'/);
+  assert.match(loans, /const currentExactEmptyLiabilities = liabilityRows !== null[\s\S]*privateReadGuard\.commonTone === 'ok'[\s\S]*privateReadGuard\.sourceGuardTone === 'ok'[\s\S]*privateRead\.margin\.coverage\.state === 'COMPLETE_CURRENT'[\s\S]*privateRead\.reconciliation\.liabilities\.state === 'RECONCILED'/);
+  assert.match(loans, /currentExactEmptyLiabilities \? \([\s\S]*No Margin Liabilities[\s\S]*Current Liability Absence Unknown/);
+  assert.match(loans, /STALE LAST-KNOWN/);
 
   // Signed-in account truth advances on a bounded cadence without a second
   // private transport, and every private read is abortable and ordered.

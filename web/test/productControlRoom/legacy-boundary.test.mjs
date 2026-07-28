@@ -144,7 +144,7 @@ test('mounted pages cannot claim armed execution while authorized private reads 
 test('header keeps canonical Product truth and structurally omits legacy and AWS actions', async () => {
   const header = await read('components/Header.tsx');
   assert.match(header, /useProductControlRoomContext/);
-  assert.match(header, /No signed, test-order, private, or money-moving port exists in this slice/);
+  assert.match(header, /No signed mutation, test-order, or money-moving port exists; GET-only private-read posture is/);
   assert.match(header, /Live Execution/);
   assert.match(header, /Blocked/);
   assert.match(header, /killSwitchControl\?\.wiringState === 'WIRED_LIVE'/);

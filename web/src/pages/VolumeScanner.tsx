@@ -21,6 +21,7 @@ import '../components/MoneySurfaceBinding.css';
 import { TokenIcon } from '../components/TokenIcon';
 import { fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
 import { apiErrorMessage, fetchJson } from '../lib/http';
+import { useOptionalSurface } from '../lib/optionalSurfaceControl';
 import { createSettledPoll } from '../lib/polling';
 import {
   parseTokenIntelligence,
@@ -142,6 +143,7 @@ function multipleTone(
 
 export function VolumeScanner() {
   const { state, stateStatus, openDetail, openLedger, toggleWatch } = useStore();
+  const tokenSurface = useOptionalSurface('token');
   const [snapshot, setSnapshot] = useState<VolumeRuntimeSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
@@ -149,6 +151,12 @@ export function VolumeScanner() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [expandedIntelligence, setExpandedIntelligence] = useState<TokenIntelligenceRead | null>(null);
   const [expandedIntelligenceError, setExpandedIntelligenceError] = useState<string | null>(null);
+  const tokenIntelligenceAdmissionPending = tokenSurface.controlStatus === 'LOADING';
+  const tokenIntelligenceAdmissionError = tokenSurface.enabled || tokenSurface.controlStatus === 'LOADING'
+    ? null
+    : tokenSurface.controlError
+      ?? tokenSurface.snapshot.failureCode
+      ?? 'OPTIONAL_SURFACE_OFF';
 
   useEffect(() => {
     const poll = createSettledPoll<VolumeRuntimeSnapshot>({
@@ -172,8 +180,9 @@ export function VolumeScanner() {
 
   useEffect(() => {
     setExpandedIntelligence(null);
-    setExpandedIntelligenceError(null);
+    setExpandedIntelligenceError(expanded === null ? null : tokenIntelligenceAdmissionError);
     if (expanded === null) return;
+    if (!tokenSurface.enabled) return;
     const symbol = expanded;
     const poll = createSettledPoll<TokenIntelligenceRead>({
       intervalMs: 2_000,
@@ -198,7 +207,12 @@ export function VolumeScanner() {
     });
     poll.start();
     return poll.stop;
-  }, [expanded]);
+  }, [
+    expanded,
+    tokenIntelligenceAdmissionError,
+    tokenSurface.enabled,
+    tokenSurface.snapshot.generation,
+  ]);
 
   const rows = snapshot?.rows ?? [];
   const query = search.trim().toUpperCase();
@@ -485,7 +499,12 @@ export function VolumeScanner() {
                       <header>
                         <span><strong>Canonical Intelligence Evidence</strong><small>Exact symbol · MarketEngine → router → Bridge</small></span>
                         <em className={ownerTruth?.projectionState === 'ACTIVE' ? 'fresh' : ownerTruth ? 'degraded' : 'missing'}>
-                          {ownerTruth?.projectionState ?? (expandedIntelligenceError ? 'UNAVAILABLE' : 'READING')}
+                          {ownerTruth?.projectionState
+                            ?? (tokenIntelligenceAdmissionPending
+                              ? 'ADMISSION PENDING'
+                              : expandedIntelligenceError
+                                ? 'UNAVAILABLE'
+                                : 'READING')}
                         </em>
                       </header>
                       {ownerTruth ? (
@@ -558,7 +577,10 @@ export function VolumeScanner() {
                         </>
                       ) : (
                         <p className="volx-owner-unavailable">
-                          {expandedIntelligenceError ?? 'Reading the exact-symbol owner contract. No evidence value is inferred while it is unavailable.'}
+                          {tokenIntelligenceAdmissionPending
+                            ? 'Token admission is pending. No exact-symbol owner request is mounted until control truth is current.'
+                            : expandedIntelligenceError
+                              ?? 'Reading the exact-symbol owner contract. No evidence value is inferred while it is unavailable.'}
                         </p>
                       )}
                     </section>

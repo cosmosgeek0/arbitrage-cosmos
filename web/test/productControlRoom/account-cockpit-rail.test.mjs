@@ -14,6 +14,7 @@ import {
   decodePrivateReadSnapshot,
   privateReadAccessReasonForStatus,
   privateReadErrorFact,
+  projectPrivateReadGuard,
   reducePrivateReadAppliedTruth,
   unavailablePrivateRead,
 } from '../../src/lib/privateRead.ts';
@@ -375,7 +376,7 @@ test('the cockpit consumes the existing store and projector without a transport 
 
   assert.match(rail, /const \{ privateRead, privateReadSource, privateReadError \} = useStore\(\);/);
   assert.match(rail, /<AccountCockpitRailView/);
-  assert.match(view, /projectPrivateRead\(snapshot\)/);
+  assert.match(view, /projectPrivateReadGuard\(\{ snapshot, source, error \}\)/);
   assert.match(view, /exactOrDash\(/);
   // The presentation surface never reaches the store itself, so the shell stays
   // the single consumption point.
@@ -400,9 +401,15 @@ test('one preferred private read and one bounded fallback remain the only privat
   assert.equal((store.match(/createSettledPoll<unknown>/g) ?? []).length, 1);
   assert.match(store, /if \(privateReadSource !== 'FALLBACK'\) return;/);
   assert.match(store, /if \(privateReadSource === 'FALLBACK'\) return;/);
+  assert.match(store, /privateRead\.observedAt,[\s\S]*privateRead\.permissionPosture\.observedAt/);
+  assert.match(store, /\.map\(\(observedAt\) => observedAt \+ PRIVATE_READ_STALE_AFTER_MS\)/);
+  assert.match(store, /\.sort\(\(left, right\) => left - right\)\[0\]/);
+  assert.match(store, /window\.setTimeout\([\s\S]*bumpPrivateReadFreshness/);
+  assert.match(store, /return \(\) => window\.clearTimeout\(timer\)/);
+  assert.match(store, /privateReadFreshnessTick,[\s\S]*\]\);/);
 });
 
-test('a null collection stays unknown and an exact empty array keeps its observed zero', () => {
+test('a null collection stays unknown and observed values remain exact behind non-green guards', () => {
   assert.deepEqual(accountCockpitCountFact(null, 'UNAVAILABLE'), {
     value: '—',
     status: 'UNKNOWN',
@@ -416,13 +423,22 @@ test('a null collection stays unknown and an exact empty array keeps its observe
   assert.equal(accountCockpitCountFact(4, 'AVAILABLE').value, '4');
 
   const exact = render(admitted(exactEmptyFixture(Date.now())));
-  for (const id of ['open-orders', 'fills', 'positions', 'liabilities']) {
+  for (const id of ['open-orders', 'fills', 'positions']) {
     const cell = factCell(exact, id);
-    assert.match(cell, /<b class="s-ok">0<\/b>/, `${id} must present its observed zero`);
+    assert.match(cell, /<b class="s-warn">0<\/b>/, `${id} must retain its observed zero without a green claim`);
+    assert.match(cell, /OBSERVED · PARTIAL RECONCILIATION/);
     assert.match(cell, /EXACT_EMPTY/);
     assert.doesNotMatch(cell, /—/);
   }
-  assert.match(factCell(exact, 'spot-available-usdt'), /<b class="s-ok">12\.50000000<\/b>/);
+  assert.match(factCell(exact, 'liabilities'), /<b class="s-ok">0<\/b>/);
+  assert.match(factCell(exact, 'liabilities'), /EXACT_EMPTY/);
+  assert.match(factCell(exact, 'spot-available-usdt'), /<b class="s-warn">12\.50000000<\/b>/);
+  assert.match(factCell(exact, 'spot-available-usdt'), /OBSERVED · PARTIAL RECONCILIATION/);
+  const exactZeroFixture = exactEmptyFixture(Date.now());
+  exactZeroFixture.spot.balances[0].free = '0.00000000';
+  const exactZero = render(admitted(exactZeroFixture));
+  assert.match(factCell(exactZero, 'spot-available-usdt'), /<b class="s-warn">0\.00000000<\/b>/);
+  assert.doesNotMatch(factCell(exactZero, 'spot-available-usdt'), /UNKNOWN|>—</);
 
   const unknown = render(unavailablePrivateRead('PRIVATE_READ_REQUEST_FAILED'), 'FALLBACK');
   for (const id of ['open-orders', 'fills', 'positions', 'liabilities', 'spot-available-usdt']) {
@@ -561,10 +577,10 @@ test('an unreported error is neutral truth, never a green admission and never a 
   assert.equal(absent.tone, 'idle', 'silence is not a proven admission');
   assert.equal(absent.guardTone, 'ok', 'silence imposes no downgrade of its own');
 
-  // A proven read keeps its green overall guard, while the admission cell that
-  // only reports the absence of an error stays neutral.
+  // A current admitted read remains warning-level where its reconciliation is
+  // explicitly partial, while the absence of an error adds no downgrade.
   const proven = render(admitted(exactEmptyFixture(Date.now())));
-  assert.equal(attribute(proven, 'data-acr-tone'), 'ok');
+  assert.equal(attribute(proven, 'data-acr-tone'), 'warn');
   assert.equal(attribute(proven, 'data-acr-error'), 'NO_ERROR_REPORTED');
   const cell = factCell(proven, 'admission');
   assert.match(cell, /data-acr-fact-tone="idle"/);
@@ -583,16 +599,67 @@ test('an unreported error is neutral truth, never a green admission and never a 
 });
 
 test('stale, unsafe, not configured, unknown, and source states stay explicit', () => {
-  const stale = render(admitted(exactEmptyFixture(Date.now() - PRIVATE_READ_STALE_AFTER_MS - 60_000)));
+  const staleSnapshot = admitted(exactEmptyFixture(Date.now() - PRIVATE_READ_STALE_AFTER_MS - 60_000));
+  const staleGuard = projectPrivateReadGuard({
+    snapshot: staleSnapshot,
+    source: 'STATE',
+    error: null,
+  });
+  assert.equal(staleGuard.presentation.postureTone, 'ok');
+  assert.equal(staleGuard.permissionGuardTone, 'warn');
+  assert.match(staleGuard.permissionStatusLabel, /STALE/);
+  const stale = render(staleSnapshot);
   assert.equal(attribute(stale, 'data-acr-freshness'), 'STALE');
   assert.equal(attribute(stale, 'data-acr-tone'), 'warn');
   assert.match(factCell(stale, 'freshness'), /<b class="s-warn">STALE<\/b>/);
+  for (const id of ['spot-available-usdt', 'open-orders', 'fills', 'positions', 'liabilities']) {
+    assert.match(factCell(stale, id), /STALE LAST-KNOWN/);
+    assert.doesNotMatch(factCell(stale, id), /<b class="s-ok">/);
+  }
 
   const current = render(admitted(exactEmptyFixture(Date.now())));
   assert.equal(attribute(current, 'data-acr-freshness'), 'CURRENT');
-  assert.equal(attribute(current, 'data-acr-tone'), 'ok');
+  assert.equal(attribute(current, 'data-acr-tone'), 'warn');
+  assert.match(factCell(current, 'reconciliation'), /<b class="s-warn">Partial Reconciliation<\/b>/);
   assert.match(factCell(current, 'permission'), /VERIFIED_READ_ONLY/);
   assert.match(factCell(current, 'private-read'), /AVAILABLE/);
+  const currentPermission = projectPrivateReadGuard({
+    snapshot: admitted(exactEmptyFixture(Date.now())),
+    source: 'STATE',
+    error: null,
+  });
+  assert.equal(currentPermission.permissionGuardTone, 'ok');
+  assert.equal(currentPermission.permissionStatusLabel, 'Verified Read Only');
+
+  const divergentPermissionClock = exactEmptyFixture(Date.now());
+  divergentPermissionClock.permissionPosture.observedAt = divergentPermissionClock.observedAt
+    - PRIVATE_READ_STALE_AFTER_MS - 1;
+  const stalePermission = projectPrivateReadGuard({
+    snapshot: admitted(divergentPermissionClock),
+    source: 'STATE',
+    error: null,
+    now: divergentPermissionClock.observedAt + 1,
+  });
+  assert.equal(stalePermission.presentation.freshness.state, 'CURRENT');
+  assert.equal(stalePermission.permissionFreshness.state, 'STALE');
+  assert.equal(stalePermission.permissionGuardTone, 'warn');
+  assert.equal(stalePermission.commonTone, 'warn');
+  assert.equal(stalePermission.permissionStatusLabel, 'Verified Read Only · STALE');
+  assert.match(stalePermission.permissionObservedLabel, /Ago$/);
+  const stalePermissionRail = render(admitted(divergentPermissionClock));
+  assert.match(factCell(stalePermissionRail, 'permission'), /Stale Permission Truth/);
+  assert.doesNotMatch(factCell(stalePermissionRail, 'permission'), /<b class="s-ok">/);
+
+  const fallback = projectPrivateReadGuard({
+    snapshot: admitted(notConfiguredFixture()),
+    source: 'FALLBACK',
+    error: null,
+  });
+  assert.equal(fallback.sourceGuardTone, 'warn');
+  assert.equal(fallback.sourceFactTone, 'warn');
+  assert.equal(fallback.permissionGuardTone, 'warn');
+  assert.equal(fallback.overallTone, 'warn');
+  assert.equal(fallback.statusLabel, 'NOT_CONFIGURED · FALLBACK SOURCE');
 
   const unsafe = render(admitted(unsafePostureFixture(Date.now())), 'STATE');
   assert.equal(attribute(unsafe, 'data-acr-posture'), 'UNSAFE');
@@ -623,23 +690,97 @@ test('stale, unsafe, not configured, unknown, and source states stay explicit', 
   }
 });
 
+test('the shared guard label names the highest-severity cause with stable tie priority', () => {
+  const observedAt = Date.now();
+  const coverageUnavailable = exactEmptyFixture(observedAt);
+  coverageUnavailable.state = 'PARTIAL';
+  coverageUnavailable.spot = {
+    state: 'UNAVAILABLE',
+    observedAt: null,
+    balances: null,
+    openOrders: null,
+    fills: null,
+    coverage: coverage('UNAVAILABLE', 'SPOT_PRIVATE_READ_UNAVAILABLE'),
+  };
+  for (const factId of ['balances', 'orders', 'fills', 'positions', 'liabilities']) {
+    coverageUnavailable.reconciliation[factId] = {
+      state: 'PARTIAL',
+      observedAt,
+      reason: 'PARTIAL_RECONCILIATION',
+    };
+  }
+  const coverageBad = projectPrivateReadGuard({
+    snapshot: admitted(coverageUnavailable),
+    source: 'STATE',
+    error: null,
+    now: observedAt + 1,
+  });
+  assert.equal(coverageBad.coverageTone, 'bad');
+  assert.equal(coverageBad.reconciliationTone, 'warn');
+  assert.equal(coverageBad.overallTone, 'bad');
+  assert.equal(coverageBad.statusLabel, 'PARTIAL · COVERAGE UNAVAILABLE');
+
+  const reconciliationUnavailable = exactEmptyFixture(observedAt);
+  reconciliationUnavailable.state = 'PARTIAL';
+  reconciliationUnavailable.spot.state = 'PARTIAL';
+  reconciliationUnavailable.spot.coverage = coverage('PARTIAL_SYMBOL_SCOPED', 'SYMBOL_SCOPED_HISTORY');
+  reconciliationUnavailable.reconciliation.balances = {
+    state: 'UNAVAILABLE',
+    observedAt: null,
+    reason: 'BALANCE_RECONCILIATION_UNAVAILABLE',
+  };
+  const reconciliationBad = projectPrivateReadGuard({
+    snapshot: admitted(reconciliationUnavailable),
+    source: 'STATE',
+    error: null,
+    now: observedAt + 1,
+  });
+  assert.equal(reconciliationBad.coverageTone, 'warn');
+  assert.equal(reconciliationBad.reconciliationTone, 'bad');
+  assert.equal(reconciliationBad.overallTone, 'bad');
+  assert.equal(reconciliationBad.statusLabel, 'PARTIAL · RECONCILIATION UNAVAILABLE');
+
+  const reconciliationNotConfigured = exactEmptyFixture(observedAt);
+  for (const factId of ['balances', 'orders', 'fills', 'positions', 'liabilities']) {
+    reconciliationNotConfigured.reconciliation[factId] = {
+      state: 'NOT_CONFIGURED',
+      observedAt: null,
+      reason: null,
+    };
+  }
+  const idleReconciliation = projectPrivateReadGuard({
+    snapshot: admitted(reconciliationNotConfigured),
+    source: 'STATE',
+    error: null,
+    now: observedAt + 1,
+  });
+  assert.equal(idleReconciliation.reconciliationTone, 'idle');
+  assert.equal(idleReconciliation.overallTone, 'idle');
+  assert.equal(idleReconciliation.statusLabel, 'AVAILABLE · RECONCILIATION NOT CONFIGURED');
+});
+
 test('the globally visible header account status reads the same store truth', async () => {
   const header = await read('components/Header.tsx');
   assert.match(header, /<AccountSheet \/>/);
-  assert.match(header, /const accountErrorFact = privateReadErrorFact\(privateReadError\);/);
-  assert.match(header, /privateReadPresentation\.guardTone/);
+  assert.ok((header.match(/projectPrivateReadGuard\(\{/g) ?? []).length >= 4);
+  assert.match(header, /const accountTone = privateReadGuard\.overallTone === 'ok'/);
+  assert.match(header, /const accountSub = privateReadGuard\.statusLabel/);
 
   // The sheet consumes the shared store the shell already provides: same
   // projection, same admitted error fact, and no transport of its own.
   const sheetStart = header.indexOf('function AccountSheet()');
   assert.ok(sheetStart > 0);
   const sheet = header.slice(sheetStart, header.indexOf('\n}\n', sheetStart));
-  assert.match(sheet, /const \{ privateRead, privateReadError \} = useStore\(\);/);
-  assert.match(sheet, /const presentation = projectPrivateRead\(privateRead\);/);
-  assert.match(sheet, /const errorFact = privateReadErrorFact\(privateReadError\);/);
-  assert.match(sheet, /value=\{presentation\.state\}/);
-  assert.match(sheet, /value=\{privateRead\.permissionPosture\.state\}/);
+  assert.match(sheet, /const \{ privateRead, privateReadError, privateReadSource \} = useStore\(\);/);
+  assert.match(sheet, /const guard = projectPrivateReadGuard\(\{/);
+  assert.match(sheet, /status=\{<span title=\{guard\.statusLabel\}>\{presentation\.state\}<\/span>\}/);
+  assert.match(sheet, /tone=\{guard\.overallTone\}/);
+  assert.match(sheet, /value=\{presentation\.state\} tone=\{guard\.commonTone\}/);
+  assert.match(sheet, /value=\{privateRead\.permissionPosture\.state\} tone=\{guard\.permissionGuardTone\}/);
   assert.match(sheet, /value=\{errorFact\.label\} tone=\{errorFact\.tone\}/);
+  assert.match(sheet, /title="Coverage"[\s\S]*tone=\{guard\.coverageFactTone\}/);
+  assert.match(sheet, /title="Reconciliation"[\s\S]*tone=\{guard\.reconciliationFactTone\}/);
+  assert.match(sheet, /title="Source"[\s\S]*tone=\{guard\.sourceFactTone\}/);
   assert.doesNotMatch(sheet, /fetch|useEffect|useState|setInterval|setTimeout|'\/api\//);
   assert.doesNotMatch(sheet, /<button|onClick/);
   // The retired static claims cannot return.
@@ -647,6 +788,29 @@ test('the globally visible header account status reads the same store truth', as
   assert.doesNotMatch(header, /const accountTone = 'off'/);
   assert.doesNotMatch(header, /const accountSub = 'OWNER GATED · NOT CONFIGURED'/);
   assert.doesNotMatch(header, /Private account truth is outside this candidate/);
+  assert.doesNotMatch(header, /Private exchange reads and credentials are NOT_CONFIGURED/);
+  assert.doesNotMatch(header, /No signed, test-order, private, or money-moving port exists/);
+  assert.doesNotMatch(header, /no signed account reads are mounted/);
+  assert.match(header, /Private GET-only read posture/);
+  assert.match(header, /GET-only private-read posture/);
+
+  const permissionSheetStart = header.indexOf('function PrivateAdapterSheet()');
+  assert.ok(permissionSheetStart > 0);
+  const permissionSheet = header.slice(permissionSheetStart, header.indexOf('\n}\n', permissionSheetStart));
+  assert.match(permissionSheet, /const \{ privateRead, privateReadError, privateReadSource \} = useStore\(\);/);
+  assert.match(permissionSheet, /const guard = projectPrivateReadGuard\(\{/);
+  assert.match(permissionSheet, /status=\{guard\.permissionStatusLabel\}/);
+  assert.match(permissionSheet, /tone=\{guard\.permissionGuardTone\}/);
+  assert.match(permissionSheet, /<em>\{guard\.permissionObservedLabel\}<\/em>/);
+  assert.match(permissionSheet, /worstTone\(row\.tone, guard\.permissionGuardTone\)/);
+  assert.doesNotMatch(permissionSheet, /tone=\{presentation\.postureTone\}/);
+  assert.match(header, /trig\('apikey',[\s\S]*?privateReadGuard\.permissionGuardTone[\s\S]*?privateReadGuard\.permissionStatusLabel/);
+  assert.doesNotMatch(header, /apikey-premium-trigger s-\$\{privateReadPresentation\.postureTone\}/);
+
+  const reservedIds = header.indexOf("new Set(['browser-session', 'binance-account', 'aws-runner'])");
+  const canonicalFilter = header.indexOf('.filter((component) => !locallyOwnedWatchmanIds.has(component.componentId))');
+  const composedWatchman = header.indexOf('const components: WatchmanComponent[] = [browserComponent, ...canonicalComponents, ...ownerGatedComponents]');
+  assert.ok(reservedIds > 0 && canonicalFilter > reservedIds && composedWatchman > canonicalFilter);
 });
 
 test('static CSS declarations preserve the restrained container-query contract', async () => {

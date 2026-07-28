@@ -34,6 +34,7 @@ import {
 } from './lib/reconnectBackoff';
 import {
   INITIAL_PRIVATE_READ_APPLIED_TRUTH,
+  PRIVATE_READ_STALE_AFTER_MS,
   decodePrivateReadSnapshot,
   privateReadAccessReasonForStatus,
   reducePrivateReadAppliedTruth,
@@ -597,6 +598,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     source: privateReadAppliedSource,
     error: privateReadError,
   } = privateReadApplied;
+  const [privateReadFreshnessTick, bumpPrivateReadFreshness] = useState(0);
   const [markets, setMarkets] = useState<MarketRow[]>([]);
   const [marketTruth, setMarketTruth] = useState<MarketStateTruth>(INITIAL_MARKET_STATE_TRUTH);
   const [marketsUpdatedAt, setMarketsUpdatedAt] = useState<number | null>(null);
@@ -947,6 +949,32 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setConnected(false);
     };
   }, [acceptPrivateReadFromState, applyPrivateReadUpdate, nextPrivateReadRequestId]);
+
+  // Re-render every private-read consumer at each relevant owner-truth
+  // boundary. Permission posture has its own earlier provider clock; scheduling
+  // the earliest future expiry first prevents either fact from staying green.
+  // The tick reruns this non-transport effect to schedule the next boundary.
+  useEffect(() => {
+    const now = Date.now();
+    const nextExpiryAt = [
+      privateRead.observedAt,
+      privateRead.permissionPosture.observedAt,
+    ]
+      .filter((observedAt): observedAt is number => observedAt !== null && observedAt <= now)
+      .map((observedAt) => observedAt + PRIVATE_READ_STALE_AFTER_MS)
+      .filter((expiresAt) => expiresAt > now)
+      .sort((left, right) => left - right)[0];
+    if (nextExpiryAt === undefined) return;
+    const timer = window.setTimeout(
+      () => bumpPrivateReadFreshness((value) => value + 1),
+      nextExpiryAt - now + 1,
+    );
+    return () => window.clearTimeout(timer);
+  }, [
+    privateRead.observedAt,
+    privateRead.permissionPosture.observedAt,
+    privateReadFreshnessTick,
+  ]);
 
   // The canonical socket only speaks when supervisor truth changes, so a
   // signed-in account would otherwise age silently behind a delta-free cockpit.

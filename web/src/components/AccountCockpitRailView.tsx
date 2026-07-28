@@ -1,10 +1,10 @@
 import type { KeyboardEvent } from 'react';
 import {
   exactOrDash,
-  privateReadErrorFact,
-  projectPrivateRead,
+  privateReadCoverageStateTone,
+  privateReadReconciliationStateTone,
+  projectPrivateReadGuard,
   worstTone,
-  type CoverageState,
   type PrivateReadSnapshot,
   type PrivateReadSourceId,
   type PrivateReadState,
@@ -15,8 +15,9 @@ import {
 /**
  * The account cockpit surface. It renders one shared read-only truth tape from
  * an already admitted private-read snapshot and consumes no store, transport,
- * effect, timer, or endpoint of its own: `projectPrivateRead` stays the single
- * projection owner, so this surface can only re-present proven facts.
+ * effect, timer, or endpoint of its own: `projectPrivateReadGuard` stays the
+ * shared shell projection owner, so this surface can only re-present proven
+ * facts.
  */
 
 interface CockpitFact {
@@ -43,29 +44,15 @@ const STATE_DETAIL: Record<PrivateReadState, string> = {
   NOT_CONFIGURED: 'No private account read is configured.',
 };
 
-const COVERAGE_TONE: Record<CoverageState, PrivateReadTone> = {
-  COMPLETE_CURRENT: 'ok',
-  PARTIAL_SYMBOL_SCOPED: 'warn',
-  UNAVAILABLE: 'bad',
-  NOT_CONFIGURED: 'idle',
-};
-
-const RECONCILIATION_TONE: Record<ReconciliationState, PrivateReadTone> = {
-  RECONCILED: 'ok',
-  PARTIAL: 'warn',
-  UNAVAILABLE: 'bad',
-  NOT_CONFIGURED: 'idle',
-};
-
 /**
  * Provenance, not health: naming the response that supplied the displayed
  * truth is never a claim that the read succeeded, so only a fallback response
  * takes a tone of its own.
  */
-const SOURCE_FACT: Record<PrivateReadSourceId, { detail: string; tone: PrivateReadTone }> = {
-  PENDING: { detail: 'No account result has been applied yet.', tone: 'idle' },
-  STATE: { detail: 'Applied from the preferred compatibility state endpoint.', tone: 'idle' },
-  FALLBACK: { detail: 'Applied from the bounded fallback account endpoint.', tone: 'warn' },
+const SOURCE_FACT: Record<PrivateReadSourceId, { detail: string }> = {
+  PENDING: { detail: 'No account result has been applied yet.' },
+  STATE: { detail: 'Applied from the preferred compatibility state endpoint.' },
+  FALLBACK: { detail: 'Applied from the bounded fallback account endpoint.' },
 };
 
 /**
@@ -80,7 +67,7 @@ export function accountCockpitCountFact(count: number | null, state: PrivateRead
       : { value: '—', status: 'UNKNOWN', detail: 'UNKNOWN · absence is not counted as zero.', tone: 'warn' };
   }
   return count === 0
-    ? { value: '0', status: 'EXACT_EMPTY', detail: 'EXACT_EMPTY · the read returned an exact empty array.', tone: 'ok' }
+    ? { value: '0', status: 'EXACT_EMPTY', detail: 'EXACT_EMPTY · the admitted collection proved an exact zero.', tone: 'ok' }
     : { value: String(count), status: 'OBSERVED', detail: 'OBSERVED · exact provider rows.', tone: 'ok' };
 }
 
@@ -171,33 +158,101 @@ export function AccountCockpitRailView({
   readonly source: PrivateReadSourceId;
   readonly error: string | null;
 }) {
-  const presentation = projectPrivateRead(snapshot);
-  const errorFact = privateReadErrorFact(error);
+  const guard = projectPrivateReadGuard({ snapshot, source, error });
+  const { presentation, errorFact } = guard;
   const sourceFact = SOURCE_FACT[source];
-  const coverageTone = [snapshot.spot, snapshot.margin, snapshot.usdm]
-    .map((product) => COVERAGE_TONE[product.coverage.state])
-    .reduce(worstTone, 'ok' as PrivateReadTone);
+  const coverageTone = guard.coverageTone;
   const reconciliationFacts = Object.values(snapshot.reconciliation);
-  const reconciliationTone = reconciliationFacts
-    .map((fact) => RECONCILIATION_TONE[fact.state])
-    .reduce(worstTone, 'ok' as PrivateReadTone);
   const reconciliationReason = reconciliationFacts.find((fact) => fact.reason !== null)?.reason ?? null;
   const spotAvailableUsdt = presentation.spotAvailableUsdt;
-  const orders = accountCockpitCountFact(presentation.counts.openOrders, presentation.state);
-  const fills = accountCockpitCountFact(presentation.counts.fills, presentation.state);
-  const positions = accountCockpitCountFact(presentation.counts.positions, presentation.state);
-  const liabilities = accountCockpitCountFact(presentation.counts.liabilities, presentation.state);
+  const accountGuardTone = worstTone(guard.commonTone, guard.sourceGuardTone);
+  const guardObservedFact = (
+    fact: CountFact,
+    factCoverageTone: PrivateReadTone,
+    factCoverageLabel: string,
+    reconciliationState: ReconciliationState,
+  ): CountFact => {
+    const tone = [factCoverageTone, privateReadReconciliationStateTone(reconciliationState)]
+      .reduce(worstTone, worstTone(fact.tone, accountGuardTone));
+    if (fact.status !== 'OBSERVED' && fact.status !== 'EXACT_EMPTY') return { ...fact, tone };
+    if (tone === 'ok') return fact;
+    if (presentation.freshness.state === 'STALE') {
+      return {
+        ...fact,
+        detail: fact.status === 'EXACT_EMPTY'
+          ? 'STALE LAST-KNOWN · EXACT_EMPTY · current absence UNKNOWN; the last admitted collection proved an exact zero.'
+          : `STALE LAST-KNOWN · OBSERVED · ${fact.detail.replace(/^OBSERVED · /, '')}`,
+        tone,
+      };
+    }
 
-  // A failed admission can only downgrade the rail. `guardTone` already carries
-  // the freshness guard, so a denial or an unproven key lowers the overall
-  // claim and nothing here can raise it back to a safe reading. An unreported
-  // error contributes no downgrade, which is why the error guard is read here
-  // and its neutral presentation tone is left to the admission fact.
-  const railTone = [presentation.postureTone, errorFact.guardTone]
-    .reduce(worstTone, presentation.guardTone);
-  const statusLabel = errorFact.id === 'NONE'
-    ? presentation.state
-    : `${presentation.state} · ${errorFact.label}`;
+    const qualifier = presentation.freshness.state !== 'CURRENT'
+      ? `OBSERVED · FRESHNESS ${presentation.freshness.state}`
+      : factCoverageTone !== 'ok'
+        ? `OBSERVED · ${factCoverageLabel}`
+        : reconciliationState !== 'RECONCILED'
+          ? `OBSERVED · ${reconciliationState} RECONCILIATION`
+          : snapshot.permissionPosture.state !== 'VERIFIED_READ_ONLY'
+            ? `OBSERVED · PERMISSION ${snapshot.permissionPosture.state}`
+            : errorFact.id !== 'NONE'
+              ? `OBSERVED · ${errorFact.label}`
+              : 'OBSERVED NON-GREEN';
+    return { ...fact, detail: `${qualifier} · ${fact.detail}`, tone };
+  };
+  const spotAvailable = guardObservedFact(
+    spotAvailableUsdt === null
+      ? {
+        value: '—',
+        status: snapshot.spot.state === 'NOT_CONFIGURED' ? 'NOT_CONFIGURED' : 'UNKNOWN',
+        detail: `UNKNOWN · ${snapshot.spot.state} · no exact USDT free balance was admitted.`,
+        tone: snapshot.spot.state === 'NOT_CONFIGURED' ? 'idle' : 'warn',
+      }
+      : {
+        value: exactOrDash(spotAvailableUsdt),
+        status: 'OBSERVED',
+        detail: `${snapshot.spot.state} · exact Spot free balance only.`,
+        tone: 'ok',
+      },
+    privateReadCoverageStateTone(snapshot.spot.coverage.state),
+    snapshot.spot.coverage.state,
+    snapshot.reconciliation.balances.state,
+  );
+  const orders = guardObservedFact(
+    accountCockpitCountFact(presentation.counts.openOrders, presentation.state),
+    coverageTone,
+    presentation.coverageLabel,
+    snapshot.reconciliation.orders.state,
+  );
+  const fills = guardObservedFact(
+    accountCockpitCountFact(presentation.counts.fills, presentation.state),
+    coverageTone,
+    presentation.coverageLabel,
+    snapshot.reconciliation.fills.state,
+  );
+  const positions = guardObservedFact(
+    accountCockpitCountFact(presentation.counts.positions, presentation.state),
+    privateReadCoverageStateTone(snapshot.usdm.coverage.state),
+    snapshot.usdm.coverage.state,
+    snapshot.reconciliation.positions.state,
+  );
+  const baseLiabilities = accountCockpitCountFact(presentation.counts.liabilities, presentation.state);
+  const liabilities = guardObservedFact(
+    {
+      ...baseLiabilities,
+      detail: baseLiabilities.status === 'OBSERVED' || baseLiabilities.status === 'EXACT_EMPTY'
+        ? `${baseLiabilities.status} · aggregate ${exactOrDash(presentation.marginLiabilityBtc)} BTC.`
+        : baseLiabilities.detail,
+    },
+    privateReadCoverageStateTone(snapshot.margin.coverage.state),
+    snapshot.margin.coverage.state,
+    snapshot.reconciliation.liabilities.state,
+  );
+
+  // The overall tape is the worst proven account claim. Freshness, posture,
+  // admission, coverage, and reconciliation can only downgrade it; no exact
+  // value or silent error path can raise a partial account back to green.
+  const railTone = guard.overallTone;
+  const statusLabel = guard.statusLabel;
 
   const facts: CockpitFact[] = [
     {
@@ -205,7 +260,7 @@ export function AccountCockpitRailView({
       label: 'Private Read',
       value: presentation.state,
       detail: STATE_DETAIL[presentation.state],
-      tone: presentation.tone,
+      tone: accountGuardTone,
     },
     {
       id: 'freshness',
@@ -218,8 +273,8 @@ export function AccountCockpitRailView({
       id: 'permission',
       label: 'Permission',
       value: snapshot.permissionPosture.state,
-      detail: presentation.postureDetail,
-      tone: presentation.postureTone,
+      detail: `${guard.permissionFreshness.label} · ${guard.permissionFreshness.reason} · ${presentation.postureDetail}`,
+      tone: guard.permissionGuardTone,
     },
     {
       id: 'admission',
@@ -231,13 +286,9 @@ export function AccountCockpitRailView({
     {
       id: 'spot-available-usdt',
       label: 'Spot Available USDT',
-      value: exactOrDash(spotAvailableUsdt),
-      detail: spotAvailableUsdt === null
-        ? `UNKNOWN · ${snapshot.spot.state} · no exact USDT free balance was admitted.`
-        : `${snapshot.spot.state} · exact Spot free balance only.`,
-      tone: spotAvailableUsdt === null
-        ? snapshot.spot.state === 'NOT_CONFIGURED' ? 'idle' : 'warn'
-        : 'ok',
+      value: spotAvailable.value,
+      detail: spotAvailable.detail,
+      tone: spotAvailable.tone,
     },
     {
       id: 'open-orders',
@@ -264,31 +315,33 @@ export function AccountCockpitRailView({
       id: 'liabilities',
       label: 'Liabilities',
       value: liabilities.value,
-      detail: liabilities.status === 'OBSERVED' || liabilities.status === 'EXACT_EMPTY'
-        ? `${liabilities.status} · aggregate ${exactOrDash(presentation.marginLiabilityBtc)} BTC.`
-        : liabilities.detail,
+      detail: liabilities.detail,
       tone: liabilities.tone,
     },
     {
       id: 'coverage',
       label: 'Coverage',
       value: presentation.coverageLabel,
-      detail: 'Spot, Cross Margin, and USD-M read coverage.',
-      tone: coverageTone,
+      detail: presentation.freshness.state === 'STALE'
+        ? 'STALE LAST-KNOWN · Spot, Cross Margin, and USD-M read coverage.'
+        : 'Spot, Cross Margin, and USD-M read coverage.',
+      tone: guard.coverageFactTone,
     },
     {
       id: 'reconciliation',
       label: 'Reconciliation',
       value: presentation.reconciliationLabel,
-      detail: reconciliationReason ?? 'Balances, orders, fills, positions, and liabilities.',
-      tone: reconciliationTone,
+      detail: presentation.freshness.state === 'STALE'
+        ? `STALE LAST-KNOWN · ${reconciliationReason ?? 'Balances, orders, fills, positions, and liabilities.'}`
+        : reconciliationReason ?? 'Balances, orders, fills, positions, and liabilities.',
+      tone: guard.reconciliationFactTone,
     },
     {
       id: 'source',
       label: 'Source',
       value: source,
       detail: sourceFact.detail,
-      tone: sourceFact.tone,
+      tone: guard.sourceFactTone,
     },
   ];
 

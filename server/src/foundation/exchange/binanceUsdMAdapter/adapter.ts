@@ -266,7 +266,7 @@ function normalizedResponseDecimal(
   if (
     typeof value !== 'string' ||
     value.startsWith('+') ||
-    /^-0(?:\.0+)?$/.test(value)
+    value.startsWith('-')
   ) {
     return null;
   }
@@ -903,6 +903,26 @@ function parseFoundOrder(
     codes.push('QUERY_EVIDENCE_INVALID');
     return null;
   }
+  if (typeof order.status === 'string' && QUERY_STATUSES.has(order.status)) {
+    const fillComparedWithZero = compareDecimalStrings(executedQty, '0');
+    const fillComparedWithOriginal = compareDecimalStrings(
+      executedQty,
+      origQty,
+    );
+    const fillCoherent =
+      (order.status === 'FILLED' && fillComparedWithOriginal === 0) ||
+      ((order.status === 'NEW' || order.status === 'REJECTED') &&
+        fillComparedWithZero === 0) ||
+      (order.status === 'PARTIALLY_FILLED' &&
+        fillComparedWithZero > 0 &&
+        fillComparedWithOriginal < 0) ||
+      ((order.status === 'CANCELED' ||
+        order.status === 'EXPIRED' ||
+        order.status === 'EXPIRED_IN_MATCH') &&
+        fillComparedWithZero >= 0 &&
+        fillComparedWithOriginal < 0);
+    if (!fillCoherent) codes.push('QUERY_STATUS_FILL_INCOHERENT');
+  }
   if (
     order.symbol !== intent.symbol ||
     order.clientOrderId !== intent.existingClientOrderId ||
@@ -914,6 +934,7 @@ function parseFoundOrder(
     order.reduceOnly !== intent.reduceOnly ||
     order.closePosition !== false ||
     (intent.type === 'LIMIT' && price !== intent.price) ||
+    (intent.type === 'MARKET' && price !== '0') ||
     compareDecimalStrings(executedQty, origQty) > 0
   ) {
     codes.push('QUERY_IDENTITY_MISMATCH');

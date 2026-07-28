@@ -675,15 +675,105 @@ test('normalizes valid padded Binance response decimals before identity comparis
   assert.equal(padded.order.executedQty, '0.01');
   assert.equal(padded.order.price, '50000.1');
 
-  const negativeZero = adapter.normalizeOrderQueryEvidence(
+  for (const signedZero of ['-0', '-0.00000000', '-00', '-00.000']) {
+    const negativeZero = adapter.normalizeOrderQueryEvidence(
+      built.intent,
+      foundEvidence(built.intent, {
+        order: { executedQty: signedZero },
+      }),
+    );
+    assert.equal(negativeZero.state, 'UNRESOLVED', signedZero);
+    assert.equal(
+      negativeZero.blockingCodes.includes('QUERY_EVIDENCE_INVALID'),
+      true,
+      signedZero,
+    );
+  }
+});
+
+test('query status and cumulative fill must be mutually coherent', () => {
+  const adapter = enabledAdapter();
+  const built = adapter.buildOrderIntent(intentInput());
+  assert.equal(built.ok, true);
+
+  const coherent = [
+    ['NEW', '0.00000000'],
+    ['REJECTED', '0'],
+    ['PARTIALLY_FILLED', '0.00500000'],
+    ['CANCELED', '0.005'],
+    ['EXPIRED', '0'],
+    ['EXPIRED_IN_MATCH', '0.009'],
+    ['FILLED', '0.01000000'],
+  ];
+  for (const [status, executedQty] of coherent) {
+    const resolution = adapter.normalizeOrderQueryEvidence(
+      built.intent,
+      foundEvidence(built.intent, {
+        order: { status, executedQty },
+      }),
+    );
+    assert.equal(resolution.state, 'CONFIRMED', `${status}/${executedQty}`);
+  }
+
+  const incoherent = [
+    ['FILLED', '0'],
+    ['NEW', '0.001'],
+    ['REJECTED', '0.001'],
+    ['PARTIALLY_FILLED', '0'],
+    ['PARTIALLY_FILLED', '0.01'],
+    ['CANCELED', '0.01'],
+    ['EXPIRED', '0.01'],
+    ['EXPIRED_IN_MATCH', '0.01'],
+  ];
+  for (const [status, executedQty] of incoherent) {
+    const resolution = adapter.normalizeOrderQueryEvidence(
+      built.intent,
+      foundEvidence(built.intent, {
+        order: { status, executedQty },
+      }),
+    );
+    assert.equal(
+      resolution.state,
+      'UNRESOLVED',
+      `${status}/${executedQty}`,
+    );
+    assert.equal(
+      resolution.blockingCodes.includes(
+        'QUERY_STATUS_FILL_INCOHERENT',
+      ),
+      true,
+      `${status}/${executedQty}`,
+    );
+  }
+});
+
+test('MARKET query evidence requires the venue zero-price sentinel', () => {
+  const adapter = enabledAdapter();
+  const built = adapter.buildOrderIntent(intentInput({
+    leg: 'PERP_CLOSE',
+    existingClientOrderId: 'm1i1-perp-close-market-a1',
+    type: 'MARKET',
+  }));
+  assert.equal(built.ok, true);
+
+  const zeroPrice = adapter.normalizeOrderQueryEvidence(
     built.intent,
     foundEvidence(built.intent, {
-      order: { executedQty: '-0.00000000' },
+      order: { price: '0.00000000' },
     }),
   );
-  assert.equal(negativeZero.state, 'UNRESOLVED');
+  assert.equal(zeroPrice.state, 'CONFIRMED');
+  assert.equal(zeroPrice.order.price, '0');
+
+  const nonZeroPrice = adapter.normalizeOrderQueryEvidence(
+    built.intent,
+    foundEvidence(built.intent, {
+      order: { price: '1.00000000' },
+    }),
+  );
+  assert.equal(nonZeroPrice.state, 'UNRESOLVED');
   assert.equal(
-    negativeZero.blockingCodes.includes('QUERY_EVIDENCE_INVALID'),
+    nonZeroPrice.blockingCodes.includes('QUERY_IDENTITY_MISMATCH'),
     true,
   );
 });

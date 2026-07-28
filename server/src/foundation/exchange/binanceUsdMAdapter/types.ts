@@ -57,7 +57,8 @@ export type BinanceUsdMBasisAdapterBlockingCode =
   | 'QUERY_AUTHORITY_INVALID'
   | 'QUERY_OUTCOME_UNRESOLVED'
   | 'QUERY_IDENTITY_MISMATCH'
-  | 'QUERY_STATUS_UNKNOWN';
+  | 'QUERY_STATUS_UNKNOWN'
+  | 'QUERY_STATUS_FILL_INCOHERENT';
 
 export interface BinanceUsdMBasisAdapterConfig {
   /** Exact true is required. Default is false. */

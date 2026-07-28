@@ -273,6 +273,268 @@ test('proves flat only from exact bound four-order and fresh baseline truth', ()
   assert.equal(isBasisFlatnessResult({ ...result }), false);
 });
 
+test('proves flat terminal prefixes when no exposure was created or Spot-only exposure was unwound', () => {
+  const noExposure = verifyBasisFlatness(input({
+    evidence: {
+      orders: {
+        metadata: metadata({
+          sourceId: 'basis-flatness.synthetic.orders.zero-spot',
+        }),
+        records: [
+          order('SPOT_OPEN', {
+            status: 'REJECTED',
+            cumulativeFilledQuantityExact: '0',
+          }),
+        ],
+      },
+      positions: [
+        position('BINANCE_SPOT'),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: [],
+    },
+  }));
+  assert.equal(noExposure.status, 'FLAT');
+  assert.equal(noExposure.flat, true);
+  assert.deepEqual(noExposure.exact, {
+    spotOrderDeltaExact: '0',
+    usdmOrderDeltaExact: '0',
+    spotPositionDeltaExact: '0',
+    usdmPositionDeltaExact: '0',
+    spotOrderPositionDifferenceExact: '0',
+    usdmOrderPositionDifferenceExact: '0',
+  });
+
+  const spotOnlyUnwound = verifyBasisFlatness(input({
+    evidence: {
+      orders: {
+        metadata: metadata({
+          sourceId: 'basis-flatness.synthetic.orders.zero-perp',
+        }),
+        records: [
+          order('SPOT_OPEN'),
+          order('PERP_OPEN', {
+            status: 'REJECTED',
+            cumulativeFilledQuantityExact: '0',
+          }),
+          order('SPOT_CLOSE', {
+            status: 'CANCELLED',
+            cumulativeFilledQuantityExact: '0.1',
+          }),
+          order('SPOT_CLOSE', {
+            attempt: 1,
+            submittedQuantityExact: '0.2',
+            cumulativeFilledQuantityExact: '0.2',
+          }),
+        ],
+      },
+      positions: [
+        position('BINANCE_SPOT'),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: [],
+    },
+  }));
+  assert.equal(spotOnlyUnwound.status, 'FLAT');
+  assert.equal(spotOnlyUnwound.flat, true);
+  assert.deepEqual(spotOnlyUnwound.reasonCodes, ['EXACT_BASELINE_FLAT']);
+  assert.equal(spotOnlyUnwound.exact.spotOrderDeltaExact, '0');
+  assert.equal(spotOnlyUnwound.exact.usdmOrderDeltaExact, '0');
+  assertZeroAuthority(noExposure);
+  assertZeroAuthority(spotOnlyUnwound);
+});
+
+test('terminal-prefix proof rejects missing, extra, and conflicting recovery evidence', () => {
+  const missingSpotOpen = verifyBasisFlatness(input({
+    evidence: {
+      orders: {
+        metadata: metadata(),
+        records: [
+          order('PERP_OPEN', {
+            status: 'REJECTED',
+            cumulativeFilledQuantityExact: '0',
+          }),
+        ],
+      },
+      positions: [
+        position('BINANCE_SPOT'),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: [],
+    },
+  }));
+  assert.equal(missingSpotOpen.status, 'UNKNOWN');
+  assert.deepEqual(
+    missingSpotOpen.reasonCodes,
+    ['SPOT_OPEN_TERMINAL_ATTEMPT_REQUIRED'],
+  );
+
+  const missingPerpOpen = verifyBasisFlatness(input({
+    evidence: {
+      orders: {
+        metadata: metadata(),
+        records: [order('SPOT_OPEN')],
+      },
+      positions: [
+        position('BINANCE_SPOT'),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: [],
+    },
+  }));
+  assert.equal(missingPerpOpen.status, 'UNKNOWN');
+  assert.deepEqual(
+    missingPerpOpen.reasonCodes,
+    ['PERP_OPEN_TERMINAL_ATTEMPT_REQUIRED'],
+  );
+
+  const missingPerpClose = verifyBasisFlatness(input({
+    evidence: {
+      orders: {
+        metadata: metadata(),
+        records: [
+          order('SPOT_OPEN'),
+          order('PERP_OPEN'),
+        ],
+      },
+      positions: [
+        position('BINANCE_SPOT'),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: [],
+    },
+  }));
+  assert.equal(missingPerpClose.status, 'UNKNOWN');
+  assert.deepEqual(
+    missingPerpClose.reasonCodes,
+    ['PERP_CLOSE_TERMINAL_ATTEMPT_REQUIRED'],
+  );
+
+  const missingSpotClose = verifyBasisFlatness(input({
+    evidence: {
+      orders: {
+        metadata: metadata(),
+        records: [
+          order('SPOT_OPEN'),
+          order('PERP_OPEN', {
+            status: 'REJECTED',
+            cumulativeFilledQuantityExact: '0',
+          }),
+        ],
+      },
+      positions: [
+        position('BINANCE_SPOT'),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: [],
+    },
+  }));
+  assert.equal(missingSpotClose.status, 'UNKNOWN');
+  assert.deepEqual(
+    missingSpotClose.reasonCodes,
+    ['SPOT_CLOSE_TERMINAL_ATTEMPT_REQUIRED'],
+  );
+
+  const laterOrderAfterZeroSpot = verifyBasisFlatness(input({
+    evidence: {
+      orders: {
+        metadata: metadata(),
+        records: [
+          order('SPOT_OPEN', {
+            status: 'REJECTED',
+            cumulativeFilledQuantityExact: '0',
+          }),
+          order('PERP_OPEN', {
+            status: 'REJECTED',
+            cumulativeFilledQuantityExact: '0',
+          }),
+        ],
+      },
+      positions: [
+        position('BINANCE_SPOT'),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: [],
+    },
+  }));
+  assert.equal(laterOrderAfterZeroSpot.status, 'BLOCKED');
+  assert.deepEqual(
+    laterOrderAfterZeroSpot.reasonCodes,
+    ['LATER_ORDER_FORBIDDEN_WITHOUT_SPOT_EXPOSURE'],
+  );
+
+  const perpCloseAfterZeroPerp = verifyBasisFlatness(input({
+    evidence: {
+      orders: {
+        metadata: metadata(),
+        records: [
+          order('SPOT_OPEN'),
+          order('PERP_OPEN', {
+            status: 'REJECTED',
+            cumulativeFilledQuantityExact: '0',
+          }),
+          order('PERP_CLOSE', {
+            status: 'REJECTED',
+            cumulativeFilledQuantityExact: '0',
+          }),
+          order('SPOT_CLOSE'),
+        ],
+      },
+      positions: [
+        position('BINANCE_SPOT'),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: [],
+    },
+  }));
+  assert.equal(perpCloseAfterZeroPerp.status, 'BLOCKED');
+  assert.deepEqual(
+    perpCloseAfterZeroPerp.reasonCodes,
+    ['PERP_CLOSE_FORBIDDEN_WITHOUT_PERP_EXPOSURE'],
+  );
+
+  const conflictingPosition = verifyBasisFlatness(input({
+    evidence: {
+      orders: {
+        metadata: metadata(),
+        records: [
+          order('SPOT_OPEN'),
+          order('PERP_OPEN', {
+            status: 'REJECTED',
+            cumulativeFilledQuantityExact: '0',
+          }),
+          order('SPOT_CLOSE'),
+        ],
+      },
+      positions: [
+        position('BINANCE_SPOT', {
+          currentSignedBaseQuantityExact: '1.1',
+        }),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: [],
+    },
+  }));
+  assert.equal(conflictingPosition.status, 'BLOCKED');
+  assert.deepEqual(
+    conflictingPosition.reasonCodes,
+    ['ORDER_POSITION_EVIDENCE_CONFLICT'],
+  );
+
+  for (const result of [
+    missingSpotOpen,
+    missingPerpOpen,
+    missingPerpClose,
+    missingSpotClose,
+    laterOrderAfterZeroSpot,
+    perpCloseAfterZeroPerp,
+    conflictingPosition,
+  ]) {
+    assert.equal(result.flat, false);
+    assertZeroAuthority(result);
+  }
+});
+
 test('0.3 open and 0.1 first close preserve exact 0.2 residual before re-close', () => {
   const residualEvidence = {
     orders: {

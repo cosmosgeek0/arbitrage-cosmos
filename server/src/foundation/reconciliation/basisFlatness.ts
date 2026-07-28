@@ -1047,7 +1047,7 @@ export function verifyBasisFlatness(
     const orderRecords = descriptorArray(
       orderCollection.records,
       'orders_records',
-      BASIS_FLATNESS_STEPS.length,
+      1,
       2 + (MAX_CLOSE_ATTEMPTS * 2),
       'UNKNOWN',
     );
@@ -1110,18 +1110,22 @@ export function verifyBasisFlatness(
       grouped.push(order);
       byStep.set(order.step, grouped);
     }
-    if (BASIS_FLATNESS_STEPS.some((step) => !byStep.has(step))) {
+    const spotOpenOrders = byStep.get('SPOT_OPEN') ?? [];
+    const perpOpenOrders = byStep.get('PERP_OPEN') ?? [];
+    const perpCloseOrders = byStep.get('PERP_CLOSE') ?? [];
+    const spotCloseOrders = byStep.get('SPOT_CLOSE') ?? [];
+    if (spotOpenOrders.length === 0) {
       return makeResult(
         'UNKNOWN',
         identity,
         null,
         orderMetadata.authority,
-        ['FOUR_STEPS_AND_ALL_USED_CLOSE_ATTEMPTS_REQUIRED'],
+        ['SPOT_OPEN_TERMINAL_ATTEMPT_REQUIRED'],
       );
     }
     if (
-      byStep.get('SPOT_OPEN')!.length !== 1 ||
-      byStep.get('PERP_OPEN')!.length !== 1
+      spotOpenOrders.length !== 1 ||
+      perpOpenOrders.length > 1
     ) {
       return makeResult(
         'BLOCKED',
@@ -1132,14 +1136,90 @@ export function verifyBasisFlatness(
       );
     }
 
+    const zero = normalizeExactDecimal('0');
+    const spotOpenFill = spotOpenOrders[0].cumulativeFilledQuantityExact;
+    const spotExposureCreated = compareExactDecimals(spotOpenFill, zero) > 0;
+    if (!spotExposureCreated) {
+      if (
+        perpOpenOrders.length !== 0 ||
+        perpCloseOrders.length !== 0 ||
+        spotCloseOrders.length !== 0
+      ) {
+        return makeResult(
+          'BLOCKED',
+          identity,
+          null,
+          orderMetadata.authority,
+          ['LATER_ORDER_FORBIDDEN_WITHOUT_SPOT_EXPOSURE'],
+        );
+      }
+    } else if (perpOpenOrders.length === 0) {
+      return makeResult(
+        spotCloseOrders.length === 0 && perpCloseOrders.length === 0
+          ? 'UNKNOWN'
+          : 'BLOCKED',
+        identity,
+        null,
+        orderMetadata.authority,
+        [
+          spotCloseOrders.length === 0 && perpCloseOrders.length === 0
+            ? 'PERP_OPEN_TERMINAL_ATTEMPT_REQUIRED'
+            : 'ORDER_STEP_PREFIX_GAP',
+        ],
+      );
+    }
+
+    const perpOpenFill =
+      perpOpenOrders[0]?.cumulativeFilledQuantityExact ?? zero;
+    const perpExposureCreated = compareExactDecimals(perpOpenFill, zero) > 0;
+    if (perpExposureCreated && perpCloseOrders.length === 0) {
+      return makeResult(
+        spotCloseOrders.length === 0 ? 'UNKNOWN' : 'BLOCKED',
+        identity,
+        null,
+        orderMetadata.authority,
+        [
+          spotCloseOrders.length === 0
+            ? 'PERP_CLOSE_TERMINAL_ATTEMPT_REQUIRED'
+            : 'ORDER_STEP_PREFIX_GAP',
+        ],
+      );
+    }
+    if (!perpExposureCreated && perpCloseOrders.length !== 0) {
+      return makeResult(
+        'BLOCKED',
+        identity,
+        null,
+        orderMetadata.authority,
+        ['PERP_CLOSE_FORBIDDEN_WITHOUT_PERP_EXPOSURE'],
+      );
+    }
+    if (spotExposureCreated && spotCloseOrders.length === 0) {
+      return makeResult(
+        'UNKNOWN',
+        identity,
+        null,
+        orderMetadata.authority,
+        ['SPOT_CLOSE_TERMINAL_ATTEMPT_REQUIRED'],
+      );
+    }
+    if (!spotExposureCreated && spotCloseOrders.length !== 0) {
+      return makeResult(
+        'BLOCKED',
+        identity,
+        null,
+        orderMetadata.authority,
+        ['SPOT_CLOSE_FORBIDDEN_WITHOUT_SPOT_EXPOSURE'],
+      );
+    }
+
     const closeTotal = (
       step: 'PERP_CLOSE' | 'SPOT_CLOSE',
-      openStep: 'PERP_OPEN' | 'SPOT_OPEN',
+      openFill: ExactDecimal,
     ): ExactDecimal => {
-      const openFill = byStep.get(openStep)![0].cumulativeFilledQuantityExact;
       let residual = openFill;
-      let total = normalizeExactDecimal('0');
-      const attempts = byStep.get(step)!;
+      let total = zero;
+      const attempts = byStep.get(step) ?? [];
       for (let index = 0; index < attempts.length; index += 1) {
         const attempt = attempts[index];
         if (
@@ -1156,14 +1236,14 @@ export function verifyBasisFlatness(
           residual,
           attempt.cumulativeFilledQuantityExact,
         );
-        if (compareExactDecimals(residual, normalizeExactDecimal('0')) < 0) {
+        if (compareExactDecimals(residual, zero) < 0) {
           return problem('BLOCKED', `${step}_AGGREGATE_FILL_EXCEEDS_OPEN`);
         }
       }
       return total;
     };
-    const perpCloseTotal = closeTotal('PERP_CLOSE', 'PERP_OPEN');
-    const spotCloseTotal = closeTotal('SPOT_CLOSE', 'SPOT_OPEN');
+    const perpCloseTotal = closeTotal('PERP_CLOSE', perpOpenFill);
+    const spotCloseTotal = closeTotal('SPOT_CLOSE', spotOpenFill);
 
     const positionRecords = descriptorArray(
       evidence.positions,
@@ -1211,13 +1291,11 @@ export function verifyBasisFlatness(
     }
 
     const spotOrderDelta = subtractExactDecimals(
-      byStep.get('SPOT_OPEN')![0].cumulativeFilledQuantityExact,
+      spotOpenFill,
       spotCloseTotal,
     );
     const usdmOrderDelta = addExactDecimals(
-      negateExactDecimal(
-        byStep.get('PERP_OPEN')![0].cumulativeFilledQuantityExact,
-      ),
+      negateExactDecimal(perpOpenFill),
       perpCloseTotal,
     );
     const spotPositionDelta = subtractExactDecimals(

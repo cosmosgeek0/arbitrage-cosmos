@@ -103,7 +103,9 @@ const FILTERS = Object.freeze({
   lotSize: Object.freeze({ minQty: '0.001', maxQty: '100', stepSize: '0.001' }),
   marketLotSize: Object.freeze({ minQty: '0.001', maxQty: '50', stepSize: '0.001' }),
   minNotional: '5.00',
-  percentPrice: Object.freeze({ multiplierUp: '1.15', multiplierDown: '0.85' }),
+  percentPrice: Object.freeze({ multiplierUp: '1.15', multiplierDown: '0.85', multiplierDecimal: 4 }),
+  maxNumOrders: null,
+  unsupportedFilterTypes: Object.freeze([]),
 });
 
 const FILTER_OBSERVED_AT = Object.freeze({
@@ -163,6 +165,7 @@ const EXCHANGE_INFO = {
         { filterType: 'MIN_NOTIONAL', notional: '5.00' },
         { filterType: 'PERCENT_PRICE', multiplierUp: '1.1500', multiplierDown: '0.8500', multiplierDecimal: '4' },
         { filterType: 'MAX_NUM_ORDERS', limit: 200 },
+        { filterType: 'MAX_NUM_ALGO_ORDERS', limit: 10 },
       ],
     },
   ],
@@ -302,9 +305,15 @@ section('3. full read/test endpoint matrix through fake transport');
   h.enqueue({ response: response(EXCHANGE_INFO) });
   const exchange = await h.client.getExchangeInfo({ correlationId: 'matrix-exchange' });
   check('exchangeInfo succeeds', exchange.ok);
-  check('exchange decimals normalized', exchange.ok && exchange.value.symbols[0].filters.price.tickSize === '0.1');
-  check('unknown filters ignored safely', exchange.ok && exchange.value.symbols[0].filters.minNotional === '5');
-  check('PERCENT_PRICE parsed exactly', exchange.ok && exchange.value.symbols[0].filters.percentPrice.multiplierUp === '1.15');
+  check('exchange decimals preserved exactly', exchange.ok && exchange.value.symbols[0].filters.price.tickSize === '0.10' && exchange.value.symbols[0].filters.minNotional === '5.00');
+  check(
+    'unsupported filters retained in venue order for fail-closed validation',
+    exchange.ok &&
+      Object.isFrozen(exchange.value.symbols[0].filters.unsupportedFilterTypes) &&
+      exchange.value.symbols[0].filters.unsupportedFilterTypes.join(',') === 'MAX_NUM_ALGO_ORDERS',
+  );
+  check('MAX_NUM_ORDERS schema parsed exactly', exchange.ok && exchange.value.symbols[0].filters.maxNumOrders === 200);
+  check('PERCENT_PRICE schema preserved exactly', exchange.ok && exchange.value.symbols[0].filters.percentPrice.multiplierUp === '1.1500' && exchange.value.symbols[0].filters.percentPrice.multiplierDecimal === 4);
   check('exchangeInfo symbol carries injected authority', exchange.ok && exchange.value.symbols[0].observedAt.authority === 'SYNTHETIC_TEST');
   check('exchangeInfo source time stays explicitly unknown', exchange.ok && exchange.value.symbols[0].observedAt.sourceTimeMs === null);
   check('exchangeInfo receipt/maxAge provenance is exact', exchange.ok && exchange.value.symbols[0].observedAt.receivedAtMs === exchange.metadata.receivedAtMs && exchange.value.symbols[0].observedAt.maxAgeMs === 60_000);
@@ -313,13 +322,13 @@ section('3. full read/test endpoint matrix through fake transport');
   h.enqueue({ response: response(MARK) });
   const mark = await h.client.getMarkFunding('BTCUSDT', { correlationId: 'matrix-mark' });
   check('mark/funding succeeds', mark.ok);
-  check('mark decimal normalized', mark.ok && mark.value.markPrice === '50000.1');
+  check('mark decimal preserved exactly', mark.ok && mark.value.markPrice === '50000.1000');
   check('source time preserved', mark.ok && mark.value.sourceTimeMs === T0);
 
-  h.enqueue({ response: response([{ symbol: 'BTCUSDT', fundingRate: '-0.00010000', fundingTime: T0, markPrice: '50000.1000' }]) });
+  h.enqueue({ response: response([{ symbol: 'BTCUSDT', fundingRate: '-0.00010000', fundingTime: T0, markPrice: '50000.1000', rateType: 'Regular' }]) });
   const funding = await h.client.getFundingRates({ symbol: 'BTCUSDT', limit: 1 }, { correlationId: 'matrix-funding' });
   check('funding history succeeds', funding.ok && funding.value.length === 1);
-  check('funding decimal normalized', funding.ok && funding.value[0].fundingRate === '-0.0001');
+  check('funding schema and decimals preserved exactly', funding.ok && funding.value[0].fundingRate === '-0.00010000' && funding.value[0].markPrice === '50000.1000' && funding.value[0].rateType === 'Regular');
 
   h.enqueue({ response: response(ACCOUNT) });
   const account = await h.client.getAccount({ correlationId: 'matrix-account' });
@@ -413,7 +422,9 @@ section('4. test-order mode, TIF, decimal-filter, and unknown-fact gate');
     lotSize: { minQty: '0.05', maxQty: '10', stepSize: '0.1' },
     marketLotSize: { minQty: '0.05', maxQty: '10', stepSize: '0.1' },
     minNotional: '0',
-    percentPrice: { multiplierUp: '2', multiplierDown: '0.1' },
+    percentPrice: { multiplierUp: '2', multiplierDown: '0.1', multiplierDecimal: 1 },
+    maxNumOrders: null,
+    unsupportedFilterTypes: [],
   };
   const offsetRules = { ...SYMBOL_RULES, filters: offsetFilters };
   const offsetValid = validateTestOrder({ ...LIMIT_ORDER, quantity: '0.15', price: '0.15', notionalReferencePrice: '0.15', exchangeSymbol: offsetRules }, T0);
@@ -426,7 +437,9 @@ section('4. test-order mode, TIF, decimal-filter, and unknown-fact gate');
     lotSize: { minQty: '-1', maxQty: '-1', stepSize: '-1' },
     marketLotSize: { minQty: '-1', maxQty: '-1', stepSize: '-1' },
     minNotional: '-1',
-    percentPrice: { multiplierUp: '1.15', multiplierDown: '0.85' },
+    percentPrice: { multiplierUp: '1.15', multiplierDown: '0.85', multiplierDecimal: 2 },
+    maxNumOrders: null,
+    unsupportedFilterTypes: [],
   };
   const negative = validateTestOrder({ ...LIMIT_ORDER, quantity: '0.12345', price: '0.12345', notionalReferencePrice: '0.12345', exchangeSymbol: { ...SYMBOL_RULES, filters: negativeFilters } }, T0);
   check('negative filter domains fail closed', !negative.ok && negative.issues.filter((item) => item.code === 'FILTER_MALFORMED').length >= 3);
@@ -476,7 +489,9 @@ section('4. test-order mode, TIF, decimal-filter, and unknown-fact gate');
   check('order type must be advertised by exchangeInfo', !unsupportedType.ok && unsupportedType.issues.some((item) => item.code === 'ORDER_TYPE_UNSUPPORTED_BY_SYMBOL'));
   const unsupportedTif = validateTestOrder({ ...LIMIT_ORDER, exchangeSymbol: { ...SYMBOL_RULES, timeInForce: ['IOC'] } }, T0);
   check('TIF must be advertised by exchangeInfo', !unsupportedTif.ok && unsupportedTif.issues.some((item) => item.code === 'TIME_IN_FORCE_UNSUPPORTED_BY_SYMBOL'));
-  const percentRules = { ...SYMBOL_RULES, filters: { price: { minPrice: '0', maxPrice: '1000', tickSize: '1' }, lotSize: { minQty: '1', maxQty: '10', stepSize: '1' }, marketLotSize: { minQty: '1', maxQty: '10', stepSize: '1' }, minNotional: '0', percentPrice: { multiplierUp: '1.15', multiplierDown: '0.85' } } };
+  const unsupportedFilter = validateTestOrder({ ...LIMIT_ORDER, exchangeSymbol: { ...SYMBOL_RULES, filters: { ...FILTERS, unsupportedFilterTypes: ['MAX_NUM_ALGO_ORDERS'] } } }, T0);
+  check('unsupported filter metadata fails closed', !unsupportedFilter.ok && unsupportedFilter.issues.some((item) => item.code === 'UNSUPPORTED_FILTER_TYPE'));
+  const percentRules = { ...SYMBOL_RULES, filters: { price: { minPrice: '0', maxPrice: '1000', tickSize: '1' }, lotSize: { minQty: '1', maxQty: '10', stepSize: '1' }, marketLotSize: { minQty: '1', maxQty: '10', stepSize: '1' }, minNotional: '0', percentPrice: { multiplierUp: '1.15', multiplierDown: '0.85', multiplierDecimal: 4 }, maxNumOrders: null, unsupportedFilterTypes: [] } };
   const percentHigh = validateTestOrder({ ...LIMIT_ORDER, quantity: '1', price: '100', notionalReferencePrice: '10', exchangeSymbol: percentRules }, T0);
   check('PERCENT_PRICE upper bound enforced', !percentHigh.ok && percentHigh.issues.some((item) => item.code === 'PRICE_ABOVE_PERCENT_LIMIT'));
   const percentUnknown = validateTestOrder({ ...LIMIT_ORDER, exchangeSymbol: { ...SYMBOL_RULES, filters: { ...FILTERS, percentPrice: null } } }, T0);
@@ -496,7 +511,9 @@ section('4. test-order mode, TIF, decimal-filter, and unknown-fact gate');
         lotSize: { minQty: '1', maxQty: huge, stepSize: '1' },
         marketLotSize: { minQty: '1', maxQty: huge, stepSize: '1' },
         minNotional: '1',
-        percentPrice: { multiplierUp: '1', multiplierDown: '1' },
+        percentPrice: { multiplierUp: '1', multiplierDown: '1', multiplierDecimal: 0 },
+        maxNumOrders: null,
+        unsupportedFilterTypes: [],
       } },
     }, T0);
   } catch { overflowThrew = true; }
@@ -679,9 +696,15 @@ section('7. typed venue errors, HTTP ambiguity, redaction, and strict schemas');
   }
 
   const unknownFunding = createHarness();
-  unknownFunding.enqueue({ response: response([{ symbol: 'BTCUSDT', fundingRate: '0.1', fundingTime: T0 }]) });
+  unknownFunding.enqueue({ response: response([{ symbol: 'BTCUSDT', fundingRate: '0.1', fundingTime: T0, rateType: 'Special' }]) });
   const noMark = await unknownFunding.client.getFundingRates({ symbol: 'BTCUSDT' }, { correlationId: 'funding-no-mark' });
-  check('missing optional funding mark stays null', noMark.ok && noMark.value[0].markPrice === null);
+  check('Special funding with missing optional mark stays explicit', noMark.ok && noMark.value[0].rateType === 'Special' && noMark.value[0].markPrice === null);
+  for (const [label, rateType] of [['missing', undefined], ['unknown', 'ADJUSTED']]) {
+    const malformedFunding = createHarness();
+    malformedFunding.enqueue({ response: response([{ symbol: 'BTCUSDT', fundingRate: '0.1', fundingTime: T0, ...(rateType === undefined ? {} : { rateType }) }]) });
+    const malformedRateType = await malformedFunding.client.getFundingRates({ symbol: 'BTCUSDT' }, { correlationId: `funding-rate-type-${label}` });
+    check(`${label} funding rateType rejected`, !malformedRateType.ok && malformedRateType.error.code === 'MALFORMED_RESPONSE');
+  }
 
   const h = createHarness();
   await syncTime(h);

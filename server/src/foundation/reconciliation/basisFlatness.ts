@@ -342,11 +342,21 @@ function descriptorArray(
     return problem(lengthStatus, `${path.toUpperCase()}_LENGTH_INVALID`);
   }
 
+  // Mirror the USD-M passive-array gate. Bounded declared length is not
+  // enough: a zero/short array can still carry arbitrarily many named own
+  // properties. Reject that breadth before integrity scanning or cloning all
+  // descriptors.
+  const ownKeys = Reflect.ownKeys(value);
+  if (
+    ownKeys.length > maximumLength + 1 ||
+    ownKeys.length !== length + 1 ||
+    ownKeys.some((key) => typeof key !== 'string')
+  ) {
+    return problem('BLOCKED', `${path.toUpperCase()}_ARRAY_SHAPE_INVALID`);
+  }
+
   if (!Object.isFrozen(value)) {
     return problem('BLOCKED', `${path.toUpperCase()}_FROZEN_VALUE_REQUIRED`);
-  }
-  if (Object.getOwnPropertySymbols(value).length !== 0) {
-    return problem('BLOCKED', `${path.toUpperCase()}_SYMBOL_FIELD_REJECTED`);
   }
 
   const descriptors = Object.getOwnPropertyDescriptors(value) as Record<

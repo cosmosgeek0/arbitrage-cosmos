@@ -255,6 +255,22 @@ function clonePlainData(
     ) {
       throw new PlainDataError(`${path} array length is invalid`);
     }
+    let keys: readonly (string | symbol)[];
+    try {
+      // Match the USD-M passive-data boundary: a short array may still carry
+      // an arbitrarily wide set of named properties. Reject that breadth
+      // before cloning every property descriptor.
+      keys = Reflect.ownKeys(value);
+    } catch {
+      throw new PlainDataError(`${path} array keys cannot be inspected`);
+    }
+    if (
+      keys.length > BINANCE_SPOT_PLAIN_DATA_LIMITS.maximumArrayLength + 1 ||
+      keys.length !== length + 1 ||
+      keys.some((key) => typeof key !== 'string')
+    ) {
+      throw new PlainDataError(`${path} has unsupported array keys`);
+    }
     let descriptors: PropertyDescriptorMap;
     try {
       descriptors = Object.getOwnPropertyDescriptors(
@@ -263,9 +279,7 @@ function clonePlainData(
     } catch {
       throw new PlainDataError(`${path} array descriptors cannot be inspected`);
     }
-    const keys = Reflect.ownKeys(descriptors);
     if (
-      keys.some((key) => typeof key !== 'string') ||
       !Object.hasOwn(descriptors, 'length')
     ) {
       throw new PlainDataError(`${path} has unsupported array keys`);

@@ -261,6 +261,38 @@ test('plain-data containment rejects overwide objects and dense arrays before cl
   });
   assert.deepEqual(denseResult.blockingCodes, ['INPUT_NOT_PLAIN_DATA']);
 
+  const overwideShort = [];
+  for (
+    let index = 0;
+    index <= BINANCE_SPOT_PLAIN_DATA_LIMITS.maximumArrayLength;
+    index += 1
+  ) {
+    overwideShort[`unexpected${index}`] = index;
+  }
+  const originalGetOwnPropertyDescriptors =
+    Object.getOwnPropertyDescriptors;
+  let overwideShortDescriptorClones = 0;
+  Object.getOwnPropertyDescriptors = function instrumentedDescriptors(value) {
+    if (value === overwideShort) {
+      overwideShortDescriptorClones += 1;
+    }
+    return originalGetOwnPropertyDescriptors(value);
+  };
+  let overwideShortResult;
+  try {
+    overwideShortResult = prepare({
+      publicSnapshot: snapshot({ filters: overwideShort }),
+    });
+  } finally {
+    Object.getOwnPropertyDescriptors =
+      originalGetOwnPropertyDescriptors;
+  }
+  assert.deepEqual(
+    overwideShortResult.blockingCodes,
+    ['INPUT_NOT_PLAIN_DATA'],
+  );
+  assert.equal(overwideShortDescriptorClones, 0);
+
   const nodeHeavy = Array.from(
     {
       length: BINANCE_SPOT_PLAIN_DATA_LIMITS.maximumArrayLength,

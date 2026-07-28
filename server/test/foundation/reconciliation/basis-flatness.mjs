@@ -669,6 +669,38 @@ test('array lengths short-circuit before enumeration and bounded arrays reject e
     },
   });
 
+  const overwideShortAmbiguities = [];
+  for (let index = 0; index < 64; index += 1) {
+    Object.defineProperty(
+      overwideShortAmbiguities,
+      `unexpected${index}`,
+      {
+        value: `ambiguity-${index}`,
+        enumerable: true,
+        configurable: false,
+        writable: false,
+      },
+    );
+  }
+  const overwideShortArray = input({
+    evidence: {
+      orders: {
+        metadata: metadata(),
+        records: [
+          order('SPOT_OPEN'),
+          order('PERP_OPEN'),
+          order('PERP_CLOSE'),
+          order('SPOT_CLOSE'),
+        ],
+      },
+      positions: [
+        position('BINANCE_SPOT'),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: overwideShortAmbiguities,
+    },
+  });
+
   const hugeSparseCloseIds = [];
   hugeSparseCloseIds.length = 1_000_000_000;
   Object.freeze(hugeSparseCloseIds);
@@ -701,17 +733,23 @@ test('array lengths short-circuit before enumeration and bounded arrays reject e
 
   const originalGetOwnPropertyDescriptors = Object.getOwnPropertyDescriptors;
   let overBoundDescriptorEnumerations = 0;
+  let overwideShortDescriptorClones = 0;
   Object.getOwnPropertyDescriptors = function instrumentedDescriptors(value) {
     if (value === hugeSparseOrders || value === denseOverBoundOrders) {
       overBoundDescriptorEnumerations += 1;
+    }
+    if (value === overwideShortAmbiguities) {
+      overwideShortDescriptorClones += 1;
     }
     return originalGetOwnPropertyDescriptors(value);
   };
   let hugeOrdersResult;
   let denseOverBoundResult;
+  let overwideShortResult;
   try {
     hugeOrdersResult = verifyBasisFlatness(hugeOrders);
     denseOverBoundResult = verifyBasisFlatness(denseOverBound);
+    overwideShortResult = verifyBasisFlatness(overwideShortArray);
   } finally {
     Object.getOwnPropertyDescriptors = originalGetOwnPropertyDescriptors;
   }
@@ -719,6 +757,8 @@ test('array lengths short-circuit before enumeration and bounded arrays reject e
   assert.equal(hugeOrdersResult.status, 'UNKNOWN');
   assert.equal(denseOverBoundResult.status, 'UNKNOWN');
   assert.equal(overBoundDescriptorEnumerations, 0);
+  assert.equal(overwideShortResult.status, 'BLOCKED');
+  assert.equal(overwideShortDescriptorClones, 0);
   assert.equal(verifyBasisFlatness(boundedExtraKey).status, 'BLOCKED');
   assert.equal(verifyBasisFlatness(hugeCloseIds).status, 'BLOCKED');
   assert.equal(verifyBasisFlatness(tooManyAmbiguities).status, 'BLOCKED');

@@ -3347,6 +3347,30 @@
         "line": 122
       },
       {
+        "concept": "exchange-hand",
+        "declaration": "type BinanceSpotVenueEvidence",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 14
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type SpotLedgerAppendIntent",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 20
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type SpotLedgerProjectionState",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 21
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type SpotRiskEvidence",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 30
+      },
+      {
         "concept": "risk-authority",
         "declaration": "type SpotRiskVerdict",
         "file": "server/src/foundation/execution/spotValidateOnly.ts",
@@ -7505,6 +7529,24 @@
         "line": 53
       },
       {
+        "concept": "exchange-hand",
+        "declaration": "type SpotExecutionTicket",
+        "file": "server/src/systemIntegration/evidence/m0AutomaticReceipt.ts",
+        "line": 26
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type SpotLedgerProjectionState",
+        "file": "server/src/systemIntegration/evidence/m0AutomaticReceipt.ts",
+        "line": 30
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function parseTicket",
+        "file": "server/src/systemIntegration/evidence/m0AutomaticReceipt.ts",
+        "line": 539
+      },
+      {
         "concept": "control-authority",
         "declaration": "function isCanonicalSupervisorOpsReadback",
         "file": "server/src/systemIntegration/ops/intakeGate.ts",
@@ -8567,6 +8609,16 @@
         "target": "../../../capitalFoundation/contracts/decimal.js"
       },
       {
+        "file": "server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts",
+        "line": 23,
+        "target": "../../../foundation/execution/spotPort.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts",
+        "line": 24,
+        "target": "../../../foundation/execution/spotTicket.js"
+      },
+      {
         "file": "server/src/liveEdge/adapters/durableMutationJournal/exact.ts",
         "line": 6,
         "target": "../../../capitalFoundation/contracts/decimal.js"
@@ -8745,6 +8797,21 @@
         "file": "server/src/systemIntegration/contracts/types.ts",
         "line": 24,
         "target": "../../intelligenceRuntime/contracts/index.js"
+      },
+      {
+        "file": "server/src/systemIntegration/evidence/m0AutomaticReceipt.ts",
+        "line": 23,
+        "target": "../../foundation/execution/spotLifecycle.js"
+      },
+      {
+        "file": "server/src/systemIntegration/evidence/m0AutomaticReceipt.ts",
+        "line": 27,
+        "target": "../../foundation/execution/spotTicket.js"
+      },
+      {
+        "file": "server/src/systemIntegration/evidence/m0AutomaticReceipt.ts",
+        "line": 32,
+        "target": "../../foundation/reconciliation/spotLedgerBridge.js"
       },
       {
         "file": "server/src/systemIntegration/persistence/index.ts",
@@ -15452,5 +15519,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "6202d38349328872f4cfa2edd0f6ae33e084149d9701689e7653deaaa8111982"
+  "evidenceSha256": "ed63adeef5b1619de03c1c6637a66698bad2397bd1be64dca5916b3fa89535df"
 }

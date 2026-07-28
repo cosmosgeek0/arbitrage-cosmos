@@ -244,6 +244,40 @@ test('query -2013 is authoritative only on a qualifying 4xx response', async () 
   }
 });
 
+test('query accepts Binance EXPIRED_IN_MATCH as a terminal venue observation', async () => {
+  const { adapter, requests } = harness([
+    {
+      kind: 'RESPONSE',
+      status: 200,
+      body: {
+        symbol: 'BTCUSDT',
+        clientOrderId: CLIENT_ID,
+        status: 'EXPIRED_IN_MATCH',
+        orderId: 42,
+        executedQty: '0.001',
+      },
+    },
+  ]);
+
+  assert.deepEqual(
+    await adapter.queryByOriginalClientOrderId(queryIntent()),
+    {
+      kind: 'FOUND',
+      status: 'EXPIRED_IN_MATCH',
+      venueOrderId: '42',
+      cumulativeFilledQuantity: '0.001',
+    },
+  );
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].operation, 'QUERY_ORDER');
+  assert.equal(requests[0].method, 'GET');
+  assert.equal(requests[0].path, '/api/v3/order');
+  assert.deepEqual(parameters(requests[0]), {
+    symbol: 'BTCUSDT',
+    origClientOrderId: CLIENT_ID,
+  });
+});
+
 test('fill query requires exact venue order identity before and after dispatch', async () => {
   const base = Object.freeze({
     kind: 'QUERY_FILLS',

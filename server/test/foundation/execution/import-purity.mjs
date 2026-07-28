@@ -48,6 +48,20 @@ check('no process.env reads during import', moduleEnvReads.length === 0, moduleE
 const newGlobals = Object.getOwnPropertyNames(globalThis).filter((key) => !globalsBefore.has(key));
 check('no globals created during import', newGlobals.length === 0, newGlobals.join(','));
 
+section('1b. direct-only Spot transport coordinator imports inertly');
+const coordinatorMod = await import(
+  '../../../dist/foundation/execution/spotTransportCoordinator.js'
+);
+check('coordinator import has no Date.now', dateNowCalls === 0, `${dateNowCalls} calls`);
+check('coordinator import has no fetch', fetchDenial.attempts() === 0, `${fetchDenial.attempts()} calls`);
+check('coordinator import has no setTimeout', timeoutCalls === 0, `${timeoutCalls} calls`);
+check('coordinator import has no setInterval', intervalCalls === 0, `${intervalCalls} calls`);
+check('coordinator import has no Math.random', randomCalls === 0, `${randomCalls} calls`);
+const coordinatorEnvReads = envReads.filter((key) => !toleratedLoaderEnv.has(key));
+check('coordinator import has no process.env reads', coordinatorEnvReads.length === 0, coordinatorEnvReads.join(','));
+const coordinatorGlobals = Object.getOwnPropertyNames(globalThis).filter((key) => !globalsBefore.has(key));
+check('coordinator import creates no globals', coordinatorGlobals.length === 0, coordinatorGlobals.join(','));
+
 Date.now = realDateNow;
 fetchDenial.restore();
 globalThis.setTimeout = realTimeout;
@@ -71,6 +85,16 @@ for (const name of [
 ]) {
   check(`exports ${name}()`, typeof mod[name] === 'function');
 }
+check(
+  'execution barrel does not export Spot transport coordinator',
+  mod.runSpotTransportCoordinator === undefined
+    && mod.SPOT_TRANSPORT_COORDINATOR_SCHEMA === undefined
+    && mod.SPOT_TRANSPORT_COORDINATOR_POSTURE === undefined,
+);
+check(
+  'Spot transport coordinator remains direct-import-only',
+  typeof coordinatorMod.runSpotTransportCoordinator === 'function',
+);
 
 section('3. compiled Lane C modules contain no implicit I/O');
 {
@@ -78,8 +102,29 @@ section('3. compiled Lane C modules contain no implicit I/O');
   const { join, dirname } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
   const distDir = join(dirname(fileURLToPath(import.meta.url)), '../../../dist/foundation/execution');
-  const files = readdirSync(distDir).filter((file) => file.endsWith('.js'));
-  check('all fourteen compiled execution modules present', files.length === 14, files.join(','));
+  const files = readdirSync(distDir).filter((file) => file.endsWith('.js')).sort();
+  const expectedFiles = [
+    'checkpoint.js',
+    'coordinator.js',
+    'events.js',
+    'index.js',
+    'plan.js',
+    'recovery.js',
+    'reducer.js',
+    'spotAttemptPolicy.js',
+    'spotCore.js',
+    'spotLifecycle.js',
+    'spotPort.js',
+    'spotTicket.js',
+    'spotTransportCoordinator.js',
+    'spotValidateOnly.js',
+    'types.js',
+  ];
+  check(
+    'exact compiled execution module set present',
+    JSON.stringify(files) === JSON.stringify(expectedFiles),
+    files.join(','),
+  );
   const forbidden = [
     ['process.env', /process\.env/],
     ['Date.now', /Date\.now/],
@@ -98,7 +143,10 @@ section('3. compiled Lane C modules contain no implicit I/O');
     check(`no ${label}`, offenders.length === 0, offenders.join(','));
   }
   const existingCode = files
-    .filter((file) => file !== 'spotValidateOnly.js')
+    .filter((file) => (
+      file !== 'spotValidateOnly.js'
+      && file !== 'spotTransportCoordinator.js'
+    ))
     .map((file) => codeOnly(readFileSync(join(distDir, file), 'utf8')))
     .join('\n');
   check('no concrete live-order method', !/placeOrder|submitLive|liveOrder|newOrder\s*\(/i.test(existingCode));
@@ -126,6 +174,61 @@ section('3. compiled Lane C modules contain no implicit I/O');
       new RegExp(`${capability}:\\s*false`).test(validateOnlyCode),
     );
   }
+
+  const indexCode = codeOnly(readFileSync(join(distDir, 'index.js'), 'utf8'));
+  const coordinatorCode = codeOnly(
+    readFileSync(join(distDir, 'spotTransportCoordinator.js'), 'utf8'),
+  );
+  check(
+    'compiled execution barrel omits Spot transport coordinator',
+    !/spotTransportCoordinator/.test(indexCode),
+  );
+  for (const [label, pattern] of [
+    ['ambient environment', /process\.env|\b(?:Bun|Deno)\.env\b/],
+    ['ambient clock', /Date\.now|new Date\s*\(|performance\.now/],
+    ['ambient randomness', /Math\.random/],
+    ['network capability', /\bfetch\s*\(|node:(?:dgram|dns|http2?|https|net|tls)|from ['"](?:axios|undici|ws)['"]/],
+    ['filesystem capability', /node:fs|from ['"]fs(?:\/promises)?['"]/],
+    ['signer or credential capability', /credential|signer|apiKey|apiSecret|secretKey/i],
+  ]) {
+    check(
+      `Spot transport coordinator has no ${label}`,
+      !pattern.test(coordinatorCode),
+    );
+  }
+  check(
+    'Spot transport coordinator imports no concrete execution adapter',
+    !/liveEdge|binanceSpotExecution|createBinanceSpotExecutionAdapter/.test(coordinatorCode),
+  );
+  const injectedPortMethods = [...coordinatorCode.matchAll(
+    /ports\.executionPort\.([A-Za-z][A-Za-z0-9]*)\s*\(/g,
+  )].map((match) => match[1]).sort();
+  check(
+    'Spot venue capabilities use only the injected execution port',
+    JSON.stringify([...new Set(injectedPortMethods)]) === JSON.stringify([
+      'cancel',
+      'flatten',
+      'queryByOriginalClientOrderId',
+      'queryFills',
+      'signedTestOrder',
+      'submitLiveOrder',
+    ]),
+    [...new Set(injectedPortMethods)].join(','),
+  );
+  check(
+    'Spot transport coordinator posture remains direct-only',
+    JSON.stringify(coordinatorMod.SPOT_TRANSPORT_COORDINATOR_POSTURE) === JSON.stringify({
+      liveMounted: false,
+      liveExportReachable: false,
+      sharedBarrelExported: false,
+      automaticMutationRetry: false,
+    }),
+  );
+  check(
+    'Spot transport coordinator never enables automatic mutation retry',
+    !/automatic(?:Mutation)?Retry:\s*true/.test(coordinatorCode)
+      && coordinatorMod.SPOT_TRANSPORT_COORDINATOR_POSTURE.automaticMutationRetry === false,
+  );
 }
 
 const passed = results.filter((result) => result.pass).length;

@@ -1225,6 +1225,64 @@ test('nonterminal flatten gets one cancel then query reconciliation with no muta
   );
 });
 
+test('EXPIRED_IN_MATCH is terminal and can reconcile an exact-flat zero-fill order', async () => {
+  const entryValue = ticket();
+  const venueOrderId = 'venue-order-expired-in-match';
+  const { calls, ports } = harness({
+    submitOutcomes: [{
+      kind: 'ACKNOWLEDGED',
+      venueOrderId,
+      cumulativeFilledQuantity: '0',
+    }],
+    queryOutcomes: [{
+      kind: 'FOUND',
+      status: 'EXPIRED_IN_MATCH',
+      venueOrderId,
+      cumulativeFilledQuantity: '0',
+    }],
+    flatEvidence: Object.freeze({
+      revision: 'flat-evidence-expired-in-match',
+      sourceTicketId: entryValue.ticketId,
+      sourceClientOrderId: entryValue.clientOrderId,
+      sourceVenueOrderId: venueOrderId,
+      sourceOrderTerminal: true,
+      sourceFillsComplete: true,
+      sourceCumulativeFilledQuantity: '0',
+      flattenTicketId: null,
+      flattenClientOrderId: null,
+      flattenVenueOrderId: null,
+      flattenOrderTerminal: true,
+      flattenFillsComplete: true,
+      flattenCumulativeFilledQuantity: '0',
+      canonicalStatus: 'EXACT',
+      ledgerState: 'MATCHED',
+      quoteQuantity: '0',
+      feeQuantity: '0',
+      feeAsset: 'USDT',
+      occurredAtMs: NOW,
+    }),
+  });
+
+  const result = await runSpotTransportCoordinator(
+    SYMBOL,
+    { entry: leg(entryValue), flatten: null },
+    ports,
+  );
+
+  assert.equal(result.status, 'FLAT_RECONCILED', JSON.stringify(result));
+  assert.deepEqual(result.reasonCodes, []);
+  assert.equal(result.lifecycle?.lifecycle, 'FLAT');
+  assert.equal(result.liveExportReachable, false);
+  assert.equal(result.executionAuthority, 'NONE');
+  assert.equal(result.externalActionAuthorization, 'NONE');
+  assert.equal(calls.query.length, 1);
+  assert.equal(calls.cancel.length, 0);
+  assert.equal(calls.flatten.length, 0);
+  assert.equal(calls.fills.length, 0);
+  assert.equal(calls.flatEvidence.length, 1);
+  assert.equal(calls.ledger.at(-1).status, 'EXACT');
+});
+
 test('only complete authoritative fills plus matched ledger evidence can report exact flat', async () => {
   const entryValue = ticket();
   const flatten = flattenLeg();

@@ -9,6 +9,15 @@ import {
   Star,
   X,
 } from 'lucide-react';
+import {
+  decodeVolumeRuntimeSnapshot,
+  hasAttachedOpenProposal,
+  volumeRuntimeCurrent,
+  type VolumeRuntimeRow,
+  type VolumeRuntimeSnapshot,
+  type VolumeWindowMetric,
+} from '../components/MoneySurfaceRuntime';
+import '../components/MoneySurfaceBinding.css';
 import { TokenIcon } from '../components/TokenIcon';
 import { fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
 import { apiErrorMessage, fetchJson } from '../lib/http';
@@ -25,96 +34,6 @@ import { ProductSurfaceAdapter } from '../features/productControlRoom/components
 import './VolumeScanner.css';
 
 type Filter = 'all' | 'watching' | 'focus' | 'rejected' | 'warming';
-
-interface WindowMetric {
-  quoteVolume: number;
-  tradeCount: number;
-  avgTradeSize: number;
-  priceMovePct: number;
-  takerBuyRatio: number | null;
-  largeTradeCount: number;
-}
-
-interface BaselineMetric {
-  ready: boolean;
-  samples: number;
-  confidence: number;
-  quotePerSecNorm: number;
-  tradesPerSecNorm: number;
-  quotePerMinMedian: number;
-  quotePerMinMad: number;
-  isDead: boolean;
-}
-
-interface VolumeRow {
-  symbol: string;
-  base: string;
-  state: 'IDLE' | 'WATCHING' | 'FOCUS' | 'PROPOSED' | 'REJECTED' | 'ACTIVE' | 'COOLDOWN';
-  price: number | null;
-  lastTradeTs: number | null;
-  baseline: BaselineMetric;
-  windows: Record<string, WindowMetric | undefined>;
-  volumeMultiple: Record<string, number | null | undefined>;
-  tradeCountMultiple: Record<string, number | null | undefined>;
-  spreadBps: number | null;
-  topDepthUsd: number | null;
-  depthScore: number | null;
-  depthVsNorm: number | null;
-  takerBuyRatio: number | null;
-  washScore: number | null;
-  accelerationPctPerMin: number | null;
-  focusReason: string | null;
-  focusAgeMs: number;
-  decisionKind: 'ignore' | 'watch' | 'focus' | 'proposal' | 'reject' | 'warming';
-  rejectCode: string | null;
-  reason: string;
-  correlationId: string | null;
-  decisionTs: number | null;
-  proposal: {
-    id: string;
-    status: string;
-    direction: string;
-    confidence: number | null;
-    reason: string;
-  } | null;
-}
-
-interface VolumeSnapshot {
-  updatedAt: number;
-  status: {
-    running: boolean;
-    streamState: 'starting' | 'connecting' | 'open' | 'degraded';
-    streamConnections: number;
-    openConnections: number;
-    bookState: 'fresh' | 'stale';
-    universeSize: number;
-    eligibleSize: number;
-    observedSymbols: number;
-    baselineReady: number;
-    baselineTotal: number;
-    baselineCompleted: number;
-    baselineFailed: number;
-    watching: number;
-    focused: number;
-    openProposals: number;
-    lastTradeTs: number | null;
-    lastBookTs: number | null;
-    tradeMessages: number;
-    source: string;
-    bookSource: string;
-    baselineSource: string;
-  };
-  thresholds: {
-    volume1s: number;
-    volume5s: number;
-    tradeCount: number;
-    followthroughPct: number;
-    maxSpreadBps: number;
-    minDepthScore: number;
-    baselineMinutes: number;
-  };
-  rows: VolumeRow[];
-}
 
 const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All Symbols' },
@@ -133,7 +52,7 @@ function numberOrDash(value: number | null | undefined, digits = 1): string {
 }
 
 export function windowCountLabel(
-  windowMetric: WindowMetric | undefined,
+  windowMetric: VolumeWindowMetric | undefined,
   countKey: 'tradeCount' | 'largeTradeCount',
   suffix = '',
 ): string {
@@ -147,22 +66,54 @@ function titleCase(value: string): string {
   return value.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function stateLabel(row: VolumeRow): string {
+function stateLabel(row: VolumeRuntimeRow): string {
+  if (row.proposal?.status === 'rejected') return 'Proposal Rejected';
+  if (row.state === 'PROPOSED') {
+    if (hasAttachedOpenProposal(row)) return 'Proposal';
+    if (row.proposal?.status === 'expired') return 'Proposal Expired';
+    if (row.proposal?.status === 'approved_manual') return 'Proposal Approved';
+    return 'Proposal Reconciling';
+  }
+  if (hasAttachedOpenProposal(row)) return 'Open Proposal Reconciling';
+  if (row.proposal?.status === 'expired') return 'Proposal Expired';
+  if (row.proposal?.status === 'approved_manual') return 'Proposal Approved';
   if (!row.baseline.ready) return 'Warming';
-  if (row.state === 'PROPOSED') return 'Proposal';
   if (row.state === 'FOCUS') return 'Focused';
   if (row.state === 'WATCHING') return 'Watching';
   if (row.state === 'COOLDOWN' || row.decisionKind === 'reject') return 'Rejected';
   return 'Monitoring';
 }
 
-function stateTone(row: VolumeRow): string {
+function stateTone(row: VolumeRuntimeRow, truthCurrent: boolean): string {
+  if (row.proposal?.status === 'rejected') return 'rejected';
+  if (row.state === 'PROPOSED' || row.proposal !== null) {
+    return truthCurrent && row.state === 'PROPOSED' && hasAttachedOpenProposal(row) ? 'proposal' : 'idle';
+  }
   if (!row.baseline.ready) return 'warming';
-  if (row.state === 'PROPOSED') return 'proposal';
   if (row.state === 'FOCUS') return 'focus';
   if (row.state === 'WATCHING') return 'watching';
   if (row.state === 'COOLDOWN' || row.decisionKind === 'reject') return 'rejected';
   return 'idle';
+}
+
+function decisionTitle(row: VolumeRuntimeRow): string {
+  if (row.rejectCode) return titleCase(row.rejectCode);
+  if (row.proposal?.status === 'rejected') return 'Proposal Rejected';
+  if (row.proposal?.status === 'expired') return 'Proposal Expired';
+  if (row.proposal?.status === 'approved_manual') return 'Proposal Approved Manually';
+  if (hasAttachedOpenProposal(row) && row.state !== 'PROPOSED') return 'Open Proposal Lifecycle Mismatch';
+  if (row.state === 'PROPOSED' && !hasAttachedOpenProposal(row)) return 'Proposal Lifecycle Reconciliation';
+  if (row.decisionKind === 'proposal' && !hasAttachedOpenProposal(row)) return 'Historical Proposal Decision';
+  return titleCase(row.decisionKind);
+}
+
+function proposalDetail(row: VolumeRuntimeRow): string {
+  if (row.state === 'PROPOSED' && hasAttachedOpenProposal(row)) return 'Open · Lifecycle Bound';
+  if (hasAttachedOpenProposal(row)) return `Open · ${titleCase(row.state)} Lifecycle Mismatch`;
+  if (row.proposal !== null) return `${titleCase(row.proposal.status)} · Closed Store Record`;
+  if (row.state === 'PROPOSED') return 'No Attached Store Record · Lifecycle Reconciling';
+  if (row.decisionKind === 'proposal') return 'Historical Decision · No Attached Store Record';
+  return 'None';
 }
 
 function ratioLabel(value: number | null): string {
@@ -177,9 +128,21 @@ function countLabel(value: number | null | undefined): string | number {
   return typeof value === 'number' && Number.isFinite(value) ? value : '—';
 }
 
+function multipleTone(
+  value: number | null | undefined,
+  threshold: number | null,
+  baselineReady: boolean,
+  truthCurrent: boolean,
+): 'trigger' | 'elevated' | 'normal' | 'unknown' {
+  if (!truthCurrent || !baselineReady || typeof value !== 'number' || !Number.isFinite(value)) return 'unknown';
+  if (threshold !== null && value >= threshold) return 'trigger';
+  if (value >= 1) return 'elevated';
+  return 'normal';
+}
+
 export function VolumeScanner() {
-  const { state, openDetail, openLedger, toggleWatch } = useStore();
-  const [snapshot, setSnapshot] = useState<VolumeSnapshot | null>(null);
+  const { state, stateStatus, openDetail, openLedger, toggleWatch } = useStore();
+  const [snapshot, setSnapshot] = useState<VolumeRuntimeSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
@@ -188,9 +151,15 @@ export function VolumeScanner() {
   const [expandedIntelligenceError, setExpandedIntelligenceError] = useState<string | null>(null);
 
   useEffect(() => {
-    const poll = createSettledPoll<VolumeSnapshot>({
+    const poll = createSettledPoll<VolumeRuntimeSnapshot>({
       intervalMs: 2_000,
-      request: (signal) => fetchJson('/api/engine/volume', { cache: 'no-store', signal }),
+      request: async (signal) => {
+        const decoded = decodeVolumeRuntimeSnapshot(
+          await fetchJson<unknown>('/api/engine/volume', { cache: 'no-store', signal }),
+        );
+        if (decoded === null) throw new Error('INVALID_VOLUME_RUNTIME_RESPONSE');
+        return decoded;
+      },
       onSuccess: (next) => {
         setSnapshot(next);
         setError(null);
@@ -250,8 +219,30 @@ export function VolumeScanner() {
     return true;
   }), [filter, query, rows]);
 
-  const engineFeedsCurrent = !error && snapshot?.status.streamState === 'open' && snapshot.status.bookState === 'fresh';
+  const engineFeedsCurrent = Boolean(!error && snapshot && volumeRuntimeCurrent(snapshot));
   const watchlist = state?.config.watchlist ?? [];
+  const watchWritable = stateStatus === 'CURRENT' && engineFeedsCurrent;
+  const retainedSnapshot = Boolean(error && snapshot);
+  const feedTone = engineFeedsCurrent
+    ? 'active'
+    : retainedSnapshot
+      ? 'retained'
+      : error
+        ? 'unavailable'
+        : snapshot
+          ? 'degraded'
+          : 'starting';
+  const feedLabel = engineFeedsCurrent
+    ? 'Engine Feeds Current'
+    : retainedSnapshot
+      ? 'Last Snapshot Retained'
+      : error
+        ? 'Runtime Unavailable'
+        : snapshot
+          ? snapshot.status.running
+            ? 'Market Inputs Degraded'
+            : 'Runtime Not Running'
+          : 'Runtime Starting';
 
   return (
     <div className="container page volx-page">
@@ -260,12 +251,12 @@ export function VolumeScanner() {
           <div className="volx-title">
             <img className="volx-page-mark" src="/volume-bars.png" alt="" aria-hidden="true" />
             <h1>Volume</h1>
-            <span className={'volx-live ' + (engineFeedsCurrent ? 'active' : error ? 'degraded' : 'starting')}>
+            <span className={'volx-live ' + feedTone} role="status">
               <i aria-hidden="true" />
-              {engineFeedsCurrent ? 'Engine Feeds Current' : error ? 'Engine Feeds Unavailable' : 'Engine Feeds Starting'}
+              {feedLabel}
             </span>
             <span className="volx-updated">
-              {snapshot ? 'Updated ' + timeAgo(snapshot.updatedAt) : 'Connecting'}
+              {snapshot ? (retainedSnapshot ? 'Last received ' : 'Updated ') + timeAgo(snapshot.updatedAt) : 'Connecting'}
             </span>
           </div>
           <label className="volx-search">
@@ -291,35 +282,52 @@ export function VolumeScanner() {
         <div className="volx-summary" aria-label="Volume Summary">
           <div className="volx-summary-cell">
             <span>Observed Symbols</span>
-            <strong>{snapshot?.status.observedSymbols ?? '—'} <em>/ {snapshot?.status.eligibleSize ?? '—'}</em></strong>
-            <small>Exact aggregate-trade streams</small>
+            <strong>{retainedSnapshot ? 'UNKNOWN' : snapshot?.status.observedSymbols ?? '—'} {!retainedSnapshot ? <em>/ {snapshot?.status.eligibleSize ?? '—'}</em> : null}</strong>
+            <small>{retainedSnapshot ? 'STALE LAST-KNOWN · current stream coverage withheld' : 'Exact aggregate-trade streams'}</small>
           </div>
           <div className="volx-summary-cell">
             <span>Baselines Ready</span>
-            <strong>{snapshot?.status.baselineReady ?? '—'} <em>/ {snapshot?.status.baselineTotal ?? '—'}</em></strong>
-            <small>{snapshot ? snapshot.thresholds.baselineMinutes + ' completed minutes required' : 'Loading history'}</small>
+            <strong>{retainedSnapshot ? 'UNKNOWN' : snapshot?.status.baselineReady ?? '—'} {!retainedSnapshot ? <em>/ {snapshot?.status.baselineTotal ?? '—'}</em> : null}</strong>
+            <small>{retainedSnapshot ? 'STALE LAST-KNOWN · current baseline state withheld' : snapshot ? snapshot.thresholds.baselineMinutes + ' completed minutes required' : 'Loading history'}</small>
           </div>
           <div className="volx-summary-cell">
             <span>Focus Queue</span>
-            <strong>{snapshot ? snapshot.status.watching + snapshot.status.focused : '—'}</strong>
-            <small>{snapshot ? snapshot.status.watching + ' watching · ' + snapshot.status.focused + ' focused' : 'Waiting for runtime'}</small>
+            <strong>{retainedSnapshot ? 'UNKNOWN' : snapshot ? snapshot.status.watching + snapshot.status.focused : '—'}</strong>
+            <small>{retainedSnapshot ? 'STALE LAST-KNOWN · current queue withheld' : snapshot ? snapshot.status.watching + ' watching · ' + snapshot.status.focused + ' focused' : 'Waiting for runtime'}</small>
           </div>
           <div className="volx-summary-cell">
             <span>Open Proposals</span>
-            <strong>{snapshot?.status.openProposals ?? '—'}</strong>
-            <small>{snapshot?.status.openProposals ? 'Volume proposals in engine' : 'No verified wakeup staged'}</small>
+            <strong>{retainedSnapshot ? 'UNKNOWN' : snapshot?.status.openProposals ?? '—'}</strong>
+            <small>
+              {retainedSnapshot
+                ? 'STALE LAST-KNOWN · current proposals withheld'
+                : snapshot == null
+                ? 'Runtime truth unavailable'
+                : snapshot.status.openProposals
+                  ? 'Engine-reported proposals only'
+                  : 'No verified wakeup staged'}
+            </small>
           </div>
         </div>
 
-        <ProductSurfaceAdapter surfaceId="volume" />
+        <details className="moneyx-binding-details">
+          <summary><span>Canonical Integration Evidence</span><small>Required Volume owner fields</small></summary>
+          <ProductSurfaceAdapter surfaceId="volume" />
+        </details>
+
+        {retainedSnapshot ? (
+          <div className="volx-retained" role="status">
+            <Activity size={14} aria-hidden="true" />
+            <span><strong>Retained engine snapshot</strong> · Refresh failed. Values below are last received from the runtime, not current.</span>
+          </div>
+        ) : null}
 
         <div className="volx-filters">
-          <div className="volx-segments" role="tablist" aria-label="Volume Views">
+          <div className="volx-segments" role="group" aria-label="Volume row filters">
             {FILTERS.map((item) => (
               <button
                 type="button"
-                role="tab"
-                aria-selected={filter === item.id}
+                aria-pressed={filter === item.id}
                 className={filter === item.id ? 'selected' : ''}
                 key={item.id}
                 onClick={() => {
@@ -332,12 +340,21 @@ export function VolumeScanner() {
               </button>
             ))}
           </div>
-          <span className="volx-view-note">
-            {snapshot ? snapshot.status.openConnections + '/' + snapshot.status.streamConnections + ' trade streams · book ' + snapshot.status.bookState : 'Runtime starting'}
-          </span>
+          <div className="volx-desk-meta">
+            <span className="volx-view-note">
+              {snapshot ? snapshot.status.openConnections + '/' + snapshot.status.streamConnections + ' trade streams · book ' + snapshot.status.bookState : 'Runtime starting'}
+            </span>
+            <span className="volx-authority">Monitor only · execution unavailable</span>
+          </div>
         </div>
 
-        <div className="volx-table" role="table" aria-label="Volume Scanner Decisions">
+        <div
+          className="volx-table"
+          role="table"
+          aria-label="Volume Scanner Decisions"
+          data-current={engineFeedsCurrent ? 'true' : 'false'}
+          data-retained={retainedSnapshot ? 'true' : 'false'}
+        >
           <div className="volx-head" role="row">
             <span role="columnheader">State</span>
             <span role="columnheader">Asset</span>
@@ -368,21 +385,20 @@ export function VolumeScanner() {
             const minute = row.windows['60s'];
             const isExpanded = expanded === row.symbol;
             const watching = watchlist.includes(row.symbol);
+            const detailId = `volume-detail-${row.symbol}`;
             const ownerTruth = projectVolumeWorkspaceTruth(
               expandedIntelligence?.symbol === row.symbol ? expandedIntelligence : null,
               row.symbol,
             );
             return (
               <div className="volx-item" role="rowgroup" key={row.symbol}>
-                <button
-                  type="button"
+                <div
                   className="volx-row"
-                  aria-expanded={isExpanded}
-                  onClick={() => setExpanded(isExpanded ? null : row.symbol)}
+                  role="row"
                 >
-                  <span className={'volx-state ' + stateTone(row)} role="cell">
+                  <span className={'volx-state ' + stateTone(row, engineFeedsCurrent)} role="cell">
                     <i aria-hidden="true" />
-                    {stateLabel(row)}
+                    {retainedSnapshot ? 'Stale ' : ''}{stateLabel(row)}
                   </span>
                   <span className="volx-asset" role="cell">
                     <TokenIcon symbol={row.symbol} size={28} />
@@ -393,9 +409,9 @@ export function VolumeScanner() {
                     <small>{row.lastTradeTs ? timeAgo(row.lastTradeTs) : 'No recent trade'}</small>
                   </span>
                   <span className="volx-window-stack" role="cell">
-                    <span><em>1s</em><strong>{multiple(row.volumeMultiple['1s'])}</strong><small>{fmtMoney(one?.quoteVolume ?? null)}</small></span>
-                    <span><em>5s</em><strong>{multiple(row.volumeMultiple['5s'])}</strong><small>{fmtMoney(five?.quoteVolume ?? null)}</small></span>
-                    <span><em>1m</em><strong>{multiple(row.volumeMultiple['60s'])}</strong><small>{fmtMoney(minute?.quoteVolume ?? null)}</small></span>
+                    <span><em>1s</em><strong className={multipleTone(row.volumeMultiple['1s'], snapshot.thresholds.volume1s, row.baseline.ready, engineFeedsCurrent)}>{multiple(row.volumeMultiple['1s'])}</strong><small>{fmtMoney(one?.quoteVolume ?? null)}</small></span>
+                    <span><em>5s</em><strong className={multipleTone(row.volumeMultiple['5s'], snapshot.thresholds.volume5s, row.baseline.ready, engineFeedsCurrent)}>{multiple(row.volumeMultiple['5s'])}</strong><small>{fmtMoney(five?.quoteVolume ?? null)}</small></span>
+                    <span><em>1m</em><strong className={multipleTone(row.volumeMultiple['60s'], null, row.baseline.ready, engineFeedsCurrent)}>{multiple(row.volumeMultiple['60s'])}</strong><small>{fmtMoney(minute?.quoteVolume ?? null)}</small></span>
                   </span>
                   <span className="volx-tape" role="cell">
                     <strong>{windowCountLabel(five, 'tradeCount', ' Trades')}</strong>
@@ -410,14 +426,25 @@ export function VolumeScanner() {
                     <small>{row.accelerationPctPerMin === null ? '—' : fmtPct(row.accelerationPctPerMin, 2) + '/min'}</small>
                   </span>
                   <span className="volx-decision" role="cell">
-                    <strong>{row.rejectCode ? titleCase(row.rejectCode) : titleCase(row.decisionKind)}</strong>
+                    <strong>{decisionTitle(row)}</strong>
                     <small>{row.reason}</small>
                   </span>
-                  <ChevronDown className={isExpanded ? 'expanded' : ''} size={15} aria-hidden="true" />
-                </button>
+                  <span className="volx-row-control" role="cell">
+                    <button
+                      type="button"
+                      className="volx-disclosure"
+                      aria-controls={isExpanded ? detailId : undefined}
+                      aria-expanded={isExpanded}
+                      aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${row.symbol} volume evidence`}
+                      onClick={() => setExpanded(isExpanded ? null : row.symbol)}
+                    >
+                      <ChevronDown className={isExpanded ? 'expanded' : ''} size={15} aria-hidden="true" />
+                    </button>
+                  </span>
+                </div>
 
                 {isExpanded ? (
-                  <div className="volx-detail">
+                  <div className="volx-detail" id={detailId}>
                     <div className="volx-reason">
                       <span>Scanner Decision</span>
                       <p>{row.reason}</p>
@@ -435,12 +462,22 @@ export function VolumeScanner() {
                       <div><dt>Depth Vs Norm</dt><dd>{row.depthVsNorm === null ? '—' : Math.round(row.depthVsNorm * 100) + '%'}</dd></div>
                       <div><dt>Focus Reason</dt><dd>{row.focusReason ? titleCase(row.focusReason) : 'Not Focused'}</dd></div>
                       <div><dt>Reject Code</dt><dd>{row.rejectCode ? titleCase(row.rejectCode) : 'None'}</dd></div>
-                      <div><dt>Proposal</dt><dd>{row.proposal ? titleCase(row.proposal.status) : 'None'}</dd></div>
+                      <div><dt>Proposal</dt><dd>{proposalDetail(row)}</dd></div>
                     </dl>
                     <div className="volx-actions">
                       <button type="button" onClick={() => openDetail(row.symbol)}><Eye size={14} />Open Market</button>
-                      <button type="button" className={watching ? 'active' : ''} onClick={() => void toggleWatch(row.symbol)}>
-                        <Star size={14} fill={watching ? 'currentColor' : 'none'} />{watching ? 'Watching' : 'Watch'}
+                      <button
+                        type="button"
+                        className={watchWritable && watching ? 'active' : ''}
+                        aria-pressed={watching}
+                        disabled={!watchWritable}
+                        title={watchWritable ? undefined : 'Watch changes require current compatibility and Volume runtime truth.'}
+                        onClick={() => {
+                          if (watchWritable) void toggleWatch(row.symbol);
+                        }}
+                      >
+                        <Star size={14} fill={watching ? 'currentColor' : 'none'} />
+                        {watchWritable ? watching ? 'Watching' : 'Watch' : watching ? 'Watching · Change Unavailable' : 'Watch Unavailable'}
                       </button>
                       <button type="button" onClick={() => openLedger(row.symbol)}><BookOpen size={14} />Open Logs</button>
                     </div>
@@ -529,7 +566,19 @@ export function VolumeScanner() {
                 ) : null}
               </div>
             );
-          }) : (
+          }) : rows.length === 0 && retainedSnapshot ? (
+            <div className="volx-empty">
+              <Activity size={18} />
+              <strong>Volume Rows Stale Last-Known</strong>
+              <span>The retained runtime response contained no rows. Current row absence is unknown.</span>
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="volx-empty">
+              <Activity size={18} />
+              <strong>No Volume Decisions Available</strong>
+              <span>The current engine snapshot contains no volume rows. Nothing is simulated.</span>
+            </div>
+          ) : (
             <div className="volx-empty">
               <Activity size={18} />
               <strong>No Volume Rows Match</strong>

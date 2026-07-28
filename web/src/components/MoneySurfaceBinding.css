@@ -1,0 +1,65 @@
+.moneyx-binding-details {
+  border-bottom: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--tile) 22%, var(--panel));
+}
+
+.moneyx-binding-details > summary {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 16px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 560;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+
+.moneyx-binding-details > summary::-webkit-details-marker { display: none; }
+
+.moneyx-binding-details > summary::after {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  place-items: center;
+  color: var(--muted-2);
+  content: '+';
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1;
+}
+
+.moneyx-binding-details > summary small {
+  overflow: hidden;
+  color: var(--muted-2);
+  font-size: 10px;
+  font-weight: 430;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.moneyx-binding-details[open] > summary {
+  border-bottom: 1px solid var(--line-2);
+  color: var(--text);
+}
+
+.moneyx-binding-details[open] > summary::after { content: '−'; }
+
+.moneyx-binding-details > summary:hover { background: var(--hover); }
+.moneyx-binding-details > summary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 82%, var(--text));
+  outline-offset: -2px;
+}
+
+@container (max-width: 520px) {
+  .moneyx-binding-details > summary { padding: 0 12px; }
+  .moneyx-binding-details > summary small { display: none; }
+}

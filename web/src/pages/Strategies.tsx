@@ -10,6 +10,12 @@ import {
   Star,
   X,
 } from 'lucide-react';
+import {
+  basisRuntimeCurrent,
+  decodeBasisRuntimeSnapshot,
+  hasAttachedOpenProposal,
+} from '../components/MoneySurfaceRuntime';
+import '../components/MoneySurfaceBinding.css';
 import { TokenIcon } from '../components/TokenIcon';
 import { countdown, fmtBasis, fmtFunding, fmtMoney, fmtPrice, timeAgo } from '../format';
 import { apiErrorMessage, fetchJson } from '../lib/http';
@@ -53,15 +59,20 @@ function bps(value: number | null | undefined): string {
 }
 
 function stateLabel(row: BasisRow): string {
-  if (row.state === 'PROPOSED') return 'Proposal';
+  if (row.state === 'PROPOSED') {
+    return hasAttachedOpenProposal(row) ? 'Proposal' : 'Proposal Reconciling';
+  }
+  if (hasAttachedOpenProposal(row)) return 'Open Proposal Reconciling';
   if (row.state === 'FOCUS') return 'Focused';
   if (row.state === 'WATCHING') return 'Watching';
   if (row.decisionKind === 'reject' || row.state === 'REJECTED' || row.state === 'COOLDOWN') return 'Rejected';
   return 'Monitoring';
 }
 
-function stateTone(row: BasisRow): string {
-  if (row.state === 'PROPOSED') return 'proposal';
+function stateTone(row: BasisRow, truthCurrent: boolean): string {
+  if (row.state === 'PROPOSED' || hasAttachedOpenProposal(row)) {
+    return truthCurrent && row.state === 'PROPOSED' && hasAttachedOpenProposal(row) ? 'proposal' : 'idle';
+  }
   if (row.state === 'FOCUS') return 'focus';
   if (row.state === 'WATCHING') return 'watching';
   if (row.decisionKind === 'reject' || row.state === 'REJECTED' || row.state === 'COOLDOWN') return 'rejected';
@@ -87,12 +98,43 @@ function executionPrices(row: BasisRow): { primary: string; secondary: string } 
 
 function decisionTitle(row: BasisRow): string {
   if (row.rejectCode) return titleCase(row.rejectCode);
+  if (row.state === 'PROPOSED' && !hasAttachedOpenProposal(row)) {
+    return 'Proposal Lifecycle · No Open Attachment';
+  }
+  if (hasAttachedOpenProposal(row) && row.state !== 'PROPOSED') {
+    return 'Open Proposal Lifecycle Mismatch';
+  }
+  if (row.decisionKind === 'proposal') {
+    return row.state === 'PROPOSED' && hasAttachedOpenProposal(row)
+      ? 'Proposal'
+      : 'Historical Proposal Decision';
+  }
   if (row.decisionKind === 'ignore') return 'Below Watch Gate';
   return titleCase(row.decisionKind);
 }
 
+function proposalDetail(row: BasisRow): string {
+  if (row.state === 'PROPOSED' && hasAttachedOpenProposal(row)) return 'Open · Lifecycle Bound';
+  if (row.state === 'PROPOSED') return 'No Open Attachment · Lifecycle Reconciling';
+  if (hasAttachedOpenProposal(row)) return `Open · ${titleCase(row.state)} Lifecycle Mismatch`;
+  if (row.decisionKind === 'proposal') return 'Historical Decision · No Open Attachment';
+  return 'None';
+}
+
+function edgeTone(row: BasisRow, truthCurrent: boolean): 'cleared' | 'measured' | 'blocked' | 'unknown' {
+  if (!truthCurrent) return 'unknown';
+  if (!finite(row.netEdgePct)) return 'unknown';
+  if (row.state === 'PROPOSED' || hasAttachedOpenProposal(row)) {
+    return row.state === 'PROPOSED' && hasAttachedOpenProposal(row) && row.netEdgePct > 0
+      ? 'cleared'
+      : 'unknown';
+  }
+  if (row.decisionKind === 'reject' || row.state === 'REJECTED' || row.state === 'COOLDOWN') return 'blocked';
+  return 'measured';
+}
+
 export function Strategies() {
-  const { state, openDetail, openLedger, setPage, toggleWatch } = useStore();
+  const { state, stateStatus, openDetail, openLedger, setPage, toggleWatch } = useStore();
   const [snapshot, setSnapshot] = useState<BasisSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
@@ -102,7 +144,13 @@ export function Strategies() {
   useEffect(() => {
     const poll = createSettledPoll<BasisSnapshot>({
       intervalMs: 2_000,
-      request: (signal) => fetchJson('/api/engine/basis', { cache: 'no-store', signal }),
+      request: async (signal) => {
+        const decoded = decodeBasisRuntimeSnapshot(
+          await fetchJson<unknown>('/api/engine/basis', { cache: 'no-store', signal }),
+        );
+        if (decoded === null) throw new Error('INVALID_BASIS_RUNTIME_RESPONSE');
+        return decoded;
+      },
       onSuccess: (next) => {
         setSnapshot(next);
         setError(null);
@@ -114,11 +162,15 @@ export function Strategies() {
   }, []);
 
   const rows = snapshot?.rows ?? [];
+  const openProposalCount = rows.filter(hasAttachedOpenProposal).length;
+  const proposalReconciliationCount = rows.filter(
+    (row) => (row.state === 'PROPOSED') !== hasAttachedOpenProposal(row),
+  ).length;
   const query = search.trim().toUpperCase();
   const counts = useMemo(() => ({
     all: rows.length,
     candidates: rows.filter((row) => row.state === 'WATCHING' || row.state === 'FOCUS' || row.state === 'PROPOSED').length,
-    proposals: rows.filter((row) => row.state === 'PROPOSED').length,
+    proposals: rows.filter(hasAttachedOpenProposal).length,
     borrow: rows.filter((row) => row.rejectCode?.startsWith('borrow_')).length,
     rejected: rows.filter((row) => row.decisionKind === 'reject').length,
   }), [rows]);
@@ -132,21 +184,37 @@ export function Strategies() {
       !(row.rejectCode ?? '').toUpperCase().includes(query)
     ) return false;
     if (filter === 'candidates') return row.state === 'WATCHING' || row.state === 'FOCUS' || row.state === 'PROPOSED';
-    if (filter === 'proposals') return row.state === 'PROPOSED';
+    if (filter === 'proposals') return hasAttachedOpenProposal(row);
     if (filter === 'borrow') return row.rejectCode?.startsWith('borrow_');
     if (filter === 'rejected') return row.decisionKind === 'reject';
     return true;
   }), [filter, query, rows]);
 
-  const liveFeed = Boolean(
-    !error &&
-    snapshot?.status.running &&
-    snapshot.status.bookState === 'fresh' &&
-    snapshot.status.markState === 'fresh' &&
-    !snapshot.status.lastError,
-  );
+  const liveFeed = Boolean(!error && snapshot && basisRuntimeCurrent(snapshot));
   const watchlist = state?.config.watchlist ?? [];
+  const watchWritable = stateStatus === 'CURRENT' && liveFeed;
   const queueSize = snapshot ? snapshot.status.watching + snapshot.status.focused : null;
+  const retainedSnapshot = Boolean(error && snapshot);
+  const feedTone = liveFeed
+    ? 'active'
+    : retainedSnapshot
+      ? 'retained'
+      : error
+        ? 'unavailable'
+        : snapshot
+          ? 'degraded'
+          : 'starting';
+  const feedLabel = liveFeed
+    ? 'Market Inputs Current'
+    : retainedSnapshot
+      ? 'Last Snapshot Retained'
+      : error
+        ? 'Runtime Unavailable'
+        : snapshot
+          ? snapshot.status.running
+            ? 'Market Inputs Degraded'
+            : 'Runtime Not Running'
+          : 'Runtime Starting';
 
   return (
     <div className="container page volx-page basx-page">
@@ -155,12 +223,12 @@ export function Strategies() {
           <div className="volx-title basx-title">
             <img className="basx-page-mark" src="/basis-percent.png" alt="" aria-hidden="true" />
             <h1>Basis</h1>
-            <span className={'volx-live ' + (liveFeed ? 'active' : error ? 'degraded' : 'starting')}>
+            <span className={'volx-live ' + feedTone} role="status">
               <i aria-hidden="true" />
-              {liveFeed ? 'Live' : error ? 'Unavailable' : 'Starting'}
+              {feedLabel}
             </span>
             <span className="volx-updated">
-              {snapshot ? 'Updated ' + timeAgo(snapshot.updatedAt) : 'Connecting'}
+              {snapshot ? (retainedSnapshot ? 'Last received ' : 'Updated ') + timeAgo(snapshot.updatedAt) : 'Connecting'}
             </span>
           </div>
           <label className="volx-search">
@@ -186,35 +254,54 @@ export function Strategies() {
         <div className="volx-summary" aria-label="Basis Summary">
           <div className="volx-summary-cell">
             <span>Eligible Pairs</span>
-            <strong>{snapshot?.status.universeSize ?? '—'}</strong>
-            <small>Liquid Binance spot + USD-M pairs</small>
+            <strong>{retainedSnapshot ? 'UNKNOWN' : snapshot?.status.universeSize ?? '—'}</strong>
+            <small>{retainedSnapshot ? 'STALE LAST-KNOWN · current universe withheld' : 'Liquid Binance spot + USD-M pairs'}</small>
           </div>
           <div className="volx-summary-cell">
             <span>Decision Queue</span>
-            <strong>{queueSize ?? '—'}</strong>
-            <small>{snapshot ? snapshot.status.watching + ' watching · ' + snapshot.status.focused + ' focused' : 'Waiting for runtime'}</small>
+            <strong>{retainedSnapshot ? 'UNKNOWN' : queueSize ?? '—'}</strong>
+            <small>{retainedSnapshot ? 'STALE LAST-KNOWN · current queue withheld' : snapshot ? snapshot.status.watching + ' watching · ' + snapshot.status.focused + ' focused' : 'Waiting for runtime'}</small>
           </div>
           <div className="volx-summary-cell">
             <span>Open Proposals</span>
-            <strong>{snapshot?.status.openProposals ?? '—'}</strong>
-            <small>{snapshot == null ? 'Runtime truth unavailable' : snapshot.status.openProposals ? 'Passed every executable gate' : 'No setup has cleared every gate'}</small>
+            <strong>{retainedSnapshot ? 'UNKNOWN' : snapshot ? openProposalCount : '—'}</strong>
+            <small>
+              {retainedSnapshot
+                ? 'STALE LAST-KNOWN · current proposals withheld'
+                : snapshot == null
+                ? 'Runtime truth unavailable'
+                : proposalReconciliationCount > 0
+                  ? `${proposalReconciliationCount} lifecycle/store reconciliation ${proposalReconciliationCount === 1 ? 'row' : 'rows'} · attached-open only`
+                : openProposalCount
+                  ? 'Attached open proposals only'
+                  : 'No setup has cleared every gate'}
+            </small>
           </div>
           <div className="volx-summary-cell">
             <span>Borrow Verified</span>
-            <strong>{snapshot?.status.verifiedBorrow ?? '—'} <em>/ {snapshot?.status.universeSize ?? '—'}</em></strong>
-            <small>Unknown borrow is blocked, never inferred</small>
+            <strong>{retainedSnapshot ? 'UNKNOWN' : snapshot?.status.verifiedBorrow ?? '—'} {!retainedSnapshot ? <em>/ {snapshot?.status.universeSize ?? '—'}</em> : null}</strong>
+            <small>{retainedSnapshot ? 'STALE LAST-KNOWN · current borrow checks withheld' : 'Unknown borrow is blocked, never inferred'}</small>
           </div>
         </div>
 
-        <ProductSurfaceAdapter surfaceId="basis" />
+        <details className="moneyx-binding-details">
+          <summary><span>Canonical Integration Evidence</span><small>Required Basis owner fields</small></summary>
+          <ProductSurfaceAdapter surfaceId="basis" />
+        </details>
+
+        {retainedSnapshot ? (
+          <div className="volx-retained" role="status">
+            <Activity size={14} aria-hidden="true" />
+            <span><strong>Retained engine snapshot</strong> · Refresh failed. Values below are last received from the runtime, not current.</span>
+          </div>
+        ) : null}
 
         <div className="volx-filters">
-          <div className="volx-segments" role="tablist" aria-label="Basis Views">
+          <div className="volx-segments" role="group" aria-label="Basis row filters">
             {FILTERS.map((item) => (
               <button
                 type="button"
-                role="tab"
-                aria-selected={filter === item.id}
+                aria-pressed={filter === item.id}
                 className={filter === item.id ? 'selected' : ''}
                 key={item.id}
                 onClick={() => {
@@ -227,12 +314,21 @@ export function Strategies() {
               </button>
             ))}
           </div>
-          <span className="volx-view-note">
-            {snapshot ? 'Crossed books ' + snapshot.status.bookState + ' · marks ' + snapshot.status.markState : 'Runtime starting'}
-          </span>
+          <div className="volx-desk-meta">
+            <span className="volx-view-note">
+              {snapshot ? 'Crossed books ' + snapshot.status.bookState + ' · marks ' + snapshot.status.markState : 'Runtime starting'}
+            </span>
+            <span className="volx-authority">Monitor only · execution unavailable</span>
+          </div>
         </div>
 
-        <div className="volx-table basx-table" role="table" aria-label="Basis Scanner Decisions">
+        <div
+          className="volx-table basx-table"
+          role="table"
+          aria-label="Basis Scanner Decisions"
+          data-current={liveFeed ? 'true' : 'false'}
+          data-retained={retainedSnapshot ? 'true' : 'false'}
+        >
           <div className="basx-head" role="row">
             <span role="columnheader">State</span>
             <span role="columnheader">Asset</span>
@@ -258,20 +354,21 @@ export function Strategies() {
               <span>Waiting for public Binance spot, USD-M book, mark, and funding sources.</span>
             </div>
           ) : filteredRows.length ? filteredRows.map((row) => {
+            const rowCurrent = liveFeed && row.dataQuality.score >= snapshot.thresholds.minDataQuality;
+            const rowWatchWritable = watchWritable && rowCurrent;
             const isExpanded = expanded === row.symbol;
             const watching = watchlist.includes(row.symbol);
             const prices = executionPrices(row);
+            const detailId = `basis-detail-${row.symbol}`;
             return (
               <div className="basx-item" role="rowgroup" key={row.symbol}>
-                <button
-                  type="button"
+                <div
                   className="basx-row"
-                  aria-expanded={isExpanded}
-                  onClick={() => setExpanded(isExpanded ? null : row.symbol)}
+                  role="row"
                 >
-                  <span className={'volx-state ' + stateTone(row)} role="cell">
+                  <span className={'volx-state ' + stateTone(row, rowCurrent)} role="cell">
                     <i aria-hidden="true" />
-                    {stateLabel(row)}
+                    {retainedSnapshot ? 'Stale ' : ''}{stateLabel(row)}
                   </span>
                   <span className="volx-asset" role="cell">
                     <TokenIcon symbol={row.symbol} size={28} />
@@ -289,7 +386,7 @@ export function Strategies() {
                     <strong>{fmtFunding(row.fundingRate)}</strong>
                     <small>{row.nextFundingTs ? countdown(row.nextFundingTs) + ' · Carry ' + fmtBasis(row.fundingCarryPct) : 'Funding unavailable'}</small>
                   </span>
-                  <span className="basx-edge" role="cell">
+                  <span className={'basx-edge ' + edgeTone(row, rowCurrent)} role="cell">
                     <strong>{fmtBasis(row.netEdgePct)}</strong>
                     <small>Gross {fmtBasis(row.executableGapPct)} · Cost {fmtBasis(row.costs.totalPct)}</small>
                   </span>
@@ -301,11 +398,22 @@ export function Strategies() {
                     <strong>{decisionTitle(row)}</strong>
                     <small>{row.reason}</small>
                   </span>
-                  <ChevronDown className={isExpanded ? 'expanded' : ''} size={15} aria-hidden="true" />
-                </button>
+                  <span className="volx-row-control" role="cell">
+                    <button
+                      type="button"
+                      className="volx-disclosure"
+                      aria-controls={isExpanded ? detailId : undefined}
+                      aria-expanded={isExpanded}
+                      aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${row.symbol} basis evidence`}
+                      onClick={() => setExpanded(isExpanded ? null : row.symbol)}
+                    >
+                      <ChevronDown className={isExpanded ? 'expanded' : ''} size={15} aria-hidden="true" />
+                    </button>
+                  </span>
+                </div>
 
                 {isExpanded ? (
-                  <div className="volx-detail basx-detail">
+                  <div className="volx-detail basx-detail" id={detailId}>
                     <div className="volx-reason">
                       <span>Scanner Decision</span>
                       <p>{row.reason}</p>
@@ -327,12 +435,23 @@ export function Strategies() {
                       <div><dt>Borrow Preflight</dt><dd>{titleCase(row.borrow.status)}</dd></div>
                       <div><dt>Borrow Reason</dt><dd title={row.borrow.human}>{row.borrow.human}</dd></div>
                       <div><dt>Reject Code</dt><dd>{row.rejectCode ? titleCase(row.rejectCode) : 'None'}</dd></div>
+                      <div><dt>Proposal</dt><dd>{proposalDetail(row)}</dd></div>
                       <div><dt>Correlation</dt><dd title={row.correlationId ?? undefined}>{row.correlationId ?? 'None'}</dd></div>
                     </dl>
                     <div className="volx-actions">
                       <button type="button" onClick={() => openDetail(row.symbol)}><Eye size={14} />Open Market</button>
-                      <button type="button" className={watching ? 'active' : ''} onClick={() => void toggleWatch(row.symbol)}>
-                        <Star size={14} fill={watching ? 'currentColor' : 'none'} />{watching ? 'Watching' : 'Watch'}
+                      <button
+                        type="button"
+                        className={rowWatchWritable && watching ? 'active' : ''}
+                        aria-pressed={watching}
+                        disabled={!rowWatchWritable}
+                        title={rowWatchWritable ? undefined : 'Watch changes require current compatibility, current Basis runtime truth, and row data quality at or above the configured minimum.'}
+                        onClick={() => {
+                          if (rowWatchWritable) void toggleWatch(row.symbol);
+                        }}
+                      >
+                        <Star size={14} fill={watching ? 'currentColor' : 'none'} />
+                        {rowWatchWritable ? watching ? 'Watching' : 'Watch' : watching ? 'Watching · Change Unavailable' : 'Watch Unavailable'}
                       </button>
                       <button type="button" onClick={() => openLedger(row.symbol)}><BookOpen size={14} />Open Logs</button>
                       <button type="button" onClick={() => setPage('opportunities')}><ArrowRightLeft size={14} />Open Queue</button>
@@ -341,7 +460,19 @@ export function Strategies() {
                 ) : null}
               </div>
             );
-          }) : (
+          }) : rows.length === 0 && retainedSnapshot ? (
+            <div className="volx-empty">
+              <Activity size={18} />
+              <strong>Basis Rows Stale Last-Known</strong>
+              <span>The retained runtime response contained no rows. Current row absence is unknown.</span>
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="volx-empty">
+              <Activity size={18} />
+              <strong>No Basis Decisions Available</strong>
+              <span>The current engine snapshot contains no basis rows. Nothing is simulated.</span>
+            </div>
+          ) : (
             <div className="volx-empty">
               <Activity size={18} />
               <strong>No Basis Rows Match</strong>

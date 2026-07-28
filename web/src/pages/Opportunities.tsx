@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { projectMarketConsumerTruth } from '../components/Header';
+import '../components/MoneySurfaceBinding.css';
 import { TokenIcon } from '../components/TokenIcon';
 import { fmtBasis, fmtFunding, fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
 import { useStore } from '../store';
@@ -139,15 +140,17 @@ export function Opportunities() {
           </div>
         </div>
 
-        <ProductSurfaceAdapter surfaceId="opportunities" />
+        <details className="moneyx-binding-details">
+          <summary><span>Canonical Integration Evidence</span><small>Required opportunity owner fields</small></summary>
+          <ProductSurfaceAdapter surfaceId="opportunities" />
+        </details>
 
         <div className="opportunityx-filters">
-          <div className="opportunityx-segments" role="tablist" aria-label="Opportunity Views">
+          <div className="opportunityx-segments" role="group" aria-label="Opportunity views">
             {VIEWS.map((item) => (
               <button
                 type="button"
-                role="tab"
-                aria-selected={view === item.id}
+                aria-pressed={view === item.id}
                 className={view === item.id ? 'selected' : ''}
                 key={item.id}
                 onClick={() => setView(item.id)}
@@ -224,11 +227,17 @@ export function Opportunities() {
                     </button>
                   </span>
                 </div>
-              )) : (
+              )) : query ? (
               <div className="opportunityx-empty">
                 <Radar size={18} />
                 <strong>No Raw Market Facts Match Search</strong>
                 <span>No source row matches the symbol query. No fallback value or strategy row is fabricated.</span>
+              </div>
+            ) : (
+              <div className="opportunityx-empty">
+                <Radar size={18} />
+                <strong>No Raw Market Rows Available</strong>
+                <span>The canonical market read contains no raw rows. Source order remains authoritative; no fallback, scoring, or strategy row is fabricated.</span>
               </div>
             )}
           </div>

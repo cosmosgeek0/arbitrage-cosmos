@@ -8,8 +8,8 @@
 .basx-head,
 .basx-row {
   display: grid;
-  grid-template-columns: 78px minmax(145px, 1fr) minmax(145px, .95fr) minmax(205px, 1.3fr) minmax(150px, .9fr) minmax(165px, 1fr) minmax(150px, .9fr) minmax(320px, 2fr) 20px;
-  min-width: 1450px;
+  grid-template-columns: 68px minmax(110px, .8fr) minmax(100px, .72fr) minmax(140px, 1fr) minmax(110px, .8fr) minmax(120px, .85fr) minmax(105px, .75fr) minmax(190px, 1.35fr) 34px;
+  min-width: 1020px;
   align-items: center;
 }
 
@@ -27,7 +27,7 @@
 }
 
 .basx-head > *,
-.basx-row > * { min-width: 0; padding-right: 20px; }
+.basx-row > * { min-width: 0; padding-right: 12px; }
 .basx-head > *:last-child,
 .basx-row > *:last-child { padding-right: 0; }
 
@@ -90,14 +90,18 @@
 .basx-gap strong { font-weight: 480; }
 .basx-prices strong { font-size: 12px; }
 .basx-funding strong { font-size: 12px; }
-.basx-edge strong { color: #278b5d; font-weight: 480; }
+.basx-edge strong { color: var(--text); font-weight: 480; }
+.basx-edge.cleared strong { color: #278b5d; }
+.basx-edge.measured strong { color: var(--text); }
+.basx-edge.blocked strong,
+.basx-edge.unknown strong { color: var(--muted); }
 .basx-row .volx-decision strong { font-size: 12px; font-weight: 470; }
 
 .basx-detail {
-  grid-template-columns: minmax(260px, .95fr) minmax(580px, 2fr) minmax(190px, auto);
-  min-width: 1450px;
-  gap: 24px;
-  padding: 18px 20px 20px 126px;
+  grid-template-columns: minmax(220px, .8fr) minmax(500px, 2fr) minmax(170px, auto);
+  min-width: 1020px;
+  gap: 18px;
+  padding: 18px 20px 20px 100px;
 }
 
 .basx-detail .volx-actions {
@@ -108,16 +112,16 @@
 .basx-facts { gap: 12px 14px; }
 
 [data-theme='dark'] .basx-head { background: #171b20; }
-[data-theme='dark'] .basx-edge strong { color: #62ba8b; }
+[data-theme='dark'] .basx-edge.cleared strong { color: #62ba8b; }
 
 @container (max-width: 1180px) {
   .basx-detail {
-    grid-template-columns: minmax(260px, .95fr) minmax(580px, 2fr) minmax(190px, auto);
-    min-width: 1450px;
-    padding: 18px 20px 20px 126px;
+    grid-template-columns: minmax(220px, .8fr) minmax(500px, 2fr) minmax(170px, auto);
+    min-width: 1020px;
+    padding: 18px 20px 20px 100px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .basx-row > svg:last-child { transition: none; }
+  .basx-row .volx-disclosure svg { transition: none; }
 }

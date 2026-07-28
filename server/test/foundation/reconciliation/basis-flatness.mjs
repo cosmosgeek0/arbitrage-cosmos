@@ -724,6 +724,46 @@ test('array lengths short-circuit before enumeration and bounded arrays reject e
   assert.equal(verifyBasisFlatness(tooManyAmbiguities).status, 'BLOCKED');
 });
 
+test('overwide frozen plain objects stop before full descriptor cloning', () => {
+  const normal = input();
+  const overwide = {
+    nowMs: NOW_MS,
+    policy: normal.policy,
+    plan: normal.plan,
+    evidence: normal.evidence,
+  };
+  for (let index = 0; index < 25; index += 1) {
+    overwide[`unexpected${index}`] = index;
+  }
+  deepFreeze(overwide);
+
+  const originalGetOwnPropertyDescriptors = Object.getOwnPropertyDescriptors;
+  const originalIsFrozen = Object.isFrozen;
+  let overwideDescriptorClones = 0;
+  let overwideIntegrityScans = 0;
+  Object.getOwnPropertyDescriptors = function instrumentedDescriptors(value) {
+    if (value === overwide) overwideDescriptorClones += 1;
+    return originalGetOwnPropertyDescriptors(value);
+  };
+  Object.isFrozen = function instrumentedIsFrozen(value) {
+    if (value === overwide) overwideIntegrityScans += 1;
+    return originalIsFrozen(value);
+  };
+  let result;
+  try {
+    result = verifyBasisFlatness(overwide);
+  } finally {
+    Object.getOwnPropertyDescriptors = originalGetOwnPropertyDescriptors;
+    Object.isFrozen = originalIsFrozen;
+  }
+
+  assert.equal(result.status, 'BLOCKED');
+  assert.deepEqual(result.reasonCodes, ['INPUT_OWN_KEY_BUDGET_EXCEEDED']);
+  assert.equal(overwideDescriptorClones, 0);
+  assert.equal(overwideIntegrityScans, 0);
+  assertZeroAuthority(result);
+});
+
 test('missing, non-terminal, ambiguous, stale, or incomplete evidence is never flat', () => {
   const missingOrder = input({
     evidence: {

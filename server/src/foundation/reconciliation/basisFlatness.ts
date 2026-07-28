@@ -16,6 +16,7 @@ export const BASIS_FLATNESS_SCHEMA =
 export const BASIS_FLATNESS_VERSION = 1 as const;
 export const MAXIMUM_BASIS_FLATNESS_EVIDENCE_AGE_MS = 300_000;
 export const MAXIMUM_BASIS_FLATNESS_AMBIGUITIES = 16;
+export const MAXIMUM_BASIS_FLATNESS_OBJECT_KEYS = 24;
 
 export const BASIS_FLATNESS_STEPS = Object.freeze([
   'SPOT_OPEN',
@@ -265,18 +266,18 @@ function descriptorValues(
   if (prototype !== Object.prototype && prototype !== null) {
     return problem('BLOCKED', `${path.toUpperCase()}_PLAIN_OBJECT_REQUIRED`);
   }
-  if (!Object.isFrozen(value)) {
-    return problem('BLOCKED', `${path.toUpperCase()}_FROZEN_VALUE_REQUIRED`);
+
+  // Plain evidence objects in this contract are deliberately tiny (the
+  // largest is one order record). Bound own-key materialization before
+  // reading any descriptors, then inspect only the exact expected keys.
+  const ownKeys = Reflect.ownKeys(value);
+  if (ownKeys.length > MAXIMUM_BASIS_FLATNESS_OBJECT_KEYS) {
+    return problem('BLOCKED', `${path.toUpperCase()}_OWN_KEY_BUDGET_EXCEEDED`);
   }
-  if (Object.getOwnPropertySymbols(value).length !== 0) {
+  if (ownKeys.some((key) => typeof key === 'symbol')) {
     return problem('BLOCKED', `${path.toUpperCase()}_SYMBOL_FIELD_REJECTED`);
   }
-
-  const descriptors = Object.getOwnPropertyDescriptors(value) as Record<
-    string,
-    PropertyDescriptor
-  >;
-  const actualKeys = Object.keys(descriptors).sort();
+  const actualKeys = (ownKeys as string[]).sort();
   const wantedKeys = [...expectedKeys].sort();
   if (
     actualKeys.length !== wantedKeys.length ||
@@ -284,10 +285,13 @@ function descriptorValues(
   ) {
     return problem('BLOCKED', `${path.toUpperCase()}_SHAPE_INVALID`);
   }
+  if (!Object.isFrozen(value)) {
+    return problem('BLOCKED', `${path.toUpperCase()}_FROZEN_VALUE_REQUIRED`);
+  }
 
   const projected: Record<string, unknown> = {};
   for (const key of expectedKeys) {
-    const descriptor = descriptors[key];
+    const descriptor = Object.getOwnPropertyDescriptor(value, key);
     if (
       descriptor === undefined ||
       !Object.hasOwn(descriptor, 'value') ||

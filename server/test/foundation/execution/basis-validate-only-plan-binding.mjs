@@ -1163,6 +1163,45 @@ test('plain-data snapshot rejects overwide, dense, deep, oversized, and aggregat
   }
 });
 
+test('own enumerable __proto__ data is rejected for both input and controls', () => {
+  const { input, planInput } = makeWorld();
+  const protoData = {};
+  Object.defineProperty(protoData, '__proto__', {
+    value: { polluted: true },
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+  assert.equal(Object.hasOwn(protoData, '__proto__'), true);
+  assert.equal(Object.getPrototypeOf(protoData), Object.prototype);
+
+  const inputResult = bindBasisValidateOnlyPlan(
+    {
+      ...input,
+      planInput: {
+        ...planInput,
+        openingOrder: protoData,
+      },
+    },
+    enabledControls(),
+  );
+  assert.equal(inputResult.ok, false);
+  assert.equal(inputResult.code, 'INPUT_NOT_PLAIN_DATA');
+
+  const controls = enabledControls();
+  Object.defineProperty(controls, '__proto__', {
+    value: { polluted: true },
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
+  const controlResult = bindBasisValidateOnlyPlan(input, controls);
+  assert.equal(controlResult.ok, false);
+  assert.equal(controlResult.code, 'CONTROL_INVALID');
+  assert.equal(Object.hasOwn(Object.prototype, 'polluted'), false);
+  assert.equal({}.polluted, undefined);
+});
+
 test('hostile accessors and Proxies are rejected without invocation', () => {
   const { input } = makeWorld();
   let getterCalls = 0;

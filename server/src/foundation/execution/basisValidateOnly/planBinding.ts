@@ -620,6 +620,9 @@ function snapshotPlainData(
     const output: Record<string, unknown> = {};
     for (const key of keys) {
       if (typeof key === 'symbol') throw new PlainDataError('symbol properties are forbidden');
+      if (key === '__proto__') {
+        throw new PlainDataError('__proto__ data properties are forbidden');
+      }
       budget.bytes += key.length * 2;
       if (budget.bytes > MAX_SNAPSHOT_TOTAL_BYTES) {
         throw new PlainDataError('input exceeds bounded snapshot byte capacity');

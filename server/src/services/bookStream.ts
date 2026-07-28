@@ -37,6 +37,7 @@ type StreamFactory = (
 ) => StreamHandle;
 
 interface Feed {
+  generation: number;
   stream: StreamHandle;
   viewers: Set<WebSocket>;
   status: FeedStatus;
@@ -46,6 +47,8 @@ interface Feed {
   lastTradeId: number;
   flushTimer: NodeJS.Timeout;
   idleTimer: NodeJS.Timeout | null;
+  recoveryTimer: NodeJS.Timeout | null;
+  recoveryAttempt: number;
 }
 
 export interface BookStreamHubOptions {
@@ -53,6 +56,9 @@ export interface BookStreamHubOptions {
   maxSubscriptions?: number;
   maxViewersPerFeed?: number;
   maxClientBufferedBytes?: number;
+  /** Test-time compression only; production retains the bounded default. */
+  sourceRecoveryBaseMs?: number;
+  random?: () => number;
   streamFactory?: StreamFactory;
 }
 
@@ -67,6 +73,9 @@ const DEFAULT_MAX_VIEWERS_PER_FEED = 128;
 const DEFAULT_MAX_CLIENT_BUFFERED_BYTES = 512 * 1024;
 const MAX_EVENT_AGE_MS = 10 * 60_000;
 const MAX_FUTURE_SKEW_MS = 60_000;
+const SOURCE_RECOVERY_BASE_MS = 60_000;
+const SOURCE_RECOVERY_MAX_MS = 15 * 60_000;
+const SOURCE_RECOVERY_JITTER_RATIO = 0.2;
 
 function boundedInt(value: number | undefined, fallback: number): number {
   return Number.isSafeInteger(value) && Number(value) > 0 ? Number(value) : fallback;
@@ -111,7 +120,10 @@ export class BookStreamHub {
   private readonly maxSubscriptions: number;
   private readonly maxViewersPerFeed: number;
   private readonly maxClientBufferedBytes: number;
+  private readonly sourceRecoveryBaseMs: number;
+  private readonly recoveryRandom: () => number;
   private readonly streamFactory: StreamFactory;
+  private feedGeneration = 0;
   private stopped = false;
 
   constructor(
@@ -125,6 +137,22 @@ export class BookStreamHub {
       options.maxClientBufferedBytes,
       DEFAULT_MAX_CLIENT_BUFFERED_BYTES,
     );
+    const recoveryBaseMs = options.sourceRecoveryBaseMs ?? SOURCE_RECOVERY_BASE_MS;
+    if (
+      !Number.isSafeInteger(recoveryBaseMs)
+      || recoveryBaseMs < 1
+      || recoveryBaseMs > SOURCE_RECOVERY_MAX_MS
+    ) {
+      throw new RangeError(`BOOK_SOURCE_RECOVERY_BASE_OUT_OF_BOUNDS:${String(recoveryBaseMs)}`);
+    }
+    if (options.random !== undefined && typeof options.random !== 'function') {
+      throw new TypeError('BOOK_SOURCE_RECOVERY_RANDOM_INVALID');
+    }
+    if (options.streamFactory !== undefined && typeof options.streamFactory !== 'function') {
+      throw new TypeError('BOOK_STREAM_FACTORY_INVALID');
+    }
+    this.sourceRecoveryBaseMs = recoveryBaseMs;
+    this.recoveryRandom = options.random ?? Math.random;
     this.streamFactory = options.streamFactory ?? ((name, url, onMessage, onStatus) => (
       new BinanceStream(name, url, onMessage, onStatus)
     ));
@@ -244,18 +272,29 @@ export class BookStreamHub {
   private openFeed(symbol: string): Feed {
     const lower = symbol.toLowerCase();
     const url = `wss://stream.binance.com:443/stream?streams=${lower}@depth${BOOK_LEVELS}@100ms/${lower}@aggTrade`;
+    const generation = ++this.feedGeneration;
     let feed: Feed | null = null;
     const stream = this.streamFactory(
       `book-${lower}`,
       url,
-      (data) => this.onFrame(symbol, data),
+      (data) => {
+        if (feed) this.onFrame(symbol, feed, generation, data);
+      },
       (_name, status) => {
-        if (feed) this.onFeedStatus(symbol, feed, status);
+        if (feed) this.onFeedStatus(symbol, feed, generation, status);
       },
     );
-    const flushTimer = setInterval(() => this.flushTrades(symbol), TRADE_FLUSH_MS);
+    const flushTimer = setInterval(() => {
+      if (
+        feed
+        && !feed.disposed
+        && feed.generation === generation
+        && this.feeds.get(symbol) === feed
+      ) this.flushTrades(symbol);
+    }, TRADE_FLUSH_MS);
     flushTimer.unref?.();
     feed = {
+      generation,
       viewers: new Set(),
       status: 'connecting',
       lastMessageAtMs: null,
@@ -263,6 +302,8 @@ export class BookStreamHub {
       tradeBuf: [],
       lastTradeId: -1,
       idleTimer: null,
+      recoveryTimer: null,
+      recoveryAttempt: 0,
       flushTimer,
       stream,
     };
@@ -274,7 +315,10 @@ export class BookStreamHub {
     feed.disposed = true;
     clearInterval(feed.flushTimer);
     if (feed.idleTimer) clearTimeout(feed.idleTimer);
+    if (feed.recoveryTimer) clearTimeout(feed.recoveryTimer);
     feed.idleTimer = null;
+    feed.recoveryTimer = null;
+    feed.recoveryAttempt = 0;
     feed.tradeBuf.length = 0;
     try {
       feed.stream.stop();
@@ -283,19 +327,117 @@ export class BookStreamHub {
     }
   }
 
-  private onFeedStatus(symbol: string, feed: Feed, status: FeedStatus): void {
-    if (this.stopped || feed.disposed || this.feeds.get(symbol) !== feed) return;
+  private onFeedStatus(
+    symbol: string,
+    feed: Feed,
+    generation: number,
+    status: FeedStatus,
+  ): void {
+    if (
+      this.stopped
+      || feed.disposed
+      || feed.generation !== generation
+      || this.feeds.get(symbol) !== feed
+    ) return;
     feed.status = status;
-    const viewers = [...feed.viewers];
     this.publishFeedStatus(symbol, feed);
-    if (status !== 'exhausted') return;
+    if (
+      this.stopped
+      || feed.disposed
+      || feed.generation !== generation
+      || this.feeds.get(symbol) !== feed
+    ) return;
+    const currentStatus = feed.status;
+    if (currentStatus === 'open') this.clearFeedRecovery(feed);
+    if (currentStatus === 'exhausted') this.scheduleFeedRecovery(symbol, feed, generation);
+  }
 
-    for (const viewer of viewers) {
-      if (this.subOf.get(viewer) === symbol) this.subOf.delete(viewer);
+  private scheduleFeedRecovery(symbol: string, feed: Feed, generation: number): void {
+    if (!this.canScheduleFeedRecovery(symbol, feed, generation)) return;
+    const attempt = feed.recoveryAttempt + 1;
+    const exponent = Math.min(attempt - 1, 30);
+    const base = Math.min(this.sourceRecoveryBaseMs * 2 ** exponent, SOURCE_RECOVERY_MAX_MS);
+    let random = 0.5;
+    try {
+      const observed = this.recoveryRandom();
+      if (Number.isFinite(observed)) random = Math.min(1, Math.max(0, observed));
+    } catch {
+      // Deterministic midpoint jitter is the fail-closed fallback.
     }
-    feed.viewers.clear();
-    this.feeds.delete(symbol);
-    this.disposeFeed(feed);
+    const delay = Math.max(
+      1,
+      Math.round(base * (1 + ((random * 2) - 1) * SOURCE_RECOVERY_JITTER_RATIO)),
+    );
+    if (!this.canScheduleFeedRecovery(symbol, feed, generation)) return;
+    const timer = setTimeout(() => {
+      if (feed.recoveryTimer !== timer) return;
+      feed.recoveryTimer = null;
+      if (
+        this.stopped
+        || feed.disposed
+        || feed.generation !== generation
+        || this.feeds.get(symbol) !== feed
+        || feed.status !== 'exhausted'
+      ) return;
+      const recoveryStatus = feed.status;
+      try {
+        feed.stream.stop();
+        const postStopStatus = feed.status as FeedStatus;
+        if (
+          this.stopped
+          || feed.disposed
+          || feed.generation !== generation
+          || this.feeds.get(symbol) !== feed
+          || feed.recoveryTimer !== null
+          || (postStopStatus !== 'closed' && postStopStatus !== recoveryStatus)
+        ) return;
+        feed.stream.start();
+      } catch {
+        if (this.canRestoreFeedRecovery(symbol, feed, generation)) {
+          this.onFeedStatus(symbol, feed, generation, 'exhausted');
+        }
+      }
+      if (
+        !this.stopped
+        && !feed.disposed
+        && feed.generation === generation
+        && this.feeds.get(symbol) === feed
+        && feed.status === 'exhausted'
+      ) {
+        this.scheduleFeedRecovery(symbol, feed, generation);
+      }
+    }, delay);
+    feed.recoveryAttempt = attempt;
+    feed.recoveryTimer = timer;
+    timer.unref?.();
+  }
+
+  private canScheduleFeedRecovery(symbol: string, feed: Feed, generation: number): boolean {
+    return (
+      !this.stopped
+      && !feed.disposed
+      && feed.generation === generation
+      && this.feeds.get(symbol) === feed
+      && feed.status === 'exhausted'
+      && feed.recoveryTimer === null
+    );
+  }
+
+  private canRestoreFeedRecovery(symbol: string, feed: Feed, generation: number): boolean {
+    return (
+      !this.stopped
+      && !feed.disposed
+      && feed.generation === generation
+      && this.feeds.get(symbol) === feed
+      && feed.status !== 'open'
+      && feed.recoveryTimer === null
+    );
+  }
+
+  private clearFeedRecovery(feed: Feed): void {
+    if (feed.recoveryTimer) clearTimeout(feed.recoveryTimer);
+    feed.recoveryTimer = null;
+    feed.recoveryAttempt = 0;
   }
 
   private publishFeedStatus(symbol: string, feed: Feed): void {
@@ -307,9 +449,14 @@ export class BookStreamHub {
     });
   }
 
-  private onFrame(symbol: string, data: unknown): void {
-    const feed = this.feeds.get(symbol);
-    if (this.stopped || !feed || feed.disposed || !isRecord(data)) return;
+  private onFrame(symbol: string, feed: Feed, generation: number, data: unknown): void {
+    if (
+      this.stopped
+      || feed.disposed
+      || feed.generation !== generation
+      || this.feeds.get(symbol) !== feed
+      || !isRecord(data)
+    ) return;
     const stream = typeof data.stream === 'string' ? data.stream : '';
     const expectedPrefix = `${symbol.toLowerCase()}@`;
     if (!stream.startsWith(expectedPrefix) || data.data === undefined) return;

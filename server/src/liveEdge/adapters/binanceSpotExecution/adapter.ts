@@ -99,6 +99,7 @@ const VENUE_STATUSES = new Set<SpotVenueObservationStatus>([
   'CANCELED',
   'REJECTED',
   'EXPIRED',
+  'EXPIRED_IN_MATCH',
 ]);
 const SIDES = new Set(['BUY', 'SELL']);
 const TYPES = new Set(['LIMIT', 'MARKET']);

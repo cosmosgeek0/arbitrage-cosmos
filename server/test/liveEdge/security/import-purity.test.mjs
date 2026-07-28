@@ -13,6 +13,48 @@ import ts from 'typescript';
 
 const SOURCE_ROOT = path.resolve('server/src/liveEdge');
 const DIST_ROOT = path.resolve('server/dist/liveEdge');
+const SERVER_SOURCE_ROOT = path.resolve('server/src');
+const BINANCE_SPOT_EXECUTION_SOURCE = path.resolve(
+  'server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts',
+);
+const BINANCE_SPOT_EXECUTION_TYPE_IMPORTS = new Map([
+  ['../../../foundation/execution/spotPort.js', new Set([
+    'BinanceSpotExecutionPort',
+    'SpotCancelIntent',
+    'SpotFillObservation',
+    'SpotFlattenIntent',
+    'SpotLiveSubmitIntent',
+    'SpotMutationOutcome',
+    'SpotQueryByClientOrderIdIntent',
+    'SpotQueryFillsIntent',
+    'SpotQueryOutcome',
+    'SpotSignedTestOrderIntent',
+    'SpotVenueObservationStatus',
+  ])],
+  ['../../../foundation/execution/spotTicket.js', new Set([
+    'SpotExecutionTicket',
+  ])],
+]);
+const BINANCE_SPOT_EXECUTION_ENDPOINTS = new Set([
+  '/api/v3/myTrades',
+  '/api/v3/order',
+  '/api/v3/order/test',
+]);
+const BINANCE_SPOT_EXECUTION_PORT_METHODS = new Set([
+  'cancel',
+  'flatten',
+  'queryByOriginalClientOrderId',
+  'queryFills',
+  'signedTestOrder',
+  'submitLiveOrder',
+]);
+const BINANCE_SPOT_EXECUTION_CONTRACTS = new Set([
+  'SPOT_MY_TRADES_QUERY',
+  'SPOT_ORDER_CANCEL',
+  'SPOT_ORDER_POST',
+  'SPOT_ORDER_QUERY',
+  'SPOT_TEST_ORDER_POST',
+]);
 const CAPITAL_DECIMAL_LEAF_SUFFIX = '/capitalFoundation/contracts/decimal.js';
 const CAPITAL_DECIMAL_CONSUMERS = new Map([
   [path.resolve('server/src/liveEdge/adapters/binanceInstrumentSpecs/exact.ts'), new Set([
@@ -262,6 +304,39 @@ function isAllowedCapitalDecimalImport(file, node, specifier) {
   ));
 }
 
+function isAllowedBinanceSpotExecutionTypeImport(file, node, specifier) {
+  const allowedImports = BINANCE_SPOT_EXECUTION_TYPE_IMPORTS.get(specifier);
+  if (
+    file !== BINANCE_SPOT_EXECUTION_SOURCE ||
+    allowedImports === undefined ||
+    !ts.isImportDeclaration(node) ||
+    node.importClause?.isTypeOnly !== true ||
+    node.importClause.name ||
+    !node.importClause.namedBindings ||
+    !ts.isNamedImports(node.importClause.namedBindings)
+  ) {
+    return false;
+  }
+  const elements = node.importClause.namedBindings.elements;
+  return elements.length === allowedImports.size && elements.every((element) => (
+    element.propertyName === undefined &&
+    allowedImports.has(element.name.text)
+  ));
+}
+
+function isAllowedBinanceSpotExecutionEndpoint(file, node) {
+  return file === BINANCE_SPOT_EXECUTION_SOURCE
+    && (ts.isStringLiteralLike(node) || ts.isNoSubstitutionTemplateLiteral(node))
+    && BINANCE_SPOT_EXECUTION_ENDPOINTS.has(node.text);
+}
+
+function isAllowedBinanceSpotExecutionMethod(file, node, name) {
+  return file === BINANCE_SPOT_EXECUTION_SOURCE
+    && ts.isMethodDeclaration(node)
+    && ts.isObjectLiteralExpression(node.parent)
+    && BINANCE_SPOT_EXECUTION_PORT_METHODS.has(name);
+}
+
 function isEnvironmentAccess(node) {
   if (!ts.isPropertyAccessExpression(node) && !ts.isElementAccessExpression(node)) return false;
   if (nodeName(node) !== 'env') return false;
@@ -301,7 +376,14 @@ function staticViolations(files) {
         if (specifier !== null) {
           const capitalLeaf = isCapitalDecimalLeaf(specifier);
           const allowedCapitalLeaf = isAllowedCapitalDecimalImport(file, node, specifier);
-          const reason = allowedCapitalLeaf ? null : forbiddenImportReason(specifier);
+          const allowedSpotExecutionType = isAllowedBinanceSpotExecutionTypeImport(
+            file,
+            node,
+            specifier,
+          );
+          const reason = allowedCapitalLeaf || allowedSpotExecutionType
+            ? null
+            : forbiddenImportReason(specifier);
           if (reason) report(node.moduleSpecifier, reason);
           if (capitalLeaf && !allowedCapitalLeaf && reason === null) {
             report(node.moduleSpecifier, 'imports Capital exact-decimal leaf outside the one approved consumer/import set');
@@ -371,7 +453,13 @@ function staticViolations(files) {
       const declarationName = isExecutableDeclaration(node);
       if (declarationName) {
         const name = nodeName(declarationName);
-        if (name && FORBIDDEN_MUTATION_NAMES.has(name)) report(node, `defines mutation command ${name}`);
+        if (
+          name &&
+          FORBIDDEN_MUTATION_NAMES.has(name) &&
+          !isAllowedBinanceSpotExecutionMethod(file, node, name)
+        ) {
+          report(node, `defines mutation command ${name}`);
+        }
         if (name === LIVE_BARRIER) report(node, `shadows canonical ${LIVE_BARRIER}`);
       }
 
@@ -387,8 +475,12 @@ function staticViolations(files) {
 
       if (ts.isStringLiteralLike(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
         const documentaryData = isBinanceDocumentaryDataLiteral(file, node);
+        const allowedSpotExecutionEndpoint = isAllowedBinanceSpotExecutionEndpoint(
+          file,
+          node,
+        );
         if (/^(?:https?|wss?):\/\//i.test(node.text) && !documentaryData) report(node, 'embeds a network target');
-        if (!documentaryData && /X-MBX|(?:^|[?&])signature=|\/(?:api|sapi|fapi|dapi|vapi)\/v\d+\/[^\s]*(?:order|loan|borrow|repay|withdraw|transfer)|\/(?:order\/test|test\/order)(?:$|[?/#])/i.test(node.text)) {
+        if (!documentaryData && !allowedSpotExecutionEndpoint && /X-MBX|(?:^|[?&])signature=|\/(?:api|sapi|fapi|dapi|vapi)\/v\d+\/[^\s]*(?:order|loan|borrow|repay|withdraw|transfer)|\/(?:order\/test|test\/order)(?:$|[?/#])/i.test(node.text)) {
           report(node, 'embeds a signed/private/money endpoint');
         }
       }
@@ -532,6 +624,41 @@ function isClosedLiteralData(node) {
   return false;
 }
 
+function exactStringLiteralMembers(typeNode, label) {
+  const members = ts.isUnionTypeNode(typeNode) ? typeNode.types : [typeNode];
+  return new Set(members.map((member) => {
+    assert.ok(
+      ts.isLiteralTypeNode(member) && ts.isStringLiteralLike(member.literal),
+      `${label} must contain string literals only`,
+    );
+    return member.literal.text;
+  }));
+}
+
+function typeAliasLiteralMembers(tree, name) {
+  const declarations = tree.statements.filter((statement) => (
+    ts.isTypeAliasDeclaration(statement) && statement.name.text === name
+  ));
+  assert.equal(declarations.length, 1, `${name} must have one declaration`);
+  return exactStringLiteralMembers(declarations[0].type, name);
+}
+
+function interfacePropertyLiteralMembers(tree, interfaceName, propertyName) {
+  const declarations = tree.statements.filter((statement) => (
+    ts.isInterfaceDeclaration(statement) && statement.name.text === interfaceName
+  ));
+  assert.equal(declarations.length, 1, `${interfaceName} must have one declaration`);
+  const properties = declarations[0].members.filter((member) => (
+    ts.isPropertySignature(member) && nodeName(member.name) === propertyName
+  ));
+  assert.equal(properties.length, 1, `${interfaceName}.${propertyName} must have one declaration`);
+  assert.ok(properties[0].type, `${interfaceName}.${propertyName} must declare a type`);
+  return exactStringLiteralMembers(
+    properties[0].type,
+    `${interfaceName}.${propertyName}`,
+  );
+}
+
 test('Binance endpoint and provenance literals are confined to inert closed documentary data', () => {
   const tree = parse(BINANCE_DOCUMENTARY_DATA_SOURCE);
   const exports = new Set();
@@ -553,6 +680,115 @@ test('Binance endpoint and provenance literals are confined to inert closed docu
   }
 
   assert.deepEqual(exports, BINANCE_DOCUMENTARY_DATA_EXPORTS);
+});
+
+test('the Binance Spot execution adapter capability is exact-file, exact-contract, and unmounted', () => {
+  const tree = parse(BINANCE_SPOT_EXECUTION_SOURCE);
+  const executionImports = tree.statements.filter((statement) => (
+    ts.isImportDeclaration(statement)
+    && BINANCE_SPOT_EXECUTION_TYPE_IMPORTS.has(moduleName(statement.moduleSpecifier))
+  ));
+  assert.equal(executionImports.length, BINANCE_SPOT_EXECUTION_TYPE_IMPORTS.size);
+  assert.deepEqual(
+    new Set(executionImports.map((statement) => moduleName(statement.moduleSpecifier))),
+    new Set(BINANCE_SPOT_EXECUTION_TYPE_IMPORTS.keys()),
+  );
+  for (const statement of executionImports) {
+    assert.equal(
+      isAllowedBinanceSpotExecutionTypeImport(
+        BINANCE_SPOT_EXECUTION_SOURCE,
+        statement,
+        moduleName(statement.moduleSpecifier),
+      ),
+      true,
+      'Foundation execution imports must remain exact named type-only imports',
+    );
+  }
+
+  assert.deepEqual(
+    typeAliasLiteralMembers(tree, 'BinanceSpotExecutionContractId'),
+    BINANCE_SPOT_EXECUTION_CONTRACTS,
+  );
+  assert.deepEqual(
+    typeAliasLiteralMembers(tree, 'BinanceSpotExecutionOperation'),
+    new Set(['CANCEL', 'FLATTEN', 'QUERY_FILLS', 'QUERY_ORDER', 'SIGNED_TEST', 'SUBMIT']),
+  );
+  assert.deepEqual(
+    interfacePropertyLiteralMembers(
+      tree,
+      'BinanceSpotSignedTransportRequest',
+      'method',
+    ),
+    new Set(['DELETE', 'GET', 'POST']),
+  );
+  assert.deepEqual(
+    interfacePropertyLiteralMembers(
+      tree,
+      'BinanceSpotSignedTransportRequest',
+      'path',
+    ),
+    BINANCE_SPOT_EXECUTION_ENDPOINTS,
+  );
+
+  const endpointLiterals = new Set();
+  const requestCapabilities = [];
+  const adapterMethods = new Set();
+  walk(tree, (node) => {
+    if (
+      (ts.isStringLiteralLike(node) || ts.isNoSubstitutionTemplateLiteral(node))
+      && /^\/(?:api|sapi|fapi|dapi|vapi)\//u.test(node.text)
+    ) {
+      endpointLiterals.add(node.text);
+    }
+    if (
+      ts.isCallExpression(node)
+      && ts.isIdentifier(node.expression)
+      && node.expression.text === 'request'
+    ) {
+      assert.equal(node.arguments.length, 5, 'request capability arity must stay exact');
+      const capability = node.arguments.slice(0, 4).map((argument) => {
+        assert.ok(ts.isStringLiteralLike(argument), 'request capability fields must be literals');
+        return argument.text;
+      });
+      requestCapabilities.push(capability.join('|'));
+    }
+    if (
+      ts.isMethodDeclaration(node)
+      && ts.isObjectLiteralExpression(node.parent)
+      && BINANCE_SPOT_EXECUTION_PORT_METHODS.has(nodeName(node.name))
+    ) {
+      adapterMethods.add(nodeName(node.name));
+    }
+  });
+  assert.deepEqual(endpointLiterals, BINANCE_SPOT_EXECUTION_ENDPOINTS);
+  assert.deepEqual(adapterMethods, BINANCE_SPOT_EXECUTION_PORT_METHODS);
+  assert.deepEqual(requestCapabilities.sort(), [
+    'CANCEL|SPOT_ORDER_CANCEL|DELETE|/api/v3/order',
+    'FLATTEN|SPOT_ORDER_POST|POST|/api/v3/order',
+    'QUERY_FILLS|SPOT_MY_TRADES_QUERY|GET|/api/v3/myTrades',
+    'QUERY_ORDER|SPOT_ORDER_QUERY|GET|/api/v3/order',
+    'SIGNED_TEST|SPOT_TEST_ORDER_POST|POST|/api/v3/order/test',
+    'SUBMIT|SPOT_ORDER_POST|POST|/api/v3/order',
+  ]);
+
+  const runtimeSurfaceMentions = filesUnder(SERVER_SOURCE_ROOT, '.ts')
+    .filter((file) => {
+      const relative = path.relative(SERVER_SOURCE_ROOT, file);
+      const segments = relative.split(path.sep);
+      return path.basename(file) === 'index.ts'
+        || segments.includes('bootstrap')
+        || segments.includes('composition')
+        || segments.includes('application')
+        || segments.includes('production');
+    })
+    .filter((file) => fs.readFileSync(file, 'utf8').includes('binanceSpotExecution'))
+    .map((file) => path.relative(process.cwd(), file));
+  assert.deepEqual(runtimeSurfaceMentions, [], 'Spot execution adapter must stay absent from barrels and bootstrap');
+  assert.equal(
+    fs.existsSync(path.join(path.dirname(BINANCE_SPOT_EXECUTION_SOURCE), 'index.ts')),
+    false,
+    'Spot execution adapter must not gain a local barrel',
+  );
 });
 
 test('live-edge source has no ambient, money-moving, or canonical-authority seam', () => {

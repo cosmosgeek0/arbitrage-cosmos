@@ -384,11 +384,13 @@ function observeQuery(
     observation.status === 'FILLED' ||
     observation.status === 'CANCELED' ||
     observation.status === 'REJECTED' ||
-    observation.status === 'EXPIRED';
+    observation.status === 'EXPIRED' ||
+    observation.status === 'EXPIRED_IN_MATCH';
   if (
     observation.status === 'CANCELED' ||
     observation.status === 'REJECTED' ||
-    observation.status === 'EXPIRED'
+    observation.status === 'EXPIRED' ||
+    observation.status === 'EXPIRED_IN_MATCH'
   ) {
     if (state.lifecycle === 'FILLED') {
       return Object.freeze({ state, terminal: true });
@@ -1395,7 +1397,8 @@ export async function runSpotTransportCoordinator(
         flattenObservation.status === 'FILLED' ||
         flattenObservation.status === 'CANCELED' ||
         flattenObservation.status === 'REJECTED' ||
-        flattenObservation.status === 'EXPIRED';
+        flattenObservation.status === 'EXPIRED' ||
+        flattenObservation.status === 'EXPIRED_IN_MATCH';
       if (!flattenTerminal) {
         const flattenCancelAttemptFence = await appendMutationAttempt(
           flattenTicket,
@@ -1509,7 +1512,8 @@ export async function runSpotTransportCoordinator(
           afterFlattenCancel.status === 'FILLED' ||
           afterFlattenCancel.status === 'CANCELED' ||
           afterFlattenCancel.status === 'REJECTED' ||
-          afterFlattenCancel.status === 'EXPIRED';
+          afterFlattenCancel.status === 'EXPIRED' ||
+          afterFlattenCancel.status === 'EXPIRED_IN_MATCH';
       }
       if (!flattenTerminal || spotResidualQuantity(lifecycle) !== '0') {
         return result(

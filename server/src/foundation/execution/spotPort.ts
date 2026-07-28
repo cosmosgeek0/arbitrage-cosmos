@@ -13,7 +13,8 @@ export type SpotVenueObservationStatus =
   | 'FILLED'
   | 'CANCELED'
   | 'REJECTED'
-  | 'EXPIRED';
+  | 'EXPIRED'
+  | 'EXPIRED_IN_MATCH';
 
 export interface SpotSignedTestOrderIntent {
   readonly kind: 'SIGNED_TEST_ORDER';

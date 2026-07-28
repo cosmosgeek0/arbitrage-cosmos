@@ -425,6 +425,71 @@ export interface RiskEvaluationInput {
   policy: RiskPolicy;
 }
 
+// ---------- normal-Basis approved-entry projection (additive, default off) ----------
+
+export const NORMAL_BASIS_RISK_BINDING_SCHEMA =
+  'cosmos.foundation.risk.normalBasisApprovedEntry' as const;
+export const NORMAL_BASIS_RISK_BINDING_VERSION = 1 as const;
+
+export interface NormalBasisRiskLegBinding {
+  readonly legKey: string;
+  readonly venue: 'BINANCE_SPOT' | 'BINANCE_USDM';
+  readonly positionBucket: 'SPOT_CASH' | 'USDM_ONE_WAY';
+  readonly side: 'BUY' | 'SELL';
+  readonly symbol: string;
+  readonly intendedPrice: number;
+  readonly intendedQty: number;
+}
+
+/**
+ * Complete, one-way account baseline captured by the same risk evaluation.
+ * Completion means returning to these two signed quantities, not assuming that
+ * an omitted or pre-existing owner position was zero.
+ */
+export interface NormalBasisRiskBaseline {
+  readonly accountId: string;
+  readonly symbol: string;
+  readonly positionMode: 'ONE_WAY';
+  readonly observedAtMs: number;
+  readonly spotSignedBaseQty: number;
+  readonly perpSignedBaseQty: number;
+}
+
+/**
+ * Compact projection derived by evaluateNormalBasisRiskBinding from a real
+ * RiskEvaluationInput and its real generic RiskVerdict. Callers do not supply
+ * digests, an "allowed" assertion, a size cap, or an expiry.
+ */
+export interface NormalBasisApprovedRiskBinding {
+  readonly schema: typeof NORMAL_BASIS_RISK_BINDING_SCHEMA;
+  readonly version: typeof NORMAL_BASIS_RISK_BINDING_VERSION;
+  readonly bindingId: string;
+  readonly planId: string;
+  readonly correlationId: string;
+  readonly accountId: string;
+  readonly proposalRef: string;
+  readonly riskClass: 'RISK_INCREASING';
+  readonly riskIntentDigest: string;
+  readonly riskVerdictDigest: string;
+  readonly verdictDecision: 'APPROVED';
+  readonly verdictEvaluatedAtMs: number;
+  /** Earliest entry authority horizon. This expiry never gates a close. */
+  readonly entryExpiresAtMs: number;
+  /** Exact plain-decimal gross-USD ceiling from the existing generic verdict. */
+  readonly approvedEntryGrossNotionalExact: string;
+  readonly declaredMaxNakedDurationMs: number;
+  readonly requiredBorrowUsd: 0;
+  readonly spot: Readonly<NormalBasisRiskLegBinding>;
+  readonly perp: Readonly<NormalBasisRiskLegBinding>;
+  readonly baseline: Readonly<NormalBasisRiskBaseline>;
+}
+
+/** Input accepted by the normal-Basis projection: real evaluator input only. */
+export interface NormalBasisRiskBindingRequest {
+  readonly version: typeof NORMAL_BASIS_RISK_BINDING_VERSION;
+  readonly evaluationInput: RiskEvaluationInput;
+}
+
 // ---------- structural validation (intent / policy / nowMs only) ----------
 
 const LEG_KEY_PATTERN = /^[A-Z][A-Z0-9_]{0,63}$/;

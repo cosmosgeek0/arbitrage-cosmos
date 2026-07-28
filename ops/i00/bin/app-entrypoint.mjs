@@ -17,7 +17,23 @@ const CREDENTIAL_KEYS = Object.freeze(['BINANCE_API_KEY', 'BINANCE_API_SECRET'])
 const PRODUCTION_CURRENT_LINK = '/opt/cosmos/current';
 const PRODUCTION_RELEASE_PARENT = '/opt/cosmos/releases';
 
-function exactPhysicalDirectory(raw, label, { privateMode = false } = {}) {
+function hasTrustedCredentialAccess(stat, path, simulationRoot) {
+  const invokingUid = typeof process.getuid === 'function'
+    ? BigInt(process.getuid())
+    : null;
+  const validatedSimulationOwner = simulationRoot !== null
+    && path.startsWith(`${simulationRoot}/`)
+    && invokingUid !== null
+    && stat.uid === invokingUid;
+  return (stat.uid === 0n || validatedSimulationOwner)
+    && (stat.mode & 0o007n) === 0n
+    && (stat.mode & 0o022n) === 0n;
+}
+
+function exactPhysicalDirectory(raw, label, {
+  credentialAccess = false,
+  simulationRoot = null,
+} = {}) {
   if (typeof raw !== 'string' || raw === '/' || raw.length > 4_096
       || !isAbsolute(raw) || resolve(raw) !== raw
       || /[\u0000-\u001f\u007f]/u.test(raw)) {
@@ -36,10 +52,13 @@ function exactPhysicalDirectory(raw, label, { privateMode = false } = {}) {
       || realpathSync.native(raw) !== raw
       || (stat.mode & 0o022n) !== 0n
       || (stat.mode & 0o7000n) !== 0n
-      || (privateMode && (stat.mode & 0o777n) !== 0o500n
-        && (stat.mode & 0o777n) !== 0o700n)
-      || (invokingUid !== null && stat.uid !== 0n && stat.uid !== invokingUid)) {
-    fail(`${label} must be one trusted physical${privateMode ? ' mode-0500-or-0700' : ''} directory`);
+      || (credentialAccess
+        && !hasTrustedCredentialAccess(stat, raw, simulationRoot))
+      || (!credentialAccess
+        && invokingUid !== null && stat.uid !== 0n && stat.uid !== invokingUid)) {
+    fail(`${label} must be one trusted physical${credentialAccess
+      ? ' root-owned directory with no other access or group/other write'
+      : ''}`);
   }
   return Object.freeze({ path: raw, stat });
 }
@@ -62,7 +81,7 @@ function exactReleaseRoot() {
   const cwd = process.cwd();
   exactPhysicalDirectory(cwd, 'application working directory');
   const simulationRoot = simulationAncestor(cwd);
-  if (simulationRoot !== null) return cwd;
+  if (simulationRoot !== null) return Object.freeze({ path: cwd, simulationRoot });
   let currentStat;
   try {
     currentStat = lstatSync(PRODUCTION_CURRENT_LINK, { bigint: true });
@@ -84,7 +103,7 @@ function exactReleaseRoot() {
     fail('application working directory differs from the exact current release root');
   }
   exactPhysicalDirectory(releaseRoot, 'current release root');
-  return releaseRoot;
+  return Object.freeze({ path: releaseRoot, simulationRoot: null });
 }
 
 function fileIdentity(stat) {
@@ -107,7 +126,8 @@ function sameIdentity(left, right) {
 
 function requirePhysicalFile(path, label, {
   maximumBytes,
-  privateMode = false,
+  credentialAccess = false,
+  simulationRoot = null,
 } = {}) {
   let stat;
   try {
@@ -123,8 +143,10 @@ function requirePhysicalFile(path, label, {
       || realpathSync.native(path) !== path
       || (stat.mode & 0o022n) !== 0n
       || (stat.mode & 0o7000n) !== 0n
-      || (privateMode && (stat.mode & 0o077n) !== 0n)
-      || (invokingUid !== null && stat.uid !== 0n && stat.uid !== invokingUid)) {
+      || (credentialAccess
+        && !hasTrustedCredentialAccess(stat, path, simulationRoot))
+      || (!credentialAccess
+        && invokingUid !== null && stat.uid !== 0n && stat.uid !== invokingUid)) {
     fail(`${label} must be one bounded trusted physical single-link regular file`);
   }
   return Object.freeze({ path, identity: fileIdentity(stat) });
@@ -150,14 +172,15 @@ function ensureDirectPhysicalPath(root, path, label) {
   }
 }
 
-function readCredentialFile(directory) {
+function readCredentialFile(directory, simulationRoot) {
   const path = join(directory, 'app-secrets');
   const entry = lstatSync(path, { bigint: true, throwIfNoEntry: false });
   if (entry === undefined) return null;
   ensureDirectPhysicalPath(directory, path, 'application credential');
   const before = requirePhysicalFile(path, 'application credential', {
     maximumBytes: 64 * 1024,
-    privateMode: true,
+    credentialAccess: true,
+    simulationRoot,
   });
   let descriptor;
   let bytes;
@@ -181,7 +204,8 @@ function readCredentialFile(directory) {
   }
   const after = requirePhysicalFile(path, 'application credential', {
     maximumBytes: 64 * 1024,
-    privateMode: true,
+    credentialAccess: true,
+    simulationRoot,
   });
   if (!sameIdentity(after.identity, before.identity)) {
     fail('application credential named identity changed after descriptor read');
@@ -198,7 +222,8 @@ function readCredentialFile(directory) {
   }
 }
 
-const releaseRoot = exactReleaseRoot();
+const release = exactReleaseRoot();
+const releaseRoot = release.path;
 const serverEntrypoint = join(releaseRoot, 'server', 'dist', 'index.js');
 ensureDirectPhysicalPath(releaseRoot, serverEntrypoint, 'application server entrypoint');
 const serverBefore = requirePhysicalFile(
@@ -213,9 +238,12 @@ if (credentialDirectory !== undefined && credentialDirectory !== '') {
   const boundDirectory = exactPhysicalDirectory(
     credentialDirectory,
     'CREDENTIALS_DIRECTORY',
-    { privateMode: true },
+    {
+      credentialAccess: true,
+      simulationRoot: release.simulationRoot,
+    },
   );
-  secret = readCredentialFile(boundDirectory.path);
+  secret = readCredentialFile(boundDirectory.path, release.simulationRoot);
 }
 const supplied = secret !== null
   && CREDENTIAL_KEYS.some((key) => secret[key] !== undefined);

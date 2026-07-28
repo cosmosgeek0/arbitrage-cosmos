@@ -1291,15 +1291,14 @@ run_entrypoint() {
   )
 }
 
-note "entrypoint accepts exact same-owner credential directory modes 0700 and 0500"
-KEYLESS_OUT="$(run_entrypoint "$KEYLESS_ROOT/creds" 2>&1)"
-assert_contains "$KEYLESS_OUT" 'stub-app-booted'
-assert_contains "$KEYLESS_OUT" 'keyless posture'
-chmod 400 "$KEYLESS_ROOT/creds/app-secrets"
-chmod 500 "$KEYLESS_ROOT/creds"
-KEYLESS_0500_OUT="$(run_entrypoint "$KEYLESS_ROOT/creds" 2>&1)"
-assert_contains "$KEYLESS_0500_OUT" 'stub-app-booted'
-assert_contains "$KEYLESS_0500_OUT" 'keyless posture'
+note "entrypoint accepts the trusted credential property for 0500, 0550, and 0700 directories with a systemd 0440 file"
+chmod 440 "$KEYLESS_ROOT/creds/app-secrets"
+for trusted_mode in 0500 0550 0700; do
+  chmod "$trusted_mode" "$KEYLESS_ROOT/creds"
+  KEYLESS_OUT="$(run_entrypoint "$KEYLESS_ROOT/creds" 2>&1)"
+  assert_contains "$KEYLESS_OUT" 'stub-app-booted'
+  assert_contains "$KEYLESS_OUT" 'keyless posture'
+done
 chmod 700 "$KEYLESS_ROOT/creds"
 chmod 600 "$KEYLESS_ROOT/creds/app-secrets"
 printf '{"BINANCE_API_KEY":"x","BINANCE_API_SECRET":"y"}' > "$KEYLESS_ROOT/creds/app-secrets"
@@ -1309,17 +1308,38 @@ assert_failure_contains 'required credential field' \
 printf '{}' > "$KEYLESS_ROOT/creds/app-secrets"
 chmod 600 "$KEYLESS_ROOT/creds/app-secrets"
 
-note "entrypoint rejects non-approved writable, group/world-accessible, and non-physical credential directories"
-for unsafe_mode in 0400 0501 0510 0550 0600 0705 0770 0707; do
+note "entrypoint rejects other access and group write without enumerating trusted directory modes"
+for unsafe_mode in 0501 0504 0520 0560 0705 0770 0707; do
   chmod "$unsafe_mode" "$KEYLESS_ROOT/creds"
-  assert_failure_contains 'mode-0500-or-0700 directory' \
+  assert_failure_contains 'root-owned directory with no other access or group/other write' \
     run_entrypoint "$KEYLESS_ROOT/creds"
 done
+chmod 550 "$KEYLESS_ROOT/creds"
+for unsafe_file_mode in 0444 0460; do
+  chmod "$unsafe_file_mode" "$KEYLESS_ROOT/creds/app-secrets"
+  assert_failure_contains 'single-link regular file' \
+    run_entrypoint "$KEYLESS_ROOT/creds"
+done
+chmod 440 "$KEYLESS_ROOT/creds/app-secrets"
+
+note "entrypoint rejects a property-safe non-root credential path outside the validated simulation root"
+UNTRUSTED_CREDENTIAL_ROOT="$TEST_TMP/untrusted-entrypoint-credentials"
+mkdir "$UNTRUSTED_CREDENTIAL_ROOT"
+printf '{}' > "$UNTRUSTED_CREDENTIAL_ROOT/app-secrets"
+chmod 500 "$UNTRUSTED_CREDENTIAL_ROOT"
+chmod 400 "$UNTRUSTED_CREDENTIAL_ROOT/app-secrets"
+if [ "$(node -e 'process.stdout.write(String(process.getuid()))')" = 0 ]; then
+  chown 1 "$UNTRUSTED_CREDENTIAL_ROOT" "$UNTRUSTED_CREDENTIAL_ROOT/app-secrets"
+fi
+assert_failure_contains 'root-owned directory with no other access or group/other write' \
+  run_entrypoint "$UNTRUSTED_CREDENTIAL_ROOT"
+
 chmod 700 "$KEYLESS_ROOT/creds"
+chmod 600 "$KEYLESS_ROOT/creds/app-secrets"
 assert_failure_contains 'absolute lexical canonical path' \
   run_entrypoint "$KEYLESS_ROOT/./creds"
 ln -s "$KEYLESS_ROOT/creds" "$KEYLESS_ROOT/creds-alias"
-assert_failure_contains 'mode-0500-or-0700 directory' \
+assert_failure_contains 'root-owned directory with no other access or group/other write' \
   run_entrypoint "$KEYLESS_ROOT/creds-alias"
 mv "$KEYLESS_ROOT/creds/app-secrets" "$KEYLESS_ROOT/creds/app-secrets.saved"
 ln -s "$KEYLESS_ROOT/creds/app-secrets.saved" "$KEYLESS_ROOT/creds/app-secrets"

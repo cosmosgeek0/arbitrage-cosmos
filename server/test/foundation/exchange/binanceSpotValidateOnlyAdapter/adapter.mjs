@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  BINANCE_SPOT_PLAIN_DATA_LIMITS,
   BINANCE_SPOT_VALIDATE_ONLY_DEFAULTS,
   BINANCE_SPOT_VALIDATE_ONLY_FRESHNESS_POLICY,
   isBinanceSpotQueryResolution,
@@ -222,6 +223,44 @@ test('hostile accessors and proxies are rejected without invoking getters or tra
   assert.equal(proxyTrapCalls, 0);
   assert.deepEqual(proxyResult.blockingCodes, ['INPUT_NOT_PLAIN_DATA']);
   assert.equal(isBinanceSpotValidateOnlyPreparation(proxyResult), true);
+});
+
+test('plain-data containment rejects overwide objects and dense arrays before cloning', () => {
+  const overwide = Object.fromEntries(
+    Array.from(
+      {
+        length:
+          BINANCE_SPOT_PLAIN_DATA_LIMITS.maximumObjectOwnKeys + 1,
+      },
+      (_, index) => [`key${index}`, index],
+    ),
+  );
+  const overwideResult = prepare({
+    publicSnapshot: snapshot({ venueEvidence: overwide }),
+  });
+  assert.deepEqual(overwideResult.blockingCodes, ['INPUT_NOT_PLAIN_DATA']);
+
+  const dense = Array.from(
+    {
+      length: BINANCE_SPOT_PLAIN_DATA_LIMITS.maximumArrayLength + 1,
+    },
+    () => null,
+  );
+  const denseResult = prepare({
+    publicSnapshot: snapshot({ filters: dense }),
+  });
+  assert.deepEqual(denseResult.blockingCodes, ['INPUT_NOT_PLAIN_DATA']);
+
+  const nodeHeavy = Array.from(
+    {
+      length: BINANCE_SPOT_PLAIN_DATA_LIMITS.maximumArrayLength,
+    },
+    (_, index) => ({ index, nested: {} }),
+  );
+  const nodeHeavyResult = prepare({
+    publicSnapshot: snapshot({ filters: nodeHeavy }),
+  });
+  assert.deepEqual(nodeHeavyResult.blockingCodes, ['INPUT_NOT_PLAIN_DATA']);
 });
 
 test('symbol state, snapshot completeness, filter mismatch, and deterministic identity fail closed', () => {
@@ -496,7 +535,7 @@ test('MARKET query identity explicitly maps an unsent wire TIF to venue GTC', ()
       type: 'MARKET',
       timeInForce: 'GTC',
       quantity: '0.01',
-      price: null,
+      price: '0.00000000',
       executedQuantity: '0.01',
       status: 'FILLED',
     },
@@ -504,6 +543,39 @@ test('MARKET query identity explicitly maps an unsent wire TIF to venue GTC', ()
   assert.equal(resolution.state, 'OBSERVED');
   assert.equal(resolution.observation?.type, 'MARKET');
   assert.equal(resolution.observation?.timeInForce, 'GTC');
+  assert.equal(resolution.observation?.price, null);
+
+  for (const rawPrice of ['0.00000001', '1', null]) {
+    const rejected = normalizeBinanceSpotInjectedQueryEvidence(prepared, {
+      evaluatedAtMs: T0,
+      mutationKnowledge: 'KNOWN_SUBMITTED',
+      evidence: {
+        outcome: 'FOUND',
+        observedAt: QUERY_OBSERVED_AT,
+        symbol: 'BTCUSDT',
+        clientOrderId: marketId,
+        venueOrderId: '918273646',
+        side: 'SELL',
+        type: 'MARKET',
+        timeInForce: 'GTC',
+        quantity: '0.01',
+        price: rawPrice,
+        executedQuantity: '0.01',
+        status: 'FILLED',
+      },
+    });
+    assert.equal(rejected.state, 'UNKNOWN', String(rawPrice));
+    assert.equal(rejected.observation, null);
+    assert.equal(rejected.recoveryAction, 'QUERY_REQUIRED');
+    assert.deepEqual(
+      rejected.reasonCodes,
+      [
+        rawPrice === null
+          ? 'QUERY_EVIDENCE_INVALID'
+          : 'QUERY_IDENTITY_MISMATCH',
+      ],
+    );
+  }
 });
 
 test('query status and cumulative fill must describe one coherent venue state', () => {

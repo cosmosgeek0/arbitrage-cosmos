@@ -178,6 +178,13 @@ interface PlainDataBudget {
   nodes: number;
 }
 
+export const BINANCE_SPOT_PLAIN_DATA_LIMITS = Object.freeze({
+  maximumDepth: 16,
+  maximumNodes: 512,
+  maximumArrayLength: 256,
+  maximumObjectOwnKeys: 64,
+});
+
 function clonePlainData(
   value: unknown,
   path: string,
@@ -204,7 +211,10 @@ function clonePlainData(
   if (nodeTypes.isProxy(value)) {
     throw new PlainDataError(`${path} must not be a Proxy`);
   }
-  if (depth > 16 || (budget.nodes += 1) > 1_024) {
+  if (
+    depth > BINANCE_SPOT_PLAIN_DATA_LIMITS.maximumDepth ||
+    (budget.nodes += 1) > BINANCE_SPOT_PLAIN_DATA_LIMITS.maximumNodes
+  ) {
     throw new PlainDataError(`${path} exceeds the plain-data bound`);
   }
   if (seen.has(value)) {
@@ -213,10 +223,8 @@ function clonePlainData(
   seen.add(value);
 
   let prototype: object | null;
-  let descriptors: PropertyDescriptorMap;
   try {
     prototype = Object.getPrototypeOf(value) as object | null;
-    descriptors = Object.getOwnPropertyDescriptors(value);
   } catch {
     throw new PlainDataError(`${path} cannot be inspected as plain data`);
   }
@@ -225,17 +233,35 @@ function clonePlainData(
     if (prototype !== Array.prototype) {
       throw new PlainDataError(`${path} must be a plain array`);
     }
+    let lengthDescriptor: PropertyDescriptor | undefined;
+    try {
+      // Bound declared length before enumerating every element descriptor.
+      lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length');
+    } catch {
+      throw new PlainDataError(`${path} array length cannot be inspected`);
+    }
+    const length = lengthDescriptor?.value;
+    if (
+      !Number.isSafeInteger(length) ||
+      length < 0 ||
+      length > BINANCE_SPOT_PLAIN_DATA_LIMITS.maximumArrayLength
+    ) {
+      throw new PlainDataError(`${path} array length is invalid`);
+    }
+    let descriptors: PropertyDescriptorMap;
+    try {
+      descriptors = Object.getOwnPropertyDescriptors(
+        value,
+      ) as unknown as PropertyDescriptorMap;
+    } catch {
+      throw new PlainDataError(`${path} array descriptors cannot be inspected`);
+    }
     const keys = Reflect.ownKeys(descriptors);
     if (
       keys.some((key) => typeof key !== 'string') ||
       !Object.hasOwn(descriptors, 'length')
     ) {
       throw new PlainDataError(`${path} has unsupported array keys`);
-    }
-    const lengthDescriptor = descriptors.length;
-    const length = lengthDescriptor?.value;
-    if (!Number.isSafeInteger(length) || length < 0 || length > 256) {
-      throw new PlainDataError(`${path} array length is invalid`);
     }
     const allowed = new Set([
       'length',
@@ -274,11 +300,27 @@ function clonePlainData(
   if (prototype !== Object.prototype && prototype !== null) {
     throw new PlainDataError(`${path} must be a plain object`);
   }
+  let keys: readonly (string | symbol)[];
+  try {
+    keys = Reflect.ownKeys(value);
+  } catch {
+    throw new PlainDataError(`${path} keys cannot be inspected`);
+  }
+  if (
+    keys.length > BINANCE_SPOT_PLAIN_DATA_LIMITS.maximumObjectOwnKeys ||
+    keys.some((key) => typeof key !== 'string')
+  ) {
+    throw new PlainDataError(`${path} has too many or unsupported own keys`);
+  }
+  let descriptors: PropertyDescriptorMap;
+  try {
+    // Descriptor cloning is reached only after the own-key breadth gate.
+    descriptors = Object.getOwnPropertyDescriptors(value);
+  } catch {
+    throw new PlainDataError(`${path} descriptors cannot be inspected`);
+  }
   const copy: Record<string, unknown> = {};
-  for (const key of Reflect.ownKeys(descriptors)) {
-    if (typeof key !== 'string') {
-      throw new PlainDataError(`${path} must not contain symbol keys`);
-    }
+  for (const key of keys as readonly string[]) {
     const descriptor = descriptors[key];
     if (
       descriptor === undefined ||
@@ -788,7 +830,11 @@ export interface BinanceSpotFoundQueryEvidence {
    */
   readonly timeInForce: 'GTC';
   readonly quantity: string;
-  readonly price: string | null;
+  /**
+   * Raw query-record price. LIMIT carries its exact price; Binance MARKET
+   * records carry a decimal zero (often padded), which is projected to null.
+   */
+  readonly price: string;
   readonly executedQuantity: string;
   readonly status: BinanceSpotObservedOrderStatus;
 }
@@ -940,6 +986,7 @@ function normalizeFoundEvidence(
       ] as readonly unknown[]
     ).includes(evidence.status) ||
     typeof evidence.quantity !== 'string' ||
+    typeof evidence.price !== 'string' ||
     typeof evidence.executedQuantity !== 'string'
   ) {
     return Object.freeze({
@@ -956,13 +1003,15 @@ function normalizeFoundEvidence(
       evidence.executedQuantity,
       'evidence.executedQuantity',
     );
+    const rawPrice = normalizeSpotDecimal(
+      evidence.price,
+      'evidence.price',
+    );
     price =
-      evidence.price === null
+      intent.type === 'MARKET' &&
+      compareSpotDecimals(rawPrice, '0') === 0
         ? null
-        : normalizeSpotDecimal(
-            evidence.price as string,
-            'evidence.price',
-          );
+        : rawPrice;
   } catch {
     return Object.freeze({
       observation: null,

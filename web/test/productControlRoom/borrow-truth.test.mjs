@@ -35,8 +35,8 @@ test('Borrow preserves canonical preflight evidence and projects sanitized priva
   ]);
 
   const source = await readFile(loansUrl, 'utf8');
-  assert.match(source, /const \{ privateRead, privateReadError, openDetail, setPage \} = useStore\(\)/);
-  assert.match(source, /projectPrivateRead\(privateRead\)/);
+  assert.match(source, /const \{ privateRead, privateReadError, privateReadSource, openDetail, setPage \} = useStore\(\)/);
+  assert.match(source, /projectPrivateReadGuard\(\{[\s\S]*source: privateReadSource,[\s\S]*error: privateReadError/);
   assert.match(source, /privateRead\.margin\.assets\?\.filter/);
   assert.match(source, /privateRead\.margin\.totalLiabilityBtc/);
   assert.match(source, /privateRead\.reconciliation\.liabilities\.state/);
@@ -53,7 +53,12 @@ test('normalized zero liabilities stay zero and unavailable liabilities stay unk
   assert.match(source, /privateRead\.margin\.assets\?\.filter\(hasMarginLiability\)/);
   assert.doesNotMatch(source, /borrowed !== '0'|interest !== '0'/);
   assert.match(source, /privatePresentation\.freshness\.label/);
-  assert.match(source, /privatePresentation\.guardTone/);
+  assert.match(source, /privateReadGuard\.overallTone/);
+  assert.match(source, /const currentExactEmptyLiabilities = liabilityRows !== null[\s\S]*liabilityRows\.length === 0[\s\S]*privateReadGuard\.commonTone === 'ok'[\s\S]*privateReadGuard\.sourceGuardTone === 'ok'[\s\S]*privateRead\.margin\.coverage\.state === 'COMPLETE_CURRENT'[\s\S]*privateRead\.reconciliation\.liabilities\.state === 'RECONCILED'/);
+  assert.match(source, /const liabilityCount = liabilityRows === null \|\| \(liabilityRows\.length === 0 && !currentExactEmptyLiabilities\)/);
+  assert.match(source, /assets: privateRead\.margin\.assets === null[\s\S]*privateRead\.margin\.assets\.length === 0 && !currentExactEmptyLiabilities[\s\S]*String\(privateRead\.margin\.assets\.length\)/);
+  assert.match(source, /currentExactEmptyLiabilities \? \([\s\S]*No Margin Liabilities[\s\S]*Current Liability Absence Unknown/);
+  assert.match(source, /privateObservationLabel\} · current absence UNKNOWN/);
 
   const zeroRow = { asset: 'USDT', free: '8.00000000', locked: '0.00000000', borrowed: '0.00000000', interest: '0.00000000', netAsset: '8.00000000' };
   const negativeZeroRow = { ...zeroRow, asset: 'BNB', borrowed: '-0.00000000', interest: '0' };

@@ -91,7 +91,7 @@ function availableSurfaceCut(surfaceId, overrides = {}) {
     source: surfaceId === 'account'
       ? 'services.privateRead'
       : surfaceId === 'markets'
-        ? 'intelligenceRuntime.marketSources'
+        ? 'intelligenceRuntime.publishedMarketState'
         : 'systemIntegration.supervisor',
     state: 'AVAILABLE',
     observedAtMs: T0 - 1_000,
@@ -115,7 +115,7 @@ function unavailableSurfaceCut(surfaceId, unavailableReason, truthLabel = 'NOT_C
     source: surfaceId === 'account'
       ? 'services.privateRead'
       : surfaceId === 'markets'
-        ? 'intelligenceRuntime.marketSources'
+        ? 'intelligenceRuntime.publishedMarketState'
         : 'systemIntegration.supervisor',
     state: 'UNAVAILABLE',
     observedAtMs: T0 - 1_000,

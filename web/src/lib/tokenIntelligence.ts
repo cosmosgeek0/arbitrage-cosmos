@@ -121,14 +121,6 @@ export interface TokenIntelligenceRead {
   liveMoneyAuthority: 'NONE';
 }
 
-export interface SymbolAccountContext {
-  accountTruthState: 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
-  orderTruthState: 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
-  borrowTruthState: BorrowTruthState;
-  openOrders: unknown[] | null;
-  balances: { base: number; usdtFree: number } | null;
-}
-
 export interface TokenNewsContext {
   fetchedAt: number;
   freshness: 'FRESH' | 'STALE';
@@ -143,8 +135,6 @@ export interface TokenNewsContext {
   }[];
   sources: { key: string; status: 'live' | 'delayed' | 'error'; fetchedAt: number | null }[];
 }
-
-export type BorrowTruthState = 'UNKNOWN' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
 
 type DataRecord = Readonly<Record<string, PropertyDescriptor>>;
 
@@ -825,38 +815,6 @@ export function parseTokenIntelligence(
     },
     authority: 'EVIDENCE_ONLY',
     liveMoneyAuthority: 'NONE',
-  };
-}
-
-export function parseSymbolAccountContext(value: unknown): SymbolAccountContext | null {
-  const record = dataRecord(value);
-  if (!record) return null;
-  const accountTruthState = valueOf(record, 'accountTruthState');
-  const orderTruthState = valueOf(record, 'orderTruthState');
-  const borrowTruthState = valueOf(record, 'borrowTruthState');
-  if (!stringIn(accountTruthState, ['AVAILABLE', 'UNAVAILABLE', 'NOT_CONFIGURED'])
-      || !stringIn(orderTruthState, ['AVAILABLE', 'UNAVAILABLE', 'NOT_CONFIGURED'])
-      || !stringIn(borrowTruthState, ['UNKNOWN', 'UNAVAILABLE', 'NOT_CONFIGURED'])) return null;
-  const rawOrders = valueOf(record, 'openOrders');
-  const openOrders = rawOrders === null ? null : denseArray(rawOrders, 2_000);
-  if (rawOrders !== null && openOrders === null) return null;
-  const rawBalances = valueOf(record, 'balances');
-  let balances: SymbolAccountContext['balances'] = null;
-  if (rawBalances !== null) {
-    const balanceRecord = dataRecord(rawBalances, ['base', 'usdtFree']);
-    const base = balanceRecord ? valueOf(balanceRecord, 'base') : null;
-    const usdtFree = balanceRecord ? valueOf(balanceRecord, 'usdtFree') : null;
-    if (!balanceRecord || !finite(base) || base < 0 || !finite(usdtFree) || usdtFree < 0) return null;
-    balances = { base, usdtFree };
-  }
-  if (accountTruthState !== 'AVAILABLE' && balances !== null) return null;
-  if (orderTruthState !== 'AVAILABLE' && openOrders !== null) return null;
-  return {
-    accountTruthState: accountTruthState as SymbolAccountContext['accountTruthState'],
-    orderTruthState: orderTruthState as SymbolAccountContext['orderTruthState'],
-    borrowTruthState: borrowTruthState as BorrowTruthState,
-    openOrders,
-    balances,
   };
 }
 

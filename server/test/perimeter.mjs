@@ -630,8 +630,25 @@ test('HTTP and WebSocket perimeter fails closed while preserving local operation
     assert.equal(oversized.status, 413);
     assert.equal((await oversized.json()).code, 'BODY_TOO_LARGE');
 
+    const enabledLogsForQueryValidation = await localFetch('/api/optional-surfaces/logs', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled: true }),
+    });
+    assert.equal(enabledLogsForQueryValidation.status, 200);
+    assert.equal((await enabledLogsForQueryValidation.json()).snapshot.phase, 'ON');
     assert.equal((await localFetch('/api/events?limit=1.5')).status, 400);
     assert.equal((await localFetch('/api/events?limit=2001')).status, 400);
+    const disabledLogsAfterQueryValidation = await localFetch('/api/optional-surfaces/logs', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ enabled: false }),
+    });
+    assert.equal(disabledLogsAfterQueryValidation.status, 200);
+    const disabledLogsSnapshot = (await disabledLogsAfterQueryValidation.json()).snapshot;
+    assert.equal(disabledLogsSnapshot.phase, 'OFF');
+    assert.equal(disabledLogsSnapshot.admissionOpen, false);
+    assert.equal(disabledLogsSnapshot.inFlight, 0);
     assert.equal((await localFetch('/api/refresh', {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
     })).status, 400);

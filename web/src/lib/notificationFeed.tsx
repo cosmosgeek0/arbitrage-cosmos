@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { LedgerEvent } from '../types';
 import { apiErrorMessage, fetchJson } from './http';
 import { createSettledPoll } from './polling';
+import { useOptionalSurface } from './optionalSurfaceControl';
 
 const DAY_MS = 24 * 60 * 60_000;
 const NOTIFICATION_ARCHIVE_DAYS = 7;
@@ -64,8 +65,25 @@ const NotificationFeedContext = createContext<NotificationFeedState | null>(null
 
 export function NotificationFeedProvider({ children }: { children: ReactNode }) {
   const [snapshot, setSnapshot] = useState<NotificationFeedState>(INITIAL_NOTIFICATION_FEED);
+  const logsSurface = useOptionalSurface('logs');
 
   useEffect(() => {
+    if (!logsSurface.enabled) {
+      setSnapshot({
+        archive: { events: [], droppedCount: 0 },
+        status: logsSurface.controlStatus === 'LOADING' ? 'LOADING' : 'UNAVAILABLE',
+        lastSuccessAt: null,
+        error: logsSurface.controlStatus === 'LOADING'
+          ? null
+          : logsSurface.controlError
+            ?? logsSurface.snapshot.failureCode
+            ?? 'OPTIONAL_SURFACE_OFF',
+        pendingBootstrapKinds: 0,
+      });
+      return;
+    }
+
+    setSnapshot(INITIAL_NOTIFICATION_FEED);
     let bootstrapped = false;
     let pendingBootstrapKinds = [...RELEVANT_KINDS];
     let bootstrapHighWater: number | null = null;
@@ -151,7 +169,13 @@ export function NotificationFeedProvider({ children }: { children: ReactNode }) 
     });
     notificationPoll.start();
     return notificationPoll.stop;
-  }, []);
+  }, [
+    logsSurface.controlError,
+    logsSurface.controlStatus,
+    logsSurface.enabled,
+    logsSurface.snapshot.failureCode,
+    logsSurface.snapshot.generation,
+  ]);
 
   return <NotificationFeedContext.Provider value={snapshot}>{children}</NotificationFeedContext.Provider>;
 }

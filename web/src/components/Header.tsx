@@ -23,11 +23,21 @@ import {
   type ProductComponentProjection,
 } from '../lib/productIntegration';
 import { canonicalRefreshTargetPosture, canonicalWatchmanLauncherPresentation } from '../lib/operatorControlPosture';
-import { projectPrivateRead, type PrivateReadSnapshot } from '../lib/privateRead';
+import {
+  projectPrivateReadGuard,
+  worstTone,
+} from '../lib/privateRead';
 import { ACCENTS, CURRENCIES, DATA_CADENCE_DEFAULTS, MARKET_PING_CHOICES, type AccentKey, type DataCadenceKey, type NotificationRuleKey } from '../lib/prefs';
 import { openOverlay, useOverlay } from '../lib/overlay';
+import {
+  optionalSurfaceAllowsOverlay,
+  optionalSurfaceForPage,
+  useOptionalSurface,
+  useOptionalSurfaceControl,
+} from '../lib/optionalSurfaceControl';
 import { TokenIcon } from './TokenIcon';
 import { PillSelect } from './PillSelect';
+import { OptionalSurfaceSwitch } from './OptionalSurfaceGate';
 import { AWS_CONTROL_POSTURE } from './AwsRunnerControl';
 import {
   BadgeCheck as LucideAdvisorClear,
@@ -441,30 +451,51 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
   },
 ];
 
-// The integration candidate deliberately does not mount private account truth.
-// This sheet is provenance only: it has no credential, session, mutation, or
-// signed-read path and therefore cannot become green from legacy Binance state.
+// The globally visible account status reads the same private-read truth as the
+// rest of the cockpit. This sheet still has no credential, session, or mutation
+// path: it consumes the shared store the shell already provides — no transport,
+// poll, or effect of its own — and reports the admitted state instead of
+// asserting a fixed one, so it can never contradict the cockpit while claiming
+// an account is unmounted.
 function AccountSheet() {
+  const { privateRead, privateReadError, privateReadSource } = useStore();
+  const guard = projectPrivateReadGuard({
+    snapshot: privateRead,
+    source: privateReadSource,
+    error: privateReadError,
+  });
+  const { presentation, errorFact } = guard;
+  const reconciliationReason = Object.values(privateRead.reconciliation)
+    .find((fact) => fact.reason !== null)?.reason ?? 'Balances, orders, fills, positions, and liabilities.';
+  const coverageState = guard.coverageTone === 'bad'
+    ? 'UNAVAILABLE'
+    : guard.coverageTone === 'warn' ? 'PARTIAL' : guard.coverageTone === 'idle' ? 'NOT CONFIGURED' : 'COMPLETE';
+  const reconciliationState = guard.reconciliationTone === 'bad'
+    ? 'UNAVAILABLE'
+    : guard.reconciliationTone === 'warn' ? 'PARTIAL' : guard.reconciliationTone === 'idle' ? 'NOT CONFIGURED' : 'RECONCILED';
   return (
     <div className="ops-sheet ops-account-sheet account-sheet-v3">
       <OpsSheetHeader
         className="account-v3-head"
         icon={<PopupSourceMark tone="#778292"><ApiKeyIdentityMark size={26} /></PopupSourceMark>}
         title="Account Details"
-        subtitle="Private account truth is outside this candidate"
-        status="Not Configured"
-        tone="warn"
+        subtitle={`${presentation.identityLabel} · ${guard.statusLabel}`}
+        status={<span title={guard.statusLabel}>{presentation.state}</span>}
+        tone={guard.overallTone}
       />
-      <div className="ops-section-label"><span>Authority Boundary</span><em>Static provenance</em></div>
+      <div className="ops-section-label"><span>Private Account Truth</span><em>{presentation.observedLabel}</em></div>
       <div className="ops-list ops-control-list">
-        <OpsRow title="Private Account Truth" detail="No signed account adapter is mounted" value="NOT CONFIGURED" tone="warn" />
-        <OpsRow title="Credentials" detail="Owner authorization and server-side configuration required" value="OWNER GATED" tone="idle" />
-        <OpsRow title="Signed Reads" detail="Balances, orders, positions, loans, and sessions are unavailable" value="NOT MOUNTED" tone="idle" />
+        <OpsRow title="Private Account Truth" detail={`${guard.statusLabel} · ${presentation.freshness.reason}`} value={presentation.state} tone={guard.commonTone} />
+        <OpsRow title="Signed Reads" detail={`${guard.permissionStatusLabel} · ${guard.permissionFreshness.reason} · ${presentation.postureDetail}`} value={privateRead.permissionPosture.state} tone={guard.permissionGuardTone} />
+        <OpsRow title="Admission" detail={errorFact.detail} value={errorFact.label} tone={errorFact.tone} />
+        <OpsRow title="Coverage" detail={`Spot, Cross Margin, and USD-M · ${presentation.coverageLabel}`} value={coverageState} tone={guard.coverageFactTone} />
+        <OpsRow title="Reconciliation" detail={`${presentation.reconciliationLabel} · ${reconciliationReason}`} value={reconciliationState} tone={guard.reconciliationFactTone} />
+        <OpsRow title="Source" detail="Applied private-read response provenance" value={privateReadSource} tone={guard.sourceFactTone} />
         <OpsRow title="Money Actions" detail="Orders, borrow, repay, transfer, withdrawal, and leverage mutation stay blocked" value="BLOCKED" tone="ok" />
       </div>
-      <div className="ops-account-note">
+      <div className="ops-account-note ops-note-row">
         <IconShield size={15} />
-        <span>This surface does not inspect credentials or imply private exchange connectivity.</span>
+        <span>This surface reads account facts only: no credential material, permission change, or money-action control.</span>
       </div>
     </div>
   );
@@ -632,6 +663,7 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
     marketsUpdatedAt,
     openDetail,
   } = useStore();
+  const tokenSurface = useOptionalSurface('token');
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
   const [tab, setTab] = useState<SearchTab>('top');
@@ -648,7 +680,8 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
   // letter finds tokens across the whole app (not just the menu).
   const index = useMemo(() => {
     const pages = buildIndex();
-    const tokens: SearchEntry[] = markets.filter((m) => m.hasSpot || m.spot !== null).map((m) => ({
+    const tokens: SearchEntry[] = tokenSurface.enabled
+      ? markets.filter((m) => m.hasSpot || m.spot !== null).map((m) => ({
       label: m.base,
       hint: `${m.symbol} · Crypto`,
       symbol: m.symbol,
@@ -659,8 +692,10 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
       kind: 'token' as const,
       marketTruth,
       keywords: `${m.base} ${m.symbol} crypto spot token asset coin`.toLowerCase(),
-    }));
-    const perps: SearchEntry[] = markets.filter((m) => m.hasPerp || m.perpMark !== null).map((m) => {
+      }))
+      : [];
+    const perps: SearchEntry[] = tokenSurface.enabled
+      ? markets.filter((m) => m.hasPerp || m.perpMark !== null).map((m) => {
       const facts = marketTruth.factsAvailable
         ? projectPerpetualSearchFacts(m)
         : { perpMark: null, volume: null, changePct: null, fundingRate: null };
@@ -674,9 +709,10 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
         marketTruth,
         keywords: `${m.base} ${m.symbol} perp perpetual futures funding`.toLowerCase(),
       };
-    });
+      })
+      : [];
     return [...pages, ...tokens, ...perps];
-  }, [markets, marketTruth]);
+  }, [markets, marketTruth, tokenSurface.enabled]);
   // Close on outside click even when the query is empty. The panel opens on
   // focus, so tying outside-close only to `q` leaves an empty focused search
   // stuck open.
@@ -746,6 +782,7 @@ function SidebarSearch({ placement = 'rail' }: { placement?: 'rail' | 'topbar' }
   }), [results]);
 
   const go = (e: SearchEntry) => {
+    if (e.symbol && !tokenSurface.enabled) return;
     if (e.symbol && e.marketTruth && !e.marketTruth.factsAvailable) return;
     if (e.symbol) openDetail(e.symbol);
     else if (e.overlay) openOverlay(e.overlay);
@@ -881,19 +918,24 @@ export function Sidebar() {
         {NAV.map((g, i) => (
           <div key={i} className="snav-group" data-nav-group={g.group?.toLowerCase() ?? 'utility'}>
             {g.group && <div className="snav-group-title">{g.group}</div>}
-            {g.items.map((n) => (
-              <button
-                key={n.id}
-                className={`snav-item ${page === n.id || n.match?.includes(page) ? 'active' : ''}`}
-                data-nav-id={n.id}
-                onClick={() => setPage(n.id!)}
-                title={n.label}
-                aria-current={page === n.id || n.match?.includes(page) ? 'page' : undefined}
-              >
-                <span className="snav-ic">{n.icon}</span>
-                <span className="snav-label">{n.label}</span>
-              </button>
-            ))}
+            {g.items.map((n) => {
+              const optionalSurface = optionalSurfaceForPage(n.id ?? '');
+              return (
+                <div className="snav-optional-row" key={n.id}>
+                  <button
+                    className={`snav-item ${page === n.id || n.match?.includes(page) ? 'active' : ''}`}
+                    data-nav-id={n.id}
+                    onClick={() => setPage(n.id!)}
+                    title={n.label}
+                    aria-current={page === n.id || n.match?.includes(page) ? 'page' : undefined}
+                  >
+                    <span className="snav-ic">{n.icon}</span>
+                    <span className="snav-label">{n.label}</span>
+                  </button>
+                  {optionalSurface && <OptionalSurfaceSwitch surfaceId={optionalSurface} compact />}
+                </div>
+              );
+            })}
           </div>
         ))}
       </nav>
@@ -1380,21 +1422,33 @@ const clockDate = (zoneId: string, d: Date) => {
     return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: '2-digit' });
   }
 };
-function PrivateAdapterSheet({ snapshot }: { readonly snapshot: PrivateReadSnapshot }) {
-  const presentation = projectPrivateRead(snapshot);
+function PrivateAdapterSheet() {
+  const { privateRead, privateReadError, privateReadSource } = useStore();
+  const guard = projectPrivateReadGuard({
+    snapshot: privateRead,
+    source: privateReadSource,
+    error: privateReadError,
+  });
+  const { presentation } = guard;
   return (
     <div className="ops-sheet ops-key-sheet api-key-sheet-v2">
       <OpsSheetHeader
-        icon={<PopupSourceMark tone={presentation.postureTone === 'ok' ? '#24c85a' : presentation.postureTone === 'bad' ? '#ef4444' : '#ffb000'} brand><ApiKeyIdentityMark size={40} /></PopupSourceMark>}
+        icon={<PopupSourceMark tone={guard.permissionGuardTone === 'ok' ? '#24c85a' : guard.permissionGuardTone === 'bad' ? '#ef4444' : '#ffb000'} brand><ApiKeyIdentityMark size={40} /></PopupSourceMark>}
         title="API Permissions"
         subtitle={presentation.identityLabel}
-        status={presentation.postureLabel}
-        tone={presentation.postureTone}
+        status={guard.permissionStatusLabel}
+        tone={guard.permissionGuardTone}
       />
-      <div className="ops-section-label"><span>Provider Readback</span><em>{presentation.observedLabel}</em></div>
+      <div className="ops-section-label"><span>Provider Readback</span><em>{guard.permissionObservedLabel}</em></div>
       <div className="ops-list ops-control-list api-permission-list" aria-label="Binance API permission facts">
         {presentation.permissionRows.map((row) => (
-          <OpsRow key={row.id} title={row.label} detail={row.detail} value={row.value} tone={row.tone} />
+          <OpsRow
+            key={row.id}
+            title={row.label}
+            detail={row.detail}
+            value={row.value}
+            tone={worstTone(row.tone, guard.permissionGuardTone)}
+          />
         ))}
       </div>
       <div className="aws-pop-notice neutral"><IconShield size={14} /><span>Facts only · no credential material, permission changes, or money-action controls.</span></div>
@@ -1425,13 +1479,18 @@ function AwsOwnerGatedSheet() {
 
 function SharedTopBar() {
   const {
-    state, privateRead, connected, page, prefs, updatePref, setPage,
+    state, privateRead, privateReadError, privateReadSource, connected, page, prefs, updatePref, setPage,
     fxTruth, fxBusy: currencyBusy, refreshFx: refreshCurrencyFx,
   } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
   const notificationFeedState = useNotificationFeed();
   const theme = useResolvedTheme();
-  const privateReadPresentation = projectPrivateRead(privateRead);
+  const privateReadGuard = projectPrivateReadGuard({
+    snapshot: privateRead,
+    source: privateReadSource,
+    error: privateReadError,
+  });
+  const privateReadPresentation = privateReadGuard.presentation;
   const rowRef = useRef<HTMLDivElement>(null);
   const menuContentRef = useRef<HTMLDivElement>(null);
   const incomingPaneRef = useRef<HTMLDivElement>(null);
@@ -1574,8 +1633,11 @@ function SharedTopBar() {
   const cfg = state?.config;
   const accountProfile = cfg?.profile ?? { name: '', avatar: null };
   const accountAvatar = accountProfile.avatar ?? DEFAULT_PROFILE_LOGO;
-  const accountTone = 'off';
-  const accountSub = 'OWNER GATED · NOT CONFIGURED';
+  // The trigger reports the same complete guard as the sheet and shared rail.
+  const accountTone = privateReadGuard.overallTone === 'ok'
+    ? 'live'
+    : privateReadGuard.overallTone === 'idle' ? 'off' : privateReadGuard.overallTone;
+  const accountSub = privateReadGuard.statusLabel;
   const events = notificationFeedState.archive.events;
   const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[0];
   const activeClock = clockParts(zone.id, now);
@@ -1796,8 +1858,15 @@ function SharedTopBar() {
     advisorMarketFeedReadiness.proven
       ? { sev: 'pass', name: advisorMarketFeedReadiness.label, detail: advisorMarketFeedReadiness.detail }
       : { sev: 'invest', name: advisorMarketFeedReadiness.label, detail: advisorMarketFeedReadiness.detail, page: 'system' },
-    { sev: 'pass', name: 'Live execution blocked', detail: 'LIVE_EXECUTION_NOT_IMPLEMENTED; no signed, test-order, or money-moving port is mounted.' },
-    { sev: 'pass', name: 'Private adapter owner-gated', detail: 'Private exchange reads and credentials are NOT_CONFIGURED in this candidate.' },
+    {
+      sev: privateReadGuard.overallTone === 'bad'
+        ? 'action'
+        : privateReadGuard.overallTone === 'ok' ? 'pass' : 'invest',
+      name: 'Private GET-only read posture',
+      detail: `${privateReadGuard.statusLabel} · Source ${privateReadSource}; no credential material or signed mutation path is exposed.`,
+      page: privateReadGuard.overallTone === 'ok' ? undefined : 'account',
+    },
+    { sev: 'pass', name: 'Live execution blocked', detail: 'LIVE_EXECUTION_NOT_IMPLEMENTED; no signed mutation, test-order, or money-moving port is mounted.' },
   ];
   const advChecks = advRaw.filter(Boolean) as { sev: Sev; name: string; detail: string; page?: Page }[];
   const advA = advChecks.filter((c) => c.sev === 'action'); const advI = advChecks.filter((c) => c.sev === 'invest'); const advP = advChecks.filter((c) => c.sev === 'pass');
@@ -1940,7 +2009,7 @@ function SharedTopBar() {
         return <AwsOwnerGatedSheet />;
 
       case 'apikey':
-        return <PrivateAdapterSheet snapshot={privateRead} />;
+        return <PrivateAdapterSheet />;
 
       case 'advisor': {
         return (
@@ -2073,7 +2142,7 @@ function SharedTopBar() {
               />
               <OpsRow title="Strategy Intake" detail={intakeControl?.disabledReason ?? intakeControl?.wiringState ?? 'Canonical state unavailable.'} value={intakeControl?.currentEffectiveValue ?? 'UNKNOWN'} tone={intakeTone} />
               <OpsRow title="Kill Switch" detail={killSwitchControl?.disabledReason ?? killSwitchControl?.wiringState ?? 'Canonical state unavailable.'} value={killSwitchState} tone={convergenceKillOn ? 'warn' : 'ok'} />
-              <OpsRow title="Live Execution" detail="No signed, test-order, private, or money-moving port exists in this slice." value="Blocked" tone="bad" />
+              <OpsRow title="Live Execution" detail={`No signed mutation, test-order, or money-moving port exists; GET-only private-read posture is ${privateReadGuard.statusLabel}.`} value="Blocked" tone="bad" />
               <OpsRow title="Supervisor Continuity" detail={productSnapshot ? `${productSnapshot.truthLabel} · ${productSnapshot.ownerView.machineReady} Machine Ready` : 'Supervisor unavailable'} value={productBinding.continuity} tone={productSnapshot && productBinding.continuity === 'PROVEN' ? 'ok' : 'warn'} />
             </div>
           </div>
@@ -2235,9 +2304,9 @@ function SharedTopBar() {
       {trig('shell', 'hdr-ic tint-shell shell-ghost shell-premium-trigger', <>
         <span className="rail-icon-core aws-runner-trigger-core" aria-hidden="true"><AwsCubeIdentityMark size={24} /></span>
       </>, { title: 'AWS Runner Control — OWNER GATED · NOT CONFIGURED' })}
-      {trig('apikey', `hdr-ic apikey-ghost apikey-premium-trigger s-${privateReadPresentation.postureTone}`, <>
-        <span className={`rail-icon-core api-key-trigger-core s-${privateReadPresentation.postureTone}`}><ApiKeyIdentityMark size={24} /></span>
-      </>, { title: `API Permissions — ${privateReadPresentation.postureLabel} · ${privateReadPresentation.observedLabel}` })}
+      {trig('apikey', `hdr-ic apikey-ghost apikey-premium-trigger s-${privateReadGuard.permissionGuardTone}`, <>
+        <span className={`rail-icon-core api-key-trigger-core s-${privateReadGuard.permissionGuardTone}`}><ApiKeyIdentityMark size={24} /></span>
+      </>, { title: `API Permissions — ${privateReadGuard.permissionStatusLabel}` })}
       {trig('advisor', `hdr-ic advisor-ghost advisor-premium-trigger grade-${advTone}`, <>
         <span className={`rail-icon-core trust-advisor-trigger-core ${advTone}`}>
           <img className="trust-advisor-trigger-image" src={TRUST_ADVISOR_MARK} alt="" />
@@ -2432,8 +2501,20 @@ function watchmanComponentFromSupervisor(component: Readonly<ProductComponentPro
 }
 
 export function RefreshDock() {
-  const { connected, prefs, updatePref } = useStore();
+  const {
+    connected,
+    prefs,
+    updatePref,
+    privateRead,
+    privateReadError,
+    privateReadSource,
+  } = useStore();
   const { binding } = useProductControlRoomContext();
+  const privateReadGuard = projectPrivateReadGuard({
+    snapshot: privateRead,
+    source: privateReadSource,
+    error: privateReadError,
+  });
   const [appRtt, setAppRtt] = useState<number | null>(null);
   const [st, setSt] = useState<'idle' | 'spin' | 'ok' | 'err'>('idle');
   const [open, setOpen] = useState(false);
@@ -2560,7 +2641,10 @@ export function RefreshDock() {
 
   const productSnapshot = binding.snapshot;
   const productBindingContinuity = binding.continuity;
-  const canonicalComponents = (productSnapshot?.components ?? []).map((component) => watchmanComponentFromSupervisor(component, productBindingContinuity));
+  const locallyOwnedWatchmanIds = new Set(['browser-session', 'binance-account', 'aws-runner']);
+  const canonicalComponents = (productSnapshot?.components ?? [])
+    .filter((component) => !locallyOwnedWatchmanIds.has(component.componentId))
+    .map((component) => watchmanComponentFromSupervisor(component, productBindingContinuity));
   const effectiveLastResetTs = lastRefreshTs;
   const healthFreshness = resolveWatchmanHealthFreshness({
     probeStatus: healthProbeStatus,
@@ -2599,20 +2683,25 @@ export function RefreshDock() {
     updatedAt: healthFreshness.lastSuccessAt,
     latencyMs: appRtt,
   };
-  // Private account and external infrastructure are explicit owner boundaries,
-  // not runtime health. Discard any operational-looking server row for these
-  // IDs and replace it with static planned provenance before all counts/paths.
+  // Private account and external infrastructure truth come from local owners.
+  // Reserved canonical IDs were removed above, so neither row can be shadowed
+  // by an earlier generic server component before counts or path selection.
+  const privateReadWatchmanStatus: WatchmanStatus = privateReadGuard.overallTone === 'ok'
+    ? 'operational'
+    : privateReadGuard.overallTone === 'bad'
+      ? 'outage'
+      : privateReadGuard.overallTone === 'idle' ? 'planned' : 'degraded';
   const ownerGatedComponents: WatchmanComponent[] = [
     {
       id: 'binance-account',
       label: 'Private Account Adapter',
       group: 'binance',
-      status: 'planned',
-      statusLabel: 'Not Configured',
-      detail: 'OWNER_GATED · NOT_CONFIGURED · no signed account reads are mounted',
-      value: 'OWNER GATED',
-      required: false,
-      updatedAt: null,
+      status: privateReadWatchmanStatus,
+      statusLabel: privateReadGuard.statusLabel,
+      detail: `GET-only private-read posture · Source ${privateReadSource} · no signed mutation, order, transfer, or withdrawal path is mounted`,
+      value: `GET ONLY · ${privateReadSource}`,
+      required: privateRead.state !== 'NOT_CONFIGURED',
+      updatedAt: privateRead.observedAt,
     },
     {
       id: 'aws-runner',
@@ -3073,6 +3162,12 @@ function CalendarModal({ onClose }: { onClose: () => void }) {
 // Rendered once at the app root so fixed overlays escape the sidebar box.
 export function Overlays() {
   const [kind, set] = useOverlay();
+  const optionalSurfaces = useOptionalSurfaceControl();
+  const allowed = kind === null || optionalSurfaceAllowsOverlay(optionalSurfaces, kind);
+  useEffect(() => {
+    if (kind !== null && !allowed) set(null);
+  }, [allowed, kind, set]);
+  if (!allowed) return null;
   if (kind === 'news') return <NewsModal onClose={() => set(null)} />;
   if (kind === 'calendar') return <CalendarModal onClose={() => set(null)} />;
   return null;

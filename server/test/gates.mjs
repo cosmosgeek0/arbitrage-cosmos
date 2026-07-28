@@ -114,6 +114,15 @@ async function post(p, body) {
   return { status: res.status, body: await res.json().catch(() => null) };
 }
 
+async function put(p, body) {
+  const res = await request(p, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, body: await res.json().catch(() => null) };
+}
+
 async function awsControl(p, { method = 'GET', body } = {}) {
   const res = await request(p, {
     method,
@@ -214,9 +223,9 @@ const dataDirLeaseSource = readFileSync(
   'utf8',
 );
 check(
-  'Token current OI comes only from the canonical owner read model',
+  'Token current OI and private account facts come only from canonical owners',
   /\/api\/intelligence\/token\?symbol=/.test(tokenDetailSource) &&
-    /\/api\/symbol\/context\?symbol=/.test(tokenDetailSource) &&
+    !/\/api\/symbol\/context\?symbol=/.test(tokenDetailSource) &&
     !/\/api\/futures\/oi-hist/.test(tokenDetailSource) &&
     !/openInterestSnapshot|setOpenInterestSnapshot/.test(tokenDetailSource) &&
     !/latest\.notional|previous\.notional/.test(tokenDetailSource)
@@ -361,11 +370,17 @@ try {
     const icons = await import(${JSON.stringify(moduleUrls.icons)});
     const profile = await import(${JSON.stringify(moduleUrls.profile)});
     const liquidations = await import(${JSON.stringify(moduleUrls.liquidations)});
+    icons.startIconSource();
+    profile.startProfileSource();
     const out = {
       icon: icons.resolveIcons(['BTC']).BTC ?? null,
       cachedProfiles: profile.profileWarmStatus().cachedProfiles,
       liquidationPoints: liquidations.liquidationSeries('BTCUSDT', 300000).points.length,
     };
+    await Promise.all([
+      icons.stopIconSource(),
+      profile.stopProfileSource(),
+    ]);
     process.stdout.write(JSON.stringify(out));
     process.exit(0);
   `;
@@ -498,6 +513,93 @@ check('app boots', booted, booted ? '' : bootLog.slice(-300));
 if (!booted) {
   throw new Error(`app did not boot${spawnError ? `: ${spawnError.message}` : `: ${bootLog.slice(-500)}`}`);
 }
+
+const defaultOffRouteCases = [
+  { label: 'News', path: '/api/news?catalog=all', status: 503, code: 'OPTIONAL_SURFACE_OFF', surface: 'news' },
+  { label: 'Calendar', path: '/api/calendar', status: 503, code: 'OPTIONAL_SURFACE_OFF', surface: 'calendar' },
+  { label: 'Logs', path: '/api/events?limit=1', status: 503, code: 'OPTIONAL_SURFACE_OFF', surface: 'logs' },
+  { label: 'Logs mixed-case route', path: '/API/EVENTS?limit=1', status: 503, code: 'OPTIONAL_SURFACE_OFF', surface: 'logs' },
+  { label: 'Token owner', path: '/api/token/moneyflow?symbol=BTCUSDT&window=15m', status: 503, code: 'OPTIONAL_SURFACE_OFF', surface: 'token' },
+  { label: 'Token intelligence owner', path: '/api/intelligence/token?symbol=BTCUSDT', status: 503, code: 'OPTIONAL_SURFACE_OFF', surface: 'token' },
+  { label: 'Token legacy alias', path: '/api/market/detail?symbol=BTCUSDT', status: 503, code: 'OPTIONAL_SURFACE_OFF', surface: 'token' },
+  { label: 'Token legacy trailing-slash alias', path: '/api/market/quote/?symbol=BTCUSDT', status: 503, code: 'OPTIONAL_SURFACE_OFF', surface: 'token' },
+  { label: 'Markets enrichment', path: '/api/markets/enrichment', status: 503, code: 'OPTIONAL_SURFACE_OFF', surface: 'markets' },
+  { label: 'Token-owned icons', path: '/api/icons?owner=token&bases=BTC,ETH', status: 503, code: 'OPTIONAL_SURFACE_OFF', surface: 'token' },
+  { label: 'icons missing owner', path: '/api/icons?bases=BTC,ETH', status: 400, code: 'INVALID_ICON_OWNER', surface: null },
+  { label: 'icons invalid owner', path: '/api/icons?owner=dashboard&bases=BTC,ETH', status: 400, code: 'INVALID_ICON_OWNER', surface: null },
+];
+const defaultOffRouteResponses = await Promise.all(
+  defaultOffRouteCases.map(async (routeCase) => ({
+    ...routeCase,
+    response: await get(routeCase.path),
+  })),
+);
+check(
+  'default-OFF optional routes and invalid or missing icon owners fail closed before handler work',
+  defaultOffRouteResponses.every(({ response, status, code, surface }) => (
+    response.status === status &&
+    response.body?.ok === false &&
+    response.body?.code === code &&
+    (surface === null
+      ? response.body?.surface === undefined
+      : response.body?.surface === surface)
+  )),
+  JSON.stringify(defaultOffRouteResponses.map(({ label, response }) => ({
+    label,
+    status: response.status,
+    code: response.body?.code ?? null,
+    surface: response.body?.surface ?? null,
+  }))),
+);
+
+const defaultOffControlResponse = await get('/api/optional-surfaces');
+const defaultOffControlSnapshots = defaultOffControlResponse.body?.surfaces;
+check(
+  'GET optional-surface control snapshots remain all admission-closed with zero in-flight work after default-OFF requests',
+  defaultOffControlResponse.status === 200 &&
+    Array.isArray(defaultOffControlSnapshots) &&
+    defaultOffControlSnapshots.length === 5 &&
+    ['news', 'calendar', 'logs', 'token', 'markets'].every((surface) => (
+      defaultOffControlSnapshots.some((snapshot) => (
+        snapshot?.id === surface &&
+        snapshot?.desiredState === 'OFF' &&
+        snapshot?.phase === 'OFF' &&
+        snapshot?.generation === 0 &&
+        snapshot?.admissionOpen === false &&
+        snapshot?.inFlight === 0 &&
+        snapshot?.failureCode === null
+      ))
+    )),
+  JSON.stringify(defaultOffControlSnapshots ?? null),
+);
+
+const retainedMarketsBeforeOptionalEnable = await get('/api/markets');
+check(
+  'core /api/markets remains available while optional Markets enrichment is default-OFF',
+  retainedMarketsBeforeOptionalEnable.status === 200 &&
+    Array.isArray(retainedMarketsBeforeOptionalEnable.body?.rows),
+  `${retainedMarketsBeforeOptionalEnable.status}/${typeof retainedMarketsBeforeOptionalEnable.body?.rows}`,
+);
+
+const explicitlyStartedLegacySurfaces = await Promise.all(
+  ['logs', 'token', 'news', 'calendar'].map((surface) => (
+    put(`/api/optional-surfaces/${surface}`, { enabled: true })
+  )),
+);
+check(
+  'legacy route gates explicitly start only the optional leaf owners they exercise',
+  explicitlyStartedLegacySurfaces.every((response) => (
+    response.status === 200 &&
+    response.body?.snapshot?.desiredState === 'ON' &&
+    response.body?.snapshot?.phase === 'ON' &&
+    response.body?.snapshot?.admissionOpen === true
+  )),
+  JSON.stringify(explicitlyStartedLegacySurfaces.map((response) => ({
+    status: response.status,
+    surface: response.body?.snapshot?.id ?? null,
+    phase: response.body?.snapshot?.phase ?? null,
+  }))),
+);
 
 const isolatedQuote = await get('/api/market/quote?symbol=BTCUSDT');
 check(
@@ -1035,14 +1137,22 @@ check(
 );
 
 const sctx = (await get('/api/symbol/context?symbol=BTCUSDT')).body;
-check('symbol context responds', Array.isArray(sctx?.fills) && Array.isArray(sctx?.signals));
 check(
-  'symbol context keeps unconfigured balances, private orders, and borrow truth explicit instead of fabricating zero',
-  sctx?.accountTruthState === 'NOT_CONFIGURED' &&
-    sctx?.orderTruthState === 'NOT_CONFIGURED' &&
-    sctx?.borrowTruthState === 'NOT_CONFIGURED' &&
-    sctx?.balances === null &&
-    sctx?.openOrders === null
+  'public symbol context responds',
+  sctx?.schemaVersion === 'symbol.public-context.v1' &&
+    sctx?.symbol === 'BTCUSDT' &&
+    Array.isArray(sctx?.fills) &&
+    Array.isArray(sctx?.signals) &&
+    typeof sctx?.allowlisted === 'boolean' &&
+    typeof sctx?.blocklisted === 'boolean'
+);
+check(
+  'public symbol context cannot duplicate centralized private balance or order truth',
+  !Object.hasOwn(sctx ?? {}, 'accountTruthState') &&
+    !Object.hasOwn(sctx ?? {}, 'orderTruthState') &&
+    !Object.hasOwn(sctx ?? {}, 'borrowTruthState') &&
+    !Object.hasOwn(sctx ?? {}, 'balances') &&
+    !Object.hasOwn(sctx ?? {}, 'openOrders')
 );
 
 const tokenIntelligenceResponse = await get('/api/intelligence/token?symbol=BTCUSDT');
@@ -1187,9 +1297,12 @@ check(
     typeof basisRuntime?.thresholds?.watchGapPct === 'number'
 );
 
-const iconsRes = await request('/api/icons?bases=BTC,ETH,TLM,BREV');
+const iconsRes = await request('/api/icons?owner=token&bases=BTC,ETH,TLM,BREV');
 const iconsBody = await iconsRes.json().catch(() => null);
-check('icon manifest endpoint responds', iconsRes.status === 200 && iconsBody !== null && typeof iconsBody === 'object');
+check(
+  'icon manifest endpoint responds for the explicitly admitted Token owner',
+  iconsRes.status === 200 && iconsBody !== null && typeof iconsBody === 'object',
+);
 check(
   'CSP allows only the server-resolved token image owner, not retired client fallback CDNs',
   (secRes.headers.get('content-security-policy') ?? '').includes('coingecko.com') &&

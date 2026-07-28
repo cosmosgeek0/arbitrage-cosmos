@@ -2,6 +2,7 @@ import { IconBook } from '../components/Icons';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { TokenIcon } from '../components/TokenIcon';
 import { fmtDateTime, fmtMoney, timeAgo } from '../format';
+import { projectPrivateReadGuard } from '../lib/privateRead';
 import { useStore } from '../store';
 import type { AppConfig, LedgerEvent } from '../types';
 import './Risk.css';
@@ -20,6 +21,7 @@ type GateCondition = {
   pass: boolean;
   value: string;
   detail: string;
+  status?: string;
 };
 
 const LIMIT_FIELDS: {
@@ -95,6 +97,7 @@ function riskDecisionData(event: LedgerEvent): { allowed: boolean | null; stage:
 
 function statusLabel(condition: GateCondition): string {
   if (condition.id === 'execution-authority') return 'Owner Gated';
+  if (condition.status) return condition.status;
   return condition.pass ? 'Advisory Pass' : 'Unavailable';
 }
 
@@ -105,7 +108,16 @@ function utilization(value: number | null, limit: number | null): number {
 }
 
 export function Risk() {
-  const { state, stateStatus, stateLastSuccessAtMs, stateError, setPage } = useStore();
+  const {
+    state,
+    stateStatus,
+    stateLastSuccessAtMs,
+    stateError,
+    privateRead,
+    privateReadError,
+    privateReadSource,
+    setPage,
+  } = useStore();
 
   if (!state) {
     return (
@@ -133,7 +145,33 @@ export function Risk() {
   const dailyLossLimit = configNumber(config, 'maxDailyLossUsd');
   const realizedToday: number | null = null;
   const openOrderLimit = configNumber(config, 'maxOpenOrders');
-  const openOrdersCount: number | null = null;
+  const privateReadGuard = projectPrivateReadGuard({
+    snapshot: privateRead,
+    source: privateReadSource,
+    error: privateReadError,
+  });
+  const privatePresentation = privateReadGuard.presentation;
+  const openOrdersCount = privatePresentation.counts.openOrders;
+  const orderTruthAuthoritative = openOrdersCount !== null
+    && privateReadGuard.commonTone === 'ok'
+    && privateReadGuard.sourceGuardTone === 'ok'
+    && privateRead.reconciliation.orders.state === 'RECONCILED'
+    && [privateRead.spot, privateRead.margin, privateRead.usdm]
+      .every((product) => product.coverage.state === 'COMPLETE_CURRENT');
+  const openOrdersWithinLimit = orderTruthAuthoritative
+    && openOrdersCount !== null
+    && openOrderLimit !== null
+    && openOrdersCount <= openOrderLimit;
+  const privateAccountDetail = privateReadGuard.errorFact.id !== 'NONE'
+    ? privateReadGuard.errorFact.detail
+    : privatePresentation.freshness.state !== 'CURRENT'
+      ? privatePresentation.freshness.reason
+      : `${privatePresentation.coverageLabel} · ${privatePresentation.reconciliationLabel} · Source ${privateReadSource}`;
+  const openOrdersDetail = openOrdersCount === null
+    ? `${privateReadGuard.statusLabel} · no complete open-order collection was admitted.`
+    : openOrdersCount === 0
+      ? `0 observed rows · ${privateRead.reconciliation.orders.state} · ${privateReadGuard.statusLabel}. Observed zero is retained; a partial guard does not prove current absence.`
+      : `${openOrdersCount} observed rows · ${privateRead.reconciliation.orders.state} · ${privateReadGuard.statusLabel}.`;
   const cooldownSecKnown = typeof config.cooldownSec === 'number' && Number.isFinite(config.cooldownSec);
   const cooldownLeft: number | null = !cooldownSecKnown
     ? null
@@ -173,16 +211,22 @@ export function Risk() {
     {
       id: 'account-source',
       label: 'Private Account',
-      pass: false,
-      value: 'NOT_CONFIGURED',
-      detail: 'No private account endpoint or user stream is mounted.',
+      pass: privateReadGuard.overallTone === 'ok',
+      value: privateReadGuard.statusLabel,
+      detail: privateAccountDetail,
+      status: privateReadGuard.overallTone === 'ok'
+        ? 'Current Truth'
+        : privateReadGuard.overallTone === 'warn' ? 'Partial Truth' : 'Unavailable',
     },
     {
       id: 'key-posture',
       label: 'API Key Posture',
-      pass: false,
-      value: 'OWNER_GATED',
-      detail: 'No private key capability is accepted or projected by this surface.',
+      pass: privateReadGuard.permissionGuardTone === 'ok',
+      value: privateReadGuard.permissionStatusLabel,
+      detail: `${privatePresentation.postureDetail} · ${privateReadGuard.permissionFreshness.label} · Source ${privateReadSource}.`,
+      status: privateReadGuard.permissionGuardTone === 'ok'
+        ? 'Verified Read Only'
+        : privateReadGuard.permissionGuardTone === 'warn' ? 'Guarded Truth' : 'Unavailable',
     },
     {
       id: 'symbol-policy',
@@ -217,15 +261,16 @@ export function Risk() {
       id: 'daily-loss',
       label: 'Daily Loss',
       pass: false,
-      value: 'NOT_CONFIGURED',
-      detail: 'Private account PnL and cost basis are not projected; no zero is assumed.',
+      value: 'UNKNOWN',
+      detail: `${privateReadGuard.statusLabel} · no cross-product daily realized-PnL aggregate is published; no zero is assumed.`,
     },
     {
       id: 'open-orders',
       label: 'Open Orders',
-      pass: false,
-      value: 'UNKNOWN',
-      detail: 'Private open-order truth is not mounted; absence is not interpreted as zero.',
+      pass: openOrdersWithinLimit,
+      value: openOrdersCount === null ? 'UNKNOWN' : `${openOrdersCount} Observed`,
+      detail: openOrdersDetail,
+      status: openOrdersCount === null ? 'Unavailable' : openOrdersWithinLimit ? 'Advisory Pass' : 'Observed Only',
     },
     {
       id: 'cooldown',
@@ -289,8 +334,10 @@ export function Risk() {
           </div>
           <div className="riskx-summary-cell">
             <span>Open Orders</span>
-            <strong>UNKNOWN <em>/ {openOrderLimit === null ? 'UNKNOWN' : openOrderLimit}</em></strong>
-            <small>Private order truth is NOT_CONFIGURED</small>
+            <strong>{openOrdersCount === null ? 'UNKNOWN' : openOrdersCount} <em>/ {openOrderLimit === null ? 'UNKNOWN' : openOrderLimit}</em></strong>
+            <small>
+              {openOrdersCount === null ? 'UNAVAILABLE' : 'OBSERVED'} · {privateRead.reconciliation.orders.state} · {privateReadGuard.statusLabel}
+            </small>
           </div>
           <div className="riskx-summary-cell">
             <span>Rejections Today</span>

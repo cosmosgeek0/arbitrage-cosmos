@@ -456,13 +456,22 @@
 .pcr-surface-end em.truth-unknown { color: var(--muted); }
 .pcr-surface-end b { color: var(--text-2); }
 
-.pcr-visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
+/* A positioned table-caption has undefined CSS behavior and Chromium can place
+   its static position at the deep end of this long table, leaking a second
+   document scrollbar outside the shell. Keep the semantic caption in table
+   flow at zero visual height instead; it remains named for assistive tech. */
+caption.pcr-visually-hidden {
+  position: static;
+  width: auto;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
   overflow: hidden;
-  clip: rect(0 0 0 0);
+  clip: auto;
   clip-path: inset(50%);
+  font-size: 0;
+  line-height: 0;
   white-space: nowrap;
 }
 

@@ -33,9 +33,16 @@ import {
   planReconnectBackoff,
 } from './lib/reconnectBackoff';
 import {
+  INITIAL_PRIVATE_READ_APPLIED_TRUTH,
+  PRIVATE_READ_STALE_AFTER_MS,
   decodePrivateReadSnapshot,
+  privateReadAccessReasonForStatus,
+  reducePrivateReadAppliedTruth,
   unavailablePrivateRead,
+  type PrivateReadAppliedTruth,
+  type PrivateReadAppliedUpdate,
   type PrivateReadSnapshot,
+  type PrivateReadSourceId,
 } from './lib/privateRead';
 import type {
   AppConfig,
@@ -177,7 +184,7 @@ interface Store {
   stateLastSuccessAtMs: number | null;
   stateError: string | null;
   privateRead: PrivateReadSnapshot;
-  privateReadSource: 'PENDING' | 'STATE' | 'FALLBACK';
+  privateReadSource: PrivateReadSourceId;
   privateReadError: string | null;
   markets: MarketRow[];
   marketStatus: CompatibilityStateStatus;
@@ -563,16 +570,35 @@ export function createSerializedWatchlistMutationQueue(
   return Object.freeze({ synchronize, enqueue });
 }
 
+/**
+ * Names a refused browser-to-application request. A same-origin 401/403 does
+ * not identify the upstream provider, so provider permission truth remains
+ * owned exclusively by a decoded private-read snapshot.
+ */
+function privateReadAccessReason(cause: unknown): string | null {
+  return cause instanceof ApiRequestError
+    ? privateReadAccessReasonForStatus(cause.status)
+    : null;
+}
+
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ServerState | null>(null);
   const [stateTruth, setStateTruth] = useState<CompatibilityStateTruth>(
     INITIAL_COMPATIBILITY_STATE_TRUTH,
   );
-  const [privateRead, setPrivateRead] = useState<PrivateReadSnapshot>(
-    () => unavailablePrivateRead('PRIVATE_READ_PENDING'),
+  const [privateReadApplied, setPrivateReadApplied] = useState<PrivateReadAppliedTruth>(
+    () => INITIAL_PRIVATE_READ_APPLIED_TRUTH,
   );
-  const [privateReadSource, setPrivateReadSource] = useState<'PENDING' | 'STATE' | 'FALLBACK'>('PENDING');
-  const [privateReadError, setPrivateReadError] = useState<string | null>(null);
+  // Transport cadence remains separate from displayed provenance. Retaining
+  // this established internal name keeps the existing single-transport
+  // contracts stable while the applied tuple owns what the UI labels.
+  const [privateReadSource, setPrivateReadSource] = useState<PrivateReadSourceId>('PENDING');
+  const {
+    snapshot: privateRead,
+    source: privateReadAppliedSource,
+    error: privateReadError,
+  } = privateReadApplied;
+  const [privateReadFreshnessTick, bumpPrivateReadFreshness] = useState(0);
   const [markets, setMarkets] = useState<MarketRow[]>([]);
   const [marketTruth, setMarketTruth] = useState<MarketStateTruth>(INITIAL_MARKET_STATE_TRUTH);
   const [marketsUpdatedAt, setMarketsUpdatedAt] = useState<number | null>(null);
@@ -606,9 +632,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const privateReadCadenceRef = useRef<(() => void) | null>(null);
   const watchlistMutationQueueRef = useRef<SerializedWatchlistMutationQueue | null>(null);
 
-  // Private snapshots are ordered by the id assigned when their request left
-  // the browser, so a slow earlier answer can never overwrite newer account
-  // truth no matter which caller (socket delta, cadence, manual refresh) won.
+  // Private results are ordered by the id assigned when their request left the
+  // browser. Snapshot, error, and displayed provenance cross one atomic gate;
+  // transport mode remains separate because it controls cadence, not truth.
   const privateReadRequestRef = useRef(0);
   const privateReadAppliedRef = useRef(0);
   const privateReadStateDecisionRef = useRef(0);
@@ -617,10 +643,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return privateReadRequestRef.current;
   }, []);
 
-  const applyPrivateReadUpdate = useCallback((requestId: number, apply: () => void) => {
+  const applyPrivateReadUpdate = useCallback((update: PrivateReadAppliedUpdate) => {
+    const { requestId } = update;
     if (requestId <= privateReadAppliedRef.current) return;
     privateReadAppliedRef.current = requestId;
-    apply();
+    setPrivateReadApplied((current) => reducePrivateReadAppliedTruth(current, update));
   }, []);
 
   const acceptPrivateReadFromState = useCallback((snapshot: ServerState, requestId: number) => {
@@ -632,17 +659,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       privateReadStateDecisionRef.current = requestId;
       setPrivateReadSource(decoded ? 'STATE' : 'FALLBACK');
     }
-    applyPrivateReadUpdate(requestId, () => {
-      if (decoded) {
-        setPrivateRead(decoded);
-        setPrivateReadError(null);
-        return;
-      }
-      if (Object.prototype.hasOwnProperty.call(snapshot, 'privateRead')) {
-        setPrivateRead(unavailablePrivateRead('PRIVATE_READ_STATE_CONTRACT_INVALID'));
-        setPrivateReadError('PRIVATE_READ_STATE_CONTRACT_INVALID');
-      }
-    });
+    if (decoded) {
+      applyPrivateReadUpdate({
+        requestId,
+        snapshot: decoded,
+        error: null,
+        source: 'STATE',
+      });
+      return;
+    }
+    if (Object.prototype.hasOwnProperty.call(snapshot, 'privateRead')) {
+      applyPrivateReadUpdate({
+        requestId,
+        snapshot: unavailablePrivateRead('PRIVATE_READ_STATE_CONTRACT_INVALID'),
+        error: 'PRIVATE_READ_STATE_CONTRACT_INVALID',
+        source: 'STATE',
+      });
+    }
   }, [applyPrivateReadUpdate]);
 
   // One FX owner feeds both global formatters and the operator sheet. Cached
@@ -752,7 +785,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
         .catch((cause) => {
           if (!closed && !controller.signal.aborted) {
-            setPrivateReadSource((current) => current === 'STATE' ? current : 'FALLBACK');
+            if (requestId > privateReadStateDecisionRef.current) {
+              privateReadStateDecisionRef.current = requestId;
+              setPrivateReadSource((current) => current === 'STATE' ? current : 'FALLBACK');
+            }
+            // A request refusal outranks retained rows, but it proves only that
+            // the application boundary denied this STATE request. The applied
+            // tuple keeps that endpoint provenance and provider truth UNKNOWN.
+            const accessReason = privateReadAccessReason(cause);
+            if (accessReason) {
+              applyPrivateReadUpdate({
+                requestId,
+                snapshot: unavailablePrivateRead(accessReason),
+                error: accessReason,
+                source: 'STATE',
+              });
+            }
             setStateTruth((current) => reduceCompatibilityStateTruth(current, {
               kind: 'FAILURE',
               observedAtMs: Date.now(),
@@ -900,7 +948,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       closeCurrent();
       setConnected(false);
     };
-  }, [acceptPrivateReadFromState, nextPrivateReadRequestId]);
+  }, [acceptPrivateReadFromState, applyPrivateReadUpdate, nextPrivateReadRequestId]);
+
+  // Re-render every private-read consumer at each relevant owner-truth
+  // boundary. Permission posture has its own earlier provider clock; scheduling
+  // the earliest future expiry first prevents either fact from staying green.
+  // The tick reruns this non-transport effect to schedule the next boundary.
+  useEffect(() => {
+    const now = Date.now();
+    const nextExpiryAt = [
+      privateRead.observedAt,
+      privateRead.permissionPosture.observedAt,
+    ]
+      .filter((observedAt): observedAt is number => observedAt !== null && observedAt <= now)
+      .map((observedAt) => observedAt + PRIVATE_READ_STALE_AFTER_MS)
+      .filter((expiresAt) => expiresAt > now)
+      .sort((left, right) => left - right)[0];
+    if (nextExpiryAt === undefined) return;
+    const timer = window.setTimeout(
+      () => bumpPrivateReadFreshness((value) => value + 1),
+      nextExpiryAt - now + 1,
+    );
+    return () => window.clearTimeout(timer);
+  }, [
+    privateRead.observedAt,
+    privateRead.permissionPosture.observedAt,
+    privateReadFreshnessTick,
+  ]);
 
   // The canonical socket only speaks when supervisor truth changes, so a
   // signed-in account would otherwise age silently behind a delta-free cockpit.
@@ -929,19 +1003,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       onSuccess: (payload) => {
         const decoded = decodePrivateReadSnapshot(payload);
         if (!decoded) throw new Error('PRIVATE_READ_FALLBACK_CONTRACT_INVALID');
-        applyPrivateReadUpdate(fallbackRequestId, () => {
-          setPrivateRead(decoded);
-          setPrivateReadError(null);
+        applyPrivateReadUpdate({
+          requestId: fallbackRequestId,
+          snapshot: decoded,
+          error: null,
+          source: 'FALLBACK',
         });
       },
       onError: (cause) => {
         const contractInvalid = cause instanceof Error && cause.message === 'PRIVATE_READ_FALLBACK_CONTRACT_INVALID';
-        const reason = contractInvalid
-          ? 'PRIVATE_READ_FALLBACK_CONTRACT_INVALID'
-          : 'PRIVATE_READ_FALLBACK_UNAVAILABLE';
-        applyPrivateReadUpdate(fallbackRequestId, () => {
-          setPrivateRead(unavailablePrivateRead(reason));
-          setPrivateReadError(reason);
+        const reason = privateReadAccessReason(cause)
+          ?? (contractInvalid
+            ? 'PRIVATE_READ_FALLBACK_CONTRACT_INVALID'
+            : 'PRIVATE_READ_FALLBACK_UNAVAILABLE');
+        applyPrivateReadUpdate({
+          requestId: fallbackRequestId,
+          snapshot: unavailablePrivateRead(reason),
+          error: reason,
+          source: 'FALLBACK',
         });
       },
     });
@@ -949,8 +1028,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return poll.stop;
   }, [applyPrivateReadUpdate, nextPrivateReadRequestId, prefs.dataCadence?.account, privateReadSource]);
 
-  // markets poll at the preferred source cadence. `refreshSec` is retained as
-  // the legacy market value; `dataCadence.market` is the new source map.
+  // The shared poll reads only the passive published market cut. Expensive
+  // REST enrichment belongs exclusively to the admitted Markets page.
+  // `refreshSec` is retained as the legacy market value.
   useEffect(() => {
     const marketSec = prefs.dataCadence?.market ?? prefs.refreshSec;
     const poll = createSettledPoll<{ updatedAt?: number; rows: MarketRow[] }>({
@@ -1031,6 +1111,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   // Read-only browser snapshot refresh retained for compatibility consumers.
+  // Its market read is the same passive cut and never bypasses Markets
+  // optional-surface admission through the enrichment route.
   // It never calls the managed-runtime /api/refresh targets: those require the
   // canonical Product preview/digest/revision/receipt protocol.
   const refresh = useCallback(async (): Promise<RefreshResult> => {
@@ -1046,6 +1128,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }));
     } catch (cause) {
       issues.push('State snapshot failed');
+      if (requestId > privateReadStateDecisionRef.current) {
+        privateReadStateDecisionRef.current = requestId;
+        setPrivateReadSource((current) => current === 'STATE' ? current : 'FALLBACK');
+      }
+      const accessReason = privateReadAccessReason(cause);
+      if (accessReason) {
+        applyPrivateReadUpdate({
+          requestId,
+          snapshot: unavailablePrivateRead(accessReason),
+          error: accessReason,
+          source: 'STATE',
+        });
+      }
       setStateTruth((current) => reduceCompatibilityStateTruth(current, {
         kind: 'FAILURE',
         observedAtMs: Date.now(),
@@ -1082,7 +1177,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       issues,
       ts: Date.now(),
     };
-  }, [acceptPrivateReadFromState, nextPrivateReadRequestId]);
+  }, [acceptPrivateReadFromState, applyPrivateReadUpdate, nextPrivateReadRequestId]);
 
   const store: Store = {
     state,
@@ -1090,7 +1185,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     stateLastSuccessAtMs: stateTruth.lastSuccessAtMs,
     stateError: stateTruth.error,
     privateRead,
-    privateReadSource,
+    privateReadSource: privateReadAppliedSource,
     privateReadError,
     markets,
     marketStatus: marketTruth.status,

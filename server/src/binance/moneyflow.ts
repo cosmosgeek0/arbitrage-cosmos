@@ -56,12 +56,64 @@ interface ActiveWalk {
   promise: Promise<MoneyFlow | null>;
   subscribers: number;
   settled: boolean;
+  generation: number;
 }
 
 const cache = new Map<string, { fetchedAt: number; data: MoneyFlow }>();
 const inFlight = new Map<string, ActiveWalk>();
 const failures = new Map<string, number>();
 const CACHE_MS = 45_000;
+let stopped = true;
+let generation = 0;
+let stopSettlement: Promise<void> | null = null;
+
+function isActive(owner: number): boolean {
+  return !stopped && generation === owner;
+}
+
+function liveWalks(): number {
+  let count = 0;
+  for (const walk of inFlight.values()) {
+    if (!walk.settled && isActive(walk.generation)) count++;
+  }
+  return count;
+}
+
+function lifecycleStopReason(): DOMException {
+  return new DOMException('money flow stopped', 'AbortError');
+}
+
+export function moneyFlowLifecycle(): Readonly<{
+  running: boolean;
+  generation: number;
+  activeWalks: number;
+}> {
+  return Object.freeze({
+    running: !stopped,
+    generation,
+    activeWalks: liveWalks(),
+  });
+}
+
+export function startMoneyFlow(): void {
+  if (!stopped || stopSettlement !== null) return;
+  generation++;
+  stopped = false;
+}
+
+export async function stopMoneyFlow(): Promise<void> {
+  if (stopSettlement !== null) return stopSettlement;
+  stopped = true;
+  const shed = [...inFlight.values()].filter((walk) => !walk.settled);
+  for (const walk of shed) walk.controller.abort(lifecycleStopReason());
+  const settlement = Promise.allSettled(shed.map((walk) => walk.promise)).then(() => undefined);
+  stopSettlement = settlement;
+  try {
+    await settlement;
+  } finally {
+    if (stopSettlement === settlement) stopSettlement = null;
+  }
+}
 
 function canonicalSymbol(value: string): string | null {
   const symbol = value.trim().toUpperCase();
@@ -180,14 +232,16 @@ export async function fetchMoneyFlow(symbol: string, window: string, signal?: Ab
   const key = `${safeSymbol}:${window}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.fetchedAt < CACHE_MS) return hit.data;
+  if (stopped) throw new Error('money flow stopped');
   if ((failures.get(key) ?? 0) > Date.now()) {
     throw new Error('money flow unavailable');
   }
   failures.delete(key);
   const existing = inFlight.get(key);
-  if (existing) return joinActiveWalk(existing, signal);
-  if (inFlight.size >= MAX_ACTIVE_WALKS) throw new Error('money flow capacity reached');
+  if (existing && isActive(existing.generation)) return joinActiveWalk(existing, signal);
+  if (liveWalks() >= MAX_ACTIVE_WALKS) throw new Error('money flow capacity reached');
 
+  const owner = generation;
   const controller = new AbortController();
   const timer = setTimeout(() => {
     controller.abort(new DOMException('money flow deadline exceeded', 'TimeoutError'));
@@ -254,12 +308,16 @@ export async function fetchMoneyFlow(symbol: string, window: string, signal?: Ab
       flow.sampled = oldestSeen > start + 1_000;
       flow.inflow = flow.totalBuy - flow.totalSell;
       if (!Number.isFinite(flow.inflow)) throw new Error('money flow unavailable');
-      boundedSet(cache, key, { fetchedAt: now, data: flow });
-      failures.delete(key);
+      if (isActive(owner)) {
+        boundedSet(cache, key, { fetchedAt: now, data: flow });
+        failures.delete(key);
+      }
       return flow;
     } catch (error) {
       if (isAbortError(error)) throw error;
-      boundedSet(failures, key, Date.now() + NEGATIVE_CACHE_MS, MAX_CACHE_ENTRIES);
+      if (isActive(owner)) {
+        boundedSet(failures, key, Date.now() + NEGATIVE_CACHE_MS, MAX_CACHE_ENTRIES);
+      }
       throw new Error('money flow unavailable');
     } finally {
       clearTimeout(timer);
@@ -270,7 +328,13 @@ export async function fetchMoneyFlow(symbol: string, window: string, signal?: Ab
     active.settled = true;
     if (inFlight.get(key) === active) inFlight.delete(key);
   });
-  active = { controller, promise: work, subscribers: 0, settled: false };
+  active = {
+    controller,
+    promise: work,
+    subscribers: 0,
+    settled: false,
+    generation: owner,
+  };
   inFlight.set(key, active);
   return joinActiveWalk(active, signal);
 }

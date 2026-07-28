@@ -15,6 +15,7 @@ import {
   permissionViolations,
   privateReadFreshness,
   projectPrivateRead,
+  projectPrivateReadGuard,
   unavailablePrivateRead,
 } from '../../src/lib/privateRead.ts';
 
@@ -506,18 +507,18 @@ test('RECONCILED is admitted only where the decoder contract can support it', ()
 test('the freshness guard is bounded, explicit, and can only downgrade a claim', () => {
   const decoded = decodePrivateReadSnapshot(availableFixture());
   assert.ok(decoded);
-  assert.equal(PRIVATE_READ_STALE_AFTER_MS, 120_000);
+  assert.equal(PRIVATE_READ_STALE_AFTER_MS, 45_000);
 
   const current = privateReadFreshness(decoded, decoded.observedAt + 5_000);
   assert.equal(current.state, 'CURRENT');
   assert.equal(current.tone, 'ok');
   assert.equal(current.ageMs, 5_000);
-  assert.match(current.reason, /within the 120s account freshness bound/);
+  assert.match(current.reason, /within the 45s account freshness bound/);
 
   const atBound = privateReadFreshness(decoded, decoded.observedAt + PRIVATE_READ_STALE_AFTER_MS);
   assert.equal(atBound.state, 'STALE');
   assert.equal(atBound.tone, 'warn');
-  assert.match(atBound.reason, /beyond the 120s account freshness bound/);
+  assert.match(atBound.reason, /beyond the 45s account freshness bound/);
 
   const future = privateReadFreshness(decoded, decoded.observedAt - 1);
   assert.equal(future.state, 'UNKNOWN');
@@ -597,9 +598,37 @@ test('partial and not-configured contracts remain non-green and preserve explici
   }
   const decodedPartial = decodePrivateReadSnapshot(partial);
   assert.ok(decodedPartial);
-  assert.equal(projectPrivateRead(decodedPartial).tone, 'warn');
-  assert.equal(projectPrivateRead(decodedPartial).coverageLabel, 'Partial Symbol-Scoped History');
+  const nonzeroProjection = projectPrivateRead(decodedPartial);
+  const nonzeroGuard = projectPrivateReadGuard({
+    snapshot: decodedPartial,
+    source: 'STATE',
+    error: null,
+    now: decodedPartial.observedAt + 1,
+  });
+  assert.equal(nonzeroProjection.tone, 'warn');
+  assert.equal(nonzeroProjection.coverageLabel, 'Partial Symbol-Scoped History');
+  assert.equal(nonzeroProjection.counts.openOrders, 1, 'PARTIAL keeps an observed nonzero order count');
+  assert.equal(nonzeroProjection.spotAvailableUsdt, '12.50000000', 'PARTIAL keeps an observed nonzero balance');
+  assert.equal(nonzeroGuard.overallTone, 'warn', 'an observed nonzero does not upgrade PARTIAL');
+  assert.match(nonzeroGuard.statusLabel, /^PARTIAL/);
   assert.equal(decodedPartial.spot.coverage.symbols[0], 'BTCUSDT');
+
+  const partialZero = structuredClone(partial);
+  partialZero.spot.openOrders = [];
+  partialZero.spot.balances[0].free = '0.00000000';
+  const decodedPartialZero = decodePrivateReadSnapshot(partialZero);
+  assert.ok(decodedPartialZero);
+  const zeroProjection = projectPrivateRead(decodedPartialZero);
+  const zeroGuard = projectPrivateReadGuard({
+    snapshot: decodedPartialZero,
+    source: 'STATE',
+    error: null,
+    now: decodedPartialZero.observedAt + 1,
+  });
+  assert.equal(zeroProjection.counts.openOrders, 0, 'PARTIAL keeps an observed exact zero distinct from unknown');
+  assert.equal(zeroProjection.spotAvailableUsdt, '0.00000000', 'PARTIAL keeps an observed fixed-scale zero balance');
+  assert.equal(zeroGuard.overallTone, 'warn', 'an observed zero does not become a green absence claim');
+  assert.match(zeroGuard.statusLabel, /^PARTIAL/);
 
   const decodedNotConfigured = decodePrivateReadSnapshot(notConfiguredFixture());
   assert.ok(decodedNotConfigured);
@@ -649,6 +678,31 @@ test('API permission envelope is exact and last-4 is the only key fragment prese
   }), null);
 });
 
+test('Risk and Token reuse the centralized privateRead tuple without a legacy account poll', async () => {
+  const [risk, token] = await Promise.all([
+    read('pages/Risk.tsx'),
+    read('pages/TokenDetail.tsx'),
+  ]);
+
+  for (const source of [risk, token]) {
+    assert.match(source, /projectPrivateReadGuard\(\{/);
+    assert.match(source, /snapshot:\s*privateRead/);
+    assert.match(source, /source:\s*privateReadSource/);
+    assert.match(source, /error:\s*privateReadError/);
+  }
+  assert.match(risk, /const openOrdersCount = privatePresentation\.counts\.openOrders/);
+  assert.match(risk, /Observed zero is retained; a partial guard does not prove current absence/);
+  assert.match(risk, /OBSERVED.*privateRead\.reconciliation\.orders\.state.*privateReadGuard\.statusLabel/s);
+  assert.match(token, /symbolOpenOrderCount\(privateRead, symbol\)/);
+  assert.match(token, /privateRead\.reconciliation\.orders\.state/);
+  assert.match(token, /privateRead\.reconciliation\.balances\.state/);
+  assert.doesNotMatch(
+    token,
+    /\/api\/symbol\/context|SymbolAccountContext|parseSymbolAccountContext|accountContext|setAccountContext/,
+  );
+  assert.doesNotMatch(token, /createSettledPoll<[^>]*(?:Account|Balance|Order)/);
+});
+
 test('mounted private-read surfaces consume one projection and retain no money-action controls', async () => {
   const [account, dashboard, loans, health, header, store, owner, styles] = await Promise.all([
     read('pages/Account.tsx'),
@@ -663,6 +717,11 @@ test('mounted private-read surfaces consume one projection and retain no money-a
   const combined = [account, dashboard, loans, health, header].join('\n');
   for (const source of [account, dashboard, loans, health, header]) {
     assert.match(source, /projectPrivateRead/);
+  }
+  for (const source of [account, dashboard, loans, health]) {
+    assert.match(source, /projectPrivateReadGuard\(\{/);
+    assert.match(source, /source:\s*privateReadSource/);
+    assert.match(source, /error:\s*privateReadError/);
   }
   assert.match(store, /decodePrivateReadSnapshot\(snapshot\.privateRead\)/);
   assert.match(store, /privateReadSource !== 'FALLBACK'/);
@@ -681,7 +740,9 @@ test('mounted private-read surfaces consume one projection and retain no money-a
   assert.doesNotMatch(combined, /clientOrderId|apiSecret|secretKey|signatureValue|whitelistContents/);
   assert.match(account, /No cross-product valuation is published/);
   assert.match(loans, /Borrowed And Accrued Interest Remain In Asset Units/);
-  assert.match(health, /Private Account \{privatePresentation\.stateLabel\}/);
+  assert.match(health, /Private Account \{privateReadGuard\.statusLabel\}/);
+  assert.match(health, /Permissions \{privateReadGuard\.permissionStatusLabel\}/);
+  assert.match(health, /Source \{privateReadSource\}/);
 });
 
 test('the private-account surfaces present the freshness guard and never invent position facts', async () => {
@@ -693,23 +754,38 @@ test('the private-account surfaces present the freshness guard and never invent 
     read('store.tsx'),
   ]);
 
-  for (const source of [account, dashboard, loans, health]) {
+  for (const source of [account, loans, health]) {
     assert.match(source, /freshness\.(?:label|reason|state)/);
   }
+  assert.match(dashboard, /privateReadGuard\.statusLabel/);
+  for (const source of [account, dashboard, loans, health]) {
+    assert.match(source, /projectPrivateReadGuard\(\{/, 'private/account pages must consume the shared full-truth guard');
+  }
   for (const source of [account, dashboard, loans]) {
-    assert.match(source, /guardTone/, 'a stale snapshot must not keep a green source badge');
+    assert.match(source, /(?:guard|privateReadGuard)\.overallTone/, 'a partial, stale, denied, or fallback tuple must not keep a green source badge');
   }
   const accountSync = dashboard.match(/label: 'Account Sync',[\s\S]*?\n\s*},/)?.[0] ?? '';
-  assert.match(accountSync, /privatePresentation\.freshness\.label/);
-  assert.match(accountSync, /tone: privatePresentation\.guardTone/);
+  assert.match(accountSync, /privateReadGuard\.statusLabel/);
+  assert.match(accountSync, /Source \$\{privateReadSource\}/);
+  assert.match(accountSync, /tone: privateReadGuard\.overallTone/);
+  assert.doesNotMatch(accountSync, /tone: privatePresentation\.guardTone/);
   assert.doesNotMatch(accountSync, /tone: privatePresentation\.tone/);
+  assert.match(account, /const sourceLabel = `Private Reads \$\{guard\.statusLabel\}`/);
+  assert.match(account, /const accountFactsAuthoritative = guard\.overallTone === 'ok'/);
+  assert.doesNotMatch(account, /sourceReason = privateReadError/);
   assert.match(account, /position\.marginType \?\? 'Margin Mode Not Published'/);
   assert.match(account, /position\.leverage === null/);
   assert.doesNotMatch(account, /position\.leverage \?\? '1'|marginType \?\? 'cross'/i);
-  assert.match(health, /privateRead\.permissionPosture\.state === 'UNSAFE'/);
+  assert.match(health, /privateReadGuard\.permissionFreshness\.label/);
+  assert.match(health, /privateReadGuard\.permissionStatusLabel/);
+  assert.match(health, /privateReadGuard\.errorFact\.detail/);
+  assert.doesNotMatch(health, /privateReadReason = privateReadError/);
   assert.match(health, /privatePresentation\.postureDetail/);
   assert.match(loans, /hasMarginLiability/);
   assert.doesNotMatch(loans, /borrowed !== '0'|interest !== '0'/);
+  assert.match(loans, /const currentExactEmptyLiabilities = liabilityRows !== null[\s\S]*privateReadGuard\.commonTone === 'ok'[\s\S]*privateReadGuard\.sourceGuardTone === 'ok'[\s\S]*privateRead\.margin\.coverage\.state === 'COMPLETE_CURRENT'[\s\S]*privateRead\.reconciliation\.liabilities\.state === 'RECONCILED'/);
+  assert.match(loans, /currentExactEmptyLiabilities \? \([\s\S]*No Margin Liabilities[\s\S]*Current Liability Absence Unknown/);
+  assert.match(loans, /STALE LAST-KNOWN/);
 
   // Signed-in account truth advances on a bounded cadence without a second
   // private transport, and every private read is abortable and ordered.

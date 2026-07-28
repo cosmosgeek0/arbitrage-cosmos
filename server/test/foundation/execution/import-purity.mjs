@@ -53,14 +53,14 @@ const coordinatorEnvReadStart = envReads.length;
 const coordinatorMod = await import(
   '../../../dist/foundation/execution/spotTransportCoordinator.js'
 );
+const coordinatorEnvReads = envReads
+  .slice(coordinatorEnvReadStart)
+  .filter((key) => !toleratedLoaderEnv.has(key));
 check('coordinator import has no Date.now', dateNowCalls === 0, `${dateNowCalls} calls`);
 check('coordinator import has no fetch', fetchDenial.attempts() === 0, `${fetchDenial.attempts()} calls`);
 check('coordinator import has no setTimeout', timeoutCalls === 0, `${timeoutCalls} calls`);
 check('coordinator import has no setInterval', intervalCalls === 0, `${intervalCalls} calls`);
 check('coordinator import has no Math.random', randomCalls === 0, `${randomCalls} calls`);
-const coordinatorEnvReads = envReads
-  .slice(coordinatorEnvReadStart)
-  .filter((key) => !toleratedLoaderEnv.has(key));
 check('coordinator import has no process.env reads', coordinatorEnvReads.length === 0, coordinatorEnvReads.join(','));
 const coordinatorGlobals = Object.getOwnPropertyNames(globalThis).filter((key) => !globalsBefore.has(key));
 check('coordinator import creates no globals', coordinatorGlobals.length === 0, coordinatorGlobals.join(','));

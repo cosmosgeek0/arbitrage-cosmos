@@ -19,6 +19,7 @@ import {
   addExactDecimals,
   assessCapitalTruth,
   createSyntheticConservativeEconomicFactBinding,
+  multiplyExactDecimals,
 } from '../../../dist/capitalFoundation/contracts/index.js';
 import {
   deriveOpportunityEligibilityPolicyRevision,
@@ -39,7 +40,7 @@ import {
   BasisHandoffLifecycle,
 } from '../../../dist/engine/basis/lifecycle.js';
 
-const NOW = 1_900_000_000_000;
+export const NOW = 1_900_000_000_000;
 const CAPITAL_AT = NOW - 1_000;
 const ACCEPTED_REVISION_AT = CAPITAL_AT - 100;
 const DAY_MS = 86_400_000;
@@ -136,11 +137,11 @@ function approvedRiskInput(plan) {
         intendedQty: plan.openingLegs.PERP.quantity,
         requiredPermission: 'FUTURES',
         positionBucket: 'USDM_ONE_WAY',
-        estimatedRequiredMarginUsd: 30,
+        estimatedRequiredMarginUsd: 30 * plan.openingLegs.PERP.quantity,
       },
     ],
     declaredMaxNakedDurationMs: plan.maxNakedDurationMs,
-    estimatedRequiredMarginUsd: 30,
+    estimatedRequiredMarginUsd: 30 * plan.openingLegs.PERP.quantity,
     requiredBorrowUsd: 0,
   };
   const intentDigest = deriveRiskIntentDigest(intent);
@@ -249,7 +250,7 @@ function approvedRiskInput(plan) {
         venue: 'BINANCE_USDM',
         symbol: SYMBOL,
         intentDigest,
-        projectedSignedBaseQty: -1,
+        projectedSignedBaseQty: -plan.openingLegs.PERP.quantity,
         markPrice: 30,
         liquidationPrice: 45,
         observedAt: stamp('risk.liquidation-projection'),
@@ -281,7 +282,7 @@ function approvedRiskInput(plan) {
       verdictTtlMs: 5_000,
       minEvidenceAuthority: 'SYNTHETIC_TEST',
       maxSpotPerpSkewMs: 50,
-      minLegNotionalUsd: 10,
+      minLegNotionalUsd: 5,
       maxLegNotionalUsd: 200,
       maxGrossNotionalUsd: 400,
       maxHedgeRatioDeviationPct: 1,
@@ -778,7 +779,7 @@ function makeHandoff({
   return result.handoff;
 }
 
-function makeWorld({
+export function makeWorld({
   acceptedRevisionAt = ACCEPTED_REVISION_AT,
   proposalMaxAgeMs = 10_000,
   spotQuantity = 1,
@@ -833,7 +834,7 @@ function makeWorld({
   };
 }
 
-function enabledControls(overrides = {}) {
+export function enabledControls(overrides = {}) {
   return { enabled: true, killSwitchEngaged: false, ...overrides };
 }
 
@@ -1041,6 +1042,36 @@ test('canonical allocation may narrow requested Capital and exact leg notionals 
   assert.equal(bindBasisValidateOnlyPlan(narrowed.input, enabledControls()).ok, true);
 });
 
+test('combined Spot and Perp gross notional cannot exceed the canonical staged maximum', () => {
+  const overGross = makeWorld({
+    requestedCapital: '100',
+    acceptedNotionalUsd: 100,
+    allocationCap: '80',
+    spotQuantity: 2,
+    perpQuantity: 2,
+  });
+  assert.equal(overGross.capital.mandate.targetMaximumExposure, '80');
+  assert.equal(
+    multiplyExactDecimals(
+      overGross.capital.spotPriceExact,
+      overGross.capital.spotQuantityExact,
+    ),
+    '60',
+  );
+  assert.equal(
+    multiplyExactDecimals(
+      overGross.capital.perpPriceExact,
+      overGross.capital.perpQuantityExact,
+    ),
+    '60',
+  );
+  assert.equal(
+    bindBasisValidateOnlyPlan(overGross.input, enabledControls()).code,
+    'PROVENANCE_MISMATCH',
+    'two individually bounded legs must not combine into 120 against an 80 mandate',
+  );
+});
+
 test('hostile scalar graphs always return typed refusals instead of throwing', () => {
   const { input, handoff, planInput } = makeWorld();
   const hostileHandoffs = [
@@ -1079,6 +1110,57 @@ test('hostile scalar graphs always return typed refusals instead of throwing', (
     assert.equal(result.ok, false);
     assert.equal(typeof result.code, 'string');
   });
+});
+
+test('plain-data snapshot rejects overwide, dense, deep, oversized, and aggregate-node graphs', () => {
+  const { input, planInput } = makeWorld();
+  const cases = [
+    {
+      name: 'overwide object',
+      value: Object.fromEntries(
+        Array.from({ length: 129 }, (_, index) => [`k${index}`, index]),
+      ),
+    },
+    {
+      name: 'dense array',
+      value: Array.from({ length: 513 }, () => 'SPOT'),
+    },
+    {
+      name: 'aggregate nodes',
+      value: Array.from({ length: 512 }, (_, row) =>
+        Object.fromEntries(
+          Array.from({ length: 8 }, (_, column) => [
+            `k${column}`,
+            `${row}:${column}`,
+          ]),
+        )),
+    },
+    {
+      name: 'aggregate bytes',
+      value: Array.from({ length: 5 }, (_, index) =>
+        `${index}${'x'.repeat(60_000)}`),
+    },
+  ];
+  let deep = { leaf: true };
+  for (let depth = 0; depth < 40; depth += 1) deep = { next: deep };
+  cases.push({ name: 'deep graph', value: deep });
+
+  for (const entry of cases) {
+    assert.doesNotThrow(() => {
+      const result = bindBasisValidateOnlyPlan(
+        {
+          ...input,
+          planInput: {
+            ...planInput,
+            openingOrder: entry.value,
+          },
+        },
+        enabledControls(),
+      );
+      assert.equal(result.ok, false, entry.name);
+      assert.equal(result.code, 'INPUT_NOT_PLAIN_DATA', entry.name);
+    }, entry.name);
+  }
 });
 
 test('hostile accessors and Proxies are rejected without invocation', () => {

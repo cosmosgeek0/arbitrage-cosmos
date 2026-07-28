@@ -463,9 +463,17 @@ const producedCapitalProofs = new WeakSet<object>();
 
 class PlainDataError extends TypeError {}
 
-const MAX_SNAPSHOT_ARRAY_LENGTH = 10_000;
-const MAX_SNAPSHOT_OBJECT_KEYS = 2_000;
-const MAX_SNAPSHOT_STRING_LENGTH = 1_000_000;
+const MAX_SNAPSHOT_ARRAY_LENGTH = 512;
+const MAX_SNAPSHOT_OBJECT_KEYS = 128;
+const MAX_SNAPSHOT_STRING_LENGTH = 262_144;
+const MAX_SNAPSHOT_TOTAL_NODES = 4_096;
+const MAX_SNAPSHOT_TOTAL_BYTES = 524_288;
+const MAX_SNAPSHOT_DEPTH = 32;
+
+interface SnapshotBudget {
+  nodes: number;
+  bytes: number;
+}
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -480,17 +488,34 @@ function snapshotPlainData(
   value: unknown,
   active: WeakSet<object> = new WeakSet<object>(),
   completed: WeakMap<object, unknown> = new WeakMap<object, unknown>(),
+  budget: SnapshotBudget = { nodes: 0, bytes: 0 },
+  depth = 0,
 ): unknown {
+  if (depth > MAX_SNAPSHOT_DEPTH) {
+    throw new PlainDataError('input exceeds bounded snapshot depth');
+  }
+  budget.nodes += 1;
+  if (budget.nodes > MAX_SNAPSHOT_TOTAL_NODES) {
+    throw new PlainDataError('input exceeds bounded snapshot node capacity');
+  }
   if (
     value === null ||
     typeof value === 'number' ||
     typeof value === 'boolean'
   ) {
+    budget.bytes += value === null || typeof value === 'boolean' ? 1 : 8;
+    if (budget.bytes > MAX_SNAPSHOT_TOTAL_BYTES) {
+      throw new PlainDataError('input exceeds bounded snapshot byte capacity');
+    }
     return value;
   }
   if (typeof value === 'string') {
     if (value.length > MAX_SNAPSHOT_STRING_LENGTH) {
       throw new PlainDataError('string input exceeds bounded snapshot capacity');
+    }
+    budget.bytes += value.length * 2;
+    if (budget.bytes > MAX_SNAPSHOT_TOTAL_BYTES) {
+      throw new PlainDataError('input exceeds bounded snapshot byte capacity');
     }
     return value;
   }
@@ -505,23 +530,22 @@ function snapshotPlainData(
   if (active.has(value)) throw new PlainDataError('cyclic input is forbidden');
   active.add(value);
 
-  const prototype = Object.getPrototypeOf(value);
-  const descriptors = Object.getOwnPropertyDescriptors(value);
-  if (Reflect.ownKeys(descriptors).length > MAX_SNAPSHOT_OBJECT_KEYS) {
-    throw new PlainDataError('object input exceeds bounded snapshot capacity');
-  }
-  for (const key of Reflect.ownKeys(descriptors)) {
-    if (typeof key === 'symbol') throw new PlainDataError('symbol properties are forbidden');
-    const descriptor = descriptors[key];
-    if (descriptor === undefined || !Object.hasOwn(descriptor, 'value')) {
-      throw new PlainDataError('accessor properties are forbidden');
-    }
+  let prototype: object | null;
+  try {
+    prototype = Object.getPrototypeOf(value);
+  } catch {
+    throw new PlainDataError('input prototype cannot be inspected');
   }
 
   let copy: unknown;
   if (Array.isArray(value)) {
     if (prototype !== Array.prototype) throw new PlainDataError('array subclass input is forbidden');
-    const lengthDescriptor = descriptors.length;
+    let lengthDescriptor: PropertyDescriptor | undefined;
+    try {
+      lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length');
+    } catch {
+      throw new PlainDataError('array length cannot be inspected');
+    }
     if (
       lengthDescriptor === undefined ||
       !Object.hasOwn(lengthDescriptor, 'value') ||
@@ -532,32 +556,94 @@ function snapshotPlainData(
     ) {
       throw new PlainDataError('invalid array length');
     }
-    const output: unknown[] = [];
-    for (const key of Object.keys(descriptors)) {
-      if (key === 'length') continue;
-      if (!/^(0|[1-9]\d*)$/.test(key)) {
+    let keys: readonly (string | symbol)[];
+    try {
+      keys = Reflect.ownKeys(value);
+    } catch {
+      throw new PlainDataError('array keys cannot be inspected');
+    }
+    if (
+      keys.length > MAX_SNAPSHOT_ARRAY_LENGTH + 1 ||
+      keys.length !== lengthDescriptor.value + 1
+    ) {
+      throw new PlainDataError('array breadth is invalid');
+    }
+    for (const key of keys) {
+      if (typeof key === 'symbol') throw new PlainDataError('symbol properties are forbidden');
+      budget.bytes += key.length * 2;
+      if (budget.bytes > MAX_SNAPSHOT_TOTAL_BYTES) {
+        throw new PlainDataError('input exceeds bounded snapshot byte capacity');
+      }
+      if (key !== 'length' && !/^(0|[1-9]\d*)$/.test(key)) {
         throw new PlainDataError('non-index array properties are forbidden');
       }
     }
+    const output: unknown[] = [];
     for (let index = 0; index < lengthDescriptor.value; index += 1) {
-      const descriptor = descriptors[String(index)];
-      if (descriptor === undefined || !Object.hasOwn(descriptor, 'value')) {
+      let descriptor: PropertyDescriptor | undefined;
+      try {
+        descriptor = Object.getOwnPropertyDescriptor(value, String(index));
+      } catch {
+        throw new PlainDataError('array element cannot be inspected');
+      }
+      if (
+        descriptor === undefined ||
+        !Object.hasOwn(descriptor, 'value') ||
+        descriptor.enumerable !== true
+      ) {
         throw new PlainDataError('sparse arrays are forbidden');
       }
-      output.push(snapshotPlainData(descriptor.value, active, completed));
+      output.push(
+        snapshotPlainData(
+          descriptor.value,
+          active,
+          completed,
+          budget,
+          depth + 1,
+        ),
+      );
     }
     copy = Object.freeze(output);
   } else {
     if (prototype !== Object.prototype && prototype !== null) {
       throw new PlainDataError('class instances are forbidden');
     }
+    let keys: readonly (string | symbol)[];
+    try {
+      keys = Reflect.ownKeys(value);
+    } catch {
+      throw new PlainDataError('object keys cannot be inspected');
+    }
+    if (keys.length > MAX_SNAPSHOT_OBJECT_KEYS) {
+      throw new PlainDataError('object input exceeds bounded snapshot capacity');
+    }
     const output: Record<string, unknown> = {};
-    for (const key of Object.keys(descriptors)) {
-      const descriptor = descriptors[key];
-      if (descriptor === undefined || descriptor.enumerable !== true) {
+    for (const key of keys) {
+      if (typeof key === 'symbol') throw new PlainDataError('symbol properties are forbidden');
+      budget.bytes += key.length * 2;
+      if (budget.bytes > MAX_SNAPSHOT_TOTAL_BYTES) {
+        throw new PlainDataError('input exceeds bounded snapshot byte capacity');
+      }
+      let descriptor: PropertyDescriptor | undefined;
+      try {
+        descriptor = Object.getOwnPropertyDescriptor(value, key);
+      } catch {
+        throw new PlainDataError('object property cannot be inspected');
+      }
+      if (
+        descriptor === undefined ||
+        !Object.hasOwn(descriptor, 'value') ||
+        descriptor.enumerable !== true
+      ) {
         throw new PlainDataError('hidden data properties are forbidden');
       }
-      output[key] = snapshotPlainData(descriptor.value, active, completed);
+      output[key] = snapshotPlainData(
+        descriptor.value,
+        active,
+        completed,
+        budget,
+        depth + 1,
+      );
     }
     copy = Object.freeze(output);
   }
@@ -1569,6 +1655,7 @@ function bindBasisValidateOnlyPlanUnsafe(
       compareExactDecimals(capitalMaximum, acceptedNotionalUsdExact) > 0 ||
       compareExactDecimals(spotNotionalUsdExact, capitalMaximum) > 0 ||
       compareExactDecimals(perpNotionalUsdExact, capitalMaximum) > 0 ||
+      compareExactDecimals(grossNotional, capitalMaximum) > 0 ||
       compareExactDecimals(grossNotional, approvedGross) > 0
     ) {
       return fail('PROVENANCE_MISMATCH');

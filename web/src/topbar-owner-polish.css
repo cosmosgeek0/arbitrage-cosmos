@@ -11,9 +11,30 @@
   --owner-rail-ink-strong: var(--text);
 }
 
-html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button[data-topbar-key],
-html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button[data-topbar-key]:hover,
-html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button[data-topbar-key].on {
+html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button:is(
+  [data-topbar-key="shell"],
+  [data-topbar-key="apikey"],
+  [data-topbar-key="advisor"],
+  [data-topbar-key="notif"],
+  [data-topbar-key="currency"],
+  [data-topbar-key="basisu"]
+),
+html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button:is(
+  [data-topbar-key="shell"],
+  [data-topbar-key="apikey"],
+  [data-topbar-key="advisor"],
+  [data-topbar-key="notif"],
+  [data-topbar-key="currency"],
+  [data-topbar-key="basisu"]
+):hover,
+html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button:is(
+  [data-topbar-key="shell"],
+  [data-topbar-key="apikey"],
+  [data-topbar-key="advisor"],
+  [data-topbar-key="notif"],
+  [data-topbar-key="currency"],
+  [data-topbar-key="basisu"]
+).on {
   --rail-tone: var(--owner-rail-ink) !important;
   border-color: transparent !important;
   color: var(--owner-rail-ink) !important;
@@ -23,12 +44,26 @@ html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button[data-topbar-key]
   transform: none !important;
 }
 
-html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button[data-topbar-key]:is(:hover, :focus-visible, .on) {
+html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button:is(
+  [data-topbar-key="shell"],
+  [data-topbar-key="apikey"],
+  [data-topbar-key="advisor"],
+  [data-topbar-key="notif"],
+  [data-topbar-key="currency"],
+  [data-topbar-key="basisu"]
+):is(:hover, :focus-visible, .on) {
   color: var(--owner-rail-ink-strong) !important;
   background: var(--hover) !important;
 }
 
-html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button[data-topbar-key]::after {
+html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button:is(
+  [data-topbar-key="shell"],
+  [data-topbar-key="apikey"],
+  [data-topbar-key="advisor"],
+  [data-topbar-key="notif"],
+  [data-topbar-key="currency"],
+  [data-topbar-key="basisu"]
+)::after {
   right: 10px !important;
   bottom: -2px !important;
   left: 10px !important;
@@ -38,33 +73,64 @@ html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button[data-topbar-key]
   animation: none !important;
 }
 
-html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button[data-topbar-key]:is(:hover, .on)::after {
+html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button:is(
+  [data-topbar-key="shell"],
+  [data-topbar-key="apikey"],
+  [data-topbar-key="advisor"],
+  [data-topbar-key="notif"],
+  [data-topbar-key="currency"],
+  [data-topbar-key="basisu"]
+):is(:hover, .on)::after {
   opacity: .42 !important;
   transform: none !important;
 }
 
 /* Purpose-built monochrome line glyphs replace the colored rail artwork.
    The original marks remain untouched inside their opened sheets. */
-html body .hdr .topbar-suite-v4 > button[data-topbar-key] .rail-icon-core {
+html body .hdr .topbar-suite-v4 > button:is(
+  [data-topbar-key="shell"],
+  [data-topbar-key="apikey"],
+  [data-topbar-key="advisor"],
+  [data-topbar-key="notif"],
+  [data-topbar-key="currency"],
+  [data-topbar-key="basisu"]
+) .rail-icon-core {
   color: inherit !important;
   box-shadow: none !important;
   filter: none !important;
   transform: none !important;
 }
 
-html body .hdr .topbar-suite-v4 > button[data-topbar-key] .rail-icon-core > :is(img, svg) {
+html body .hdr .topbar-suite-v4 > button:is(
+  [data-topbar-key="shell"],
+  [data-topbar-key="apikey"],
+  [data-topbar-key="advisor"],
+  [data-topbar-key="notif"],
+  [data-topbar-key="currency"],
+  [data-topbar-key="basisu"]
+) .rail-icon-core > :is(img, svg) {
   opacity: 0 !important;
   filter: none !important;
   transform: none !important;
 }
 
-html body .hdr .topbar-suite-v4 > button[data-topbar-key] .rail-icon-core::before,
-html body .hdr .topbar-suite-v4 > button[data-topbar-key="clock"] .clock-command-pill::before {
+html body .hdr .topbar-suite-v4 > button:is(
+  [data-topbar-key="shell"],
+  [data-topbar-key="apikey"],
+  [data-topbar-key="advisor"],
+  [data-topbar-key="notif"],
+  [data-topbar-key="currency"],
+  [data-topbar-key="basisu"]
+) .rail-icon-core::before {
   position: absolute;
+  top: 5px !important;
+  left: 5px !important;
+  display: block !important;
+  opacity: 1 !important;
   width: 18px;
   height: 18px;
-  background: currentColor;
-  content: "";
+  background: currentColor !important;
+  content: "" !important;
   -webkit-mask-position: center;
   mask-position: center;
   -webkit-mask-repeat: no-repeat;
@@ -93,11 +159,6 @@ html body .hdr .topbar-suite-v4 > button[data-topbar-key="notif"] .rail-icon-cor
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM9.8 21h4.4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 
-html body .hdr .topbar-suite-v4 > button[data-topbar-key="power"] .rail-icon-core::before {
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3v9m-5.7-5.1a8 8 0 1 0 11.4 0' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3v9m-5.7-5.1a8 8 0 1 0 11.4 0' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
-}
-
 html body .hdr .topbar-suite-v4 > button[data-topbar-key="currency"] .rail-icon-core::before {
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2v20m5-16H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2v20m5-16H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
@@ -108,51 +169,37 @@ html body .hdr .topbar-suite-v4 > button[data-topbar-key="basisu"] .rail-icon-co
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m19 5-14 14M7.5 4.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm9 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
 }
 
-html body .hdr .topbar-suite-v4 > button[data-topbar-key="appearance"] .rail-icon-core::before {
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 4V2m0 20v-2m8-8h2M2 12h2m13.7-5.7 1.4-1.4M4.9 19.1l1.4-1.4m11.4 0 1.4 1.4M4.9 4.9l1.4 1.4M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0Z' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 4V2m0 20v-2m8-8h2M2 12h2m13.7-5.7 1.4-1.4M4.9 19.1l1.4-1.4m11.4 0 1.4 1.4M4.9 4.9l1.4 1.4M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0Z' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+@media (min-width: 1101px) {
+  html body .hdr .hdr-in {
+    display: grid !important;
+    grid-template-columns: 160px minmax(280px, 1fr) auto !important;
+    column-gap: 24px !important;
+  }
+
+  html body .hdr .hdr-in > .hdr-brand {
+    margin-right: 0 !important;
+  }
+
+  html body .hdr .hdr-in > .tb-left {
+    position: static !important;
+    inset: auto !important;
+    width: auto !important;
+    height: 100% !important;
+    padding-left: 0 !important;
+  }
+
+  html body .hdr .hdr-in > .tb-left > .topbar-search {
+    width: 100% !important;
+  }
+
+  html body .hdr .hdr-in > .hdr-right {
+    margin-left: 0 !important;
+  }
 }
 
-html body .hdr .topbar-suite-v4 > button.hdr-clock-btn.clock-pro-btn.clock-premium-trigger[data-topbar-key="clock"],
-html body .hdr .topbar-suite-v4 > button.hdr-clock-btn.clock-pro-btn.clock-premium-trigger[data-topbar-key="clock"]:hover,
-html body .hdr .topbar-suite-v4 > button.hdr-clock-btn.clock-pro-btn.clock-premium-trigger[data-topbar-key="clock"].on {
-  --rail-tone: var(--owner-rail-ink) !important;
-  color: var(--owner-rail-ink) !important;
-}
-
-html body .hdr .topbar-suite-v4 > button[data-topbar-key="clock"] .clock-hourglass-mark {
-  opacity: 0 !important;
-}
-
-html body .hdr .topbar-suite-v4 > button[data-topbar-key="clock"] .clock-command-pill::before {
-  left: 9px;
-  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 3h10M7 21h10M8 3c0 4 1.5 6.2 4 9-2.5 2.8-4 5-4 9m8-18c0 4-1.5 6.2-4 9 2.5 2.8 4 5 4 9' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 3h10M7 21h10M8 3c0 4 1.5 6.2 4 9-2.5 2.8-4 5-4 9m8-18c0 4-1.5 6.2-4 9 2.5 2.8 4 5 4 9' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-}
-
-html body .hdr .topbar-suite-v4 > button[data-topbar-key="clock"] .clock-command-pill {
-  border-color: var(--line-2) !important;
-  color: var(--text) !important;
-  background: transparent !important;
-  box-shadow: none !important;
-}
-
-html body .hdr .topbar-suite-v4 > button[data-topbar-key="clock"] .clock-command-zone {
-  color: var(--text-2) !important;
-}
-
-html body .hdr .topbar-suite-v4 > button[data-topbar-key="clock"] .clock-command-bullet {
-  background: var(--muted) !important;
-  box-shadow: none !important;
-}
-
-/* AWS and Account rendered fewer rows than the inherited five-track tape. */
+/* AWS renders three evidence rows, not the inherited five-track tape. */
 .smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet.ops-aws-sheet .ops-control-list {
   grid-template-rows: repeat(3, minmax(0, 1fr)) !important;
-}
-
-.smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet.ops-account-sheet .ops-control-list {
-  grid-template-rows: repeat(4, minmax(0, 1fr)) !important;
 }
 
 .smenu-bar.topbar-suite-v4 .ops-aws-sheet .ops-row-copy > em,
@@ -176,8 +223,7 @@ html body .hdr .topbar-suite-v4 > button[data-topbar-key="clock"] .clock-command
   -webkit-line-clamp: 2;
 }
 
-.smenu-bar.topbar-suite-v4 :is(.ops-aws-sheet, .api-key-sheet-v2) .aws-pop-notice,
-.smenu-bar.topbar-suite-v4 .ops-account-sheet .ops-account-note {
+.smenu-bar.topbar-suite-v4 :is(.ops-aws-sheet, .api-key-sheet-v2) .aws-pop-notice {
   display: grid !important;
   grid-template-columns: 28px minmax(0, 1fr) !important;
   min-height: 52px !important;
@@ -195,8 +241,7 @@ html body .hdr .topbar-suite-v4 > button[data-topbar-key="clock"] .clock-command
   line-height: 15px !important;
 }
 
-.smenu-bar.topbar-suite-v4 :is(.ops-aws-sheet, .api-key-sheet-v2) .aws-pop-notice > span,
-.smenu-bar.topbar-suite-v4 .ops-account-sheet .ops-account-note > span {
+.smenu-bar.topbar-suite-v4 :is(.ops-aws-sheet, .api-key-sheet-v2) .aws-pop-notice > span {
   overflow: hidden !important;
   white-space: normal !important;
   text-overflow: clip !important;
@@ -273,4 +318,466 @@ html body .hdr .topbar-suite-v4 > button[data-topbar-key="clock"] .clock-command
 
 .smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-choice-stack > button.selected .ops-choice-mark {
   color: var(--text) !important;
+}
+
+/* AWS Runner — align evidence and state on a stable two-column rail. */
+.smenu-bar.topbar-suite-v4 .ops-aws-sheet .ops-sheet-head {
+  grid-template-columns: 44px minmax(0, 1fr) 98px !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-aws-sheet .ops-row {
+  grid-template-columns: minmax(0, 1fr) 112px !important;
+  gap: 14px !important;
+  padding: 18px var(--popover-rail) !important;
+  align-items: start !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-aws-sheet .ops-row-copy {
+  min-width: 0 !important;
+  align-content: start !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-aws-sheet .ops-row-copy > em {
+  overflow-wrap: anywhere !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-aws-sheet .ops-row-value {
+  width: 112px !important;
+  max-width: none !important;
+  margin-top: 1px !important;
+  align-self: start !important;
+  justify-self: end !important;
+  justify-content: flex-end !important;
+  white-space: nowrap !important;
+}
+
+/* API Permissions — a readable summary band and seven aligned truth rows. */
+.smenu-bar.topbar-suite-v4 .smenu-pane .api-key-sheet-v2 .ops-section-label {
+  height: 46px !important;
+  min-height: 46px !important;
+  flex: 0 0 46px !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  border-bottom: 1px solid var(--line) !important;
+  background: color-mix(in srgb, var(--text) 2.5%, var(--panel)) !important;
+  text-transform: none !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .api-key-sheet-v2 .ops-section-label > em {
+  display: inline-flex !important;
+  min-height: 24px !important;
+  padding: 0 8px !important;
+  align-items: center !important;
+  border: 1px solid var(--line-2) !important;
+  border-radius: 999px !important;
+  color: var(--text-2) !important;
+  background: var(--panel) !important;
+  font-family: var(--ref-mono-font, var(--mono)) !important;
+  font-size: 9.75px !important;
+  white-space: nowrap !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .api-key-sheet-v2 .api-permission-list {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  grid-template-rows: repeat(7, minmax(0, 1fr)) !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .api-key-sheet-v2 .api-permission-list .ops-row {
+  grid-template-columns: minmax(0, 1fr) 84px !important;
+  min-height: 0 !important;
+  align-items: center !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .api-key-sheet-v2 .ops-row-copy {
+  min-width: 0 !important;
+  align-self: center !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .api-key-sheet-v2 .ops-row-copy > b {
+  display: block !important;
+  overflow: hidden !important;
+  font-family: var(--font) !important;
+  font-size: 12.75px !important;
+  font-weight: 470 !important;
+  line-height: 18px !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .api-key-sheet-v2 .ops-row-value {
+  min-width: 76px !important;
+  min-height: 24px !important;
+  padding: 0 8px !important;
+  justify-self: end !important;
+  justify-content: center !important;
+  border: 1px solid var(--line-2) !important;
+  border-radius: 999px !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .api-key-sheet-v2
+.api-permission-list .ops-row-value:is(.warn, .idle) {
+  color: var(--text-2) !important;
+  background: color-mix(in srgb, var(--text) 2.5%, var(--panel)) !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .api-key-sheet-v2
+.api-permission-list .ops-row:first-child {
+  background: color-mix(in srgb, var(--text) 2%, var(--panel)) !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .api-key-sheet-v2
+.api-permission-list .ops-row:first-child .ops-row-copy > b {
+  font-weight: 540 !important;
+}
+
+/* Trust Advisor — reuse the reference sheets' summary + ledger rhythm. */
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet.ops-advisor-sheet {
+  --advisor-danger: var(--ops-red, #d43f4c);
+  --advisor-review: var(--ops-amber, #b8790f);
+  --advisor-clear: var(--ops-green, #168f56);
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-advisor-strip {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  height: 58px !important;
+  min-height: 58px !important;
+  margin: 8px 12px 0 !important;
+  flex: 0 0 58px !important;
+  overflow: hidden !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 8px !important;
+  background: color-mix(in srgb, var(--text) 1.5%, var(--panel)) !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-advisor-strip > span {
+  grid-template-columns: 24px minmax(0, 1fr) !important;
+  gap: 8px !important;
+  padding: 0 10px !important;
+  border: 0 !important;
+  border-right: 1px solid var(--line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-advisor-strip > span:last-child {
+  border-right: 0 !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-advisor-state-icon {
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 6px !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-advisor-state-copy {
+  align-content: center !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-advisor-strip .bad :is(.ops-advisor-state-icon, b) {
+  color: var(--advisor-danger) !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-advisor-strip .warn :is(.ops-advisor-state-icon, b) {
+  color: var(--advisor-review) !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-advisor-strip .ok :is(.ops-advisor-state-icon, b) {
+  color: var(--advisor-clear) !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-advisor-list {
+  grid-auto-rows: minmax(60px, 1fr) !important;
+  overflow-y: auto !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-advisor-list .ops-row:has(.ops-row-icon) {
+  grid-template-columns: 28px minmax(0, 1fr) 58px !important;
+  align-items: center !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-row-copy {
+  min-width: 0 !important;
+  align-content: center !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-row-copy > b {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-row-copy > em {
+  overflow-wrap: anywhere !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-row-value {
+  width: 58px !important;
+  max-width: 58px !important;
+  justify-self: stretch !important;
+  text-align: right !important;
+  white-space: nowrap !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-row.button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, white) !important;
+  outline-offset: -3px !important;
+}
+
+/* Notifications — keep real actions and turn the empty feed into an honest state. */
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-notification-sheet .ops-inline-tools {
+  grid-template-columns: minmax(0, 1fr) 84px 108px !important;
+  height: 52px !important;
+  min-height: 52px !important;
+  flex: 0 0 52px !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-notification-sheet .ops-notification-list {
+  grid-auto-rows: minmax(88px, max-content) !important;
+  align-content: start !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-notification-sheet .ops-notification-list .ops-row {
+  grid-template-columns: 30px minmax(0, 1fr) !important;
+  grid-template-rows: auto auto !important;
+  min-height: 88px !important;
+  padding: 9px 14px !important;
+  column-gap: 11px !important;
+  row-gap: 3px !important;
+  align-items: center !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-notification-sheet .ops-row-icon {
+  grid-row: 1 / span 2 !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-notification-sheet .ops-row-value {
+  grid-column: 2 !important;
+  grid-row: 2 !important;
+  width: max-content !important;
+  max-width: 100% !important;
+  justify-self: start !important;
+  text-align: left !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-notification-sheet
+.ops-notification-list:has(> .ops-row:only-child) {
+  grid-template-rows: minmax(0, 1fr) !important;
+  padding: 16px !important;
+  align-content: stretch !important;
+  box-sizing: border-box !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-notification-sheet
+.ops-notification-list > .ops-row:only-child {
+  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-rows: 40px auto 26px !important;
+  min-height: 0 !important;
+  padding: 42px 28px !important;
+  place-items: center !important;
+  gap: 12px !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 12px !important;
+  background: color-mix(in srgb, var(--text) 1.5%, var(--panel)) !important;
+  text-align: center !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-notification-sheet
+.ops-notification-list > .ops-row:only-child .ops-row-icon {
+  grid-column: 1 !important;
+  grid-row: 1 !important;
+  width: 40px !important;
+  height: 40px !important;
+  place-self: center !important;
+  border: 1px solid var(--line-2) !important;
+  border-radius: 10px !important;
+  background: var(--panel) !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-notification-sheet
+.ops-notification-list > .ops-row:only-child .ops-row-copy {
+  grid-column: 1 !important;
+  grid-row: 2 !important;
+  max-width: 292px !important;
+  justify-self: center !important;
+  text-align: center !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-notification-sheet
+.ops-notification-list > .ops-row:only-child .ops-row-value {
+  grid-column: 1 !important;
+  grid-row: 3 !important;
+  min-height: 24px !important;
+  padding: 0 8px !important;
+  justify-self: center !important;
+  align-items: center !important;
+  border: 1px solid var(--line-2) !important;
+  border-radius: 999px !important;
+  background: var(--panel) !important;
+}
+
+/* Currency — reserve a fixed fact rail and selection column in every row. */
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-currency-sheet > .ops-list .ops-row,
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-currency-sheet > .ops-list .ops-row:has(.ops-row-icon),
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-currency-sheet > .ops-list .ops-row:has(.ops-row-check) {
+  grid-template-columns: 28px minmax(0, 1fr) 88px 16px !important;
+  column-gap: 10px !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-currency-sheet .ops-row-icon {
+  justify-self: center !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-currency-sheet .ops-row-value {
+  width: 88px !important;
+  max-width: 88px !important;
+  justify-content: flex-end !important;
+  justify-self: end !important;
+  text-align: right !important;
+  font-variant-numeric: tabular-nums lining-nums !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-currency-sheet .ops-row-check {
+  grid-column: 4 !important;
+  justify-self: end !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-currency-sheet .ops-row-copy > em {
+  font-family: var(--ref-mono-font, var(--mono)) !important;
+  letter-spacing: .02em !important;
+}
+
+/* Basis Units — explicit selection hierarchy and a compact conversion ledger. */
+.smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-choice-stack {
+  flex: 0 0 174px !important;
+  border: 0 !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-choice-stack > button {
+  position: relative;
+  grid-template-columns: 30px minmax(0, 1fr) 34px 16px !important;
+  height: 58px !important;
+  min-height: 58px !important;
+  padding: 7px 14px !important;
+  gap: 10px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--line) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-choice-stack > button.selected {
+  background: color-mix(in srgb, var(--ops-accent) 6%, transparent) !important;
+  box-shadow: inset 2px 0 0 var(--ops-accent) !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-choice-stack > button > span:nth-child(2) {
+  display: grid !important;
+  min-width: 0 !important;
+  gap: 1px !important;
+  text-align: left !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-choice-stack b {
+  overflow: hidden !important;
+  color: var(--text) !important;
+  font-size: 13px !important;
+  font-weight: 540 !important;
+  line-height: 18px !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-choice-stack em {
+  overflow: hidden !important;
+  color: var(--muted) !important;
+  font-size: 10.75px !important;
+  font-weight: 400 !important;
+  line-height: 15px !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-choice-mark {
+  width: 30px !important;
+  height: 30px !important;
+  color: var(--text-2) !important;
+  font-family: var(--mono) !important;
+  font-weight: 520 !important;
+  background: transparent !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-sheet button.selected .ops-choice-mark,
+.smenu-bar.topbar-suite-v4 .ops-basis-sheet button.selected .ops-row-value {
+  color: var(--ops-accent) !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-row-value {
+  min-width: 34px !important;
+  color: var(--muted) !important;
+  font-family: var(--mono) !important;
+  font-size: 10.5px !important;
+  font-weight: 520 !important;
+  text-align: right !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-conversion-label {
+  flex: 0 0 30px !important;
+  height: 30px !important;
+  min-height: 30px !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-conversion {
+  flex: 0 0 122px !important;
+  width: calc(100% - 24px) !important;
+  height: 122px !important;
+  margin: 0 12px !important;
+  overflow: hidden !important;
+  border: 1px solid var(--line) !important;
+  border-radius: 10px !important;
+  background: var(--panel) !important;
+  box-sizing: border-box !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-conversion > div {
+  grid-template-columns: 1.2fr 1fr 1fr !important;
+  height: 30.5px !important;
+  min-height: 30.5px !important;
+  padding: 0 12px !important;
+  color: var(--text-2) !important;
+  font-family: var(--mono) !important;
+  font-size: 11.5px !important;
+  font-weight: 450 !important;
+  line-height: 16px !important;
+  font-variant-numeric: tabular-nums lining-nums !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-conversion > .ops-basis-conversion-head {
+  color: var(--muted) !important;
+  background: var(--tile) !important;
+  font-family: var(--font) !important;
+  font-size: 10.5px !important;
+  font-weight: 520 !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-basis-definition {
+  flex: 0 0 90px !important;
+  height: 90px !important;
+  min-height: 90px !important;
+  margin: 0 !important;
+  padding: 10px 14px !important;
+  grid-template-columns: 28px minmax(0, 1fr) !important;
+  gap: 10px !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-definition b {
+  font-size: 13px !important;
+  font-weight: 540 !important;
+  line-height: 18px !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-definition em {
+  font-size: 11px !important;
+  line-height: 16px !important;
 }

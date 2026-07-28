@@ -69,6 +69,8 @@ const ACCOUNT_ID = 'm1-i1-validate-only';
 const P1_START_MS = NOW - 10_000;
 const QUANTITY = '0.3';
 const PRICE = '30';
+const adapterInvocations = new WeakMap();
+const queryInvocations = new WeakMap();
 
 function deepFreeze(value, seen = new Set()) {
   if (
@@ -613,7 +615,7 @@ function spotPublicSnapshot() {
 
 function prepareSpot(binding, step, attempt, quantity) {
   const normal = binding.plan.normalBasisBinding;
-  const result = prepareBinanceSpotValidateOnlyOrder({
+  const input = deepFreeze({
     evaluatedAtMs: NOW,
     publicSnapshot: spotPublicSnapshot(),
     order: Object.freeze({
@@ -634,6 +636,7 @@ function prepareSpot(binding, step, attempt, quantity) {
       authority: 'NONE',
     }),
   });
+  const result = prepareBinanceSpotValidateOnlyOrder(input);
   assert.equal(result.status, 'VALIDATED', JSON.stringify(result));
   assert.equal(result.authority, 'NONE');
   assert.equal(result.sendEligible, false);
@@ -648,6 +651,11 @@ function prepareSpot(binding, step, attempt, quantity) {
       result.filterObservedAt.receivedAtMs <= binding.proposalExpiresAtMs,
     true,
   );
+  adapterInvocations.set(result, deepFreeze({
+    adapter: 'BINANCE_SPOT',
+    config: null,
+    input,
+  }));
   return result;
 }
 
@@ -781,16 +789,15 @@ function usdmPositionModeEvidence() {
 }
 
 function prepareUsdM(binding, step, attempt, quantity) {
-  const adapter = createBinanceUsdMBasisValidateOnlyAdapter(
-    Object.freeze({
-      enabled: true,
-      sourceEnabled: true,
-      killSwitchEngaged: false,
-      authority: 'NONE',
-      allowedSymbols: Object.freeze([SYMBOL]),
-    }),
-  );
-  const result = adapter.buildOrderIntent(Object.freeze({
+  const config = Object.freeze({
+    enabled: true,
+    sourceEnabled: true,
+    killSwitchEngaged: false,
+    authority: 'NONE',
+    allowedSymbols: Object.freeze([SYMBOL]),
+  });
+  const adapter = createBinanceUsdMBasisValidateOnlyAdapter(config);
+  const input = deepFreeze({
     nowMs: NOW,
     leg: step,
     symbol: binding.symbol,
@@ -802,7 +809,8 @@ function prepareUsdM(binding, step, attempt, quantity) {
     positionModeEvidence: usdmPositionModeEvidence(),
     positionSide: 'BOTH',
     publicEvidence: usdmPublicEvidence(),
-  }));
+  });
+  const result = adapter.buildOrderIntent(input);
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.equal(result.authority, 'NONE');
   assert.equal(result.sendEligible, false);
@@ -822,10 +830,16 @@ function prepareUsdM(binding, step, attempt, quantity) {
     result.intent.localValidation.positionModeReceivedAtMs >=
       binding.acceptedRevisionTs &&
       result.intent.localValidation.positionModeReceivedAtMs <=
-        binding.proposalExpiresAtMs,
+      binding.proposalExpiresAtMs,
     true,
   );
-  return { adapter, result };
+  const adapterInvocation = deepFreeze({
+    adapter: 'BINANCE_USDM',
+    config,
+    input,
+  });
+  adapterInvocations.set(result, adapterInvocation);
+  return { adapter, result, adapterInvocation };
 }
 
 function usdmFoundEvidence(intent, overrides = {}) {
@@ -854,6 +868,23 @@ function usdmFoundEvidence(intent, overrides = {}) {
   });
 }
 
+function normalizeUsdMQuery(prepared, queryInput) {
+  const resolution = prepared.adapter.normalizeOrderQueryEvidence(
+    prepared.result.intent,
+    queryInput,
+  );
+  const validationInvocation =
+    adapterInvocations.get(prepared.result);
+  assert.ok(validationInvocation);
+  queryInvocations.set(resolution, deepFreeze({
+    adapter: 'BINANCE_USDM',
+    config: validationInvocation.config,
+    validationInput: validationInvocation.input,
+    queryInput,
+  }));
+  return resolution;
+}
+
 function apply(state, binding, observation) {
   const result = applyBasisValidateOnlyObservation(
     binding,
@@ -865,11 +896,14 @@ function apply(state, binding, observation) {
 }
 
 function validate(state, binding, step, attempt, adapterResult) {
+  const adapterInvocation = adapterInvocations.get(adapterResult);
+  assert.ok(adapterInvocation);
   return apply(state, binding, {
     kind: 'VALIDATION',
     step,
     attempt,
     adapterResult,
+    adapterInvocation,
   });
 }
 
@@ -1234,15 +1268,21 @@ test('actual proposal to exact flatness stays validate-only and contains T-3 tel
     assert.equal(queryDescriptorResult.signedRequestsPerformed, 0);
     assert.equal(queryDescriptorResult.sideEffectsPerformed, 0);
 
-    const canceled = close0.adapter.normalizeOrderQueryEvidence(
+    const canceledQueryInput = usdmFoundEvidence(
       close0.result.intent,
-      usdmFoundEvidence(close0.result.intent, {
+      {
         order: {
           status: 'CANCELED',
           executedQty: '0.10000000',
         },
-      }),
+      },
     );
+    const canceled = normalizeUsdMQuery(
+      close0,
+      canceledQueryInput,
+    );
+    const queryInvocation = queryInvocations.get(canceled);
+    assert.ok(queryInvocation);
     state = apply(state, binding, {
       kind: 'QUERY',
       step: 'PERP_CLOSE',
@@ -1251,6 +1291,7 @@ test('actual proposal to exact flatness stays validate-only and contains T-3 tel
       adapterResult: close0.result,
       queryDescriptorResult,
       queryResolution: canceled,
+      queryInvocation,
     });
     assert.equal(state.next, 'PERP_CLOSE');
     assert.equal(state.attempt, 1);
@@ -1348,6 +1389,38 @@ test('actual proposal to exact flatness stays validate-only and contains T-3 tel
     assert.equal(state.signedRequestsPerformed, 0);
     assert.equal(state.ordersPerformed, 0);
     assert.equal(state.sideEffectsPerformed, 0);
+
+    const forgedValidationJournal = structuredClone(state.journal);
+    const forgedValidation = forgedValidationJournal.find(
+      (entry) => entry.kind === 'VALIDATION',
+    );
+    assert.ok(forgedValidation);
+    forgedValidation.evidenceId =
+      'forged_arbitrary_validation_evidence';
+    assert.equal(
+      replayBasisValidateOnlyLifecycle(
+        binding,
+        forgedValidationJournal,
+      ).ok,
+      false,
+      'replay must derive validation evidence instead of trusting its ID',
+    );
+
+    const forgedTerminalQueryJournal = structuredClone(state.journal);
+    const forgedTerminalQuery = forgedTerminalQueryJournal.find(
+      (entry) => entry.kind === 'QUERY' && entry.state === 'TERMINAL',
+    );
+    assert.ok(forgedTerminalQuery);
+    forgedTerminalQuery.terminalStatus = 'FILLED';
+    forgedTerminalQuery.cumulativeFilledQuantityExact = QUANTITY;
+    assert.equal(
+      replayBasisValidateOnlyLifecycle(
+        binding,
+        forgedTerminalQueryJournal,
+      ).ok,
+      false,
+      'replay must derive terminal query truth from retained raw evidence',
+    );
 
     const completedCheckpoint =
       serializeBasisValidateOnlyCheckpoint(binding, state);

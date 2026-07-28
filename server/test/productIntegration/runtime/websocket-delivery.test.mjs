@@ -252,7 +252,7 @@ test('application socket has no legacy state timer or push and preserves its saf
   assert.match(storeSource, /isCanonicalSupervisorDeltaMessage\(data\)\) requestCompatibilityState\(\)/);
   assert.match(serverSource, /operatorAccess\.verify\(request, \{ websocket: true \}\)/);
   assert.match(serverSource, /client\.close\(1012, ['"]service restart['"]\)/);
-  assert.match(serverSource, /bookHub\.handleMessage\(ws, decoded\)/);
+  assert.match(serverSource, /handleBookStreamMessage\(ws, decoded\)/);
   assert.match(serverSource, /client\.bufferedAmount > WS_MAX_BUFFERED_BYTES/);
   assert.match(serverSource, /client\.close\(1013, ['"]slow consumer['"]\)/);
   assert.match(serverSource, /client\.close\(1009, ['"]canonical message exceeds bound['"]\)/);

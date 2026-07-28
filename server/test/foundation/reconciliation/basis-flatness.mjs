@@ -6,11 +6,18 @@ import {
   isBasisFlatnessResult,
   verifyBasisFlatness,
 } from '../../../dist/foundation/reconciliation/basisFlatness.js';
+import {
+  deriveStateRevisionId,
+} from '../../../dist/foundation/contracts/identity.js';
 
 const NOW_MS = 1_800_000_000_000;
 const ACCEPTED_REVISION_TS = NOW_MS - 5_000;
 const STATE_REVISION = 17;
-const STATE_REVISION_ID = 'state_revision_exact_17';
+const PLAN_ID = 'plan_basis_exact';
+const STATE_REVISION_ID = deriveStateRevisionId({
+  scope: `execution:${PLAN_ID}`,
+  revision: STATE_REVISION,
+});
 const MAX_AGE_MS = 60_000;
 
 const CLIENT_ORDER_IDS = Object.freeze({
@@ -89,7 +96,7 @@ function metadata(overrides = {}) {
 
 function plan(overrides = {}) {
   return {
-    planId: overrides.planId ?? 'plan_basis_exact',
+    planId: overrides.planId ?? PLAN_ID,
     bindingId: overrides.bindingId ?? 'binding_basis_exact',
     termsFingerprint: overrides.termsFingerprint ?? 'terms_basis_exact',
     accountId: overrides.accountId ?? 'account_basis_exact',
@@ -143,6 +150,7 @@ function order(step, overrides = {}) {
     cumulativeFilledQuantityExact:
       overrides.cumulativeFilledQuantityExact ?? '0.3',
     ambiguous: overrides.ambiguous ?? false,
+    terminalObservedAtMs: overrides.terminalObservedAtMs ?? NOW_MS - 2,
   };
 }
 
@@ -166,18 +174,33 @@ function position(venue, overrides = {}) {
     currentSignedBaseQuantityExact:
       overrides.currentSignedBaseQuantityExact ??
       (venue === 'BINANCE_SPOT' ? '1' : '-0.4'),
-    metadata: overrides.metadata ?? metadata({
-      sourceId:
-        venue === 'BINANCE_SPOT'
-          ? 'basis-flatness.synthetic.spot'
-          : 'basis-flatness.synthetic.usdm',
-    }),
+    baselineMetadata:
+      overrides.baselineMetadata ??
+      metadata({
+        sourceId:
+          venue === 'BINANCE_SPOT'
+            ? 'basis-flatness.synthetic.spot.baseline'
+            : 'basis-flatness.synthetic.usdm.baseline',
+        sourceTimeMs: ACCEPTED_REVISION_TS - 1,
+        receivedAtMs: ACCEPTED_REVISION_TS,
+      }),
+    currentMetadata:
+      overrides.currentMetadata ??
+      metadata({
+        sourceId:
+          venue === 'BINANCE_SPOT'
+            ? 'basis-flatness.synthetic.spot.current'
+            : 'basis-flatness.synthetic.usdm.current',
+      }),
   };
 }
 
 function input(overrides = {}) {
   return deepFreeze({
     nowMs: overrides.nowMs ?? NOW_MS,
+    policy: overrides.policy ?? {
+      maximumEvidenceAgeMs: MAX_AGE_MS,
+    },
     plan: overrides.plan ?? plan(),
     evidence: overrides.evidence ?? {
       orders: {
@@ -264,7 +287,7 @@ test('0.3 open and 0.1 first close preserve exact 0.2 residual before re-close',
           cumulativeFilledQuantityExact: '0.1',
         }),
         order('SPOT_CLOSE', {
-          status: 'CANCELLED',
+          status: 'EXPIRED',
           cumulativeFilledQuantityExact: '0.1',
         }),
       ],
@@ -373,9 +396,253 @@ test('0.3 open and 0.1 first close preserve exact 0.2 residual before re-close',
     binary64ArtifactRetry.reasonCodes,
     ['PERP_CLOSE_RECLOSE_RESIDUAL_NOT_EXACT'],
   );
+
+  const wrongRetryIdentity = verifyBasisFlatness(input({
+    evidence: {
+      orders: {
+        metadata: metadata({
+          sourceId: 'basis-flatness.synthetic.orders.wrong-retry-id',
+        }),
+        records: [
+          order('SPOT_OPEN'),
+          order('PERP_OPEN'),
+          order('PERP_CLOSE', {
+            status: 'CANCELLED',
+            cumulativeFilledQuantityExact: '0.1',
+          }),
+          order('PERP_CLOSE', {
+            attempt: 1,
+            clientOrderId: 'forged-perp-close-attempt-1',
+            submittedQuantityExact: '0.2',
+            cumulativeFilledQuantityExact: '0.2',
+          }),
+          order('SPOT_CLOSE', {
+            status: 'EXPIRED',
+            cumulativeFilledQuantityExact: '0.1',
+          }),
+          order('SPOT_CLOSE', {
+            attempt: 1,
+            submittedQuantityExact: '0.2',
+            cumulativeFilledQuantityExact: '0.2',
+          }),
+        ],
+      },
+      positions: [
+        position('BINANCE_SPOT'),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: [],
+    },
+  }));
+  assert.equal(wrongRetryIdentity.status, 'BLOCKED');
+  assert.deepEqual(
+    wrongRetryIdentity.reasonCodes,
+    ['PERP_CLOSE_ORDER_IDENTITY_CONFLICT'],
+  );
   assertZeroAuthority(residual);
   assertZeroAuthority(reclosed);
   assertZeroAuthority(binary64ArtifactRetry);
+  assertZeroAuthority(wrongRetryIdentity);
+});
+
+test('terminal order states enforce exact coherent cumulative-fill semantics', () => {
+  const terminalCases = [
+    {
+      status: 'FILLED',
+      fill: '0.1',
+      code: 'SPOT_OPEN_FILLED_QUANTITY_CONFLICT',
+    },
+    {
+      status: 'CANCELLED',
+      fill: '0.3',
+      code: 'SPOT_OPEN_CANCELLED_OR_EXPIRED_REMAINDER_REQUIRED',
+    },
+    {
+      status: 'EXPIRED',
+      fill: '0.3',
+      code: 'SPOT_OPEN_CANCELLED_OR_EXPIRED_REMAINDER_REQUIRED',
+    },
+    {
+      status: 'REJECTED',
+      fill: '0.1',
+      code: 'SPOT_OPEN_REJECTED_FILL_MUST_BE_ZERO',
+    },
+    {
+      status: 'PROVEN_ABSENT',
+      fill: '0.1',
+      code: 'SPOT_OPEN_PROVEN_ABSENT_FILL_MUST_BE_ZERO',
+    },
+  ];
+
+  for (const fixture of terminalCases) {
+    const result = verifyBasisFlatness(input({
+      evidence: {
+        orders: {
+          metadata: metadata(),
+          records: [
+            order('SPOT_OPEN', {
+              status: fixture.status,
+              cumulativeFilledQuantityExact: fixture.fill,
+            }),
+            order('PERP_OPEN'),
+            order('PERP_CLOSE'),
+            order('SPOT_CLOSE'),
+          ],
+        },
+        positions: [
+          position('BINANCE_SPOT'),
+          position('BINANCE_USDM'),
+        ],
+        ambiguities: [],
+      },
+    }));
+    assert.equal(result.status, 'BLOCKED');
+    assert.deepEqual(result.reasonCodes, [fixture.code]);
+    assertZeroAuthority(result);
+  }
+});
+
+test('baseline/current time proof and verifier-owned freshness ceiling fail closed', () => {
+  const baselineAfterAcceptance = input({
+    evidence: {
+      orders: {
+        metadata: metadata(),
+        records: [
+          order('SPOT_OPEN'),
+          order('PERP_OPEN'),
+          order('PERP_CLOSE'),
+          order('SPOT_CLOSE'),
+        ],
+      },
+      positions: [
+        position('BINANCE_SPOT', {
+          baselineMetadata: metadata({
+            sourceId: 'basis-flatness.synthetic.spot.late-baseline',
+            sourceTimeMs: ACCEPTED_REVISION_TS + 1,
+            receivedAtMs: ACCEPTED_REVISION_TS + 1,
+          }),
+        }),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: [],
+    },
+  });
+  const currentBeforeTerminal = input({
+    evidence: {
+      orders: {
+        metadata: metadata(),
+        records: [
+          order('SPOT_OPEN'),
+          order('PERP_OPEN'),
+          order('PERP_CLOSE'),
+          order('SPOT_CLOSE'),
+        ],
+      },
+      positions: [
+        position('BINANCE_SPOT', {
+          currentMetadata: metadata({
+            sourceId: 'basis-flatness.synthetic.spot.pre-terminal-current',
+            sourceTimeMs: NOW_MS - 3,
+            receivedAtMs: NOW_MS - 1,
+          }),
+        }),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: [],
+    },
+  });
+  const hugeClaimCannotWidenPolicy = input({
+    evidence: {
+      orders: {
+        metadata: metadata({
+          sourceTimeMs: NOW_MS - MAX_AGE_MS - 1,
+          maxAgeMs: Number.MAX_SAFE_INTEGER,
+        }),
+        records: [
+          order('SPOT_OPEN'),
+          order('PERP_OPEN'),
+          order('PERP_CLOSE'),
+          order('SPOT_CLOSE'),
+        ],
+      },
+      positions: [
+        position('BINANCE_SPOT'),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: [],
+    },
+  });
+  const unboundedPolicy = input({
+    policy: { maximumEvidenceAgeMs: 300_001 },
+  });
+
+  for (const fixture of [
+    baselineAfterAcceptance,
+    currentBeforeTerminal,
+    hugeClaimCannotWidenPolicy,
+  ]) {
+    const result = verifyBasisFlatness(fixture);
+    assert.equal(result.status, 'UNKNOWN');
+    assert.equal(result.flat, false);
+    assertZeroAuthority(result);
+  }
+  const policyResult = verifyBasisFlatness(unboundedPolicy);
+  assert.equal(policyResult.status, 'BLOCKED');
+  assert.equal(policyResult.flat, false);
+  assertZeroAuthority(policyResult);
+});
+
+test('array lengths are rejected before sparse attacker-controlled allocation walks', () => {
+  const hugeSparseOrders = [];
+  hugeSparseOrders.length = 1_000_000_000;
+  Object.freeze(hugeSparseOrders);
+  const hugeOrders = input({
+    evidence: {
+      orders: {
+        metadata: metadata(),
+        records: hugeSparseOrders,
+      },
+      positions: [
+        position('BINANCE_SPOT'),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: [],
+    },
+  });
+
+  const hugeSparseCloseIds = [];
+  hugeSparseCloseIds.length = 1_000_000_000;
+  Object.freeze(hugeSparseCloseIds);
+  const hugeCloseIds = input({
+    plan: plan({
+      closeAttemptClientOrderIds: {
+        PERP_CLOSE: hugeSparseCloseIds,
+        SPOT_CLOSE: [...CLOSE_ATTEMPT_CLIENT_ORDER_IDS.SPOT_CLOSE],
+      },
+    }),
+  });
+  const tooManyAmbiguities = input({
+    evidence: {
+      orders: {
+        metadata: metadata(),
+        records: [
+          order('SPOT_OPEN'),
+          order('PERP_OPEN'),
+          order('PERP_CLOSE'),
+          order('SPOT_CLOSE'),
+        ],
+      },
+      positions: [
+        position('BINANCE_SPOT'),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: Array.from({ length: 17 }, (_, index) => `ambiguity-${index}`),
+    },
+  });
+
+  assert.equal(verifyBasisFlatness(hugeOrders).flat, false);
+  assert.equal(verifyBasisFlatness(hugeCloseIds).status, 'BLOCKED');
+  assert.equal(verifyBasisFlatness(tooManyAmbiguities).status, 'BLOCKED');
 });
 
 test('missing, non-terminal, ambiguous, stale, or incomplete evidence is never flat', () => {
@@ -437,6 +704,7 @@ test('missing, non-terminal, ambiguous, stale, or incomplete evidence is never f
       orders: {
         metadata: metadata({
           sourceTimeMs: NOW_MS - MAX_AGE_MS - 1,
+          maxAgeMs: Number.MAX_SAFE_INTEGER,
         }),
         records: [
           order('SPOT_OPEN'),
@@ -544,6 +812,9 @@ test('identity, revision, decimal, position-mode, and order-position conflict fa
     },
   });
   const hedgeMode = input({ plan: plan({ positionMode: 'HEDGE' }) });
+  const forgedStateRevisionId = input({
+    plan: plan({ stateRevisionId: 'rev_forged' }),
+  });
   const mismatch = input({
     evidence: {
       orders: {
@@ -575,12 +846,20 @@ test('identity, revision, decimal, position-mode, and order-position conflict fa
   assert.equal(modeResult.status, 'UNKNOWN');
   assert.equal(modeResult.flat, false);
   assertZeroAuthority(modeResult);
+  const revisionIdResult = verifyBasisFlatness(forgedStateRevisionId);
+  assert.equal(revisionIdResult.status, 'BLOCKED');
+  assert.deepEqual(
+    revisionIdResult.reasonCodes,
+    ['STATE_REVISION_ID_NOT_DETERMINISTIC'],
+  );
+  assertZeroAuthority(revisionIdResult);
 });
 
 test('frozen accessors and Proxy evidence are rejected without invoking hostile code', () => {
   let getterReads = 0;
   const accessorInput = {
     nowMs: NOW_MS,
+    policy: deepFreeze({ maximumEvidenceAgeMs: MAX_AGE_MS }),
     plan: deepFreeze(plan()),
   };
   Object.defineProperty(accessorInput, 'evidence', {
@@ -631,6 +910,7 @@ test('frozen accessors and Proxy evidence are rejected without invoking hostile 
 test('mutable inputs and live/private evidence are out of scope and blocked', () => {
   const mutable = {
     nowMs: NOW_MS,
+    policy: { maximumEvidenceAgeMs: MAX_AGE_MS },
     plan: plan(),
     evidence: {},
   };

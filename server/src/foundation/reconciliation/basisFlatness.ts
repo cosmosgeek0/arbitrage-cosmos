@@ -9,10 +9,13 @@ import {
   subtractExactDecimals,
   type ExactDecimal,
 } from '../../capitalFoundation/contracts/decimal.js';
+import { deriveStateRevisionId } from '../contracts/identity.js';
 
 export const BASIS_FLATNESS_SCHEMA =
   'cosmos.foundation.reconciliation.normalBasisFlatness' as const;
 export const BASIS_FLATNESS_VERSION = 1 as const;
+export const MAXIMUM_BASIS_FLATNESS_EVIDENCE_AGE_MS = 300_000;
+export const MAXIMUM_BASIS_FLATNESS_AMBIGUITIES = 16;
 
 export const BASIS_FLATNESS_STEPS = Object.freeze([
   'SPOT_OPEN',
@@ -107,6 +110,7 @@ export interface BasisFlatnessOrderEvidence {
   readonly submittedQuantityExact: string;
   readonly cumulativeFilledQuantityExact: string;
   readonly ambiguous: false;
+  readonly terminalObservedAtMs: number;
 }
 
 export interface BasisFlatnessOrderCollection {
@@ -124,7 +128,8 @@ export interface BasisFlatnessPositionEvidence {
   readonly positionMode: 'CASH' | 'ONE_WAY';
   readonly baselineSignedBaseQuantityExact: string;
   readonly currentSignedBaseQuantityExact: string;
-  readonly metadata: Readonly<BasisFlatnessSourceMetadata>;
+  readonly baselineMetadata: Readonly<BasisFlatnessSourceMetadata>;
+  readonly currentMetadata: Readonly<BasisFlatnessSourceMetadata>;
 }
 
 export interface BasisFlatnessEvidence {
@@ -136,8 +141,18 @@ export interface BasisFlatnessEvidence {
 
 export interface BasisFlatnessVerificationInput {
   readonly nowMs: number;
+  readonly policy: Readonly<BasisFlatnessVerifierPolicy>;
   readonly plan: Readonly<BasisFlatnessPlanIdentity>;
   readonly evidence: Readonly<BasisFlatnessEvidence>;
+}
+
+export interface BasisFlatnessVerifierPolicy {
+  /**
+   * Verifier-owned ceiling. Venue/source metadata cannot widen this window.
+   * The upper bound prevents a caller from turning stale truth into current
+   * truth with an arbitrarily large value.
+   */
+  readonly maximumEvidenceAgeMs: number;
 }
 
 export interface BasisFlatnessIdentityProjection {
@@ -289,6 +304,9 @@ function descriptorValues(
 function descriptorArray(
   value: unknown,
   path: string,
+  minimumLength: number,
+  maximumLength: number,
+  lengthStatus: Extract<BasisFlatnessStatus, 'UNKNOWN' | 'BLOCKED'> = 'BLOCKED',
 ): readonly unknown[] {
   if (typeof value !== 'object' || value === null || !Array.isArray(value)) {
     return problem('BLOCKED', `${path.toUpperCase()}_ARRAY_REQUIRED`);
@@ -320,15 +338,13 @@ function descriptorArray(
     return problem('BLOCKED', `${path.toUpperCase()}_ARRAY_SHAPE_INVALID`);
   }
   const length = lengthDescriptor.value as number;
-  const expectedKeys = [
-    ...Array.from({ length }, (_, index) => String(index)),
-    'length',
-  ].sort();
   const actualKeys = Object.keys(descriptors).sort();
-  if (
-    actualKeys.length !== expectedKeys.length ||
-    actualKeys.some((key, index) => key !== expectedKeys[index])
-  ) {
+  if (length < minimumLength || length > maximumLength) {
+    return problem(lengthStatus, `${path.toUpperCase()}_LENGTH_INVALID`);
+  }
+  // Length is bounded before any allocation or index walk. Exact descriptor
+  // count plus the indexed-data-property loop below rejects holes and extras.
+  if (actualKeys.length !== length + 1 || descriptors.length === undefined) {
     return problem('BLOCKED', `${path.toUpperCase()}_ARRAY_SHAPE_INVALID`);
   }
 
@@ -460,13 +476,9 @@ function parseCloseAttemptIds(
     const values = descriptorArray(
       candidate,
       `plan_close_attempt_client_order_ids_${step.toLowerCase()}`,
+      MAX_CLOSE_ATTEMPTS,
+      MAX_CLOSE_ATTEMPTS,
     );
-    if (values.length !== MAX_CLOSE_ATTEMPTS) {
-      return problem(
-        'BLOCKED',
-        `${step}_CLOSE_ATTEMPT_ID_BUDGET_INVALID`,
-      );
-    }
     const ids = Object.freeze(
       values.map((item, index) =>
         identifier(item, `${step.toLowerCase()}_attempt_${index}_client_order_id`),
@@ -529,8 +541,22 @@ function parsePlan(value: unknown): Readonly<BasisFlatnessPlanIdentity> {
     return problem('BLOCKED', 'PLAN_ZERO_AUTHORITY_INVARIANT_VIOLATED');
   }
   const clientOrderIds = parseClientOrderIds(record.clientOrderIds);
+  const planId = identifier(record.planId, 'plan_id');
+  const stateRevision = safeInteger(record.stateRevision, 'state_revision', 1);
+  const stateRevisionId = identifier(
+    record.stateRevisionId,
+    'state_revision_id',
+  );
+  if (
+    stateRevisionId !== deriveStateRevisionId({
+      scope: `execution:${planId}`,
+      revision: stateRevision,
+    })
+  ) {
+    return problem('BLOCKED', 'STATE_REVISION_ID_NOT_DETERMINISTIC');
+  }
   return Object.freeze({
-    planId: identifier(record.planId, 'plan_id'),
+    planId,
     bindingId: identifier(record.bindingId, 'binding_id'),
     termsFingerprint: identifier(
       record.termsFingerprint,
@@ -543,11 +569,8 @@ function parsePlan(value: unknown): Readonly<BasisFlatnessPlanIdentity> {
       'accepted_revision_ts',
       0,
     ),
-    stateRevision: safeInteger(record.stateRevision, 'state_revision', 1),
-    stateRevisionId: identifier(
-      record.stateRevisionId,
-      'state_revision_id',
-    ),
+    stateRevision,
+    stateRevisionId,
     direction: 'LONG_SPOT_SHORT_PERP',
     positionMode: 'ONE_WAY',
     clientOrderIds,
@@ -561,9 +584,27 @@ function parsePlan(value: unknown): Readonly<BasisFlatnessPlanIdentity> {
   });
 }
 
+function parsePolicy(value: unknown): Readonly<BasisFlatnessVerifierPolicy> {
+  const record = descriptorValues(
+    value,
+    ['maximumEvidenceAgeMs'],
+    'policy',
+  );
+  const maximumEvidenceAgeMs = safeInteger(
+    record.maximumEvidenceAgeMs,
+    'policy_maximum_evidence_age_ms',
+    1,
+  );
+  if (maximumEvidenceAgeMs > MAXIMUM_BASIS_FLATNESS_EVIDENCE_AGE_MS) {
+    return problem('BLOCKED', 'POLICY_MAXIMUM_EVIDENCE_AGE_EXCEEDS_BOUND');
+  }
+  return Object.freeze({ maximumEvidenceAgeMs });
+}
+
 function parseMetadata(
   value: unknown,
-  nowMs: number,
+  evaluatedAtMs: number,
+  maximumEvidenceAgeMs: number,
   path: string,
 ): Readonly<BasisFlatnessSourceMetadata> {
   const record = descriptorValues(
@@ -600,12 +641,15 @@ function parseMetadata(
   const maxAgeMs = safeInteger(record.maxAgeMs, `${path}_max_age_ms`, 1);
   if (
     sourceTimeMs > receivedAtMs ||
-    receivedAtMs > nowMs ||
-    sourceTimeMs > nowMs
+    receivedAtMs > evaluatedAtMs ||
+    sourceTimeMs > evaluatedAtMs
   ) {
     return problem('UNKNOWN', `${path.toUpperCase()}_CLOCK_SKEWED`);
   }
-  if (nowMs - sourceTimeMs > maxAgeMs) {
+  if (
+    evaluatedAtMs - sourceTimeMs >
+    Math.min(maxAgeMs, maximumEvidenceAgeMs)
+  ) {
     return problem('UNKNOWN', `${path.toUpperCase()}_STALE`);
   }
   return Object.freeze({
@@ -639,12 +683,14 @@ interface ParsedOrder {
   readonly attempt: number;
   readonly submittedQuantityExact: ExactDecimal;
   readonly cumulativeFilledQuantityExact: ExactDecimal;
+  readonly terminalObservedAtMs: number;
 }
 
 function parseOrder(
   value: unknown,
   plan: Readonly<BasisFlatnessPlanIdentity>,
   index: number,
+  nowMs: number,
 ): Readonly<ParsedOrder> {
   const path = `order_${index}`;
   const record = descriptorValues(
@@ -668,6 +714,7 @@ function parseOrder(
       'submittedQuantityExact',
       'cumulativeFilledQuantityExact',
       'ambiguous',
+      'terminalObservedAtMs',
     ],
     path,
   );
@@ -721,14 +768,39 @@ function parseOrder(
   if (compareExactDecimals(filled, submitted) > 0) {
     return problem('BLOCKED', `${step}_FILL_EXCEEDS_SUBMITTED`);
   }
-  if (record.status === 'FILLED' && compareExactDecimals(filled, submitted) !== 0) {
+  const fillComparison = compareExactDecimals(filled, submitted);
+  if (record.status === 'FILLED' && fillComparison !== 0) {
     return problem('BLOCKED', `${step}_FILLED_QUANTITY_CONFLICT`);
+  }
+  if (
+    (record.status === 'CANCELLED' || record.status === 'EXPIRED') &&
+    fillComparison >= 0
+  ) {
+    return problem('BLOCKED', `${step}_CANCELLED_OR_EXPIRED_REMAINDER_REQUIRED`);
+  }
+  if (
+    (record.status === 'PROVEN_ABSENT' || record.status === 'REJECTED') &&
+    !isExactZero(filled)
+  ) {
+    return problem('BLOCKED', `${step}_${record.status}_FILL_MUST_BE_ZERO`);
+  }
+  const terminalObservedAtMs = safeInteger(
+    record.terminalObservedAtMs,
+    `${path}_terminal_observed_at_ms`,
+    0,
+  );
+  if (
+    terminalObservedAtMs < plan.acceptedRevisionTs ||
+    terminalObservedAtMs > nowMs
+  ) {
+    return problem('UNKNOWN', `${step}_TERMINAL_TIME_OUTSIDE_ACCEPTED_WINDOW`);
   }
   return Object.freeze({
     step,
     attempt,
     submittedQuantityExact: submitted,
     cumulativeFilledQuantityExact: filled,
+    terminalObservedAtMs,
   });
 }
 
@@ -736,13 +808,16 @@ interface ParsedPosition {
   readonly venue: BasisFlatnessPositionEvidence['venue'];
   readonly baseline: ExactDecimal;
   readonly current: ExactDecimal;
-  readonly authority: BasisFlatnessEvidenceAuthority;
+  readonly baselineAuthority: BasisFlatnessEvidenceAuthority;
+  readonly currentAuthority: BasisFlatnessEvidenceAuthority;
 }
 
 function parsePosition(
   value: unknown,
   plan: Readonly<BasisFlatnessPlanIdentity>,
   nowMs: number,
+  maximumEvidenceAgeMs: number,
+  latestTerminalOrderAtMs: number,
   index: number,
 ): Readonly<ParsedPosition> {
   const path = `position_${index}`;
@@ -758,7 +833,8 @@ function parsePosition(
       'positionMode',
       'baselineSignedBaseQuantityExact',
       'currentSignedBaseQuantityExact',
-      'metadata',
+      'baselineMetadata',
+      'currentMetadata',
     ],
     path,
   );
@@ -785,7 +861,30 @@ function parsePosition(
         : 'SPOT_POSITION_MODE_INVALID',
     );
   }
-  const metadata = parseMetadata(record.metadata, nowMs, `${path}_metadata`);
+  const baselineMetadata = parseMetadata(
+    record.baselineMetadata,
+    plan.acceptedRevisionTs,
+    maximumEvidenceAgeMs,
+    `${path}_baseline_metadata`,
+  );
+  const currentMetadata = parseMetadata(
+    record.currentMetadata,
+    nowMs,
+    maximumEvidenceAgeMs,
+    `${path}_current_metadata`,
+  );
+  if (
+    baselineMetadata.sourceTimeMs > plan.acceptedRevisionTs ||
+    baselineMetadata.receivedAtMs > plan.acceptedRevisionTs
+  ) {
+    return problem('UNKNOWN', `${path.toUpperCase()}_BASELINE_AFTER_ACCEPTED_REVISION`);
+  }
+  if (
+    currentMetadata.sourceTimeMs <
+    Math.max(plan.acceptedRevisionTs, latestTerminalOrderAtMs)
+  ) {
+    return problem('UNKNOWN', `${path.toUpperCase()}_CURRENT_PRECEDES_TERMINAL_ORDER`);
+  }
   return Object.freeze({
     venue: record.venue,
     baseline: exactDecimal(
@@ -798,7 +897,8 @@ function parsePosition(
       `${path}_current_signed_base_quantity`,
       'SIGNED',
     ),
-    authority: metadata.authority,
+    baselineAuthority: baselineMetadata.authority,
+    currentAuthority: currentMetadata.authority,
   });
 }
 
@@ -880,8 +980,13 @@ export function verifyBasisFlatness(
   let plan: Readonly<BasisFlatnessPlanIdentity> | null = null;
   let identity: Readonly<BasisFlatnessIdentityProjection> | null = null;
   try {
-    const root = descriptorValues(input, ['nowMs', 'plan', 'evidence'], 'input');
+    const root = descriptorValues(
+      input,
+      ['nowMs', 'policy', 'plan', 'evidence'],
+      'input',
+    );
     const nowMs = safeInteger(root.nowMs, 'now_ms', 0);
+    const policy = parsePolicy(root.policy);
     plan = parsePlan(root.plan);
     identity = identityProjection(plan);
 
@@ -893,6 +998,8 @@ export function verifyBasisFlatness(
     const ambiguityRecords = descriptorArray(
       evidence.ambiguities,
       'evidence_ambiguities',
+      0,
+      MAXIMUM_BASIS_FLATNESS_AMBIGUITIES,
     );
     if (ambiguityRecords.length !== 0) {
       return makeResult(
@@ -912,28 +1019,42 @@ export function verifyBasisFlatness(
     const orderMetadata = parseMetadata(
       orderCollection.metadata,
       nowMs,
+      policy.maximumEvidenceAgeMs,
       'orders_metadata',
     );
-    const orderRecords = descriptorArray(orderCollection.records, 'orders_records');
-    if (
-      orderRecords.length < BASIS_FLATNESS_STEPS.length ||
-      orderRecords.length > 2 + (MAX_CLOSE_ATTEMPTS * 2)
-    ) {
+    const orderRecords = descriptorArray(
+      orderCollection.records,
+      'orders_records',
+      BASIS_FLATNESS_STEPS.length,
+      2 + (MAX_CLOSE_ATTEMPTS * 2),
+      'UNKNOWN',
+    );
+    const orders = orderRecords.map((record, index) =>
+      parseOrder(
+        record,
+        plan as Readonly<BasisFlatnessPlanIdentity>,
+        index,
+        nowMs,
+      ),
+    );
+    const latestTerminalOrderAtMs = orders.reduce(
+      (latest, order) => Math.max(latest, order.terminalObservedAtMs),
+      plan.acceptedRevisionTs,
+    );
+    if (orderMetadata.sourceTimeMs < latestTerminalOrderAtMs) {
       return makeResult(
         'UNKNOWN',
         identity,
         null,
         orderMetadata.authority,
-        ['FOUR_STEPS_AND_ALL_USED_CLOSE_ATTEMPTS_REQUIRED'],
+        ['ORDER_SOURCE_PRECEDES_LATEST_TERMINAL_ORDER'],
       );
     }
-    const orders = orderRecords.map((record, index) =>
-      parseOrder(record, plan as Readonly<BasisFlatnessPlanIdentity>, index),
-    );
     const byIdentity = new Map<string, Readonly<ParsedOrder>>();
     const byStep = new Map<BasisFlatnessStep, Readonly<ParsedOrder>[]>();
     let priorStepIndex = -1;
     let priorAttempt = -1;
+    let priorTerminalObservedAtMs = plan.acceptedRevisionTs;
     for (const order of orders) {
       const identityKey = `${order.step}:${order.attempt}`;
       if (byIdentity.has(identityKey)) {
@@ -949,7 +1070,8 @@ export function verifyBasisFlatness(
       const stepIndex = BASIS_FLATNESS_STEPS.indexOf(order.step);
       if (
         stepIndex < priorStepIndex ||
-        (stepIndex === priorStepIndex && order.attempt !== priorAttempt + 1)
+        (stepIndex === priorStepIndex && order.attempt !== priorAttempt + 1) ||
+        order.terminalObservedAtMs < priorTerminalObservedAtMs
       ) {
         return makeResult(
           'BLOCKED',
@@ -961,6 +1083,7 @@ export function verifyBasisFlatness(
       }
       priorStepIndex = stepIndex;
       priorAttempt = order.attempt;
+      priorTerminalObservedAtMs = order.terminalObservedAtMs;
       const grouped = byStep.get(order.step) ?? [];
       grouped.push(order);
       byStep.set(order.step, grouped);
@@ -1023,21 +1146,17 @@ export function verifyBasisFlatness(
     const positionRecords = descriptorArray(
       evidence.positions,
       'positions',
+      2,
+      2,
+      'UNKNOWN',
     );
-    if (positionRecords.length !== 2) {
-      return makeResult(
-        'UNKNOWN',
-        identity,
-        null,
-        orderMetadata.authority,
-        ['SPOT_AND_USDM_POSITION_EVIDENCE_REQUIRED'],
-      );
-    }
     const positions = positionRecords.map((record, index) =>
       parsePosition(
         record,
         plan as Readonly<BasisFlatnessPlanIdentity>,
         nowMs,
+        policy.maximumEvidenceAgeMs,
+        latestTerminalOrderAtMs,
         index,
       ),
     );
@@ -1105,8 +1224,10 @@ export function verifyBasisFlatness(
     });
     const authorities = new Set<BasisFlatnessEvidenceAuthority>([
       orderMetadata.authority,
-      spotPosition.authority,
-      usdmPosition.authority,
+      spotPosition.baselineAuthority,
+      spotPosition.currentAuthority,
+      usdmPosition.baselineAuthority,
+      usdmPosition.currentAuthority,
     ]);
     if (authorities.size !== 1) {
       return makeResult(

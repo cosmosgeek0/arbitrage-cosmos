@@ -4,6 +4,7 @@ import test from 'node:test';
 
 import {
   BINANCE_SPOT_VALIDATE_ONLY_DEFAULTS,
+  BINANCE_SPOT_VALIDATE_ONLY_FRESHNESS_POLICY,
   isBinanceSpotQueryResolution,
   isBinanceSpotValidateOnlyPreparation,
   normalizeBinanceSpotInjectedQueryEvidence,
@@ -291,6 +292,54 @@ test('stale and future public filter or venue evidence cannot produce descriptor
     true,
   );
   assert.equal(futureVenue.wireIntent, null);
+
+  const callerExtendedFilter = prepare({
+    publicSnapshot: snapshot({
+      filterObservedAt: Object.freeze({
+        ...PUBLIC_OBSERVED_AT,
+        sourceTimeMs:
+          T0 -
+          BINANCE_SPOT_VALIDATE_ONLY_FRESHNESS_POLICY
+            .publicFilterMaximumAgeMs -
+          1,
+        receivedAtMs:
+          T0 -
+          BINANCE_SPOT_VALIDATE_ONLY_FRESHNESS_POLICY
+            .publicFilterMaximumAgeMs -
+          1,
+        maxAgeMs:
+          BINANCE_SPOT_VALIDATE_ONLY_FRESHNESS_POLICY
+            .publicFilterMaximumAgeMs +
+          10_000,
+      }),
+    }),
+  });
+  assert.equal(
+    callerExtendedFilter.blockingCodes.includes(
+      'FILTER_EVIDENCE_MAX_AGE_EXCEEDED',
+    ),
+    true,
+  );
+  assert.equal(callerExtendedFilter.wireIntent, null);
+
+  const callerExtendedVenue = prepare({
+    publicSnapshot: snapshot({
+      venueEvidenceObservedAt: Object.freeze({
+        ...PUBLIC_OBSERVED_AT,
+        maxAgeMs:
+          BINANCE_SPOT_VALIDATE_ONLY_FRESHNESS_POLICY
+            .publicVenueEvidenceMaximumAgeMs +
+          1,
+      }),
+    }),
+  });
+  assert.equal(
+    callerExtendedVenue.blockingCodes.includes(
+      'VENUE_EVIDENCE_MAX_AGE_EXCEEDED',
+    ),
+    true,
+  );
+  assert.equal(callerExtendedVenue.wireIntent, null);
 });
 
 test('LIMIT and MARKET wire records contain no provider or mutation capability', () => {
@@ -349,6 +398,7 @@ test('query evidence is normalized only when full exchange identity matches', ()
       venueOrderId: '918273645',
       side: 'BUY',
       type: 'LIMIT',
+      timeInForce: 'GTC',
       quantity: '0.010',
       price: '50000.0',
       executedQuantity: '0.0040',
@@ -377,6 +427,7 @@ test('query evidence is normalized only when full exchange identity matches', ()
       venueOrderId: '918273645',
       side: 'SELL',
       type: 'LIMIT',
+      timeInForce: 'GTC',
       quantity: '0.01',
       price: '50000',
       executedQuantity: '0',
@@ -388,6 +439,71 @@ test('query evidence is normalized only when full exchange identity matches', ()
   assert.deepEqual(mismatched.reasonCodes, ['QUERY_IDENTITY_MISMATCH']);
   assert.equal(mismatched.clientOrderId, CLIENT_ORDER_ID);
   assert.equal(mismatched.resubmitAllowed, false);
+
+  const timeInForceMismatch =
+    normalizeBinanceSpotInjectedQueryEvidence(prepared, {
+      evaluatedAtMs: T0,
+      mutationKnowledge: 'KNOWN_SUBMITTED',
+      evidence: {
+        outcome: 'FOUND',
+        observedAt: QUERY_OBSERVED_AT,
+        symbol: 'BTCUSDT',
+        clientOrderId: CLIENT_ORDER_ID,
+        venueOrderId: '918273645',
+        side: 'BUY',
+        type: 'LIMIT',
+        timeInForce: 'IOC',
+        quantity: '0.01',
+        price: '50000',
+        executedQuantity: '0',
+        status: 'NEW',
+      },
+    });
+  assert.equal(timeInForceMismatch.state, 'UNKNOWN');
+  assert.deepEqual(
+    timeInForceMismatch.reasonCodes,
+    ['QUERY_IDENTITY_MISMATCH'],
+  );
+});
+
+test('MARKET query identity explicitly maps an unsent wire TIF to venue GTC', () => {
+  const marketId = deriveBinanceSpotClientOrderId({
+    planId: 'basis-plan-spot-adapter-fixture',
+    legId: 'SPOT_CLOSE',
+    attempt: 0,
+  });
+  const prepared = prepare({
+    order: limitOrder({
+      legId: 'SPOT_CLOSE',
+      clientOrderId: marketId,
+      side: 'SELL',
+      type: 'MARKET',
+      price: null,
+      timeInForce: null,
+    }),
+  });
+  assert.equal(prepared.wireIntent?.timeInForce, null);
+  const resolution = normalizeBinanceSpotInjectedQueryEvidence(prepared, {
+    evaluatedAtMs: T0,
+    mutationKnowledge: 'KNOWN_SUBMITTED',
+    evidence: {
+      outcome: 'FOUND',
+      observedAt: QUERY_OBSERVED_AT,
+      symbol: 'BTCUSDT',
+      clientOrderId: marketId,
+      venueOrderId: '918273646',
+      side: 'SELL',
+      type: 'MARKET',
+      timeInForce: 'GTC',
+      quantity: '0.01',
+      price: null,
+      executedQuantity: '0.01',
+      status: 'FILLED',
+    },
+  });
+  assert.equal(resolution.state, 'OBSERVED');
+  assert.equal(resolution.observation?.type, 'MARKET');
+  assert.equal(resolution.observation?.timeInForce, 'GTC');
 });
 
 test('query status and cumulative fill must describe one coherent venue state', () => {
@@ -404,6 +520,7 @@ test('query status and cumulative fill must describe one coherent venue state', 
         venueOrderId: '918273645',
         side: 'BUY',
         type: 'LIMIT',
+        timeInForce: 'GTC',
         quantity: '0.01',
         price: '50000',
         executedQuantity,
@@ -548,6 +665,16 @@ test('stale or future query evidence cannot become an order observation', () => 
       }),
       'QUERY_EVIDENCE_CLOCK_SKEWED',
     ],
+    [
+      Object.freeze({
+        ...QUERY_OBSERVED_AT,
+        maxAgeMs:
+          BINANCE_SPOT_VALIDATE_ONLY_FRESHNESS_POLICY
+            .queryEvidenceMaximumAgeMs +
+          1,
+      }),
+      'QUERY_EVIDENCE_MAX_AGE_EXCEEDED',
+    ],
   ]) {
     const resolution = normalizeBinanceSpotInjectedQueryEvidence(prepared, {
       evaluatedAtMs: T0,
@@ -560,6 +687,7 @@ test('stale or future query evidence cannot become an order observation', () => 
         venueOrderId: '918273645',
         side: 'BUY',
         type: 'LIMIT',
+        timeInForce: 'GTC',
         quantity: '0.01',
         price: '50000',
         executedQuantity: '0',

@@ -34,6 +34,17 @@ export const BINANCE_SPOT_VALIDATE_ONLY_DEFAULTS = Object.freeze({
   authority: 'NONE' as const,
 });
 
+/**
+ * Adapter-owned ceilings. Evidence may declare a shorter lifetime, never a
+ * longer one. This prevents a caller from making an old public or private fact
+ * appear current by supplying an arbitrarily large maxAgeMs.
+ */
+export const BINANCE_SPOT_VALIDATE_ONLY_FRESHNESS_POLICY = Object.freeze({
+  publicFilterMaximumAgeMs: 60_000,
+  publicVenueEvidenceMaximumAgeMs: 5_000,
+  queryEvidenceMaximumAgeMs: 5_000,
+});
+
 export interface BinanceSpotValidateOnlyPolicy {
   readonly enabled: boolean;
   readonly killSwitchEngaged: boolean;
@@ -74,8 +85,10 @@ export const BINANCE_SPOT_PREPARATION_BLOCKING_CODES = [
   'SNAPSHOT_INCOMPLETE',
   'FILTER_EVIDENCE_STALE',
   'FILTER_EVIDENCE_CLOCK_SKEWED',
+  'FILTER_EVIDENCE_MAX_AGE_EXCEEDED',
   'VENUE_EVIDENCE_STALE',
   'VENUE_EVIDENCE_CLOCK_SKEWED',
+  'VENUE_EVIDENCE_MAX_AGE_EXCEEDED',
   'SYMBOL_NOT_TRADING',
   'SYMBOL_MISMATCH',
   'ORDER_INVALID',
@@ -362,12 +375,14 @@ function parsePolicy(
 type FreshnessFailure =
   | 'INVALID'
   | 'STALE'
-  | 'CLOCK_SKEWED';
+  | 'CLOCK_SKEWED'
+  | 'MAX_AGE_EXCEEDS_POLICY';
 
 function validateFreshProvenance(
   value: unknown,
   evaluatedAtMs: number,
   allowedAuthorities: readonly DataAuthority[],
+  maximumAgeMs: number,
 ): FreshnessFailure | null {
   if (
     value === null ||
@@ -385,6 +400,9 @@ function validateFreshProvenance(
       timestamp.sourceTimeMs > timestamp.receivedAtMs)
   ) {
     return 'INVALID';
+  }
+  if (timestamp.maxAgeMs > maximumAgeMs) {
+    return 'MAX_AGE_EXCEEDS_POLICY';
   }
   if (
     timestamp.receivedAtMs > evaluatedAtMs ||
@@ -499,6 +517,8 @@ export function prepareBinanceSpotValidateOnlyOrder(
       snapshot.filterObservedAt,
       root.evaluatedAtMs,
       ['LIVE_PUBLIC', 'RECORDED_REPLAY', 'SYNTHETIC_TEST'],
+      BINANCE_SPOT_VALIDATE_ONLY_FRESHNESS_POLICY
+        .publicFilterMaximumAgeMs,
     );
     if (filterFreshness === 'INVALID') {
       blockingCodes.push('SNAPSHOT_INVALID');
@@ -506,11 +526,15 @@ export function prepareBinanceSpotValidateOnlyOrder(
       blockingCodes.push('FILTER_EVIDENCE_STALE');
     } else if (filterFreshness === 'CLOCK_SKEWED') {
       blockingCodes.push('FILTER_EVIDENCE_CLOCK_SKEWED');
+    } else if (filterFreshness === 'MAX_AGE_EXCEEDS_POLICY') {
+      blockingCodes.push('FILTER_EVIDENCE_MAX_AGE_EXCEEDED');
     }
     const venueFreshness = validateFreshProvenance(
       snapshot.venueEvidenceObservedAt,
       root.evaluatedAtMs,
       ['LIVE_PUBLIC', 'RECORDED_REPLAY', 'SYNTHETIC_TEST'],
+      BINANCE_SPOT_VALIDATE_ONLY_FRESHNESS_POLICY
+        .publicVenueEvidenceMaximumAgeMs,
     );
     if (venueFreshness === 'INVALID') {
       blockingCodes.push('SNAPSHOT_INVALID');
@@ -518,6 +542,8 @@ export function prepareBinanceSpotValidateOnlyOrder(
       blockingCodes.push('VENUE_EVIDENCE_STALE');
     } else if (venueFreshness === 'CLOCK_SKEWED') {
       blockingCodes.push('VENUE_EVIDENCE_CLOCK_SKEWED');
+    } else if (venueFreshness === 'MAX_AGE_EXCEEDS_POLICY') {
+      blockingCodes.push('VENUE_EVIDENCE_MAX_AGE_EXCEEDED');
     }
   }
   if (snapshot.completeness !== 'COMPLETE_SUPPORTED_FILTER_SET') {
@@ -653,8 +679,10 @@ export function prepareBinanceSpotValidateOnlyOrder(
       'SNAPSHOT_INCOMPLETE',
       'FILTER_EVIDENCE_STALE',
       'FILTER_EVIDENCE_CLOCK_SKEWED',
+      'FILTER_EVIDENCE_MAX_AGE_EXCEEDED',
       'VENUE_EVIDENCE_STALE',
       'VENUE_EVIDENCE_CLOCK_SKEWED',
+      'VENUE_EVIDENCE_MAX_AGE_EXCEEDED',
       'SYMBOL_NOT_TRADING',
       'SYMBOL_MISMATCH',
       'ORDER_INVALID',
@@ -754,6 +782,11 @@ export interface BinanceSpotFoundQueryEvidence {
   readonly venueOrderId: string;
   readonly side: BinanceSpotOrderSide;
   readonly type: 'LIMIT' | 'MARKET';
+  /**
+   * Binance reports GTC for both LIMIT GTC and MARKET query records. MARKET
+   * submission intent remains null because no TIF is sent for MARKET.
+   */
+  readonly timeInForce: 'GTC';
   readonly quantity: string;
   readonly price: string | null;
   readonly executedQuantity: string;
@@ -778,6 +811,7 @@ export const BINANCE_SPOT_QUERY_REASON_CODES = [
   'QUERY_EVIDENCE_INVALID',
   'QUERY_EVIDENCE_STALE',
   'QUERY_EVIDENCE_CLOCK_SKEWED',
+  'QUERY_EVIDENCE_MAX_AGE_EXCEEDED',
   'QUERY_STATUS_FILL_INCOHERENT',
   'QUERY_AMBIGUOUS',
   'QUERY_NOT_FOUND_AFTER_MUTATION',
@@ -795,6 +829,7 @@ export interface BinanceSpotNormalizedOrderObservation {
   readonly venueOrderId: string;
   readonly side: BinanceSpotOrderSide;
   readonly type: 'LIMIT' | 'MARKET';
+  readonly timeInForce: 'GTC';
   readonly quantity: string;
   readonly price: string | null;
   readonly executedQuantity: string;
@@ -869,6 +904,8 @@ function normalizeFoundEvidence(
   intent: Readonly<BinanceSpotOrderWireIntent>,
   evidence: Record<string, unknown>,
 ): Readonly<FoundEvidenceNormalization> {
+  const expectedQueryTimeInForce =
+    intent.type === 'MARKET' ? 'GTC' : intent.timeInForce;
   if (
     !hasExactKeys(evidence, [
       'outcome',
@@ -878,6 +915,7 @@ function normalizeFoundEvidence(
       'venueOrderId',
       'side',
       'type',
+      'timeInForce',
       'quantity',
       'price',
       'executedQuantity',
@@ -936,6 +974,8 @@ function normalizeFoundEvidence(
     evidence.clientOrderId !== intent.clientOrderId ||
     evidence.side !== intent.side ||
     evidence.type !== intent.type ||
+    expectedQueryTimeInForce !== 'GTC' ||
+    evidence.timeInForce !== expectedQueryTimeInForce ||
     quantity !== intent.quantity ||
     price !== intent.price
   ) {
@@ -979,6 +1019,7 @@ function normalizeFoundEvidence(
     venueOrderId: evidence.venueOrderId as string,
     side: intent.side,
     type: intent.type,
+    timeInForce: expectedQueryTimeInForce,
     quantity,
     price,
     executedQuantity,
@@ -1041,6 +1082,7 @@ export function normalizeBinanceSpotInjectedQueryEvidence(
     evidence.observedAt,
     root.evaluatedAtMs as number,
     ['LIVE_PRIVATE', 'RECORDED_REPLAY', 'SYNTHETIC_TEST'],
+    BINANCE_SPOT_VALIDATE_ONLY_FRESHNESS_POLICY.queryEvidenceMaximumAgeMs,
   );
   if (queryFreshness === 'INVALID') {
     return unknownQueryResolution(
@@ -1058,6 +1100,12 @@ export function normalizeBinanceSpotInjectedQueryEvidence(
     return unknownQueryResolution(
       intent.clientOrderId,
       'QUERY_EVIDENCE_CLOCK_SKEWED',
+    );
+  }
+  if (queryFreshness === 'MAX_AGE_EXCEEDS_POLICY') {
+    return unknownQueryResolution(
+      intent.clientOrderId,
+      'QUERY_EVIDENCE_MAX_AGE_EXCEEDED',
     );
   }
   if (

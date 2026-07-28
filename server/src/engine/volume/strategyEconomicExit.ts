@@ -342,6 +342,60 @@ function canonicalNonNegative(value: unknown, positive = false): NonNegativeDeci
   }
 }
 
+function canonicalExact(value: unknown): ExactDecimal | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const normalized = normalizeExactDecimal(value);
+    return normalized === value ? normalized : null;
+  } catch {
+    return null;
+  }
+}
+
+function validIdentifier(value: unknown, maximum = 256): value is string {
+  return typeof value === 'string'
+    && value.length > 0
+    && value.length <= maximum
+    && /^[A-Za-z0-9][A-Za-z0-9._:-]*$/.test(value);
+}
+
+function cumulativeExitNotionalIsConservative(
+  limitPrice: unknown,
+  baseQuantity: unknown,
+  quoteNotional: unknown,
+  exitSide: unknown,
+): boolean {
+  const price = canonicalNonNegative(limitPrice, true);
+  const quantity = canonicalNonNegative(baseQuantity, true);
+  const quote = canonicalNonNegative(quoteNotional, true);
+  if (price === null || quantity === null || quote === null
+      || (exitSide !== 'BUY' && exitSide !== 'SELL')) return false;
+  try {
+    const parts = (value: string): Readonly<{ coefficient: bigint; scale: number }> => {
+      const [whole, fraction = ''] = value.split('.');
+      return Object.freeze({
+        coefficient: BigInt(`${whole}${fraction}`),
+        scale: fraction.length,
+      });
+    };
+    const priceParts = parts(price);
+    const quantityParts = parts(quantity);
+    const quoteParts = parts(quote);
+    const productCoefficient = priceParts.coefficient * quantityParts.coefficient;
+    const productScale = priceParts.scale + quantityParts.scale;
+    const comparisonScale = Math.max(productScale, quoteParts.scale);
+    const scaledProduct = productCoefficient
+      * (10n ** BigInt(comparisonScale - productScale));
+    const scaledQuote = quoteParts.coefficient
+      * (10n ** BigInt(comparisonScale - quoteParts.scale));
+    return exitSide === 'BUY'
+      ? scaledProduct >= scaledQuote
+      : scaledProduct <= scaledQuote;
+  } catch {
+    return false;
+  }
+}
+
 function identity(prefix: string, namespace: string, semantic: unknown): string {
   return `${prefix}_${stableHash128Hex(`${namespace}|${canonicalJson(semantic)}`)}`;
 }
@@ -722,6 +776,14 @@ export function evaluateVolumeEconomicExit(
       decision: buildRejectedDecision(evaluatedAtMs, ['EXIT_SAMPLE_CHAIN_INVALID']),
     });
   }
+  if (current !== null
+      && validateVolumeStrategyObservation(current)
+      && current.evaluatedAtMs > evaluatedAtMs) {
+    return deepFreeze({
+      sample: null,
+      decision: buildRejectedDecision(evaluatedAtMs, ['EXIT_SOURCE_CLOCK_INVALID']),
+    });
+  }
   const quantity = policy.modeledBaseQuantity as NonNegativeDecimal;
   const entrySide = evaluation.proposal.direction === 'long' ? 'BUY' : 'SELL';
   const exitSide = entrySide === 'BUY' ? 'SELL' : 'BUY';
@@ -946,14 +1008,87 @@ export function validateVolumeForwardExitSample(
       || !Number.isSafeInteger(value.sampleRevision)
       || (value.sampleRevision as number) < 1
       || (value.sampleRevision === 1) !== (value.previousSampleId === null)
+      || (value.previousSampleId !== null
+        && (typeof value.previousSampleId !== 'string'
+          || !/^vfes_[a-f0-9]{32}$/.test(value.previousSampleId)))
+      || typeof value.entryEvaluationId !== 'string'
+      || !/^vevaluation_[a-f0-9]{64}$/.test(value.entryEvaluationId)
+      || typeof value.entryPlanId !== 'string'
+      || !/^vplan_[a-f0-9]{64}$/.test(value.entryPlanId)
+      || !validIdentifier(value.entryProposalId, 128)
+      || !validIdentifier(value.entryProposalDigest)
+      || typeof value.entryObservationDigest !== 'string'
+      || !/^vobs_[a-f0-9]{64}$/.test(value.entryObservationDigest)
+      || (value.currentObservationDigest !== null
+        && (typeof value.currentObservationDigest !== 'string'
+          || !/^vobs_[a-f0-9]{64}$/.test(value.currentObservationDigest)))
+      || typeof value.policyDigest !== 'string'
+      || !/^vexitpolicyd_[a-f0-9]{32}$/.test(value.policyDigest)
+      || typeof value.symbol !== 'string'
+      || !/^[A-Z0-9]{1,20}$/.test(value.symbol)
       || !validTime(value.openedAtMs) || !validTime(value.evaluatedAtMs)
       || value.evaluatedAtMs < value.openedAtMs
       || value.holdAgeMs !== value.evaluatedAtMs - value.openedAtMs
+      || (value.observedAtMs !== null && !validTime(value.observedAtMs))
+      || (value.currentObservationDigest === null) !== (value.observedAtMs === null)
+      || (value.observedAtMs !== null
+        && value.observedAtMs > value.evaluatedAtMs)
       || (value.direction !== 'long' && value.direction !== 'short')
       || (value.sourceDisposition !== 'ACCEPTED' && value.sourceDisposition !== 'DEGRADED')
       || value.economicsApplicability !== 'SYNTHETIC_TEST_ONLY'
       || canonicalNonNegative(value.modeledBaseQuantity, true) === null
       || canonicalNonNegative(value.entryQuoteNotional, true) === null) return false;
+
+  const exitQuoteNotional = value.exitQuoteNotional === null
+    ? null
+    : canonicalNonNegative(value.exitQuoteNotional, true);
+  const netLiquidationPnlPer1000 = value.netLiquidationPnlPer1000 === null
+    ? null
+    : canonicalExact(value.netLiquidationPnlPer1000);
+  const priorFavorableExtremeNetPnlPer1000 =
+    value.priorFavorableExtremeNetPnlPer1000 === null
+      ? null
+      : canonicalExact(value.priorFavorableExtremeNetPnlPer1000);
+  const favorableExtremeNetPnlPer1000 = value.favorableExtremeNetPnlPer1000 === null
+    ? null
+    : canonicalExact(value.favorableExtremeNetPnlPer1000);
+  const drawdownFromFavorableExtremePer1000 =
+    value.drawdownFromFavorableExtremePer1000 === null
+      ? null
+      : canonicalNonNegative(value.drawdownFromFavorableExtremePer1000);
+  if ((value.exitQuoteNotional !== null && exitQuoteNotional === null)
+      || (value.netLiquidationPnlPer1000 !== null && netLiquidationPnlPer1000 === null)
+      || (value.priorFavorableExtremeNetPnlPer1000 !== null
+        && priorFavorableExtremeNetPnlPer1000 === null)
+      || (value.favorableExtremeNetPnlPer1000 !== null
+        && favorableExtremeNetPnlPer1000 === null)
+      || (value.drawdownFromFavorableExtremePer1000 !== null
+        && drawdownFromFavorableExtremePer1000 === null)
+      || (value.sampleRevision === 1 && priorFavorableExtremeNetPnlPer1000 !== null)
+      || (exitQuoteNotional !== null && value.currentObservationDigest === null)
+      || (netLiquidationPnlPer1000 !== null && exitQuoteNotional === null)
+      || ((value.sourceDisposition === 'ACCEPTED')
+        !== (netLiquidationPnlPer1000 !== null))) {
+    return false;
+  }
+  if (netLiquidationPnlPer1000 === null) {
+    if (drawdownFromFavorableExtremePer1000 !== null
+        || favorableExtremeNetPnlPer1000 !== priorFavorableExtremeNetPnlPer1000) return false;
+  } else {
+    const expectedFavorable = priorFavorableExtremeNetPnlPer1000 === null
+      ? netLiquidationPnlPer1000
+      : maximumExactDecimal(
+        priorFavorableExtremeNetPnlPer1000,
+        netLiquidationPnlPer1000,
+      );
+    if (favorableExtremeNetPnlPer1000 !== expectedFavorable
+        || drawdownFromFavorableExtremePer1000 === null
+        || drawdownFromFavorableExtremePer1000 !== subtractExactDecimals(
+          expectedFavorable,
+          netLiquidationPnlPer1000,
+        )) return false;
+  }
+
   const { sampleId, sampleDigest, ...semantic } = value;
   return sampleId === identity('vfes', 'volume.forward-exit.sample-id.v1', semantic)
     && sampleDigest === identity('vfesd', 'volume.forward-exit.sample-digest.v1', semantic);
@@ -992,6 +1127,12 @@ function validateExitTerms(value: unknown): value is Readonly<VolumeHypothetical
       || canonicalNonNegative(terms.limitPrice, true) === null
       || canonicalNonNegative(terms.baseQuantity, true) === null
       || canonicalNonNegative(terms.quoteNotional, true) === null
+      || !cumulativeExitNotionalIsConservative(
+        terms.limitPrice,
+        terms.baseQuantity,
+        terms.quoteNotional,
+        terms.exitSide,
+      )
       || !Number.isSafeInteger(terms.levelCount) || (terms.levelCount as number) < 1
       || typeof terms.entryObservationDigest !== 'string'
       || !/^vobs_[a-f0-9]{64}$/.test(terms.entryObservationDigest)
@@ -1064,7 +1205,10 @@ export function validateVolumeEconomicExitDecision(
       || typeof value.decisionId !== 'string' || !/^vexitdecision_[a-f0-9]{32}$/.test(value.decisionId)
       || typeof value.decisionDigest !== 'string' || !/^vexitdecisiond_[a-f0-9]{32}$/.test(value.decisionDigest)
       || !validTime(value.evaluatedAtMs)
+      || (value.sampleId !== null
+        && (typeof value.sampleId !== 'string' || !/^vfes_[a-f0-9]{32}$/.test(value.sampleId)))
       || !Array.isArray(value.reasonCodes)
+      || value.reasonCodes.length > 16
       || value.reasonCodes.some((code) => typeof code !== 'string')) return false;
   const parsedPlan = value.exitPlan === null
     ? null
@@ -1093,17 +1237,26 @@ export function validateVolumeEconomicExitDecision(
         semantic,
       )) return false;
   if (value.disposition === 'REJECTED') {
+    const codes = value.reasonCodes as string[];
+    const sorted = [...new Set(codes)].sort(compareText);
     return value.lifecyclePhase === 'REJECTED'
       && value.primaryReason === 'INPUT_REJECTED'
       && value.sampleId === null
       && value.exitPlan === null
-      && value.reasonCodes.length > 0;
+      && codes.length > 0
+      && codes.every((code, index) => (
+        VOLUME_ECONOMIC_EXIT_REJECTION_CODES.includes(code as VolumeEconomicExitRejectionCode)
+        && code === sorted[index]
+      ));
   }
+  const codes = value.reasonCodes as string[];
   return (value.disposition === 'HOLD_SHADOW'
       && value.lifecyclePhase === 'HOLDING'
       && value.primaryReason === 'NO_EXIT_TRIGGER'
       && typeof value.sampleId === 'string'
-      && value.exitPlan === null)
+      && value.exitPlan === null
+      && codes.length === 1
+      && codes[0] === 'NO_EXIT_TRIGGER')
     || (value.disposition === 'EXIT_SHADOW'
       && value.lifecyclePhase === 'TERMINAL_EXIT'
       && VOLUME_ECONOMIC_EXIT_TRIGGER_PRECEDENCE.includes(
@@ -1111,7 +1264,12 @@ export function validateVolumeEconomicExitDecision(
       )
       && value.primaryReason !== 'NO_EXIT_TRIGGER'
       && typeof value.sampleId === 'string'
-      && parsedPlan !== null);
+      && parsedPlan !== null
+      && codes[0] === value.primaryReason
+      && (codes.length === 1
+        || (codes.length === 2
+          && value.primaryReason === 'SOURCE_DEGRADED'
+          && codes[1] === 'EXIT_LIQUIDATION_CAPACITY_INSUFFICIENT')));
 }
 
 /** Cross-validates the two objects that form one durable shadow-exit state. */
@@ -1128,20 +1286,48 @@ export function validateVolumeEconomicExitState(
       || !validateVolumeEconomicExitDecision(state.decision)) return false;
   const sample = state.sample;
   const decision = state.decision;
-  if (decision.sampleId !== sample.sampleId || decision.disposition === 'REJECTED') return false;
+  if (decision.sampleId !== sample.sampleId
+      || decision.evaluatedAtMs !== sample.evaluatedAtMs
+      || decision.disposition === 'REJECTED') return false;
   if (decision.disposition === 'HOLD_SHADOW') {
     return sample.sourceDisposition === 'ACCEPTED'
+      && sample.holdAgeMs < VOLUME_ECONOMIC_EXIT_MAX_HOLD_MS
       && decision.primaryReason === 'NO_EXIT_TRIGGER'
       && decision.exitPlan === null;
   }
-  if (decision.primaryReason === 'SOURCE_DEGRADED'
-      && sample.sourceDisposition !== 'DEGRADED') return false;
-  if (decision.primaryReason === 'MAX_HOLD_REACHED'
-      && sample.holdAgeMs < VOLUME_ECONOMIC_EXIT_MAX_HOLD_MS) return false;
+  if (sample.sourceDisposition === 'DEGRADED') {
+    if (decision.primaryReason !== 'SOURCE_DEGRADED') return false;
+  } else if (sample.holdAgeMs >= VOLUME_ECONOMIC_EXIT_MAX_HOLD_MS) {
+    if (decision.primaryReason !== 'MAX_HOLD_REACHED') return false;
+  } else if (decision.primaryReason === 'NET_LIQUIDATION_STOP_REACHED'
+      || decision.primaryReason === 'NET_LIQUIDATION_REVERSAL_LOSS_REACHED') {
+    const net = canonicalExact(sample.netLiquidationPnlPer1000);
+    if (net === null || compareExactDecimals(net, ZERO) >= 0) return false;
+  } else if (decision.primaryReason === 'TRAILING_DRAWDOWN_REACHED') {
+    const drawdown = canonicalNonNegative(sample.drawdownFromFavorableExtremePer1000);
+    if (drawdown === null || compareExactDecimals(drawdown, ZERO) <= 0) return false;
+  } else {
+    return false;
+  }
+  const plan = decision.exitPlan;
+  if (plan === null) return false;
+  const requiredPlanRejections = [
+    'EXIT_ACCOUNT_FEE_PROOF_NOT_CURRENT',
+    'EXIT_ENTRY_FILL_UNPROVEN',
+    'EXIT_NO_EXECUTION_AUTHORITY',
+    ...(sample.direction === 'short' ? ['EXIT_SHORT_INVENTORY_UNPROVEN'] : []),
+    'EXIT_SYMBOL_FILTER_PROOF_NOT_CURRENT',
+  ].sort(compareText);
+  if (plan.rejectionCodes.length !== requiredPlanRejections.length
+      || plan.rejectionCodes.some((code, index) => code !== requiredPlanRejections[index])) {
+    return false;
+  }
   const terms = decision.exitPlan?.terms;
   if (terms === null || terms === undefined) {
-    return sample.sourceDisposition === 'DEGRADED';
+    return decision.primaryReason === 'SOURCE_DEGRADED'
+      && sample.sourceDisposition === 'DEGRADED';
   }
+  if (decision.reasonCodes.includes('EXIT_LIQUIDATION_CAPACITY_INSUFFICIENT')) return false;
   return terms.symbol === sample.symbol
     && terms.direction === sample.direction
     && terms.baseQuantity === sample.modeledBaseQuantity

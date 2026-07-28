@@ -15,8 +15,13 @@ import {
   evaluateVolumeEconomicExit,
   validateVolumeEconomicExitDecision,
   validateVolumeEconomicExitPolicy,
+  validateVolumeEconomicExitState,
   validateVolumeForwardExitSample,
 } from '../dist/engine/volume/strategyEconomicExit.js';
+import {
+  canonicalJson,
+  stableHash128Hex,
+} from '../dist/foundation/contracts/index.js';
 import {
   VOLUME_PUBLIC_REST_BASE_URL,
   VOLUME_PUBLIC_SOURCE_ID,
@@ -207,6 +212,89 @@ function evaluateAt({
     enabled: true,
     killSwitchEngaged: true,
   });
+}
+
+function identity(prefix, namespace, semantic) {
+  return `${prefix}_${stableHash128Hex(`${namespace}|${canonicalJson(semantic)}`)}`;
+}
+
+function resignSample(sample, overrides = {}) {
+  const {
+    sampleId: _sampleId,
+    sampleDigest: _sampleDigest,
+    ...semantic
+  } = structuredClone(sample);
+  Object.assign(semantic, overrides);
+  return {
+    sampleId: identity('vfes', 'volume.forward-exit.sample-id.v1', semantic),
+    sampleDigest: identity('vfesd', 'volume.forward-exit.sample-digest.v1', semantic),
+    ...semantic,
+  };
+}
+
+function resignTerms(terms, overrides = {}) {
+  const { termsId: _termsId, ...semantic } = structuredClone(terms);
+  Object.assign(semantic, overrides);
+  return {
+    termsId: identity('vexitterms', 'volume.economic-exit.terms.v1', semantic),
+    ...semantic,
+  };
+}
+
+function resignDecision(
+  decision,
+  {
+    decision: decisionOverrides = {},
+    plan: planOverrides,
+    terms: termsOverrides,
+  } = {},
+) {
+  const snapshot = structuredClone(decision);
+  let planCore = null;
+  if (planOverrides !== null && snapshot.exitPlan !== null) {
+    const {
+      planId: _planId,
+      decisionId: _planDecisionId,
+      ...semantic
+    } = snapshot.exitPlan;
+    const terms = semantic.terms === null
+      ? null
+      : resignTerms(semantic.terms, termsOverrides ?? {});
+    planCore = { ...semantic, ...(planOverrides ?? {}), terms };
+  }
+  const base = {
+    schemaVersion: snapshot.schemaVersion,
+    sampleId: snapshot.sampleId,
+    evaluatedAtMs: snapshot.evaluatedAtMs,
+    lifecyclePhase: snapshot.lifecyclePhase,
+    disposition: snapshot.disposition,
+    primaryReason: snapshot.primaryReason,
+    reasonCodes: snapshot.reasonCodes,
+    ...decisionOverrides,
+  };
+  const semantic = { decision: base, exitPlan: planCore };
+  const decisionId = identity(
+    'vexitdecision',
+    'volume.economic-exit.decision-id.v1',
+    semantic,
+  );
+  const decisionDigest = identity(
+    'vexitdecisiond',
+    'volume.economic-exit.decision-digest.v1',
+    semantic,
+  );
+  const exitPlan = planCore === null
+    ? null
+    : {
+        planId: identity(
+          'vexitplan',
+          'volume.economic-exit.plan.v1',
+          { decisionId, ...planCore },
+        ),
+        decisionId,
+        ...planCore,
+      };
+  return { decisionId, decisionDigest, ...base, exitPlan };
 }
 
 function assertDeepFrozen(value, seen = new Set()) {
@@ -517,6 +605,243 @@ test('shadow LIMIT+IOC terms are inert, deeply frozen, and identity-bound', () =
   assert.equal(explicitNoCurrent.decision.primaryReason, 'SOURCE_DEGRADED');
   assert.equal(explicitNoCurrent.decision.exitPlan.terms, null);
   assertNoAuthority(explicitNoCurrent.decision.exitPlan);
+
+  const olderCurrent = evaluateAt({
+    elapsedMs: 1_000,
+    current: bookFor({
+      evaluatedAtMs: NOW_MS - 1,
+      sourceRevision: 13,
+    }),
+  });
+  assert.equal(olderCurrent.sample.sourceDisposition, 'DEGRADED');
+  assert.equal(olderCurrent.sample.observedAtMs, NOW_MS - 1);
+  assert.equal(validateVolumeEconomicExitState(olderCurrent), true);
+
+  const futureCurrent = evaluateAt({
+    elapsedMs: 1_000,
+    current: bookFor({
+      evaluatedAtMs: NOW_MS + 1_001,
+      sourceRevision: 14,
+    }),
+  });
+  assert.equal(futureCurrent.sample, null);
+  assert.equal(futureCurrent.decision.disposition, 'REJECTED');
+  assert.deepEqual(futureCurrent.decision.reasonCodes, ['EXIT_SOURCE_CLOCK_INVALID']);
+  assert.equal(validateVolumeEconomicExitDecision(futureCurrent.decision), true);
+});
+
+test('re-signed forward samples reject every omitted field, time, decimal, null, and arithmetic invariant', () => {
+  const first = evaluateAt({ elapsedMs: 1_000 });
+  const chained = evaluateAt({
+    elapsedMs: 2_000,
+    previousSample: first.sample,
+  });
+  assert.equal(validateVolumeForwardExitSample(first.sample), true);
+  assert.equal(validateVolumeForwardExitSample(chained.sample), true);
+  assert.notEqual(chained.sample.priorFavorableExtremeNetPnlPer1000, null);
+
+  const cases = [
+    ['previousSampleId format', chained.sample, { previousSampleId: 'vfes_bad' }],
+    ['entryEvaluationId', first.sample, { entryEvaluationId: '' }],
+    ['entryPlanId', first.sample, { entryPlanId: '' }],
+    ['entryProposalId', first.sample, { entryProposalId: ' bad' }],
+    ['entryProposalDigest', first.sample, { entryProposalDigest: '' }],
+    ['entryObservationDigest', first.sample, { entryObservationDigest: 'vobs_bad' }],
+    ['currentObservationDigest', first.sample, { currentObservationDigest: 'vobs_bad' }],
+    ['policyDigest', first.sample, { policyDigest: 'vexitpolicyd_bad' }],
+    ['symbol', first.sample, { symbol: 'btcusdt' }],
+    ['observedAtMs type', first.sample, { observedAtMs: '1900000000001' }],
+    ['observedAtMs negative', first.sample, { observedAtMs: -1 }],
+    ['observedAtMs future', first.sample, { observedAtMs: first.sample.evaluatedAtMs + 1 }],
+    ['current digest without observed time', first.sample, { observedAtMs: null }],
+    ['observed time without current digest', first.sample, { currentObservationDigest: null }],
+    ['exitQuoteNotional canonical', first.sample, { exitQuoteNotional: '04000.6' }],
+    ['exitQuoteNotional positive', first.sample, { exitQuoteNotional: '0' }],
+    ['netLiquidationPnlPer1000 canonical', first.sample, { netLiquidationPnlPer1000: '-0' }],
+    ['prior favorable canonical', chained.sample, { priorFavorableExtremeNetPnlPer1000: '-0' }],
+    ['favorable canonical', first.sample, { favorableExtremeNetPnlPer1000: '01' }],
+    ['drawdown nonnegative', first.sample, { drawdownFromFavorableExtremePer1000: '-1' }],
+    ['exit notional and pnl co-presence', first.sample, { exitQuoteNotional: null }],
+    ['pnl and exit notional co-presence', first.sample, { netLiquidationPnlPer1000: null }],
+    ['accepted current digest required', first.sample, { currentObservationDigest: null, observedAtMs: null }],
+    ['accepted favorable required', first.sample, { favorableExtremeNetPnlPer1000: null }],
+    ['accepted drawdown required', first.sample, { drawdownFromFavorableExtremePer1000: null }],
+    ['degraded disposition cannot retain net economics', first.sample, { sourceDisposition: 'DEGRADED' }],
+    ['prior favorable maximum', chained.sample, { priorFavorableExtremeNetPnlPer1000: '999999' }],
+    ['favorable maximum', chained.sample, { favorableExtremeNetPnlPer1000: '999999' }],
+    ['drawdown arithmetic', chained.sample, { drawdownFromFavorableExtremePer1000: '999999' }],
+  ];
+  for (const [label, sample, overrides] of cases) {
+    assert.equal(
+      validateVolumeForwardExitSample(resignSample(sample, overrides)),
+      false,
+      label,
+    );
+  }
+});
+
+test('re-signed cumulative LIMIT terms remain conservative for both exit sides', () => {
+  const longExit = evaluateAt({ elapsedMs: 60_000 });
+  const shortExit = evaluateAt({ direction: 'short', elapsedMs: 60_000 });
+  assert.equal(validateVolumeEconomicExitDecision(longExit.decision), true);
+  assert.equal(validateVolumeEconomicExitDecision(shortExit.decision), true);
+
+  const inflatedSellLimit = resignDecision(longExit.decision, {
+    terms: { limitPrice: '999999999' },
+  });
+  const deflatedBuyLimit = resignDecision(shortExit.decision, {
+    terms: { limitPrice: '0.00000001' },
+  });
+  const maximumCanonical = '9'.repeat(96);
+  const wideBuyTerms = resignDecision(shortExit.decision, {
+    terms: {
+      limitPrice: maximumCanonical,
+      baseQuantity: maximumCanonical,
+      quoteNotional: maximumCanonical,
+    },
+  });
+  assert.equal(validateVolumeEconomicExitDecision(inflatedSellLimit), false);
+  assert.equal(validateVolumeEconomicExitDecision(deflatedBuyLimit), false);
+  assert.equal(validateVolumeEconomicExitDecision(wideBuyTerms), true);
+});
+
+test('re-signed decisions enforce reason semantics instead of trusting their identities', () => {
+  const hold = evaluateAt({ elapsedMs: 1_000 });
+  const rejected = evaluateVolumeEconomicExit({
+    entryEvaluation: null,
+    entryObservation: null,
+    currentObservation: null,
+    policy: VOLUME_CURRENT_ECONOMIC_EXIT_POLICY,
+    previousSample: null,
+    evaluatedAtMs: NOW_MS,
+  }, {
+    enabled: true,
+    killSwitchEngaged: true,
+  });
+  assert.equal(validateVolumeEconomicExitDecision(hold.decision), true);
+  assert.equal(validateVolumeEconomicExitDecision(rejected.decision), true);
+
+  for (const [label, decision, reasonCodes] of [
+    ['unknown hold reason', hold.decision, ['NOT_A_REASON']],
+    ['duplicate hold reason', hold.decision, ['NO_EXIT_TRIGGER', 'NO_EXIT_TRIGGER']],
+    ['primary/reason mismatch', hold.decision, ['SOURCE_DEGRADED']],
+    ['unknown rejected reason', rejected.decision, ['NOT_A_REJECTION']],
+  ]) {
+    assert.equal(
+      validateVolumeEconomicExitDecision(resignDecision(decision, {
+        decision: { reasonCodes },
+      })),
+      false,
+      label,
+    );
+  }
+});
+
+test('durable state binds decision time, disposition, precedence, and hypothetical terms to its sample', () => {
+  const hold = evaluateAt({ elapsedMs: 1_000 });
+  const exit = evaluateAt({ elapsedMs: 60_000 });
+  const degraded = evaluateAt({
+    elapsedMs: 60_000,
+    current: bookFor({
+      evaluatedAtMs: NOW_MS + 60_000,
+      sourceRevision: 72,
+      continuity: 'GAP',
+    }),
+  });
+  const degradedBeforeMax = evaluateAt({
+    elapsedMs: 1_000,
+    current: bookFor({
+      evaluatedAtMs: NOW_MS + 1_000,
+      sourceRevision: 13,
+      continuity: 'GAP',
+    }),
+  });
+  for (const result of [hold, exit, degraded, degradedBeforeMax]) {
+    assert.equal(
+      validateVolumeEconomicExitState({
+        sample: result.sample,
+        decision: result.decision,
+      }),
+      true,
+      result.decision.primaryReason,
+    );
+  }
+
+  const crossInvalid = [
+    ['decision/sample time', hold.sample, resignDecision(hold.decision, {
+      decision: { evaluatedAtMs: hold.decision.evaluatedAtMs + 1 },
+    })],
+    ['HOLD at maximum age', exit.sample, resignDecision(hold.decision, {
+      decision: {
+        sampleId: exit.sample.sampleId,
+        evaluatedAtMs: exit.sample.evaluatedAtMs,
+      },
+    })],
+    ['accepted cannot claim SOURCE_DEGRADED', exit.sample, resignDecision(exit.decision, {
+      decision: {
+        primaryReason: 'SOURCE_DEGRADED',
+        reasonCodes: ['SOURCE_DEGRADED'],
+      },
+    })],
+    ['degraded must retain SOURCE_DEGRADED precedence', degraded.sample, resignDecision(
+      degraded.decision,
+      {
+        decision: {
+          primaryReason: 'MAX_HOLD_REACHED',
+          reasonCodes: ['MAX_HOLD_REACHED'],
+        },
+      },
+    )],
+    ['degraded cannot HOLD', degradedBeforeMax.sample, resignDecision(
+      degradedBeforeMax.decision,
+      {
+        decision: {
+          lifecyclePhase: 'HOLDING',
+          disposition: 'HOLD_SHADOW',
+          primaryReason: 'NO_EXIT_TRIGGER',
+          reasonCodes: ['NO_EXIT_TRIGGER'],
+        },
+        plan: null,
+      },
+    )],
+    ['MAX before boundary', hold.sample, resignDecision(exit.decision, {
+      decision: {
+        sampleId: hold.sample.sampleId,
+        evaluatedAtMs: hold.sample.evaluatedAtMs,
+      },
+      plan: { sampleId: hold.sample.sampleId },
+      terms: {
+        symbol: hold.sample.symbol,
+        direction: hold.sample.direction,
+        exitSide: hold.sample.direction === 'long' ? 'SELL' : 'BUY',
+        baseQuantity: hold.sample.modeledBaseQuantity,
+        quoteNotional: hold.sample.exitQuoteNotional,
+        entryObservationDigest: hold.sample.entryObservationDigest,
+        currentObservationDigest: hold.sample.currentObservationDigest,
+      },
+    })],
+  ];
+  for (const [label, sample, decision] of crossInvalid) {
+    assert.equal(validateVolumeEconomicExitDecision(decision), true, `${label} decision`);
+    assert.equal(validateVolumeForwardExitSample(sample), true, `${label} sample`);
+    assert.equal(validateVolumeEconomicExitState({ sample, decision }), false, label);
+  }
+
+  for (const [label, terms] of [
+    ['terms symbol', { symbol: 'ETHUSDT' }],
+    ['terms quantity', { baseQuantity: '0.03' }],
+    ['terms notional', { quoteNotional: '999999999' }],
+    ['terms entry digest', { entryObservationDigest: `vobs_${'e'.repeat(64)}` }],
+    ['terms current digest', { currentObservationDigest: `vobs_${'f'.repeat(64)}` }],
+  ]) {
+    const decision = resignDecision(exit.decision, { terms });
+    assert.equal(validateVolumeEconomicExitDecision(decision), true, `${label} decision`);
+    assert.equal(
+      validateVolumeEconomicExitState({ sample: exit.sample, decision }),
+      false,
+      label,
+    );
+  }
 });
 
 test('hostile and non-canonical inputs fail closed without invoking traps or exposing authority', () => {

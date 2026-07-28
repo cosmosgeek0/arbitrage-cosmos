@@ -4,6 +4,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  canonicalJson,
+  stableHash128Hex,
+} from '../dist/foundation/contracts/index.js';
+import {
   VOLUME_PUBLIC_REST_BASE_URL,
   VOLUME_PUBLIC_SOURCE_ID,
   VOLUME_PUBLIC_WEBSOCKET_BASE_URL,
@@ -36,6 +40,103 @@ import {
 } from '../dist/engine/volume/strategyEconomicExitLedger.js';
 
 const NOW_MS = 1_900_000_000_000;
+
+function contentId(prefix, namespace, semantic) {
+  return `${prefix}_${stableHash128Hex(`${namespace}|${canonicalJson(semantic)}`)}`;
+}
+
+function resignSample(source, overrides = {}) {
+  const {
+    sampleId: _sampleId,
+    sampleDigest: _sampleDigest,
+    ...semantic
+  } = structuredClone(source);
+  Object.assign(semantic, overrides);
+  return {
+    sampleId: contentId('vfes', 'volume.forward-exit.sample-id.v1', semantic),
+    sampleDigest: contentId('vfesd', 'volume.forward-exit.sample-digest.v1', semantic),
+    ...semantic,
+  };
+}
+
+function resignDecision(source, overrides = {}) {
+  const {
+    decisionId: _decisionId,
+    decisionDigest: _decisionDigest,
+    exitPlan: sourcePlan,
+    ...sourceBase
+  } = source;
+  const base = {
+    ...sourceBase,
+    ...overrides,
+  };
+  delete base.exitPlan;
+
+  const selectedPlan = Object.hasOwn(overrides, 'exitPlan')
+    ? overrides.exitPlan
+    : sourcePlan;
+  let planCore = null;
+  if (selectedPlan !== null) {
+    const {
+      planId: _planId,
+      decisionId: _planDecisionId,
+      ...sourcePlanCore
+    } = selectedPlan;
+    planCore = {
+      ...sourcePlanCore,
+      sampleId: base.sampleId,
+    };
+  }
+  const semantic = { decision: base, exitPlan: planCore };
+  const nextDecisionId = contentId(
+    'vexitdecision',
+    'volume.economic-exit.decision-id.v1',
+    semantic,
+  );
+  const nextDecisionDigest = contentId(
+    'vexitdecisiond',
+    'volume.economic-exit.decision-digest.v1',
+    semantic,
+  );
+  const exitPlan = planCore === null ? null : {
+    planId: contentId(
+      'vexitplan',
+      'volume.economic-exit.plan.v1',
+      { decisionId: nextDecisionId, ...planCore },
+    ),
+    decisionId: nextDecisionId,
+    ...planCore,
+  };
+  return {
+    decisionId: nextDecisionId,
+    decisionDigest: nextDecisionDigest,
+    ...base,
+    exitPlan,
+  };
+}
+
+function resignedCheckpoint(checkpoint, {
+  sample,
+  decision,
+  localReconciliation,
+}) {
+  const payload = {
+    schema: checkpoint.schema,
+    schemaVersion: checkpoint.schemaVersion,
+    revision: checkpoint.revision,
+    latestSample: sample,
+    latestDecision: decision,
+    localReconciliation,
+  };
+  return {
+    ...payload,
+    checksum: contentId(
+      'vec',
+      'volume.strategy.exit-shadow.checkpoint.v1',
+      payload,
+    ),
+  };
+}
 
 function proposal(tag = 'a') {
   return {
@@ -182,18 +283,21 @@ function scenario(tag = 'a') {
   });
 }
 
-function exitPair(owner, {
+function evaluateExit(owner, {
   evaluatedAtMs,
   sourceRevision,
   previousSample = null,
+  currentObservation = undefined,
 }) {
-  const currentObservation = buildVolumeStrategyObservation(
-    observationInput(owner.entryProposal, evaluatedAtMs, sourceRevision),
-  );
+  const current = currentObservation === undefined
+    ? buildVolumeStrategyObservation(
+      observationInput(owner.entryProposal, evaluatedAtMs, sourceRevision),
+    )
+    : currentObservation;
   const result = evaluateVolumeEconomicExit({
     entryEvaluation: owner.entryEvaluation,
     entryObservation: owner.entryObservation,
-    currentObservation,
+    currentObservation: current,
     policy: owner.policy,
     previousSample,
     evaluatedAtMs,
@@ -203,10 +307,15 @@ function exitPair(owner, {
   });
   assert.ok(result.sample, JSON.stringify(result.decision));
   assert.equal(result.decision.sampleId, result.sample.sampleId);
-  assert.equal(result.decision.disposition, 'HOLD_SHADOW');
-  assert.equal(result.decision.lifecyclePhase, 'HOLDING');
   assert.equal(validateVolumeForwardExitSample(result.sample), true);
   assert.equal(validateVolumeEconomicExitDecision(result.decision), true);
+  return result;
+}
+
+function exitPair(owner, options) {
+  const result = evaluateExit(owner, options);
+  assert.equal(result.decision.disposition, 'HOLD_SHADOW');
+  assert.equal(result.decision.lifecyclePhase, 'HOLDING');
   return result;
 }
 
@@ -356,6 +465,138 @@ test('exit shadow CAS atomically records the sample plus local reconciliation an
   assert.equal(restored.checkpoint.checksum, committed.checkpoint.checksum);
   assert.equal(restarted.snapshot().status, 'AVAILABLE');
   assertLocalOnly(restarted.snapshot().checkpoint.localReconciliation);
+});
+
+test('durable boundary rejects re-signed leaf-valid but cross-invalid sample and decision states', () => {
+  const owner = scenario();
+  const hold = exitPair(owner, {
+    evaluatedAtMs: NOW_MS + 1_000,
+    sourceRevision: 12,
+  });
+  const maxHold = evaluateExit(owner, {
+    evaluatedAtMs: NOW_MS + 60_000,
+    sourceRevision: 13,
+  });
+  assert.equal(maxHold.decision.disposition, 'EXIT_SHADOW');
+  assert.equal(maxHold.decision.primaryReason, 'MAX_HOLD_REACHED');
+  const degraded = evaluateExit(owner, {
+    evaluatedAtMs: NOW_MS + 2_000,
+    sourceRevision: 14,
+    currentObservation: null,
+  });
+  assert.equal(degraded.sample.sourceDisposition, 'DEGRADED');
+  assert.equal(degraded.decision.primaryReason, 'SOURCE_DEGRADED');
+
+  const mismatchedTime = resignDecision(hold.decision, {
+    evaluatedAtMs: hold.decision.evaluatedAtMs + 1,
+  });
+  const prematureMaxHold = resignDecision(maxHold.decision, {
+    sampleId: hold.sample.sampleId,
+    evaluatedAtMs: hold.sample.evaluatedAtMs,
+  });
+  const degradedHold = resignDecision(degraded.decision, {
+    lifecyclePhase: 'HOLDING',
+    disposition: 'HOLD_SHADOW',
+    primaryReason: 'NO_EXIT_TRIGGER',
+    reasonCodes: ['NO_EXIT_TRIGGER'],
+    exitPlan: null,
+  });
+  const probes = [
+    ['decision/sample time mismatch', hold.sample, mismatchedTime],
+    ['premature maximum-hold decision', hold.sample, prematureMaxHold],
+    ['degraded sample represented as holding', degraded.sample, degradedHold],
+  ];
+
+  const validLedger = new FakeExitLedger();
+  const validAdapter = new VolumeEconomicExitLedgerAdapter(validLedger);
+  const validCommit = validAdapter.commit({
+    expected: validAdapter.load(),
+    sample: hold.sample,
+    decision: hold.decision,
+  });
+  assert.equal(validCommit.disposition, 'COMMITTED_NEW');
+  const validSerialized = encodeVolumeEconomicExitCheckpoint(validCommit.checkpoint);
+  assert.deepEqual(
+    decodeVolumeEconomicExitCheckpoint(validSerialized),
+    validCommit.checkpoint,
+  );
+
+  for (const [label, sample, decision] of probes) {
+    assert.equal(
+      validateVolumeForwardExitSample(sample),
+      true,
+      `${label}: sample leaf must remain valid`,
+    );
+    assert.equal(
+      validateVolumeEconomicExitDecision(decision),
+      true,
+      `${label}: decision leaf must remain valid after identity regeneration`,
+    );
+    assert.equal(
+      decision.sampleId,
+      sample.sampleId,
+      `${label}: the probe must cross the old sample-id-only boundary`,
+    );
+
+    const state = { sample, decision };
+    const reconciliation = reconcileVolumeEconomicExitLocal(state, state);
+    assert.equal(reconciliation.status, 'AMBIGUOUS', label);
+    assertLocalOnly(reconciliation);
+
+    const ledger = new FakeExitLedger();
+    const adapter = new VolumeEconomicExitLedgerAdapter(ledger);
+    const rejected = adapter.commit({
+      expected: adapter.load(),
+      sample,
+      decision,
+    });
+    assert.equal(rejected.disposition, 'INVALID_REQUEST', label);
+    assert.equal(rejected.reasonCode, 'VOLUME_EXIT_SHADOW_STATE_INVALID', label);
+    assert.deepEqual(rejected.eventIds, [], label);
+    assert.equal(ledger.casCalls, 0, label);
+    assert.equal(ledger.events.length, 0, label);
+    assert.equal(ledger.value, null, label);
+
+    const resigned = resignedCheckpoint(validCommit.checkpoint, {
+      sample,
+      decision,
+      localReconciliation: reconciliation,
+    });
+    assert.match(resigned.checksum, /^vec_[a-f0-9]{32}$/);
+    assert.equal(
+      decodeVolumeEconomicExitCheckpoint(canonicalJson(resigned)),
+      null,
+      `${label}: recomputed outer checksum must not legalize invalid durable state`,
+    );
+  }
+
+  const downgradedSample = resignSample(hold.sample, {
+    sourceDisposition: 'DEGRADED',
+  });
+  const downgradedDecision = resignDecision(hold.decision, {
+    sampleId: downgradedSample.sampleId,
+  });
+  assert.equal(validateVolumeForwardExitSample(downgradedSample), false);
+  assert.equal(validateVolumeEconomicExitDecision(downgradedDecision), true);
+  const downgradedState = {
+    sample: downgradedSample,
+    decision: downgradedDecision,
+  };
+  assert.equal(
+    reconcileVolumeEconomicExitLocal(downgradedState, downgradedState).status,
+    'AMBIGUOUS',
+  );
+  const downgradedLedger = new FakeExitLedger();
+  const downgradedAdapter = new VolumeEconomicExitLedgerAdapter(downgradedLedger);
+  const downgradedCommit = downgradedAdapter.commit({
+    expected: downgradedAdapter.load(),
+    sample: downgradedSample,
+    decision: downgradedDecision,
+  });
+  assert.equal(downgradedCommit.disposition, 'INVALID_REQUEST');
+  assert.equal(downgradedCommit.reasonCode, 'VOLUME_EXIT_SHADOW_STATE_INVALID');
+  assert.equal(downgradedLedger.casCalls, 0);
+  assert.equal(downgradedLedger.events.length, 0);
 });
 
 test('exact replay writes nothing and a same-revision fork fails before CAS', () => {

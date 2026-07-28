@@ -4,8 +4,7 @@ import {
   stableHash128Hex,
 } from '../../foundation/contracts/index.js';
 import {
-  validateVolumeEconomicExitDecision,
-  validateVolumeForwardExitSample,
+  validateVolumeEconomicExitState,
   type VolumeEconomicExitDecision,
   type VolumeForwardExitSample,
 } from './strategyEconomicExit.js';
@@ -72,8 +71,6 @@ const LEDGER_EVENT_KEYS = Object.freeze([
   'symbol',
   'ts',
 ]);
-const STATE_KEYS = Object.freeze(['decision', 'sample']);
-
 export type VolumeEconomicExitLocalReconciliationStatus =
   | 'EXACT'
   | 'STALE'
@@ -371,23 +368,11 @@ function validCommitDeadline(value: unknown): value is number | undefined {
       && !Object.is(value, -0));
 }
 
-function normalizeSample(value: unknown): Readonly<VolumeForwardExitSample> | null {
-  const snapshot = canonicalSnapshot<VolumeForwardExitSample>(value);
-  return snapshot !== null && validateVolumeForwardExitSample(snapshot) ? snapshot : null;
-}
-
-function normalizeDecision(value: unknown): Readonly<VolumeEconomicExitDecision> | null {
-  const snapshot = canonicalSnapshot<VolumeEconomicExitDecision>(value);
-  return snapshot !== null && validateVolumeEconomicExitDecision(snapshot) ? snapshot : null;
-}
-
 function normalizeState(value: unknown): Readonly<VolumeEconomicExitState> | null {
-  const record = exactRecord(value, STATE_KEYS);
-  if (record === null) return null;
-  const sample = normalizeSample(record.sample);
-  const decision = normalizeDecision(record.decision);
-  if (sample === null || decision === null || decision.sampleId !== sample.sampleId) return null;
-  return Object.freeze({ sample, decision });
+  const snapshot = canonicalSnapshot<VolumeEconomicExitState>(value);
+  return snapshot !== null && validateVolumeEconomicExitState(snapshot)
+    ? snapshot
+    : null;
 }
 
 function sortedUnique(values: readonly string[]): readonly string[] {

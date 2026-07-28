@@ -12,22 +12,36 @@ import {
   BASIS_VALIDATE_ONLY_PLAN_BINDING_SCHEMA,
   DEFAULT_BASIS_VALIDATE_ONLY_CONTROLS,
   bindBasisValidateOnlyPlan,
+  createBasisValidateOnlyCapitalProof,
   isBasisValidateOnlyPlanBinding,
 } from '../../../dist/foundation/execution/basisValidateOnly/planBinding.js';
 import {
+  addExactDecimals,
   assessCapitalTruth,
-  capitalDigest,
-  deriveCapitalMandateId,
-  deriveOpportunityConsiderationId,
+  createSyntheticConservativeEconomicFactBinding,
 } from '../../../dist/capitalFoundation/contracts/index.js';
+import {
+  deriveOpportunityEligibilityPolicyRevision,
+} from '../../../dist/capitalFoundation/opportunities/index.js';
+import {
+  deriveCapitalBudgetPolicyRevision,
+} from '../../../dist/capitalFoundation/budgets/index.js';
+import {
+  createStagedPlanConfiguration,
+} from '../../../dist/capitalFoundation/stages/index.js';
 import {
   createExecutionPlanDefinition,
 } from '../../../dist/foundation/execution/plan.js';
 import {
   deriveRiskIntentDigest,
 } from '../../../dist/foundation/risk/index.js';
+import {
+  BasisHandoffLifecycle,
+} from '../../../dist/engine/basis/lifecycle.js';
 
 const NOW = 1_900_000_000_000;
+const CAPITAL_AT = NOW - 1_000;
+const ACCEPTED_REVISION_AT = CAPITAL_AT - 100;
 const DAY_MS = 86_400_000;
 const DAY_START = Math.floor(NOW / DAY_MS) * DAY_MS;
 const SYMBOL = 'BTCUSDT';
@@ -35,7 +49,6 @@ const ACCOUNT = 'm1-i1-validate-only';
 const PROPOSAL_ID = 'bp_m1_i1_accepted';
 const CANONICAL_PROPOSAL_ID = 'cprop_m1_i1_accepted';
 const PROPOSAL_CORRELATION_ID = 'basis:m1-i1:accepted';
-const ELIGIBILITY_POLICY_REVISION = 'capital-eligibility:m1-i1';
 
 let networkAttempts = 0;
 const originalFetch = globalThis.fetch;
@@ -108,7 +121,7 @@ function approvedRiskInput(plan) {
         venue: 'BINANCE_SPOT',
         symbol: SYMBOL,
         side: 'BUY',
-        intendedPrice: 100,
+        intendedPrice: 30,
         intendedQty: plan.openingLegs.SPOT.quantity,
         requiredPermission: 'SPOT',
         positionBucket: 'SPOT_CASH',
@@ -119,15 +132,15 @@ function approvedRiskInput(plan) {
         venue: 'BINANCE_USDM',
         symbol: SYMBOL,
         side: 'SELL',
-        intendedPrice: 100,
+        intendedPrice: 30,
         intendedQty: plan.openingLegs.PERP.quantity,
         requiredPermission: 'FUTURES',
         positionBucket: 'USDM_ONE_WAY',
-        estimatedRequiredMarginUsd: 100,
+        estimatedRequiredMarginUsd: 30,
       },
     ],
     declaredMaxNakedDurationMs: plan.maxNakedDurationMs,
-    estimatedRequiredMarginUsd: 100,
+    estimatedRequiredMarginUsd: 30,
     requiredBorrowUsd: 0,
   };
   const intentDigest = deriveRiskIntentDigest(intent);
@@ -163,7 +176,7 @@ function approvedRiskInput(plan) {
           legKey: 'SPOT_OPEN',
           venue: 'BINANCE_SPOT',
           symbol: SYMBOL,
-          referencePrice: 100,
+          referencePrice: 30,
           observedAt: stamp('binance.spot.book'),
           spreadPct: 0.01,
           topDepthUsd: 10_000,
@@ -173,7 +186,7 @@ function approvedRiskInput(plan) {
           legKey: 'PERP_OPEN',
           venue: 'BINANCE_USDM',
           symbol: SYMBOL,
-          referencePrice: 100,
+          referencePrice: 30,
           observedAt: stamp('binance.usdm.book'),
           spreadPct: 0.01,
           topDepthUsd: 10_000,
@@ -237,8 +250,8 @@ function approvedRiskInput(plan) {
         symbol: SYMBOL,
         intentDigest,
         projectedSignedBaseQty: -1,
-        markPrice: 100,
-        liquidationPrice: 150,
+        markPrice: 30,
+        liquidationPrice: 45,
         observedAt: stamp('risk.liquidation-projection'),
       }],
       dailyRealizedLossUsd: 0,
@@ -291,24 +304,86 @@ function approvedRiskInput(plan) {
   };
 }
 
-function makeCapitalProof({
-  sourceRevisionTs = NOW - 100,
-  evaluatedAtMs = NOW - 30,
-  proposalExpiresAtMs = NOW + 6_000,
-  mandateExpiresAtMs = proposalExpiresAtMs,
-  mode = 'VALIDATE_ONLY',
-  requestedCapital = '100',
-  expectedNetEdge = '0.5',
-  spotPriceExact = '100',
-  spotQuantityExact = '1',
-  perpPriceExact = '100',
-  perpQuantityExact = '1',
-} = {}) {
-  const intakeDigest = capitalDigest({
-    sourceProposalId: PROPOSAL_ID,
-    sourceRevisionTs,
-    canonicalProposalId: CANONICAL_PROPOSAL_ID,
+function deepFreeze(value) {
+  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  for (const child of Object.values(value)) deepFreeze(child);
+  return Object.freeze(value);
+}
+
+function capitalTruth(sourceId, evaluatedAtMs = CAPITAL_AT, overrides = {}) {
+  return assessCapitalTruth({
+    source: {
+      sourceTimeMs: evaluatedAtMs - 10,
+      receivedAtMs: evaluatedAtMs - 5,
+      maxAgeMs: 20_000,
+      authority: 'SYNTHETIC_TEST',
+      completeness: 'COMPLETE',
+      sourceId,
+      ...(overrides.source ?? {}),
+    },
+    evaluatedAtMs,
+    requiredValuePresent: true,
+    revision: `truth:${sourceId}`,
+    ...(overrides.assessment ?? {}),
   });
+}
+
+function economicFact(kind, value, sourceId, acceptedRevisionAt) {
+  const expectedBorrowScope = {
+    accountId: ACCOUNT,
+    symbol: SYMBOL,
+    asset: 'BTC',
+    mode: 'CROSS_CLASSIC',
+    permissionId: 'synthetic-no-borrow',
+  };
+  return createSyntheticConservativeEconomicFactBinding({
+    kind,
+    scope: {
+      proposalId: PROPOSAL_ID,
+      proposalRevision: null,
+      proposalUpdatedAtMs: acceptedRevisionAt,
+      proposalConfigRevision: 'basis-config:m1-i1',
+      correlationId: PROPOSAL_CORRELATION_ID,
+      strategy: 'BASIS',
+      symbol: SYMBOL,
+      instrumentIds: [`${SYMBOL}:PERP`, `${SYMBOL}:SPOT`],
+      ownerRecordId: `${sourceId}:record`,
+      ownerConfigRevision: 'basis-config:m1-i1',
+    },
+    borrowScope: kind === 'BORROW'
+      ? {
+          ...expectedBorrowScope,
+          truthEvaluatedAtMs: CAPITAL_AT - 10,
+          truthExpiresAtMs: CAPITAL_AT + 10_000,
+        }
+      : null,
+    value,
+    unit: 'USDT',
+    source: {
+      sourceTimeMs: CAPITAL_AT - 10,
+      receivedAtMs: CAPITAL_AT - 5,
+      maxAgeMs: 20_000,
+      authority: 'SYNTHETIC_TEST',
+      completeness: 'COMPLETE',
+      sourceId,
+    },
+    ownerRevision: `${sourceId}:r1`,
+    completeness: 'COMPLETE',
+    evidenceIds: [`${sourceId}:e1`],
+  });
+}
+
+function eligibilityCandidate({
+  acceptedRevisionAt = ACCEPTED_REVISION_AT,
+  requestedCapital = '100',
+} = {}) {
+  const expectedBorrowScope = {
+    accountId: ACCOUNT,
+    symbol: SYMBOL,
+    asset: 'BTC',
+    mode: 'CROSS_CLASSIC',
+    permissionId: 'synthetic-no-borrow',
+  };
   const proposal = {
     sourceProposalId: PROPOSAL_ID,
     canonicalProposalId: CANONICAL_PROPOSAL_ID,
@@ -317,115 +392,346 @@ function makeCapitalProof({
     symbol: SYMBOL,
     direction: 'long_spot_short_perp',
     sourceLifecycle: 'OPEN',
-    sourceRevision: String(sourceRevisionTs),
+    sourceRevision: null,
     sourceConfigRevision: 'basis-config:m1-i1',
-    createdAtMs: sourceRevisionTs - 100,
-    updatedAtMs: sourceRevisionTs,
-    expiresAtMs: proposalExpiresAtMs,
-    intakeDigest,
+    createdAtMs: acceptedRevisionAt - 100,
+    updatedAtMs: acceptedRevisionAt,
+    expiresAtMs: CAPITAL_AT + 10_000,
+    intakeDigest: 'intake_m1_i1_accepted',
   };
-  const considerationId = deriveOpportunityConsiderationId({
-    proposalId: proposal.sourceProposalId,
-    proposalRevision: proposal.sourceRevision,
-    intakeDigest,
-    policyRevision: ELIGIBILITY_POLICY_REVISION,
-  });
-  const truth = assessCapitalTruth({
-    source: {
-      sourceTimeMs: evaluatedAtMs - 10,
-      receivedAtMs: evaluatedAtMs - 5,
-      maxAgeMs: 1_000,
-      authority: 'SYNTHETIC_TEST',
-      completeness: 'COMPLETE',
-      sourceId: 'capital.consideration:m1-i1',
-    },
-    evaluatedAtMs,
-    requiredValuePresent: true,
-    revision: 'capital-truth:m1-i1',
-  });
-  const consideration = Object.freeze({
-    id: considerationId,
-    proposal,
-    mode,
-    status: 'ELIGIBLE',
-    reasons: [],
-    legs: [
-      {
-        role: 'SPOT',
-        instrumentId: `${SYMBOL}:SPOT`,
-        symbol: SYMBOL,
-        side: 'LONG',
-        borrowRequired: false,
+  return {
+    intake: {
+      proposal,
+      economics: {
+        valuationAsset: 'USDT',
+        requestedCapital,
+        expectedGrossEdge: '0.5',
+        expectedNetEdge: '0.5',
+        estimatedFees: '0',
+        estimatedFunding: '0',
+        estimatedBorrowCost: '0',
+        estimatedSpreadCost: '0',
+        estimatedSlippage: '0',
+        estimatedLatencyCost: '0',
+        estimatedAdverseSelectionCost: '0',
+        estimatedRecoveryCost: '0',
+        estimatedCapitalOpportunityCost: '0',
+        liquidityCapacity: requestedCapital,
+        expectedBorrowScope,
+        fundingFact: economicFact(
+          'FUNDING',
+          '0',
+          'capital.synthetic.funding',
+          acceptedRevisionAt,
+        ),
+        borrowFact: economicFact(
+          'BORROW',
+          '0',
+          'capital.synthetic.borrow',
+          acceptedRevisionAt,
+        ),
+        capitalOpportunityFact: economicFact(
+          'CAPITAL_OPPORTUNITY',
+          '0',
+          'capital.synthetic.opportunity',
+          acceptedRevisionAt,
+        ),
+        exactSourceIds: ['capital.synthetic:m1-i1'],
+        missingFields: [],
       },
-      {
-        role: 'PERPETUAL',
-        instrumentId: `${SYMBOL}:PERP`,
-        symbol: SYMBOL,
-        side: 'SHORT',
-        borrowRequired: false,
+      truth: capitalTruth('capital.synthetic.intake'),
+      lossReport: {
+        omittedFields: ['netEdgePct', 'confidence', 'evidence'],
+        missingSourceFields: ['sourceRevision'],
+        translationReasons: [
+          'SOURCE_REVISION_NOT_EXPORTED',
+          'UPSTREAM_FLOATING_FINANCIAL_FIELDS_OMITTED',
+        ],
+        financialNumbersAccepted: false,
       },
-    ],
-    economics: {
-      valuationAsset: 'USDT',
-      requestedCapital,
-      expectedGrossEdge: expectedNetEdge,
-      expectedNetEdge,
-      estimatedFees: '0',
-      estimatedFunding: '0',
-      estimatedBorrowCost: '0',
-      estimatedSpreadCost: '0',
-      estimatedSlippage: '0',
-      estimatedLatencyCost: '0',
-      estimatedAdverseSelectionCost: '0',
-      estimatedRecoveryCost: '0',
-      estimatedCapitalOpportunityCost: '0',
-      liquidityCapacity: requestedCapital,
-      expectedBorrowScope: null,
-      fundingFact: null,
-      borrowFact: null,
-      capitalOpportunityFact: null,
-      exactSourceIds: ['capital.synthetic:m1-i1'],
-      missingFields: [],
     },
-    evidencePacketIds: [],
-    evidenceTruth: 'COMPLETE',
-    truth,
-    conflictingConsiderationIds: [],
-    evaluatedAtMs,
-  });
-  const mandateSeed = {
-    considerationId,
-    allocationDecisionId: 'calloc_m1_i1_validate_only',
-    reservationId: 'cres_m1_i1_validate_only',
-    proposalIntakeDigest: intakeDigest,
+    structure: {
+      kind: 'BASIS_TWO_LEG',
+      spotInstrumentId: `${SYMBOL}:SPOT`,
+      perpetualInstrumentId: `${SYMBOL}:PERP`,
+    },
+    requiredEvidenceIds: [],
+    evidenceReferences: [],
+    thesisReference: null,
+    conflictScope: { exclusiveCapitalClaimIds: [] },
   };
-  const mandateSemantic = {
-    id: deriveCapitalMandateId(mandateSeed),
-    revision: 1,
-    considerationId,
-    allocationDecisionId: mandateSeed.allocationDecisionId,
-    reservationId: mandateSeed.reservationId,
-    stagedPlanId: 'cstage_m1_i1_validate_only',
-    stagedPlanRevision: 1,
-    stagedPlanDigest: capitalDigest({ stagedPlan: 'm1-i1', requestedCapital }),
-    proposalIntakeDigest: intakeDigest,
-    configRevision: 'cfg_capital_m1_i1_validate_only',
-    approvalId: null,
-    riskDecision: null,
-    targetMaximumExposure: requestedCapital,
+}
+
+function eligibilityPolicy() {
+  const draft = {
+    authority: {
+      revision: 'pending-content-address',
+      sourceId: 'capital.synthetic.eligibility-policy',
+      issuedAtMs: CAPITAL_AT - 2_000,
+      effectiveFromMs: CAPITAL_AT - 1_000,
+      effectiveUntilMs: CAPITAL_AT + 20_000,
+    },
+    acceptedProposalConfigRevisions: {
+      BASIS: ['basis-config:m1-i1'],
+      VOLUME: ['volume-config:unused'],
+    },
+    acceptedEvidenceConfigRevisions: {
+      BASIS: ['evidence-config:m1-i1'],
+      VOLUME: ['evidence-config:unused'],
+    },
+    evidenceRequirement: { BASIS: 'OPTIONAL', VOLUME: 'OPTIONAL' },
+    basisMode: 'MANUAL_ARMED',
+    volumeMode: 'ADVISORY',
+  };
+  return {
+    ...draft,
+    authority: {
+      ...draft.authority,
+      revision: deriveOpportunityEligibilityPolicyRevision(draft),
+    },
+  };
+}
+
+const exactBound = (value, maximum = '1000') => ({
+  value,
+  minimum: '0',
+  maximum,
+  unit: 'USDT',
+});
+const integerBound = (value, maximum, unit = 'COUNT') => ({
+  value,
+  minimum: 0,
+  maximum,
+  unit,
+});
+
+function allocationPolicy() {
+  const draft = {
+    authority: {
+      revision: 'pending-content-address',
+      sourceId: 'capital.synthetic.allocation-policy',
+      issuedAtMs: CAPITAL_AT - 2_000,
+      effectiveFromMs: CAPITAL_AT - 1_000,
+      effectiveUntilMs: CAPITAL_AT + 20_000,
+    },
     valuationAsset: 'USDT',
-    createdAtMs: evaluatedAtMs,
-    expiresAtMs: mandateExpiresAtMs,
+    portfolioGrossLimit: exactBound('1000'),
+    portfolioNetLimit: exactBound('500'),
+    perStrategyLimits: {
+      BASIS: exactBound('500'),
+      VOLUME: exactBound('100'),
+    },
+    perSymbolLimit: exactBound('500'),
+    perCorrelatedGroupLimit: exactBound('500'),
+    perVenueInstrumentLimit: exactBound('500'),
+    riskReductionReserve: exactBound('20'),
+    maximumConcurrentPlans: integerBound(10, 20),
+    maximumActivePositions: integerBound(10, 20),
+    reservationTtlMs: integerBound(10_000, 20_000, 'MILLISECONDS'),
   };
-  const mandate = Object.freeze({
-    ...mandateSemantic,
-    digest: capitalDigest(mandateSemantic),
+  return {
+    ...draft,
+    authority: {
+      ...draft.authority,
+      revision: deriveCapitalBudgetPolicyRevision(draft),
+    },
+  };
+}
+
+function allocationSnapshot(allocationCap = '80') {
+  return {
+    valuationAsset: 'USDT',
+    truth: capitalTruth('capital.synthetic.budget'),
+    entryCollateralAvailable: allocationCap,
+    protectedRiskReductionReserve: '20',
+    collateralPoolBinding: {
+      sourcePoolId: 'ACCOUNT:USDT:COLLATERAL',
+      sourcePoolTotal: addExactDecimals(allocationCap, '20'),
+      otherUnavailableCollateral: '0',
+    },
+    marginHeadroomAvailable: allocationCap,
+    grossExposureAndCommitments: '0',
+    netDirectionalExposure: '0',
+    strategyUse: [],
+    symbolUse: [],
+    correlatedGroupUse: [],
+    venueInstrumentUse: [],
+    currentConcurrentPlans: 0,
+    currentActivePositions: 0,
+    borrowCapacityByAsset: [{ key: 'BTC', amount: '500' }],
+    liquidityCapacityByKey: [{ key: `${SYMBOL}:SPOT`, amount: '500' }],
+    commitmentCoverage: {
+      orders: 'COMPLETE',
+      reservations: 'COMPLETE',
+      plans: 'COMPLETE',
+      partiallyExposedPositions: 'COMPLETE',
+      activePositions: 'COMPLETE',
+    },
+    commitments: [],
+  };
+}
+
+function allocationTerms(requestedCapital = '100') {
+  return {
+    sizingAuthoritySourceId: 'capital.synthetic.sizing',
+    grossExposureIncrease: requestedCapital,
+    netDirectionalExposureDelta: '0',
+    collateralRequired: requestedCapital,
+    marginRequired: requestedCapital,
+    strategyRequirements: [{ key: 'BASIS', amount: requestedCapital }],
+    symbolRequirements: [{ key: SYMBOL, amount: requestedCapital }],
+    correlatedGroupRequirements: [{ key: 'BTC', amount: requestedCapital }],
+    venueInstrumentRequirements: [{
+      key: `BINANCE:${SYMBOL}:PAIR`,
+      amount: requestedCapital,
+    }],
+    borrowRequired: false,
+    borrowRequirements: [],
+    liquidityRequirements: [{ key: `${SYMBOL}:SPOT`, amount: requestedCapital }],
+  };
+}
+
+function stage(stageName, sequence, maximumTotalExposure, maximumAdditionalExposure, reservationConsumption, next) {
+  const increasing = stageName === 'CONFIRM' || stageName === 'ADD';
+  return {
+    stage: stageName,
+    sequence,
+    maximumAdditionalExposure,
+    maximumTotalExposure,
+    reservationConsumption,
+    prerequisites: increasing
+      ? [{
+          code: `${stageName}_SYNTHETIC_EVIDENCE`,
+          required: true,
+          evidenceMaximumAgeMs: 1_000,
+          detail: 'sealed synthetic fixture evidence',
+        }]
+      : [],
+    economicThesisConditions: increasing ? [`${stageName}_THESIS`] : [],
+    invalidationConditions: increasing ? [`${stageName}_INVALID`] : [],
+    maximumTimeInStageMs: 1_000,
+    requiredApprovalActions: stageName === 'CONFIRM'
+      ? ['OPEN']
+      : stageName === 'ADD'
+        ? ['ADD']
+        : [],
+    requiredFutureGates: increasing
+      ? [
+          'OPERATOR_APPROVAL',
+          'MULTI_LEG_RISK',
+          'FRESH_ACCOUNT_TRUTH',
+          'FRESH_MARKET_EVIDENCE',
+        ]
+      : [],
+    liquidityRequirement: increasing ? '100' : null,
+    maximumNakedLegAmount: increasing ? '5' : '0',
+    maximumNakedLegDurationMs: increasing ? 1_000 : 0,
+    stopAddingConditions: increasing ? [`${stageName}_STOP`] : [],
+    allowedNextStages: next === null ? [] : [next],
+    reductionConditions: stageName === 'REDUCE' ? ['TARGET_REACHED'] : [],
+    cancellableBeforeEntry: true,
+    nextStageConditions: next === null
+      ? []
+      : [{ targetStage: next, conditions: [`${stageName}_TO_${next}`] }],
+    skipConditions: stageName === 'OBSERVE'
+      ? [{
+          targetStage: 'CONFIRM',
+          skippedStages: ['PROBE'],
+          conditions: ['PROBE_NOT_REQUIRED'],
+        }]
+      : [],
+    unenteredCancellationConditions: ['PROPOSAL_EXPIRED'],
+  };
+}
+
+function stagedPlanStages(allocationCap = '80') {
+  const first = String(Math.min(30, Number(allocationCap)));
+  const second = String(Number(allocationCap) - Number(first));
+  return [
+    stage('OBSERVE', 0, '0', '0', '0', 'CONFIRM'),
+    stage('CONFIRM', 1, first, first, first, 'ADD'),
+    stage('ADD', 2, allocationCap, second, second, 'HOLD'),
+    stage('HOLD', 3, allocationCap, '0', '0', 'REDUCE'),
+    stage('REDUCE', 4, first, '0', '0', 'EXIT'),
+    stage('EXIT', 5, '0', '0', '0', null),
+  ];
+}
+
+function stagedPlanConfiguration() {
+  return createStagedPlanConfiguration({
+    sourceId: 'capital.synthetic.staged-plan-policy',
+    issuedAtMs: CAPITAL_AT - 2_000,
+    effectiveFromMs: CAPITAL_AT - 1_000,
+    effectiveUntilMs: CAPITAL_AT + 20_000,
+    maximumPlanExposure: {
+      value: '200',
+      minimum: '0',
+      maximum: '500',
+      unit: 'USDT',
+    },
+    maximumPlanDurationMs: {
+      value: 10_000,
+      minimum: 1,
+      maximum: 20_000,
+      unit: 'MILLISECONDS',
+    },
+    maximumStageDurationMs: {
+      value: 1_000,
+      minimum: 1,
+      maximum: 2_000,
+      unit: 'MILLISECONDS',
+    },
+    maximumEvidenceAgeMs: {
+      value: 1_000,
+      minimum: 1,
+      maximum: 2_000,
+      unit: 'MILLISECONDS',
+    },
+    maximumNakedLegAmount: {
+      value: '5',
+      minimum: '0',
+      maximum: '10',
+      unit: 'USDT',
+    },
+    maximumNakedLegDurationMs: {
+      value: 1_000,
+      minimum: 1,
+      maximum: 2_000,
+      unit: 'MILLISECONDS',
+    },
   });
-  return Object.freeze({
-    consideration,
-    considerationDigest: capitalDigest(consideration),
-    eligibilityPolicyRevision: ELIGIBILITY_POLICY_REVISION,
-    mandate,
+}
+
+function makeCapitalProofInput({
+  acceptedRevisionAt = ACCEPTED_REVISION_AT,
+  requestedCapital = '100',
+  allocationCap = '80',
+  spotPriceExact = '30',
+  spotQuantityExact = '1',
+  perpPriceExact = '30',
+  perpQuantityExact = '1',
+  stagedPlanExpiresAtMs = CAPITAL_AT + 8_000,
+  mandateExpiresAtMs = CAPITAL_AT + 7_000,
+} = {}) {
+  return deepFreeze({
+    eligibilityCandidate: eligibilityCandidate({
+      acceptedRevisionAt,
+      requestedCapital,
+    }),
+    eligibilityPolicy: eligibilityPolicy(),
+    evaluatedAtMs: CAPITAL_AT,
+    allocationPolicy: allocationPolicy(),
+    allocationSnapshot: allocationSnapshot(allocationCap),
+    allocationTerms: allocationTerms(requestedCapital),
+    reservationCommandId: 'capital-reserve:m1-i1',
+    capitalClaimKey: 'basis-validate-only:m1-i1',
+    stagedPlanConfiguration: stagedPlanConfiguration(),
+    stagedPlanStages: stagedPlanStages(allocationCap),
+    stagedPlanActiveStage: 'OBSERVE',
+    stagedPlanExpiresAtMs,
+    stagedPlanBuildCorrelationId: 'capital-stage:m1-i1',
+    mandateExpiresAtMs,
+    mandateBuildCorrelationId: 'capital-mandate:m1-i1',
     spotPriceExact,
     spotQuantityExact,
     perpPriceExact,
@@ -433,26 +739,67 @@ function makeCapitalProof({
   });
 }
 
+function makeCapitalProof(options = {}) {
+  const constructionInput = makeCapitalProofInput(options);
+  const result = createBasisValidateOnlyCapitalProof(constructionInput);
+  assert.equal(result.ok, true, result.code);
+  return { proof: result.proof, constructionInput };
+}
+
+function makeHandoff({
+  acceptedRevisionAt = ACCEPTED_REVISION_AT,
+  acceptedNotionalUsd = 100,
+} = {}) {
+  const acceptance = Object.freeze({
+    proposalId: PROPOSAL_ID,
+    correlationId: PROPOSAL_CORRELATION_ID,
+    symbol: SYMBOL,
+    direction: 'long_spot_short_perp',
+    acceptedBy: 'owner',
+    acceptedTs: acceptedRevisionAt + 25,
+    acceptedRevisionTs: acceptedRevisionAt,
+    acceptedNetEdgePct: 0.5,
+    acceptedNotionalUsd,
+  });
+  const boundAt = acceptedRevisionAt + 50;
+  const lifecycle = new BasisHandoffLifecycle(
+    { now: () => boundAt },
+    {
+      consumeAcceptance(proposalId, observedBoundAt) {
+        assert.equal(proposalId, PROPOSAL_ID);
+        assert.equal(observedBoundAt, boundAt);
+        return { ok: true, acceptance };
+      },
+    },
+    { enabled: true },
+  );
+  const result = lifecycle.consumeAccepted(PROPOSAL_ID);
+  assert.equal(result.ok, true);
+  return result.handoff;
+}
+
 function makeWorld({
-  sourceRevisionTs = NOW - 100,
+  acceptedRevisionAt = ACCEPTED_REVISION_AT,
   proposalMaxAgeMs = 10_000,
   spotQuantity = 1,
   perpQuantity = 1,
   requestedCapital = '100',
   acceptedNotionalUsd = Number(requestedCapital),
+  allocationCap = '80',
   capitalOptions = {},
   inputOverrides = {},
 } = {}) {
-  const capital = makeCapitalProof({
-    sourceRevisionTs,
+  const { proof: capital, constructionInput } = makeCapitalProof({
+    acceptedRevisionAt,
     requestedCapital,
+    allocationCap,
     spotQuantityExact: String(spotQuantity),
     perpQuantityExact: String(perpQuantity),
     ...capitalOptions,
   });
   const proposal = {
     canonicalProposalId: CANONICAL_PROPOSAL_ID,
-    observedAtMs: sourceRevisionTs,
+    observedAtMs: acceptedRevisionAt,
     maxAgeMs: proposalMaxAgeMs,
     expiresAtMs: capital.consideration.proposal.expiresAtMs,
   };
@@ -470,26 +817,7 @@ function makeWorld({
       evaluationInput: approvedRiskInput(base),
     },
   });
-  const handoff = Object.freeze({
-    handoffId: `bh_${PROPOSAL_ID}`,
-    proposalId: PROPOSAL_ID,
-    correlationId: PROPOSAL_CORRELATION_ID,
-    symbol: SYMBOL,
-    direction: 'long_spot_short_perp',
-    acceptedBy: 'owner',
-    acceptedTs: sourceRevisionTs + 50,
-    acceptedRevisionTs: sourceRevisionTs,
-    acceptedNetEdgePct: 0.5,
-    acceptedNotionalUsd,
-    boundTs: sourceRevisionTs + 60,
-    state: 'AWAITING_FEEDBACK',
-    terminalKind: null,
-    terminalTs: null,
-    cumulativeFilledQuantity: null,
-    lastSequence: null,
-    lastObservedAtMs: null,
-    ambiguousObservations: 0,
-  });
+  const handoff = makeHandoff({ acceptedRevisionAt, acceptedNotionalUsd });
   return {
     input: {
       handoff,
@@ -500,6 +828,7 @@ function makeWorld({
     },
     handoff,
     capital,
+    capitalConstructionInput: constructionInput,
     planInput,
   };
 }
@@ -553,7 +882,7 @@ test('acceptance, acceptedBy, and T-3 labels never substitute for canonical Capi
   assert.equal(result.actionAuthority, 'NONE');
 });
 
-test('missing, unfrozen, stale, and mismatched canonical Capital proof fails closed', () => {
+test('missing, unfrozen, self-minted, and mismatched Capital graphs fail closed', () => {
   const { input, capital } = makeWorld();
   assert.equal(
     bindBasisValidateOnlyPlan({ ...input, capital: null }, enabledControls()).code,
@@ -580,15 +909,16 @@ test('missing, unfrozen, stale, and mismatched canonical Capital proof fails clo
     ).code,
     'CAPITAL_PROOF_INVALID',
   );
-  const manualCapital = makeCapitalProof({ mode: 'MANUAL_ARMED' });
+  const selfMinted = deepFreeze(structuredClone(capital));
   assert.equal(
     bindBasisValidateOnlyPlan(
-      { ...input, capital: manualCapital },
+      { ...input, capital: selfMinted },
       enabledControls(),
     ).code,
-    'AUTHORITY_INVALID',
+    'CAPITAL_PROOF_INVALID',
+    'content-equal frozen data has no canonical producer provenance',
   );
-  const expiredCapital = makeCapitalProof({ mandateExpiresAtMs: NOW });
+  const { proof: expiredCapital } = makeCapitalProof({ mandateExpiresAtMs: NOW });
   assert.equal(
     bindBasisValidateOnlyPlan(
       { ...input, capital: expiredCapital },
@@ -598,9 +928,35 @@ test('missing, unfrozen, stale, and mismatched canonical Capital proof fails clo
   );
 });
 
+test('proof construction requires the synthetic MANUAL_ARMED Capital dialect and forbids LIVE_PRIVATE', () => {
+  const livePrivate = structuredClone(makeCapitalProofInput());
+  livePrivate.eligibilityCandidate.intake.truth.source.authority = 'LIVE_PRIVATE';
+  const privateResult = createBasisValidateOnlyCapitalProof(deepFreeze(livePrivate));
+  assert.deepEqual(privateResult, { ok: false, code: 'AUTHORITY_INVALID' });
+
+  const validateOnlyDialect = structuredClone(makeCapitalProofInput());
+  validateOnlyDialect.eligibilityPolicy.basisMode = 'VALIDATE_ONLY';
+  const validateOnlyResult = createBasisValidateOnlyCapitalProof(
+    deepFreeze(validateOnlyDialect),
+  );
+  assert.deepEqual(validateOnlyResult, { ok: false, code: 'AUTHORITY_INVALID' });
+
+  const { input, planInput } = makeWorld();
+  const privateRisk = structuredClone(planInput);
+  privateRisk.normalBasis.evaluationInput.approval.observedAt.authority =
+    'LIVE_PRIVATE';
+  assert.equal(
+    bindBasisValidateOnlyPlan(
+      { ...input, planInput: privateRisk },
+      enabledControls(),
+    ).code,
+    'AUTHORITY_INVALID',
+  );
+});
+
 test('stale accepted revision and non-current risk evaluation are rejected', () => {
   const stale = makeWorld({
-    sourceRevisionTs: NOW - 20_000,
+    acceptedRevisionAt: NOW - 20_000,
     proposalMaxAgeMs: 1_000,
   });
   assert.equal(
@@ -629,12 +985,15 @@ test('stale accepted revision and non-current risk evaluation are rejected', () 
 });
 
 test('canonical exact quantities must round-trip through frozen P2 number terms', () => {
-  const { input, capital, planInput } = makeWorld();
+  const { input, planInput } = makeWorld();
   for (const hostile of ['01', '1.0', '1e0', '0.10000000000000001']) {
+    const { proof: hostileCapital } = makeCapitalProof({
+      spotQuantityExact: hostile,
+    });
     const result = bindBasisValidateOnlyPlan(
       {
         ...input,
-        capital: Object.freeze({ ...capital, spotQuantityExact: hostile }),
+        capital: hostileCapital,
       },
       enabledControls(),
     );
@@ -660,12 +1019,66 @@ test('canonical exact quantities must round-trip through frozen P2 number terms'
   const overCapital = makeWorld({
     requestedCapital: '10',
     acceptedNotionalUsd: 10,
+    allocationCap: '10',
   });
   assert.equal(
     bindBasisValidateOnlyPlan(overCapital.input, enabledControls()).code,
     'PROVENANCE_MISMATCH',
     'each exact leg notional must remain within the accepted canonical Capital ceiling',
   );
+});
+
+test('canonical allocation may narrow requested Capital and exact leg notionals cannot exceed it', () => {
+  const narrowed = makeWorld({
+    requestedCapital: '100',
+    acceptedNotionalUsd: 100,
+    allocationCap: '80',
+  });
+  assert.equal(narrowed.capital.consideration.economics.requestedCapital, '100');
+  assert.equal(narrowed.capital.allocationDecision.status, 'CAPPED');
+  assert.equal(narrowed.capital.allocationDecision.grantedAmount, '80');
+  assert.equal(narrowed.capital.mandate.targetMaximumExposure, '80');
+  assert.equal(bindBasisValidateOnlyPlan(narrowed.input, enabledControls()).ok, true);
+});
+
+test('hostile scalar graphs always return typed refusals instead of throwing', () => {
+  const { input, handoff, planInput } = makeWorld();
+  const hostileHandoffs = [
+    Object.freeze({ ...handoff, acceptedNetEdgePct: Number.NaN }),
+    Object.freeze({ ...handoff, acceptedNotionalUsd: Number.POSITIVE_INFINITY }),
+    Object.freeze({ ...handoff, acceptedBy: 7 }),
+    Object.freeze({ ...handoff, handoffId: 'bh_wrong' }),
+  ];
+  for (const candidate of hostileHandoffs) {
+    assert.doesNotThrow(() => {
+      const result = bindBasisValidateOnlyPlan(
+        { ...input, handoff: candidate },
+        enabledControls(),
+      );
+      assert.equal(result.ok, false);
+      assert.equal(typeof result.code, 'string');
+    });
+  }
+
+  const hostilePlan = structuredClone(planInput);
+  hostilePlan.normalBasis.evaluationInput.intent.accountId = Number.NaN;
+  assert.doesNotThrow(() => {
+    const result = bindBasisValidateOnlyPlan(
+      { ...input, planInput: hostilePlan },
+      enabledControls(),
+    );
+    assert.equal(result.ok, false);
+  });
+
+  const hostileCapitalInput = structuredClone(makeCapitalProofInput());
+  hostileCapitalInput.eligibilityCandidate.intake.proposal.sourceLifecycle = 7;
+  assert.doesNotThrow(() => {
+    const result = createBasisValidateOnlyCapitalProof(
+      deepFreeze(hostileCapitalInput),
+    );
+    assert.equal(result.ok, false);
+    assert.equal(typeof result.code, 'string');
+  });
 });
 
 test('hostile accessors and Proxies are rejected without invocation', () => {
@@ -715,10 +1128,22 @@ test('hostile accessors and Proxies are rejected without invocation', () => {
   assert.equal(proxyTraps, 0);
 });
 
-test('valid synthetic input binds exactly four immutable steps and remains non-fireable', () => {
-  const { input } = makeWorld();
+test('valid canonical owner graph binds exactly four immutable steps and remains non-fireable', () => {
+  const { input, handoff, capital } = makeWorld();
   const result = bindBasisValidateOnlyPlan(input, enabledControls());
   assert.equal(result.ok, true);
+  assert.equal(capital.consideration.mode, 'MANUAL_ARMED');
+  assert.equal(capital.consideration.evidenceTruth, 'UNKNOWN');
+  assert.deepEqual(
+    capital.consideration.reasons,
+    ['PROPOSAL_OPEN', 'PROPOSAL_REVISION_UNKNOWN'],
+  );
+  assert.equal(capital.consideration.proposal.sourceRevision, null);
+  assert.equal(
+    capital.consideration.proposal.updatedAtMs,
+    handoff.acceptedRevisionTs,
+  );
+  assert.equal(handoff.handoffId, `bh_${handoff.proposalId}`);
   const binding = result.binding;
   assert.equal(binding.schema, BASIS_VALIDATE_ONLY_PLAN_BINDING_SCHEMA);
   assert.match(binding.bindingId, /^bvopb1_[0-9a-f]{32}$/);
@@ -732,8 +1157,8 @@ test('valid synthetic input binds exactly four immutable steps and remains non-f
     killSwitchEngaged: false,
   });
   assert.equal(Object.isFrozen(binding.validatedControls), true);
-  assert.equal(binding.spotNotionalUsdExact, '100');
-  assert.equal(binding.perpNotionalUsdExact, '100');
+  assert.equal(binding.spotNotionalUsdExact, '30');
+  assert.equal(binding.perpNotionalUsdExact, '30');
   assert.equal(binding.plan.mode, 'VALIDATE_ONLY');
   assert.deepEqual(
     binding.plan.normalBasisBinding.stepOrder,

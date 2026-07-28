@@ -189,7 +189,10 @@ html body .hdr .topbar-suite-v4 > button[data-topbar-key="basisu"] .rail-icon-co
   }
 
   html body .hdr .hdr-in > .tb-left > .topbar-search {
+    flex: 1 1 auto !important;
     width: 100% !important;
+    max-width: none !important;
+    margin-right: 0 !important;
   }
 
   html body .hdr .hdr-in > .hdr-right {

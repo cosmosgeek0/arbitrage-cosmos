@@ -1,0 +1,93 @@
+{
+  "schema": "S1BSpotTrendResearchStopReceiptV1",
+  "candidateId": "btc-usdt-equal-weight-pma-1-2-4-10-20w:v1",
+  "prevalidationCommit": "2ab74dbf4b1cb8c3b4d65499343dcb8d162c9c99",
+  "planSha256": "de4ee4e29ad0c7345416ab3212385187e4e6fde3d3c3d35d7c0ec4aeaf9e809f",
+  "scriptSha256": "95e00d15e63d50852d28abd8b100aa46c33c1ce0e4a422eb986586445ca6f24e",
+  "researchManifestSha256": "0ee21a59ecc0d078f34e9240832c503c15fbbff342880525887f30bd6935e14b",
+  "fullResearchArtifact": {
+    "path": "/private/tmp/cosmos-s1b-pma-v1/research-candidate.json",
+    "sha256": "58cd38ab160b17a78db5daf555d77774f3364b492d0f00ce6621ce66fe19566e"
+  },
+  "partition": {
+    "warmupStartUtc": "2021-02-01",
+    "evaluationStartUtc": "2021-07-01",
+    "evaluationEndUtcInclusive": "2024-06-30",
+    "calendarDays": 1096,
+    "nonOverlappingSevenDayBlocks": 156,
+    "nonOverlapping28DayBlocks": 39
+  },
+  "denomination": {
+    "ledgerAsset": "USDT",
+    "usdEquivalentAssumption": "1_USDT_EQUALS_1_USD",
+    "depegRiskModeled": false
+  },
+  "base": {
+    "feeBpsPerFill": "10",
+    "adverseExecutionBpsPerFill": "10",
+    "fundingUsd": "0",
+    "periodNetUsdPer1k": "613.2827922554132734",
+    "meanDailyNetUsdPer1k": "0.60469514792429972163060949995274365832751738295584",
+    "annualizedExpectedNetUsdPer1k": "246.8832325509926584993100381926764802775066307373",
+    "primary28DayBootstrap95": {
+      "lowerMeanDailyUsdPer1k": "-0.64142576262571510510105662218911609041074881004531",
+      "pointMeanDailyUsdPer1k": "0.60469514792429972163060949995274365832751738295584",
+      "upperMeanDailyUsdPer1k": "1.9344309088219305642618673587694170146668164866932",
+      "replicates": 4096,
+      "seed": "150102180831"
+    },
+    "sevenDaySensitivity95": {
+      "lowerMeanDailyUsdPer1k": "-0.534998854058220641741028456317940173804628160176",
+      "upperMeanDailyUsdPer1k": "1.7662405032475257472824127896709126533583835241149"
+    },
+    "maximumDailyCloseDrawdownPct": "53.906294694718370896792327594275660024413556642199",
+    "maximumDailyCloseDrawdownUsd": "819.7156533310139367",
+    "longestUnderwaterDays": 859,
+    "activeDays": 856,
+    "nonTerminalTransitionDays": 396,
+    "distinctOrganicExitDays": 203,
+    "stateChangingFills": 570,
+    "modeledCostUsd": "198.2727016000867266",
+    "maxAggregateParticipationBps": "0.011215716069702931069833630873910313513739184161314",
+    "capacityScreenPassed": true,
+    "fillsSha256": "d18ee7a69f9f72dd09402df9899a0813f3cb350250d38ae3c007d1a3e190f04f"
+  },
+  "stress": {
+    "feeBpsPerFill": "10",
+    "adverseExecutionBpsPerFill": "20",
+    "periodNetUsdPer1k": "497.3781963861692988",
+    "annualizedExpectedNetUsdPer1k": "216.7560419120858842563598418289921300415797742101",
+    "maximumDailyCloseDrawdownPct": "55.42640011425036454632620368362958848853785387946",
+    "modeledCostUsd": "277.6769879996307012",
+    "capacityScreenPassed": true,
+    "fillsSha256": "ac72cb06f7bf8263a7859ee428023f142ca533490e2bda8b659203d0438d23b2"
+  },
+  "severe": {
+    "feeBpsPerFill": "10",
+    "adverseExecutionBpsPerFill": "50",
+    "periodNetUsdPer1k": "224.958612206946579",
+    "annualizedExpectedNetUsdPer1k": "139.3138737518522721882857030258645291700434841931",
+    "maximumDailyCloseDrawdownPct": "59.414242961071809173051645540638201645268744909147",
+    "modeledCostUsd": "460.963256154853421",
+    "fillsSha256": "22647004f3bf02a4e933b763d870934b365b891d926cb832700b5bea0242907b"
+  },
+  "researchGate": {
+    "passed": false,
+    "failedChecks": ["drawdownWithinCap"],
+    "predeclaredMaximumDrawdownPct": "40"
+  },
+  "validation": {
+    "candidateFixtureCreated": false,
+    "authorizationFixtureCreated": false,
+    "dataAcquired": false,
+    "opened": false,
+    "claim": "NO_VALIDATION_OR_OUT_OF_SAMPLE_RESULT"
+  },
+  "verdict": {
+    "label": "NO_GO",
+    "crediblePositiveSubsets": 0,
+    "testedPointEstimatePositive": true,
+    "profitability": "UNKNOWN",
+    "reason": "PREDECLARED_RESEARCH_DRAWDOWN_STOP_AND_PRIMARY_INTERVAL_CROSSES_ZERO"
+  }
+}

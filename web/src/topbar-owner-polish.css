@@ -1,0 +1,276 @@
+/*
+ * Owner-directed chrome polish.
+ *
+ * This isolated layer intentionally leaves the accepted Execution Control and
+ * Appearance sheet layouts untouched. It only normalizes navigation chrome and
+ * fixes measured layout defects in the other operator sheets.
+ */
+
+.smenu-bar.topbar-suite-v4 {
+  --owner-rail-ink: color-mix(in srgb, var(--text) 70%, var(--panel));
+  --owner-rail-ink-strong: var(--text);
+}
+
+html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button[data-topbar-key],
+html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button[data-topbar-key]:hover,
+html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button[data-topbar-key].on {
+  --rail-tone: var(--owner-rail-ink) !important;
+  border-color: transparent !important;
+  color: var(--owner-rail-ink) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button[data-topbar-key]:is(:hover, :focus-visible, .on) {
+  color: var(--owner-rail-ink-strong) !important;
+  background: var(--hover) !important;
+}
+
+html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button[data-topbar-key]::after {
+  right: 10px !important;
+  bottom: -2px !important;
+  left: 10px !important;
+  height: 1px !important;
+  background: currentColor !important;
+  box-shadow: none !important;
+  animation: none !important;
+}
+
+html body .hdr .hdr-right > .smenu-bar.topbar-suite-v4 > button[data-topbar-key]:is(:hover, .on)::after {
+  opacity: .42 !important;
+  transform: none !important;
+}
+
+/* Purpose-built monochrome line glyphs replace the colored rail artwork.
+   The original marks remain untouched inside their opened sheets. */
+html body .hdr .topbar-suite-v4 > button[data-topbar-key] .rail-icon-core {
+  color: inherit !important;
+  box-shadow: none !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+html body .hdr .topbar-suite-v4 > button[data-topbar-key] .rail-icon-core > :is(img, svg) {
+  opacity: 0 !important;
+  filter: none !important;
+  transform: none !important;
+}
+
+html body .hdr .topbar-suite-v4 > button[data-topbar-key] .rail-icon-core::before,
+html body .hdr .topbar-suite-v4 > button[data-topbar-key="clock"] .clock-command-pill::before {
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  background: currentColor;
+  content: "";
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+}
+
+html body .hdr .topbar-suite-v4 > button[data-topbar-key="shell"] .rail-icon-core::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6.5 18h10a4.5 4.5 0 0 0 .7-8.95A6 6 0 0 0 5.7 10.8 3.6 3.6 0 0 0 6.5 18Zm2-6 2 2-2 2m4 0h3' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6.5 18h10a4.5 4.5 0 0 0 .7-8.95A6 6 0 0 0 5.7 10.8 3.6 3.6 0 0 0 6.5 18Zm2-6 2 2-2 2m4 0h3' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+html body .hdr .topbar-suite-v4 > button[data-topbar-key="apikey"] .rail-icon-core::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.8 14.2a4 4 0 1 1-1.9-1.9L18.5 1.8l3.7 3.7-2.1 2.1-1.5-1.5-2.1 2.1 1.5 1.5-2.1 2.1-1.5-1.5-4.6 3.9Z' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M9.8 14.2a4 4 0 1 1-1.9-1.9L18.5 1.8l3.7 3.7-2.1 2.1-1.5-1.5-2.1 2.1 1.5 1.5-2.1 2.1-1.5-1.5-4.6 3.9Z' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+html body .hdr .topbar-suite-v4 > button[data-topbar-key="advisor"] .rail-icon-core::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3 19 6v5c0 4.4-2.8 8.4-7 10-4.2-1.6-7-5.6-7-10V6l7-3Zm-3 9 2 2 4-4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3 19 6v5c0 4.4-2.8 8.4-7 10-4.2-1.6-7-5.6-7-10V6l7-3Zm-3 9 2 2 4-4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+html body .hdr .topbar-suite-v4 > button[data-topbar-key="notif"] .rail-icon-core::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM9.8 21h4.4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM9.8 21h4.4' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+html body .hdr .topbar-suite-v4 > button[data-topbar-key="power"] .rail-icon-core::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3v9m-5.7-5.1a8 8 0 1 0 11.4 0' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3v9m-5.7-5.1a8 8 0 1 0 11.4 0' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+html body .hdr .topbar-suite-v4 > button[data-topbar-key="currency"] .rail-icon-core::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2v20m5-16H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2v20m5-16H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H7' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+html body .hdr .topbar-suite-v4 > button[data-topbar-key="basisu"] .rail-icon-core::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m19 5-14 14M7.5 4.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm9 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m19 5-14 14M7.5 4.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm9 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+html body .hdr .topbar-suite-v4 > button[data-topbar-key="appearance"] .rail-icon-core::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 4V2m0 20v-2m8-8h2M2 12h2m13.7-5.7 1.4-1.4M4.9 19.1l1.4-1.4m11.4 0 1.4 1.4M4.9 4.9l1.4 1.4M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0Z' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 4V2m0 20v-2m8-8h2M2 12h2m13.7-5.7 1.4-1.4M4.9 19.1l1.4-1.4m11.4 0 1.4 1.4M4.9 4.9l1.4 1.4M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0Z' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+html body .hdr .topbar-suite-v4 > button.hdr-clock-btn.clock-pro-btn.clock-premium-trigger[data-topbar-key="clock"],
+html body .hdr .topbar-suite-v4 > button.hdr-clock-btn.clock-pro-btn.clock-premium-trigger[data-topbar-key="clock"]:hover,
+html body .hdr .topbar-suite-v4 > button.hdr-clock-btn.clock-pro-btn.clock-premium-trigger[data-topbar-key="clock"].on {
+  --rail-tone: var(--owner-rail-ink) !important;
+  color: var(--owner-rail-ink) !important;
+}
+
+html body .hdr .topbar-suite-v4 > button[data-topbar-key="clock"] .clock-hourglass-mark {
+  opacity: 0 !important;
+}
+
+html body .hdr .topbar-suite-v4 > button[data-topbar-key="clock"] .clock-command-pill::before {
+  left: 9px;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 3h10M7 21h10M8 3c0 4 1.5 6.2 4 9-2.5 2.8-4 5-4 9m8-18c0 4-1.5 6.2-4 9 2.5 2.8 4 5 4 9' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 3h10M7 21h10M8 3c0 4 1.5 6.2 4 9-2.5 2.8-4 5-4 9m8-18c0 4-1.5 6.2-4 9 2.5 2.8 4 5 4 9' fill='none' stroke='black' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+html body .hdr .topbar-suite-v4 > button[data-topbar-key="clock"] .clock-command-pill {
+  border-color: var(--line-2) !important;
+  color: var(--text) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html body .hdr .topbar-suite-v4 > button[data-topbar-key="clock"] .clock-command-zone {
+  color: var(--text-2) !important;
+}
+
+html body .hdr .topbar-suite-v4 > button[data-topbar-key="clock"] .clock-command-bullet {
+  background: var(--muted) !important;
+  box-shadow: none !important;
+}
+
+/* AWS and Account rendered fewer rows than the inherited five-track tape. */
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet.ops-aws-sheet .ops-control-list {
+  grid-template-rows: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet.ops-account-sheet .ops-control-list {
+  grid-template-rows: repeat(4, minmax(0, 1fr)) !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-aws-sheet .ops-row-copy > em,
+.smenu-bar.topbar-suite-v4 .ops-advisor-sheet .ops-row-copy > em,
+.smenu-bar.topbar-suite-v4 .ops-notification-sheet .ops-row-copy > em {
+  display: -webkit-box !important;
+  overflow: hidden !important;
+  white-space: normal !important;
+  text-overflow: clip !important;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-aws-sheet .ops-sheet-title > em,
+.smenu-bar.topbar-suite-v4 .ops-notification-sheet .ops-sheet-title > em {
+  display: -webkit-box !important;
+  overflow: hidden !important;
+  white-space: normal !important;
+  line-height: 14px !important;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.smenu-bar.topbar-suite-v4 :is(.ops-aws-sheet, .api-key-sheet-v2) .aws-pop-notice,
+.smenu-bar.topbar-suite-v4 .ops-account-sheet .ops-account-note {
+  display: grid !important;
+  grid-template-columns: 28px minmax(0, 1fr) !important;
+  min-height: 52px !important;
+  margin: 0 !important;
+  padding: 8px var(--popover-rail) !important;
+  align-items: center !important;
+  gap: 8px !important;
+  border: 0 !important;
+  border-top: 1px solid var(--line) !important;
+  border-radius: 0 !important;
+  color: var(--muted) !important;
+  background: transparent !important;
+  font-size: 10.5px !important;
+  font-weight: 400 !important;
+  line-height: 15px !important;
+}
+
+.smenu-bar.topbar-suite-v4 :is(.ops-aws-sheet, .api-key-sheet-v2) .aws-pop-notice > span,
+.smenu-bar.topbar-suite-v4 .ops-account-sheet .ops-account-note > span {
+  overflow: hidden !important;
+  white-space: normal !important;
+  text-overflow: clip !important;
+}
+
+/* Provider unavailability is stated once in the header/section instead of
+   being repeated seven times. Unknown remains neutral, never false amber. */
+.smenu-bar.topbar-suite-v4 .api-key-sheet-v2 .api-permission-list .ops-row-copy > em {
+  display: none !important;
+}
+
+.smenu-bar.topbar-suite-v4 .api-key-sheet-v2 .api-permission-list .ops-row-value.idle {
+  color: var(--text-2) !important;
+}
+
+/* A single empty notification row belongs at the top, not stretched through
+   the full sheet. Real episode rows still grow naturally and remain scrollable. */
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-sheet .ops-notification-list {
+  grid-auto-rows: minmax(78px, max-content) !important;
+  align-content: start !important;
+}
+
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-notification-list .ops-row {
+  min-height: 78px !important;
+}
+
+/* Current Currency markup had fallen back to a native browser button. */
+.smenu-bar.topbar-suite-v4 .ops-currency-sheet .curfx-refresh {
+  display: grid !important;
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  min-height: 30px !important;
+  padding: 0 !important;
+  place-items: center !important;
+  border: 1px solid var(--line-2) !important;
+  border-radius: 8px !important;
+  color: var(--text-2) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-currency-sheet .curfx-refresh:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--text) 28%, var(--line-2)) !important;
+  color: var(--text) !important;
+  background: var(--hover) !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-currency-sheet .curfx-refresh:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, transparent) !important;
+  outline-offset: 2px !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-currency-sheet .curfx-refresh:disabled {
+  opacity: .42 !important;
+  cursor: not-allowed !important;
+}
+
+/* Basis choices keep their real radio behavior but lose the mini-card marks. */
+.smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-choice-stack > button {
+  grid-template-columns: 32px minmax(0, 1fr) auto 16px !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-choice-mark,
+.smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-choice-stack > button.selected .ops-choice-mark {
+  width: 28px !important;
+  height: 28px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  color: var(--text-2) !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-choice-stack > button.selected .ops-choice-mark {
+  color: var(--text) !important;
+}

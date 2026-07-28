@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import './styles.css';
+import './topbar-owner-polish.css';
 
 // A random, first-party device identity keeps Recent Devices truthful when
 // multiple browsers share the same public IP and User-Agent. The raw token is

@@ -46,6 +46,44 @@ function safeGit(args, encoding = 'utf8') {
   }
 }
 
+export function verifyGitSourceAuthority({
+  repositoryRoot = ROOT,
+  sourceCommit,
+  sourceBlob,
+  sourceDigestAlgorithm,
+  sourceSha256,
+  rulingCommit,
+  path: sourcePath,
+}) {
+  if (!FULL_SHA.test(sourceCommit ?? '')
+    || !FULL_SHA.test(sourceBlob ?? '')
+    || sourceDigestAlgorithm !== 'sha256'
+    || !SHA256.test(sourceSha256 ?? '')
+    || !FULL_SHA.test(rulingCommit ?? '')
+    || !SAFE_PATH.test(sourcePath ?? '')) return false;
+  try {
+    const cwd = path.resolve(repositoryRoot);
+    const observedBlob = execFileSync(
+      'git',
+      ['rev-parse', `${sourceCommit}:${sourcePath}`],
+      { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] },
+    ).trim();
+    const sourceBytes = execFileSync(
+      'git',
+      ['cat-file', 'blob', sourceBlob],
+      { cwd, encoding: null, stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+    execFileSync(
+      'git',
+      ['merge-base', '--is-ancestor', rulingCommit, sourceCommit],
+      { cwd, stdio: 'ignore' },
+    );
+    return observedBlob === sourceBlob && digest(sourceBytes) === sourceSha256;
+  } catch {
+    return false;
+  }
+}
+
 function sameMembers(actual, expected) {
   return actual.length === expected.length && [...actual].sort().every((value, index) => value === [...expected].sort()[index]);
 }
@@ -648,13 +686,24 @@ export function validateProductAssuranceManifest(document) {
 
   const operationScan = document?.operationScan;
   addError(errors, exactKeys(operationScan, [
-    'schemaVersion', 'scriptPath', 'filesScanned', 'discovered', 'covered', 'uncovered',
+    'schemaVersion',
+    'scriptPath',
+    'minimumFilesScanned',
+    'discovered',
+    'mapped',
+    'policyCount',
+    'policyCovered',
+    'uncovered',
   ]), 'OPERATION_SCAN_KEYS');
   addError(errors, operationScan?.schemaVersion === 'production-operation-scan.v1', 'OPERATION_SCAN_SCHEMA');
   addError(errors, operationScan?.scriptPath === 'test/productAssurance/production-operation-scan.mjs', 'OPERATION_SCAN_PATH');
-  addError(errors, Number.isSafeInteger(operationScan?.filesScanned) && operationScan.filesScanned > 0, 'OPERATION_FILE_COUNT');
+  addError(errors, Number.isSafeInteger(operationScan?.minimumFilesScanned)
+    && operationScan.minimumFilesScanned > 0, 'OPERATION_FILE_COUNT');
   addError(errors, Number.isSafeInteger(operationScan?.discovered) && operationScan.discovered > 0
-    && operationScan.covered === operationScan.discovered
+    && operationScan.mapped === operationScan.discovered
+    && Number.isSafeInteger(operationScan.policyCount)
+    && operationScan.policyCount > 0
+    && operationScan.policyCovered === operationScan.discovered
     && operationScan.uncovered === 0, 'OPERATION_COUNTS');
 
   const donors = Array.isArray(document?.donors) ? document.donors : [];
@@ -1132,19 +1181,49 @@ export function verifyProductAssuranceDonors(document) {
   });
 }
 
-export function verifyProductAssuranceOperationReport(document, report) {
+export function verifyProductAssuranceOperationReport(document, report, policyCoverage) {
   const expected = document?.operationScan;
+  const siteIds = Array.isArray(report?.sites) ? report.sites.map((site) => site?.siteId) : [];
+  const operationCountTotal = report?.operationCounts !== null
+    && typeof report?.operationCounts === 'object'
+    && !Array.isArray(report.operationCounts)
+    ? Object.values(report.operationCounts).reduce(
+      (total, value) => total + (Number.isSafeInteger(value) ? value : Number.NaN),
+      0,
+    )
+    : Number.NaN;
   const checks = Object.freeze({
     manifestValid: validateProductAssuranceManifest(document).passed,
     schemaVersion: report?.schemaVersion === expected?.schemaVersion,
     scannedRoot: report?.scannedRoot === 'server/src',
-    filesScanned: report?.filesScanned === expected?.filesScanned,
+    filesScanned: Number.isSafeInteger(report?.filesScanned)
+      && report.filesScanned >= expected?.minimumFilesScanned,
     discovered: report?.discovered === expected?.discovered,
-    covered: report?.covered === expected?.covered,
+    mapped: report?.covered === expected?.mapped && report?.covered === report?.discovered,
     uncovered: report?.uncovered === expected?.uncovered && report?.uncovered === 0,
     conservation: report?.discovered === report?.covered + report?.uncovered,
     sites: Array.isArray(report?.sites) && report.sites.length === report?.discovered,
+    uniqueSites: siteIds.length === new Set(siteIds).size
+      && siteIds.every((siteId) => typeof siteId === 'string' && siteId.length > 0),
+    mappedSites: Array.isArray(report?.sites)
+      && report.sites.every((site) => typeof site?.operationId === 'string' && site.operationId.length > 0),
+    operationCounts: operationCountTotal === report?.discovered,
     uncoveredSites: Array.isArray(report?.uncoveredSites) && report.uncoveredSites.length === 0,
+    policyCount: policyCoverage?.policyCount === expected?.policyCount
+      && Array.isArray(policyCoverage?.policies)
+      && policyCoverage.policies.length === policyCoverage.policyCount,
+    policyCovered: policyCoverage?.expectedSiteCount === report?.discovered
+      && policyCoverage?.registeredSiteCount === expected?.policyCovered
+      && policyCoverage?.registeredSiteCount === report?.discovered,
+    policyVerdict: policyCoverage?.verdict === 'PASS'
+      && Array.isArray(policyCoverage?.reasonCodes)
+      && policyCoverage.reasonCodes.length === 0
+      && Array.isArray(policyCoverage?.uncoveredSites)
+      && policyCoverage.uncoveredSites.length === 0
+      && Array.isArray(policyCoverage?.unknownPolicyIds)
+      && policyCoverage.unknownPolicyIds.length === 0
+      && Array.isArray(policyCoverage?.duplicateOperationIds)
+      && policyCoverage.duplicateOperationIds.length === 0,
   });
   return Object.freeze({ checks, passed: Object.values(checks).every(Boolean) });
 }

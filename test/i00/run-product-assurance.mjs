@@ -4,7 +4,14 @@ import path from 'node:path';
 import { run } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
-import { scanIntegratedProductionOperations } from './product-assurance-operation-overlay.mjs';
+import {
+  OPERATION_POLICY_REGISTRY,
+  scanOperationCoverage,
+} from '../../server/dist/productAssurance/index.js';
+import {
+  scanIntegratedOperationPolicyCoverage,
+  scanIntegratedProductionOperations,
+} from './product-assurance-operation-overlay.mjs';
 import {
   validateProductAssuranceManifest,
   verifyProductAssuranceDonors,
@@ -20,20 +27,32 @@ function readManifest() {
   return JSON.parse(readFileSync(MANIFEST_PATH, 'utf8'));
 }
 
+function scanLiveOperationPolicy() {
+  const operationReport = scanIntegratedProductionOperations();
+  const policyCoverage = scanIntegratedOperationPolicyCoverage({
+    canonicalRegistry: OPERATION_POLICY_REGISTRY,
+    coverageScanner: scanOperationCoverage,
+    operationReport,
+  });
+  return Object.freeze({ operationReport, policyCoverage });
+}
+
 function regenerateManifest() {
   const current = readManifest();
-  const operationReport = scanIntegratedProductionOperations();
-  if (operationReport.uncovered !== 0) {
-    throw new Error(`PRODUCT_ASSURANCE_OPERATION_SCAN_UNCOVERED:${operationReport.uncovered}`);
+  const { operationReport, policyCoverage } = scanLiveOperationPolicy();
+  if (operationReport.uncovered !== 0 || policyCoverage.verdict !== 'PASS') {
+    throw new Error(`PRODUCT_ASSURANCE_OPERATION_POLICY_UNCOVERED:${policyCoverage.uncoveredSites.length}`);
   }
   const generated = {
     ...current,
     operationScan: {
       schemaVersion: operationReport.schemaVersion,
       scriptPath: current.operationScan?.scriptPath,
-      filesScanned: operationReport.filesScanned,
+      minimumFilesScanned: operationReport.filesScanned,
       discovered: operationReport.discovered,
-      covered: operationReport.covered,
+      mapped: operationReport.covered,
+      policyCount: policyCoverage.policyCount,
+      policyCovered: policyCoverage.registeredSiteCount,
       uncovered: operationReport.uncovered,
     },
   };
@@ -41,7 +60,11 @@ function regenerateManifest() {
   if (!validation.passed) {
     throw new Error(`PRODUCT_ASSURANCE_GENERATED_MANIFEST_INVALID:${validation.errors.join(',')}`);
   }
-  const operationVerification = verifyProductAssuranceOperationReport(generated, operationReport);
+  const operationVerification = verifyProductAssuranceOperationReport(
+    generated,
+    operationReport,
+    policyCoverage,
+  );
   if (!operationVerification.passed) {
     throw new Error('PRODUCT_ASSURANCE_GENERATED_OPERATION_SCAN_INVALID');
   }
@@ -153,8 +176,12 @@ async function main() {
     throw new Error(`PRODUCT_ASSURANCE_EFFECTIVE_BEHAVIOR_TOTAL:${effectiveBehaviorPasses}`);
   }
 
-  const operationReport = scanIntegratedProductionOperations();
-  const operationVerification = verifyProductAssuranceOperationReport(manifest, operationReport);
+  const { operationReport, policyCoverage } = scanLiveOperationPolicy();
+  const operationVerification = verifyProductAssuranceOperationReport(
+    manifest,
+    operationReport,
+    policyCoverage,
+  );
   if (!operationVerification.passed) throw new Error('PRODUCT_ASSURANCE_OPERATION_SCAN_INVALID');
 
   const result = Object.freeze({
@@ -166,7 +193,8 @@ async function main() {
     operationScan: Object.freeze({
       filesScanned: operationReport.filesScanned,
       discovered: operationReport.discovered,
-      covered: operationReport.covered,
+      mapped: operationReport.covered,
+      policyCovered: policyCoverage.registeredSiteCount,
       uncovered: operationReport.uncovered,
     }),
     skipped_callbacks: validation.skippedCallbacks,

@@ -785,7 +785,7 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 3667,
+        "line": 3718,
         "classification": "LEGACY_APP_DELIVERY"
       },
       {
@@ -3222,6 +3222,18 @@
       },
       {
         "concept": "exchange-hand",
+        "declaration": "interface BinanceSpotVenueEvidence",
+        "file": "server/src/foundation/exchange/binanceSpot/filters.ts",
+        "line": 266
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "interface ParsedVenuePrices",
+        "file": "server/src/foundation/exchange/binanceSpot/filters.ts",
+        "line": 550
+      },
+      {
+        "concept": "exchange-hand",
         "declaration": "type BinanceUsdMExchangeInfo",
         "file": "server/src/foundation/exchange/binanceUsdM/client.ts",
         "line": 35
@@ -3267,6 +3279,108 @@
         "declaration": "function hasNakedExposure",
         "file": "server/src/foundation/execution/reducer.ts",
         "line": 188
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type BinanceSpotVenueEvidence",
+        "file": "server/src/foundation/execution/spotCore.ts",
+        "line": 12
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type SpotRiskPolicy",
+        "file": "server/src/foundation/execution/spotCore.ts",
+        "line": 17
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type SpotRiskVerdict",
+        "file": "server/src/foundation/execution/spotCore.ts",
+        "line": 18
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface SpotRiskReductionEvidence",
+        "file": "server/src/foundation/execution/spotCore.ts",
+        "line": 88
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface SpotRiskEvidence",
+        "file": "server/src/foundation/execution/spotCore.ts",
+        "line": 101
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function correlateSpotTicket",
+        "file": "server/src/foundation/execution/spotCore.ts",
+        "line": 220
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type SpotVenueObservationStatus",
+        "file": "server/src/foundation/execution/spotPort.ts",
+        "line": 10
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type SpotTicketPurpose",
+        "file": "server/src/foundation/execution/spotTicket.ts",
+        "line": 29
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "interface CreateSpotExecutionTicketInput",
+        "file": "server/src/foundation/execution/spotTicket.ts",
+        "line": 31
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "interface SpotExecutionTicket",
+        "file": "server/src/foundation/execution/spotTicket.ts",
+        "line": 54
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function createSpotExecutionTicket",
+        "file": "server/src/foundation/execution/spotTicket.ts",
+        "line": 122
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type SpotRiskVerdict",
+        "file": "server/src/foundation/execution/spotValidateOnly.ts",
+        "line": 20
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type SpotRiskEvidence",
+        "file": "server/src/foundation/execution/spotValidateOnly.ts",
+        "line": 25
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type SpotExecutionTicket",
+        "file": "server/src/foundation/execution/spotValidateOnly.ts",
+        "line": 29
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "interface SpotVenueExecutionEvidence",
+        "file": "server/src/foundation/execution/spotValidateOnly.ts",
+        "line": 137
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "interface VenuePriceStructure",
+        "file": "server/src/foundation/execution/spotValidateOnly.ts",
+        "line": 240
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function canonicalTicket",
+        "file": "server/src/foundation/execution/spotValidateOnly.ts",
+        "line": 441
       },
       {
         "concept": "risk-authority",
@@ -3413,6 +3527,78 @@
         "line": 282
       },
       {
+        "concept": "ledger-authority",
+        "declaration": "type SpotLedgerEventKind",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 16
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type SpotLedgerProjectionState",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 54
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface SpotLedgerFactInput",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 78
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface SpotLedgerEventData",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 93
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface SpotLedgerAppendIntent",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 118
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface SpotLedgerIntentConflict",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 133
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface CoalescedSpotLedgerIntents",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 139
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function buildSpotLedgerAppendIntent",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 411
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function coalesceSpotLedgerAppendIntents",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 493
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function classifySpotLedgerDiscrepancy",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 534
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type SpotLedgerAppendIntent",
+        "file": "server/src/foundation/reconciliation/spotRestartRecovery.ts",
+        "line": 6
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type SpotExchangeQueryState",
+        "file": "server/src/foundation/reconciliation/spotRestartRecovery.ts",
+        "line": 16
+      },
+      {
         "concept": "semantic-source",
         "declaration": "interface EvidenceSourceMetadata",
         "file": "server/src/foundation/reconciliation/types.ts",
@@ -3459,6 +3645,72 @@
         "declaration": "function evaluateMultiLegRisk",
         "file": "server/src/foundation/risk/evaluator.ts",
         "line": 209
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface SpotRiskPolicy",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 20
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface SpotRiskSubject",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 27
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface SpotRiskEvaluationInput",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 51
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type SpotRiskCheckCode",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 72
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type SpotRiskCheckStatus",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 73
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface SpotRiskCheck",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 75
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface SpotRiskVerdict",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 83
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function createSpotRiskPolicy",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 109
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function evaluateSpotRiskPolicy",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 184
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "class SpotRiskRejectedError",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 490
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function assertSpotRiskAllowed",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 500
       },
       {
         "concept": "risk-authority",
@@ -3542,61 +3794,73 @@
         "concept": "semantic-source",
         "declaration": "type SourceLogoEntry",
         "file": "server/src/index.ts",
-        "line": 159
+        "line": 160
       },
       {
         "concept": "semantic-source",
         "declaration": "function legacyScannerSnapshot",
         "file": "server/src/index.ts",
-        "line": 210
+        "line": 211
       },
       {
         "concept": "ledger-authority",
         "declaration": "function pruneEphemeralLedgerEvents",
         "file": "server/src/index.ts",
-        "line": 633
+        "line": 635
       },
       {
         "concept": "control-authority",
         "declaration": "function recordSupervisorReadFailure",
         "file": "server/src/index.ts",
-        "line": 852
+        "line": 854
       },
       {
         "concept": "semantic-source",
         "declaration": "function sendLegacyScannerRetired",
         "file": "server/src/index.ts",
-        "line": 902
+        "line": 904
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "type ObservedMarketSourceResult",
+        "file": "server/src/index.ts",
+        "line": 2096
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketSourceSnapshot",
         "file": "server/src/index.ts",
-        "line": 2094
+        "line": 2100
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function observedMarketSourceResult",
+        "file": "server/src/index.ts",
+        "line": 2109
       },
       {
         "concept": "semantic-source",
         "declaration": "function marketSources",
         "file": "server/src/index.ts",
-        "line": 2103
+        "line": 2116
       },
       {
         "concept": "semantic-source",
         "declaration": "function cachedSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2483
+        "line": 2534
       },
       {
         "concept": "semantic-source",
         "declaration": "function rememberSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2495
+        "line": 2546
       },
       {
         "concept": "semantic-source",
         "declaration": "function loadSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2505
+        "line": 2556
       },
       {
         "concept": "semantic-source",
@@ -6281,16 +6545,52 @@
         "line": 97
       },
       {
+        "concept": "semantic-source",
+        "declaration": "type ProductRuntimeOwnerTruthMarketSourceState",
+        "file": "server/src/productIntegration/runtime/ownerTruth.ts",
+        "line": 33
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function canonicalSupervisorCutIdentity",
+        "file": "server/src/productIntegration/runtime/ownerTruth.ts",
+        "line": 82
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function publicSourceLive",
+        "file": "server/src/productIntegration/runtime/ownerTruth.ts",
+        "line": 96
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function normalizedSourceState",
+        "file": "server/src/productIntegration/runtime/ownerTruth.ts",
+        "line": 835
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function retainsStreamFacts",
+        "file": "server/src/productIntegration/runtime/ownerTruth.ts",
+        "line": 956
+      },
+      {
         "concept": "control-authority",
         "declaration": "type ProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/projection.ts",
-        "line": 45
+        "line": 56
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function ownerTruthCanonicalSource",
+        "file": "server/src/productIntegration/runtime/projection.ts",
+        "line": 1127
       },
       {
         "concept": "control-authority",
         "declaration": "function buildProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/projection.ts",
-        "line": 1244
+        "line": 1545
       },
       {
         "concept": "control-authority",
@@ -6308,13 +6608,13 @@
         "concept": "control-authority",
         "declaration": "type ProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/service.ts",
-        "line": 30
+        "line": 32
       },
       {
         "concept": "control-authority",
         "declaration": "function incidentTargetForControl",
         "file": "server/src/productIntegration/runtime/service.ts",
-        "line": 41
+        "line": 43
       },
       {
         "concept": "control-authority",
@@ -6416,37 +6716,37 @@
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeControlPreview",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 171
+        "line": 343
       },
       {
         "concept": "control-authority",
         "declaration": "type ProductRuntimeControlResultStatus",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 197
+        "line": 369
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeControlResult",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 204
+        "line": 376
       },
       {
         "concept": "control-authority",
         "declaration": "type ProductRuntimeControlWiringState",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 412
+        "line": 584
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeControlRegistryEntry",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 415
+        "line": 587
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 657
+        "line": 829
       },
       {
         "concept": "control-authority",
@@ -8243,7 +8543,7 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 140,
+        "line": 141,
         "target": "./capitalFoundation/contracts/index.js"
       },
       {
@@ -15152,5 +15452,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "142ff5eb3baa2eed47c924c1b2b811dbddbbff7a2c9eb06f86712c91cd8de72d"
+  "evidenceSha256": "6202d38349328872f4cfa2edd0f6ae33e084149d9701689e7653deaaa8111982"
 }

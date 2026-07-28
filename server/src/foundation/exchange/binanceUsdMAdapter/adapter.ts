@@ -677,7 +677,7 @@ function parsePublicContext(
   );
   const minNotional = canonicalDecimal(
     filters.minNotional,
-    'NON_NEGATIVE',
+    'POSITIVE',
   );
   const percent = plainDataRecord(filters.percentPrice);
   const multiplierUp =
@@ -700,6 +700,7 @@ function parsePublicContext(
     minNotional === null ||
     multiplierUp === null ||
     multiplierDown === null ||
+    compareDecimalStrings(multiplierDown, multiplierUp) > 0 ||
     percent?.multiplierDecimal === undefined ||
     typeof percent.multiplierDecimal !== 'number' ||
     !Number.isSafeInteger(percent.multiplierDecimal) ||

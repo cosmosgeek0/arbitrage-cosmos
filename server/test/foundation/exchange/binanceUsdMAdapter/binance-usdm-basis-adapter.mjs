@@ -15,7 +15,7 @@ import {
   isBinanceUsdMBasisWireIntent,
 } from '../../../../dist/foundation/exchange/binanceUsdMAdapter/index.js';
 
-const T0 = 1_800_000_000_000;
+export const T0 = 1_900_000_000_000;
 const MAX_AGE_MS = 60_000;
 const FORECAST_MAX_AGE_MS = 15_000;
 
@@ -88,7 +88,7 @@ function exchangeSymbol(overrides = {}) {
   });
 }
 
-function fundingForecast(overrides = {}) {
+export function fundingForecast(overrides = {}) {
   return Object.freeze({
     revision: overrides.revision ?? 'forecast-revision-1',
     observedAt:
@@ -128,7 +128,7 @@ function fundingHistory() {
   });
 }
 
-function publicEvidence(overrides = {}) {
+export function publicEvidence(overrides = {}) {
   const symbolFacts = overrides.exchangeSymbol ?? exchangeSymbol();
   const seam = createBinanceUsdMPublicGroundworkSeam(Object.freeze({
     sourceEnabled: true,
@@ -184,6 +184,7 @@ function forgedPublicEvidence(overrides = {}) {
   const filters = Object.freeze({
     ...valid.groundwork.filters,
     observedAt: filterObservedAt,
+    ...(overrides.filters ?? {}),
   });
   const groundwork = Object.freeze({
     ...valid.groundwork,
@@ -202,7 +203,7 @@ function forgedPublicEvidence(overrides = {}) {
   });
 }
 
-function positionModeEvidence(overrides = {}) {
+export function positionModeEvidence(overrides = {}) {
   return Object.freeze({
     mode: overrides.mode ?? 'ONE_WAY',
     scope: overrides.scope ?? 'ACCOUNT',
@@ -218,7 +219,7 @@ function positionModeEvidence(overrides = {}) {
   });
 }
 
-function intentInput(overrides = {}) {
+export function intentInput(overrides = {}) {
   const base = {
     nowMs: T0,
     leg: 'PERP_OPEN',
@@ -238,7 +239,7 @@ function intentInput(overrides = {}) {
   return Object.freeze(merged);
 }
 
-function enabledAdapter(overrides = {}) {
+export function enabledAdapter(overrides = {}) {
   return createBinanceUsdMBasisValidateOnlyAdapter(Object.freeze({
     enabled: true,
     sourceEnabled: true,
@@ -249,7 +250,7 @@ function enabledAdapter(overrides = {}) {
   }));
 }
 
-function foundEvidence(intent, overrides = {}) {
+export function foundEvidence(intent, overrides = {}) {
   return Object.freeze({
     nowMs: overrides.nowMs ?? T0,
     observedAtMs: overrides.observedAtMs ?? T0 - 1,
@@ -670,6 +671,41 @@ test('independently rejects forged public filter, capability, and mark provenanc
       true,
       label,
     );
+  }
+});
+
+test('independently rejects zero MIN_NOTIONAL and inverted PERCENT_PRICE multipliers', () => {
+  const adapter = enabledAdapter();
+  const cases = [
+    [
+      'zero MIN_NOTIONAL',
+      forgedPublicEvidence({
+        filters: { minNotional: '0' },
+      }),
+    ],
+    [
+      'inverted PERCENT_PRICE multipliers',
+      forgedPublicEvidence({
+        filters: {
+          percentPrice: Object.freeze({
+            multiplierUp: '0.85',
+            multiplierDown: '1.15',
+            multiplierDecimal: 4,
+          }),
+        },
+      }),
+    ],
+  ];
+
+  for (const [label, evidence] of cases) {
+    const result = adapter.buildOrderIntent(intentInput({
+      publicEvidence: evidence,
+    }));
+    assert.equal(result.ok, false, label);
+    assert.equal(result.intent, null, label);
+    assert.deepEqual(result.blockingCodes, [
+      'PUBLIC_FILTER_MALFORMED',
+    ], label);
   }
 });
 

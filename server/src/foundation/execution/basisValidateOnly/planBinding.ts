@@ -12,7 +12,7 @@
  * label is never exposed as execution authority. approvalId/riskDecision must
  * remain null: this is provenance, not permission to act.
  */
-import { types as nodeTypes } from 'node:util';
+import { isProxy } from 'node:util/types';
 
 import type { BasisHandoffRecord } from '../../../engine/basis/lifecycle.js';
 import {
@@ -522,7 +522,7 @@ function snapshotPlainData(
   if (typeof value !== 'object') {
     throw new PlainDataError('input must contain plain JSON-compatible data');
   }
-  if (nodeTypes.isProxy(value)) {
+  if (isProxy(value)) {
     throw new PlainDataError('Proxy input is forbidden');
   }
   const cached = completed.get(value);
@@ -717,7 +717,7 @@ function rawDataProperty(container: unknown, key: string): unknown {
   if (
     typeof container !== 'object' ||
     container === null ||
-    nodeTypes.isProxy(container) ||
+    isProxy(container) ||
     Array.isArray(container)
   ) {
     throw new PlainDataError('plain object required');
@@ -822,7 +822,7 @@ export function createBasisValidateOnlyCapitalProof(
   if (
     typeof input !== 'object' ||
     input === null ||
-    nodeTypes.isProxy(input) ||
+    isProxy(input) ||
     !Object.isFrozen(input)
   ) {
     return Object.freeze({ ok: false as const, code: 'INPUT_NOT_PLAIN_DATA' as const });
@@ -1410,7 +1410,7 @@ function bindBasisValidateOnlyPlanUnsafe(
   if (
     typeof rawHandoff !== 'object' ||
     rawHandoff === null ||
-    nodeTypes.isProxy(rawHandoff) ||
+    isProxy(rawHandoff) ||
     !Object.isFrozen(rawHandoff)
   ) {
     return fail('HANDOFF_NOT_FROZEN');
@@ -1436,7 +1436,7 @@ function bindBasisValidateOnlyPlanUnsafe(
   if (
     typeof rawCapital !== 'object' ||
     rawCapital === null ||
-    nodeTypes.isProxy(rawCapital) ||
+    isProxy(rawCapital) ||
     !Object.isFrozen(rawCapital)
   ) {
     return fail('CAPITAL_PROOF_NOT_FROZEN');
@@ -1455,11 +1455,11 @@ function bindBasisValidateOnlyPlanUnsafe(
   if (
     typeof rawConsideration !== 'object' ||
     rawConsideration === null ||
-    nodeTypes.isProxy(rawConsideration) ||
+    isProxy(rawConsideration) ||
     !Object.isFrozen(rawConsideration) ||
     typeof rawMandate !== 'object' ||
     rawMandate === null ||
-    nodeTypes.isProxy(rawMandate) ||
+    isProxy(rawMandate) ||
     !Object.isFrozen(rawMandate)
   ) {
     return fail('CAPITAL_PROOF_NOT_FROZEN');

@@ -1,4 +1,4 @@
-import { types as nodeTypes } from 'node:util';
+import { isProxy } from 'node:util/types';
 
 import {
   addExactDecimals,
@@ -259,7 +259,7 @@ function descriptorValues(
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return problem('BLOCKED', `${path.toUpperCase()}_PLAIN_OBJECT_REQUIRED`);
   }
-  if (nodeTypes.isProxy(value)) {
+  if (isProxy(value)) {
     return problem('BLOCKED', `${path.toUpperCase()}_PROXY_REJECTED`);
   }
   const prototype = Object.getPrototypeOf(value);
@@ -315,7 +315,7 @@ function descriptorArray(
   if (typeof value !== 'object' || value === null) {
     return problem('BLOCKED', `${path.toUpperCase()}_ARRAY_REQUIRED`);
   }
-  if (nodeTypes.isProxy(value)) {
+  if (isProxy(value)) {
     return problem('BLOCKED', `${path.toUpperCase()}_PROXY_REJECTED`);
   }
   if (!Array.isArray(value)) {

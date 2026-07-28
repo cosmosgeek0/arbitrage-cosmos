@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import nodeTest from 'node:test';
+import { pathToFileURL } from 'node:url';
+
+const test =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+    ? nodeTest
+    : () => {};
 
 import {
   createBinanceUsdMPublicGroundworkSeam,
@@ -20,11 +27,12 @@ const MAX_AGE_MS = 60_000;
 const FORECAST_MAX_AGE_MS = 15_000;
 
 function observedAt(sourceId, overrides = {}) {
+  const nowMs = overrides.nowMs ?? T0;
   return Object.freeze({
     sourceTimeMs: Object.hasOwn(overrides, 'sourceTimeMs')
       ? overrides.sourceTimeMs
-      : T0 - 1,
-    receivedAtMs: overrides.receivedAtMs ?? T0,
+      : nowMs - 1,
+    receivedAtMs: overrides.receivedAtMs ?? nowMs,
     maxAgeMs: overrides.maxAgeMs ?? MAX_AGE_MS,
     authority: overrides.authority ?? 'SYNTHETIC_TEST',
     completeness: overrides.completeness ?? 'COMPLETE',
@@ -89,12 +97,14 @@ function exchangeSymbol(overrides = {}) {
 }
 
 export function fundingForecast(overrides = {}) {
+  const nowMs = overrides.nowMs ?? T0;
   return Object.freeze({
     revision: overrides.revision ?? 'forecast-revision-1',
     observedAt:
       overrides.observedAt ??
       observedAt('binance.usdm.mark-price.adapter-fixture', {
         maxAgeMs: FORECAST_MAX_AGE_MS,
+        nowMs,
       }),
     value: Object.freeze({
       symbol: overrides.symbol ?? 'BTCUSDT',
@@ -103,24 +113,24 @@ export function fundingForecast(overrides = {}) {
       estimatedSettlePrice: '50000.1',
       lastFundingRate: '0.0001',
       interestRate: '0.0001',
-      nextFundingTimeMs: T0 + 28_800_000,
-      sourceTimeMs: T0 - 1,
+      nextFundingTimeMs: nowMs + 28_800_000,
+      sourceTimeMs: nowMs - 1,
     }),
   });
 }
 
-function fundingHistory() {
+function fundingHistory(nowMs = T0) {
   return Object.freeze({
     revision: 'history-revision-1',
     observedAt: observedAt(
       'binance.usdm.funding-history.adapter-fixture',
-      { sourceTimeMs: null },
+      { sourceTimeMs: null, nowMs },
     ),
     rows: Object.freeze([
       Object.freeze({
         symbol: 'BTCUSDT',
         fundingRate: '0.0001',
-        fundingTimeMs: T0 - 28_800_000,
+        fundingTimeMs: nowMs - 28_800_000,
         markPrice: '50000.1',
         rateType: 'Regular',
       }),
@@ -129,7 +139,15 @@ function fundingHistory() {
 }
 
 export function publicEvidence(overrides = {}) {
-  const symbolFacts = overrides.exchangeSymbol ?? exchangeSymbol();
+  const nowMs = overrides.nowMs ?? T0;
+  const symbolFacts =
+    overrides.exchangeSymbol ??
+    exchangeSymbol({
+      observedAt: observedAt(
+        'binance.usdm.exchange-info.adapter-fixture',
+        { nowMs },
+      ),
+    });
   const seam = createBinanceUsdMPublicGroundworkSeam(Object.freeze({
     sourceEnabled: true,
     allowedSymbols: Object.freeze(['BTCUSDT']),
@@ -138,12 +156,13 @@ export function publicEvidence(overrides = {}) {
     maximumHistoryCaptureAgeMs: MAX_AGE_MS,
   }));
   const groundwork = seam.validate(Object.freeze({
-    nowMs: T0,
+    nowMs,
     currentEffectiveKillSwitchEngaged: false,
     symbol: 'BTCUSDT',
     exchangeSymbol: symbolFacts,
-    fundingForecast: overrides.fundingForecast ?? fundingForecast(),
-    fundingHistory: fundingHistory(),
+    fundingForecast:
+      overrides.fundingForecast ?? fundingForecast({ nowMs }),
+    fundingHistory: fundingHistory(nowMs),
   }));
   assert.equal(groundwork.validationPassed, true);
   return Object.freeze({

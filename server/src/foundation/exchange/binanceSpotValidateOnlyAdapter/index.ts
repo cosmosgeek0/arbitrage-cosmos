@@ -6,7 +6,7 @@
  * records. It intentionally has no clock, environment, key, signing, network,
  * test-order, order, cancel, or retry capability.
  */
-import { types as nodeTypes } from 'node:util';
+import { isProxy } from 'node:util/types';
 
 import {
   compareSpotDecimals,
@@ -215,7 +215,7 @@ function clonePlainData(
   if (typeof value !== 'object') {
     throw new PlainDataError(`${path} must contain plain JSON-like data`);
   }
-  if (nodeTypes.isProxy(value)) {
+  if (isProxy(value)) {
     throw new PlainDataError(`${path} must not be a Proxy`);
   }
   if (

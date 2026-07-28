@@ -6,3 +6,5 @@ export * from './checkpoint.js';
 export * from './recovery.js';
 export * from './coordinator.js';
 export * from './spotValidateOnly.js';
+export * from './basisValidateOnly/planBinding.js';
+export * from './basisValidateOnly/lifecycle.js';

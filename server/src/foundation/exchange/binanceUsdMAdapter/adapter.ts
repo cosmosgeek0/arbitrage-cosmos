@@ -1,4 +1,4 @@
-import { types as nodeTypes } from 'node:util';
+import { isProxy } from 'node:util/types';
 
 import {
   compareDecimalStrings,
@@ -153,7 +153,7 @@ function plainDataRecord(value: unknown): SafeRecord | null {
     return null;
   }
   try {
-    if (nodeTypes.isProxy(value) || Array.isArray(value)) return null;
+    if (isProxy(value) || Array.isArray(value)) return null;
     const prototype = Object.getPrototypeOf(value);
     if (prototype !== Object.prototype && prototype !== null) return null;
     const keys = Reflect.ownKeys(value);
@@ -190,7 +190,7 @@ function plainDataRecord(value: unknown): SafeRecord | null {
 
 function plainDataArray(value: unknown, maximum = 256): readonly unknown[] | null {
   try {
-    if (nodeTypes.isProxy(value) || !Array.isArray(value)) return null;
+    if (isProxy(value) || !Array.isArray(value)) return null;
     const prototype = Object.getPrototypeOf(value);
     if (prototype !== Array.prototype) return null;
     const length = value.length;

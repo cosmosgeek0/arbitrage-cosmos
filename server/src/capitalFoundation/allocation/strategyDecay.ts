@@ -1,4 +1,4 @@
-import { types as utilTypes } from 'node:util';
+import { isProxy } from 'node:util/types';
 
 import { isValidUtcMillis } from '../../foundation/contracts/index.js';
 import {
@@ -49,7 +49,7 @@ export function snapshotStrategyDecayPostureData(value: unknown): unknown | null
         return candidate;
       }
       if ((typeof candidate !== 'object' && typeof candidate !== 'function')
-        || utilTypes.isProxy(candidate)
+        || isProxy(candidate)
         || typeof candidate === 'function'
         || active.has(candidate)) {
         throw new TypeError('posture input must be ordinary acyclic data');

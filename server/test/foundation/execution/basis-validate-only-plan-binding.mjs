@@ -6,7 +6,16 @@
  * Run after `npm run build -w server`.
  */
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import nodeTest from 'node:test';
+import { pathToFileURL } from 'node:url';
+
+const importedTestNoop = Object.assign(() => {}, {
+  after: () => {},
+});
+const isDirectTest =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href;
+const test = isDirectTest ? nodeTest : importedTestNoop;
 
 import {
   BASIS_VALIDATE_ONLY_PLAN_BINDING_SCHEMA,
@@ -53,10 +62,12 @@ const PROPOSAL_CORRELATION_ID = 'basis:m1-i1:accepted';
 
 let networkAttempts = 0;
 const originalFetch = globalThis.fetch;
-globalThis.fetch = async () => {
-  networkAttempts += 1;
-  throw new Error('network forbidden in validate-only plan-binding proof');
-};
+if (isDirectTest) {
+  globalThis.fetch = async () => {
+    networkAttempts += 1;
+    throw new Error('network forbidden in validate-only plan-binding proof');
+  };
+}
 
 function stamp(sourceId, overrides = {}) {
   return {

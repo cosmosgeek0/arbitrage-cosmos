@@ -1,4 +1,4 @@
-import { types as utilTypes } from 'node:util';
+import { isProxy } from 'node:util/types';
 
 import {
   evaluateFreshness,
@@ -140,7 +140,7 @@ function compareText(left: string, right: string): number {
 }
 
 function canonicalIds(value: unknown): readonly string[] | null {
-  if (utilTypes.isProxy(value) || !Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) return null;
+  if (isProxy(value) || !Array.isArray(value) || Object.getPrototypeOf(value) !== Array.prototype) return null;
   const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length');
   if (!lengthDescriptor || !('value' in lengthDescriptor)
     || !Number.isSafeInteger(lengthDescriptor.value)
@@ -293,7 +293,7 @@ export function validateConservativeEconomicFactBinding(
 ): readonly string[] {
   const reasons: string[] = [];
   try {
-    if (utilTypes.isProxy(value) || !value || typeof value !== 'object' || Array.isArray(value)) {
+    if (isProxy(value) || !value || typeof value !== 'object' || Array.isArray(value)) {
       return Object.freeze(['ECONOMIC_FACT_BINDING_REQUIRED']);
     }
     const binding = value as ConservativeEconomicFactBinding;

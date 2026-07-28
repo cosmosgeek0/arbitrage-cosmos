@@ -143,6 +143,10 @@
       ],
       "productionConsumers": [
         {
+          "path": "server/src/index.ts",
+          "occurrences": 1
+        },
+        {
           "path": "web/src/lib/notificationFeed.tsx",
           "occurrences": 3
         },
@@ -339,7 +343,12 @@
           "expectedOccurrences": 1
         }
       ],
-      "productionConsumers": []
+      "productionConsumers": [
+        {
+          "path": "server/src/index.ts",
+          "occurrences": 1
+        }
+      ]
     },
     {
       "route": "/api/wallet-balances",
@@ -462,6 +471,18 @@
         }
       ],
       "productionConsumers": [
+        {
+          "path": "web/src/features/strategyDashboard/StrategyDashboard.tsx",
+          "occurrences": 2
+        },
+        {
+          "path": "web/src/features/strategyDashboard/StrategyPerformanceChart.tsx",
+          "occurrences": 2
+        },
+        {
+          "path": "web/src/features/strategyDashboard/types.ts",
+          "occurrences": 1
+        },
         {
           "path": "web/src/pages/Dashboard.tsx",
           "occurrences": 1

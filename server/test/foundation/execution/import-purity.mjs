@@ -49,6 +49,7 @@ const newGlobals = Object.getOwnPropertyNames(globalThis).filter((key) => !globa
 check('no globals created during import', newGlobals.length === 0, newGlobals.join(','));
 
 section('1b. direct-only Spot transport coordinator imports inertly');
+const coordinatorEnvReadStart = envReads.length;
 const coordinatorMod = await import(
   '../../../dist/foundation/execution/spotTransportCoordinator.js'
 );
@@ -57,7 +58,9 @@ check('coordinator import has no fetch', fetchDenial.attempts() === 0, `${fetchD
 check('coordinator import has no setTimeout', timeoutCalls === 0, `${timeoutCalls} calls`);
 check('coordinator import has no setInterval', intervalCalls === 0, `${intervalCalls} calls`);
 check('coordinator import has no Math.random', randomCalls === 0, `${randomCalls} calls`);
-const coordinatorEnvReads = envReads.filter((key) => !toleratedLoaderEnv.has(key));
+const coordinatorEnvReads = envReads
+  .slice(coordinatorEnvReadStart)
+  .filter((key) => !toleratedLoaderEnv.has(key));
 check('coordinator import has no process.env reads', coordinatorEnvReads.length === 0, coordinatorEnvReads.join(','));
 const coordinatorGlobals = Object.getOwnPropertyNames(globalThis).filter((key) => !globalsBefore.has(key));
 check('coordinator import creates no globals', coordinatorGlobals.length === 0, coordinatorGlobals.join(','));

@@ -26,6 +26,15 @@ const DATABASE_KINDS = new Set([
   OPERATION_KINDS.DATABASE_MUTATION,
   OPERATION_KINDS.DATABASE_TRANSACTION,
 ]);
+const BINANCE_SPOT_SIGNED_TRANSPORT_OPERATION_ID =
+  'OP_BINANCE_SPOT_SIGNED_TRANSPORT_DORMANT_BLOCKED';
+const BINANCE_SPOT_SIGNED_TRANSPORT_PATH =
+  'server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts';
+const BINANCE_SPOT_SIGNED_TRANSPORT_SITE_IDS = Object.freeze([
+  'OPSITE_41207E8089FCA59F9EC3',
+  'OPSITE_5C70114C64727E66FC9A',
+  'OPSITE_85D71B839C490D05B2BB',
+].sort());
 
 test('assembled production operation scan matches the final manifest denominator with zero uncovered sites', () => {
   assert.equal(verifyNewsContextOverlayAuthority(NEWS_CONTEXT_OVERLAY_AUTHORITY), true);
@@ -73,6 +82,8 @@ test('assembled production operation scan matches the final manifest denominator
     uncovered: report.uncovered,
   }, checks: verified.checks }));
   assert.equal(policyCoverage.verdict, 'PASS', JSON.stringify(policyCoverage));
+  assert.equal(policyCoverage.policyCount, OPERATION_POLICY_REGISTRY.length + 3);
+  assert.equal(policyCoverage.policies.length, OPERATION_POLICY_REGISTRY.length + 3);
   assert.equal(policyCoverage.registeredSiteCount, report.discovered);
   assert.deepEqual(policyCoverage.unknownPolicyIds, []);
   assert.deepEqual(policyCoverage.duplicateOperationIds, []);
@@ -85,6 +96,65 @@ test('assembled production operation scan matches the final manifest denominator
   );
 
   const policyById = new Map(policyCoverage.policies.map((policy) => [policy.operationId, policy]));
+  const legacySignedPolicy = policyById.get('OP_LEGACY_SIGNED_MONEY_PATH_DORMANT_BLOCKED');
+  const spotSignedTransportPolicy = policyById.get(BINANCE_SPOT_SIGNED_TRANSPORT_OPERATION_ID);
+  assert.deepEqual({
+    operationClass: spotSignedTransportPolicy?.operationClass,
+    canonicalOwnerId: spotSignedTransportPolicy?.canonicalOwnerId,
+    implementationPaths: spotSignedTransportPolicy?.implementationPaths,
+    wiringState: spotSignedTransportPolicy?.wiringState,
+    maximumAttempts: spotSignedTransportPolicy?.maximumAttempts,
+    backoff: spotSignedTransportPolicy?.backoff,
+    idempotency: spotSignedTransportPolicy?.idempotency,
+    authoritativeReconciliationLookup:
+      spotSignedTransportPolicy?.authoritativeReconciliationLookup,
+    fallbackEligibility: spotSignedTransportPolicy?.fallbackEligibility,
+    degradedResult: spotSignedTransportPolicy?.degradedResult,
+    blockedResult: spotSignedTransportPolicy?.blockedResult,
+    automaticRemediationAllowed: spotSignedTransportPolicy?.automaticRemediationAllowed,
+    escalationControlId: spotSignedTransportPolicy?.escalationControlId,
+  }, {
+    operationClass: 'NON_IDEMPOTENT_MUTATION',
+    canonicalOwnerId: 'BINANCE_SPOT_EXECUTION_ADAPTER',
+    implementationPaths: [BINANCE_SPOT_SIGNED_TRANSPORT_PATH],
+    wiringState: 'DORMANT_BLOCKED',
+    maximumAttempts: 1,
+    backoff: {
+      baseDelayMs: 0,
+      maximumDelayMs: 0,
+      jitterRatio: 0,
+      totalRetryBudgetMs: 0,
+    },
+    idempotency: {
+      required: true,
+      identityField: 'clientOrderId',
+      lifetimeMs: 86_400_000,
+      durability: 'DURABLE',
+    },
+    authoritativeReconciliationLookup: 'BINANCE_SPOT_QUERY_BY_ORIGINAL_CLIENT_ORDER_ID',
+    fallbackEligibility: 'NONE',
+    degradedResult: 'DORMANT_BLOCKED',
+    blockedResult: 'M0_NEVER_FIREABLE',
+    automaticRemediationAllowed: false,
+    escalationControlId: 'NO_RUNTIME_CONTROL',
+  });
+  assert.notEqual(
+    spotSignedTransportPolicy?.canonicalOwnerId,
+    legacySignedPolicy?.canonicalOwnerId,
+  );
+  assert.deepEqual(
+    report.sites
+      .filter((site) => site.operationId === BINANCE_SPOT_SIGNED_TRANSPORT_OPERATION_ID)
+      .map((site) => site.siteId)
+      .sort(),
+    BINANCE_SPOT_SIGNED_TRANSPORT_SITE_IDS,
+  );
+  assert.equal(
+    report.sites
+      .filter((site) => site.operationId === BINANCE_SPOT_SIGNED_TRANSPORT_OPERATION_ID)
+      .every((site) => site.path === BINANCE_SPOT_SIGNED_TRANSPORT_PATH),
+    true,
+  );
   assert.deepEqual(
     policyById.get('OP_BINANCE_PRIVATE_SIGNED_GET_READ')?.implementationPaths,
     ['server/src/binance/privateReadClient.ts'],
@@ -103,48 +173,25 @@ test('assembled production operation scan matches the final manifest denominator
       .includes('server/src/liveEdge/integration/assessmentBridge.ts'),
     true,
   );
-  const spotSignedTransport = policyById.get('OP_BINANCE_SPOT_SIGNED_TRANSPORT_DORMANT_BLOCKED');
-  assert.deepEqual(
-    spotSignedTransport?.implementationPaths,
-    ['server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts'],
-  );
-  assert.equal(spotSignedTransport?.canonicalOwnerId, 'BINANCE_SPOT_EXECUTION_ADAPTER');
-  assert.equal(spotSignedTransport?.operationClass, 'NON_IDEMPOTENT_MUTATION');
-  assert.equal(spotSignedTransport?.wiringState, 'DORMANT_BLOCKED');
-  assert.equal(spotSignedTransport?.idempotency.identityField, 'clientOrderId');
-  assert.equal(
-    spotSignedTransport?.authoritativeReconciliationLookup,
-    'SPOT_ORDER_QUERY_BY_ORIGINAL_CLIENT_ORDER_ID',
-  );
-  assert.equal(spotSignedTransport?.blockedResult, 'SPOT_EXECUTION_ADAPTER_UNMOUNTED');
-  assert.equal(
-    policyById.get('OP_LEGACY_SIGNED_MONEY_PATH_DORMANT_BLOCKED')?.implementationPaths
-      .includes('server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts'),
-    false,
-  );
-
-  const withoutSpotPolicy = policyCoverage.policies
-    .filter((policy) => policy.operationId !== 'OP_BINANCE_SPOT_SIGNED_TRANSPORT_DORMANT_BLOCKED');
-  const missingSpotCoverage = scanOperationCoverage(withoutSpotPolicy, report.sites);
-  assert.equal(missingSpotCoverage.verdict, 'FAIL');
-  assert.deepEqual(
-    missingSpotCoverage.unknownPolicyIds,
-    ['OP_BINANCE_SPOT_SIGNED_TRANSPORT_DORMANT_BLOCKED'],
-  );
-  assert.deepEqual(
-    missingSpotCoverage.uncoveredSites.map((site) => site.siteId).sort(),
-    [
-      'OPSITE_41207E8089FCA59F9EC3',
-      'OPSITE_5C70114C64727E66FC9A',
-      'OPSITE_85D71B839C490D05B2BB',
-    ].sort(),
-  );
-
   const withoutPrivatePolicy = policyCoverage.policies
     .filter((policy) => policy.operationId !== 'OP_BINANCE_PRIVATE_SIGNED_GET_READ');
   const missingPrivateCoverage = scanOperationCoverage(withoutPrivatePolicy, report.sites);
   assert.equal(missingPrivateCoverage.verdict, 'FAIL');
   assert.deepEqual(missingPrivateCoverage.unknownPolicyIds, ['OP_BINANCE_PRIVATE_SIGNED_GET_READ']);
+
+  const withoutSpotSignedTransportPolicy = policyCoverage.policies
+    .filter((policy) => policy.operationId !== BINANCE_SPOT_SIGNED_TRANSPORT_OPERATION_ID);
+  const missingSpotSignedTransportCoverage =
+    scanOperationCoverage(withoutSpotSignedTransportPolicy, report.sites);
+  assert.equal(missingSpotSignedTransportCoverage.verdict, 'FAIL');
+  assert.deepEqual(
+    missingSpotSignedTransportCoverage.unknownPolicyIds,
+    [BINANCE_SPOT_SIGNED_TRANSPORT_OPERATION_ID],
+  );
+  assert.deepEqual(
+    missingSpotSignedTransportCoverage.uncoveredSites.map((site) => site.siteId).sort(),
+    BINANCE_SPOT_SIGNED_TRANSPORT_SITE_IDS,
+  );
 
   const rawNewsSites = report.sites.map((site) => site.siteId === NEWS_CONTEXT_OVERLAY_AUTHORITY.siteId
     ? Object.freeze({

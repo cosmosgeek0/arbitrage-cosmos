@@ -68,12 +68,35 @@ export interface VolumeStrategyDecayCadencePort {
   tick(request: Readonly<StrategyDecayCoordinatorRequest>): StrategyDecayCoordinatorResult;
 }
 
+interface VolumeStreamHandle {
+  readonly name: string;
+  start(): void;
+  stop(): void;
+}
+
+type VolumeStreamFactory = (
+  name: string,
+  url: string,
+  onMessage: (data: unknown) => void,
+  onStatus: (name: string, status: FeedStatus) => void,
+) => VolumeStreamHandle;
+
+export interface VolumeRuntimeOptions {
+  /** Test-time compression only; production retains the bounded default. */
+  sourceRecoveryBaseMs?: number;
+  random?: () => number;
+  streamFactory?: VolumeStreamFactory;
+}
+
 const STREAM_CHUNK = 140;
 const UNIVERSE_REFRESH_MS = 15 * 60_000;
 const BOOK_REFRESH_MS = 2_750;
-// Bounded per-stream recycle budget for exhausted retry campaigns; reset when
-// a stream proves recovery by reaching 'open'.
-const MAX_EXHAUSTED_STREAM_RECYCLES = 5;
+// BinanceStream deliberately latches after its bounded retry campaign. The
+// runtime that owns the producer therefore re-arms it on a bounded,
+// de-synchronised supervisory schedule until an open proves recovery.
+const SOURCE_RECOVERY_BASE_MS = 60_000;
+const SOURCE_RECOVERY_MAX_MS = 15 * 60_000;
+const SOURCE_RECOVERY_JITTER_RATIO = 0.2;
 
 function chunks<T>(rows: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -84,14 +107,21 @@ function chunks<T>(rows: T[], size: number): T[][] {
 export class VolumeRuntime {
   private readonly engine: VolumeEngine;
   private readonly observedOrderFocusCoordinator: DurableObservedOrderFocusCoordinator | null;
-  private streams: BinanceStream[] = [];
+  private streams: VolumeStreamHandle[] = [];
+  private readonly streamStopQuarantine = new Set<VolumeStreamHandle>();
   private streamStatus = new Map<string, FeedStatus>();
-  private readonly streamRecycleBudget = new Map<string, number>();
+  private readonly streamRecoveryTimers = new Map<string, NodeJS.Timeout>();
+  private readonly streamRecoveryAttempts = new Map<string, number>();
+  private readonly sourceRecoveryBaseMs: number;
+  private readonly recoveryRandom: () => number;
+  private readonly streamFactory: VolumeStreamFactory;
   private eligibleSymbols: string[] = [];
   private eligibleSymbolSet = new Set<string>();
   private eligibleBaseBySymbol = new Map<string, string>();
   private symbolSetKey = '';
+  private streamOwnershipKey: string | null = null;
   private running = false;
+  private stopping = false;
   private generation = 0;
   private streamEpoch = 0;
   private startPromise: Promise<void> | null = null;
@@ -143,7 +173,26 @@ export class VolumeRuntime {
     private readonly getUniverse: () => MarketUniverseRow[],
     private readonly strategyDecay: VolumeStrategyDecayCadencePort | null = null,
     private readonly nowSource: () => number = () => Date.now(),
+    options: Readonly<VolumeRuntimeOptions> = Object.freeze({}),
   ) {
+    const recoveryBaseMs = options.sourceRecoveryBaseMs ?? SOURCE_RECOVERY_BASE_MS;
+    if (
+      !Number.isSafeInteger(recoveryBaseMs)
+      || recoveryBaseMs < 1
+      || recoveryBaseMs > SOURCE_RECOVERY_MAX_MS
+    ) {
+      throw new RangeError(`VOLUME_SOURCE_RECOVERY_BASE_OUT_OF_BOUNDS:${String(recoveryBaseMs)}`);
+    }
+    if (options.random !== undefined && typeof options.random !== 'function') {
+      throw new TypeError('VOLUME_SOURCE_RECOVERY_RANDOM_INVALID');
+    }
+    if (options.streamFactory !== undefined && typeof options.streamFactory !== 'function') {
+      throw new TypeError('VOLUME_STREAM_FACTORY_INVALID');
+    }
+    this.sourceRecoveryBaseMs = recoveryBaseMs;
+    this.recoveryRandom = options.random ?? Math.random;
+    this.streamFactory = options.streamFactory
+      ?? ((name, url, onMessage, onStatus) => new BinanceStream(name, url, onMessage, onStatus));
     this.engine = new VolumeEngine(systemClock, undefined, {
       emit: (event) => this.persistEvent(event),
     });
@@ -166,6 +215,7 @@ export class VolumeRuntime {
   }
 
   async start(): Promise<void> {
+    if (this.stopping) return;
     if (this.running) return this.startPromise ?? Promise.resolve();
     const restoration = this.observedOrderFocusCoordinator?.restore();
     if (restoration !== undefined
@@ -186,42 +236,64 @@ export class VolumeRuntime {
   }
 
   stop(): void {
-    if (!this.running && !this.startPromise && !this.engine.isRunning()) return;
-    const closingGeneration = this.generation;
-    const observedAtMs = this.latchedNowMs();
-    this.publishEvidence(Object.freeze({
-      kind: 'SOURCE_CLOSED' as const,
-      generation: closingGeneration,
-      revision: this.nextEvidenceRevision(),
-      observedAtMs,
-    }));
-    ++this.generation;
-    ++this.streamEpoch;
-    this.running = false;
-    this.startPromise = null;
-    for (const stream of this.streams) stream.stop();
-    this.streams = [];
-    // A subsequent start() must rebuild sockets even when the eligible symbol
-    // universe is unchanged. Keeping the old key left the runtime running with
-    // zero streams after an operator-initiated recovery.
-    this.streamStatus.clear();
-    this.symbolSetKey = '';
-    this.eligibleSymbols = [];
-    this.eligibleSymbolSet.clear();
-    this.eligibleBaseBySymbol.clear();
-    this.lastRawTradeId.clear();
-    if (this.tickTimer) clearInterval(this.tickTimer);
-    if (this.bookTimer) clearInterval(this.bookTimer);
-    if (this.universeTimer) clearInterval(this.universeTimer);
-    if (this.streamRetryTimer) clearTimeout(this.streamRetryTimer);
-    this.tickTimer = null;
-    this.bookTimer = null;
-    this.universeTimer = null;
-    this.streamRetryTimer = null;
-    this.streamRetryMs = 1_000;
-    this.bookBusyGeneration = null;
-    this.warmingSymbols.clear();
-    this.engine.stop();
+    if (this.stopping) return;
+    if (
+      !this.running
+      && !this.startPromise
+      && !this.engine.isRunning()
+      && this.streams.length === 0
+      && this.streamStopQuarantine.size === 0
+    ) return;
+    this.stopping = true;
+    try {
+      const closingGeneration = this.generation;
+      const observedAtMs = this.latchedNowMs();
+      this.publishEvidence(Object.freeze({
+        kind: 'SOURCE_CLOSED' as const,
+        generation: closingGeneration,
+        revision: this.nextEvidenceRevision(),
+        observedAtMs,
+      }));
+      ++this.generation;
+      ++this.streamEpoch;
+      this.running = false;
+      this.startPromise = null;
+      this.streamOwnershipKey = null;
+      this.symbolSetKey = '';
+      this.clearAllStreamRecoveries();
+      const stopCandidates = new Set([...this.streams, ...this.streamStopQuarantine]);
+      for (const stream of stopCandidates) {
+        try {
+          stream.stop();
+          this.streamStopQuarantine.delete(stream);
+        } catch {
+          this.streamStopQuarantine.add(stream);
+        }
+      }
+      this.streams = [...this.streamStopQuarantine];
+      // A subsequent start() must rebuild sockets even when the eligible symbol
+      // universe is unchanged. Keeping the old key left the runtime running with
+      // zero streams after an operator-initiated recovery.
+      this.streamStatus.clear();
+      this.eligibleSymbols = [];
+      this.eligibleSymbolSet.clear();
+      this.eligibleBaseBySymbol.clear();
+      this.lastRawTradeId.clear();
+      if (this.tickTimer) clearInterval(this.tickTimer);
+      if (this.bookTimer) clearInterval(this.bookTimer);
+      if (this.universeTimer) clearInterval(this.universeTimer);
+      if (this.streamRetryTimer) clearTimeout(this.streamRetryTimer);
+      this.tickTimer = null;
+      this.bookTimer = null;
+      this.universeTimer = null;
+      this.streamRetryTimer = null;
+      this.streamRetryMs = 1_000;
+      this.bookBusyGeneration = null;
+      this.warmingSymbols.clear();
+      this.engine.stop();
+    } finally {
+      this.stopping = false;
+    }
   }
 
   private async startGeneration(generation: number): Promise<void> {
@@ -240,12 +312,26 @@ export class VolumeRuntime {
       );
       this.launch('initial book refresh', generation, () => this.refreshBooks(generation));
     } catch (error) {
+      const failedEpoch = this.streamEpoch;
+      const failedStreams = this.streams;
+      const staleRetryTimer = this.streamRetryTimer;
       this.safeLog('error_event', null, {
         source: 'volume-runtime.start',
         message: error instanceof Error ? error.message : String(error),
       });
-      if (this.isActive(generation)) {
+      if (
+        this.isActive(generation)
+        && this.streamEpoch === failedEpoch
+        && this.streams === failedStreams
+      ) {
         this.stop();
+        return;
+      }
+      if (
+        staleRetryTimer !== null
+        && this.streamRetryTimer === staleRetryTimer
+      ) {
+        this.clearStreamRetry();
       }
     }
   }
@@ -505,15 +591,25 @@ export class VolumeRuntime {
     this.baselineTotal = nextSymbols.length;
     this.baselineCompleted = nextSymbols.filter((symbol) => this.seeded.has(symbol)).length;
     this.baselineFailed = this.baselineFailures.size;
-    if (nextKey !== this.symbolSetKey) {
+    const expectedStreamCount = Math.ceil(nextSymbols.length / STREAM_CHUNK);
+    const streamOwnershipIncomplete = (
+      this.streamStopQuarantine.size > 0
+      || this.streams.length !== expectedStreamCount
+      || new Set(this.streams).size !== expectedStreamCount
+      || this.streamOwnershipKey !== nextKey
+    );
+    if (nextKey !== this.symbolSetKey || streamOwnershipIncomplete) {
       try {
-        this.restartTradeStreams(nextSymbols, generation);
+        const restarted = this.restartTradeStreams(nextSymbols, generation);
+        if (!restarted || !this.isActive(generation)) return;
         this.symbolSetKey = nextKey;
         this.clearStreamRetry();
       } catch (error) {
         this.scheduleStreamRetry(nextSymbols, nextKey, generation);
         throw error;
       }
+    } else {
+      this.clearStreamRetry();
     }
     this.launch(
       'baseline warmup',
@@ -522,31 +618,123 @@ export class VolumeRuntime {
     );
   }
 
-  private restartTradeStreams(symbols: string[], generation: number): void {
-    if (!this.isActive(generation)) return;
-    const streamEpoch = ++this.streamEpoch;
-    for (const stream of this.streams) stream.stop();
-    this.streams = [];
+  private restartTradeStreams(symbols: string[], generation: number): boolean {
+    if (!this.isActive(generation)) return false;
+    const requestedKey = symbols.join(',');
+    const previousStreams = [...this.streams];
+    const turnEpoch = ++this.streamEpoch;
+    const turn: VolumeStreamHandle[] = [];
+    this.streams = turn;
+    this.streamOwnershipKey = null;
+    this.clearAllStreamRecoveries();
     this.streamStatus.clear();
-    this.streamRecycleBudget.clear();
-    const nextStreams: BinanceStream[] = [];
-    for (const [index, group] of chunks(symbols, STREAM_CHUNK).entries()) {
-      if (!group.length) continue;
-      const names = group.map((symbol) => symbol.toLowerCase() + '@aggTrade').join('/');
-      const stream = new BinanceStream(
-        'volume-aggtrade-' + String(index + 1),
-        'wss://stream.binance.com:443/stream?streams=' + names,
-        (data) => this.onTradeMessage(data, generation, streamEpoch),
-        (name, status) => this.onStreamStatus(name, status, generation, streamEpoch),
-      );
-      nextStreams.push(stream);
+    const captured = new Set<VolumeStreamHandle>([
+      ...previousStreams,
+      ...this.streamStopQuarantine,
+    ]);
+    const owns = (epoch: number, streams: VolumeStreamHandle[]): boolean => (
+      this.isActive(generation)
+      && this.streamEpoch === epoch
+      && this.streams === streams
+    );
+    const cleanupCaptured = (
+      expectedEpoch: number,
+      expectedStreams: VolumeStreamHandle[],
+    ): {
+      retainedOwnership: boolean;
+      failedStreams: VolumeStreamHandle[];
+      cleanupError: unknown;
+    } => {
+      let retainedOwnership = owns(expectedEpoch, expectedStreams);
+      const failedStreams: VolumeStreamHandle[] = [];
+      let cleanupError: unknown = null;
+      for (const stream of captured) {
+        const ownedBeforeStop = owns(expectedEpoch, expectedStreams);
+        retainedOwnership = retainedOwnership && ownedBeforeStop;
+        if (this.streams.includes(stream)) continue;
+        try {
+          stream.stop();
+          this.streamStopQuarantine.delete(stream);
+        } catch (error) {
+          this.streamStopQuarantine.add(stream);
+          failedStreams.push(stream);
+          if (failedStreams.length === 1) cleanupError = error;
+        }
+        const ownedAfterStop = owns(expectedEpoch, expectedStreams);
+        retainedOwnership = retainedOwnership && ownedAfterStop;
+      }
+      return {
+        retainedOwnership: retainedOwnership && owns(expectedEpoch, expectedStreams),
+        failedStreams,
+        cleanupError,
+      };
+    };
+
+    const predecessorCleanup = cleanupCaptured(turnEpoch, turn);
+    if (!predecessorCleanup.retainedOwnership) return false;
+    if (predecessorCleanup.failedStreams.length > 0) {
+      const rollbackEpoch = ++this.streamEpoch;
+      const rollback = [...predecessorCleanup.failedStreams];
+      this.streams = rollback;
+      this.streamOwnershipKey = null;
+      this.clearAllStreamRecoveries();
+      this.streamStatus.clear();
+      if (!owns(rollbackEpoch, rollback)) return false;
+      throw predecessorCleanup.cleanupError;
     }
     try {
-      for (const stream of nextStreams) stream.start();
-      this.streams = nextStreams;
+      for (const [index, group] of chunks(symbols, STREAM_CHUNK).entries()) {
+        if (!group.length) continue;
+        if (!owns(turnEpoch, turn)) {
+          cleanupCaptured(turnEpoch, turn);
+          return false;
+        }
+        const names = group.map((symbol) => symbol.toLowerCase() + '@aggTrade').join('/');
+        const stream = this.streamFactory(
+          'volume-aggtrade-' + String(index + 1),
+          'wss://stream.binance.com:443/stream?streams=' + names,
+          (data) => this.onTradeMessage(data, generation, turnEpoch),
+          (name, status) => this.onStreamStatus(name, status, generation, turnEpoch),
+        );
+        captured.add(stream);
+        if (turn.includes(stream)) {
+          throw new TypeError('volume stream factory returned a duplicate handle');
+        }
+        if (!owns(turnEpoch, turn)) {
+          cleanupCaptured(turnEpoch, turn);
+          return false;
+        }
+        turn.push(stream);
+        if (!owns(turnEpoch, turn)) {
+          cleanupCaptured(turnEpoch, turn);
+          return false;
+        }
+        stream.start();
+        if (!owns(turnEpoch, turn)) {
+          cleanupCaptured(turnEpoch, turn);
+          return false;
+        }
+      }
+      if (!owns(turnEpoch, turn)) return false;
+      this.streamOwnershipKey = requestedKey;
+      return owns(turnEpoch, turn) && this.streamOwnershipKey === requestedKey;
     } catch (error) {
-      for (const stream of nextStreams) stream.stop();
+      if (!owns(turnEpoch, turn)) {
+        cleanupCaptured(turnEpoch, turn);
+        return false;
+      }
+      const rollbackEpoch = ++this.streamEpoch;
+      const rollback: VolumeStreamHandle[] = [];
+      this.streams = rollback;
+      this.streamOwnershipKey = null;
+      this.clearAllStreamRecoveries();
       this.streamStatus.clear();
+      const rollbackCleanup = cleanupCaptured(rollbackEpoch, rollback);
+      if (!rollbackCleanup.retainedOwnership) return false;
+      for (const stream of rollbackCleanup.failedStreams) {
+        if (!rollback.includes(stream)) rollback.push(stream);
+      }
+      if (!owns(rollbackEpoch, rollback)) return false;
       throw error;
     }
   }
@@ -561,15 +749,26 @@ export class VolumeRuntime {
       this.streamRetryTimer = null;
       if (!this.isActive(generation) || key !== this.eligibleSymbols.join(',')) return;
       try {
-        this.restartTradeStreams(symbols, generation);
+        const restarted = this.restartTradeStreams(symbols, generation);
+        if (!restarted || !this.isActive(generation)) return;
         this.symbolSetKey = key;
         this.clearStreamRetry();
       } catch (error) {
+        const failedEpoch = this.streamEpoch;
+        const failedStreams = this.streams;
+        const failedRetryTimer = this.streamRetryTimer;
         this.safeLog('error_event', null, {
           source: 'volume-runtime.stream-retry',
           message: error instanceof Error ? error.message : String(error),
         });
-        this.scheduleStreamRetry(symbols, key, generation);
+        if (
+          this.isActive(generation)
+          && this.streamEpoch === failedEpoch
+          && this.streams === failedStreams
+          && this.streamRetryTimer === failedRetryTimer
+        ) {
+          this.scheduleStreamRetry(symbols, key, generation);
+        }
       }
     }, delay);
   }
@@ -644,9 +843,15 @@ export class VolumeRuntime {
 
   private onStreamStatus(name: string, status: FeedStatus, generation: number, streamEpoch: number): void {
     if (!this.isActive(generation) || streamEpoch !== this.streamEpoch) return;
+    const stream = this.streams.find((candidate) => candidate.name === name);
+    if (!stream) return;
     const previous = this.streamStatus.get(name);
     this.streamStatus.set(name, status);
-    if (previous === status || status === 'connecting') return;
+    if (previous === status) {
+      if (status === 'exhausted') this.scheduleStreamRecovery(name, generation, streamEpoch);
+      return;
+    }
+    if (status === 'connecting') return;
     const event = status === 'open'
       ? 'ws.open'
       : status === 'cooldown'
@@ -659,22 +864,120 @@ export class VolumeRuntime {
       source: 'volume-runtime',
       status,
     });
-    if (status === 'open') this.streamRecycleBudget.delete(name);
-    if (status === 'exhausted') {
-      const recycles = this.streamRecycleBudget.get(name) ?? 0;
-      if (recycles < MAX_EXHAUSTED_STREAM_RECYCLES) {
-        // A retry campaign that ends does not end the stream's obligation.
-        // Recycle it so a later network recovery is observed; the bounded
-        // budget (reset on 'open') keeps a genuinely dead endpoint from
-        // spinning, and the epoch guard above fences late callbacks.
-        this.streamRecycleBudget.set(name, recycles + 1);
-        const stream = this.streams.find((candidate) => candidate.name === name);
-        if (stream) {
-          stream.stop();
-          stream.start();
+    if (
+      !this.isActive(generation)
+      || streamEpoch !== this.streamEpoch
+      || this.streams.find((candidate) => candidate.name === name) !== stream
+    ) return;
+    const currentStatus = this.streamStatus.get(name);
+    if (currentStatus === 'open') this.clearStreamRecovery(name);
+    if (currentStatus === 'exhausted') this.scheduleStreamRecovery(name, generation, streamEpoch);
+  }
+
+  private scheduleStreamRecovery(name: string, generation: number, streamEpoch: number): void {
+    const stream = this.streams.find((candidate) => candidate.name === name);
+    if (
+      !this.isActive(generation)
+      || streamEpoch !== this.streamEpoch
+      || !stream
+      || this.streamStatus.get(name) !== 'exhausted'
+      || this.streamRecoveryTimers.has(name)
+    ) return;
+    const attempt = (this.streamRecoveryAttempts.get(name) ?? 0) + 1;
+    const exponent = Math.min(attempt - 1, 30);
+    const base = Math.min(this.sourceRecoveryBaseMs * 2 ** exponent, SOURCE_RECOVERY_MAX_MS);
+    let random = 0.5;
+    try {
+      const observed = this.recoveryRandom();
+      if (Number.isFinite(observed)) random = Math.min(1, Math.max(0, observed));
+    } catch {
+      // Deterministic midpoint jitter is the fail-closed fallback.
+    }
+    const delay = Math.max(
+      1,
+      Math.round(base * (1 + ((random * 2) - 1) * SOURCE_RECOVERY_JITTER_RATIO)),
+    );
+    if (
+      !this.isActive(generation)
+      || streamEpoch !== this.streamEpoch
+      || this.streams.find((candidate) => candidate.name === name) !== stream
+      || this.streamStatus.get(name) !== 'exhausted'
+      || this.streamRecoveryTimers.has(name)
+    ) return;
+    const timer = setTimeout(() => {
+      if (this.streamRecoveryTimers.get(name) !== timer) return;
+      this.streamRecoveryTimers.delete(name);
+      if (!this.isActive(generation) || streamEpoch !== this.streamEpoch) return;
+      if (this.streamStatus.get(name) !== 'exhausted') return;
+      if (this.streams.find((candidate) => candidate.name === name) !== stream) return;
+      this.safeLog('ws.rearm', null, {
+        feed: name,
+        source: 'volume-runtime',
+        attempt,
+        delayMs: delay,
+      });
+      if (
+        !this.isActive(generation)
+        || streamEpoch !== this.streamEpoch
+        || this.streamStatus.get(name) !== 'exhausted'
+        || this.streams.find((candidate) => candidate.name === name) !== stream
+        || this.streamRecoveryTimers.has(name)
+      ) return;
+      const recoveryStatus = this.streamStatus.get(name);
+      try {
+        stream.stop();
+        if (
+          !this.isActive(generation)
+          || streamEpoch !== this.streamEpoch
+          || this.streams.find((candidate) => candidate.name === name) !== stream
+          || this.streamRecoveryTimers.has(name)
+          || (
+            this.streamStatus.get(name) !== 'closed'
+            && this.streamStatus.get(name) !== recoveryStatus
+          )
+        ) return;
+        stream.start();
+      } catch (error) {
+        this.safeLog('error_event', null, {
+          source: 'volume-runtime.stream-rearm',
+          feed: name,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        if (
+          this.isActive(generation)
+          && streamEpoch === this.streamEpoch
+          && this.streams.find((candidate) => candidate.name === name) === stream
+          && this.streamStatus.get(name) !== 'open'
+          && !this.streamRecoveryTimers.has(name)
+        ) {
+          this.onStreamStatus(name, 'exhausted', generation, streamEpoch);
         }
       }
-    }
+      if (
+        this.isActive(generation)
+        && streamEpoch === this.streamEpoch
+        && this.streamStatus.get(name) === 'exhausted'
+        && this.streams.find((candidate) => candidate.name === name) === stream
+      ) {
+        this.scheduleStreamRecovery(name, generation, streamEpoch);
+      }
+    }, delay);
+    this.streamRecoveryAttempts.set(name, attempt);
+    this.streamRecoveryTimers.set(name, timer);
+    timer.unref?.();
+  }
+
+  private clearStreamRecovery(name: string): void {
+    const timer = this.streamRecoveryTimers.get(name);
+    if (timer !== undefined) clearTimeout(timer);
+    this.streamRecoveryTimers.delete(name);
+    this.streamRecoveryAttempts.delete(name);
+  }
+
+  private clearAllStreamRecoveries(): void {
+    for (const timer of this.streamRecoveryTimers.values()) clearTimeout(timer);
+    this.streamRecoveryTimers.clear();
+    this.streamRecoveryAttempts.clear();
   }
 
   private async refreshBooks(generation: number): Promise<void> {
@@ -776,11 +1079,25 @@ export class VolumeRuntime {
       .then(task)
       .catch((error) => {
         if (!this.isActive(generation)) return;
+        const failedEpoch = this.streamEpoch;
+        const failedStreams = this.streams;
+        const staleRetryTimer = this.streamRetryTimer;
         this.safeLog('error_event', null, {
           source: 'volume-runtime.background',
           task: label,
           message: error instanceof Error ? error.message : String(error),
         });
+        if (
+          this.isActive(generation)
+          && this.streamEpoch === failedEpoch
+          && this.streams === failedStreams
+        ) return;
+        if (
+          staleRetryTimer !== null
+          && this.streamRetryTimer === staleRetryTimer
+        ) {
+          this.clearStreamRetry();
+        }
       });
   }
 

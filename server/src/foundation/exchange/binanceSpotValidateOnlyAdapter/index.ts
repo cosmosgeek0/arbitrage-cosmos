@@ -21,6 +21,7 @@ import {
   isBinanceSpotClientOrderId,
 } from '../binanceSpot/clientOrderId.js';
 import {
+  createSourcedTimestamp,
   evaluateFreshness,
   isValidUtcMillis,
   validateSourcedTimestamp,
@@ -140,6 +141,12 @@ export interface BinanceSpotValidateOnlyPreparation {
   readonly sendEligible: false;
   readonly transportCapability: 'ABSENT';
   readonly snapshotId: string | null;
+  /** Injected validation clock, projected only from inspected plain data. */
+  readonly evaluatedAtMs: number | null;
+  /** Exact normalized public exchangeInfo/filter provenance. */
+  readonly filterObservedAt: Readonly<SourcedTimestamp> | null;
+  /** Exact normalized reference-price / execution-rule provenance. */
+  readonly venueEvidenceObservedAt: Readonly<SourcedTimestamp> | null;
   readonly blockingCodes:
     readonly BinanceSpotPreparationBlockingCode[];
   readonly filterValidation:
@@ -459,12 +466,51 @@ function validateFreshProvenance(
   return report.state === 'FRESH' ? null : 'INVALID';
 }
 
+function projectSourcedTimestamp(
+  value: unknown,
+  allowedAuthorities: readonly DataAuthority[],
+): Readonly<SourcedTimestamp> | null {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    validateSourcedTimestamp(value).length > 0
+  ) {
+    return null;
+  }
+  const timestamp = value as unknown as SourcedTimestamp;
+  if (
+    timestamp.completeness !== 'COMPLETE' ||
+    !allowedAuthorities.includes(timestamp.authority) ||
+    (timestamp.sourceTimeMs !== null &&
+      timestamp.sourceTimeMs > timestamp.receivedAtMs)
+  ) {
+    return null;
+  }
+  return createSourcedTimestamp({
+    sourceTimeMs: timestamp.sourceTimeMs,
+    receivedAtMs: timestamp.receivedAtMs,
+    maxAgeMs: timestamp.maxAgeMs,
+    authority: timestamp.authority,
+    completeness: timestamp.completeness,
+    sourceId: timestamp.sourceId,
+  });
+}
+
 function freezePreparation(
   value: BinanceSpotValidateOnlyPreparation,
 ): Readonly<BinanceSpotValidateOnlyPreparation> {
   const frozen = Object.freeze({
     ...value,
     policy: Object.freeze({ ...value.policy }),
+    filterObservedAt:
+      value.filterObservedAt === null
+        ? null
+        : Object.freeze({ ...value.filterObservedAt }),
+    venueEvidenceObservedAt:
+      value.venueEvidenceObservedAt === null
+        ? null
+        : Object.freeze({ ...value.venueEvidenceObservedAt }),
     blockingCodes: Object.freeze([...value.blockingCodes]),
   });
   preparations.add(frozen);
@@ -482,6 +528,9 @@ function invalidPreparation(
     sendEligible: false,
     transportCapability: 'ABSENT',
     snapshotId: null,
+    evaluatedAtMs: null,
+    filterObservedAt: null,
+    venueEvidenceObservedAt: null,
     blockingCodes: Object.freeze([code]),
     filterValidation: null,
     priceRangeRisk: null,
@@ -533,6 +582,14 @@ export function prepareBinanceSpotValidateOnlyOrder(
   }
 
   const snapshot = root.publicSnapshot as Record<string, unknown>;
+  const filterObservedAt = projectSourcedTimestamp(
+    snapshot.filterObservedAt,
+    ['LIVE_PUBLIC', 'RECORDED_REPLAY', 'SYNTHETIC_TEST'],
+  );
+  const venueEvidenceObservedAt = projectSourcedTimestamp(
+    snapshot.venueEvidenceObservedAt,
+    ['LIVE_PUBLIC', 'RECORDED_REPLAY', 'SYNTHETIC_TEST'],
+  );
   const snapshotShape = hasExactKeys(snapshot, [
     'snapshotId',
     'symbol',
@@ -788,6 +845,9 @@ export function prepareBinanceSpotValidateOnlyOrder(
     sendEligible: false,
     transportCapability: 'ABSENT',
     snapshotId: nonEmptyToken(snapshot.snapshotId) ? snapshot.snapshotId : null,
+    evaluatedAtMs: root.evaluatedAtMs as number,
+    filterObservedAt,
+    venueEvidenceObservedAt,
     blockingCodes: uniqueCodes,
     filterValidation,
     priceRangeRisk: filterValidation?.priceRange ?? null,

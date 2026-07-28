@@ -155,6 +155,13 @@ test('defaults remain OFF, kill-switch ON, authority NONE and inert descriptors 
   assert.equal(result.authority, 'NONE');
   assert.equal(result.sendEligible, false);
   assert.equal(result.transportCapability, 'ABSENT');
+  assert.equal(result.evaluatedAtMs, T0);
+  assert.deepEqual(result.filterObservedAt, PUBLIC_OBSERVED_AT);
+  assert.deepEqual(result.venueEvidenceObservedAt, PUBLIC_OBSERVED_AT);
+  assert.notEqual(result.filterObservedAt, PUBLIC_OBSERVED_AT);
+  assert.notEqual(result.venueEvidenceObservedAt, PUBLIC_OBSERVED_AT);
+  assert.equal(Object.isFrozen(result.filterObservedAt), true);
+  assert.equal(Object.isFrozen(result.venueEvidenceObservedAt), true);
   assert.equal(result.wireIntent?.quantity, '0.01');
   assert.equal(result.wireIntent?.price, '50000');
   assert.equal(result.wireIntent?.clientOrderId, CLIENT_ORDER_ID);
@@ -196,6 +203,9 @@ test('hostile accessors and proxies are rejected without invoking getters or tra
   const getterResult = prepareBinanceSpotValidateOnlyOrder(getterInput);
   assert.equal(getterCalls, 0);
   assert.deepEqual(getterResult.blockingCodes, ['INPUT_NOT_PLAIN_DATA']);
+  assert.equal(getterResult.evaluatedAtMs, null);
+  assert.equal(getterResult.filterObservedAt, null);
+  assert.equal(getterResult.venueEvidenceObservedAt, null);
 
   let proxyTrapCalls = 0;
   const proxyInput = new Proxy(
@@ -317,6 +327,9 @@ test('stale and future public filter or venue evidence cannot produce descriptor
     true,
   );
   assert.equal(staleFilter.wireIntent, null);
+  assert.equal(staleFilter.evaluatedAtMs, T0);
+  assert.deepEqual(staleFilter.filterObservedAt, stale);
+  assert.equal(Object.isFrozen(staleFilter.filterObservedAt), true);
 
   const future = Object.freeze({
     ...PUBLIC_OBSERVED_AT,
@@ -331,6 +344,7 @@ test('stale and future public filter or venue evidence cannot produce descriptor
     true,
   );
   assert.equal(futureVenue.wireIntent, null);
+  assert.deepEqual(futureVenue.venueEvidenceObservedAt, future);
 
   const callerExtendedFilter = prepare({
     publicSnapshot: snapshot({
@@ -385,6 +399,9 @@ test('LIMIT and MARKET wire records contain no provider or mutation capability',
   const limit = prepare();
   assert.equal(limit.status, 'VALIDATED');
   assert.equal(limit.blockingCodes.length, 0);
+  assert.equal(limit.evaluatedAtMs, T0);
+  assert.deepEqual(limit.filterObservedAt, PUBLIC_OBSERVED_AT);
+  assert.deepEqual(limit.venueEvidenceObservedAt, PUBLIC_OBSERVED_AT);
 
   const marketId = deriveBinanceSpotClientOrderId({
     planId: 'basis-plan-spot-adapter-fixture',

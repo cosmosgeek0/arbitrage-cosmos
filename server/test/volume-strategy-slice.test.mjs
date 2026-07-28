@@ -41,6 +41,9 @@ import {
   decodeVolumeStrategyCheckpoint,
   encodeVolumeStrategyCheckpoint,
 } from '../dist/engine/volume/strategyLedger.js';
+import {
+  VOLUME_ECONOMIC_EXIT_CONFIG_KEY,
+} from '../dist/engine/volume/strategyEconomicExitLedger.js';
 import { VolumeRuntime } from '../dist/services/volumeRuntime.js';
 
 const NOW_MS = 1_900_000_000_000;
@@ -331,6 +334,44 @@ class FakeVolumeStrategyLedger {
       committed: true,
       events: committedEvents,
     };
+  }
+}
+
+class FakeVolumeRuntimeLedger extends FakeVolumeStrategyLedger {
+  exitValue = null;
+  exitCasCalls = 0;
+  exitReadCalls = 0;
+  exitMode = 'NORMAL';
+
+  getConfigValue(key) {
+    if (key !== VOLUME_ECONOMIC_EXIT_CONFIG_KEY) {
+      return super.getConfigValue(key);
+    }
+    this.exitReadCalls += 1;
+    if (this.exitMode === 'READ_UNAVAILABLE') {
+      throw new Error('simulated exit-shadow read outage');
+    }
+    return this.exitValue;
+  }
+
+  compareAndSetConfigValueAndLogEvents(
+    key,
+    expectedValue,
+    nextValue,
+    records,
+    commitBeforeMs,
+  ) {
+    if (key !== VOLUME_ECONOMIC_EXIT_CONFIG_KEY) {
+      return super.compareAndSetConfigValueAndLogEvents(
+        key,
+        expectedValue,
+        nextValue,
+        records,
+        commitBeforeMs,
+      );
+    }
+    this.exitCasCalls += 1;
+    throw new Error('current conditional economics must not publish an exit-shadow sample');
   }
 }
 
@@ -937,6 +978,95 @@ test('slice rejects source, proposal, economics, capacity, and hostile-tamper bo
   assert.equal(hostileRejected.disposition, 'REJECTED');
   assert.equal(trapCalls, 0);
   assertNoAuthority(hostileRejected);
+});
+
+test('VolumeRuntime economic exit successor stays OFF, non-admitted, empty, and failure-contained', () => {
+  const ledger = new FakeVolumeRuntimeLedger();
+  const runtimeConfig = structuredClone(DEFAULTS);
+  const runtime = new VolumeRuntime(
+    ledger,
+    () => runtimeConfig,
+    () => [],
+    null,
+    () => NOW_MS,
+  );
+
+  assert.doesNotThrow(() => runtime.restoreStrategySlice());
+  assert.doesNotThrow(() => runtime.restoreEconomicExitRule());
+
+  const strategySnapshot = runtime.strategySliceSnapshot();
+  const exitSnapshot = runtime.economicExitSnapshot();
+  assert.deepEqual(exitSnapshot.controls, {
+    enabled: false,
+    killSwitch: 'ON',
+    mode: 'SHADOW_ONLY',
+    executionAuthority: 'NONE',
+    submitAuthority: 'NONE',
+    privateDataAuthority: 'NONE',
+    providerAuthority: 'NONE',
+  });
+  assert.equal(Object.isFrozen(exitSnapshot.controls), true);
+  assert.equal(exitSnapshot.latestSample, null);
+  assert.equal(exitSnapshot.latestDecision, null);
+  assert.equal(exitSnapshot.lifecycle.mode, 'SHADOW_ONLY_RECORD');
+  assert.equal(exitSnapshot.lifecycle.checkpointScope, 'LATEST_ONLY');
+  assert.equal(exitSnapshot.lifecycle.persistence.status, 'EMPTY');
+  assert.equal(exitSnapshot.lifecycle.restoreAttempts, 1);
+  assert.equal(exitSnapshot.lifecycle.commitAttempts, 0);
+  assert.equal(exitSnapshot.lifecycle.durablePublications, 0);
+
+  assert.equal(strategySnapshot.controls.enabled, false);
+  assert.equal(strategySnapshot.controls.killSwitchEngaged, true);
+  assert.equal(strategySnapshot.economics.disposition, 'REJECTED');
+  assert.equal(strategySnapshot.economics.applicability, 'UNKNOWN');
+  assert.equal(strategySnapshot.economics.productionAdmissible, false);
+  assert.equal(strategySnapshot.economics.proposalEdgeInference, false);
+  assert.equal(
+    strategySnapshot.economics.sourceNativeGrossEdgePer1000ValuationNotional,
+    null,
+  );
+  assert.equal(
+    strategySnapshot.economics.sourceNativeNetEdgePer1000ValuationNotional,
+    null,
+  );
+  assert.ok(strategySnapshot.economics.rejectionCodes.includes(
+    'ECONOMICS_CONDITIONAL_PROXY_ONLY',
+  ));
+  assert.ok(strategySnapshot.economics.rejectionCodes.includes(
+    'ECONOMICS_SOURCE_NATIVE_EDGE_UNDEFINED',
+  ));
+  assert.doesNotThrow(() => runtime.evaluateStrategySlice());
+  assert.equal(ledger.exitCasCalls, 0);
+  assert.equal(runtime.economicExitSnapshot().latestSample, null);
+  assert.equal(runtime.economicExitSnapshot().latestDecision, null);
+
+  ledger.exitValue = '{not-json';
+  assert.doesNotThrow(() => runtime.restoreEconomicExitRule());
+  const blockedExit = runtime.economicExitSnapshot();
+  assert.equal(blockedExit.latestSample, null);
+  assert.equal(blockedExit.latestDecision, null);
+  assert.equal(blockedExit.lifecycle.persistence.status, 'BLOCKED');
+  assert.equal(
+    blockedExit.lifecycle.persistence.reasonCode,
+    'VOLUME_EXIT_SHADOW_LEDGER_CORRUPT',
+  );
+  assert.equal(blockedExit.lifecycle.restoreAttempts, 2);
+  assert.equal(blockedExit.lifecycle.commitAttempts, 0);
+  assert.equal(blockedExit.lifecycle.durablePublications, 0);
+  assert.equal(ledger.exitCasCalls, 0);
+
+  const unaffectedStrategy = runtime.strategySliceSnapshot();
+  assert.equal(unaffectedStrategy.lifecycle.persistence.status, 'EMPTY');
+  assert.equal(unaffectedStrategy.latestEvaluation, null);
+  assert.doesNotThrow(() => runtime.evaluateStrategySlice());
+  assert.equal(ledger.casCalls, 0);
+  assert.equal(ledger.exitCasCalls, 0);
+
+  const integration = runtime.integrationSnapshot();
+  assert.deepEqual(integration.economicExit.controls, blockedExit.controls);
+  assert.equal(integration.economicExit.latestSample, null);
+  assert.equal(integration.economicExit.latestDecision, null);
+  assert.equal(integration.economicExit.lifecycle.persistence.status, 'BLOCKED');
 });
 
 test('VolumeRuntime direct public cut bypasses default empty engine allowlist only into one durable no-authority checkpoint', () => {

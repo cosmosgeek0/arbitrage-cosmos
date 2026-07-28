@@ -13,6 +13,12 @@ const PURE_SOURCE_RELATIVES = Object.freeze([
   'server/src/engine/volume/strategyObservation.ts',
   'server/src/engine/volume/strategySlice.ts',
   'server/src/engine/volume/strategyLedger.ts',
+  'server/src/engine/volume/strategyEconomicExit.ts',
+  'server/src/engine/volume/strategyEconomicExitLedger.ts',
+]);
+const ECONOMIC_EXIT_SOURCE_RELATIVES = Object.freeze([
+  'server/src/engine/volume/strategyEconomicExit.ts',
+  'server/src/engine/volume/strategyEconomicExitLedger.ts',
 ]);
 const RUNTIME_SOURCE_RELATIVE = 'server/src/services/volumeRuntime.ts';
 const TARGET_SOURCE_RELATIVES = Object.freeze([
@@ -29,15 +35,20 @@ const PURE_DIST_RELATIVES = Object.freeze(
 
 const FORBIDDEN_DIRECT_MODULE_ROOTS = new Set([
   'axios',
+  'child_process',
   'dgram',
   'dns',
+  'fs',
   'http',
   'http2',
   'https',
+  'module',
   'net',
   'process',
   'tls',
   'undici',
+  'vm',
+  'worker_threads',
   'ws',
 ]);
 const FORBIDDEN_PATH_SEGMENTS = new Set([
@@ -60,19 +71,34 @@ const FORBIDDEN_CALL_NAMES = new Set([
   'cancelAll',
   'cancelOpenOrders',
   'cancelOrder',
+  'createConnection',
   'createHmac',
   'createOrder',
   'createPrivateKey',
   'createSecretKey',
   'createSign',
+  'createRequire',
   'credsFromEnv',
+  'eval',
   'fetch',
   'generateKey',
   'generateKeyPair',
+  'getRandomValues',
   'intentFor',
   'loadCredential',
+  'open',
   'placeOrder',
+  'queryOrder',
+  'randomBytes',
+  'randomFill',
+  'randomFillSync',
+  'randomInt',
+  'randomUUID',
+  'readFile',
+  'readFileSync',
   'repay',
+  'require',
+  'request',
   'send',
   'sendOrder',
   'sendSignedRequest',
@@ -84,11 +110,14 @@ const FORBIDDEN_CALL_NAMES = new Set([
   'testOrder',
   'transfer',
   'withdraw',
+  'writeFile',
+  'writeFileSync',
 ]);
 const FORBIDDEN_CONSTRUCTORS = new Set([
   'BinanceClient',
   'CredentialProvider',
   'ExecutionCoordinator',
+  'Function',
   'LoanService',
   'OrderService',
   'PrivateReadClient',
@@ -97,7 +126,7 @@ const FORBIDDEN_CONSTRUCTORS = new Set([
 const FORBIDDEN_IMPORTED_IDENTIFIER =
   /(?:BinanceClient|Credential|ExecutionCoordinator|Loan(?:Client|Service|Port)|Order(?:Client|Service|Port)|PrivateRead|Provider|SignedKernel|Signer|SubmitPort)/;
 const FORBIDDEN_PRIVATE_ENDPOINT =
-  /\/(?:api\/v3\/order(?:\/test)?|sapi\/v1\/(?:asset\/transfer|capital\/withdraw|margin\/(?:borrow-repay|loan|repay)))(?:[/?]|$)/i;
+  /\/(?:(?:api\/v3\/(?:account|allOrders|myTrades|openOrders|order(?:\/(?:cancelReplace|oco|test))?|userDataStream))(?:[/?]|$)|(?:sapi|fapi|dapi|papi)\/|ws-api\/v3\/.*(?:account|order|userData))/i;
 const PURE_AMBIENT_CALLS = new Set([
   'queueMicrotask',
   'setImmediate',
@@ -309,6 +338,9 @@ function staticViolations(file, tree, pure) {
     if (accessPath && /^(?:globalThis\.)?process\.env(?:\.|$)/.test(accessPath)) {
       report(node, 'reads process.env');
     }
+    if (pure && ts.isIdentifier(node) && node.text === 'process') {
+      report(node, 'accesses ambient process state');
+    }
 
     if (ts.isCallExpression(node)) {
       if (node.expression.kind === ts.SyntaxKind.ImportKeyword) report(node, 'uses dynamic import');
@@ -335,6 +367,12 @@ function staticViolations(file, tree, pure) {
           || target === 'globalThis.Date.now'
           || target === 'Math.random'
           || target === 'globalThis.Math.random'
+          || target === 'performance.now'
+          || target === 'globalThis.performance.now'
+          || target === 'crypto.getRandomValues'
+          || target === 'globalThis.crypto.getRandomValues'
+          || target === 'crypto.randomUUID'
+          || target === 'globalThis.crypto.randomUUID'
         )
       ) report(node, `reads ambient clock or randomness ${target}`);
     }
@@ -513,6 +551,84 @@ function assertValidateOnlyNoEffectPlan(plan) {
   assertDeepFrozen(plan);
 }
 
+function assertShadowExitNoEffectPlan(plan) {
+  assert.notEqual(plan, null);
+  assert.equal(plan.mode, 'SHADOW_VALIDATE_ONLY');
+  assert.equal(plan.validation, 'REJECTED');
+  assert.equal(plan.killSwitchEngaged, true);
+  assert.equal(plan.executionAuthority, 'NONE');
+  assert.equal(plan.submitAuthority, 'NONE');
+  assert.equal(plan.riskAuthority, 'NONE');
+  assert.equal(plan.externalAuthority, 'NONE');
+  assert.equal(plan.sendEligible, false);
+  assert.equal(plan.sends, 0);
+  assert.equal(plan.sideEffects, 0);
+  assert.equal(plan.submitPortPresent, false);
+  assert.equal(plan.queryPortPresent, false);
+  assert.equal(plan.publicOnly, true);
+  assert.equal(plan.privateCalls, false);
+  assert.equal(plan.signedCalls, false);
+  assert.equal(plan.providerCalls, false);
+  assert.equal(plan.exchangeQueries, 0);
+  assert.notEqual(plan.terms, null);
+  assert.equal(plan.terms.orderType, 'LIMIT');
+  assert.equal(plan.terms.timeInForce, 'IOC');
+  assert.ok(plan.rejectionCodes.includes('EXIT_ACCOUNT_FEE_PROOF_NOT_CURRENT'));
+  assert.ok(plan.rejectionCodes.includes('EXIT_ENTRY_FILL_UNPROVEN'));
+  assert.ok(plan.rejectionCodes.includes('EXIT_SYMBOL_FILTER_PROOF_NOT_CURRENT'));
+  assert.ok(plan.rejectionCodes.includes('EXIT_NO_EXECUTION_AUTHORITY'));
+
+  const entries = collectDataEntries(plan, 'economicExit.plan');
+  assert.deepEqual(
+    entries.filter(({ value }) => typeof value === 'function').map(({ path }) => path),
+    [],
+    'shadow exit plan must contain no callback or executable capability',
+  );
+  assert.deepEqual(
+    entries
+      .filter(({ value }) => typeof value === 'string' && FORBIDDEN_PRIVATE_ENDPOINT.test(value))
+      .map(({ path }) => path),
+    [],
+    'shadow exit plan must contain no private, signed, or order endpoint',
+  );
+  const forbiddenCapabilityFields = new Set([
+    'apikey',
+    'apisecret',
+    'client',
+    'clientfactory',
+    'clientorderid',
+    'credential',
+    'credentials',
+    'endpoint',
+    'headers',
+    'keymaterial',
+    'listenkey',
+    'orderid',
+    'privatekey',
+    'queryfn',
+    'requestsigner',
+    'secretkey',
+    'sendfn',
+    'signature',
+    'signer',
+    'signedrequest',
+    'submitfn',
+    'transport',
+    'transportport',
+    'url',
+  ]);
+  assert.deepEqual(
+    entries
+      .filter(({ key }) => forbiddenCapabilityFields.has(
+        key.replace(/[-_]/g, '').toLowerCase(),
+      ))
+      .map(({ path }) => path),
+    [],
+    'shadow exit plan must carry no endpoint, transport, client, signer, credential, or callback seam',
+  );
+  assertDeepFrozen(plan, 'economicExit.plan');
+}
+
 test('authority scanner is AST-aware and rejects runtime capability without filename or prose false positives', () => {
   const harmlessFile = path.resolve('tmp/privateRead-binance-client-order-credential.ts');
   const harmlessTree = parseText(harmlessFile, `
@@ -543,9 +659,42 @@ test('authority scanner is AST-aware and rejects runtime capability without file
   assert.match(violations, /constructs forbidden authority or transport WebSocket/);
   assert.match(violations, /primitive intentFor/);
   assert.match(violations, /primitive submitOrder/);
+
+  const hostileExitFile = path.resolve('tmp/volume-exit-shadow.ts');
+  const hostileExitTree = parseText(hostileExitFile, `
+    import { exec } from 'node:child_process';
+    const ambient = process.env.BINANCE_API_KEY;
+    const nonce = globalThis.crypto.randomUUID();
+    const modulePromise = import('../binance/client.js');
+    const legacy = require('node:https');
+    const privateUrl = 'https://api.binance.com/api/v3/openOrders';
+    transport.request(privateUrl);
+    exec('true');
+    void ambient;
+    void nonce;
+    void modulePromise;
+    void legacy;
+  `);
+  const hostileExitViolations = staticViolations(
+    hostileExitFile,
+    hostileExitTree,
+    true,
+  ).join('\n');
+  assert.match(hostileExitViolations, /imports direct transport or process boundary/);
+  assert.match(hostileExitViolations, /accesses ambient process state/);
+  assert.match(hostileExitViolations, /ambient clock or randomness/);
+  assert.match(hostileExitViolations, /uses dynamic import/);
+  assert.match(hostileExitViolations, /primitive require/);
+  assert.match(hostileExitViolations, /private, signed, or order endpoint/);
+  assert.match(hostileExitViolations, /primitive request/);
 });
 
 test('strategy source and VolumeRuntime integration expose no private, signed, order, provider, or submit seam', () => {
+  assert.deepEqual(
+    ECONOMIC_EXIT_SOURCE_RELATIVES.filter((relative) => PURE_SOURCE_RELATIVES.includes(relative)),
+    ECONOMIC_EXIT_SOURCE_RELATIVES,
+    'both economic-exit modules must remain in the pure authority scan',
+  );
   const allViolations = [];
   let runtimeTree = null;
   for (const relative of TARGET_SOURCE_RELATIVES) {
@@ -566,6 +715,8 @@ test('strategy source and VolumeRuntime integration expose no private, signed, o
     '../engine/volume/strategyObservation.js',
     '../engine/volume/strategySlice.js',
     '../engine/volume/strategyLedger.js',
+    '../engine/volume/strategyEconomicExit.js',
+    '../engine/volume/strategyEconomicExitLedger.js',
   ]) {
     assert.ok(
       integrationImports.includes(required),
@@ -600,6 +751,27 @@ test('every built pure strategy module imports without ambient network, timer, c
   assert.deepEqual(applicationAttempts, []);
 });
 
+test('economic-exit Ledger reconciliation is explicitly local-only and proves no exchange, fill, position, or flatness state', async () => {
+  const ledgerModule = await import(
+    `${pathToFileURL(path.resolve(
+      'server/dist/engine/volume/strategyEconomicExitLedger.js',
+    )).href}?volume-economic-exit-authority=ledger`,
+  );
+  const unavailable = ledgerModule.reconcileVolumeEconomicExitLocal(null, null);
+  assert.equal(
+    ledgerModule.validateVolumeEconomicExitLocalReconciliation(unavailable),
+    true,
+  );
+  assert.equal(unavailable.scope, 'LOCAL_LEDGER_ONLY');
+  assert.equal(unavailable.status, 'UNAVAILABLE');
+  assert.equal(unavailable.executionAuthority, 'NONE');
+  assert.equal(unavailable.exchangeReconciliation, false);
+  assert.equal(unavailable.positionReconciliation, false);
+  assert.equal(unavailable.actualFillReconciliation, false);
+  assert.equal(unavailable.flatnessProven, false);
+  assertDeepFrozen(unavailable, 'economicExit.localReconciliation');
+});
+
 test('default-off and synthetic-positive plans remain deeply immutable validate-only no-effect records', async () => {
   const observationModule = await import(
     `${pathToFileURL(path.resolve(PURE_DIST_RELATIVES[1])).href}?volume-strategy-plan=observation`,
@@ -609,6 +781,11 @@ test('default-off and synthetic-positive plans remain deeply immutable validate-
   );
   const sliceModule = await import(
     `${pathToFileURL(path.resolve(PURE_DIST_RELATIVES[2])).href}?volume-strategy-plan=slice`,
+  );
+  const exitModule = await import(
+    `${pathToFileURL(path.resolve(
+      'server/dist/engine/volume/strategyEconomicExit.js',
+    )).href}?volume-strategy-plan=economic-exit`,
   );
 
   const nowMs = 1_785_206_040_302;
@@ -729,4 +906,133 @@ test('default-off and synthetic-positive plans remain deeply immutable validate-
   assert.equal(sliceModule.validateVolumeValidateOnlyPlan(first.plan), true);
   assert.equal(sliceModule.validateVolumeValidateOnlyPlan(structuredClone(first.plan)), true);
   assertValidateOnlyNoEffectPlan(first.plan);
+
+  const currentPolicy = exitModule.VOLUME_CURRENT_ECONOMIC_EXIT_POLICY;
+  assert.equal(exitModule.validateVolumeEconomicExitPolicy(currentPolicy), true);
+  assert.equal(currentPolicy.productionAdmissible, false);
+  assert.equal(currentPolicy.continuationOnly, true);
+  assert.equal(currentPolicy.fadeEnabled, false);
+  assert.equal(currentPolicy.admissibility, 'REJECT_ONLY');
+  assert.equal(currentPolicy.applicability, 'UNKNOWN');
+  assertDeepFrozen(currentPolicy, 'economicExit.currentPolicy');
+
+  const syntheticExitPolicy = exitModule.buildSyntheticVolumeEconomicExitPolicy({
+    fixtureId: 'authority-exit-v1',
+    modeledBaseQuantity: '0.01',
+    accountFeeBpsPerSide: '10',
+    slippageBpsPerSide: '5',
+    netLiquidationStopLossPer1000: '1',
+    trailingDrawdownPer1000: '1',
+    netLiquidationReversalLossPer1000: '1',
+    evaluatedAtMs: nowMs,
+    expiresAtMs: nowMs + 60_000,
+  });
+  assert.equal(exitModule.validateVolumeEconomicExitPolicy(syntheticExitPolicy), true);
+  assert.equal(syntheticExitPolicy.productionAdmissible, false);
+  assert.equal(syntheticExitPolicy.continuationOnly, true);
+  assert.equal(syntheticExitPolicy.fadeEnabled, false);
+  assertDeepFrozen(syntheticExitPolicy, 'economicExit.syntheticPolicy');
+
+  const exitInput = Object.freeze({
+    entryEvaluation: first,
+    entryObservation: observation,
+    currentObservation: observation,
+    policy: syntheticExitPolicy,
+    previousSample: null,
+    evaluatedAtMs: nowMs,
+  });
+  const disabledExit = exitModule.evaluateVolumeEconomicExit(exitInput);
+  assert.equal(disabledExit.sample, null);
+  assert.equal(disabledExit.decision.disposition, 'REJECTED');
+  assert.equal(disabledExit.decision.exitPlan, null);
+  assert.ok(disabledExit.decision.reasonCodes.includes('EXIT_RULE_DISABLED'));
+  assert.equal(exitModule.validateVolumeEconomicExitDecision(disabledExit.decision), true);
+  assertDeepFrozen(disabledExit, 'economicExit.disabled');
+
+  const currentEvidenceExit = exitModule.evaluateVolumeEconomicExit({
+    ...exitInput,
+    policy: currentPolicy,
+  }, {
+    enabled: true,
+    killSwitchEngaged: true,
+  });
+  assert.equal(currentEvidenceExit.sample, null);
+  assert.equal(currentEvidenceExit.decision.disposition, 'REJECTED');
+  assert.equal(currentEvidenceExit.decision.exitPlan, null);
+  assert.ok(currentEvidenceExit.decision.reasonCodes.includes('EXIT_POLICY_REJECT_ONLY'));
+  assert.ok(currentEvidenceExit.decision.reasonCodes.includes('EXIT_ECONOMICS_UNKNOWN'));
+  assert.ok(currentEvidenceExit.decision.reasonCodes.includes('EXIT_ACCOUNT_FEE_UNKNOWN'));
+  assert.ok(currentEvidenceExit.decision.reasonCodes.includes('EXIT_SLIPPAGE_UNKNOWN'));
+  assert.equal(
+    exitModule.validateVolumeEconomicExitDecision(currentEvidenceExit.decision),
+    true,
+  );
+  assertDeepFrozen(currentEvidenceExit, 'economicExit.currentEvidence');
+
+  const shadowExit = exitModule.evaluateVolumeEconomicExit(exitInput, {
+    enabled: true,
+    killSwitchEngaged: true,
+  });
+  assert.notEqual(
+    shadowExit.sample,
+    null,
+    `synthetic shadow exit rejected: ${JSON.stringify(shadowExit.decision.reasonCodes)}`,
+  );
+  assert.equal(exitModule.validateVolumeForwardExitSample(shadowExit.sample), true);
+  assert.equal(shadowExit.decision.disposition, 'EXIT_SHADOW');
+  assert.equal(shadowExit.decision.lifecyclePhase, 'TERMINAL_EXIT');
+  assert.equal(
+    exitModule.validateVolumeEconomicExitDecision(shadowExit.decision),
+    true,
+  );
+  assert.equal(
+    exitModule.validateVolumeEconomicExitDecision(structuredClone(shadowExit.decision)),
+    true,
+  );
+  assert.deepEqual(exitModule.replayVolumeEconomicExitDecision(shadowExit.decision), {
+    status: 'EXACT',
+    decision: shadowExit.decision,
+  });
+  assertShadowExitNoEffectPlan(shadowExit.decision.exitPlan);
+  assertDeepFrozen(shadowExit.sample, 'economicExit.sample');
+  assertDeepFrozen(shadowExit.decision, 'economicExit.decision');
+  assertDeepFrozen(shadowExit, 'economicExit.result');
+
+  for (const [field, unsafeValue] of [
+    ['mode', 'EXECUTE'],
+    ['validation', 'ACCEPTED'],
+    ['executionAuthority', 'SUBMIT'],
+    ['submitAuthority', 'SUBMIT'],
+    ['riskAuthority', 'WRITE'],
+    ['externalAuthority', 'PROVIDER'],
+    ['sendEligible', true],
+    ['sends', 1],
+    ['sideEffects', 1],
+    ['submitPortPresent', true],
+    ['queryPortPresent', true],
+    ['publicOnly', false],
+    ['privateCalls', true],
+    ['signedCalls', true],
+    ['providerCalls', true],
+    ['exchangeQueries', 1],
+  ]) {
+    const mutated = structuredClone(shadowExit.decision);
+    mutated.exitPlan[field] = unsafeValue;
+    assert.equal(
+      exitModule.validateVolumeEconomicExitDecision(mutated),
+      false,
+      `tampered shadow plan ${field} must fail validation`,
+    );
+    assert.deepEqual(exitModule.replayVolumeEconomicExitDecision(mutated), {
+      status: 'INVALID',
+      decision: null,
+    });
+  }
+  const marketMutation = structuredClone(shadowExit.decision);
+  marketMutation.exitPlan.terms.orderType = 'MARKET';
+  assert.equal(exitModule.validateVolumeEconomicExitDecision(marketMutation), false);
+  assert.deepEqual(exitModule.replayVolumeEconomicExitDecision(marketMutation), {
+    status: 'INVALID',
+    decision: null,
+  });
 });

@@ -10,6 +10,16 @@ import {
   type VolumeEconomicsAssessment,
 } from '../engine/volume/strategyEconomics.js';
 import {
+  evaluateVolumeEconomicExit,
+  VOLUME_CURRENT_ECONOMIC_EXIT_POLICY,
+} from '../engine/volume/strategyEconomicExit.js';
+import {
+  createVolumeEconomicExitLedgerCoordinator,
+  type VolumeEconomicExitCheckpoint,
+  type VolumeEconomicExitLedgerCoordinator,
+  type VolumeEconomicExitLedgerCoordinatorSnapshot,
+} from '../engine/volume/strategyEconomicExitLedger.js';
+import {
   createVolumeStrategyLedgerCoordinator,
   type VolumeStrategyLedgerCoordinator,
   type VolumeStrategyLedgerCoordinatorSnapshot,
@@ -100,6 +110,28 @@ export interface VolumeRuntimeStrategySliceSnapshot {
   }>;
 }
 
+export interface VolumeRuntimeEconomicExitSnapshot {
+  readonly controls: Readonly<{
+    enabled: false;
+    killSwitch: 'ON';
+    mode: 'SHADOW_ONLY';
+    executionAuthority: 'NONE';
+    submitAuthority: 'NONE';
+    privateDataAuthority: 'NONE';
+    providerAuthority: 'NONE';
+  }>;
+  readonly latestSample: Readonly<VolumeEconomicExitCheckpoint['latestSample']> | null;
+  readonly latestDecision: Readonly<VolumeEconomicExitCheckpoint['latestDecision']> | null;
+  readonly lifecycle: Readonly<{
+    mode: 'SHADOW_ONLY_RECORD';
+    checkpointScope: 'LATEST_ONLY';
+    persistence: VolumeEconomicExitLedgerCoordinatorSnapshot;
+    restoreAttempts: number;
+    commitAttempts: number;
+    durablePublications: number;
+  }>;
+}
+
 export interface VolumeRuntimeIntegrationSnapshot {
   /** Capture time only. Never use this field as source-observation freshness. */
   capturedAtMs: number;
@@ -108,6 +140,7 @@ export interface VolumeRuntimeIntegrationSnapshot {
   decisions: Decision[];
   proposals: VolumeProposal[];
   strategySlice: Readonly<VolumeRuntimeStrategySliceSnapshot>;
+  economicExit: Readonly<VolumeRuntimeEconomicExitSnapshot>;
   ownerSummary: {
     candidateCount: number;
     opportunityCount: number;
@@ -213,11 +246,18 @@ export class VolumeRuntime {
   private readonly strategySlice: Readonly<VolumeStrategySlice>;
   private readonly strategyEconomics: Readonly<VolumeEconomicsAssessment>;
   private readonly strategyLedgerCoordinator: VolumeStrategyLedgerCoordinator | null;
+  private readonly economicExitLedgerCoordinator: VolumeEconomicExitLedgerCoordinator | null;
   private latestStrategyEvaluation: Readonly<VolumeStrategyEvaluation> | null = null;
+  private latestEconomicExitSample: Readonly<VolumeEconomicExitCheckpoint['latestSample']> | null = null;
+  private latestEconomicExitDecision: Readonly<VolumeEconomicExitCheckpoint['latestDecision']> | null = null;
   private strategyRestoreAttempts = 0;
   private strategyCommitAttempts = 0;
   private strategyDurablePublications = 0;
   private strategyPersistenceBlocked = false;
+  private economicExitRestoreAttempts = 0;
+  private economicExitCommitAttempts = 0;
+  private economicExitDurablePublications = 0;
+  private economicExitPersistenceBlocked = false;
   private strategyNextDirectObservationAtMs = 0;
   private readonly observedOrderFocusCoordinator: DurableObservedOrderFocusCoordinator | null;
   private streams: VolumeStreamHandle[] = [];
@@ -322,6 +362,10 @@ export class VolumeRuntime {
       && typeof ledger?.compareAndSetConfigValueAndLogEvents === 'function'
       ? createVolumeStrategyLedgerCoordinator(ledger)
       : null;
+    this.economicExitLedgerCoordinator = typeof ledger?.getConfigValue === 'function'
+      && typeof ledger?.compareAndSetConfigValueAndLogEvents === 'function'
+      ? createVolumeEconomicExitLedgerCoordinator(ledger)
+      : null;
     this.observedOrderFocusCoordinator = typeof ledger?.getConfigValue === 'function'
       && typeof ledger?.compareAndSetConfigValueAndLogEvents === 'function'
       ? new DurableObservedOrderFocusCoordinator(
@@ -344,6 +388,7 @@ export class VolumeRuntime {
     if (this.stopping) return;
     if (this.running) return this.startPromise ?? Promise.resolve();
     this.restoreStrategySlice();
+    this.restoreEconomicExitRule();
     const restoration = this.observedOrderFocusCoordinator?.restore();
     if (restoration !== undefined
         && (restoration.state === 'UNAVAILABLE'
@@ -570,6 +615,7 @@ export class VolumeRuntime {
       decisions: this.engine.decisions(2_000),
       proposals: this.engine.proposalStore.all().slice(-2_000),
       strategySlice: this.strategySliceSnapshot(),
+      economicExit: this.economicExitSnapshot(),
       ownerSummary: {
         candidateCount: this.engine.focusMgr.candidateList().length,
         opportunityCount: this.engine.proposalStore.openProposals().length,
@@ -606,6 +652,27 @@ export class VolumeRuntime {
           restoredDirectEvaluation.evaluatedAtMs
             + DIRECT_PUBLIC_OBSERVATION_MIN_INTERVAL_MS,
         );
+  }
+
+  private restoreEconomicExitRule(): void {
+    // The successor checkpoint is independent from the V-I1 record. A corrupt
+    // or unavailable exit checkpoint blocks only this shadow-only lane.
+    if (this.economicExitLedgerCoordinator === null) return;
+    this.economicExitRestoreAttempts += 1;
+    const restoration = this.economicExitLedgerCoordinator.restore();
+    if (restoration.status === 'CORRUPT' || restoration.status === 'UNAVAILABLE') {
+      this.latestEconomicExitSample = null;
+      this.latestEconomicExitDecision = null;
+      this.economicExitPersistenceBlocked = true;
+      return;
+    }
+    this.economicExitPersistenceBlocked = false;
+    this.latestEconomicExitSample = restoration.status === 'RESTORED'
+      ? restoration.checkpoint.latestSample
+      : null;
+    this.latestEconomicExitDecision = restoration.status === 'RESTORED'
+      ? restoration.checkpoint.latestDecision
+      : null;
   }
 
   private evaluateStrategySlice(): void {
@@ -855,10 +922,48 @@ export class VolumeRuntime {
         4_102_444_800_000,
         evaluatedAtMs + DIRECT_PUBLIC_OBSERVATION_MIN_INTERVAL_MS,
       );
+      if (committed.disposition === 'COMMITTED_NEW') {
+        this.evaluateEconomicExitRule(
+          committed.checkpoint.lastEvaluation,
+          observation,
+          evaluatedAtMs,
+        );
+      }
     }
     if (committed.disposition === 'COMMITTED_NEW') {
       this.strategyDurablePublications += 1;
     }
+  }
+
+  private evaluateEconomicExitRule(
+    entryEvaluation: Readonly<VolumeStrategyEvaluation>,
+    entryObservation: Readonly<ReturnType<typeof buildVolumeStrategyObservation>>,
+    evaluatedAtMs: number,
+  ): void {
+    // A fresh, exact direct-public V-I1 commit is the only production input to
+    // this successor. The runtime remains immutable OFF/KILL-ON, so the pure
+    // rule can publish a named in-memory non-admission but cannot create a
+    // HOLDING sample or reach the exit ledger. Synthetic entry assumptions are
+    // confined to the pure rule's focused tests.
+    if (
+      this.economicExitLedgerCoordinator === null
+      || this.economicExitPersistenceBlocked
+    ) return;
+    const result = evaluateVolumeEconomicExit({
+      entryEvaluation,
+      entryObservation,
+      currentObservation: entryObservation,
+      policy: VOLUME_CURRENT_ECONOMIC_EXIT_POLICY,
+      previousSample: null,
+      evaluatedAtMs,
+    }, {
+      enabled: false,
+      killSwitchEngaged: true,
+    });
+    this.latestEconomicExitDecision = result.decision;
+    // Fail closed even if a future rule implementation regresses its controls:
+    // an OFF runtime never publishes or persists a modeled active sample.
+    this.latestEconomicExitSample = null;
   }
 
   private strategySliceSnapshot(): Readonly<VolumeRuntimeStrategySliceSnapshot> {
@@ -879,6 +984,34 @@ export class VolumeRuntime {
         durablePublications: this.strategyDurablePublications,
         directObservationMinIntervalMs: DIRECT_PUBLIC_OBSERVATION_MIN_INTERVAL_MS,
         nextDirectObservationAtMs: this.strategyNextDirectObservationAtMs,
+      }),
+    });
+  }
+
+  private economicExitSnapshot(): Readonly<VolumeRuntimeEconomicExitSnapshot> {
+    return Object.freeze({
+      controls: Object.freeze({
+        enabled: false as const,
+        killSwitch: 'ON' as const,
+        mode: 'SHADOW_ONLY' as const,
+        executionAuthority: 'NONE' as const,
+        submitAuthority: 'NONE' as const,
+        privateDataAuthority: 'NONE' as const,
+        providerAuthority: 'NONE' as const,
+      }),
+      latestSample: this.latestEconomicExitSample,
+      latestDecision: this.latestEconomicExitDecision,
+      lifecycle: Object.freeze({
+        mode: 'SHADOW_ONLY_RECORD' as const,
+        checkpointScope: 'LATEST_ONLY' as const,
+        persistence: this.economicExitLedgerCoordinator?.snapshot() ?? Object.freeze({
+          status: 'BLOCKED' as const,
+          checkpoint: null,
+          reasonCode: 'VOLUME_EXIT_SHADOW_LEDGER_UNAVAILABLE',
+        }),
+        restoreAttempts: this.economicExitRestoreAttempts,
+        commitAttempts: this.economicExitCommitAttempts,
+        durablePublications: this.economicExitDurablePublications,
       }),
     });
   }
@@ -1854,6 +1987,7 @@ export class VolumeRuntime {
         baselineMinutes: this.engine.cfg.baselineMinSamples,
       },
       strategySlice: this.strategySliceSnapshot(),
+      economicExit: this.economicExitSnapshot(),
       rows,
     };
   }

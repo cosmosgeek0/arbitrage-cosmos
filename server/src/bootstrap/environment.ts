@@ -6,6 +6,9 @@ import {
   DataDirLease,
   type DataDirLeaseOptions,
 } from '../systemIntegration/persistence/dataDirLease.js';
+import { installProductionLogging } from '../ops/productionLogging.js';
+
+installProductionLogging({ environment: process.env.NODE_ENV });
 
 type Environment = Readonly<Record<string, string | undefined>>;
 

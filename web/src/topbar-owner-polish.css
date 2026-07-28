@@ -183,15 +183,17 @@ html body .hdr .topbar-suite-v4 > button[data-topbar-key="basisu"] .rail-icon-co
   html body .hdr .hdr-in > .tb-left {
     position: static !important;
     inset: auto !important;
-    width: auto !important;
+    width: min(760px, 100%) !important;
+    max-width: 760px !important;
     height: 100% !important;
     padding-left: 0 !important;
+    justify-self: start !important;
   }
 
   html body .hdr .hdr-in > .tb-left > .topbar-search {
     flex: 1 1 auto !important;
     width: 100% !important;
-    max-width: none !important;
+    max-width: 760px !important;
     margin-right: 0 !important;
   }
 
@@ -444,10 +446,10 @@ html body .hdr .topbar-suite-v4 > button[data-topbar-key="basisu"] .rail-icon-co
 .smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-advisor-strip {
   grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   gap: 0 !important;
-  height: 58px !important;
-  min-height: 58px !important;
-  margin: 8px 12px 0 !important;
-  flex: 0 0 58px !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  margin: 4px 12px 0 !important;
+  flex: 0 0 48px !important;
   overflow: hidden !important;
   border: 1px solid var(--line) !important;
   border-radius: 8px !important;
@@ -490,14 +492,21 @@ html body .hdr .topbar-suite-v4 > button[data-topbar-key="basisu"] .rail-icon-co
   color: var(--advisor-clear) !important;
 }
 
+.smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-section-label {
+  height: 26px !important;
+  min-height: 26px !important;
+  flex: 0 0 26px !important;
+}
+
 .smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-advisor-list {
-  grid-auto-rows: minmax(60px, 1fr) !important;
+  grid-auto-rows: minmax(56px, 1fr) !important;
   overflow-y: auto !important;
 }
 
 .smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-advisor-list .ops-row:has(.ops-row-icon) {
   grid-template-columns: 28px minmax(0, 1fr) 58px !important;
   align-items: center !important;
+  padding-block: 4px !important;
 }
 
 .smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-row-copy {
@@ -526,6 +535,26 @@ html body .hdr .topbar-suite-v4 > button[data-topbar-key="basisu"] .rail-icon-co
 .smenu-bar.topbar-suite-v4 .smenu-pane .ops-advisor-sheet .ops-row.button:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--accent) 70%, white) !important;
   outline-offset: -3px !important;
+}
+
+/* Small secondary copy remains subtle while meeting normal-text contrast. */
+.smenu-bar.topbar-suite-v4 .smenu-pane :is(
+  .ops-aws-sheet,
+  .api-key-sheet-v2,
+  .ops-advisor-sheet,
+  .ops-notification-sheet,
+  .ops-currency-sheet,
+  .ops-basis-sheet
+) :is(
+  .ops-sheet-title > em,
+  .ops-row-copy > em,
+  .ops-choice-stack em,
+  .aws-pop-notice,
+  .ops-policy-line,
+  .ops-note-row em,
+  .ops-empty-state-copy > em
+) {
+  color: var(--text-2) !important;
 }
 
 /* Notifications — keep real actions and turn the empty feed into an honest state. */
@@ -694,7 +723,7 @@ html body .hdr .topbar-suite-v4 > button[data-topbar-key="basisu"] .rail-icon-co
 
 .smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-choice-stack em {
   overflow: hidden !important;
-  color: var(--muted) !important;
+  color: var(--text-2) !important;
   font-size: 10.75px !important;
   font-weight: 400 !important;
   line-height: 15px !important;
@@ -718,7 +747,7 @@ html body .hdr .topbar-suite-v4 > button[data-topbar-key="basisu"] .rail-icon-co
 
 .smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-row-value {
   min-width: 34px !important;
-  color: var(--muted) !important;
+  color: var(--text-2) !important;
   font-family: var(--mono) !important;
   font-size: 10.5px !important;
   font-weight: 520 !important;
@@ -745,8 +774,8 @@ html body .hdr .topbar-suite-v4 > button[data-topbar-key="basisu"] .rail-icon-co
 
 .smenu-bar.topbar-suite-v4 .ops-basis-conversion > div {
   grid-template-columns: 1.2fr 1fr 1fr !important;
-  height: 30.5px !important;
-  min-height: 30.5px !important;
+  height: 30px !important;
+  min-height: 30px !important;
   padding: 0 12px !important;
   color: var(--text-2) !important;
   font-family: var(--mono) !important;
@@ -757,7 +786,7 @@ html body .hdr .topbar-suite-v4 > button[data-topbar-key="basisu"] .rail-icon-co
 }
 
 .smenu-bar.topbar-suite-v4 .ops-basis-conversion > .ops-basis-conversion-head {
-  color: var(--muted) !important;
+  color: var(--text-2) !important;
   background: var(--tile) !important;
   font-family: var(--font) !important;
   font-size: 10.5px !important;

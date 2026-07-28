@@ -308,15 +308,36 @@ function descriptorArray(
   maximumLength: number,
   lengthStatus: Extract<BasisFlatnessStatus, 'UNKNOWN' | 'BLOCKED'> = 'BLOCKED',
 ): readonly unknown[] {
-  if (typeof value !== 'object' || value === null || !Array.isArray(value)) {
+  if (typeof value !== 'object' || value === null) {
     return problem('BLOCKED', `${path.toUpperCase()}_ARRAY_REQUIRED`);
   }
   if (nodeTypes.isProxy(value)) {
     return problem('BLOCKED', `${path.toUpperCase()}_PROXY_REJECTED`);
   }
+  if (!Array.isArray(value)) {
+    return problem('BLOCKED', `${path.toUpperCase()}_ARRAY_REQUIRED`);
+  }
   if (Object.getPrototypeOf(value) !== Array.prototype) {
     return problem('BLOCKED', `${path.toUpperCase()}_PLAIN_ARRAY_REQUIRED`);
   }
+
+  // Read the non-enumerating built-in length descriptor first. An attacker
+  // can provide a frozen dense/sparse array with billions of slots; no
+  // array-wide operation is permitted until that declared size is bounded.
+  const lengthDescriptor = Object.getOwnPropertyDescriptor(value, 'length');
+  if (
+    lengthDescriptor === undefined ||
+    !Object.hasOwn(lengthDescriptor, 'value') ||
+    !Number.isSafeInteger(lengthDescriptor.value) ||
+    (lengthDescriptor.value as number) < 0
+  ) {
+    return problem('BLOCKED', `${path.toUpperCase()}_ARRAY_SHAPE_INVALID`);
+  }
+  const length = lengthDescriptor.value as number;
+  if (length < minimumLength || length > maximumLength) {
+    return problem(lengthStatus, `${path.toUpperCase()}_LENGTH_INVALID`);
+  }
+
   if (!Object.isFrozen(value)) {
     return problem('BLOCKED', `${path.toUpperCase()}_FROZEN_VALUE_REQUIRED`);
   }
@@ -328,22 +349,9 @@ function descriptorArray(
     string,
     PropertyDescriptor
   >;
-  const lengthDescriptor = descriptors.length;
-  if (
-    lengthDescriptor === undefined ||
-    !Object.hasOwn(lengthDescriptor, 'value') ||
-    !Number.isSafeInteger(lengthDescriptor.value) ||
-    (lengthDescriptor.value as number) < 0
-  ) {
-    return problem('BLOCKED', `${path.toUpperCase()}_ARRAY_SHAPE_INVALID`);
-  }
-  const length = lengthDescriptor.value as number;
   const actualKeys = Object.keys(descriptors).sort();
-  if (length < minimumLength || length > maximumLength) {
-    return problem(lengthStatus, `${path.toUpperCase()}_LENGTH_INVALID`);
-  }
-  // Length is bounded before any allocation or index walk. Exact descriptor
-  // count plus the indexed-data-property loop below rejects holes and extras.
+  // Exact descriptor count plus the indexed-data-property loop below rejects
+  // holes and extras after the bounded length gate.
   if (actualKeys.length !== length + 1 || descriptors.length === undefined) {
     return problem('BLOCKED', `${path.toUpperCase()}_ARRAY_SHAPE_INVALID`);
   }

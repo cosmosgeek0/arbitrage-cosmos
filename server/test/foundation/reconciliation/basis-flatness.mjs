@@ -592,7 +592,7 @@ test('baseline/current time proof and verifier-owned freshness ceiling fail clos
   assertZeroAuthority(policyResult);
 });
 
-test('array lengths are rejected before sparse attacker-controlled allocation walks', () => {
+test('array lengths short-circuit before enumeration and bounded arrays reject extra keys', () => {
   const hugeSparseOrders = [];
   hugeSparseOrders.length = 1_000_000_000;
   Object.freeze(hugeSparseOrders);
@@ -601,6 +601,65 @@ test('array lengths are rejected before sparse attacker-controlled allocation wa
       orders: {
         metadata: metadata(),
         records: hugeSparseOrders,
+      },
+      positions: [
+        position('BINANCE_SPOT'),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: [],
+    },
+  });
+  const denseOverBoundOrders = Array.from(
+    { length: 11 },
+    (_, index) => order(
+      index === 0
+        ? 'SPOT_OPEN'
+        : index === 1
+          ? 'PERP_OPEN'
+          : index < 7
+            ? 'PERP_CLOSE'
+            : 'SPOT_CLOSE',
+      {
+        attempt:
+          index < 2
+            ? 0
+            : index < 7
+              ? Math.min(index - 2, 3)
+              : Math.min(index - 7, 3),
+      },
+    ),
+  );
+  const denseOverBound = input({
+    evidence: {
+      orders: {
+        metadata: metadata(),
+        records: denseOverBoundOrders,
+      },
+      positions: [
+        position('BINANCE_SPOT'),
+        position('BINANCE_USDM'),
+      ],
+      ambiguities: [],
+    },
+  });
+
+  const boundedExtraKeyOrders = [
+    order('SPOT_OPEN'),
+    order('PERP_OPEN'),
+    order('PERP_CLOSE'),
+    order('SPOT_CLOSE'),
+  ];
+  Object.defineProperty(boundedExtraKeyOrders, 'unexpected', {
+    value: 'reject-me',
+    enumerable: true,
+    configurable: false,
+    writable: false,
+  });
+  const boundedExtraKey = input({
+    evidence: {
+      orders: {
+        metadata: metadata(),
+        records: boundedExtraKeyOrders,
       },
       positions: [
         position('BINANCE_SPOT'),
@@ -640,7 +699,27 @@ test('array lengths are rejected before sparse attacker-controlled allocation wa
     },
   });
 
-  assert.equal(verifyBasisFlatness(hugeOrders).flat, false);
+  const originalGetOwnPropertyDescriptors = Object.getOwnPropertyDescriptors;
+  let overBoundDescriptorEnumerations = 0;
+  Object.getOwnPropertyDescriptors = function instrumentedDescriptors(value) {
+    if (value === hugeSparseOrders || value === denseOverBoundOrders) {
+      overBoundDescriptorEnumerations += 1;
+    }
+    return originalGetOwnPropertyDescriptors(value);
+  };
+  let hugeOrdersResult;
+  let denseOverBoundResult;
+  try {
+    hugeOrdersResult = verifyBasisFlatness(hugeOrders);
+    denseOverBoundResult = verifyBasisFlatness(denseOverBound);
+  } finally {
+    Object.getOwnPropertyDescriptors = originalGetOwnPropertyDescriptors;
+  }
+
+  assert.equal(hugeOrdersResult.status, 'UNKNOWN');
+  assert.equal(denseOverBoundResult.status, 'UNKNOWN');
+  assert.equal(overBoundDescriptorEnumerations, 0);
+  assert.equal(verifyBasisFlatness(boundedExtraKey).status, 'BLOCKED');
   assert.equal(verifyBasisFlatness(hugeCloseIds).status, 'BLOCKED');
   assert.equal(verifyBasisFlatness(tooManyAmbiguities).status, 'BLOCKED');
 });

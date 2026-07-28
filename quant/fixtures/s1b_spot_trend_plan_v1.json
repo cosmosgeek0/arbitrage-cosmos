@@ -1,0 +1,151 @@
+{
+  "schema": "S1BSpotTrendPlanV1",
+  "strategy": {
+    "candidateId": "btc-usdt-equal-weight-pma-1-2-4-10-20w:v1",
+    "family": "UNLEVERED_SPOT_TIME_SERIES_TREND",
+    "symbol": "BTCUSDT",
+    "quoteAsset": "USDT",
+    "initialCapitalUsd": "1000",
+    "reportingDenomination": "USDT_TREATED_AS_USD_AT_FROZEN_1_TO_1",
+    "cashYieldAnnualPct": "0",
+    "funding": "NOT_APPLICABLE_SPOT_ONLY",
+    "weighting": "INITIAL_EQUAL_200_USDT_SLEEVES_NO_CROSS_SLEEVE_REBALANCING",
+    "sleeves": [
+      {"pmaWeeks": 1, "pmaCalendarDays": 7, "initialCashUsd": "200"},
+      {"pmaWeeks": 2, "pmaCalendarDays": 14, "initialCashUsd": "200"},
+      {"pmaWeeks": 4, "pmaCalendarDays": 28, "initialCashUsd": "200"},
+      {"pmaWeeks": 10, "pmaCalendarDays": 70, "initialCashUsd": "200"},
+      {"pmaWeeks": 20, "pmaCalendarDays": 140, "initialCashUsd": "200"}
+    ],
+    "signal": "AFTER_COMPLETED_UTC_DAILY_CLOSE_LONG_WHEN_LOG_CLOSE_GT_OWN_TRAILING_MEAN_LOG_CLOSE_ELSE_CASH",
+    "execution": "NEXT_UTC_DAILY_OPEN_ON_STATE_CHANGE;TERMINAL_CLOSE_FORCED_LIQUIDATION",
+    "selection": {
+      "attemptedHypotheses": 1,
+      "parameterSearch": "NONE",
+      "candidateSelection": "FIXED_PRIMARY_RESEARCH_IMPORT_BEFORE_DATA",
+      "multiplicityPenalty": "NOT_APPLICABLE_SINGLE_IMPORTED_HYPOTHESIS",
+      "pbo": "NOT_APPLICABLE_SINGLE_IMPORTED_HYPOTHESIS",
+      "tieBreak": "NOT_APPLICABLE"
+    }
+  },
+  "partitions": {
+    "research": {
+      "warmupStartUtc": "2021-02-01",
+      "evaluationStartUtc": "2021-07-01",
+      "evaluationEndUtcInclusive": "2024-06-30",
+      "monthsInclusive": ["2021-02", "2024-06"]
+    },
+    "validation": {
+      "evaluationStartUtc": "2024-07-01",
+      "evaluationEndUtcInclusive": "2025-06-30",
+      "monthsInclusive": ["2024-07", "2025-06"],
+      "openCount": 1,
+      "reusedPriorClaimPeriod": false,
+      "priorS1aPeriodExcluded": "2025-07-01/2026-06-30"
+    }
+  },
+  "holdoutControl": {
+    "grantId": "s1b-pma-v1-20260728",
+    "expectedCandidateFixtureName": "s1b_spot_trend_candidate_v1.json",
+    "expectedAuthorizationFixtureName": "s1b_spot_trend_authorization_v1.json",
+    "expectedValidationRoot": "/private/tmp/cosmos-s1b-pma-v1/validation",
+    "expectedValidationEvidencePath": "/private/tmp/cosmos-s1b-pma-v1/validation-evidence.json",
+    "externalFreeze": "CANDIDATE_AND_AUTHORIZATION_FIXTURES_COMMITTED_BEFORE_VALIDATION_ACQUISITION"
+  },
+  "lineage": {
+    "scanUtc": "2026-07-28",
+    "scanned": ["run.md", "canonical quant paths"],
+    "foundExactFamilyOutcomeOnValidationPeriod": false,
+    "claim": "QUARANTINED_FROM_S1B_SELECTION_NOT_NEVER_VIEWED_BY_ANY_HUMAN"
+  },
+  "data": {
+    "authority": "https://data.binance.vision",
+    "archivePath": "data/spot/monthly/klines/BTCUSDT/1d",
+    "checksumRequired": true,
+    "expectedInterval": "1d",
+    "expectedUtcOpen": "00:00:00",
+    "expectedColumns": 12,
+    "archiveTimestampUnitTransitionUtc": "2025-01-01",
+    "historicalBboOrDepth": "UNAVAILABLE_IN_OFFICIAL_ARCHIVE",
+    "dataMutationPolicy": "PIN_EVERY_ZIP_AND_CHECKSUM_SHA256"
+  },
+  "costs": {
+    "orderStyle": "MARKET_TAKER",
+    "regularSpotFeeBpsPerFill": "10",
+    "bnbDiscountAssumed": false,
+    "specialOrTaxCommissionAssumed": false,
+    "baseAdverseExecutionBpsPerFill": "10",
+    "stressAdverseExecutionBpsPerFill": "20",
+    "severeAdverseExecutionBpsPerFill": "50",
+    "adverseExecutionMeaning": "ALL_IN_HALF_SPREAD_IMPACT_AND_DELAY_WEDGE;NO_DOUBLE_COUNT",
+    "buyFeeAsset": "RECEIVED_BASE",
+    "sellFeeAsset": "RECEIVED_QUOTE",
+    "quantityPrecisionDecimals": 8,
+    "currentMarketMinNotionalUsd": "5",
+    "currentPublicFilterSnapshotUtc": "2026-07-28T09:42:06Z",
+    "currentPublicFilterSource": "https://api.binance.com/api/v3/exchangeInfo?symbol=BTCUSDT",
+    "currentPublicFilterResponseSha256": "4ed53750fb1c5e64609051d966c0509433c2b73fb5e8854750980aa48f6c8a1c",
+    "currentMarketLotStepSize": "0.00000000",
+    "currentLimitLotStepSize": "0.00001000",
+    "currentBaseAssetPrecisionDecimals": 8,
+    "quantityRule": "MARKET_LOT_STEP_DISABLED_USE_BASE_ASSET_PRECISION",
+    "historicalFilterContinuity": "UNKNOWN"
+  },
+  "capacity": {
+    "reference": "MIN_PREVIOUS_COMPLETE_DAY_QUOTE_VOLUME_AND_TRAILING_7_COMPLETE_DAY_MEDIAN",
+    "baseParticipationBpsOfReference": "1",
+    "stressParticipationBpsOfReference": "0.5",
+    "aggregateSameTimestampFills": true,
+    "interpretation": "PUBLIC_VOLUME_SCREEN_ONLY_NOT_COUNTERFACTUAL_DEPTH_PROOF"
+  },
+  "uncertainty": {
+    "estimand": "MEAN_COMPLETE_UTC_DAILY_NET_ACCOUNT_RETURN_USD_PER_1000",
+    "method": "CIRCULAR_BLOCK_BOOTSTRAP_PERCENTILE",
+    "primaryBlockLengthDays": 28,
+    "sensitivityBlockLengthDays": 7,
+    "replicates": 4096,
+    "coveragePct": "95",
+    "seed": "150102180831"
+  },
+  "stopRules": {
+    "research": {
+      "minCalendarDays": 1000,
+      "minNonOverlappingSevenDayBlocks": 104,
+      "minNonOverlapping28DayBlocks": 26,
+      "minNonTerminalTransitionDays": 20,
+      "minDistinctOrganicExitDays": 5,
+      "requireBasePeriodNetPositive": true,
+      "requireStressPeriodNetPositive": true,
+      "requireBaseMeanDailyPositive": true,
+      "maxDailyCloseDrawdownPct": "40",
+      "requireBaseAndStressCapacityPass": true,
+      "requireCompleteData": true
+    },
+    "validation": {
+      "minCalendarDays": 350,
+      "minNonOverlappingSevenDayBlocks": 50,
+      "minNonOverlapping28DayBlocks": 12,
+      "minNonTerminalTransitionDays": 6,
+      "minDistinctOrganicExitDays": 2,
+      "requireBasePeriodNetPositive": true,
+      "requireStressPeriodNetPositive": true,
+      "requireBaseBootstrapLowerPositive": true,
+      "maxDailyCloseDrawdownPct": "40",
+      "requireBaseAndStressCapacityPass": true,
+      "requireCompleteData": true,
+      "passLabel": "GO_TO_FORWARD_SHADOW_ONLY",
+      "failLabel": "NO_GO",
+      "capitalReadyRegardlessOfPass": false
+    }
+  },
+  "sources": {
+    "officialFees": "https://www.binance.com/en/fee/trading",
+    "officialArchive": "https://github.com/binance/binance-public-data/blob/master/README.md?plain=1",
+    "officialSpotRest": "https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md?plain=1",
+    "officialCommissionSemantics": "https://github.com/binance/binance-spot-api-docs/blob/master/faqs/commission_faq.md?plain=1",
+    "primaryStrategy": "https://doi.org/10.1111/fima.12310",
+    "primaryCryptoMomentum": "https://doi.org/10.1093/rfs/hhaa113",
+    "primaryMultipleTestingCaution": "https://doi.org/10.1007/s10479-019-03357-1",
+    "primaryTailRisk": "https://doi.org/10.1007/s11408-025-00474-9"
+  }
+}

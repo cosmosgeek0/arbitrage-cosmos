@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import type { OperatorIdentity } from '../../security/access.js';
 import type { SystemControlActor } from '../controls/types.js';
+import { IDEMPOTENCY_KEY_PATTERN } from '../controls/validation.js';
 import type { SystemControlMutationRequest } from '../contracts/types.js';
 import { evaluateCanonicalOpsIntakeGate } from '../ops/intakeGate.js';
 import type { ValidateOnlyOrchestratorInput, ValidateOnlyRunResult } from '../verticalSlice/types.js';
@@ -27,6 +28,19 @@ function operator(value: unknown): Readonly<SystemControlActor> | null {
 function correlationId(idempotencyKey: string): string {
   const digest = createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 32);
   return `cor_control_${digest}`;
+}
+
+function m0RequestId(
+  actor: Readonly<SystemControlActor>,
+  idempotencyKey: string,
+): `m0_req_${string}` {
+  const digest = createHash('sha256')
+    .update(actor.id)
+    .update('\u0000')
+    .update(idempotencyKey)
+    .digest('hex')
+    .slice(0, 32);
+  return `m0_req_${digest}`;
 }
 
 // A read-model failure must stay opaque on the wire (the body below is part of
@@ -117,9 +131,10 @@ export function createSystemIntegrationRouter(options: SystemIntegrationRouterOp
     || typeof options.controls?.auditRejectedRequest !== 'function'
     || typeof options.controls?.snapshot !== 'function'
     || typeof options.validateOnly?.executeValidateOnly !== 'function'
+    || typeof options.m0SpotCanary?.inspectSourceMount !== 'function'
     || typeof options.clock?.nowMs !== 'function'
     || typeof options.opsReadback?.read !== 'function'
-  ) throw new TypeError('createSystemIntegrationRouter requires injected read, control, validate-only, clock, and ops readback ports.');
+  ) throw new TypeError('createSystemIntegrationRouter requires injected read, control, validate-only, M0 Spot source-mount, clock, and ops readback ports.');
 
   const router = express.Router();
   router.use((_req, res, next) => {
@@ -248,6 +263,93 @@ export function createSystemIntegrationRouter(options: SystemIntegrationRouterOp
         ok: false,
         code: 'VALIDATE_ONLY_UNAVAILABLE',
         error: 'Validate-only orchestration is unavailable.',
+      });
+    }
+  }));
+
+  router.post('/m0/spot-canary', asyncRoute(async (req, res) => {
+    if (Object.keys(req.query).length !== 0) {
+      res.status(400).json({
+        ok: false,
+        code: 'INVALID_M0_SPOT_CANARY_QUERY',
+        error: 'M0 Spot source mount accepts no query fields.',
+      });
+      return;
+    }
+    if (!req.is('application/json')) {
+      res.status(415).json({
+        ok: false,
+        code: 'UNSUPPORTED_MEDIA_TYPE',
+        error: 'Content-Type must be application/json.',
+      });
+      return;
+    }
+    const idempotencyKey = req.get('Idempotency-Key') ?? '';
+    if (!idempotencyKey) {
+      res.status(400).json({
+        ok: false,
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        error: 'Idempotency-Key is required.',
+      });
+      return;
+    }
+    if (!IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
+      res.status(400).json({
+        ok: false,
+        code: 'IDEMPOTENCY_KEY_INVALID',
+        error: 'Idempotency-Key is invalid.',
+      });
+      return;
+    }
+    if (
+      !plainRecord(req.body)
+      || Object.keys(req.body).length !== 1
+      || !Object.prototype.hasOwnProperty.call(
+        req.body,
+        'ownerConfirmation',
+      )
+      || req.body.ownerConfirmation !== 'YES'
+    ) {
+      res.status(400).json({
+        ok: false,
+        code: 'OWNER_YES_REQUIRED',
+        error: 'Exact ownerConfirmation "YES" acknowledges only the closed M0 source mount.',
+      });
+      return;
+    }
+
+    const actor = res.locals
+      .systemIntegrationOperator as Readonly<SystemControlActor>;
+    const ownerSource = actor.source;
+    if (
+      ownerSource !== 'loopback'
+      && ownerSource !== 'cloudflare-access'
+    ) {
+      res.status(403).json({
+        ok: false,
+        code: 'OWNER_IDENTITY_REQUIRED',
+        error: 'A verified owner identity is required.',
+      });
+      return;
+    }
+    try {
+      const result = await options.m0SpotCanary.inspectSourceMount(
+        Object.freeze({
+          requestId: m0RequestId(actor, idempotencyKey),
+          ownerConfirmation: 'YES' as const,
+          operator: Object.freeze({
+            id: actor.id,
+            email: actor.email,
+            source: ownerSource,
+          }),
+        }),
+      );
+      res.status(409).json(result);
+    } catch {
+      res.status(503).json({
+        ok: false,
+        code: 'M0_SOURCE_MOUNT_UNAVAILABLE',
+        error: 'M0 Spot source mount is unavailable and remains closed.',
       });
     }
   }));

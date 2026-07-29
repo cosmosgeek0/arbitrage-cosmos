@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import {
@@ -35,6 +37,16 @@ const EFFECT_FIELDS = Object.freeze([
   'persistenceWritesPerformed',
   'controlMutationsPerformed',
 ]);
+
+async function listSourceFiles(directory) {
+  const files = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...await listSourceFiles(path));
+    else if (entry.isFile() && /\.(?:ts|tsx)$/u.test(entry.name)) files.push(path);
+  }
+  return files.sort();
+}
 
 function assertNotProvedReceipt(receipt) {
   assert.equal(receipt.disposition, 'NOT_PROVED');
@@ -160,7 +172,20 @@ test('default admission blocks adapter-to-coordinator composition before effects
   assert.equal(result.externalActionAuthorization, 'NONE');
 });
 
-test('Spot canary action sources remain absent from shared barrels and runtime bootstrap', async () => {
+test('Spot canary production mounts only the pure source port while signed test preparation stays direct-import and unconfigured', async () => {
+  const serverSourceRoot = fileURLToPath(
+    new URL('../../../src/', import.meta.url),
+  );
+  const mapperImportPattern =
+    /(?:from\s+|import\s*\()\s*['"][^'"]*m0SpotSignedTransport\.js['"]/u;
+  const productionMapperImports = [];
+  for (const path of await listSourceFiles(serverSourceRoot)) {
+    if (mapperImportPattern.test(await readFile(path, 'utf8'))) {
+      productionMapperImports.push(path);
+    }
+  }
+  assert.deepEqual(productionMapperImports, []);
+
   const sharedBarrelUrls = [
     '../../../src/foundation/execution/index.ts',
     '../../../src/liveEdge/index.ts',
@@ -173,6 +198,29 @@ test('Spot canary action sources remain absent from shared barrels and runtime b
     new URL('../../../src/index.ts', import.meta.url),
     'utf8',
   );
+  const sourceMount = await readFile(
+    new URL(
+      '../../../src/foundation/execution/m0SpotSourceMount.ts',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  const signedMapper = await readFile(
+    new URL('../../../src/binance/m0SpotSignedTransport.ts', import.meta.url),
+    'utf8',
+  );
+  const routeSource = await readFile(
+    new URL('../../../src/systemIntegration/routes/router.ts', import.meta.url),
+    'utf8',
+  );
+  const routeTypes = await readFile(
+    new URL('../../../src/systemIntegration/routes/types.ts', import.meta.url),
+    'utf8',
+  );
+  const proofCatalog = JSON.parse(await readFile(
+    new URL('../../../../fixtures/i00/proof-catalog.json', import.meta.url),
+    'utf8',
+  ));
 
   for (const forbiddenSourceName of [
     'spotTransportCoordinator',
@@ -183,13 +231,67 @@ test('Spot canary action sources remain absent from shared barrels and runtime b
     'createBinanceSpotExecutionAdapter',
     'm0AutomaticReceipt',
     'generateM0AutomaticReceipt',
+    'm0SpotSignedTransport',
+    'createM0SpotSignedTestOrderMapper',
   ]) {
     assert.doesNotMatch(sharedBarrels, new RegExp(forbiddenSourceName, 'u'));
     assert.doesNotMatch(runtimeBootstrap, new RegExp(forbiddenSourceName, 'u'));
   }
 
-  assert.doesNotMatch(
-    runtimeBootstrap,
-    /spotValidateOnly|DEFAULT_SPOT_VALIDATE_ONLY_SEAM_CONFIG/u,
+  assert.equal(
+    (runtimeBootstrap.match(/createM0SpotSourceMount/gu) ?? []).length,
+    2,
   );
+  assert.match(runtimeBootstrap, /m0SpotCanary:\s*m0SpotSourceMount/u);
+  assert.match(sourceMount, /createSpotValidateOnlySeam/u);
+  assert.match(
+    sourceMount,
+    /DEFAULT_SPOT_VALIDATE_ONLY_SEAM_CONFIG/u,
+  );
+  assert.doesNotMatch(
+    sourceMount,
+    /spotTransportCoordinator|binanceSpotExecution|binanceSignedKernel|createM0SpotSignedTestOrderMapper|process\.env|globalThis\.fetch|node:http|node:https/u,
+  );
+
+  assert.match(signedMapper, /contractId:\s*'SPOT_TEST_ORDER_POST'/u);
+  assert.match(signedMapper, /path:\s*'\/api\/v3\/order\/test'/u);
+  assert.match(signedMapper, /transportCallsAuthorized:\s*0/u);
+  assert.match(signedMapper, /dispatchAuthorized:\s*false/u);
+  assert.match(signedMapper, /submitAuthority:\s*'NONE'/u);
+  assert.doesNotMatch(
+    signedMapper,
+    /['"]\/api\/v3\/order['"]|\/api\/v3\/sor\/order\/test|\/api\/v3\/myTrades|SPOT_ORDER_POST|SPOT_ORDER_QUERY|SPOT_ORDER_CANCEL|SPOT_MY_TRADES_QUERY|submitLiveOrder|queryByOriginalClientOrderId|queryFills|cancelOrder|flattenOrder/u,
+  );
+  assert.doesNotMatch(
+    signedMapper,
+    /globalThis\.fetch|node:http|node:https|node:net|node:tls|undici|axios|api\.binance\.com|request:\s*constructed\.request/u,
+  );
+  assert.doesNotMatch(
+    signedMapper,
+    /['"]\/sapi\/v1\/(?:capital\/withdraw|asset\/transfer)|\b(?:withdraw|transfer)(?:Funds|Asset|Capital|Order)?\s*\(/u,
+  );
+
+  assert.doesNotMatch(
+    `${routeSource}\n${routeTypes}`,
+    /binanceSpotExecution|binanceSignedKernel|m0SpotSignedTransport|SpotOwnerSendAuthority|SpotLiveSubmitIntent|runSpotTransportCoordinator/u,
+  );
+  assert.equal(
+    (routeSource.match(/router\.post\('\/m0\/spot-canary'/gu) ?? [])
+      .length,
+    1,
+  );
+  assert.doesNotMatch(
+    routeSource,
+    /\/m0\/spot-canary\/(?:send|submit|test|query|cancel|flatten|transfer|withdraw)/u,
+  );
+  const sourceM0Routes = [...routeSource.matchAll(
+    /router\.(get|post|put|delete)\(\s*['"](\/m0\/[^'"]+)['"]/gu,
+  )].map(
+    (match) =>
+      `${match[1].toUpperCase()} /api/system-integration${match[2]}`,
+  );
+  const catalogM0Routes = proofCatalog.canonicalRoutes
+    .filter((route) => route.route.startsWith('/api/system-integration/m0/'))
+    .map((route) => `${route.method} ${route.route}`);
+  assert.deepEqual(catalogM0Routes, sourceM0Routes);
 });

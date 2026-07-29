@@ -2481,6 +2481,9 @@ test('corrupt persistence leaves a router-mountable fail-closed read/control she
     read: f.app.read,
     controls: f.app.controls,
     validateOnly: f.app,
+    m0SpotCanary: {
+      async inspectSourceMount() { throw new Error('not under test'); },
+    },
     clock: f.clock,
     opsReadback: {
       read: () => Object.freeze({

@@ -105,10 +105,10 @@ async function browserGet(p, deviceId = 'gate-primary-device-2026') {
   return { status: res.status, headers: res.headers, body: await res.json().catch(() => null) };
 }
 
-async function post(p, body) {
+async function post(p, body, headers = {}) {
   const res = await request(p, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
   });
   return { status: res.status, body: await res.json().catch(() => null) };
@@ -222,6 +222,14 @@ const dataDirLeaseSource = readFileSync(
   'server/src/systemIntegration/persistence/dataDirLease.ts',
   'utf8',
 );
+const m0SpotSourceMountSource = readFileSync(
+  'server/src/foundation/execution/m0SpotSourceMount.ts',
+  'utf8',
+);
+const m0SpotSignedTransportSource = readFileSync(
+  'server/src/binance/m0SpotSignedTransport.ts',
+  'utf8',
+);
 check(
   'Token current OI and private account facts come only from canonical owners',
   /\/api\/intelligence\/token\?symbol=/.test(tokenDetailSource) &&
@@ -265,6 +273,20 @@ check(
   'legacy signed services receive only a mechanically unavailable client',
   /function\s+unavailablePrivateBinanceClient\(\):\s*BinanceClient\s*\|\s*null\s*\{\s*return\s+null;\s*\}/s.test(serverIndex) &&
     /const\s+client\s*=\s*unavailablePrivateBinanceClient\(\);/.test(serverIndex)
+);
+check(
+  'M0 Spot production mounts only the closed validate/test source port',
+  /import\s+\{\s*createM0SpotSourceMount\s*,?\s*\}\s+from\s+['"]\.\/foundation\/execution\/m0SpotSourceMount\.js['"]/.test(serverIndex) &&
+    /const\s+m0SpotSourceMount\s*=\s*createM0SpotSourceMount\(\);/.test(serverIndex) &&
+    /m0SpotCanary:\s*m0SpotSourceMount/.test(serverIndex) &&
+    /createSpotValidateOnlySeam/.test(m0SpotSourceMountSource) &&
+    /sourceEnabled:\s*false\s+as\s+const/.test(m0SpotSourceMountSource) &&
+    /killSwitchEngaged:\s*true\s+as\s+const/.test(m0SpotSourceMountSource) &&
+    /authorityCardinality:\s*['"]ONE_USE['"]/.test(m0SpotSourceMountSource) &&
+    /submitAuthority:\s*['"]NONE['"]/.test(m0SpotSourceMountSource) &&
+    !/m0SpotSignedTransport|binanceSpotExecution|binanceSignedKernel/.test(m0SpotSourceMountSource) &&
+    !/\bfetch\s*\(|\bhttps?:\/\//.test(m0SpotSignedTransportSource) &&
+    !/['"]\/api\/v3\/order['"]|\/api\/v3\/sor\/order\/test|\/api\/v3\/myTrades/.test(m0SpotSignedTransportSource)
 );
 check(
   'calendar and fx GET responses declare their own freshness state and TTL',
@@ -881,6 +903,44 @@ const testOrder = await post('/api/trade/test', { symbol: 'BTCUSDT', side: 'BUY'
 check(
   'signed test-order route is retired',
   testOrder.status === 410 && testOrder.body?.code === 'LIVE_EXECUTION_NOT_IMPLEMENTED'
+);
+const m0SpotSourceMount = await post(
+  '/api/system-integration/m0/spot-canary',
+  { ownerConfirmation: 'YES' },
+  { 'Idempotency-Key': 'm0.gates.source-mount.0001' },
+);
+check(
+  'owner YES reaches only the inert $10 validate/test-order M0 source mount',
+  m0SpotSourceMount.status === 409 &&
+    m0SpotSourceMount.body?.schema === 'cosmos.foundation.m0-spot-validate-test-source.v1' &&
+    m0SpotSourceMount.body?.code === 'M0_SOURCE_MOUNT_BLOCKED' &&
+    m0SpotSourceMount.body?.state === 'VALIDATE_TEST_ORDER_SOURCE_MOUNTED_NOT_ACTIVATED' &&
+    m0SpotSourceMount.body?.sourceMounted === true &&
+    m0SpotSourceMount.body?.runtimeActivated === false &&
+    m0SpotSourceMount.body?.liveExecutionPermitted === false &&
+    m0SpotSourceMount.body?.maximumOrderNotionalQuote === '10' &&
+    m0SpotSourceMount.body?.maximumOrderNotionalAsset === 'USDT' &&
+    m0SpotSourceMount.body?.ownerConfirmation === 'ACKNOWLEDGED_NOT_AUTHORITY' &&
+    m0SpotSourceMount.body?.admission?.sourceEnabled === false &&
+    m0SpotSourceMount.body?.admission?.killSwitchEngaged === true &&
+    Array.isArray(m0SpotSourceMount.body?.admission?.allowedSymbols) &&
+    m0SpotSourceMount.body.admission.allowedSymbols.length === 0 &&
+    m0SpotSourceMount.body?.validation?.signedTestPerformed === false &&
+    m0SpotSourceMount.body?.testOrder?.orderType === 'LIMIT' &&
+    m0SpotSourceMount.body?.testOrder?.notionalBasis === 'SIGNED_LIMIT_PRICE_TIMES_QUANTITY' &&
+    m0SpotSourceMount.body?.testOrder?.authorityCardinality === 'ONE_USE' &&
+    m0SpotSourceMount.body?.testOrder?.authorityState === 'NOT_PRESENT' &&
+    m0SpotSourceMount.body?.testOrder?.authorityConsumption === 'NOT_ATTEMPTED' &&
+    m0SpotSourceMount.body?.testOrder?.transport === 'NOT_CONFIGURED' &&
+    m0SpotSourceMount.body?.testOrder?.calls === 0 &&
+    m0SpotSourceMount.body?.submitAuthority === 'NONE' &&
+    m0SpotSourceMount.body?.withdrawalPolicy === 'DISABLED' &&
+    m0SpotSourceMount.body?.transferPolicy === 'DISABLED' &&
+    m0SpotSourceMount.body?.flat === 'NOT_PROVED' &&
+    m0SpotSourceMount.body?.reconciliation === 'NOT_PROVED' &&
+    m0SpotSourceMount.body?.disarm === 'NOT_PROVED' &&
+    Object.values(m0SpotSourceMount.body?.effects ?? {})
+      .every((value) => value === 0)
 );
 
 // Legacy config is display-only. Operational policy belongs to canonical

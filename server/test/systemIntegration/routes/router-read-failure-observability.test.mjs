@@ -66,8 +66,9 @@ test('a failed read is opaque on the wire but records its cause on stderr for al
     snapshot() { throw new Error('not under test'); },
   };
   const validateOnly = { async executeValidateOnly() { throw new Error('not under test'); } };
+  const m0SpotCanary = { async inspectSourceMount() { throw new Error('not under test'); } };
   const router = createSystemIntegrationRouter({
-    read, controls, validateOnly, clock: { nowMs: () => T0 }, opsReadback,
+    read, controls, validateOnly, m0SpotCanary, clock: { nowMs: () => T0 }, opsReadback,
   });
   const app = express();
   app.disable('x-powered-by');

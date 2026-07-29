@@ -115,6 +115,8 @@ section('3. compiled Lane C modules contain no implicit I/O');
     'coordinator.js',
     'events.js',
     'index.js',
+    'm0SpotSourceMount.js',
+    'm0SpotTestOrderAuthority.js',
     'plan.js',
     'recovery.js',
     'reducer.js',
@@ -153,11 +155,34 @@ section('3. compiled Lane C modules contain no implicit I/O');
     .filter((file) => (
       file !== 'spotValidateOnly.js'
       && file !== 'spotTransportCoordinator.js'
+      && file !== 'm0SpotSourceMount.js'
+      && file !== 'm0SpotTestOrderAuthority.js'
     ))
     .map((file) => codeOnly(readFileSync(join(distDir, file), 'utf8')))
     .join('\n');
   check('no concrete live-order method', !/placeOrder|submitLive|liveOrder|newOrder\s*\(/i.test(existingCode));
   check('no capital-movement method', !/withdraw|repay|transferOut|changeLeverage|changeMarginMode/i.test(existingCode));
+
+  const m0Code = [
+    'm0SpotSourceMount.js',
+    'm0SpotTestOrderAuthority.js',
+  ].map((file) => codeOnly(readFileSync(join(distDir, file), 'utf8')))
+    .join('\n');
+  const m0ExecutableCode = m0Code
+    .replaceAll("withdrawalPolicy: 'DISABLED'", '')
+    .replaceAll("transferPolicy: 'DISABLED'", '')
+    .replaceAll('withdrawals: 0', '')
+    .replaceAll('transfers: 0', '');
+  check(
+    'M0 source mount has no capital-movement capability',
+    !/withdraw|repay|transferOut|changeLeverage|changeMarginMode/i
+      .test(m0ExecutableCode),
+  );
+  check(
+    'M0 source mount has no live submit, query, cancel, or flatten capability',
+    !/placeOrder|submitLive|liveOrder|newOrder\s*\(|queryOrder|cancelOrder|flatten/i
+      .test(m0ExecutableCode),
+  );
 
   const validateOnlyCode = codeOnly(
     readFileSync(join(distDir, 'spotValidateOnly.js'), 'utf8'),

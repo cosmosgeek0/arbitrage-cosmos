@@ -79,7 +79,14 @@
     { "id": "NO_BROWSER_TOKEN_EXCHANGE_SOCKET", "scope": "web/src/pages/TokenDetail.tsx", "pattern": "new\\s+WebSocket|wss://", "expectedHits": 0 },
     { "id": "NO_BROWSER_TOKEN_FALLBACK_CDN", "scope": "web/src/components/TokenIcon.tsx", "pattern": "cdn\\.jsdelivr\\.net|assets\\.coincap\\.io", "expectedHits": 0 },
     { "id": "ONE_PHYSICAL_USDM_LIQUIDATION_TRANSPORT_URL", "scope": "server/src", "pattern": "wss://fstream\\.binance\\.com/market/ws/!forceOrder@arr", "expectedHits": 1 },
-    { "id": "NO_LIQUIDATION_PROJECTION_TRANSPORT_OR_RAW_FRAME", "scope": "server/src/binance/liquidations.ts", "pattern": "new\\s+WebSocket|from\\s+['\"]ws['\"]|wss://|!forceOrder@arr|ForceOrder|ingestFrame|BinanceStream|socketFactory|last-filled quantity|cumulative filled quantity", "expectedHits": 0 }
+    { "id": "NO_LIQUIDATION_PROJECTION_TRANSPORT_OR_RAW_FRAME", "scope": "server/src/binance/liquidations.ts", "pattern": "new\\s+WebSocket|from\\s+['\"]ws['\"]|wss://|!forceOrder@arr|ForceOrder|ingestFrame|BinanceStream|socketFactory|last-filled quantity|cumulative filled quantity", "expectedHits": 0 },
+    { "id": "ONE_M0_SOURCE_MOUNT_BOOT_IMPORT", "scope": "server/src/index.ts", "pattern": "from\\s+['\"]\\./foundation/execution/m0SpotSourceMount\\.js['\"]", "expectedHits": 1 },
+    { "id": "NO_SYSTEM_INTEGRATION_SIGNED_TEST_BOUNDARY", "scope": "server/src/systemIntegration", "pattern": "m0SpotSignedTransport|binanceSpotExecution|binanceSignedKernel|SpotOwnerSendAuthority|SpotLiveSubmitIntent|runSpotTransportCoordinator", "expectedHits": 0 },
+    { "id": "NO_PRODUCTION_IMPORT_OF_M0_SIGNED_TEST_MAPPER", "scope": "server/src", "pattern": "(?:from\\s+|import\\s*\\()\\s*['\"][^'\"]*m0SpotSignedTransport\\.js['\"]", "expectedHits": 0 },
+    { "id": "ONE_M0_TEST_ONLY_SIGNED_KERNEL_IMPORT", "scope": "server/src/binance/m0SpotSignedTransport.ts", "pattern": "from\\s+['\"]\\.\\./liveEdge/adapters/binanceSignedKernel/request\\.js['\"]", "expectedHits": 1 },
+    { "id": "NO_M0_LIVE_OR_QUERY_ENDPOINT", "scope": "server/src/binance/m0SpotSignedTransport.ts", "pattern": "['\"]\\/api\\/v3\\/order['\"]|\\/api\\/v3\\/sor\\/order\\/test|\\/api\\/v3\\/myTrades|SPOT_ORDER_POST|SPOT_ORDER_QUERY|SPOT_ORDER_CANCEL|SPOT_MY_TRADES_QUERY", "expectedHits": 0 },
+    { "id": "NO_M0_NETWORK_OR_RAW_SIGNED_RESULT", "scope": "server/src/binance/m0SpotSignedTransport.ts", "pattern": "globalThis\\.fetch|node:http|node:https|node:net|node:tls|undici|axios|api\\.binance\\.com|request:\\s*constructed\\.request", "expectedHits": 0 },
+    { "id": "M0_SOURCE_DEFAULT_OFF_LITERAL", "scope": "server/src/foundation/execution/m0SpotSourceMount.ts", "pattern": "sourceEnabled:\\s*false\\s+as\\s+const", "expectedHits": 1 }
   ],
   "knownConflicts": [
     { "id": "LEGACY_LIVE_ROUTE", "path": "server/src/index.ts", "needle": "app.post('/api/live'", "classification": "RESOLVED_RETIRED_TOMBSTONE", "resolutionState": "RESOLVED", "evidence": "fixtures/i00/baseline-route-migration.json", "impact": "registered only as a fail-closed LIVE_EXECUTION_NOT_IMPLEMENTED tombstone with zero production consumers" },
@@ -96,6 +103,7 @@
     { "method": "GET", "route": "/api/system-integration/controls", "sourceNeedle": "router.get('/controls'" },
     { "method": "GET", "route": "/api/system-integration/traces/:correlationId", "sourceNeedle": "router.get('/traces/:correlationId'" },
     { "method": "POST", "route": "/api/system-integration/validate-only", "sourceNeedle": "router.post('/validate-only'" },
+    { "method": "POST", "route": "/api/system-integration/m0/spot-canary", "sourceNeedle": "router.post('/m0/spot-canary'" },
     { "method": "POST", "route": "/api/system-integration/controls", "sourceNeedle": "router.post('/controls'" },
     { "method": "GET", "route": "/api/product-integration/v1/supervisor", "sourceNeedle": "router.get('/v1/supervisor'" },
     { "method": "GET", "route": "/api/product-integration/v1/material-events", "sourceNeedle": "router.get('/v1/material-events'" },

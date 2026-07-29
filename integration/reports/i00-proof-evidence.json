@@ -687,6 +687,66 @@
         "expectedHits": 0,
         "hits": [],
         "passed": true
+      },
+      {
+        "id": "ONE_M0_SOURCE_MOUNT_BOOT_IMPORT",
+        "expectedHits": 1,
+        "hits": [
+          {
+            "file": "server/src/index.ts",
+            "line": 95,
+            "ruleId": "ONE_M0_SOURCE_MOUNT_BOOT_IMPORT"
+          }
+        ],
+        "passed": true
+      },
+      {
+        "id": "NO_SYSTEM_INTEGRATION_SIGNED_TEST_BOUNDARY",
+        "expectedHits": 0,
+        "hits": [],
+        "passed": true
+      },
+      {
+        "id": "NO_PRODUCTION_IMPORT_OF_M0_SIGNED_TEST_MAPPER",
+        "expectedHits": 0,
+        "hits": [],
+        "passed": true
+      },
+      {
+        "id": "ONE_M0_TEST_ONLY_SIGNED_KERNEL_IMPORT",
+        "expectedHits": 1,
+        "hits": [
+          {
+            "file": "server/src/binance/m0SpotSignedTransport.ts",
+            "line": 22,
+            "ruleId": "ONE_M0_TEST_ONLY_SIGNED_KERNEL_IMPORT"
+          }
+        ],
+        "passed": true
+      },
+      {
+        "id": "NO_M0_LIVE_OR_QUERY_ENDPOINT",
+        "expectedHits": 0,
+        "hits": [],
+        "passed": true
+      },
+      {
+        "id": "NO_M0_NETWORK_OR_RAW_SIGNED_RESULT",
+        "expectedHits": 0,
+        "hits": [],
+        "passed": true
+      },
+      {
+        "id": "M0_SOURCE_DEFAULT_OFF_LITERAL",
+        "expectedHits": 1,
+        "hits": [
+          {
+            "file": "server/src/foundation/execution/m0SpotSourceMount.ts",
+            "line": 214,
+            "ruleId": "M0_SOURCE_DEFAULT_OFF_LITERAL"
+          }
+        ],
+        "passed": true
       }
     ],
     "conflicts": [
@@ -785,7 +845,7 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 4223,
+        "line": 4228,
         "classification": "LEGACY_APP_DELIVERY"
       },
       {
@@ -1335,6 +1395,12 @@
         "declaration": "function observeLiquidationSourceStatus",
         "file": "server/src/binance/liquidations.ts",
         "line": 285
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function intentMatchesTicket",
+        "file": "server/src/binance/m0SpotSignedTransport.ts",
+        "line": 214
       },
       {
         "concept": "semantic-source",
@@ -3401,6 +3467,48 @@
         "line": 5
       },
       {
+        "concept": "semantic-source",
+        "declaration": "interface M0SpotSourceMountOperator",
+        "file": "server/src/foundation/execution/m0SpotSourceMount.ts",
+        "line": 37
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface M0SpotSourceMountInput",
+        "file": "server/src/foundation/execution/m0SpotSourceMount.ts",
+        "line": 43
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface M0SpotSourceMountResult",
+        "file": "server/src/foundation/execution/m0SpotSourceMount.ts",
+        "line": 49
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface M0SpotSourceMountPort",
+        "file": "server/src/foundation/execution/m0SpotSourceMount.ts",
+        "line": 107
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function createM0SpotSourceMount",
+        "file": "server/src/foundation/execution/m0SpotSourceMount.ts",
+        "line": 170
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type SpotExecutionTicket",
+        "file": "server/src/foundation/execution/m0SpotTestOrderAuthority.ts",
+        "line": 20
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function canonicalTicket",
+        "file": "server/src/foundation/execution/m0SpotTestOrderAuthority.ts",
+        "line": 268
+      },
+      {
         "concept": "risk-authority",
         "declaration": "type ExposureProjection",
         "file": "server/src/foundation/execution/reducer.ts",
@@ -3974,121 +4082,121 @@
         "concept": "control-authority",
         "declaration": "type SystemSupervisorReadModel",
         "file": "server/src/index.ts",
-        "line": 110
+        "line": 113
       },
       {
         "concept": "capital-authority",
         "declaration": "type ProductionCapitalSummaryReadPort",
         "file": "server/src/index.ts",
-        "line": 129
+        "line": 132
       },
       {
         "concept": "control-authority",
         "declaration": "type CanonicalSupervisorOpsReadPort",
         "file": "server/src/index.ts",
-        "line": 140
+        "line": 143
       },
       {
         "concept": "semantic-source",
         "declaration": "type SourceIsolationPhysicalPort",
         "file": "server/src/index.ts",
-        "line": 146
+        "line": 149
       },
       {
         "concept": "semantic-source",
         "declaration": "type SourceLogoEntry",
         "file": "server/src/index.ts",
-        "line": 196
+        "line": 199
       },
       {
         "concept": "semantic-source",
         "declaration": "function legacyScannerSnapshot",
         "file": "server/src/index.ts",
-        "line": 247
+        "line": 250
       },
       {
         "concept": "ledger-authority",
         "declaration": "function pruneEphemeralLedgerEvents",
         "file": "server/src/index.ts",
-        "line": 671
+        "line": 675
       },
       {
         "concept": "semantic-source",
         "declaration": "function handleBookStreamMessage",
         "file": "server/src/index.ts",
-        "line": 849
+        "line": 853
       },
       {
         "concept": "semantic-source",
         "declaration": "function resetBookStreamRuntime",
         "file": "server/src/index.ts",
-        "line": 871
+        "line": 875
       },
       {
         "concept": "control-authority",
         "declaration": "function recordSupervisorReadFailure",
         "file": "server/src/index.ts",
-        "line": 954
+        "line": 958
       },
       {
         "concept": "semantic-source",
         "declaration": "function sendLegacyScannerRetired",
         "file": "server/src/index.ts",
-        "line": 1017
+        "line": 1021
       },
       {
         "concept": "semantic-source",
         "declaration": "type ObservedMarketSourceResult",
         "file": "server/src/index.ts",
-        "line": 2402
+        "line": 2407
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketSourceSnapshot",
         "file": "server/src/index.ts",
-        "line": 2406
+        "line": 2411
       },
       {
         "concept": "semantic-source",
         "declaration": "function observedMarketSourceResult",
         "file": "server/src/index.ts",
-        "line": 2424
+        "line": 2429
       },
       {
         "concept": "semantic-source",
         "declaration": "function marketSources",
         "file": "server/src/index.ts",
-        "line": 2439
+        "line": 2444
       },
       {
         "concept": "semantic-source",
         "declaration": "function cachedSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2951
+        "line": 2956
       },
       {
         "concept": "semantic-source",
         "declaration": "function rememberSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2963
+        "line": 2968
       },
       {
         "concept": "semantic-source",
         "declaration": "function loadSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2973
+        "line": 2978
       },
       {
         "concept": "semantic-source",
         "declaration": "function startSharedIconSource",
         "file": "server/src/index.ts",
-        "line": 4073
+        "line": 4078
       },
       {
         "concept": "semantic-source",
         "declaration": "function stopSharedIconSource",
         "file": "server/src/index.ts",
-        "line": 4084
+        "line": 4089
       },
       {
         "concept": "semantic-source",
@@ -8785,6 +8893,21 @@
     ],
     "ownerImportEdges": [
       {
+        "file": "server/src/binance/m0SpotSignedTransport.ts",
+        "line": 32,
+        "target": "../foundation/execution/m0SpotTestOrderAuthority.js"
+      },
+      {
+        "file": "server/src/binance/m0SpotSignedTransport.ts",
+        "line": 33,
+        "target": "../foundation/execution/spotPort.js"
+      },
+      {
+        "file": "server/src/binance/m0SpotSignedTransport.ts",
+        "line": 34,
+        "target": "../foundation/execution/spotTicket.js"
+      },
+      {
         "file": "server/src/config.ts",
         "line": 2,
         "target": "./ledger.js"
@@ -8841,12 +8964,17 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 147,
+        "line": 95,
+        "target": "./foundation/execution/m0SpotSourceMount.js"
+      },
+      {
+        "file": "server/src/index.ts",
+        "line": 150,
         "target": "./intelligenceRuntime/lifecycle/index.js"
       },
       {
         "file": "server/src/index.ts",
-        "line": 177,
+        "line": 180,
         "target": "./capitalFoundation/contracts/index.js"
       },
       {
@@ -9160,6 +9288,11 @@
         "target": "../../foundation/risk/index.js"
       },
       {
+        "file": "server/src/systemIntegration/routes/types.ts",
+        "line": 17,
+        "target": "../../foundation/execution/m0SpotSourceMount.js"
+      },
+      {
         "file": "server/src/systemIntegration/supervisor/operatingMetrics.ts",
         "line": 12,
         "target": "../../capitalFoundation/contracts/index.js"
@@ -9282,6 +9415,12 @@
       "method": "POST",
       "route": "/api/system-integration/validate-only",
       "sourceNeedle": "router.post('/validate-only'",
+      "observed": true
+    },
+    {
+      "method": "POST",
+      "route": "/api/system-integration/m0/spot-canary",
+      "sourceNeedle": "router.post('/m0/spot-canary'",
       "observed": true
     },
     {
@@ -11273,9 +11412,9 @@
         "requirement": "Preserve the owner hierarchy from broad universe monitoring to specialist attention guarded execution complete control and no routine CLI dependence",
         "owner": "MISSION.md plus I00 director",
         "code": "canonical domain owners, all 16 accepted donors, the source-built Product runtime, and mounted Product Control application",
-        "runtime": "fifteen authenticated System/Product Integration routes and four exact fail-closed Product controls are source-wired; runtime and browser measurements remain pending",
+        "runtime": "sixteen authenticated System/Product Integration routes and four exact fail-closed Product controls are source-wired; runtime and browser measurements remain pending",
         "persistence": "existing Ledger plus bounded product_operator_events and canonical System Control CAS/idempotency/receipt paths are source-built",
-        "api": "fifteen canonical System/Product Integration routes are source-mounted",
+        "api": "sixteen canonical System/Product Integration routes are source-mounted",
         "cockpit": "Dashboard and Control Room mounted",
         "control": "four exact fail-closed controls are source-wired; every broader or reverse mutation remains disabled",
         "test": "server/test/i00Acceptance/closure-evidence.test.mjs; web/test/productControlRoom/mount.test.mjs; server/test/systemIntegration/persistence/product-operator-events.test.mjs",
@@ -15380,6 +15519,48 @@
         "scope": "server/src/binance/liquidations.ts",
         "pattern": "new\\s+WebSocket|from\\s+['\"]ws['\"]|wss://|!forceOrder@arr|ForceOrder|ingestFrame|BinanceStream|socketFactory|last-filled quantity|cumulative filled quantity",
         "expectedHits": 0
+      },
+      {
+        "id": "ONE_M0_SOURCE_MOUNT_BOOT_IMPORT",
+        "scope": "server/src/index.ts",
+        "pattern": "from\\s+['\"]\\./foundation/execution/m0SpotSourceMount\\.js['\"]",
+        "expectedHits": 1
+      },
+      {
+        "id": "NO_SYSTEM_INTEGRATION_SIGNED_TEST_BOUNDARY",
+        "scope": "server/src/systemIntegration",
+        "pattern": "m0SpotSignedTransport|binanceSpotExecution|binanceSignedKernel|SpotOwnerSendAuthority|SpotLiveSubmitIntent|runSpotTransportCoordinator",
+        "expectedHits": 0
+      },
+      {
+        "id": "NO_PRODUCTION_IMPORT_OF_M0_SIGNED_TEST_MAPPER",
+        "scope": "server/src",
+        "pattern": "(?:from\\s+|import\\s*\\()\\s*['\"][^'\"]*m0SpotSignedTransport\\.js['\"]",
+        "expectedHits": 0
+      },
+      {
+        "id": "ONE_M0_TEST_ONLY_SIGNED_KERNEL_IMPORT",
+        "scope": "server/src/binance/m0SpotSignedTransport.ts",
+        "pattern": "from\\s+['\"]\\.\\./liveEdge/adapters/binanceSignedKernel/request\\.js['\"]",
+        "expectedHits": 1
+      },
+      {
+        "id": "NO_M0_LIVE_OR_QUERY_ENDPOINT",
+        "scope": "server/src/binance/m0SpotSignedTransport.ts",
+        "pattern": "['\"]\\/api\\/v3\\/order['\"]|\\/api\\/v3\\/sor\\/order\\/test|\\/api\\/v3\\/myTrades|SPOT_ORDER_POST|SPOT_ORDER_QUERY|SPOT_ORDER_CANCEL|SPOT_MY_TRADES_QUERY",
+        "expectedHits": 0
+      },
+      {
+        "id": "NO_M0_NETWORK_OR_RAW_SIGNED_RESULT",
+        "scope": "server/src/binance/m0SpotSignedTransport.ts",
+        "pattern": "globalThis\\.fetch|node:http|node:https|node:net|node:tls|undici|axios|api\\.binance\\.com|request:\\s*constructed\\.request",
+        "expectedHits": 0
+      },
+      {
+        "id": "M0_SOURCE_DEFAULT_OFF_LITERAL",
+        "scope": "server/src/foundation/execution/m0SpotSourceMount.ts",
+        "pattern": "sourceEnabled:\\s*false\\s+as\\s+const",
+        "expectedHits": 1
       }
     ],
     "knownConflicts": [
@@ -15780,5 +15961,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "508db6125761a1a8ed1a1e785c2574db5a89c78b80c6cc915b208b4e8bb56be7"
+  "evidenceSha256": "1093e27028d8e6084f7af2ac80112bf518f9e58ab88bc8820124edb061021077"
 }

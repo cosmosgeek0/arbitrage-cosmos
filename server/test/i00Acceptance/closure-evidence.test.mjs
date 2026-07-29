@@ -244,7 +244,7 @@ test('page capability and control matrices separate historical fixtures from cur
   assert.match(notifications.canonicalApi, /\/api\/notification-routing/u);
   assert.doesNotMatch(`${notifications.canonicalApi} ${notifications.blocker}`, /PENDING_INCIDENT_ADAPTER|CANONICAL_INCIDENT_ACK_COMMAND_ABSENT/u);
   assert.deepEqual(catalog.requiredAbsentSurfaces, []);
-  assert.equal(catalog.canonicalRoutes.length, 15);
+  assert.equal(catalog.canonicalRoutes.length, 16);
   assert.deepEqual(
     catalog.canonicalRoutes
       .filter((route) => route.route.startsWith('/api/product-integration'))

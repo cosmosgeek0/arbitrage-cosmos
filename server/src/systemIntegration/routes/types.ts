@@ -12,6 +12,9 @@ import type {
   ValidateOnlyOrchestratorInput,
   ValidateOnlyRunResult,
 } from '../verticalSlice/types.js';
+import type {
+  M0SpotSourceMountPort,
+} from '../../foundation/execution/m0SpotSourceMount.js';
 
 export interface SystemIntegrationEventQuery {
   readonly limit: number;
@@ -64,6 +67,7 @@ export interface SystemIntegrationRouterOptions {
   readonly read: SystemIntegrationReadPort;
   readonly controls: SystemControlService;
   readonly validateOnly: SystemIntegrationValidateOnlyPort;
+  readonly m0SpotCanary: M0SpotSourceMountPort;
   readonly clock: SystemIntegrationRouteClock;
   readonly opsReadback: CanonicalSupervisorOpsReadPort;
 }

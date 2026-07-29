@@ -36,6 +36,8 @@ versus taker realization, and account tier remain `UNKNOWN`.
 
 Archive URLs are not custody. Before any member is opened, V-G27 binds the ZIP
 bytes, publisher checksum bytes, independently computed digest, byte count,
-symbol, interval, month, and preserved response metadata. The evaluator rejects
+and exact official archive/sidecar URLs, symbol, interval, and month. Prestaged
+bytes make no claim about acquisition time, HTTP response headers, ETag,
+Last-Modified, or other response metadata. The evaluator rejects
 headers, non-12-column rows, wrong timestamp units, non-hour opens, wrong close
 boundaries, duplicates, gaps, extra members, and wrong member names.

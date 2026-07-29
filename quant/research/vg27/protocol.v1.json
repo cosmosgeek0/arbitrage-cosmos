@@ -10,15 +10,24 @@
   },
   "canonicalBase": "a169b123fb186d1943a75ad648552c4d95be1be1",
   "capacity": {
-    "entryAllocationMaximumOfMinimumSignalBarQuoteVolumeBps": "1",
+    "allocationCap": "NONE_FULL_SLEEVE_ECONOMICS_UNCHANGED",
+    "executableCapacity": "UNMEASURED",
     "historicalDepthSpreadImpactLatencyFiltersFillsExecutableCapacity": "UNMEASURED",
+    "nominalInitial1000Screen": "EACH_INITIAL_100_USD_REFERENCE_ALLOCATION_COMPARED_WITH_1_BP_OF_MINIMUM_SIGNAL_BAR_QUOTE_VOLUME",
+    "nominalScreenGateUsd": "1000",
     "publicProxyOnly": true,
-    "sleeveGateUsd": "1000"
+    "reinvestmentMayExceedNominalScreen": true
   },
   "claimBoundary": {
     "causalIdentification": "NOT_CLAIMED",
     "estimand": "LAGGED_PREDICTIVE_ASSOCIATION_OF_CROSS_SECTIONAL_INTRADAY_QUOTE_VOLUME_DISPERSION_REGIME",
     "fixedCohort": "SURVIVORSHIP_LIMITED",
+    "programWideVgMultiplicity": {
+      "localHolmWhiteCanEstablishVerifiedPositive": false,
+      "scope": "V_G1_THROUGH_V_G27_PROGRAM_WIDE_FAMILY",
+      "sharedDateDependence": "NOT_RESOLVED",
+      "status": "NOT_CONVERGED"
+    },
     "publicQuoteVolume": "NOT_EXECUTABLE_DEPTH"
   },
   "costs": {
@@ -40,11 +49,14 @@
   "custody": {
     "archiveIdentity": "EXACT_ZIP_AND_CHECKSUM_BYTES",
     "developmentMarker": "EXCLUSIVE_CREATE_FILE_FSYNC_PARENT_FSYNC_BEFORE_FIRST_DEVELOPMENT_BODY_OPEN",
-    "holdoutMarker": "EXCLUSIVE_CREATE_FILE_FSYNC_PARENT_FSYNC_BEFORE_FIRST_HOLDOUT_BODY_OPEN",
+    "developmentSelection": "PACKET_AUTHORITY_FIRST_EXCLUSIVE_CREATE_FILE_FSYNC_PARENT_FSYNC_THEN_EXTERNAL_REPLICA_BEFORE_HOLDOUT_MARKER",
+    "freeze": "FREEZE_V2_BINDS_STATIC_INPUTS_INTERPRETER_DECIMAL_CONTEXT_AND_QUANT_RUNTIME_LOCKS",
+    "holdoutMarker": "BINDS_FREEZE_DEVELOPMENT_MARKER_SELECTION_AND_CHAMPION_BEFORE_FIRST_HOLDOUT_BODY_OPEN",
     "interruptionAfterMarker": "FINALIZE_UNMEASURED_ONLY",
-    "packetReceipts": "SOURCE_MANIFEST_FREEZE_MARKERS_RESULT_AND_SHA256_INVENTORY_MIRRORED_IN_EXCLUSIVE_VG27_SCOPE",
+    "packetReceipts": "PACKET_PATH_IS_O_EXCL_FSYNCED_AUTHORITY_WRITTEN_FIRST_EXTERNAL_PATH_IS_REPLICA",
+    "partialReplica": "CUSTODY_TERMINAL_UNMEASURED_NEVER_OVERWRITE_OR_FABRICATE_MISSING_TWIN",
     "resultOrMarkerRerun": "REFUSE",
-    "verify": "HASH_SCHEMA_RECEIPT_PAIR_AND_PACKET_INVENTORY_ONLY_NEVER_OPEN_ARCHIVE_OR_RECOMPUTE_RETURN"
+    "verify": "HASH_AND_SEMANTIC_STATE_MACHINE_ONLY_NEVER_OPEN_ARCHIVE_OR_RECOMPUTE_RETURN"
   },
   "data": {
     "archiveCount": 180,
@@ -112,7 +124,7 @@
     "drawdownMaximumFraction": "0.20",
     "holmAdjustedPMaximum": "0.05",
     "onEventsMinimum": 100,
-    "publicCapacityMinimumUsd": "1000",
+    "nominalInitial1000ScreenMinimumUsd": "1000",
     "whitePMaximum": "0.05"
   },
   "inference": {
@@ -126,6 +138,9 @@
     "cscvPbo": {
       "blocks": 8,
       "developmentOnly": true,
+      "distinctPathsMinimum": 2,
+      "orientations": 70,
+      "oosTieRank": "AVERAGE_RANK_PERCENTILE",
       "reportReferenceMaximum": "0.50",
       "role": "DIAGNOSTIC_ONLY_NEVER_SELECTION_HOLDOUT_AUTHORIZATION_OR_RESCUE"
     },
@@ -163,6 +178,7 @@
       18
     ],
     "initialUsd": "1000",
+    "nominalQuoteVolumeScreenIsAllocationCap": false,
     "missingRequiredEvidence": "TERMINAL_UNMEASURED_NOT_CASH_OR_DROP",
     "nonOverlap": true,
     "on": "EQUAL_WEIGHT_ALL_TEN_FIXED_MEMBERS",

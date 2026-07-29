@@ -13,9 +13,11 @@ import itertools
 import json
 import math
 import os
+import platform
 import random
 import re
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
@@ -75,11 +77,57 @@ BOOTSTRAP_REPLICATES: Final = 2048
 BOOTSTRAP_SEED: Final = 270027
 CHECKSUM_RE: Final = re.compile(rb"^([0-9a-f]{64})[ \t]+\*?([^\r\n]+)\r?\n?$")
 SOURCE_MANIFEST_NAME: Final = "source-manifest.v1.json"
-FREEZE_NAME: Final = "freeze.v1.json"
+FREEZE_NAME: Final = "freeze.v2.json"
+FREEZE_VERSION: Final = "VG27FreezeV2"
+SUPERSESSION_NAME: Final = "freeze-v1-supersession.v1.json"
 DEVELOPMENT_MARKER_NAME: Final = "development-open.v1.json"
+DEVELOPMENT_SELECTION_NAME: Final = "development-selection.v1.json"
 HOLDOUT_MARKER_NAME: Final = "holdout-open.v1.json"
 RESULT_NAME: Final = "result.v1.json"
+CUSTODY_TERMINAL_NAME: Final = "custody-terminal.v1.json"
 SHA256SUMS_NAME: Final = "SHA256SUMS"
+OPEN_MARKER_VERSION: Final = "VG27OpenMarkerV2"
+RESULT_VERSION: Final = "VG27ResultV2"
+TRACKED_RECEIPTS: Final = (
+    DEVELOPMENT_MARKER_NAME,
+    DEVELOPMENT_SELECTION_NAME,
+    HOLDOUT_MARKER_NAME,
+    RESULT_NAME,
+)
+RUNTIME_LOCK_PATHS: Final = (
+    REPO_ROOT / "quant" / "pyproject.toml",
+    REPO_ROOT / "quant" / "uv.lock",
+)
+PROGRAM_MULTIPLICITY: Final = {
+    "localHolmWhiteCanEstablishVerifiedPositive": False,
+    "sharedDateDependence": "NOT_RESOLVED",
+    "status": "NOT_CONVERGED",
+    "scope": "V_G1_THROUGH_V_G27_PROGRAM_WIDE_FAMILY",
+}
+DEVELOPMENT_GATE_NAMES: Final = frozenset(
+    (
+        "activeMonthsAtLeast8",
+        "baseLcbPositive",
+        "baseNetPositive",
+        "drawdownAtMost20Pct",
+        "holmAdjustedPBelow0.05",
+        "nominalInitial1000ScreenAtLeast1000",
+        "onEventsAtLeast100",
+        "stressLcbPositive",
+        "stressNetPositive",
+        "whitePBelow0.05",
+    )
+)
+HOLDOUT_GATE_NAMES: Final = frozenset(
+    (
+        "baseLcbPositive",
+        "baseNetPositive",
+        "drawdownAtMost20Pct",
+        "nominalInitial1000ScreenAtLeast1000",
+        "stressLcbPositive",
+        "stressNetPositive",
+    )
+)
 
 
 class VG27Error(RuntimeError):
@@ -120,7 +168,7 @@ class Signal:
     on: bool
     current_dispersion: Decimal
     reference_dispersion: Decimal
-    capacity_usd: Decimal
+    nominal_initial_1000_screen_usd: Decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,7 +176,7 @@ class Event:
     signal_at: datetime
     entry_at: datetime
     exit_at: datetime
-    capacity_usd: Decimal
+    nominal_initial_1000_screen_usd: Decimal
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,7 +198,8 @@ class Simulation:
     gross_trading_pnl_usd: Decimal
     fee_cost_usd: Decimal
     adverse_cost_usd: Decimal
-    minimum_capacity_usd: Decimal | None
+    minimum_nominal_initial_1000_screen_usd: Decimal | None
+    maximum_entry_to_screen_ratio: Decimal | None
     max_drawdown: Decimal
 
 
@@ -232,6 +281,15 @@ def write_atomic(path: Path, value: object | bytes) -> None:
         temporary.unlink(missing_ok=True)
 
 
+def write_exclusive_or_accept_identical(path: Path, value: object | bytes) -> None:
+    raw = value if isinstance(value, bytes) else canonical_bytes(value)
+    if path.exists() or path.is_symlink():
+        if path.is_symlink() or not path.is_file() or path.read_bytes() != raw:
+            raise CustodyError(f"existing artifact differs: {path.name}")
+        return
+    write_exclusive(path, raw)
+
+
 def load_json(path: Path, *, canonical: bool = False) -> dict[str, Any]:
     if path.is_symlink() or not path.is_file():
         raise CustodyError(f"required regular file unavailable: {path}")
@@ -265,6 +323,45 @@ def required_text(value: object, field: str) -> str:
     if not isinstance(value, str):
         raise MeasurementError(f"{field} must be text")
     return value
+
+
+def required_mapping(value: object, field: str) -> dict[str, Any]:
+    if not isinstance(value, dict) or any(not isinstance(key, str) for key in value):
+        raise CustodyError(f"{field} must be an object with text keys")
+    return value
+
+
+def required_bool(value: object, field: str) -> bool:
+    if not isinstance(value, bool):
+        raise CustodyError(f"{field} must be boolean")
+    return value
+
+
+def required_int(value: object, field: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise CustodyError(f"{field} must be integer")
+    return value
+
+
+def receipt_decimal(value: object, field: str) -> Decimal:
+    if not isinstance(value, str):
+        raise CustodyError(f"{field} must be decimal text")
+    try:
+        parsed = Decimal(value)
+    except InvalidOperation as error:
+        raise CustodyError(f"{field} decimal text invalid") from error
+    if not parsed.is_finite():
+        raise CustodyError(f"{field} must be finite")
+    return parsed
+
+
+def require_exact_keys(
+    value: Mapping[str, object],
+    expected: set[str],
+    field: str,
+) -> None:
+    if set(value) != expected:
+        raise CustodyError(f"{field} keys invalid")
 
 
 def trial_grid() -> tuple[Trial, ...]:
@@ -504,7 +601,9 @@ def signal_at(
         on=current_dispersion >= threshold,
         current_dispersion=current_dispersion,
         reference_dispersion=reference,
-        capacity_usd=minimum_quote * CAPACITY_PARTICIPATION * Decimal(len(COHORT)),
+        nominal_initial_1000_screen_usd=(
+            minimum_quote * CAPACITY_PARTICIPATION * Decimal(len(COHORT))
+        ),
     )
 
 
@@ -527,7 +626,14 @@ def build_events(
         signal = signal_at(bars, trial, formation)
         if not signal.on:
             continue
-        events.append(Event(formation, entry, exit_at, signal.capacity_usd))
+        events.append(
+            Event(
+                formation,
+                entry,
+                exit_at,
+                signal.nominal_initial_1000_screen_usd,
+            )
+        )
         occupied_until = exit_at
     return tuple(events)
 
@@ -571,6 +677,7 @@ def simulate(
     fee_cost = Decimal(0)
     adverse_cost = Decimal(0)
     gross_pnl = Decimal(0)
+    entry_to_screen_ratios: list[Decimal] = []
     times = hour_range(start, end)
     equity: list[Decimal] = []
     for opened_at in times:
@@ -589,6 +696,11 @@ def simulate(
             prices = prices_required(bars, opened_at, "entry")
             all_in = Decimal(1) + cost.fee_per_side + cost.adverse_per_side
             each_reference = cash / (Decimal(len(COHORT)) * all_in)
+            nominal_each_screen = entries[opened_at].nominal_initial_1000_screen_usd / Decimal(
+                len(COHORT)
+            )
+            if nominal_each_screen > 0:
+                entry_to_screen_ratios.append(each_reference / nominal_each_screen)
             reference_entry = dict.fromkeys(COHORT, each_reference)
             entry_reference_total = each_reference * Decimal(len(COHORT))
             fee = entry_reference_total * cost.fee_per_side
@@ -627,7 +739,11 @@ def simulate(
         gross_trading_pnl_usd=gross_pnl,
         fee_cost_usd=fee_cost,
         adverse_cost_usd=adverse_cost,
-        minimum_capacity_usd=min((event.capacity_usd for event in event_path), default=None),
+        minimum_nominal_initial_1000_screen_usd=min(
+            (event.nominal_initial_1000_screen_usd for event in event_path),
+            default=None,
+        ),
+        maximum_entry_to_screen_ratio=max(entry_to_screen_ratios, default=None),
         max_drawdown=maximum_drawdown(equity),
     )
 
@@ -736,20 +852,44 @@ def white_max_stat(
     }
 
 
+def average_oos_rank_percentile(
+    scores: Mapping[str, float],
+    selected_id: str,
+) -> float:
+    if selected_id not in scores or len(scores) < 2:
+        raise MeasurementError("OOS rank requires a selected member and two trials")
+    selected = scores[selected_id]
+    better = sum(value > selected for value in scores.values())
+    tied_others = sum(value == selected for value in scores.values()) - 1
+    average_rank = 1.0 + better + tied_others / 2.0
+    return (average_rank - 1.0) / (len(scores) - 1)
+
+
 def cscv_pbo(paths: Mapping[str, Sequence[Decimal]]) -> dict[str, object]:
     identifiers = tuple(sorted(paths))
+    if not identifiers:
+        raise MeasurementError("PBO requires trial paths")
     logs = {trial_id: log_returns(paths[trial_id]) for trial_id in identifiers}
     length = len(next(iter(logs.values())))
     if any(len(values) != length for values in logs.values()) or length < 8:
         raise MeasurementError("PBO paths are not aligned for eight blocks")
+    distinct_paths = len({tuple(values) for values in logs.values()})
+    split_count = math.comb(8, 4)
+    if distinct_paths < 2:
+        return {
+            "blocks": 8,
+            "diagnosticOnlyNeverSelectionRescue": True,
+            "distinctTrialPaths": distinct_paths,
+            "probabilityOverfit": None,
+            "splitCount": split_count,
+            "status": "NOT_ESTIMABLE",
+        }
     blocks = tuple(
         tuple(range(length * index // 8, length * (index + 1) // 8)) for index in range(8)
     )
     overfit = 0
     splits = 0
     for training_blocks in itertools.combinations(range(8), 4):
-        if 0 not in training_blocks:
-            continue
         training = tuple(index for block in training_blocks for index in blocks[block])
         testing = tuple(
             index for block in range(8) if block not in training_blocks for index in blocks[block]
@@ -761,20 +901,19 @@ def cscv_pbo(paths: Mapping[str, Sequence[Decimal]]) -> dict[str, object]:
                 tuple(-ord(character) for character in trial_id),
             ),
         )
-        ordered_oos = sorted(
-            identifiers,
-            key=lambda trial_id: (
-                -math.fsum(logs[trial_id][index] for index in testing),
-                trial_id,
-            ),
-        )
-        overfit += ordered_oos.index(champion) >= len(identifiers) / 2
+        oos_scores = {
+            trial_id: math.fsum(logs[trial_id][index] for index in testing)
+            for trial_id in identifiers
+        }
+        overfit += average_oos_rank_percentile(oos_scores, champion) > 0.5
         splits += 1
     return {
         "blocks": 8,
         "diagnosticOnlyNeverSelectionRescue": True,
+        "distinctTrialPaths": distinct_paths,
         "probabilityOverfit": f"{overfit / splits:.12f}",
-        "splits": splits,
+        "splitCount": splits,
+        "status": "ESTIMATED",
     }
 
 
@@ -808,16 +947,23 @@ def simulation_mapping(simulation: Simulation) -> dict[str, object]:
         "feeCostUsd": decimal_text(simulation.fee_cost_usd),
         "grossTradingPnlUsd": decimal_text(simulation.gross_trading_pnl_usd),
         "maxDrawdownFraction": decimal_text(simulation.max_drawdown),
-        "minimumPublicCapacityUsd": (
-            decimal_text(simulation.minimum_capacity_usd)
-            if simulation.minimum_capacity_usd is not None
+        "minimumNominalInitial1000ScreenUsd": (
+            decimal_text(simulation.minimum_nominal_initial_1000_screen_usd)
+            if simulation.minimum_nominal_initial_1000_screen_usd is not None
+            else None
+        ),
+        "maximumActualEntryToNominalScreenRatio": (
+            decimal_text(simulation.maximum_entry_to_screen_ratio)
+            if simulation.maximum_entry_to_screen_ratio is not None
             else None
         ),
         "netUsdPer1k": decimal_text(simulation.ending_usd - STARTING_USD),
-        "publicCapacity1000Pass": (
-            simulation.minimum_capacity_usd is not None
-            and simulation.minimum_capacity_usd >= STARTING_USD
+        "nominalInitial1000ScreenPass": (
+            simulation.minimum_nominal_initial_1000_screen_usd is not None
+            and simulation.minimum_nominal_initial_1000_screen_usd >= STARTING_USD
         ),
+        "reinvestmentMayExceedNominalScreen": True,
+        "executableCapacity": "UNMEASURED",
         "scenario": simulation.scenario,
         "trialId": simulation.trial_id,
     }
@@ -825,8 +971,6 @@ def simulation_mapping(simulation: Simulation) -> dict[str, object]:
 
 def development_analysis(
     bars: Mapping[str, Mapping[datetime, Bar]],
-    *,
-    replicates: int = BOOTSTRAP_REPLICATES,
 ) -> dict[str, object]:
     trials = trial_grid()
     all_runs: dict[str, dict[str, Simulation]] = {}
@@ -847,7 +991,7 @@ def development_analysis(
     indices = circular_indices(
         length,
         block=BOOTSTRAP_BLOCK_HOURS,
-        replicates=replicates,
+        replicates=BOOTSTRAP_REPLICATES,
         seed=BOOTSTRAP_SEED,
     )
     base_bootstrap = {
@@ -900,8 +1044,10 @@ def development_analysis(
         and stress.max_drawdown <= Decimal("0.20"),
         "holmAdjustedPBelow0.05": holm[champion.trial_id] < 0.05,
         "onEventsAtLeast100": len(base.events) >= 100,
-        "publicCapacityAtLeast1000": base.minimum_capacity_usd is not None
-        and base.minimum_capacity_usd >= STARTING_USD,
+        "nominalInitial1000ScreenAtLeast1000": (
+            base.minimum_nominal_initial_1000_screen_usd is not None
+            and base.minimum_nominal_initial_1000_screen_usd >= STARTING_USD
+        ),
         "stressLcbPositive": Decimal(
             required_text(
                 stress_bootstrap[champion.trial_id]["lower95UsdPer1k"],
@@ -912,9 +1058,11 @@ def development_analysis(
         "stressNetPositive": stress.ending_usd > STARTING_USD,
         "whitePBelow0.05": float(required_text(white["pValue"], "white pValue")) < 0.05,
     }
+    pbo_probability = pbo["probabilityOverfit"]
     diagnostics = {
-        "pboAtMost0.5": float(required_text(pbo["probabilityOverfit"], "probabilityOverfit"))
-        <= 0.5,
+        "pboAtMost0.5": (
+            float(pbo_probability) <= 0.5 if isinstance(pbo_probability, str) else None
+        ),
         "pboRole": "DIAGNOSTIC_ONLY_NEVER_SELECTION_OR_HOLDOUT_AUTHORIZATION",
     }
     return {
@@ -929,6 +1077,7 @@ def development_analysis(
         "formalGates": formal_gates,
         "holmAdjustedP": {trial_id: f"{value:.12f}" for trial_id, value in sorted(holm.items())},
         "pbo": pbo,
+        "programWideMultiplicity": dict(PROGRAM_MULTIPLICITY),
         "trials": {
             trial.trial_id: {
                 scenario_name: simulation_mapping(simulation)
@@ -943,8 +1092,6 @@ def development_analysis(
 def holdout_analysis(
     bars: Mapping[str, Mapping[datetime, Bar]],
     champion: Trial,
-    *,
-    replicates: int = BOOTSTRAP_REPLICATES,
 ) -> dict[str, object]:
     events = build_events(bars, champion, HOLDOUT_START, HOLDOUT_END)
     runs = {
@@ -962,7 +1109,7 @@ def holdout_analysis(
     indices = circular_indices(
         length,
         block=BOOTSTRAP_BLOCK_HOURS,
-        replicates=replicates,
+        replicates=BOOTSTRAP_REPLICATES,
         seed=BOOTSTRAP_SEED + 1,
     )
     intervals = {
@@ -979,8 +1126,10 @@ def holdout_analysis(
         "baseNetPositive": runs["base"].ending_usd > STARTING_USD,
         "drawdownAtMost20Pct": runs["base"].max_drawdown <= Decimal("0.20")
         and runs["stress"].max_drawdown <= Decimal("0.20"),
-        "publicCapacityAtLeast1000": runs["base"].minimum_capacity_usd is not None
-        and runs["base"].minimum_capacity_usd >= STARTING_USD,
+        "nominalInitial1000ScreenAtLeast1000": (
+            runs["base"].minimum_nominal_initial_1000_screen_usd is not None
+            and runs["base"].minimum_nominal_initial_1000_screen_usd >= STARTING_USD
+        ),
         "stressLcbPositive": Decimal(
             required_text(
                 intervals["stress"]["lower95UsdPer1k"],
@@ -1006,14 +1155,36 @@ def validate_protocol() -> dict[str, Any]:
         raise CustodyError("canonical base drift")
     data = protocol.get("data")
     family = protocol.get("trialFamily")
+    claim_boundary = protocol.get("claimBoundary")
+    inference = protocol.get("inference")
     if not isinstance(data, dict) or data.get("symbols") != list(COHORT):
         raise CustodyError("cohort drift")
     if not isinstance(family, dict) or family.get("count") != 12:
         raise CustodyError("trial-family drift")
+    if (
+        not isinstance(claim_boundary, dict)
+        or claim_boundary.get("programWideVgMultiplicity") != PROGRAM_MULTIPLICITY
+    ):
+        raise CustodyError("program-wide multiplicity protocol drift")
+    if not isinstance(inference, dict):
+        raise CustodyError("inference protocol invalid")
+    pbo_protocol = inference.get("cscvPbo")
+    if not isinstance(pbo_protocol, dict) or pbo_protocol.get("orientations") != 70:
+        raise CustodyError("PBO orientation protocol drift")
     if tuple(trial.trial_id for trial in trial_grid()) != tuple(
         sorted(trial.trial_id for trial in trial_grid())
     ):
         raise CustodyError("trial IDs are not stable")
+    supersession = load_json(packet_artifact(SUPERSESSION_NAME), canonical=True)
+    if supersession.get("version") != "VG27FreezeV1SupersessionV1":
+        raise CustodyError("freeze v1 supersession version invalid")
+    if supersession.get("supersededFreezeSha256") != (
+        "d1a984eee016249fc6863d8e4a36733028d5634b368c4c98594c93de9a788ee6"
+    ):
+        raise CustodyError("freeze v1 supersession digest invalid")
+    receipt_counts = supersession.get("outcomeReceiptsAtSupersession")
+    if not isinstance(receipt_counts, dict) or any(value != 0 for value in receipt_counts.values()):
+        raise CustodyError("freeze v1 supersession outcome state invalid")
     return protocol
 
 
@@ -1143,11 +1314,58 @@ def static_hashes() -> dict[str, str]:
         Path(__file__).resolve(),
         TEST_PATH,
         packet_artifact(SOURCE_MANIFEST_NAME),
+        packet_artifact(SUPERSESSION_NAME),
     )
     missing = [path.name for path in paths if not path.is_file() or path.is_symlink()]
     if missing:
         raise CustodyError(f"static freeze input unavailable: {missing}")
     return {path.name: sha256_path(path) for path in paths}
+
+
+def runtime_identity() -> dict[str, object]:
+    context = getcontext()
+    lock_inputs: dict[str, str] = {}
+    for path in RUNTIME_LOCK_PATHS:
+        if not path.is_file() or path.is_symlink():
+            raise CustodyError(f"runtime lock input unavailable: {path}")
+        lock_inputs[str(path.relative_to(REPO_ROOT))] = sha256_path(path)
+    optional_python_version = REPO_ROOT / "quant" / ".python-version"
+    if optional_python_version.exists() or optional_python_version.is_symlink():
+        if not optional_python_version.is_file() or optional_python_version.is_symlink():
+            raise CustodyError("optional Python version pin is not a regular file")
+        lock_inputs[str(optional_python_version.relative_to(REPO_ROOT))] = sha256_path(
+            optional_python_version
+        )
+    executable = Path(sys.executable).resolve()
+    if not executable.is_file():
+        raise CustodyError("Python interpreter executable unavailable")
+    return {
+        "decimalContext": {
+            "capitals": context.capitals,
+            "clamp": context.clamp,
+            "emax": context.Emax,
+            "emin": context.Emin,
+            "precision": context.prec,
+            "rounding": context.rounding,
+            "traps": {
+                signal.__name__: enabled
+                for signal, enabled in sorted(
+                    context.traps.items(),
+                    key=lambda item: item[0].__name__,
+                )
+            },
+        },
+        "interpreter": {
+            "cacheTag": sys.implementation.cache_tag,
+            "executable": str(executable),
+            "executableSha256": sha256_path(executable),
+            "implementation": platform.python_implementation(),
+            "implementationName": sys.implementation.name,
+            "version": platform.python_version(),
+            "versionInfo": list(sys.version_info[:5]),
+        },
+        "runtimeLocks": dict(sorted(lock_inputs.items())),
+    }
 
 
 def freeze(state_root: Path) -> dict[str, object]:
@@ -1158,8 +1376,10 @@ def freeze(state_root: Path) -> dict[str, object]:
         packet_artifact(name).exists()
         for name in (
             DEVELOPMENT_MARKER_NAME,
+            DEVELOPMENT_SELECTION_NAME,
             HOLDOUT_MARKER_NAME,
             RESULT_NAME,
+            CUSTODY_TERMINAL_NAME,
             SHA256SUMS_NAME,
         )
     ):
@@ -1169,16 +1389,26 @@ def freeze(state_root: Path) -> dict[str, object]:
     external_manifest = state_root / SOURCE_MANIFEST_NAME
     if external_manifest.read_bytes() != manifest_raw:
         raise CustodyError("external source manifest is not canonical")
-    write_exclusive(packet_artifact(SOURCE_MANIFEST_NAME), manifest_raw)
+    write_exclusive_or_accept_identical(
+        packet_artifact(SOURCE_MANIFEST_NAME),
+        manifest_raw,
+    )
     git_output("merge-base", "--is-ancestor", BASE_COMMIT, "HEAD")
     receipt: dict[str, object] = {
         "archiveBodiesOpened": 0,
         "authorityHead": git_output("rev-parse", "HEAD"),
         "canonicalBase": BASE_COMMIT,
         "createdAtUtc": utc_now(),
+        "runtimeIdentity": runtime_identity(),
         "sourceManifestSha256": sha256_path(external_manifest),
         "staticHashes": static_hashes(),
-        "version": "VG27FreezeV1",
+        "supersedesFreezeV1Sha256": required_text(
+            load_json(packet_artifact(SUPERSESSION_NAME), canonical=True).get(
+                "supersededFreezeSha256"
+            ),
+            "supersededFreezeSha256",
+        ),
+        "version": FREEZE_VERSION,
     }
     write_exclusive(packet_artifact(FREEZE_NAME), receipt)
     write_exclusive(state_root / FREEZE_NAME, receipt)
@@ -1193,12 +1423,19 @@ def validate_freeze(state_root: Path) -> dict[str, Any]:
         raise CustodyError("external and packet freeze receipts differ")
     if freeze_receipt.get("canonicalBase") != BASE_COMMIT:
         raise CustodyError("freeze canonical base drift")
+    if freeze_receipt.get("version") != FREEZE_VERSION:
+        raise CustodyError("freeze version invalid")
     authority_head = freeze_receipt.get("authorityHead")
     if not isinstance(authority_head, str) or len(authority_head) != 40:
         raise CustodyError("freeze authority head invalid")
     git_output("merge-base", "--is-ancestor", authority_head, "HEAD")
     if freeze_receipt.get("staticHashes") != static_hashes():
         raise CustodyError("static packet changed after freeze")
+    if freeze_receipt.get("runtimeIdentity") != runtime_identity():
+        raise CustodyError("runtime identity changed after freeze")
+    supersession = load_json(packet_artifact(SUPERSESSION_NAME), canonical=True)
+    if freeze_receipt.get("supersedesFreezeV1Sha256") != supersession.get("supersededFreezeSha256"):
+        raise CustodyError("freeze v1 supersession binding invalid")
     manifest_path = state_root / SOURCE_MANIFEST_NAME
     packet_manifest = packet_artifact(SOURCE_MANIFEST_NAME)
     if freeze_receipt.get("sourceManifestSha256") != sha256_path(manifest_path):
@@ -1228,7 +1465,35 @@ def paired_paths(state_root: Path, name: str) -> tuple[Path, Path]:
     return packet_artifact(name), state_root / name
 
 
+def receipt_state(state_root: Path, name: str) -> str:
+    packet_path, external_path = paired_paths(state_root, name)
+    packet_exists = packet_path.exists() or packet_path.is_symlink()
+    external_exists = external_path.exists() or external_path.is_symlink()
+    if not packet_exists and not external_exists:
+        return "ABSENT"
+    if packet_exists and not external_exists:
+        return "PACKET_ONLY"
+    if external_exists and not packet_exists:
+        return "EXTERNAL_ONLY"
+    if (
+        packet_path.is_symlink()
+        or external_path.is_symlink()
+        or not packet_path.is_file()
+        or not external_path.is_file()
+    ):
+        return "INVALID"
+    if packet_path.read_bytes() != external_path.read_bytes():
+        return "DIVERGED"
+    return "MATCHED"
+
+
+def receipt_states(state_root: Path) -> dict[str, str]:
+    return {name: receipt_state(state_root, name) for name in TRACKED_RECEIPTS}
+
+
 def write_paired_exclusive(state_root: Path, name: str, value: object) -> None:
+    """Write the packet authority first, then its external replica."""
+
     packet_path, external_path = paired_paths(state_root, name)
     write_exclusive(packet_path, value)
     write_exclusive(external_path, value)
@@ -1236,99 +1501,200 @@ def write_paired_exclusive(state_root: Path, name: str, value: object) -> None:
 
 def validate_receipt_pair(state_root: Path, name: str) -> tuple[Path, Path]:
     packet_path, external_path = paired_paths(state_root, name)
+    if receipt_state(state_root, name) != "MATCHED":
+        raise CustodyError(f"{name} receipt pair is not matched")
     load_json(packet_path, canonical=True)
     load_json(external_path, canonical=True)
-    if packet_path.read_bytes() != external_path.read_bytes():
-        raise CustodyError(f"external and packet {name} receipts differ")
     return packet_path, external_path
 
 
-def terminal_unmeasured(
-    state_root: Path,
-    reason: str,
-    *,
-    interrupted: bool,
-) -> dict[str, object]:
-    holdout_consumed = any(path.exists() for path in paired_paths(state_root, HOLDOUT_MARKER_NAME))
-    result: dict[str, object] = {
+def holdout_custody_label(state_root: Path) -> str:
+    return (
+        "OPEN_AUTHORITY_CONSUMED_UNMEASURED"
+        if receipt_state(state_root, HOLDOUT_MARKER_NAME) != "ABSENT"
+        else "UNOPENED"
+    )
+
+
+def custody_snapshot(state_root: Path) -> dict[str, str]:
+    return {
+        name: receipt_state(state_root, name)
+        for name in (
+            DEVELOPMENT_MARKER_NAME,
+            DEVELOPMENT_SELECTION_NAME,
+            HOLDOUT_MARKER_NAME,
+        )
+    }
+
+
+def common_terminal_fields() -> dict[str, object]:
+    return {
         "accountProfitability": "UNKNOWN",
         "capitalVerdict": "NO_GO",
-        "createdAtUtc": utc_now(),
         "executionAuthority": "NONE",
+        "moneyEffectUsd": "0",
+        "programWideMultiplicity": dict(PROGRAM_MULTIPLICITY),
+    }
+
+
+def custody_terminal(
+    state_root: Path,
+    reason: str,
+) -> dict[str, object]:
+    path = packet_artifact(CUSTODY_TERMINAL_NAME)
+    if path.exists() or path.is_symlink():
+        return load_json(path, canonical=True)
+    result: dict[str, object] = {
+        **common_terminal_fields(),
+        "createdAtUtc": utc_now(),
+        "custodyOnly": True,
         "freezeSha256": (
             sha256_path(packet_artifact(FREEZE_NAME))
             if packet_artifact(FREEZE_NAME).is_file()
             else None
         ),
-        "holdout": ("OPEN_AUTHORITY_CONSUMED_UNMEASURED" if holdout_consumed else "UNOPENED"),
-        "interruptedAfterMarker": interrupted,
-        "moneyEffectUsd": "0",
+        "holdout": holdout_custody_label(state_root),
+        "interruptedAfterMarker": True,
         "reason": reason,
+        "receiptStates": receipt_states(state_root),
         "status": "UNMEASURED",
-        "version": "VG27ResultV1",
+        "version": "VG27CustodyTerminalV1",
     }
-    write_paired_exclusive(state_root, RESULT_NAME, result)
+    write_exclusive(path, result)
     return result
 
 
-def run(state_root: Path, *, replicates: int = BOOTSTRAP_REPLICATES) -> dict[str, object]:
-    packet_result = packet_artifact(RESULT_NAME)
-    if result_path(state_root).exists() or packet_result.exists():
-        raise CustodyError("terminal result exists; rerun refused")
-    packet_development_marker, development_marker = paired_paths(
-        state_root, DEVELOPMENT_MARKER_NAME
-    )
-    packet_holdout_marker, holdout_marker = paired_paths(state_root, HOLDOUT_MARKER_NAME)
+def terminal_unmeasured(state_root: Path, reason: str) -> dict[str, object]:
     if any(
-        path.exists()
-        for path in (
-            packet_development_marker,
-            development_marker,
-            packet_holdout_marker,
-            holdout_marker,
-        )
+        state in {"PACKET_ONLY", "EXTERNAL_ONLY", "DIVERGED", "INVALID"}
+        for state in receipt_states(state_root).values()
     ):
-        return terminal_unmeasured(
-            state_root,
-            "INTERRUPTION_AFTER_CONSUMED_MARKER",
-            interrupted=True,
-        )
+        return custody_terminal(state_root, reason)
+    result: dict[str, object] = {
+        **common_terminal_fields(),
+        "createdAtUtc": utc_now(),
+        "custodySnapshot": custody_snapshot(state_root),
+        "freezeSha256": sha256_path(packet_artifact(FREEZE_NAME)),
+        "holdout": holdout_custody_label(state_root),
+        "interruptedAfterMarker": True,
+        "reason": reason,
+        "status": "UNMEASURED",
+        "version": RESULT_VERSION,
+    }
+    try:
+        write_paired_exclusive(state_root, RESULT_NAME, result)
+    except BaseException:
+        return custody_terminal(state_root, f"{reason}:RESULT_REPLICA_PARTIAL")
+    return result
+
+
+def development_selection(
+    freeze_sha: str,
+    development_marker_sha: str,
+    report: Mapping[str, object],
+) -> dict[str, object]:
+    champion = required_text(report.get("champion"), "development champion")
+    formal_gates = required_mapping(report.get("formalGates"), "development formalGates")
+    authorized = required_bool(
+        report.get("authorizedToOpenHoldout"),
+        "development authorizedToOpenHoldout",
+    )
+    report_copy = json.loads(canonical_bytes(report))
+    if not isinstance(report_copy, dict):
+        raise CustodyError("development report copy invalid")
+    return {
+        "authorizedToOpenHoldout": authorized,
+        "champion": champion,
+        "createdAtUtc": utc_now(),
+        "development": report_copy,
+        "developmentMarkerSha256": development_marker_sha,
+        "developmentReportSha256": sha256_bytes(canonical_bytes(report_copy)),
+        "formalGates": formal_gates,
+        "freezeSha256": freeze_sha,
+        "version": "VG27DevelopmentSelectionV1",
+    }
+
+
+def write_normal_result(
+    state_root: Path,
+    result: Mapping[str, object],
+) -> dict[str, object]:
+    result_copy = json.loads(canonical_bytes(result))
+    if not isinstance(result_copy, dict):
+        raise CustodyError("result copy invalid")
+    try:
+        write_paired_exclusive(state_root, RESULT_NAME, result_copy)
+    except BaseException:
+        return custody_terminal(state_root, "RESULT_REPLICA_PARTIAL")
+    return result_copy
+
+
+def run(state_root: Path) -> dict[str, object]:
+    states = receipt_states(state_root)
+    if packet_artifact(CUSTODY_TERMINAL_NAME).exists():
+        raise CustodyError("custody terminal exists; rerun refused")
+    if states[RESULT_NAME] == "MATCHED":
+        raise CustodyError("terminal result exists; rerun refused")
+    if any(state != "ABSENT" for state in states.values()):
+        return custody_terminal(state_root, "INTERRUPTION_AFTER_CONSUMED_RECEIPT")
     validate_freeze(state_root)
+    freeze_sha = sha256_path(packet_artifact(FREEZE_NAME))
     marker = {
         "createdAtUtc": utc_now(),
-        "freezeSha256": sha256_path(packet_artifact(FREEZE_NAME)),
+        "freezeSha256": freeze_sha,
         "phase": "DEVELOPMENT",
-        "version": "VG27OpenMarkerV1",
+        "version": OPEN_MARKER_VERSION,
     }
-    write_paired_exclusive(state_root, DEVELOPMENT_MARKER_NAME, marker)
     try:
+        write_paired_exclusive(state_root, DEVELOPMENT_MARKER_NAME, marker)
+        packet_development_marker, _ = validate_receipt_pair(
+            state_root,
+            DEVELOPMENT_MARKER_NAME,
+        )
         _manifest, development_bars = validate_manifest(
             state_root,
             open_archives=True,
             months=frozenset(DEVELOPMENT_MONTHS),
         )
-        development = development_analysis(development_bars, replicates=replicates)
+        development = development_analysis(development_bars)
+        selection = development_selection(
+            freeze_sha,
+            sha256_path(packet_development_marker),
+            development,
+        )
+        write_paired_exclusive(
+            state_root,
+            DEVELOPMENT_SELECTION_NAME,
+            selection,
+        )
+        packet_selection, _ = validate_receipt_pair(
+            state_root,
+            DEVELOPMENT_SELECTION_NAME,
+        )
+        selection_sha = sha256_path(packet_selection)
         result: dict[str, object] = {
-            "accountProfitability": "UNKNOWN",
-            "capitalVerdict": "NO_GO",
+            **common_terminal_fields(),
             "createdAtUtc": utc_now(),
             "development": development,
-            "executionAuthority": "NONE",
-            "freezeSha256": sha256_path(packet_artifact(FREEZE_NAME)),
+            "developmentSelectionSha256": selection_sha,
+            "freezeSha256": freeze_sha,
             "holdout": "UNOPENED",
-            "moneyEffectUsd": "0",
-            "status": "PUBLIC_GO" if development["authorizedToOpenHoldout"] else "NO_GO",
-            "version": "VG27ResultV1",
+            "status": "NO_GO",
+            "version": RESULT_VERSION,
         }
-        if not development["authorizedToOpenHoldout"]:
-            write_paired_exclusive(state_root, RESULT_NAME, result)
-            return result
+        if not required_bool(
+            development.get("authorizedToOpenHoldout"),
+            "development authorization",
+        ):
+            return write_normal_result(state_root, result)
         holdout_receipt = {
-            "champion": development["champion"],
+            "champion": required_text(development.get("champion"), "champion"),
             "createdAtUtc": utc_now(),
             "developmentMarkerSha256": sha256_path(packet_development_marker),
+            "developmentSelectionSha256": selection_sha,
+            "freezeSha256": freeze_sha,
             "phase": "HOLDOUT",
-            "version": "VG27OpenMarkerV1",
+            "version": OPEN_MARKER_VERSION,
         }
         write_paired_exclusive(state_root, HOLDOUT_MARKER_NAME, holdout_receipt)
         _manifest, holdout_bars = validate_manifest(
@@ -1340,66 +1706,572 @@ def run(state_root: Path, *, replicates: int = BOOTSTRAP_REPLICATES) -> dict[str
         champion = next(
             trial for trial in trial_grid() if trial.trial_id == development["champion"]
         )
-        holdout_report = holdout_analysis(
-            development_bars,
-            champion,
-            replicates=replicates,
-        )
+        holdout_report = holdout_analysis(development_bars, champion)
         result["holdout"] = holdout_report
         result["status"] = holdout_report["publicVerdict"]
-        write_paired_exclusive(state_root, RESULT_NAME, result)
-        return result
+        return write_normal_result(state_root, result)
     except BaseException as error:
-        if not result_path(state_root).exists() and not packet_result.exists():
-            return terminal_unmeasured(
-                state_root,
-                f"{type(error).__name__}:{error}",
-                interrupted=False,
+        if receipt_state(state_root, RESULT_NAME) == "MATCHED":
+            raise
+        return terminal_unmeasured(
+            state_root,
+            f"{type(error).__name__}:{error}",
+        )
+
+
+def validate_common_terminal(value: Mapping[str, object]) -> None:
+    if value.get("accountProfitability") != "UNKNOWN":
+        raise CustodyError("account profitability must remain UNKNOWN")
+    if value.get("capitalVerdict") != "NO_GO":
+        raise CustodyError("capital verdict must remain NO_GO")
+    if value.get("executionAuthority") != "NONE":
+        raise CustodyError("execution authority must remain NONE")
+    if value.get("moneyEffectUsd") != "0":
+        raise CustodyError("money effect must remain zero")
+    if value.get("programWideMultiplicity") != PROGRAM_MULTIPLICITY:
+        raise CustodyError("program-wide multiplicity boundary invalid")
+
+
+def validate_marker(
+    marker: Mapping[str, object],
+    *,
+    phase: str,
+    freeze_sha: str,
+) -> None:
+    expected = {
+        "createdAtUtc",
+        "freezeSha256",
+        "phase",
+        "version",
+    }
+    if phase == "HOLDOUT":
+        expected |= {
+            "champion",
+            "developmentMarkerSha256",
+            "developmentSelectionSha256",
+        }
+    require_exact_keys(marker, expected, f"{phase} marker")
+    if marker.get("version") != OPEN_MARKER_VERSION or marker.get("phase") != phase:
+        raise CustodyError(f"{phase} marker version or phase invalid")
+    if marker.get("freezeSha256") != freeze_sha:
+        raise CustodyError(f"{phase} marker freeze binding invalid")
+    required_text(marker.get("createdAtUtc"), f"{phase} marker createdAtUtc")
+
+
+def scenario_row(
+    report: Mapping[str, object],
+    trial_id: str,
+    scenario_name: str,
+) -> dict[str, Any]:
+    trials = required_mapping(report.get("trials"), "development trials")
+    trial = required_mapping(trials.get(trial_id), f"trial {trial_id}")
+    row = required_mapping(trial.get(scenario_name), f"{trial_id} {scenario_name}")
+    if row.get("trialId") != trial_id or row.get("scenario") != scenario_name:
+        raise CustodyError("trial scenario identity invalid")
+    return row
+
+
+def validate_pbo(value: object) -> None:
+    pbo = required_mapping(value, "PBO")
+    if pbo.get("blocks") != 8 or pbo.get("splitCount") != math.comb(8, 4):
+        raise CustodyError("PBO block or split count invalid")
+    distinct = required_int(pbo.get("distinctTrialPaths"), "PBO distinctTrialPaths")
+    status = pbo.get("status")
+    probability = pbo.get("probabilityOverfit")
+    if distinct < 2:
+        if status != "NOT_ESTIMABLE" or probability is not None:
+            raise CustodyError("PBO non-estimable state invalid")
+    else:
+        if status != "ESTIMATED":
+            raise CustodyError("PBO estimated state invalid")
+        parsed = receipt_decimal(probability, "PBO probabilityOverfit")
+        if parsed < 0 or parsed > 1:
+            raise CustodyError("PBO probability outside unit interval")
+
+
+def validate_development_report(value: object) -> dict[str, Any]:
+    report = required_mapping(value, "development")
+    require_exact_keys(
+        report,
+        {
+            "authorizedToOpenHoldout",
+            "bootstrap",
+            "champion",
+            "championEventConcentrationMaximumMonthFraction",
+            "diagnostics",
+            "formalGates",
+            "holmAdjustedP",
+            "pbo",
+            "programWideMultiplicity",
+            "trials",
+            "white",
+        },
+        "development",
+    )
+    trial_ids = tuple(trial.trial_id for trial in trial_grid())
+    champion = required_text(report.get("champion"), "development champion")
+    if champion not in trial_ids:
+        raise CustodyError("development champion not in frozen family")
+    trials = required_mapping(report.get("trials"), "development trials")
+    if set(trials) != set(trial_ids):
+        raise CustodyError("development must contain all 12 trials")
+    for trial_id in trial_ids:
+        trial = required_mapping(trials[trial_id], f"trial {trial_id}")
+        if set(trial) != {scenario.name for scenario in scenarios()}:
+            raise CustodyError("development scenario family incomplete")
+        for scenario_name in trial:
+            scenario_row(report, trial_id, scenario_name)
+    bootstrap = required_mapping(report.get("bootstrap"), "development bootstrap")
+    if set(bootstrap) != {"base", "stress"}:
+        raise CustodyError("development bootstrap scenarios invalid")
+    for name in ("base", "stress"):
+        rows = required_mapping(bootstrap[name], f"bootstrap {name}")
+        if set(rows) != set(trial_ids):
+            raise CustodyError("bootstrap trial family incomplete")
+    holm = required_mapping(report.get("holmAdjustedP"), "Holm")
+    if set(holm) != set(trial_ids):
+        raise CustodyError("Holm trial family incomplete")
+    white = required_mapping(report.get("white"), "White")
+    if white.get("trialCount") != len(trial_ids):
+        raise CustodyError("White trial count invalid")
+    validate_pbo(report.get("pbo"))
+    if report.get("programWideMultiplicity") != PROGRAM_MULTIPLICITY:
+        raise CustodyError("development program multiplicity invalid")
+    gates = required_mapping(report.get("formalGates"), "development formalGates")
+    if set(gates) != DEVELOPMENT_GATE_NAMES:
+        raise CustodyError("development gate family invalid")
+    if any(not isinstance(value, bool) for value in gates.values()):
+        raise CustodyError("development gates must be boolean")
+    base = scenario_row(report, champion, "base")
+    stress = scenario_row(report, champion, "stress")
+    base_bootstrap = required_mapping(
+        required_mapping(bootstrap["base"], "base bootstrap").get(champion),
+        "champion base bootstrap",
+    )
+    stress_bootstrap = required_mapping(
+        required_mapping(bootstrap["stress"], "stress bootstrap").get(champion),
+        "champion stress bootstrap",
+    )
+    expected_gates = {
+        "activeMonthsAtLeast8": required_int(
+            base.get("activeMonths"),
+            "base activeMonths",
+        )
+        >= 8,
+        "baseLcbPositive": receipt_decimal(
+            base_bootstrap.get("lower95UsdPer1k"),
+            "base lower95UsdPer1k",
+        )
+        > 0,
+        "baseNetPositive": receipt_decimal(base.get("netUsdPer1k"), "base net") > 0,
+        "drawdownAtMost20Pct": (
+            receipt_decimal(base.get("maxDrawdownFraction"), "base drawdown") <= Decimal("0.20")
+            and receipt_decimal(
+                stress.get("maxDrawdownFraction"),
+                "stress drawdown",
             )
-        raise
+            <= Decimal("0.20")
+        ),
+        "holmAdjustedPBelow0.05": receipt_decimal(
+            holm[champion],
+            "champion Holm p",
+        )
+        < Decimal("0.05"),
+        "nominalInitial1000ScreenAtLeast1000": (
+            base.get("minimumNominalInitial1000ScreenUsd") is not None
+            and receipt_decimal(
+                base.get("minimumNominalInitial1000ScreenUsd"),
+                "nominal initial screen",
+            )
+            >= STARTING_USD
+        ),
+        "onEventsAtLeast100": required_int(base.get("eventCount"), "eventCount") >= 100,
+        "stressLcbPositive": receipt_decimal(
+            stress_bootstrap.get("lower95UsdPer1k"),
+            "stress lower95UsdPer1k",
+        )
+        > 0,
+        "stressNetPositive": receipt_decimal(
+            stress.get("netUsdPer1k"),
+            "stress net",
+        )
+        > 0,
+        "whitePBelow0.05": receipt_decimal(
+            white.get("pValue"),
+            "White p",
+        )
+        < Decimal("0.05"),
+    }
+    if gates != expected_gates:
+        raise CustodyError("development gate values contradict report metrics")
+    authorized = required_bool(
+        report.get("authorizedToOpenHoldout"),
+        "authorizedToOpenHoldout",
+    )
+    if authorized != all(expected_gates.values()):
+        raise CustodyError("development authorization contradicts formal gates")
+    return report
 
 
-def verify(state_root: Path) -> dict[str, object]:
+def validate_development_selection(
+    value: object,
+    *,
+    freeze_sha: str,
+    development_marker_sha: str,
+) -> dict[str, Any]:
+    selection = required_mapping(value, "development selection")
+    require_exact_keys(
+        selection,
+        {
+            "authorizedToOpenHoldout",
+            "champion",
+            "createdAtUtc",
+            "development",
+            "developmentMarkerSha256",
+            "developmentReportSha256",
+            "formalGates",
+            "freezeSha256",
+            "version",
+        },
+        "development selection",
+    )
+    if selection.get("version") != "VG27DevelopmentSelectionV1":
+        raise CustodyError("development selection version invalid")
+    if selection.get("freezeSha256") != freeze_sha:
+        raise CustodyError("development selection freeze binding invalid")
+    if selection.get("developmentMarkerSha256") != development_marker_sha:
+        raise CustodyError("development selection marker binding invalid")
+    report = validate_development_report(selection.get("development"))
+    if selection.get("developmentReportSha256") != sha256_bytes(canonical_bytes(report)):
+        raise CustodyError("development selection report digest invalid")
+    if selection.get("champion") != report.get("champion"):
+        raise CustodyError("development selection champion mismatch")
+    if selection.get("formalGates") != report.get("formalGates"):
+        raise CustodyError("development selection gates mismatch")
+    if selection.get("authorizedToOpenHoldout") != report.get("authorizedToOpenHoldout"):
+        raise CustodyError("development selection authorization mismatch")
+    return selection
+
+
+def validate_holdout_report(value: object, champion: str) -> dict[str, Any]:
+    report = required_mapping(value, "holdout")
+    require_exact_keys(
+        report,
+        {"confirmationGates", "intervals", "publicVerdict", "scenarios"},
+        "holdout",
+    )
+    scenarios_value = required_mapping(report.get("scenarios"), "holdout scenarios")
+    scenario_names = {scenario.name for scenario in scenarios()}
+    if set(scenarios_value) != scenario_names:
+        raise CustodyError("holdout scenario family incomplete")
+    for name in scenario_names:
+        row = required_mapping(scenarios_value[name], f"holdout {name}")
+        if row.get("trialId") != champion or row.get("scenario") != name:
+            raise CustodyError("holdout scenario identity invalid")
+    intervals = required_mapping(report.get("intervals"), "holdout intervals")
+    if set(intervals) != {"base", "stress"}:
+        raise CustodyError("holdout interval family invalid")
+    gates = required_mapping(report.get("confirmationGates"), "holdout gates")
+    if set(gates) != HOLDOUT_GATE_NAMES or any(
+        not isinstance(value, bool) for value in gates.values()
+    ):
+        raise CustodyError("holdout gate family invalid")
+    base = required_mapping(scenarios_value["base"], "holdout base")
+    stress = required_mapping(scenarios_value["stress"], "holdout stress")
+    expected = {
+        "baseLcbPositive": receipt_decimal(
+            required_mapping(intervals["base"], "holdout base interval").get("lower95UsdPer1k"),
+            "holdout base lower95",
+        )
+        > 0,
+        "baseNetPositive": receipt_decimal(base.get("netUsdPer1k"), "holdout base net") > 0,
+        "drawdownAtMost20Pct": (
+            receipt_decimal(base.get("maxDrawdownFraction"), "holdout base drawdown")
+            <= Decimal("0.20")
+            and receipt_decimal(
+                stress.get("maxDrawdownFraction"),
+                "holdout stress drawdown",
+            )
+            <= Decimal("0.20")
+        ),
+        "nominalInitial1000ScreenAtLeast1000": (
+            base.get("minimumNominalInitial1000ScreenUsd") is not None
+            and receipt_decimal(
+                base.get("minimumNominalInitial1000ScreenUsd"),
+                "holdout nominal initial screen",
+            )
+            >= STARTING_USD
+        ),
+        "stressLcbPositive": receipt_decimal(
+            required_mapping(intervals["stress"], "holdout stress interval").get("lower95UsdPer1k"),
+            "holdout stress lower95",
+        )
+        > 0,
+        "stressNetPositive": receipt_decimal(
+            stress.get("netUsdPer1k"),
+            "holdout stress net",
+        )
+        > 0,
+    }
+    if gates != expected:
+        raise CustodyError("holdout gates contradict report metrics")
+    expected_verdict = "GO" if all(expected.values()) else "NO_GO"
+    if report.get("publicVerdict") != expected_verdict:
+        raise CustodyError("holdout verdict contradicts gates")
+    return report
+
+
+def validate_packet_authority_chain(state_root: Path, freeze_sha: str) -> None:
+    """Validate every packet-first receipt that survived an interrupted replica."""
+
+    packet_marker = packet_artifact(DEVELOPMENT_MARKER_NAME)
+    packet_selection = packet_artifact(DEVELOPMENT_SELECTION_NAME)
+    packet_holdout = packet_artifact(HOLDOUT_MARKER_NAME)
+    marker_present = packet_marker.exists() or packet_marker.is_symlink()
+    selection_present = packet_selection.exists() or packet_selection.is_symlink()
+    holdout_present = packet_holdout.exists() or packet_holdout.is_symlink()
+    marker: dict[str, Any] | None = None
+    selection: dict[str, Any] | None = None
+    if marker_present:
+        marker = load_json(packet_marker, canonical=True)
+        validate_marker(marker, phase="DEVELOPMENT", freeze_sha=freeze_sha)
+    if selection_present:
+        if marker is None:
+            raise CustodyError("packet selection exists without packet development marker")
+        selection = validate_development_selection(
+            load_json(packet_selection, canonical=True),
+            freeze_sha=freeze_sha,
+            development_marker_sha=sha256_path(packet_marker),
+        )
+    if holdout_present:
+        if marker is None or selection is None:
+            raise CustodyError("packet holdout marker exists without selection chain")
+        if selection.get("authorizedToOpenHoldout") is not True:
+            raise CustodyError("packet holdout marker follows unauthorized selection")
+        holdout = load_json(packet_holdout, canonical=True)
+        validate_marker(holdout, phase="HOLDOUT", freeze_sha=freeze_sha)
+        if holdout.get("developmentMarkerSha256") != sha256_path(packet_marker):
+            raise CustodyError("packet holdout development marker binding invalid")
+        if holdout.get("developmentSelectionSha256") != sha256_path(packet_selection):
+            raise CustodyError("packet holdout selection binding invalid")
+        if holdout.get("champion") != selection.get("champion"):
+            raise CustodyError("packet holdout champion binding invalid")
+
+
+def validate_custody_terminal(state_root: Path, freeze_sha: str) -> dict[str, Any]:
+    terminal = load_json(packet_artifact(CUSTODY_TERMINAL_NAME), canonical=True)
+    require_exact_keys(
+        terminal,
+        {
+            "accountProfitability",
+            "capitalVerdict",
+            "createdAtUtc",
+            "custodyOnly",
+            "executionAuthority",
+            "freezeSha256",
+            "holdout",
+            "interruptedAfterMarker",
+            "moneyEffectUsd",
+            "programWideMultiplicity",
+            "reason",
+            "receiptStates",
+            "status",
+            "version",
+        },
+        "custody terminal",
+    )
+    validate_common_terminal(terminal)
+    if terminal.get("version") != "VG27CustodyTerminalV1":
+        raise CustodyError("custody terminal version invalid")
+    if terminal.get("status") != "UNMEASURED" or terminal.get("custodyOnly") is not True:
+        raise CustodyError("custody terminal posture invalid")
+    if terminal.get("freezeSha256") != freeze_sha:
+        raise CustodyError("custody terminal freeze binding invalid")
+    states = receipt_states(state_root)
+    if terminal.get("receiptStates") != states:
+        raise CustodyError("custody terminal receipt states drift")
+    if all(state == "ABSENT" for state in states.values()):
+        raise CustodyError("custody terminal has no consumed receipt")
+    if states[RESULT_NAME] == "MATCHED":
+        raise CustodyError("custody terminal cannot override matched result")
+    if terminal.get("holdout") != holdout_custody_label(state_root):
+        raise CustodyError("custody terminal holdout label invalid")
+    required_text(terminal.get("reason"), "custody terminal reason")
+    validate_packet_authority_chain(state_root, freeze_sha)
+    return terminal
+
+
+def verify_semantic_state(
+    state_root: Path,
+    *,
+    check_inventory: bool,
+) -> dict[str, object]:
     validate_protocol()
     validate_freeze(state_root)
-    packet_result, _external_result = validate_receipt_pair(state_root, RESULT_NAME)
-    packet_marker, _external_marker = validate_receipt_pair(state_root, DEVELOPMENT_MARKER_NAME)
+    freeze_sha = sha256_path(packet_artifact(FREEZE_NAME))
+    if packet_artifact(CUSTODY_TERMINAL_NAME).exists():
+        terminal = validate_custody_terminal(state_root, freeze_sha)
+        if check_inventory:
+            verify_sha256s()
+        return {
+            "archiveBodiesOpened": 0,
+            "receiptStates": receipt_states(state_root),
+            "status": "VERIFIED_CUSTODY_UNMEASURED",
+            "terminalAuthority": CUSTODY_TERMINAL_NAME,
+            "terminalSha256": sha256_path(packet_artifact(CUSTODY_TERMINAL_NAME)),
+            "terminalStatus": terminal["status"],
+        }
+    packet_result, _ = validate_receipt_pair(state_root, RESULT_NAME)
+    packet_marker, _ = validate_receipt_pair(state_root, DEVELOPMENT_MARKER_NAME)
     result = load_json(packet_result, canonical=True)
     marker = load_json(packet_marker, canonical=True)
-    freeze_sha = sha256_path(packet_artifact(FREEZE_NAME))
-    if marker.get("freezeSha256") != freeze_sha:
-        raise CustodyError("development marker freeze binding invalid")
+    validate_marker(marker, phase="DEVELOPMENT", freeze_sha=freeze_sha)
+    validate_common_terminal(result)
+    if result.get("version") != RESULT_VERSION:
+        raise CustodyError("result version invalid")
     if result.get("freezeSha256") != freeze_sha:
         raise CustodyError("result freeze binding invalid")
-    if result.get("version") != "VG27ResultV1":
-        raise CustodyError("result version invalid")
-    if result.get("status") not in {"GO", "NO_GO", "UNMEASURED"}:
-        raise CustodyError("terminal public status invalid")
-    if result.get("accountProfitability") != "UNKNOWN":
-        raise CustodyError("account profitability must remain UNKNOWN")
-    if result.get("capitalVerdict") != "NO_GO":
-        raise CustodyError("capital verdict must remain NO_GO")
-    if result.get("executionAuthority") != "NONE":
-        raise CustodyError("execution authority must remain NONE")
-    if result.get("moneyEffectUsd") != "0":
-        raise CustodyError("money effect must remain zero")
-    packet_holdout = packet_artifact(HOLDOUT_MARKER_NAME)
-    external_holdout = state_root / HOLDOUT_MARKER_NAME
-    if packet_holdout.exists() or external_holdout.exists():
-        validate_receipt_pair(state_root, HOLDOUT_MARKER_NAME)
-        valid_unmeasured = (
-            result.get("status") == "UNMEASURED"
-            and result.get("holdout") == "OPEN_AUTHORITY_CONSUMED_UNMEASURED"
+    status = result.get("status")
+    if status == "UNMEASURED":
+        require_exact_keys(
+            result,
+            {
+                "accountProfitability",
+                "capitalVerdict",
+                "createdAtUtc",
+                "custodySnapshot",
+                "executionAuthority",
+                "freezeSha256",
+                "holdout",
+                "interruptedAfterMarker",
+                "moneyEffectUsd",
+                "programWideMultiplicity",
+                "reason",
+                "status",
+                "version",
+            },
+            "UNMEASURED result",
         )
-        if not isinstance(result.get("holdout"), dict) and not valid_unmeasured:
-            raise CustodyError("holdout marker exists without measured holdout")
-    if packet_artifact(SHA256SUMS_NAME).exists():
+        required_text(result.get("createdAtUtc"), "UNMEASURED createdAtUtc")
+        if result.get("interruptedAfterMarker") is not True:
+            raise CustodyError("UNMEASURED interruption flag invalid")
+        if result.get("custodySnapshot") != custody_snapshot(state_root):
+            raise CustodyError("UNMEASURED custody snapshot invalid")
+        if result.get("holdout") != holdout_custody_label(state_root):
+            raise CustodyError("UNMEASURED holdout label invalid")
+        required_text(result.get("reason"), "UNMEASURED reason")
+        selection_state = receipt_state(state_root, DEVELOPMENT_SELECTION_NAME)
+        holdout_state = receipt_state(state_root, HOLDOUT_MARKER_NAME)
+        if selection_state not in {"ABSENT", "MATCHED"}:
+            raise CustodyError("UNMEASURED selection receipt is partial")
+        if holdout_state not in {"ABSENT", "MATCHED"}:
+            raise CustodyError("UNMEASURED holdout receipt is partial")
+        selection: dict[str, Any] | None = None
+        selection_path = packet_artifact(DEVELOPMENT_SELECTION_NAME)
+        if selection_state == "MATCHED":
+            selection = validate_development_selection(
+                load_json(selection_path, canonical=True),
+                freeze_sha=freeze_sha,
+                development_marker_sha=sha256_path(packet_marker),
+            )
+        if holdout_state == "MATCHED":
+            if selection is None or selection.get("authorizedToOpenHoldout") is not True:
+                raise CustodyError("UNMEASURED holdout lacks an authorized selection")
+            holdout_path = packet_artifact(HOLDOUT_MARKER_NAME)
+            holdout_marker = load_json(holdout_path, canonical=True)
+            validate_marker(
+                holdout_marker,
+                phase="HOLDOUT",
+                freeze_sha=freeze_sha,
+            )
+            if holdout_marker.get("developmentMarkerSha256") != sha256_path(packet_marker):
+                raise CustodyError("UNMEASURED holdout development binding invalid")
+            if holdout_marker.get("developmentSelectionSha256") != sha256_path(selection_path):
+                raise CustodyError("UNMEASURED holdout selection binding invalid")
+            if holdout_marker.get("champion") != selection.get("champion"):
+                raise CustodyError("UNMEASURED holdout champion binding invalid")
+    elif status in {"GO", "NO_GO"}:
+        require_exact_keys(
+            result,
+            {
+                "accountProfitability",
+                "capitalVerdict",
+                "createdAtUtc",
+                "development",
+                "developmentSelectionSha256",
+                "executionAuthority",
+                "freezeSha256",
+                "holdout",
+                "moneyEffectUsd",
+                "programWideMultiplicity",
+                "status",
+                "version",
+            },
+            "measured result",
+        )
+        required_text(result.get("createdAtUtc"), "measured result createdAtUtc")
+        selection_path, _ = validate_receipt_pair(
+            state_root,
+            DEVELOPMENT_SELECTION_NAME,
+        )
+        selection = validate_development_selection(
+            load_json(selection_path, canonical=True),
+            freeze_sha=freeze_sha,
+            development_marker_sha=sha256_path(packet_marker),
+        )
+        if result.get("developmentSelectionSha256") != sha256_path(selection_path):
+            raise CustodyError("result development selection binding invalid")
+        if result.get("development") != selection.get("development"):
+            raise CustodyError("result development report differs from selection")
+        authorized = required_bool(
+            selection.get("authorizedToOpenHoldout"),
+            "selection authorization",
+        )
+        holdout_state = receipt_state(state_root, HOLDOUT_MARKER_NAME)
+        if not authorized:
+            if status != "NO_GO" or result.get("holdout") != "UNOPENED":
+                raise CustodyError("development NO_GO result posture invalid")
+            if holdout_state != "ABSENT":
+                raise CustodyError("development NO_GO must not have holdout marker")
+        else:
+            holdout_path, _ = validate_receipt_pair(
+                state_root,
+                HOLDOUT_MARKER_NAME,
+            )
+            holdout_marker = load_json(holdout_path, canonical=True)
+            validate_marker(
+                holdout_marker,
+                phase="HOLDOUT",
+                freeze_sha=freeze_sha,
+            )
+            if holdout_marker.get("developmentMarkerSha256") != sha256_path(packet_marker):
+                raise CustodyError("holdout marker development marker binding invalid")
+            if holdout_marker.get("developmentSelectionSha256") != sha256_path(selection_path):
+                raise CustodyError("holdout marker selection binding invalid")
+            if holdout_marker.get("champion") != selection.get("champion"):
+                raise CustodyError("holdout marker champion binding invalid")
+            holdout_report = validate_holdout_report(
+                result.get("holdout"),
+                required_text(selection.get("champion"), "selection champion"),
+            )
+            if status != holdout_report.get("publicVerdict"):
+                raise CustodyError("terminal status differs from holdout verdict")
+    else:
+        raise CustodyError("terminal public status invalid")
+    if check_inventory:
         verify_sha256s()
     return {
         "archiveBodiesOpened": 0,
-        "resultSha256": sha256_path(packet_result),
+        "receiptStates": receipt_states(state_root),
         "status": "VERIFIED_WITHOUT_RECOMPUTATION",
+        "terminalAuthority": RESULT_NAME,
+        "terminalSha256": sha256_path(packet_result),
+        "terminalStatus": status,
     }
+
+
+def verify(state_root: Path) -> dict[str, object]:
+    return verify_semantic_state(state_root, check_inventory=True)
 
 
 def packet_files_without_inventory() -> tuple[Path, ...]:
@@ -1415,18 +2287,24 @@ def packet_files_without_inventory() -> tuple[Path, ...]:
     )
 
 
-def seal(_state_root: Path) -> dict[str, object]:
+def seal(state_root: Path) -> dict[str, object]:
     inventory_path = packet_artifact(SHA256SUMS_NAME)
     if inventory_path.exists():
         raise CustodyError("packet inventory already exists")
-    if not packet_artifact(RESULT_NAME).is_file():
-        raise CustodyError("terminal result absent before packet seal")
+    if not packet_artifact(CUSTODY_TERMINAL_NAME).exists() and any(
+        state in {"PACKET_ONLY", "EXTERNAL_ONLY", "DIVERGED", "INVALID"}
+        for state in receipt_states(state_root).values()
+    ):
+        custody_terminal(state_root, "SEAL_DETECTED_PARTIAL_RECEIPT")
+    semantic = verify_semantic_state(state_root, check_inventory=False)
     lines = [f"{sha256_path(path)}  {path.name}\n" for path in packet_files_without_inventory()]
     write_exclusive(inventory_path, "".join(lines).encode("ascii"))
+    verify_sha256s()
     return {
         "fileCount": len(lines),
+        "semanticStatus": semantic["status"],
         "sha256sSha256": sha256_path(inventory_path),
-        "version": "VG27PacketSealV1",
+        "version": "VG27PacketSealV2",
     }
 
 

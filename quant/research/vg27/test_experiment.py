@@ -4,6 +4,7 @@ import copy
 import hashlib
 import itertools
 import zipfile
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -150,10 +151,161 @@ def _fake_manifest(root: Path) -> None:
 
 
 def _isolate_packet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    supersession_raw = vg27.packet_artifact(vg27.SUPERSESSION_NAME).read_bytes()
     packet = tmp_path / "packet"
     packet.mkdir()
     monkeypatch.setattr(vg27, "PACKET_DIR", packet)
+    vg27.write_exclusive(
+        vg27.packet_artifact(vg27.SUPERSESSION_NAME),
+        supersession_raw,
+    )
     return packet
+
+
+def _empty_bars() -> dict[str, dict[datetime, vg27.Bar]]:
+    return {symbol: {} for symbol in vg27.COHORT}
+
+
+def _synthetic_scenario(
+    trial_id: str,
+    scenario_name: str,
+    *,
+    net: str = "1",
+) -> dict[str, object]:
+    return {
+        "activeMonths": 8,
+        "eventCount": 100,
+        "maxDrawdownFraction": "0.10",
+        "minimumNominalInitial1000ScreenUsd": "1000",
+        "netUsdPer1k": net,
+        "scenario": scenario_name,
+        "trialId": trial_id,
+    }
+
+
+def _synthetic_development(*, authorized: bool) -> dict[str, object]:
+    trial_ids = tuple(trial.trial_id for trial in vg27.trial_grid())
+    champion = trial_ids[0]
+    trials = {
+        trial_id: {
+            scenario.name: _synthetic_scenario(
+                trial_id,
+                scenario.name,
+                net="-1"
+                if (not authorized and trial_id == champion and scenario.name == "base")
+                else "1",
+            )
+            for scenario in vg27.scenarios()
+        }
+        for trial_id in trial_ids
+    }
+    gates = {
+        "activeMonthsAtLeast8": True,
+        "baseLcbPositive": True,
+        "baseNetPositive": authorized,
+        "drawdownAtMost20Pct": True,
+        "holmAdjustedPBelow0.05": True,
+        "nominalInitial1000ScreenAtLeast1000": True,
+        "onEventsAtLeast100": True,
+        "stressLcbPositive": True,
+        "stressNetPositive": True,
+        "whitePBelow0.05": True,
+    }
+    bootstrap = {
+        name: {trial_id: {"lower95UsdPer1k": "1"} for trial_id in trial_ids}
+        for name in ("base", "stress")
+    }
+    return {
+        "authorizedToOpenHoldout": authorized,
+        "bootstrap": bootstrap,
+        "champion": champion,
+        "championEventConcentrationMaximumMonthFraction": "0.2",
+        "diagnostics": {
+            "pboAtMost0.5": True,
+            "pboRole": "DIAGNOSTIC_ONLY_NEVER_SELECTION_OR_HOLDOUT_AUTHORIZATION",
+        },
+        "formalGates": gates,
+        "holmAdjustedP": dict.fromkeys(trial_ids, "0.01"),
+        "pbo": {
+            "blocks": 8,
+            "diagnosticOnlyNeverSelectionRescue": True,
+            "distinctTrialPaths": 2,
+            "probabilityOverfit": "0.25",
+            "splitCount": 70,
+            "status": "ESTIMATED",
+        },
+        "programWideMultiplicity": dict(vg27.PROGRAM_MULTIPLICITY),
+        "trials": trials,
+        "white": {
+            "pValue": "0.01",
+            "trialCount": len(trial_ids),
+        },
+    }
+
+
+def _synthetic_holdout(champion: str, *, go: bool = True) -> dict[str, object]:
+    gates = {
+        "baseLcbPositive": True,
+        "baseNetPositive": go,
+        "drawdownAtMost20Pct": True,
+        "nominalInitial1000ScreenAtLeast1000": True,
+        "stressLcbPositive": True,
+        "stressNetPositive": True,
+    }
+    return {
+        "confirmationGates": gates,
+        "intervals": {
+            "base": {"lower95UsdPer1k": "1"},
+            "stress": {"lower95UsdPer1k": "1"},
+        },
+        "publicVerdict": "GO" if go else "NO_GO",
+        "scenarios": {
+            scenario.name: _synthetic_scenario(
+                champion,
+                scenario.name,
+                net="-1" if not go and scenario.name == "base" else "1",
+            )
+            for scenario in vg27.scenarios()
+        },
+    }
+
+
+def _frozen_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _isolate_packet(tmp_path, monkeypatch)
+    _fake_manifest(tmp_path)
+    vg27.freeze(tmp_path)
+
+
+def _synthetic_manifest_reader(
+    state_root: Path,
+    phases: list[str],
+) -> Callable[
+    ...,
+    tuple[dict[str, object], dict[str, dict[datetime, vg27.Bar]]],
+]:
+    def reader(
+        root: Path,
+        *,
+        open_archives: bool,
+        months: frozenset[str] | None = None,
+    ) -> tuple[dict[str, object], dict[str, dict[datetime, vg27.Bar]]]:
+        assert root == state_root
+        manifest = vg27.load_json(root / vg27.SOURCE_MANIFEST_NAME, canonical=True)
+        if open_archives:
+            if months == frozenset(vg27.DEVELOPMENT_MONTHS):
+                phases.append("DEVELOPMENT_OPENED")
+            elif months == frozenset(vg27.HOLDOUT_MONTHS):
+                assert vg27.receipt_state(root, vg27.DEVELOPMENT_SELECTION_NAME) == "MATCHED"
+                assert vg27.receipt_state(root, vg27.HOLDOUT_MARKER_NAME) == "MATCHED"
+                phases.append("HOLDOUT_OPENED_AFTER_SELECTION_AND_MARKER")
+            else:
+                raise AssertionError("unexpected open partition")
+        return manifest, _empty_bars()
+
+    return reader
 
 
 def test_trial_grid_is_exact_twelve_and_stable() -> None:
@@ -247,7 +399,8 @@ def test_full_cohort_costs_capacity_drawdown_and_reconciliation(
         start,
         end,
     )
-    assert simulation.minimum_capacity_usd == Decimal("2000")
+    assert simulation.minimum_nominal_initial_1000_screen_usd == Decimal("2000")
+    assert simulation.maximum_entry_to_screen_ratio is not None
     assert simulation.fee_cost_usd > 0
     assert simulation.adverse_cost_usd > 0
     assert simulation.ending_usd == (
@@ -257,7 +410,10 @@ def test_full_cohort_costs_capacity_drawdown_and_reconciliation(
         - simulation.adverse_cost_usd
     )
     assert simulation.max_drawdown >= Decimal("0.0029")
-    assert vg27.simulation_mapping(simulation)["publicCapacity1000Pass"] is True
+    mapping = vg27.simulation_mapping(simulation)
+    assert mapping["nominalInitial1000ScreenPass"] is True
+    assert mapping["reinvestmentMayExceedNominalScreen"] is True
+    assert mapping["executableCapacity"] == "UNMEASURED"
 
 
 def test_missing_held_mark_is_terminal_unmeasured(
@@ -331,60 +487,247 @@ def test_bootstrap_holm_white_and_pbo_are_deterministic() -> None:
     assert float(white_p) > 0
     pbo = vg27.cscv_pbo(paths)
     assert pbo["blocks"] == 8
+    assert pbo["splitCount"] == 70
+    assert pbo["status"] == "NOT_ESTIMABLE"
+    assert pbo["probabilityOverfit"] is None
     assert pbo["diagnosticOnlyNeverSelectionRescue"] is True
+    distinct_paths = dict(paths)
+    distinct_paths[vg27.trial_grid()[0].trial_id] = tuple(
+        Decimal("0.002") if index % 11 == 0 else Decimal(0) for index in range(336)
+    )
+    estimated = vg27.cscv_pbo(distinct_paths)
+    assert estimated["splitCount"] == 70
+    assert estimated["status"] == "ESTIMATED"
+    assert (
+        vg27.average_oos_rank_percentile(
+            {"a": 3.0, "b": 2.0, "c": 2.0, "d": 1.0},
+            "b",
+        )
+        == 0.5
+    )
 
 
-def test_marker_interruption_only_finalizes_unmeasured_and_refuses_rerun(
+def test_development_no_go_seals_selection_and_never_opens_holdout(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _isolate_packet(tmp_path, monkeypatch)
-    vg27.write_exclusive(tmp_path / "development-open.v1.json", {"consumed": True})
+    _frozen_state(tmp_path, monkeypatch)
+    phases: list[str] = []
     monkeypatch.setattr(
         vg27,
-        "validate_freeze",
-        lambda _root: pytest.fail("interrupted run must not validate or open sources"),
+        "validate_manifest",
+        _synthetic_manifest_reader(tmp_path, phases),
+    )
+    development = _synthetic_development(authorized=False)
+    monkeypatch.setattr(vg27, "development_analysis", lambda _bars: development)
+    monkeypatch.setattr(
+        vg27,
+        "holdout_analysis",
+        lambda *_args: pytest.fail("development NO_GO opened holdout"),
     )
     result = vg27.run(tmp_path)
+    assert result["status"] == "NO_GO"
+    assert result["holdout"] == "UNOPENED"
+    assert phases == ["DEVELOPMENT_OPENED"]
+    assert vg27.receipt_state(tmp_path, vg27.DEVELOPMENT_SELECTION_NAME) == "MATCHED"
+    assert vg27.receipt_state(tmp_path, vg27.HOLDOUT_MARKER_NAME) == "ABSENT"
+    assert vg27.verify_semantic_state(tmp_path, check_inventory=False)["terminalStatus"] == "NO_GO"
+    with pytest.raises(vg27.CustodyError, match="packet inventory absent"):
+        vg27.verify(tmp_path)
+
+
+def test_holdout_opens_only_after_paired_selection_and_marker(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _frozen_state(tmp_path, monkeypatch)
+    phases: list[str] = []
+    monkeypatch.setattr(
+        vg27,
+        "validate_manifest",
+        _synthetic_manifest_reader(tmp_path, phases),
+    )
+    development = _synthetic_development(authorized=True)
+    champion = str(development["champion"])
+    monkeypatch.setattr(vg27, "development_analysis", lambda _bars: development)
+    monkeypatch.setattr(
+        vg27,
+        "holdout_analysis",
+        lambda _bars, _champion: _synthetic_holdout(champion),
+    )
+    result = vg27.run(tmp_path)
+    assert result["status"] == "GO"
+    assert phases == [
+        "DEVELOPMENT_OPENED",
+        "HOLDOUT_OPENED_AFTER_SELECTION_AND_MARKER",
+    ]
+    assert vg27.verify_semantic_state(tmp_path, check_inventory=False)["terminalStatus"] == "GO"
+
+
+def test_development_open_failure_is_verifiable_unmeasured_and_refuses_rerun(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _frozen_state(tmp_path, monkeypatch)
+    base_reader = _synthetic_manifest_reader(tmp_path, [])
+
+    def fail_after_marker(
+        root: Path,
+        *,
+        open_archives: bool,
+        months: frozenset[str] | None = None,
+    ) -> tuple[dict[str, object], dict[str, dict[datetime, vg27.Bar]]]:
+        if open_archives:
+            raise vg27.MeasurementError("synthetic development body failure")
+        return base_reader(root, open_archives=False, months=months)
+
+    monkeypatch.setattr(vg27, "validate_manifest", fail_after_marker)
+    result = vg27.run(tmp_path)
     assert result["status"] == "UNMEASURED"
-    assert result["interruptedAfterMarker"] is True
+    assert result["holdout"] == "UNOPENED"
+    assert (
+        vg27.verify_semantic_state(tmp_path, check_inventory=False)["terminalStatus"]
+        == "UNMEASURED"
+    )
     with pytest.raises(vg27.CustodyError, match="rerun refused"):
         vg27.run(tmp_path)
+
+
+def test_partial_development_marker_replica_is_custody_terminal_and_sealable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _frozen_state(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        vg27,
+        "validate_manifest",
+        _synthetic_manifest_reader(tmp_path, []),
+    )
+    original_write = vg27.write_exclusive
+
+    def fail_external_marker(path: Path, value: object | bytes) -> None:
+        if path == tmp_path / vg27.DEVELOPMENT_MARKER_NAME:
+            raise OSError("synthetic replica interruption")
+        original_write(path, value)
+
+    monkeypatch.setattr(vg27, "write_exclusive", fail_external_marker)
+    terminal = vg27.run(tmp_path)
+    assert terminal["status"] == "UNMEASURED"
+    states = vg27.required_mapping(terminal["receiptStates"], "receiptStates")
+    assert states[vg27.DEVELOPMENT_MARKER_NAME] == "PACKET_ONLY"
+    assert vg27.seal(tmp_path)["semanticStatus"] == "VERIFIED_CUSTODY_UNMEASURED"
+    assert vg27.verify(tmp_path)["terminalAuthority"] == vg27.CUSTODY_TERMINAL_NAME
+
+
+def test_partial_result_replica_is_custody_terminal_and_sealable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _frozen_state(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        vg27,
+        "validate_manifest",
+        _synthetic_manifest_reader(tmp_path, []),
+    )
+    monkeypatch.setattr(
+        vg27,
+        "development_analysis",
+        lambda _bars: _synthetic_development(authorized=False),
+    )
+    original_write = vg27.write_exclusive
+
+    def fail_external_result(path: Path, value: object | bytes) -> None:
+        if path == tmp_path / vg27.RESULT_NAME:
+            raise OSError("synthetic result replica interruption")
+        original_write(path, value)
+
+    monkeypatch.setattr(vg27, "write_exclusive", fail_external_result)
+    terminal = vg27.run(tmp_path)
+    assert terminal["status"] == "UNMEASURED"
+    states = vg27.required_mapping(terminal["receiptStates"], "receiptStates")
+    assert states[vg27.RESULT_NAME] == "PACKET_ONLY"
+    assert vg27.seal(tmp_path)["semanticStatus"] == "VERIFIED_CUSTODY_UNMEASURED"
+    assert vg27.verify(tmp_path)["terminalStatus"] == "UNMEASURED"
+
+
+def test_forged_go_with_contradictory_holdout_metrics_is_rejected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _frozen_state(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        vg27,
+        "validate_manifest",
+        _synthetic_manifest_reader(tmp_path, []),
+    )
+    development = _synthetic_development(authorized=True)
+    champion = str(development["champion"])
+    monkeypatch.setattr(vg27, "development_analysis", lambda _bars: development)
+    monkeypatch.setattr(
+        vg27,
+        "holdout_analysis",
+        lambda _bars, _champion: _synthetic_holdout(champion),
+    )
+    assert vg27.run(tmp_path)["status"] == "GO"
+    result = vg27.load_json(vg27.packet_artifact(vg27.RESULT_NAME), canonical=True)
+    result["holdout"]["scenarios"]["base"]["netUsdPer1k"] = "-1"
+    raw = vg27.canonical_bytes(result)
+    vg27.packet_artifact(vg27.RESULT_NAME).write_bytes(raw)
+    (tmp_path / vg27.RESULT_NAME).write_bytes(raw)
+    with pytest.raises(vg27.CustodyError, match="holdout gates contradict"):
+        vg27.verify(tmp_path)
+
+
+def test_forged_holdout_marker_selection_binding_is_rejected(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _frozen_state(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        vg27,
+        "validate_manifest",
+        _synthetic_manifest_reader(tmp_path, []),
+    )
+    development = _synthetic_development(authorized=True)
+    champion = str(development["champion"])
+    monkeypatch.setattr(vg27, "development_analysis", lambda _bars: development)
+    monkeypatch.setattr(
+        vg27,
+        "holdout_analysis",
+        lambda _bars, _champion: _synthetic_holdout(champion),
+    )
+    assert vg27.run(tmp_path)["status"] == "GO"
+    marker = vg27.load_json(
+        vg27.packet_artifact(vg27.HOLDOUT_MARKER_NAME),
+        canonical=True,
+    )
+    marker["developmentSelectionSha256"] = "0" * 64
+    raw = vg27.canonical_bytes(marker)
+    vg27.packet_artifact(vg27.HOLDOUT_MARKER_NAME).write_bytes(raw)
+    (tmp_path / vg27.HOLDOUT_MARKER_NAME).write_bytes(raw)
+    with pytest.raises(vg27.CustodyError, match="selection binding invalid"):
+        vg27.verify(tmp_path)
 
 
 def test_verify_hashes_but_never_opens_archives_or_recomputes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    _isolate_packet(tmp_path, monkeypatch)
-    _fake_manifest(tmp_path)
-    vg27.freeze(tmp_path)
-    freeze_sha = vg27.sha256_path(vg27.packet_artifact(vg27.FREEZE_NAME))
-    vg27.write_paired_exclusive(
-        tmp_path,
-        vg27.DEVELOPMENT_MARKER_NAME,
-        {
-            "createdAtUtc": "2026-07-29T00:00:00Z",
-            "freezeSha256": freeze_sha,
-            "phase": "DEVELOPMENT",
-            "version": "VG27OpenMarkerV1",
-        },
+    _frozen_state(tmp_path, monkeypatch)
+    original_validate_manifest = vg27.validate_manifest
+    monkeypatch.setattr(
+        vg27,
+        "validate_manifest",
+        _synthetic_manifest_reader(tmp_path, []),
     )
-    vg27.write_paired_exclusive(
-        tmp_path,
-        vg27.RESULT_NAME,
-        {
-            "accountProfitability": "UNKNOWN",
-            "capitalVerdict": "NO_GO",
-            "executionAuthority": "NONE",
-            "freezeSha256": freeze_sha,
-            "holdout": "UNOPENED",
-            "moneyEffectUsd": "0",
-            "status": "UNMEASURED",
-            "version": "VG27ResultV1",
-        },
+    monkeypatch.setattr(
+        vg27,
+        "development_analysis",
+        lambda _bars: _synthetic_development(authorized=False),
     )
+    assert vg27.run(tmp_path)["status"] == "NO_GO"
     vg27.seal(tmp_path)
+    monkeypatch.setattr(vg27, "validate_manifest", original_validate_manifest)
     monkeypatch.setattr(
         zipfile,
         "ZipFile",

@@ -1,0 +1,215 @@
+{
+  "schema": "cosmos.quant.s1j.protocol.v1",
+  "taskId": "S-1J",
+  "title": "Cross-sectional Spot-hedged USD-M funding carry",
+  "baseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "consumer": "N3 successor/orchestrator scoreboard",
+  "authority": {
+    "capital": "NO_GO",
+    "provider": "NONE",
+    "privateData": "PROHIBITED",
+    "orders": "PROHIBITED",
+    "transfers": "PROHIBITED",
+    "withdrawals": "PROHIBITED"
+  },
+  "hypothesis": "Persistently positive settled funding across liquid common Binance Spot and USD-M symbols can pay for an equal-base long-Spot short-perpetual basket after paired execution costs.",
+  "distinctness": {
+    "S-1D": "No naked perpetual long/short dispersion. Every selected symbol is long Spot and short the same USD-M perpetual in equal base quantity; there is no low-funding long-perpetual tail.",
+    "S-1G": "Multi-symbol cross-sectional funding ranking only; no BTC-only basis threshold, basis forecast, or convergence exit.",
+    "S-1H": "No BTC/ETH relative-basis residual, z-score, or basis-dislocation signal.",
+    "S-1I": "Funding is the only ranking signal; there is no Premium Index signal and no futures-only mean-reversion basket."
+  },
+  "calendar": {
+    "timezone": "UTC",
+    "warmupStartInclusive": "2024-06-01",
+    "developmentEntryStartInclusive": "2024-07-01",
+    "developmentEntryEndInclusive": "2025-06-16",
+    "developmentLastExit": "2025-06-23",
+    "embargoStartInclusive": "2025-06-30",
+    "embargoEndExclusive": "2025-07-07",
+    "holdoutEntryStartInclusive": "2025-07-07",
+    "holdoutEntryEndInclusive": "2026-06-22",
+    "holdoutLastExit": "2026-06-29",
+    "scheduledDevelopmentWeeks": 51,
+    "scheduledHoldoutWeeks": 51,
+    "entryWeekday": "MONDAY",
+    "entryTime": "00:00:00",
+    "holdCalendarDays": 7,
+    "holdoutClaim": "July 2025-June 2026 outcome archive members are evaluator-unopened until the S-1J holdout marker; June 2025 embargo/warmup rows are preloaded before candidate seal. The public data are not globally unpublished."
+  },
+  "universe": {
+    "quoteAsset": "USDT",
+    "screenMonth": "2024-06",
+    "screenRule": "Exact-name symbols with checksum-verified June 2024 Spot 1d, USD-M regular 1h, USD-M mark-price 1h, and funding-rate archives in the two frozen parent manifests.",
+    "futureCompletenessFilter": false,
+    "currentExchangeInfoUsedForHistoricalMembership": false,
+    "excludedSymbolRegexes": [
+      "^[0-9]",
+      "(UP|DOWN|BULL|BEAR)USDT$"
+    ],
+    "custodyQuarantineSymbols": [
+      "BTCUSDT"
+    ],
+    "custodyQuarantineReason": "Three BTCUSDT archive members were sampled for schema-only preflight before freeze; BTCUSDT is excluded from every S-1J cohort and outcome.",
+    "causalCohortSize": 30,
+    "liquidityScore": "Minimum of previous complete UTC-day and trailing-seven-complete-day median quote volume on both Spot and USD-M, observed strictly before entry.",
+    "cohortTieBreak": "symbol ascending",
+    "missingness": "A symbol missing causal inputs is ineligible. A missing selected future entry, exit, mark, or funding leg invalidates the whole scheduled week; no replacement or resizing."
+  },
+  "signal": {
+    "onlyInput": "settled funding rates with timestamps strictly before entry",
+    "lookbackCalendarDays": [
+      3,
+      7,
+      14,
+      28
+    ],
+    "score": "sum(last_funding_rate) / lookback calendar days",
+    "eligibility": "At least two settlements, complete interval-aware window coverage, strictly positive score, and latest settled funding rate strictly positive.",
+    "rank": "descending score then symbol ascending",
+    "forbidden": [
+      "Spot or perpetual momentum",
+      "basis level",
+      "basis convergence",
+      "Premium Index",
+      "future funding",
+      "future archive completeness"
+    ]
+  },
+  "trials": {
+    "count": 12,
+    "slotCounts": [
+      3,
+      5,
+      10
+    ],
+    "unusedSlots": "cash",
+    "selection": "Highest minimum STRESS Bonferroni LCB across 4-week and 8-week bootstraps; then higher exact STRESS development net; then lexical trialId.",
+    "holdoutFallback": "PROHIBITED"
+  },
+  "portfolio": {
+    "accountCapitalUsd": "1000",
+    "spotCapitalBudgetUsd": "500",
+    "perpetualCollateralBudgetUsd": "500",
+    "spotSide": "LONG",
+    "perpetualSide": "SHORT",
+    "baseNeutrality": "qSpot + qPerpetual = 0 exactly per selected symbol",
+    "allocation": "For each declared slot, base quantity is slot budget divided by max(Spot open, USD-M open), so neither leg exceeds its unlevered budget. Residual and unused-slot capital stays cash. Perpetual base quantity exactly equals Spot base quantity.",
+    "borrow": false,
+    "leverage": false,
+    "compounding": false,
+    "fundingWindow": "Funding settlement hours strictly inside (entry, exit), conservatively excluding entry and exit hours including archive +1ms stamps. Actual interval fields must cover the window without a gap. Event mark uses same-hour USD-M mark-price open proxy.",
+    "entryExitPrice": "Spot daily open and USD-M regular 1h open at Monday 00:00 UTC.",
+    "drawdownProxy": "Daily 00:00 UTC marked equity using Spot daily open, USD-M mark-price 1h open, accrued funding, and complete costs."
+  },
+  "execution": {
+    "pairedAtomicity": "Both legs or neither; no one-leg state is retained.",
+    "makerEntry": {
+      "role": "NON_AUTHORITATIVE_SENSITIVITY",
+      "fillTruth": "UNKNOWN",
+      "queueTruth": "UNKNOWN",
+      "model": "Hypothetical paired post-only entry priced at archive open; no claim that either order filled."
+    },
+    "decisionExecution": "Immediate paired taker entry and exit at the declared archive-open proxy, independent of the non-authoritative maker sensitivity; daily Spot data cannot identify a later fallback price.",
+    "accountEffectiveFees": "UNKNOWN",
+    "historicalFilters": "UNKNOWN",
+    "trueSpreadImpactQueue": "UNKNOWN"
+  },
+  "costScenarios": {
+    "MAKER_SENSITIVITY": {
+      "decisionAuthority": false,
+      "spotEntryFeeBps": "10",
+      "spotExitFeeBps": "10",
+      "perpetualEntryFeeBps": "2",
+      "perpetualExitFeeBps": "5",
+      "adverseExecutionBpsPerFill": "1",
+      "capacityParticipationBps": null
+    },
+    "PROXY": {
+      "decisionAuthority": true,
+      "spotEntryFeeBps": "10",
+      "spotExitFeeBps": "10",
+      "perpetualEntryFeeBps": "5",
+      "perpetualExitFeeBps": "5",
+      "adverseExecutionBpsPerFill": "2",
+      "capacityParticipationBps": "0.5"
+    },
+    "STRESS": {
+      "decisionAuthority": true,
+      "spotEntryFeeBps": "10",
+      "spotExitFeeBps": "10",
+      "perpetualEntryFeeBps": "10",
+      "perpetualExitFeeBps": "10",
+      "adverseExecutionBpsPerFill": "5",
+      "capacityParticipationBps": "0.25"
+    }
+  },
+  "statistics": {
+    "seed": 2026072902,
+    "bootstrapReplicates": 4096,
+    "blockLengthsWeeks": [
+      4,
+      8
+    ],
+    "familywiseAlpha": "0.05",
+    "matrix": "Synchronous 51 by 12 weekly net USD per $1k for each decision scenario; valid no-signal weeks are exact zero and remain in all denominators.",
+    "rawP": "One-sided null-centered joint circular block bootstrap with plus-one correction.",
+    "multiplicity": "Holm step-down over all 12 declared trials plus synchronous White max-mean reality check, separately for PROXY and STRESS.",
+    "simultaneousLcb": "One-sided Bonferroni 95% family LCB for every trial at both 4-week and 8-week blocks.",
+    "pbo": {
+      "role": "DIAGNOSTIC_ONLY",
+      "method": "CSCV on first 48 development weeks as 12 contiguous four-week blocks; all choose(12,6)=924 splits; STRESS sums; equality to the OOS median counts as overfit.",
+      "expectedSplits": 924
+    },
+    "holdoutIntervals": "Champion-only 4-week and 8-week circular-block two-sided 95% intervals and one-sided 95% LCBs."
+  },
+  "gates": {
+    "development": {
+      "minimumActiveWeeks": 24,
+      "minimumPairedRoundTrips": 72,
+      "minimumDistinctSymbols": 10,
+      "proxyAndStressNetPositive": true,
+      "proxyAndStressBothBlockLcbsPositive": true,
+      "championHolmRejectsBothScenarios": true,
+      "whiteRealityCheckPassesBothScenarios": true
+    },
+    "holdout": {
+      "minimumActiveWeeks": 16,
+      "minimumPairedRoundTrips": 36,
+      "minimumDistinctSymbols": 8,
+      "proxyAndStressNetPositive": true,
+      "proxyAndStressBothBlockLcbsPositive": true
+    },
+    "risk": {
+      "maximumDailyMarkedDrawdownPct": "10",
+      "minimumProxySupportedAccountCapitalUsdEveryFill": "1000"
+    }
+  },
+  "capacity": {
+    "volumeBasis": "Weakest of Spot and USD-M previous-day and trailing-seven-day median quote volume at both entry and exit.",
+    "proxyOnly": true,
+    "executableCapacityUsd": null,
+    "executableCapacityStatus": "UNKNOWN"
+  },
+  "verdictLaw": {
+    "UNMEASURED": "Invalid custody, chronology, schema, selected-leg completeness, matrix, reconciliation, or inference yields null economics. If every public proxy gate passes, the capital verdict still remains UNMEASURED because account-effective fees and executable paired fill/depth capacity are UNKNOWN.",
+    "NO_GO": "Valid measurable public data with any development or opened-holdout net, interval, multiplicity, sample, stress, drawdown, or volume-capacity gate failure.",
+    "GO": "Structurally unreachable in this public-only lane; it additionally requires fresh account-effective fee proof and executable paired fill/depth proof.",
+    "capitalAuthority": "NO_GO",
+    "crossFamilyMultiplicity": "S-META1 does not preauthorize S-1J; N3 successor must treat cross-family p as 1 until a prospectively frozen registry successor exists."
+  },
+  "seal": {
+    "freezeBeforeOutcomeArchiveOpen": true,
+    "prefreezeSchemaSampling": {
+      "members": 3,
+      "symbol": "BTCUSDT",
+      "purpose": "schema-only hostile preflight",
+      "disposition": "symbol quarantined from S-1J"
+    },
+    "runMarker": "run_consumed.v1.json",
+    "candidateSeal": "candidate_seal.v1.json",
+    "holdoutMarker": "holdout_opened.v1.json",
+    "singleRun": true,
+    "postMarkerRepairOrRerun": "PROHIBITED"
+  }
+}

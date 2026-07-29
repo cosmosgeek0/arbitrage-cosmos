@@ -1,0 +1,19 @@
+{
+  "schema": "cosmos.quant.s1j.trial-ledger.v1",
+  "familySize": 12,
+  "multiplicityDenominator": 12,
+  "trials": [
+    {"trialId": "L03_K03", "lookbackDays": 3, "slots": 3},
+    {"trialId": "L03_K05", "lookbackDays": 3, "slots": 5},
+    {"trialId": "L03_K10", "lookbackDays": 3, "slots": 10},
+    {"trialId": "L07_K03", "lookbackDays": 7, "slots": 3},
+    {"trialId": "L07_K05", "lookbackDays": 7, "slots": 5},
+    {"trialId": "L07_K10", "lookbackDays": 7, "slots": 10},
+    {"trialId": "L14_K03", "lookbackDays": 14, "slots": 3},
+    {"trialId": "L14_K05", "lookbackDays": 14, "slots": 5},
+    {"trialId": "L14_K10", "lookbackDays": 14, "slots": 10},
+    {"trialId": "L28_K03", "lookbackDays": 28, "slots": 3},
+    {"trialId": "L28_K05", "lookbackDays": 28, "slots": 5},
+    {"trialId": "L28_K10", "lookbackDays": 28, "slots": 10}
+  ]
+}

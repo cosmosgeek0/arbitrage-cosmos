@@ -151,14 +151,20 @@ def _fake_manifest(root: Path) -> None:
 
 
 def _isolate_packet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
-    supersession_raw = vg27.packet_artifact(vg27.SUPERSESSION_NAME).read_bytes()
+    preserved = {
+        name: vg27.packet_artifact(name).read_bytes()
+        for name in (
+            vg27.FREEZE_V1_NAME,
+            vg27.FREEZE_V2_NAME,
+            vg27.FREEZE_V1_SUPERSESSION_NAME,
+            vg27.FREEZE_V2_SUPERSESSION_NAME,
+        )
+    }
     packet = tmp_path / "packet"
     packet.mkdir()
     monkeypatch.setattr(vg27, "PACKET_DIR", packet)
-    vg27.write_exclusive(
-        vg27.packet_artifact(vg27.SUPERSESSION_NAME),
-        supersession_raw,
-    )
+    for name, raw in preserved.items():
+        vg27.write_exclusive(vg27.packet_artifact(name), raw)
     return packet
 
 
@@ -172,14 +178,58 @@ def _synthetic_scenario(
     *,
     net: str = "1",
 ) -> dict[str, object]:
+    net_value = Decimal(net)
+    ending = vg27.STARTING_USD + net_value
+    fee = Decimal("0.25")
+    adverse = Decimal("0.25")
+    gross = net_value + fee + adverse
+    activity = dict.fromkeys(
+        (
+            "2025-07",
+            "2025-08",
+            "2025-09",
+            "2025-10",
+            "2025-11",
+            "2025-12",
+            "2026-01",
+        ),
+        12,
+    )
+    activity["2026-02"] = 16
     return {
         "activeMonths": 8,
+        "activityByMonth": activity,
+        "adverseCostUsd": vg27.decimal_text(adverse),
+        "costReconciliation": {
+            "endingUsd": vg27.decimal_text(ending),
+            "matches": True,
+            "startingPlusGrossMinusFeeMinusAdverseUsd": vg27.decimal_text(ending),
+        },
+        "endingUsd": vg27.decimal_text(ending),
         "eventCount": 100,
+        "executableCapacity": "UNMEASURED",
+        "feeCostUsd": vg27.decimal_text(fee),
+        "grossTradingPnlUsd": vg27.decimal_text(gross),
         "maxDrawdownFraction": "0.10",
+        "maximumActualEntryToNominalScreenRatio": "1",
         "minimumNominalInitial1000ScreenUsd": "1000",
         "netUsdPer1k": net,
+        "nominalInitial1000ScreenPass": True,
+        "reinvestmentMayExceedNominalScreen": True,
         "scenario": scenario_name,
         "trialId": trial_id,
+    }
+
+
+def _synthetic_bootstrap() -> dict[str, object]:
+    return {
+        "blockHours": vg27.BOOTSTRAP_BLOCK_HOURS,
+        "lower95UsdPer1k": "1",
+        "medianUsdPer1k": "2",
+        "observations": 6552,
+        "oneSidedCenteredP": "0.01",
+        "replicates": vg27.BOOTSTRAP_REPLICATES,
+        "upper95UsdPer1k": "3",
     }
 
 
@@ -191,8 +241,8 @@ def _synthetic_development(*, authorized: bool) -> dict[str, object]:
             scenario.name: _synthetic_scenario(
                 trial_id,
                 scenario.name,
-                net="-1"
-                if (not authorized and trial_id == champion and scenario.name == "base")
+                net=("-1" if trial_id == champion else "-2")
+                if not authorized and scenario.name == "base"
                 else "1",
             )
             for scenario in vg27.scenarios()
@@ -212,7 +262,7 @@ def _synthetic_development(*, authorized: bool) -> dict[str, object]:
         "whitePBelow0.05": True,
     }
     bootstrap = {
-        name: {trial_id: {"lower95UsdPer1k": "1"} for trial_id in trial_ids}
+        name: {trial_id: _synthetic_bootstrap() for trial_id in trial_ids}
         for name in ("base", "stress")
     }
     return {
@@ -237,6 +287,8 @@ def _synthetic_development(*, authorized: bool) -> dict[str, object]:
         "programWideMultiplicity": dict(vg27.PROGRAM_MULTIPLICITY),
         "trials": trials,
         "white": {
+            "method": "CENTERED_SYNCHRONOUS_WHITE_MAX_STAT",
+            "observed": "1",
             "pValue": "0.01",
             "trialCount": len(trial_ids),
         },
@@ -255,8 +307,8 @@ def _synthetic_holdout(champion: str, *, go: bool = True) -> dict[str, object]:
     return {
         "confirmationGates": gates,
         "intervals": {
-            "base": {"lower95UsdPer1k": "1"},
-            "stress": {"lower95UsdPer1k": "1"},
+            "base": _synthetic_bootstrap(),
+            "stress": _synthetic_bootstrap(),
         },
         "publicVerdict": "GO" if go else "NO_GO",
         "scenarios": {
@@ -276,6 +328,11 @@ def _frozen_state(
 ) -> None:
     _isolate_packet(tmp_path, monkeypatch)
     _fake_manifest(tmp_path)
+    for name in (vg27.FREEZE_V1_NAME, vg27.FREEZE_V2_NAME):
+        vg27.write_exclusive(
+            tmp_path / name,
+            vg27.packet_artifact(name).read_bytes(),
+        )
     vg27.freeze(tmp_path)
 
 
@@ -593,6 +650,92 @@ def test_development_open_failure_is_verifiable_unmeasured_and_refuses_rerun(
         vg27.run(tmp_path)
 
 
+def test_first_packet_marker_create_failure_leaves_retryable_zero_receipts(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _frozen_state(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        vg27,
+        "validate_manifest",
+        _synthetic_manifest_reader(tmp_path, []),
+    )
+    monkeypatch.setattr(
+        vg27,
+        "development_analysis",
+        lambda _bars: _synthetic_development(authorized=False),
+    )
+    original_publish = vg27.write_packet_authority_exclusive
+
+    def fail_first_packet_publish(path: Path, value: object | bytes) -> None:
+        if path == vg27.packet_artifact(vg27.DEVELOPMENT_MARKER_NAME):
+            raise OSError("synthetic failure before packet authority publication")
+        original_publish(path, value)
+
+    monkeypatch.setattr(
+        vg27,
+        "write_packet_authority_exclusive",
+        fail_first_packet_publish,
+    )
+    with pytest.raises(OSError, match="before packet authority publication"):
+        vg27.run(tmp_path)
+    assert set(vg27.receipt_states(tmp_path).values()) == {"ABSENT"}
+    assert not vg27.packet_artifact(vg27.CUSTODY_TERMINAL_NAME).exists()
+    assert not vg27.packet_artifact(vg27.CUSTODY_TERMINAL_NAME).is_symlink()
+    monkeypatch.setattr(
+        vg27,
+        "write_packet_authority_exclusive",
+        original_publish,
+    )
+    assert vg27.run(tmp_path)["status"] == "NO_GO"
+
+
+def test_truncated_packet_marker_is_bound_custody_unmeasured_and_sealable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _frozen_state(tmp_path, monkeypatch)
+    marker_path = vg27.packet_artifact(vg27.DEVELOPMENT_MARKER_NAME)
+    marker_path.write_bytes(b'{"truncated":')
+    terminal = vg27.run(tmp_path)
+    evidence = vg27.required_mapping(terminal["receiptEvidence"], "receiptEvidence")
+    marker_evidence = vg27.required_mapping(
+        evidence[vg27.DEVELOPMENT_MARKER_NAME],
+        "marker evidence",
+    )
+    packet_evidence = vg27.required_mapping(
+        marker_evidence["packet"],
+        "packet evidence",
+    )
+    assert packet_evidence["authorityJson"] == "INVALID_OR_NONCANONICAL"
+    assert packet_evidence["sha256"] == vg27.sha256_path(marker_path)
+    assert vg27.seal(tmp_path)["semanticStatus"] == "VERIFIED_CUSTODY_UNMEASURED"
+    assert vg27.verify(tmp_path)["terminalStatus"] == "UNMEASURED"
+
+
+def test_symlink_packet_marker_is_bound_non_authorizing_and_sealable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _frozen_state(tmp_path, monkeypatch)
+    marker_path = vg27.packet_artifact(vg27.DEVELOPMENT_MARKER_NAME)
+    marker_path.symlink_to(tmp_path / "never-follow-this-target")
+    terminal = vg27.run(tmp_path)
+    evidence = vg27.required_mapping(terminal["receiptEvidence"], "receiptEvidence")
+    marker_evidence = vg27.required_mapping(
+        evidence[vg27.DEVELOPMENT_MARKER_NAME],
+        "marker evidence",
+    )
+    packet_evidence = vg27.required_mapping(
+        marker_evidence["packet"],
+        "packet evidence",
+    )
+    assert packet_evidence["kind"] == "SYMLINK"
+    assert packet_evidence["authorityJson"] == "INVALID_NONREGULAR"
+    assert vg27.seal(tmp_path)["semanticStatus"] == "VERIFIED_CUSTODY_UNMEASURED"
+    assert vg27.verify(tmp_path)["terminalStatus"] == "UNMEASURED"
+
+
 def test_partial_development_marker_replica_is_custody_terminal_and_sealable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -650,7 +793,7 @@ def test_partial_result_replica_is_custody_terminal_and_sealable(
     assert vg27.verify(tmp_path)["terminalStatus"] == "UNMEASURED"
 
 
-def test_forged_go_with_contradictory_holdout_metrics_is_rejected(
+def test_forged_go_with_cost_and_net_contradiction_is_rejected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -674,8 +817,44 @@ def test_forged_go_with_contradictory_holdout_metrics_is_rejected(
     raw = vg27.canonical_bytes(result)
     vg27.packet_artifact(vg27.RESULT_NAME).write_bytes(raw)
     (tmp_path / vg27.RESULT_NAME).write_bytes(raw)
-    with pytest.raises(vg27.CustodyError, match="holdout gates contradict"):
+    with pytest.raises(vg27.CustodyError, match="ending and net do not reconcile"):
         vg27.verify(tmp_path)
+
+
+def test_wrong_development_champion_is_rejected_before_holdout_authority(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _frozen_state(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        vg27,
+        "validate_manifest",
+        _synthetic_manifest_reader(tmp_path, []),
+    )
+    development = _synthetic_development(authorized=True)
+    development["champion"] = vg27.trial_grid()[1].trial_id
+    monkeypatch.setattr(vg27, "development_analysis", lambda _bars: development)
+    monkeypatch.setattr(
+        vg27,
+        "holdout_analysis",
+        lambda *_args: pytest.fail("wrong champion reached holdout"),
+    )
+    result = vg27.run(tmp_path)
+    assert result["status"] == "UNMEASURED"
+    assert vg27.receipt_state(tmp_path, vg27.DEVELOPMENT_SELECTION_NAME) == "ABSENT"
+    assert vg27.receipt_state(tmp_path, vg27.HOLDOUT_MARKER_NAME) == "ABSENT"
+    assert "frozen selection rule" in str(result["reason"])
+
+
+def test_non_2048_bootstrap_receipt_is_rejected() -> None:
+    development = _synthetic_development(authorized=True)
+    bootstrap = vg27.required_mapping(development["bootstrap"], "bootstrap")
+    base = vg27.required_mapping(bootstrap["base"], "base bootstrap")
+    champion = str(development["champion"])
+    summary = vg27.required_mapping(base[champion], "champion bootstrap")
+    summary["replicates"] = 1024
+    with pytest.raises(vg27.CustodyError, match="replicate count invalid"):
+        vg27.validate_development_report(development)
 
 
 def test_forged_holdout_marker_selection_binding_is_rejected(
@@ -747,6 +926,9 @@ def test_verify_hashes_but_never_opens_archives_or_recomputes(
 
 def test_scope_and_authority_are_frozen() -> None:
     protocol = vg27.validate_protocol()
+    assert vg27.FREEZE_NAME == "freeze.v3.json"
+    assert vg27.sha256_path(vg27.packet_artifact(vg27.FREEZE_V1_NAME)) == (vg27.FREEZE_V1_SHA256)
+    assert vg27.sha256_path(vg27.packet_artifact(vg27.FREEZE_V2_NAME)) == (vg27.FREEZE_V2_SHA256)
     assert protocol["authority"]["capital"] == "NO_GO"
     assert protocol["authority"]["execution"] == "NONE"
     assert protocol["authority"]["moneyEffectUsd"] == "0"

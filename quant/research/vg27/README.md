@@ -36,17 +36,26 @@ PYTHONPATH=.:src PYTHONHASHSEED=0 uv run --frozen \
 
 `acquire` is the only network-capable command. It downloads exact official
 monthly Spot `1h` ZIP and adjacent `.CHECKSUM` bytes without opening a member.
-`freeze` writes authoritative `freeze.v2.json`. It independently hashes and
+`freeze` writes authoritative `freeze.v3.json`. It independently hashes and
 binds all staged bytes, the exact Python implementation/version, Decimal
 context, and quant runtime locks without opening a member. The code/static
 packet began as a direct child of canonical
 `a169b123fb186d1943a75ad648552c4d95be1be1`; the pre-outcome v1 rejection and
-v2 correction remain linearly preserved before the freeze/run lifecycle.
+rejected v2 correction remain byte-preserved in both packet and external
+custody. The v3 supersession receipt binds the exact rejected v2 packet and
+external digest, rejected authority head, zero outcome receipts, and MAX
+reasons.
 
 `run` creates and syncs the development marker before the first development
 archive body open. The marker is consumable once. A prior marker without a
 result can only be finalized as terminal `UNMEASURED`; it cannot resume. The
-production analysis always uses exactly 2,048 frozen bootstrap replicates;
+packet authority is published only after a same-directory exclusive temporary
+inode contains complete fsynced bytes; atomic no-clobber publication precedes
+the external replica. A failure before the first packet marker is published
+propagates with zero terminal receipts and is safe to retry. A damaged,
+truncated, or symlink receipt path is non-authorizing custody evidence whose
+exact kind and digest or link-text digest are bound by terminal `UNMEASURED`.
+The production analysis always uses exactly 2,048 frozen bootstrap replicates;
 there is no run-time replicate override. The
 paired development selection is sealed after development analysis and before
 any holdout authority. The holdout marker hash-binds that selection and
@@ -58,8 +67,11 @@ fallback, or rerun.
 
 `seal` writes the exact packet-wide `SHA256SUMS` once after the terminal result.
 `verify` is network-free. It checks exact hashes, receipt bindings, canonical
-JSON, terminal schemas, and the packet inventory. It never decompresses an
-archive, reconstructs a return, reselects a trial, or opens the holdout.
+JSON, complete simulation/inference schemas, accounting identities, the frozen
+champion selection rule over the stored 12 base-net rows, and the packet
+inventory. Validating that stored selection rule does not reconstruct returns
+or perform a new empirical selection. Verification never decompresses an
+archive, reconstructs a return path, or opens the holdout.
 
 ## Interpretation boundary
 

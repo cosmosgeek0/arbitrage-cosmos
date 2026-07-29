@@ -16,6 +16,7 @@ import os
 import platform
 import random
 import re
+import stat
 import subprocess
 import sys
 import tempfile
@@ -77,9 +78,15 @@ BOOTSTRAP_REPLICATES: Final = 2048
 BOOTSTRAP_SEED: Final = 270027
 CHECKSUM_RE: Final = re.compile(rb"^([0-9a-f]{64})[ \t]+\*?([^\r\n]+)\r?\n?$")
 SOURCE_MANIFEST_NAME: Final = "source-manifest.v1.json"
-FREEZE_NAME: Final = "freeze.v2.json"
-FREEZE_VERSION: Final = "VG27FreezeV2"
-SUPERSESSION_NAME: Final = "freeze-v1-supersession.v1.json"
+FREEZE_V1_NAME: Final = "freeze.v1.json"
+FREEZE_V2_NAME: Final = "freeze.v2.json"
+FREEZE_NAME: Final = "freeze.v3.json"
+FREEZE_VERSION: Final = "VG27FreezeV3"
+FREEZE_V1_SUPERSESSION_NAME: Final = "freeze-v1-supersession.v1.json"
+FREEZE_V2_SUPERSESSION_NAME: Final = "freeze-v2-supersession.v1.json"
+FREEZE_V1_SHA256: Final = "d1a984eee016249fc6863d8e4a36733028d5634b368c4c98594c93de9a788ee6"
+FREEZE_V2_SHA256: Final = "f4e21a4d26442f28adea6a80ad237cb18d5c49c7ac7caf6b396d6bcd28ac62b0"
+REJECTED_V2_AUTHORITY_HEAD: Final = "05668f7a7cefcaaae412a7c9a2cdb6339818eb75"
 DEVELOPMENT_MARKER_NAME: Final = "development-open.v1.json"
 DEVELOPMENT_SELECTION_NAME: Final = "development-selection.v1.json"
 HOLDOUT_MARKER_NAME: Final = "holdout-open.v1.json"
@@ -88,6 +95,7 @@ CUSTODY_TERMINAL_NAME: Final = "custody-terminal.v1.json"
 SHA256SUMS_NAME: Final = "SHA256SUMS"
 OPEN_MARKER_VERSION: Final = "VG27OpenMarkerV2"
 RESULT_VERSION: Final = "VG27ResultV2"
+CUSTODY_TERMINAL_VERSION: Final = "VG27CustodyTerminalV2"
 TRACKED_RECEIPTS: Final = (
     DEVELOPMENT_MARKER_NAME,
     DEVELOPMENT_SELECTION_NAME,
@@ -263,6 +271,58 @@ def write_exclusive(path: Path, value: object | bytes) -> None:
         with contextlib.suppress(OSError):
             path.unlink(missing_ok=True)
         raise
+
+
+def cleanup_unpublished_packet_temps(path: Path) -> None:
+    """Discard only regular, unpublished temp inodes for this exact authority path."""
+
+    prefix = f".{path.name}.pending."
+    removed = False
+    for candidate in path.parent.iterdir():
+        if not candidate.name.startswith(prefix):
+            continue
+        metadata = os.lstat(candidate)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise CustodyError(f"packet pending path is not regular: {candidate.name}")
+        candidate.unlink()
+        removed = True
+    if removed:
+        fsync_parent(path)
+
+
+def write_packet_authority_exclusive(path: Path, value: object | bytes) -> None:
+    """Atomically publish complete packet bytes without replacing an existing path.
+
+    The same-directory temp inode is created with O_EXCL, fully written and
+    fsynced, then hard-linked at the authority name. POSIX link publication is
+    atomic and fails if the authority path already exists. An interrupted
+    pre-link temp is not authority and is safely discarded on the next attempt.
+    """
+
+    raw = value if isinstance(value, bytes) else canonical_bytes(value)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    cleanup_unpublished_packet_temps(path)
+    if path.exists() or path.is_symlink():
+        raise CustodyError(f"refusing to overwrite sealed artifact: {path.name}")
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{path.name}.pending.",
+        dir=path.parent,
+    )
+    temporary = Path(temporary_name)
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(raw)
+            handle.flush()
+            os.fsync(handle.fileno())
+        try:
+            os.link(temporary, path, follow_symlinks=False)
+        except FileExistsError as error:
+            raise CustodyError(f"refusing to overwrite sealed artifact: {path.name}") from error
+        fsync_parent(path)
+    finally:
+        if temporary.exists() or temporary.is_symlink():
+            temporary.unlink()
+            fsync_parent(path)
 
 
 def write_atomic(path: Path, value: object | bytes) -> None:
@@ -1175,16 +1235,79 @@ def validate_protocol() -> dict[str, Any]:
         sorted(trial.trial_id for trial in trial_grid())
     ):
         raise CustodyError("trial IDs are not stable")
-    supersession = load_json(packet_artifact(SUPERSESSION_NAME), canonical=True)
-    if supersession.get("version") != "VG27FreezeV1SupersessionV1":
+    v1_supersession = load_json(
+        packet_artifact(FREEZE_V1_SUPERSESSION_NAME),
+        canonical=True,
+    )
+    if v1_supersession.get("version") != "VG27FreezeV1SupersessionV1":
         raise CustodyError("freeze v1 supersession version invalid")
-    if supersession.get("supersededFreezeSha256") != (
-        "d1a984eee016249fc6863d8e4a36733028d5634b368c4c98594c93de9a788ee6"
-    ):
+    if v1_supersession.get("supersededFreezeSha256") != FREEZE_V1_SHA256:
         raise CustodyError("freeze v1 supersession digest invalid")
-    receipt_counts = supersession.get("outcomeReceiptsAtSupersession")
+    receipt_counts = v1_supersession.get("outcomeReceiptsAtSupersession")
     if not isinstance(receipt_counts, dict) or any(value != 0 for value in receipt_counts.values()):
         raise CustodyError("freeze v1 supersession outcome state invalid")
+    if sha256_path(packet_artifact(FREEZE_V1_NAME)) != FREEZE_V1_SHA256:
+        raise CustodyError("preserved packet freeze v1 digest invalid")
+    if sha256_path(packet_artifact(FREEZE_V2_NAME)) != FREEZE_V2_SHA256:
+        raise CustodyError("preserved packet freeze v2 digest invalid")
+    v2_supersession = load_json(
+        packet_artifact(FREEZE_V2_SUPERSESSION_NAME),
+        canonical=True,
+    )
+    require_exact_keys(
+        v2_supersession,
+        {
+            "createdAtUtc",
+            "externalFreezeV2",
+            "maxRejectReasons",
+            "outcomeReceiptsAtSupersession",
+            "packetFreezeV2",
+            "supersededAuthorityHead",
+            "supersededExternalFreezeSha256",
+            "supersededPacketFreezeSha256",
+            "version",
+        },
+        "freeze v2 supersession",
+    )
+    if v2_supersession.get("version") != "VG27FreezeV2SupersessionV1":
+        raise CustodyError("freeze v2 supersession version invalid")
+    if (
+        v2_supersession.get("supersededPacketFreezeSha256") != FREEZE_V2_SHA256
+        or v2_supersession.get("supersededExternalFreezeSha256") != FREEZE_V2_SHA256
+        or v2_supersession.get("supersededAuthorityHead") != REJECTED_V2_AUTHORITY_HEAD
+        or v2_supersession.get("packetFreezeV2") != "READ_ONLY_PRESERVED_NOT_CONSUMED"
+        or v2_supersession.get("externalFreezeV2") != "READ_ONLY_PRESERVED_NOT_CONSUMED"
+    ):
+        raise CustodyError("freeze v2 supersession binding invalid")
+    receipt_counts = v2_supersession.get("outcomeReceiptsAtSupersession")
+    if (
+        not isinstance(receipt_counts, dict)
+        or set(receipt_counts)
+        != {
+            "custodyTerminal",
+            "developmentMarker",
+            "developmentSelection",
+            "holdoutMarker",
+            "packetInventory",
+            "result",
+        }
+        or any(value != 0 for value in receipt_counts.values())
+    ):
+        raise CustodyError("freeze v2 supersession outcome state invalid")
+    reasons = v2_supersession.get("maxRejectReasons")
+    if (
+        not isinstance(reasons, list)
+        or any(not isinstance(reason, str) for reason in reasons)
+        or {
+            "PRE_CONSUMPTION_FAILURE_FALSE_TERMINAL",
+            "DAMAGED_PACKET_AUTHORITY_UNSEALABLE",
+            "DEVELOPMENT_CHAMPION_NOT_RECONSTRUCTED",
+            "SKELETAL_MEASURED_ROWS_ACCEPTED",
+        }
+        - set(reasons)
+    ):
+        raise CustodyError("freeze v2 supersession MAX reasons incomplete")
+    required_text(v2_supersession.get("createdAtUtc"), "freeze v2 supersession createdAtUtc")
     return protocol
 
 
@@ -1314,7 +1437,10 @@ def static_hashes() -> dict[str, str]:
         Path(__file__).resolve(),
         TEST_PATH,
         packet_artifact(SOURCE_MANIFEST_NAME),
-        packet_artifact(SUPERSESSION_NAME),
+        packet_artifact(FREEZE_V1_NAME),
+        packet_artifact(FREEZE_V2_NAME),
+        packet_artifact(FREEZE_V1_SUPERSESSION_NAME),
+        packet_artifact(FREEZE_V2_SUPERSESSION_NAME),
     )
     missing = [path.name for path in paths if not path.is_file() or path.is_symlink()]
     if missing:
@@ -1370,10 +1496,18 @@ def runtime_identity() -> dict[str, object]:
 
 def freeze(state_root: Path) -> dict[str, object]:
     validate_protocol()
-    if packet_artifact(FREEZE_NAME).exists():
+    if (
+        packet_artifact(FREEZE_NAME).exists()
+        or packet_artifact(FREEZE_NAME).is_symlink()
+        or (state_root / FREEZE_NAME).exists()
+        or (state_root / FREEZE_NAME).is_symlink()
+    ):
         raise CustodyError("packet freeze already exists")
     if any(
         packet_artifact(name).exists()
+        or packet_artifact(name).is_symlink()
+        or (state_root / name).exists()
+        or (state_root / name).is_symlink()
         for name in (
             DEVELOPMENT_MARKER_NAME,
             DEVELOPMENT_SELECTION_NAME,
@@ -1389,6 +1523,21 @@ def freeze(state_root: Path) -> dict[str, object]:
     external_manifest = state_root / SOURCE_MANIFEST_NAME
     if external_manifest.read_bytes() != manifest_raw:
         raise CustodyError("external source manifest is not canonical")
+    for prior_name, expected_sha in (
+        (FREEZE_V1_NAME, FREEZE_V1_SHA256),
+        (FREEZE_V2_NAME, FREEZE_V2_SHA256),
+    ):
+        packet_prior = packet_artifact(prior_name)
+        external_prior = state_root / prior_name
+        if (
+            packet_prior.is_symlink()
+            or external_prior.is_symlink()
+            or not packet_prior.is_file()
+            or not external_prior.is_file()
+            or sha256_path(packet_prior) != expected_sha
+            or sha256_path(external_prior) != expected_sha
+        ):
+            raise CustodyError(f"preserved {prior_name} packet/external binding invalid")
     write_exclusive_or_accept_identical(
         packet_artifact(SOURCE_MANIFEST_NAME),
         manifest_raw,
@@ -1402,15 +1551,13 @@ def freeze(state_root: Path) -> dict[str, object]:
         "runtimeIdentity": runtime_identity(),
         "sourceManifestSha256": sha256_path(external_manifest),
         "staticHashes": static_hashes(),
-        "supersedesFreezeV1Sha256": required_text(
-            load_json(packet_artifact(SUPERSESSION_NAME), canonical=True).get(
-                "supersededFreezeSha256"
-            ),
-            "supersededFreezeSha256",
-        ),
+        "supersedesFreezeV2AuthorityHead": REJECTED_V2_AUTHORITY_HEAD,
+        "supersedesFreezeV2ExternalSha256": FREEZE_V2_SHA256,
+        "supersedesFreezeV2PacketSha256": FREEZE_V2_SHA256,
+        "supersessionReceiptSha256": sha256_path(packet_artifact(FREEZE_V2_SUPERSESSION_NAME)),
         "version": FREEZE_VERSION,
     }
-    write_exclusive(packet_artifact(FREEZE_NAME), receipt)
+    write_packet_authority_exclusive(packet_artifact(FREEZE_NAME), receipt)
     write_exclusive(state_root / FREEZE_NAME, receipt)
     return receipt
 
@@ -1419,8 +1566,33 @@ def validate_freeze(state_root: Path) -> dict[str, Any]:
     packet_freeze = packet_artifact(FREEZE_NAME)
     external_freeze = state_root / FREEZE_NAME
     freeze_receipt = load_json(packet_freeze, canonical=True)
-    if external_freeze.read_bytes() != packet_freeze.read_bytes():
+    require_exact_keys(
+        freeze_receipt,
+        {
+            "archiveBodiesOpened",
+            "authorityHead",
+            "canonicalBase",
+            "createdAtUtc",
+            "runtimeIdentity",
+            "sourceManifestSha256",
+            "staticHashes",
+            "supersedesFreezeV2AuthorityHead",
+            "supersedesFreezeV2ExternalSha256",
+            "supersedesFreezeV2PacketSha256",
+            "supersessionReceiptSha256",
+            "version",
+        },
+        "freeze v3",
+    )
+    if (
+        external_freeze.is_symlink()
+        or not external_freeze.is_file()
+        or external_freeze.read_bytes() != packet_freeze.read_bytes()
+    ):
         raise CustodyError("external and packet freeze receipts differ")
+    if freeze_receipt.get("archiveBodiesOpened") != 0:
+        raise CustodyError("freeze v3 archive-open posture invalid")
+    required_text(freeze_receipt.get("createdAtUtc"), "freeze v3 createdAtUtc")
     if freeze_receipt.get("canonicalBase") != BASE_COMMIT:
         raise CustodyError("freeze canonical base drift")
     if freeze_receipt.get("version") != FREEZE_VERSION:
@@ -1433,9 +1605,29 @@ def validate_freeze(state_root: Path) -> dict[str, Any]:
         raise CustodyError("static packet changed after freeze")
     if freeze_receipt.get("runtimeIdentity") != runtime_identity():
         raise CustodyError("runtime identity changed after freeze")
-    supersession = load_json(packet_artifact(SUPERSESSION_NAME), canonical=True)
-    if freeze_receipt.get("supersedesFreezeV1Sha256") != supersession.get("supersededFreezeSha256"):
-        raise CustodyError("freeze v1 supersession binding invalid")
+    if (
+        freeze_receipt.get("supersedesFreezeV2AuthorityHead") != REJECTED_V2_AUTHORITY_HEAD
+        or freeze_receipt.get("supersedesFreezeV2PacketSha256") != FREEZE_V2_SHA256
+        or freeze_receipt.get("supersedesFreezeV2ExternalSha256") != FREEZE_V2_SHA256
+        or freeze_receipt.get("supersessionReceiptSha256")
+        != sha256_path(packet_artifact(FREEZE_V2_SUPERSESSION_NAME))
+    ):
+        raise CustodyError("freeze v3 supersession binding invalid")
+    for prior_name, expected_sha in (
+        (FREEZE_V1_NAME, FREEZE_V1_SHA256),
+        (FREEZE_V2_NAME, FREEZE_V2_SHA256),
+    ):
+        packet_prior = packet_artifact(prior_name)
+        external_prior = state_root / prior_name
+        if (
+            packet_prior.is_symlink()
+            or external_prior.is_symlink()
+            or not packet_prior.is_file()
+            or not external_prior.is_file()
+            or sha256_path(packet_prior) != expected_sha
+            or sha256_path(external_prior) != expected_sha
+        ):
+            raise CustodyError(f"preserved {prior_name} changed after freeze v3")
     manifest_path = state_root / SOURCE_MANIFEST_NAME
     packet_manifest = packet_artifact(SOURCE_MANIFEST_NAME)
     if freeze_receipt.get("sourceManifestSha256") != sha256_path(manifest_path):
@@ -1491,11 +1683,61 @@ def receipt_states(state_root: Path) -> dict[str, str]:
     return {name: receipt_state(state_root, name) for name in TRACKED_RECEIPTS}
 
 
+def path_custody_evidence(path: Path) -> dict[str, object]:
+    try:
+        metadata = os.lstat(path)
+    except FileNotFoundError:
+        return {
+            "authorityJson": "ABSENT",
+            "kind": "ABSENT",
+        }
+    if stat.S_ISLNK(metadata.st_mode):
+        link_bytes = os.fsencode(os.readlink(path))
+        return {
+            "authorityJson": "INVALID_NONREGULAR",
+            "kind": "SYMLINK",
+            "linkTextBytes": len(link_bytes),
+            "linkTextSha256": sha256_bytes(link_bytes),
+        }
+    if not stat.S_ISREG(metadata.st_mode):
+        return {
+            "authorityJson": "INVALID_NONREGULAR",
+            "kind": "SPECIAL",
+            "modeType": stat.S_IFMT(metadata.st_mode),
+        }
+    raw = path.read_bytes()
+    authority_json = "INVALID_OR_NONCANONICAL"
+    try:
+        parsed = json.loads(raw)
+        if isinstance(parsed, dict) and raw == canonical_bytes(parsed):
+            authority_json = "CANONICAL_OBJECT"
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        pass
+    return {
+        "authorityJson": authority_json,
+        "bytes": len(raw),
+        "kind": "REGULAR",
+        "sha256": sha256_bytes(raw),
+    }
+
+
+def receipt_evidence(state_root: Path) -> dict[str, object]:
+    output: dict[str, object] = {}
+    for name in TRACKED_RECEIPTS:
+        packet_path, external_path = paired_paths(state_root, name)
+        output[name] = {
+            "external": path_custody_evidence(external_path),
+            "packet": path_custody_evidence(packet_path),
+            "state": receipt_state(state_root, name),
+        }
+    return output
+
+
 def write_paired_exclusive(state_root: Path, name: str, value: object) -> None:
     """Write the packet authority first, then its external replica."""
 
     packet_path, external_path = paired_paths(state_root, name)
-    write_exclusive(packet_path, value)
+    write_packet_authority_exclusive(packet_path, value)
     write_exclusive(external_path, value)
 
 
@@ -1556,11 +1798,12 @@ def custody_terminal(
         "holdout": holdout_custody_label(state_root),
         "interruptedAfterMarker": True,
         "reason": reason,
+        "receiptEvidence": receipt_evidence(state_root),
         "receiptStates": receipt_states(state_root),
         "status": "UNMEASURED",
-        "version": "VG27CustodyTerminalV1",
+        "version": CUSTODY_TERMINAL_VERSION,
     }
-    write_exclusive(path, result)
+    write_packet_authority_exclusive(path, result)
     return result
 
 
@@ -1656,7 +1899,7 @@ def run(state_root: Path) -> dict[str, object]:
             open_archives=True,
             months=frozenset(DEVELOPMENT_MONTHS),
         )
-        development = development_analysis(development_bars)
+        development = validate_development_report(development_analysis(development_bars))
         selection = development_selection(
             freeze_sha,
             sha256_path(packet_development_marker),
@@ -1706,12 +1949,17 @@ def run(state_root: Path) -> dict[str, object]:
         champion = next(
             trial for trial in trial_grid() if trial.trial_id == development["champion"]
         )
-        holdout_report = holdout_analysis(development_bars, champion)
+        holdout_report = validate_holdout_report(
+            holdout_analysis(development_bars, champion),
+            champion.trial_id,
+        )
         result["holdout"] = holdout_report
         result["status"] = holdout_report["publicVerdict"]
         return write_normal_result(state_root, result)
     except BaseException as error:
         if receipt_state(state_root, RESULT_NAME) == "MATCHED":
+            raise
+        if all(state == "ABSENT" for state in receipt_states(state_root).values()):
             raise
         return terminal_unmeasured(
             state_root,
@@ -1771,10 +2019,193 @@ def scenario_row(
     return row
 
 
+def validate_probability(value: object, field: str) -> Decimal:
+    parsed = receipt_decimal(value, field)
+    if parsed < 0 or parsed > 1:
+        raise CustodyError(f"{field} outside unit interval")
+    return parsed
+
+
+def validate_bootstrap_summary(value: object, field: str) -> dict[str, Any]:
+    summary = required_mapping(value, field)
+    require_exact_keys(
+        summary,
+        {
+            "blockHours",
+            "lower95UsdPer1k",
+            "medianUsdPer1k",
+            "observations",
+            "oneSidedCenteredP",
+            "replicates",
+            "upper95UsdPer1k",
+        },
+        field,
+    )
+    if summary.get("blockHours") != BOOTSTRAP_BLOCK_HOURS:
+        raise CustodyError(f"{field} block length invalid")
+    if summary.get("replicates") != BOOTSTRAP_REPLICATES:
+        raise CustodyError(f"{field} replicate count invalid")
+    if required_int(summary.get("observations"), f"{field} observations") < 1:
+        raise CustodyError(f"{field} observations invalid")
+    lower = receipt_decimal(summary.get("lower95UsdPer1k"), f"{field} lower95")
+    median_value = receipt_decimal(summary.get("medianUsdPer1k"), f"{field} median")
+    upper = receipt_decimal(summary.get("upper95UsdPer1k"), f"{field} upper95")
+    if not lower <= median_value <= upper:
+        raise CustodyError(f"{field} interval ordering invalid")
+    validate_probability(summary.get("oneSidedCenteredP"), f"{field} p")
+    return summary
+
+
+def validate_simulation_mapping(
+    value: object,
+    *,
+    trial_id: str,
+    scenario_name: str,
+) -> dict[str, Any]:
+    row = required_mapping(value, f"{trial_id} {scenario_name}")
+    require_exact_keys(
+        row,
+        {
+            "activeMonths",
+            "activityByMonth",
+            "adverseCostUsd",
+            "costReconciliation",
+            "endingUsd",
+            "eventCount",
+            "executableCapacity",
+            "feeCostUsd",
+            "grossTradingPnlUsd",
+            "maxDrawdownFraction",
+            "maximumActualEntryToNominalScreenRatio",
+            "minimumNominalInitial1000ScreenUsd",
+            "netUsdPer1k",
+            "nominalInitial1000ScreenPass",
+            "reinvestmentMayExceedNominalScreen",
+            "scenario",
+            "trialId",
+        },
+        f"{trial_id} {scenario_name}",
+    )
+    if row.get("trialId") != trial_id or row.get("scenario") != scenario_name:
+        raise CustodyError("trial scenario identity invalid")
+    activity = required_mapping(row.get("activityByMonth"), "activityByMonth")
+    for month, count in activity.items():
+        if not re.fullmatch(r"\d{4}-\d{2}", month):
+            raise CustodyError("activity month key invalid")
+        if required_int(count, f"activity {month}") < 1:
+            raise CustodyError("activity month count invalid")
+    active_months = required_int(row.get("activeMonths"), "activeMonths")
+    event_count = required_int(row.get("eventCount"), "eventCount")
+    if active_months != len(activity) or event_count != sum(activity.values()):
+        raise CustodyError("activity and event count do not reconcile")
+    ending = receipt_decimal(row.get("endingUsd"), "endingUsd")
+    net = receipt_decimal(row.get("netUsdPer1k"), "netUsdPer1k")
+    gross = receipt_decimal(row.get("grossTradingPnlUsd"), "grossTradingPnlUsd")
+    fee = receipt_decimal(row.get("feeCostUsd"), "feeCostUsd")
+    adverse = receipt_decimal(row.get("adverseCostUsd"), "adverseCostUsd")
+    if ending <= 0 or fee < 0 or adverse < 0:
+        raise CustodyError("ending or modeled costs outside domain")
+    if ending != STARTING_USD + net:
+        raise CustodyError("ending and net do not reconcile")
+    reconciled = STARTING_USD + gross - fee - adverse
+    if ending != reconciled:
+        raise CustodyError("ending and cost decomposition do not reconcile")
+    reconciliation = required_mapping(
+        row.get("costReconciliation"),
+        "costReconciliation",
+    )
+    require_exact_keys(
+        reconciliation,
+        {
+            "endingUsd",
+            "matches",
+            "startingPlusGrossMinusFeeMinusAdverseUsd",
+        },
+        "costReconciliation",
+    )
+    if (
+        reconciliation.get("matches") is not True
+        or receipt_decimal(reconciliation.get("endingUsd"), "reconciliation ending") != ending
+        or receipt_decimal(
+            reconciliation.get("startingPlusGrossMinusFeeMinusAdverseUsd"),
+            "reconciliation decomposition",
+        )
+        != reconciled
+    ):
+        raise CustodyError("stored cost reconciliation invalid")
+    drawdown = receipt_decimal(row.get("maxDrawdownFraction"), "maxDrawdownFraction")
+    if drawdown < 0 or drawdown > 1:
+        raise CustodyError("drawdown outside unit interval")
+    screen_raw = row.get("minimumNominalInitial1000ScreenUsd")
+    screen = (
+        None
+        if screen_raw is None
+        else receipt_decimal(screen_raw, "minimumNominalInitial1000ScreenUsd")
+    )
+    if screen is not None and screen < 0:
+        raise CustodyError("nominal screen cannot be negative")
+    screen_pass = required_bool(
+        row.get("nominalInitial1000ScreenPass"),
+        "nominalInitial1000ScreenPass",
+    )
+    if screen_pass != (screen is not None and screen >= STARTING_USD):
+        raise CustodyError("nominal screen flag contradicts value")
+    ratio_raw = row.get("maximumActualEntryToNominalScreenRatio")
+    ratio = (
+        None
+        if ratio_raw is None
+        else receipt_decimal(ratio_raw, "maximumActualEntryToNominalScreenRatio")
+    )
+    if ratio is not None and ratio < 0:
+        raise CustodyError("entry-to-screen ratio cannot be negative")
+    if event_count == 0 and (screen is not None or ratio is not None):
+        raise CustodyError("zero-event row cannot report screen or ratio")
+    if event_count > 0 and screen is None:
+        raise CustodyError("event row must report nominal screen")
+    if event_count > 0 and screen is not None and screen > 0 and ratio is None:
+        raise CustodyError("positive event screen requires actual-entry ratio")
+    if row.get("reinvestmentMayExceedNominalScreen") is not True:
+        raise CustodyError("reinvestment screen boundary invalid")
+    if row.get("executableCapacity") != "UNMEASURED":
+        raise CustodyError("executable capacity must remain UNMEASURED")
+    return row
+
+
+def validate_shared_event_path(rows: Mapping[str, Mapping[str, object]]) -> None:
+    scenario_names = tuple(sorted(rows))
+    if not scenario_names:
+        raise CustodyError("shared event path is empty")
+    first = rows[scenario_names[0]]
+    for name in scenario_names[1:]:
+        row = rows[name]
+        for field in (
+            "activeMonths",
+            "activityByMonth",
+            "eventCount",
+            "minimumNominalInitial1000ScreenUsd",
+        ):
+            if row.get(field) != first.get(field):
+                raise CustodyError(f"scenario event path field differs: {field}")
+
+
 def validate_pbo(value: object) -> None:
     pbo = required_mapping(value, "PBO")
+    require_exact_keys(
+        pbo,
+        {
+            "blocks",
+            "diagnosticOnlyNeverSelectionRescue",
+            "distinctTrialPaths",
+            "probabilityOverfit",
+            "splitCount",
+            "status",
+        },
+        "PBO",
+    )
     if pbo.get("blocks") != 8 or pbo.get("splitCount") != math.comb(8, 4):
         raise CustodyError("PBO block or split count invalid")
+    if pbo.get("diagnosticOnlyNeverSelectionRescue") is not True:
+        raise CustodyError("PBO role invalid")
     distinct = required_int(pbo.get("distinctTrialPaths"), "PBO distinctTrialPaths")
     status = pbo.get("status")
     probability = pbo.get("probabilityOverfit")
@@ -1784,9 +2215,7 @@ def validate_pbo(value: object) -> None:
     else:
         if status != "ESTIMATED":
             raise CustodyError("PBO estimated state invalid")
-        parsed = receipt_decimal(probability, "PBO probabilityOverfit")
-        if parsed < 0 or parsed > 1:
-            raise CustodyError("PBO probability outside unit interval")
+        validate_probability(probability, "PBO probabilityOverfit")
 
 
 def validate_development_report(value: object) -> dict[str, Any]:
@@ -1815,26 +2244,87 @@ def validate_development_report(value: object) -> dict[str, Any]:
     trials = required_mapping(report.get("trials"), "development trials")
     if set(trials) != set(trial_ids):
         raise CustodyError("development must contain all 12 trials")
+    base_net_by_trial: dict[str, Decimal] = {}
     for trial_id in trial_ids:
         trial = required_mapping(trials[trial_id], f"trial {trial_id}")
         if set(trial) != {scenario.name for scenario in scenarios()}:
             raise CustodyError("development scenario family incomplete")
-        for scenario_name in trial:
-            scenario_row(report, trial_id, scenario_name)
+        validated_rows = {
+            scenario_name: validate_simulation_mapping(
+                trial[scenario_name],
+                trial_id=trial_id,
+                scenario_name=scenario_name,
+            )
+            for scenario_name in trial
+        }
+        validate_shared_event_path(validated_rows)
+        base_net_by_trial[trial_id] = receipt_decimal(
+            validated_rows["base"].get("netUsdPer1k"),
+            f"{trial_id} base net",
+        )
+    reconstructed_champion = min(
+        trial_ids,
+        key=lambda trial_id: (-base_net_by_trial[trial_id], trial_id),
+    )
+    if champion != reconstructed_champion:
+        raise CustodyError("development champion contradicts frozen selection rule")
     bootstrap = required_mapping(report.get("bootstrap"), "development bootstrap")
     if set(bootstrap) != {"base", "stress"}:
         raise CustodyError("development bootstrap scenarios invalid")
+    bootstrap_observations: set[int] = set()
     for name in ("base", "stress"):
         rows = required_mapping(bootstrap[name], f"bootstrap {name}")
         if set(rows) != set(trial_ids):
             raise CustodyError("bootstrap trial family incomplete")
+        for trial_id in trial_ids:
+            summary = validate_bootstrap_summary(
+                rows[trial_id],
+                f"bootstrap {name} {trial_id}",
+            )
+            bootstrap_observations.add(
+                required_int(
+                    summary.get("observations"),
+                    f"bootstrap {name} {trial_id} observations",
+                )
+            )
+    if len(bootstrap_observations) != 1:
+        raise CustodyError("development bootstrap observation counts differ")
     holm = required_mapping(report.get("holmAdjustedP"), "Holm")
     if set(holm) != set(trial_ids):
         raise CustodyError("Holm trial family incomplete")
+    for trial_id in trial_ids:
+        validate_probability(holm[trial_id], f"Holm {trial_id}")
     white = required_mapping(report.get("white"), "White")
-    if white.get("trialCount") != len(trial_ids):
+    require_exact_keys(
+        white,
+        {"method", "observed", "pValue", "trialCount"},
+        "White",
+    )
+    if (
+        white.get("trialCount") != len(trial_ids)
+        or white.get("method") != "CENTERED_SYNCHRONOUS_WHITE_MAX_STAT"
+    ):
         raise CustodyError("White trial count invalid")
+    receipt_decimal(white.get("observed"), "White observed")
+    validate_probability(white.get("pValue"), "White p")
     validate_pbo(report.get("pbo"))
+    pbo = required_mapping(report.get("pbo"), "PBO")
+    diagnostics = required_mapping(report.get("diagnostics"), "development diagnostics")
+    require_exact_keys(
+        diagnostics,
+        {"pboAtMost0.5", "pboRole"},
+        "development diagnostics",
+    )
+    if diagnostics.get("pboRole") != "DIAGNOSTIC_ONLY_NEVER_SELECTION_OR_HOLDOUT_AUTHORIZATION":
+        raise CustodyError("development PBO diagnostic role invalid")
+    pbo_probability = pbo.get("probabilityOverfit")
+    expected_pbo_gate = (
+        receipt_decimal(pbo_probability, "PBO diagnostic probability") <= Decimal("0.5")
+        if isinstance(pbo_probability, str)
+        else None
+    )
+    if diagnostics.get("pboAtMost0.5") != expected_pbo_gate:
+        raise CustodyError("development PBO diagnostic value invalid")
     if report.get("programWideMultiplicity") != PROGRAM_MULTIPLICITY:
         raise CustodyError("development program multiplicity invalid")
     gates = required_mapping(report.get("formalGates"), "development formalGates")
@@ -1842,6 +2332,12 @@ def validate_development_report(value: object) -> dict[str, Any]:
         raise CustodyError("development gate family invalid")
     if any(not isinstance(value, bool) for value in gates.values()):
         raise CustodyError("development gates must be boolean")
+    concentration = receipt_decimal(
+        report.get("championEventConcentrationMaximumMonthFraction"),
+        "champion concentration",
+    )
+    if concentration < 0 or concentration > 1:
+        raise CustodyError("champion concentration outside unit interval")
     base = scenario_row(report, champion, "base")
     stress = scenario_row(report, champion, "stress")
     base_bootstrap = required_mapping(
@@ -1964,20 +2460,38 @@ def validate_holdout_report(value: object, champion: str) -> dict[str, Any]:
     scenario_names = {scenario.name for scenario in scenarios()}
     if set(scenarios_value) != scenario_names:
         raise CustodyError("holdout scenario family incomplete")
+    validated_rows: dict[str, dict[str, Any]] = {}
     for name in scenario_names:
-        row = required_mapping(scenarios_value[name], f"holdout {name}")
-        if row.get("trialId") != champion or row.get("scenario") != name:
-            raise CustodyError("holdout scenario identity invalid")
+        validated_rows[name] = validate_simulation_mapping(
+            scenarios_value[name],
+            trial_id=champion,
+            scenario_name=name,
+        )
+    validate_shared_event_path(validated_rows)
     intervals = required_mapping(report.get("intervals"), "holdout intervals")
     if set(intervals) != {"base", "stress"}:
         raise CustodyError("holdout interval family invalid")
+    interval_observations: set[int] = set()
+    for name in ("base", "stress"):
+        summary = validate_bootstrap_summary(
+            intervals[name],
+            f"holdout interval {name}",
+        )
+        interval_observations.add(
+            required_int(
+                summary.get("observations"),
+                f"holdout interval {name} observations",
+            )
+        )
+    if len(interval_observations) != 1:
+        raise CustodyError("holdout interval observation counts differ")
     gates = required_mapping(report.get("confirmationGates"), "holdout gates")
     if set(gates) != HOLDOUT_GATE_NAMES or any(
         not isinstance(value, bool) for value in gates.values()
     ):
         raise CustodyError("holdout gate family invalid")
-    base = required_mapping(scenarios_value["base"], "holdout base")
-    stress = required_mapping(scenarios_value["stress"], "holdout stress")
+    base = validated_rows["base"]
+    stress = validated_rows["stress"]
     expected = {
         "baseLcbPositive": receipt_decimal(
             required_mapping(intervals["base"], "holdout base interval").get("lower95UsdPer1k"),
@@ -2021,43 +2535,6 @@ def validate_holdout_report(value: object, champion: str) -> dict[str, Any]:
     return report
 
 
-def validate_packet_authority_chain(state_root: Path, freeze_sha: str) -> None:
-    """Validate every packet-first receipt that survived an interrupted replica."""
-
-    packet_marker = packet_artifact(DEVELOPMENT_MARKER_NAME)
-    packet_selection = packet_artifact(DEVELOPMENT_SELECTION_NAME)
-    packet_holdout = packet_artifact(HOLDOUT_MARKER_NAME)
-    marker_present = packet_marker.exists() or packet_marker.is_symlink()
-    selection_present = packet_selection.exists() or packet_selection.is_symlink()
-    holdout_present = packet_holdout.exists() or packet_holdout.is_symlink()
-    marker: dict[str, Any] | None = None
-    selection: dict[str, Any] | None = None
-    if marker_present:
-        marker = load_json(packet_marker, canonical=True)
-        validate_marker(marker, phase="DEVELOPMENT", freeze_sha=freeze_sha)
-    if selection_present:
-        if marker is None:
-            raise CustodyError("packet selection exists without packet development marker")
-        selection = validate_development_selection(
-            load_json(packet_selection, canonical=True),
-            freeze_sha=freeze_sha,
-            development_marker_sha=sha256_path(packet_marker),
-        )
-    if holdout_present:
-        if marker is None or selection is None:
-            raise CustodyError("packet holdout marker exists without selection chain")
-        if selection.get("authorizedToOpenHoldout") is not True:
-            raise CustodyError("packet holdout marker follows unauthorized selection")
-        holdout = load_json(packet_holdout, canonical=True)
-        validate_marker(holdout, phase="HOLDOUT", freeze_sha=freeze_sha)
-        if holdout.get("developmentMarkerSha256") != sha256_path(packet_marker):
-            raise CustodyError("packet holdout development marker binding invalid")
-        if holdout.get("developmentSelectionSha256") != sha256_path(packet_selection):
-            raise CustodyError("packet holdout selection binding invalid")
-        if holdout.get("champion") != selection.get("champion"):
-            raise CustodyError("packet holdout champion binding invalid")
-
-
 def validate_custody_terminal(state_root: Path, freeze_sha: str) -> dict[str, Any]:
     terminal = load_json(packet_artifact(CUSTODY_TERMINAL_NAME), canonical=True)
     require_exact_keys(
@@ -2074,6 +2551,7 @@ def validate_custody_terminal(state_root: Path, freeze_sha: str) -> dict[str, An
             "moneyEffectUsd",
             "programWideMultiplicity",
             "reason",
+            "receiptEvidence",
             "receiptStates",
             "status",
             "version",
@@ -2081,7 +2559,7 @@ def validate_custody_terminal(state_root: Path, freeze_sha: str) -> dict[str, An
         "custody terminal",
     )
     validate_common_terminal(terminal)
-    if terminal.get("version") != "VG27CustodyTerminalV1":
+    if terminal.get("version") != CUSTODY_TERMINAL_VERSION:
         raise CustodyError("custody terminal version invalid")
     if terminal.get("status") != "UNMEASURED" or terminal.get("custodyOnly") is not True:
         raise CustodyError("custody terminal posture invalid")
@@ -2090,6 +2568,8 @@ def validate_custody_terminal(state_root: Path, freeze_sha: str) -> dict[str, An
     states = receipt_states(state_root)
     if terminal.get("receiptStates") != states:
         raise CustodyError("custody terminal receipt states drift")
+    if terminal.get("receiptEvidence") != receipt_evidence(state_root):
+        raise CustodyError("custody terminal receipt evidence drift")
     if all(state == "ABSENT" for state in states.values()):
         raise CustodyError("custody terminal has no consumed receipt")
     if states[RESULT_NAME] == "MATCHED":
@@ -2097,7 +2577,6 @@ def validate_custody_terminal(state_root: Path, freeze_sha: str) -> dict[str, An
     if terminal.get("holdout") != holdout_custody_label(state_root):
         raise CustodyError("custody terminal holdout label invalid")
     required_text(terminal.get("reason"), "custody terminal reason")
-    validate_packet_authority_chain(state_root, freeze_sha)
     return terminal
 
 
@@ -2275,21 +2754,22 @@ def verify(state_root: Path) -> dict[str, object]:
 
 
 def packet_files_without_inventory() -> tuple[Path, ...]:
-    return tuple(
-        sorted(
-            (
-                path
-                for path in PACKET_DIR.iterdir()
-                if path.is_file() and path.name != SHA256SUMS_NAME
-            ),
-            key=lambda path: path.name,
-        )
-    )
+    files: list[Path] = []
+    custody_bound = packet_artifact(CUSTODY_TERMINAL_NAME).is_file()
+    for path in PACKET_DIR.iterdir():
+        if path.name == SHA256SUMS_NAME:
+            continue
+        if path.is_symlink() or not path.is_file():
+            if path.name in TRACKED_RECEIPTS and custody_bound:
+                continue
+            raise CustodyError(f"unbound nonregular packet path: {path.name}")
+        files.append(path)
+    return tuple(sorted(files, key=lambda path: path.name))
 
 
 def seal(state_root: Path) -> dict[str, object]:
     inventory_path = packet_artifact(SHA256SUMS_NAME)
-    if inventory_path.exists():
+    if inventory_path.exists() or inventory_path.is_symlink():
         raise CustodyError("packet inventory already exists")
     if not packet_artifact(CUSTODY_TERMINAL_NAME).exists() and any(
         state in {"PACKET_ONLY", "EXTERNAL_ONLY", "DIVERGED", "INVALID"}
@@ -2298,13 +2778,13 @@ def seal(state_root: Path) -> dict[str, object]:
         custody_terminal(state_root, "SEAL_DETECTED_PARTIAL_RECEIPT")
     semantic = verify_semantic_state(state_root, check_inventory=False)
     lines = [f"{sha256_path(path)}  {path.name}\n" for path in packet_files_without_inventory()]
-    write_exclusive(inventory_path, "".join(lines).encode("ascii"))
+    write_packet_authority_exclusive(inventory_path, "".join(lines).encode("ascii"))
     verify_sha256s()
     return {
         "fileCount": len(lines),
         "semanticStatus": semantic["status"],
         "sha256sSha256": sha256_path(inventory_path),
-        "version": "VG27PacketSealV2",
+        "version": "VG27PacketSealV3",
     }
 
 

@@ -1,0 +1,211 @@
+{
+  "schema": "cosmos.dq7.known-answer.v1",
+  "validReceipt": {
+    "attemptLedgerDigest": "2134f4e1e888d1d933b7fe8ff9c04d717878a00d2d0346e6279691fc60667598",
+    "familyComponentIds": [
+      "76d722c7269eb013982b377d313f6a1cb914aa0b99da366838882f2e8fa5e13a",
+      "771699ff90232daf86a88e61334433a2e8d12b3c7099a603511c86c6081ae295",
+      "8f20fe07ff6e76a710984b70d441600badecbf1560aa77594b84e39687e6a1c1"
+    ],
+    "familyUniverseDigest": "da930549d88e46bf6ab0f3537bce7bf3d32eff240b0d66e4b54a370705075e2f",
+    "manifestDigest": "5cd36404eb6a154e4173295dd73e0dc950c41d52a7a48b85d6715502b95d1a4f",
+    "receiptDigest": "592e89c0b4dad57abe922ee29153024586e5fda9215cce9f267ffe6234481e33"
+  },
+  "hostileReceipts": [
+    {
+      "caseId": "EXACT_RENAME_DUPLICATE",
+      "mutationId": "CLONE_EXACT_RENAME",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "FAMILY_RENAME_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "153b078f0311a984060bdb96eea92a0fab735e90918ade92e8bcf4d0652a6fb5",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "RENAMED_VENUE_DUPLICATE",
+      "mutationId": "CLONE_VENUE",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "RENAMED_VENUE_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "d405bc428c6f843bdccb480846dd0bececa22a69ade6e230b7bcfb77545582a3",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "SIZING_ONLY_DUPLICATE",
+      "mutationId": "CLONE_SIZING",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "SIZING_ONLY_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "8f7fd81de03d86a988e28ee77675a435f2d0f14eb7550dae8dd7de240e614f38",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "BOOKKEEPING_ONLY_DUPLICATE",
+      "mutationId": "CLONE_BOOKKEEPING",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "BOOKKEEPING_ONLY_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "a977e3451f84c420fe85c7b47b48d77582ccf862becd2700ee12ed75d706daeb",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "NONPREDICTIVE_ONLY_DUPLICATE",
+      "mutationId": "CLONE_NONPREDICTIVE",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "NONPREDICTIVE_ONLY_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "7fa57fe52728f95ce8a858b189fb2c7f004ddcd7696fd7cdea49b4bf043f7364",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "SEMANTIC_COLLISION_IMPLEMENTATION_DIVERGENCE",
+      "mutationId": "CLONE_IMPLEMENTATION_COLLISION",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "NONPREDICTIVE_ONLY_DUPLICATE",
+        "SEMANTIC_COLLISION_IMPLEMENTATION_DIVERGENCE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "13ce64bfd565164eababfe0358253a1a05a28bed9fbb8ed5916d8d3360082d46",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "DECLARED_FAMILY_SPLIT",
+      "mutationId": "CLONE_DECLARED_SPLIT",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "DECLARED_FAMILY_SPLIT",
+        "SHARED_SOURCE_ONLY"
+      ],
+      "receiptDigest": "41084bb0e0724c6baeb888da13a098ddc8629799bca29be511fc1b1a585b9db0",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "SHARED_SIGNAL_ACROSS_TARGETS",
+      "mutationId": "CLONE_CROSS_TARGET",
+      "n3IntakeDisposition": "ADMISSIBLE_WITH_DEPENDENCE_DISCLOSURE",
+      "reasonCodes": [
+        "SHARED_SIGNAL_CROSS_TARGET"
+      ],
+      "receiptDigest": "899dded8a438621758009f4e8aa671de2bd61c4852f99c4e501633f7f2c681e0",
+      "schedulerDisposition": "ADMIT_WITH_DISCLOSURES"
+    },
+    {
+      "caseId": "PREDICTIVE_FAMILY_OVERLAP",
+      "mutationId": "CLONE_EXTENDED_SIGNAL",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "SHARED_SIGNAL_COMPONENT",
+        "PREDICTIVE_FAMILY_OVERLAP"
+      ],
+      "receiptDigest": "565edd734a975901000959f0ed7098295332f5ed36e71b114398266b5c5bdb74",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "SHARED_SOURCE_ONLY",
+      "mutationId": "CLONE_SHARED_SOURCE_ONLY",
+      "n3IntakeDisposition": "ADMISSIBLE_WITH_DEPENDENCE_DISCLOSURE",
+      "reasonCodes": [
+        "SHARED_SOURCE_ONLY"
+      ],
+      "receiptDigest": "321b02a1b4836dc3d2456c30df6f8b4e818025c993ed948200cff46f6e9b86a1",
+      "schedulerDisposition": "ADMIT_WITH_DISCLOSURES"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_MISSING",
+      "mutationId": "DROP_MULTIPLICITY_PLAN",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_MULTIPLICITY_PLAN_MISSING"
+      ],
+      "receiptDigest": "0ad1418105ef8060c062f2e2e55b124fc86cb79bc75c1f45a13e57da8ba0cd74",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_ATTEMPT_LEDGER_INCOMPLETE",
+      "mutationId": "DROP_ATTEMPT_MEMBERSHIP",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_ATTEMPT_LEDGER_INCOMPLETE"
+      ],
+      "receiptDigest": "b48f49c0a76444ab18da0e75e28eb1ea28b64847b9093bbb75b3c8e0a84e6ec2",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_FAMILY_SET_MISMATCH",
+      "mutationId": "DROP_FAMILY_MEMBERSHIP",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_FAMILY_SET_MISMATCH"
+      ],
+      "receiptDigest": "f57ad8f3c2ce634c9687fa9660a131faa50e6587052ca8212ff32e6d6d668198",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_DIGEST_MISMATCH",
+      "mutationId": "CORRUPT_MULTIPLICITY_DIGEST",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_MULTIPLICITY_DIGEST_MISMATCH"
+      ],
+      "receiptDigest": "5fd53dfb246b7903b2c64442098816193362257548bced53505efcdfc8756e02",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_CONSUMER_MISMATCH",
+      "mutationId": "DROP_N3_CONSUMER",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_MULTIPLICITY_CONSUMER_MISMATCH"
+      ],
+      "receiptDigest": "64e579c76fe695cd68737006306fb65eb8f95bae618634bddbdff0bec43b9429",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_NOT_PREOUTCOME",
+      "mutationId": "CLEAR_PREOUTCOME_FREEZE",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_MULTIPLICITY_NOT_PREOUTCOME"
+      ],
+      "receiptDigest": "1a08bfa4cefc84a07a10b3d2e8e1eed6aca8321c5e24120b1e3b3e969867d483",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_METHOD_INVALID",
+      "mutationId": "SET_LOCAL_METHOD",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_MULTIPLICITY_METHOD_INVALID"
+      ],
+      "receiptDigest": "e4a283f648e21d3670e61c4a7e1840b8b1dfa430d1c866aadf54a56d2e752b34",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_SCOPE_INVALID",
+      "mutationId": "SET_LOCAL_SCOPE",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_MULTIPLICITY_SCOPE_INVALID"
+      ],
+      "receiptDigest": "d29edadf1947a793434623401d5461996f75cd008aeb47167dae718eb9db1cc6",
+      "schedulerDisposition": "REJECT"
+    }
+  ]
+}

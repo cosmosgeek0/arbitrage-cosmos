@@ -1,0 +1,189 @@
+{
+  "schema": "cosmos.dq7.predictive-family-program.v1",
+  "version": 1,
+  "programId": "DQ7_VALID_PROGRAM",
+  "candidates": [
+    {
+      "attemptId": "ATTEMPT_MOMENTUM",
+      "declaredFamilyId": "FAMILY_MOMENTUM",
+      "displayName": "Lagged mid-price momentum",
+      "attemptStatus": "PLANNED",
+      "outcomeAccessed": false,
+      "featureGraph": {
+        "nodes": [
+          {
+            "nodeId": "MID",
+            "opId": "SOURCE",
+            "inputNodeIds": [],
+            "sourceRoleId": "SPOT_MID_PRICE",
+            "parameterBindings": []
+          },
+          {
+            "nodeId": "MID_LAG",
+            "opId": "LAG",
+            "inputNodeIds": ["MID"],
+            "sourceRoleId": null,
+            "parameterBindings": [
+              {
+                "roleId": "LAG_PERIOD",
+                "valueId": "ONE_HOUR"
+              }
+            ]
+          },
+          {
+            "nodeId": "MOMENTUM",
+            "opId": "DIFFERENCE",
+            "inputNodeIds": ["MID", "MID_LAG"],
+            "sourceRoleId": null,
+            "parameterBindings": []
+          }
+        ],
+        "rootNodeIds": ["MOMENTUM"]
+      },
+      "prediction": {
+        "outcomeId": "FORWARD_RETURN",
+        "instrumentTopologyId": "CROSS_INSTRUMENT",
+        "forecastClockId": "ONE_HOUR_AHEAD",
+        "populationTopologyId": "LIQUID_SPOT_PAIRS",
+        "targetRoleId": "RETURN_HORIZON",
+        "targetValueId": "ONE_HOUR",
+        "polarityId": "SIGNED",
+        "actionMappingId": "RANK_LONG_SHORT"
+      },
+      "nuisance": {
+        "venueProviderIds": ["VENUE_A"],
+        "sizingPolicyId": "EQUAL_NOTIONAL",
+        "bookkeepingPolicyId": "MARK_TO_MID",
+        "universeId": "UNIVERSE_A",
+        "dataWindowId": "WINDOW_A",
+        "implementationDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "resultDigest": null
+      }
+    },
+    {
+      "attemptId": "ATTEMPT_FUNDING",
+      "declaredFamilyId": "FAMILY_FUNDING",
+      "displayName": "Standardized funding pressure",
+      "attemptStatus": "PLANNED",
+      "outcomeAccessed": false,
+      "featureGraph": {
+        "nodes": [
+          {
+            "nodeId": "FUNDING",
+            "opId": "SOURCE",
+            "inputNodeIds": [],
+            "sourceRoleId": "PERPETUAL_FUNDING_RATE",
+            "parameterBindings": []
+          },
+          {
+            "nodeId": "FUNDING_Z",
+            "opId": "ZSCORE",
+            "inputNodeIds": ["FUNDING"],
+            "sourceRoleId": null,
+            "parameterBindings": [
+              {
+                "roleId": "LOOKBACK",
+                "valueId": "SEVEN_DAYS"
+              }
+            ]
+          }
+        ],
+        "rootNodeIds": ["FUNDING_Z"]
+      },
+      "prediction": {
+        "outcomeId": "FORWARD_RETURN",
+        "instrumentTopologyId": "CROSS_INSTRUMENT",
+        "forecastClockId": "EIGHT_HOURS_AHEAD",
+        "populationTopologyId": "LIQUID_PERPETUALS",
+        "targetRoleId": "RETURN_HORIZON",
+        "targetValueId": "EIGHT_HOURS",
+        "polarityId": "INVERTED",
+        "actionMappingId": "RANK_LONG_SHORT"
+      },
+      "nuisance": {
+        "venueProviderIds": ["VENUE_B"],
+        "sizingPolicyId": "VOLATILITY_SCALED",
+        "bookkeepingPolicyId": "MARK_TO_INDEX",
+        "universeId": "UNIVERSE_B",
+        "dataWindowId": "WINDOW_B",
+        "implementationDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+        "resultDigest": null
+      }
+    },
+    {
+      "attemptId": "ATTEMPT_FLOW",
+      "declaredFamilyId": "FAMILY_FLOW",
+      "displayName": "Trade-flow entropy",
+      "attemptStatus": "PLANNED",
+      "outcomeAccessed": false,
+      "featureGraph": {
+        "nodes": [
+          {
+            "nodeId": "FLOW",
+            "opId": "SOURCE",
+            "inputNodeIds": [],
+            "sourceRoleId": "SIGNED_TRADE_FLOW",
+            "parameterBindings": []
+          },
+          {
+            "nodeId": "FLOW_ENTROPY",
+            "opId": "ENTROPY",
+            "inputNodeIds": ["FLOW"],
+            "sourceRoleId": null,
+            "parameterBindings": [
+              {
+                "roleId": "LOOKBACK",
+                "valueId": "ONE_DAY"
+              }
+            ]
+          }
+        ],
+        "rootNodeIds": ["FLOW_ENTROPY"]
+      },
+      "prediction": {
+        "outcomeId": "FORWARD_VOLATILITY",
+        "instrumentTopologyId": "PER_INSTRUMENT",
+        "forecastClockId": "ONE_DAY_AHEAD",
+        "populationTopologyId": "LIQUID_SPOT_PAIRS",
+        "targetRoleId": "VOLATILITY_HORIZON",
+        "targetValueId": "ONE_DAY",
+        "polarityId": "POSITIVE",
+        "actionMappingId": "RISK_SCALING_ONLY"
+      },
+      "nuisance": {
+        "venueProviderIds": ["VENUE_C"],
+        "sizingPolicyId": "NO_POSITION_MAPPING",
+        "bookkeepingPolicyId": "RESEARCH_ONLY",
+        "universeId": "UNIVERSE_C",
+        "dataWindowId": "WINDOW_C",
+        "implementationDigest": "3333333333333333333333333333333333333333333333333333333333333333",
+        "resultDigest": null
+      }
+    }
+  ],
+  "globalMultiplicity": {
+    "scopeId": "PROGRAM_WIDE",
+    "methodId": "PROGRAM_HOLM_FWER",
+    "alpha": {
+      "numerator": 1,
+      "denominator": 20
+    },
+    "frozenBeforeAnyOutcome": true,
+    "attemptIds": [
+      "ATTEMPT_FLOW",
+      "ATTEMPT_FUNDING",
+      "ATTEMPT_MOMENTUM"
+    ],
+    "familyComponentIds": [
+      "76d722c7269eb013982b377d313f6a1cb914aa0b99da366838882f2e8fa5e13a",
+      "771699ff90232daf86a88e61334433a2e8d12b3c7099a603511c86c6081ae295",
+      "8f20fe07ff6e76a710984b70d441600badecbf1560aa77594b84e39687e6a1c1"
+    ],
+    "attemptLedgerDigest": "2134f4e1e888d1d933b7fe8ff9c04d717878a00d2d0346e6279691fc60667598",
+    "familyUniverseDigest": "da930549d88e46bf6ab0f3537bce7bf3d32eff240b0d66e4b54a370705075e2f",
+    "consumerIds": [
+      "N3_INTAKE",
+      "SCHEDULER"
+    ]
+  }
+}

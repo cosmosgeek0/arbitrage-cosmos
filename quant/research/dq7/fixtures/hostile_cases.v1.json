@@ -1,0 +1,183 @@
+{
+  "schema": "cosmos.dq7.hostile-cases.v1",
+  "validFixture": "valid_program.v1.json",
+  "cases": [
+    {
+      "caseId": "EXACT_RENAME_DUPLICATE",
+      "mutationId": "CLONE_EXACT_RENAME",
+      "expectedReasonCodes": [
+        "FAMILY_RENAME_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "RENAMED_VENUE_DUPLICATE",
+      "mutationId": "CLONE_VENUE",
+      "expectedReasonCodes": [
+        "RENAMED_VENUE_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "SIZING_ONLY_DUPLICATE",
+      "mutationId": "CLONE_SIZING",
+      "expectedReasonCodes": [
+        "SIZING_ONLY_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "BOOKKEEPING_ONLY_DUPLICATE",
+      "mutationId": "CLONE_BOOKKEEPING",
+      "expectedReasonCodes": [
+        "BOOKKEEPING_ONLY_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "NONPREDICTIVE_ONLY_DUPLICATE",
+      "mutationId": "CLONE_NONPREDICTIVE",
+      "expectedReasonCodes": [
+        "NONPREDICTIVE_ONLY_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "SEMANTIC_COLLISION_IMPLEMENTATION_DIVERGENCE",
+      "mutationId": "CLONE_IMPLEMENTATION_COLLISION",
+      "expectedReasonCodes": [
+        "NONPREDICTIVE_ONLY_DUPLICATE",
+        "SEMANTIC_COLLISION_IMPLEMENTATION_DIVERGENCE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "DECLARED_FAMILY_SPLIT",
+      "mutationId": "CLONE_DECLARED_SPLIT",
+      "expectedReasonCodes": [
+        "DECLARED_FAMILY_SPLIT",
+        "SHARED_SOURCE_ONLY"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "SHARED_SIGNAL_ACROSS_TARGETS",
+      "mutationId": "CLONE_CROSS_TARGET",
+      "expectedReasonCodes": [
+        "SHARED_SIGNAL_CROSS_TARGET"
+      ],
+      "expectedSchedulerDisposition": "ADMIT_WITH_DISCLOSURES",
+      "expectedN3Disposition": "ADMISSIBLE_WITH_DEPENDENCE_DISCLOSURE"
+    },
+    {
+      "caseId": "PREDICTIVE_FAMILY_OVERLAP",
+      "mutationId": "CLONE_EXTENDED_SIGNAL",
+      "expectedReasonCodes": [
+        "SHARED_SIGNAL_COMPONENT",
+        "PREDICTIVE_FAMILY_OVERLAP"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "SHARED_SOURCE_ONLY",
+      "mutationId": "CLONE_SHARED_SOURCE_ONLY",
+      "expectedReasonCodes": [
+        "SHARED_SOURCE_ONLY"
+      ],
+      "expectedSchedulerDisposition": "ADMIT_WITH_DISCLOSURES",
+      "expectedN3Disposition": "ADMISSIBLE_WITH_DEPENDENCE_DISCLOSURE"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_MISSING",
+      "mutationId": "DROP_MULTIPLICITY_PLAN",
+      "expectedReasonCodes": [
+        "PROGRAM_MULTIPLICITY_PLAN_MISSING"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_ATTEMPT_LEDGER_INCOMPLETE",
+      "mutationId": "DROP_ATTEMPT_MEMBERSHIP",
+      "expectedReasonCodes": [
+        "PROGRAM_ATTEMPT_LEDGER_INCOMPLETE"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_FAMILY_SET_MISMATCH",
+      "mutationId": "DROP_FAMILY_MEMBERSHIP",
+      "expectedReasonCodes": [
+        "PROGRAM_FAMILY_SET_MISMATCH"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_DIGEST_MISMATCH",
+      "mutationId": "CORRUPT_MULTIPLICITY_DIGEST",
+      "expectedReasonCodes": [
+        "PROGRAM_MULTIPLICITY_DIGEST_MISMATCH"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_CONSUMER_MISMATCH",
+      "mutationId": "DROP_N3_CONSUMER",
+      "expectedReasonCodes": [
+        "PROGRAM_MULTIPLICITY_CONSUMER_MISMATCH"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_NOT_PREOUTCOME",
+      "mutationId": "CLEAR_PREOUTCOME_FREEZE",
+      "expectedReasonCodes": [
+        "PROGRAM_MULTIPLICITY_NOT_PREOUTCOME"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_METHOD_INVALID",
+      "mutationId": "SET_LOCAL_METHOD",
+      "expectedReasonCodes": [
+        "PROGRAM_MULTIPLICITY_METHOD_INVALID"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_SCOPE_INVALID",
+      "mutationId": "SET_LOCAL_SCOPE",
+      "expectedReasonCodes": [
+        "PROGRAM_MULTIPLICITY_SCOPE_INVALID"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    }
+  ]
+}

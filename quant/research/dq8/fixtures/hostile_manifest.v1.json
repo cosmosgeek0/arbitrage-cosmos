@@ -1,0 +1,279 @@
+{
+  "schema": "cosmos.dq8.hostile-fixtures.v1",
+  "basePayload": "valid_path.v1.json",
+  "cases": [
+    {
+      "caseId": "shifted-entry-coordinate",
+      "expectedCode": "ENTRY_PRICE_COORDINATE_SHIFTED",
+      "operations": [
+        {
+          "op": "replace",
+          "path": ["prices", 0, "timestampUs"],
+          "value": 1767268800000000
+        },
+        {
+          "op": "replace",
+          "path": ["prices", 0, "timestampLabel"],
+          "value": "2026-01-01T12:00:00Z"
+        }
+      ]
+    },
+    {
+      "caseId": "vg35-one-day-drawdown-label-shift",
+      "expectedCode": "DRAWDOWN_PEAK_TIMESTAMP_SHIFTED",
+      "operations": [
+        {
+          "op": "replace",
+          "path": ["claim", "peakTimestampLabel"],
+          "value": "2026-01-02T12:00:00Z"
+        },
+        {
+          "op": "replace",
+          "path": ["claim", "troughTimestampLabel"],
+          "value": "2026-01-02T18:00:00Z"
+        },
+        {
+          "op": "replace",
+          "path": ["claim", "peakDateLabel"],
+          "value": "2026-01-02"
+        },
+        {
+          "op": "replace",
+          "path": ["claim", "troughDateLabel"],
+          "value": "2026-01-02"
+        }
+      ]
+    },
+    {
+      "caseId": "wrong-entry-source-field",
+      "expectedCode": "ENTRY_PRICE_FIELD_MISMATCH",
+      "operations": [
+        {
+          "op": "replace",
+          "path": ["trades", 0, "expectedPriceField"],
+          "value": "CLOSE"
+        }
+      ]
+    },
+    {
+      "caseId": "shifted-valuation-coordinate",
+      "expectedCode": "VALUATION_PRICE_COORDINATE_SHIFTED",
+      "operations": [
+        {
+          "op": "replace",
+          "path": ["prices", 3, "timestampUs"],
+          "value": 1767297600000000
+        },
+        {
+          "op": "replace",
+          "path": ["prices", 3, "timestampLabel"],
+          "value": "2026-01-01T20:00:00Z"
+        }
+      ]
+    },
+    {
+      "caseId": "cash-hours-one-interval-late",
+      "expectedCode": "CASH_HOURS_MISMATCH",
+      "operations": [
+        {
+          "op": "replace",
+          "path": ["claim", "cashHours"],
+          "value": 11
+        }
+      ]
+    },
+    {
+      "caseId": "nav-decomposition-drift",
+      "expectedCode": "NAV_RECONCILIATION_MISMATCH",
+      "operations": [
+        {
+          "op": "replace",
+          "path": ["navMarks", 3, "nav"],
+          "value": "901"
+        }
+      ]
+    },
+    {
+      "caseId": "endpoint-economics-drift",
+      "expectedCode": "ENDING_NAV_MISMATCH",
+      "operations": [
+        {
+          "op": "replace",
+          "path": ["claim", "endingNav"],
+          "value": "951"
+        }
+      ]
+    },
+    {
+      "caseId": "orphan-price-coordinate",
+      "expectedCode": "PRICE_COORDINATE_UNBOUND",
+      "operations": [
+        {
+          "op": "append",
+          "path": ["prices"],
+          "value": {
+            "priceId": "price-orphan",
+            "lotId": "lot-1",
+            "instrument": "BTCUSDT",
+            "venue": "SYNTHETIC_VENUE",
+            "use": "VALUATION",
+            "sourceField": "OPEN",
+            "sourceArtifactSha256": "9a3f0ca4daf721bb89870ef40b00ede1adad51262905c315689bc69a679d8f41",
+            "sourceRowId": "row-peak",
+            "markId": "clock-12",
+            "timestampUs": 1767268800000000,
+            "timestampLabel": "2026-01-01T12:00:00Z",
+            "dateLabel": "2026-01-01",
+            "price": "120"
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "external-contribution-forbidden",
+      "expectedCode": "CASH_EVENT_KIND_INVALID",
+      "operations": [
+        {
+          "op": "append",
+          "path": ["cashEvents"],
+          "value": {
+            "eventId": "event-contribution",
+            "markId": "clock-12",
+            "kind": "CONTRIBUTION",
+            "amount": "100",
+            "evidenceSha256": "9a3f0ca4daf721bb89870ef40b00ede1adad51262905c315689bc69a679d8f41"
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "missing-exit",
+      "expectedCode": "LOT_NOT_FULLY_CLOSED",
+      "operations": [
+        {
+          "op": "remove",
+          "path": ["trades", 1]
+        }
+      ]
+    },
+    {
+      "caseId": "shifted-clock-label",
+      "expectedCode": "TIMESTAMP_LABEL_SHIFTED",
+      "operations": [
+        {
+          "op": "replace",
+          "path": ["clockPlan", "marks", 2, "timestampLabel"],
+          "value": "2026-01-02T12:00:00Z"
+        }
+      ]
+    },
+    {
+      "caseId": "noncanonical-price-decimal",
+      "expectedCode": "DECIMAL_NONCANONICAL",
+      "operations": [
+        {
+          "op": "replace",
+          "path": ["prices", 0, "price"],
+          "value": "100.0"
+        }
+      ]
+    },
+    {
+      "caseId": "wrong-entry-instrument",
+      "expectedCode": "ENTRY_PRICE_IDENTITY_MISMATCH",
+      "operations": [
+        {
+          "op": "replace",
+          "path": ["prices", 0, "instrument"],
+          "value": "ETHUSDT"
+        }
+      ]
+    },
+    {
+      "caseId": "missing-held-lot-mark",
+      "expectedCode": "POSITION_MARK_SET_MISMATCH",
+      "operations": [
+        {
+          "op": "remove",
+          "path": ["navMarks", 3, "positions", 0]
+        }
+      ]
+    },
+    {
+      "caseId": "valuation-role-substitution",
+      "expectedCode": "VALUATION_PRICE_USE_MISMATCH",
+      "operations": [
+        {
+          "op": "replace",
+          "path": ["prices", 2, "use"],
+          "value": "ENTRY"
+        }
+      ]
+    },
+    {
+      "caseId": "partial-exit",
+      "expectedCode": "LOT_QUANTITY_NOT_CLOSED",
+      "operations": [
+        {
+          "op": "replace",
+          "path": ["trades", 1, "quantityDelta"],
+          "value": "-9"
+        }
+      ]
+    },
+    {
+      "caseId": "shifted-exit-coordinate",
+      "expectedCode": "EXIT_PRICE_COORDINATE_SHIFTED",
+      "operations": [
+        {
+          "op": "replace",
+          "path": ["prices", 4, "timestampUs"],
+          "value": 1767312000000000
+        },
+        {
+          "op": "replace",
+          "path": ["prices", 4, "timestampLabel"],
+          "value": "2026-01-02T00:00:00Z"
+        },
+        {
+          "op": "replace",
+          "path": ["prices", 4, "dateLabel"],
+          "value": "2026-01-02"
+        }
+      ]
+    },
+    {
+      "caseId": "unbound-exit-price",
+      "expectedCode": "EXIT_PRICE_UNBOUND",
+      "operations": [
+        {
+          "op": "replace",
+          "path": ["trades", 1, "priceId"],
+          "value": "price-missing-exit"
+        }
+      ]
+    },
+    {
+      "caseId": "shifted-peak-date",
+      "expectedCode": "DRAWDOWN_PEAK_DATE_SHIFTED",
+      "operations": [
+        {
+          "op": "replace",
+          "path": ["claim", "peakDateLabel"],
+          "value": "2026-01-02"
+        }
+      ]
+    },
+    {
+      "caseId": "shifted-trough-date",
+      "expectedCode": "DRAWDOWN_TROUGH_DATE_SHIFTED",
+      "operations": [
+        {
+          "op": "replace",
+          "path": ["claim", "troughDateLabel"],
+          "value": "2026-01-02"
+        }
+      ]
+    }
+  ]
+}

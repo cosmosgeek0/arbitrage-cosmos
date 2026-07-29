@@ -1,0 +1,20 @@
+{
+  "version": "VG25TrialLedgerV1",
+  "family": "BINANCE_SPOT_DAILY_VOLUME_SHOCK_FIRST_PASSAGE_RECOVERY",
+  "attemptedCount": 12,
+  "outcomesOpened": 0,
+  "trials": [
+    {"trialId":"VG25-S25-R125-H07","shockThreshold":"2.5","recoveryMultiple":"1.25","maximumRecoveryHorizonDays":7,"status":"SEALED_UNOPENED"},
+    {"trialId":"VG25-S25-R125-H14","shockThreshold":"2.5","recoveryMultiple":"1.25","maximumRecoveryHorizonDays":14,"status":"SEALED_UNOPENED"},
+    {"trialId":"VG25-S25-R150-H07","shockThreshold":"2.5","recoveryMultiple":"1.50","maximumRecoveryHorizonDays":7,"status":"SEALED_UNOPENED"},
+    {"trialId":"VG25-S25-R150-H14","shockThreshold":"2.5","recoveryMultiple":"1.50","maximumRecoveryHorizonDays":14,"status":"SEALED_UNOPENED"},
+    {"trialId":"VG25-S35-R125-H07","shockThreshold":"3.5","recoveryMultiple":"1.25","maximumRecoveryHorizonDays":7,"status":"SEALED_UNOPENED"},
+    {"trialId":"VG25-S35-R125-H14","shockThreshold":"3.5","recoveryMultiple":"1.25","maximumRecoveryHorizonDays":14,"status":"SEALED_UNOPENED"},
+    {"trialId":"VG25-S35-R150-H07","shockThreshold":"3.5","recoveryMultiple":"1.50","maximumRecoveryHorizonDays":7,"status":"SEALED_UNOPENED"},
+    {"trialId":"VG25-S35-R150-H14","shockThreshold":"3.5","recoveryMultiple":"1.50","maximumRecoveryHorizonDays":14,"status":"SEALED_UNOPENED"},
+    {"trialId":"VG25-S50-R125-H07","shockThreshold":"5.0","recoveryMultiple":"1.25","maximumRecoveryHorizonDays":7,"status":"SEALED_UNOPENED"},
+    {"trialId":"VG25-S50-R125-H14","shockThreshold":"5.0","recoveryMultiple":"1.25","maximumRecoveryHorizonDays":14,"status":"SEALED_UNOPENED"},
+    {"trialId":"VG25-S50-R150-H07","shockThreshold":"5.0","recoveryMultiple":"1.50","maximumRecoveryHorizonDays":7,"status":"SEALED_UNOPENED"},
+    {"trialId":"VG25-S50-R150-H14","shockThreshold":"5.0","recoveryMultiple":"1.50","maximumRecoveryHorizonDays":14,"status":"SEALED_UNOPENED"}
+  ]
+}

@@ -106,7 +106,11 @@ PYTHONPATH=quant python -B -m research.dq12.cli \
 ```
 
 The CLI writes canonical receipt JSON to stdout and exits `0` for `MATCHED` or
-`2` for `UNKNOWN`.
+`2` for `UNKNOWN`. Each JSON input path must resolve to a regular file. The CLI
+checks the opened descriptor and reads at most `MAX_INPUT_BYTES + 1`; a missing,
+unopenable, directory, FIFO, device, or other non-regular path is
+`CLI_INPUT_UNAVAILABLE`, while an oversized regular file is
+`INPUT_SIZE_INVALID`.
 
 A malformed invocation is a receipt, not a usage error. A missing, unknown, or
 repeated argument, a `--trusted-evaluation-time-ms` that is not exact ASCII
@@ -116,8 +120,10 @@ stderr, and exit `2`. The trusted time is read as text: `int`-style coercion of
 digit separators, surrounding whitespace, or non-ASCII decimal digits is
 refused rather than normalized into a trusted current-time boundary. Every
 option is single-occurrence, and long-option abbreviations such as `--trust`,
-`--req`, and `--hel` are refused. Exact `-h` and `--help` are the only options
-that print usage instead of a receipt.
+`--req`, and `--hel` are refused. Only the exact one-option invocations `-h` and
+`--help` print usage and exit `0`; clustered, repeated, mixed, or otherwise
+non-sole help arguments produce the same canonical `CLI_ARGUMENTS_INVALID`
+receipt as other malformed invocations.
 
 ## Focused proof
 
@@ -144,10 +150,11 @@ statuses, delivery/non-coin contracts, quote or `marginAsset` mismatches,
 implicit multiplier traps such as `1000SHIB`, legitimate digit-leading assets
 such as `1INCH`, aliases/migrations and scales, active registry-wide cycles,
 simultaneous current old/new symbols on both markets, cross-market instrument
-collisions, unpaired Unicode surrogates, warning-free CLI `MATCHED`, `UNKNOWN`,
-and I/O outcomes, malformed CLI arguments and trusted-time text, duplicates,
-long-option prefixes, exact help options, malformed payloads, and deterministic
-input ordering.
+collisions including second symbols that resolve to either selected leg,
+unpaired Unicode surrogates, warning-free CLI `MATCHED`, `UNKNOWN`, and bounded
+regular-file I/O outcomes, malformed CLI arguments and trusted-time text,
+duplicates, long-option prefixes, exact and non-exact help arguments, malformed
+payloads, and deterministic input ordering.
 
 [`fixture-manifest.v1.json`](fixture-manifest.v1.json) indexes those cases and
 pins the exact committed fixture bytes.

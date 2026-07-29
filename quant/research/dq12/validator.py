@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import stat
 import sys
 import unicodedata
 from collections.abc import Mapping, Sequence
@@ -1015,7 +1017,7 @@ def _require_unique_current_symbol_identity(
     *,
     market_type: MarketType,
     selected_symbol: str,
-    selected_identity: str,
+    selected_identities: frozenset[str],
     current_symbols: tuple[str, ...],
     at_ms: int,
 ) -> None:
@@ -1034,10 +1036,10 @@ def _require_unique_current_symbol_identity(
             if error.code == "BINDING_MISSING":
                 continue
             raise
-        if resolved.canonical_id == selected_identity:
+        if resolved.canonical_id in selected_identities:
             _fail(
                 "CANONICAL_INSTRUMENT_COLLISION",
-                "multiple currently eligible venue symbols resolve to one instrument",
+                "a second eligible venue symbol resolves to a selected instrument",
             )
 
 
@@ -1089,11 +1091,12 @@ def _validate_join(
             "CROSS_MARKET_INSTRUMENT_COLLISION",
             "Spot and USD-M legs must retain distinct instrument identities",
         )
+    selected_instrument_ids = frozenset((spot_symbol.canonical_id, usdm_symbol.canonical_id))
     _require_unique_current_symbol_identity(
         registry,
         market_type=MarketType.SPOT,
         selected_symbol=spot.symbol,
-        selected_identity=spot_symbol.canonical_id,
+        selected_identities=selected_instrument_ids,
         current_symbols=spot.current_symbols,
         at_ms=at_ms,
     )
@@ -1101,7 +1104,7 @@ def _validate_join(
         registry,
         market_type=MarketType.USD_M,
         selected_symbol=usdm.symbol,
-        selected_identity=usdm_symbol.canonical_id,
+        selected_identities=selected_instrument_ids,
         current_symbols=usdm.current_symbols,
         at_ms=at_ms,
     )
@@ -1442,7 +1445,32 @@ def validate_spot_usdm_identity_v1(
 
 def _read_cli_input(path: Path, *, field: str) -> bytes:
     try:
-        value = path.read_bytes()
+        path_status = path.stat()
+        if not stat.S_ISREG(path_status.st_mode):
+            raise IdentityContractError(
+                "CLI_INPUT_UNAVAILABLE",
+                f"{field} is not a regular file",
+            )
+        if path_status.st_size > MAX_INPUT_BYTES:
+            _fail("INPUT_SIZE_INVALID", f"{field} exceeds the frozen byte bound")
+
+        open_flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_BINARY", 0)
+        descriptor = os.open(path, open_flags)
+        try:
+            opened_status = os.fstat(descriptor)
+            if not stat.S_ISREG(opened_status.st_mode):
+                raise IdentityContractError(
+                    "CLI_INPUT_UNAVAILABLE",
+                    f"{field} is not a regular file",
+                )
+            if opened_status.st_size > MAX_INPUT_BYTES:
+                _fail("INPUT_SIZE_INVALID", f"{field} exceeds the frozen byte bound")
+            with os.fdopen(descriptor, "rb", closefd=False) as stream:
+                value = stream.read(MAX_INPUT_BYTES + 1)
+        finally:
+            os.close(descriptor)
+    except IdentityContractError:
+        raise
     except (OSError, ValueError) as error:
         raise IdentityContractError("CLI_INPUT_UNAVAILABLE", f"{field} is unavailable") from error
     if len(value) > MAX_INPUT_BYTES:
@@ -1478,7 +1506,15 @@ def _cli_parser() -> argparse.ArgumentParser:
     parser = _ReceiptArgumentParser(
         prog="dq12-instrument-identity",
         description="Offline Binance Spot to USD-M current instrument-identity validator",
+        add_help=False,
         allow_abbrev=False,
+    )
+    parser.add_argument(
+        "-h",
+        "--help",
+        action=_RejectDuplicateAction,
+        nargs=0,
+        help="show this help message and exit",
     )
     parser.add_argument("--request", action=_RejectDuplicateAction, type=Path, required=True)
     parser.add_argument("--spot", action=_RejectDuplicateAction, type=Path, required=True)
@@ -1509,9 +1545,17 @@ def _cli_trusted_evaluation_time_ms(value: object) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    raw_arguments = list(sys.argv[1:] if argv is None else argv)
+    parser = _cli_parser()
+    if raw_arguments == ["-h"] or raw_arguments == ["--help"]:
+        parser.print_help()
+        return 0
+
     evaluation_time_ms: int | None = None
     try:
-        arguments = _cli_parser().parse_args(argv)
+        arguments = parser.parse_args(raw_arguments)
+        if arguments.help is not None:
+            _fail("CLI_ARGUMENTS_INVALID", "help must be the sole command-line option")
         evaluation_time_ms = _cli_trusted_evaluation_time_ms(arguments.trusted_evaluation_time_ms)
         request = _read_cli_input(arguments.request, field="request")
         spot = _read_cli_input(arguments.spot, field="spot")

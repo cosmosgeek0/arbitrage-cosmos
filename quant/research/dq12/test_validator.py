@@ -408,6 +408,14 @@ def test_fixture_manifest_exact_bytes_and_declared_offline_scope() -> None:
     manifest = _json_object((HERE / "fixture-manifest.v1.json").read_bytes())
     assert manifest["networkRequired"] is False
     assert manifest["synthetic"] is True
+    cases = manifest["cases"]
+    assert isinstance(cases, list)
+    assert {
+        "category": "cli",
+        "expectedExit": 0,
+        "expectedOutcome": "NON_RECEIPT_HELP",
+        "id": "cli-exact-help",
+    } in cases
     fixtures = manifest["fixtures"]
     assert isinstance(fixtures, list)
     for untyped_entry in fixtures:
@@ -745,6 +753,36 @@ def test_two_current_symbols_cannot_share_one_canonical_instrument(
             source="XBTUSDT",
             target="BTCUSDT",
             kind="ALIAS",
+        )
+    )
+    _assert_unknown(
+        _validate_packet(packet),
+        "CANONICAL_INSTRUMENT_COLLISION",
+    )
+
+
+@pytest.mark.parametrize("candidate_market_type", ["SPOT", "USD_M"])
+def test_second_current_symbol_cannot_resolve_to_other_selected_leg(
+    candidate_market_type: str,
+) -> None:
+    packet = _packet()
+    if candidate_market_type == "SPOT":
+        payload = packet.spot
+        other_selected_instrument = packet.expected_usdm_instrument_id
+    else:
+        payload = packet.usdm
+        other_selected_instrument = packet.expected_spot_instrument_id
+    candidate_row = copy.deepcopy(_row(payload))
+    candidate_row["symbol"] = "XBTUSDT"
+    if candidate_market_type == "USD_M":
+        candidate_row["pair"] = "XBTUSDT"
+    _rows(payload).append(candidate_row)
+    _bindings(packet.registry).append(
+        _binding(
+            market_type=candidate_market_type,
+            role="SYMBOL",
+            source="XBTUSDT",
+            target=other_selected_instrument,
         )
     )
     _assert_unknown(
@@ -1295,6 +1333,30 @@ def test_cli_io_failure_is_a_canonical_unknown(tmp_path: Path) -> None:
     assert receipt["reasonCodes"] == ["CLI_INPUT_UNAVAILABLE"]
 
 
+def test_cli_directory_input_is_a_canonical_unavailable_unknown(tmp_path: Path) -> None:
+    result = _run_cli(tmp_path)
+    assert result.returncode == 2
+    receipt = _canonical_cli_receipt(result)
+    assert receipt["decision"] == "UNKNOWN"
+    assert receipt["reasonCodes"] == ["CLI_INPUT_UNAVAILABLE"]
+
+
+def test_cli_oversized_regular_input_is_a_canonical_size_unknown(
+    tmp_path: Path,
+) -> None:
+    oversized_path = tmp_path / "oversized-request.json"
+    with oversized_path.open("wb") as stream:
+        stream.seek(MAX_INPUT_BYTES)
+        assert stream.write(b"x") == 1
+    assert oversized_path.stat().st_size == MAX_INPUT_BYTES + 1
+
+    result = _run_cli(oversized_path)
+    assert result.returncode == 2
+    receipt = _canonical_cli_receipt(result)
+    assert receipt["decision"] == "UNKNOWN"
+    assert receipt["reasonCodes"] == ["INPUT_SIZE_INVALID"]
+
+
 @pytest.mark.parametrize(
     ("trusted_time", "reason"),
     [
@@ -1428,7 +1490,37 @@ def test_cli_exact_help_option_is_warning_free_non_receipt_success(help_option: 
     assert result.returncode == 0
     assert result.stderr == b""
     assert result.stdout.startswith(b"usage: dq12-instrument-identity ")
+    assert b"-h, --help" in result.stdout
+    assert b"--trusted-evaluation-time-ms" in result.stdout
+    assert b"--request" in result.stdout
     assert not result.stdout.startswith(b"{")
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        pytest.param(["-hx"], id="clustered-short-help"),
+        pytest.param(["--help", "--unknown"], id="help-then-unknown"),
+        pytest.param(["--unknown", "--help"], id="unknown-then-help"),
+        pytest.param(["-h", "--help"], id="duplicate-help"),
+        pytest.param(
+            [
+                *_cli_arguments(FIXTURES / "request-btcusdt.current.json"),
+                "--help",
+            ],
+            id="valid-arguments-plus-help",
+        ),
+    ],
+)
+def test_cli_non_exact_help_is_a_canonical_arguments_unknown(
+    arguments: list[str],
+) -> None:
+    result = _run_cli_arguments(arguments)
+    assert result.returncode == 2
+    receipt = _canonical_cli_receipt(result)
+    assert receipt["decision"] == "UNKNOWN"
+    assert receipt["reasonCodes"] == ["CLI_ARGUMENTS_INVALID"]
+    assert receipt["evaluationTimeMs"] is None
 
 
 def test_cli_unopenable_path_is_a_canonical_unknown(

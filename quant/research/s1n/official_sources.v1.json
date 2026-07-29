@@ -1,0 +1,101 @@
+{
+  "schema": "cosmos.quant.research.s1n.official_sources.v1",
+  "milestone": "S-1N",
+  "frozenAtUtc": "2026-07-29T16:04:52Z",
+  "canonicalBaseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "scope": "PUBLIC_BINANCE_USD_M_ONLY",
+  "sources": [
+    {
+      "id": "BINANCE_USDM_FUNDING_HISTORY",
+      "publisher": "Binance",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data#get-funding-rate-history",
+      "retrievedAtUtc": "2026-07-29T15:51:00Z",
+      "frozenFacts": [
+        "GET /fapi/v1/fundingRate is public USD-M market data.",
+        "The request accepts optional symbol, inclusive startTime, inclusive endTime, and limit up to 1000.",
+        "Responses are ascending and expose symbol, fundingRate, fundingTime, markPrice, and rateType.",
+        "The documented markPrice is associated with a particular funding fee charge."
+      ]
+    },
+    {
+      "id": "BINANCE_USDM_FUNDING_INFO",
+      "publisher": "Binance",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data#get-funding-rate-info",
+      "retrievedAtUtc": "2026-07-29T15:51:00Z",
+      "frozenFacts": [
+        "GET /fapi/v1/fundingInfo identifies symbols with adjusted funding caps, floors, or funding intervals.",
+        "The response includes fundingIntervalHours."
+      ]
+    },
+    {
+      "id": "BINANCE_USDM_EXCHANGE_INFO",
+      "publisher": "Binance",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data#exchange-information",
+      "retrievedAtUtc": "2026-07-29T15:51:00Z",
+      "frozenFacts": [
+        "GET /fapi/v1/exchangeInfo returns current exchange trading rules and symbol information.",
+        "S-1N therefore does not use the current response as historical membership authority."
+      ]
+    },
+    {
+      "id": "BINANCE_USDM_KLINES",
+      "publisher": "Binance",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data#kline-candlestick-data",
+      "retrievedAtUtc": "2026-07-29T15:51:00Z",
+      "frozenFacts": [
+        "GET /fapi/v1/klines exposes symbol candlesticks keyed by open time.",
+        "The response includes OHLC, quote volume, trade count, and taker-buy volumes.",
+        "The request supports 1h bars and limit up to 1500."
+      ]
+    },
+    {
+      "id": "BINANCE_USDM_MARK_PRICE_KLINES",
+      "publisher": "Binance",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data#mark-price-kline-candlestick-data",
+      "retrievedAtUtc": "2026-07-29T15:51:00Z",
+      "frozenFacts": [
+        "GET /fapi/v1/markPriceKlines exposes mark-price candlesticks keyed by open time.",
+        "The request supports 1h bars and limit up to 1500."
+      ]
+    },
+    {
+      "id": "BINANCE_PUBLIC_DATA_ARCHIVE",
+      "publisher": "Binance",
+      "url": "https://github.com/binance/binance-public-data",
+      "retrievedAtUtc": "2026-07-29T15:51:00Z",
+      "frozenFacts": [
+        "Binance Data Collection publishes public market data as daily or monthly files.",
+        "USD-M futures kline archive rows derive from GET /fapi/v1/klines.",
+        "Each archive has an adjacent CHECKSUM file for SHA-256 verification.",
+        "Archived files can later be revised, so S-1N binds the exact downloaded bytes and sidecars."
+      ]
+    }
+  ],
+  "livePublicSchemaProbe": {
+    "performedAtUtc": "2026-07-29T15:56:00Z",
+    "archiveUrl": "https://data.binance.vision/data/futures/um/monthly/fundingRate/BTCUSDT/BTCUSDT-fundingRate-2026-06.zip",
+    "checksumUrl": "https://data.binance.vision/data/futures/um/monthly/fundingRate/BTCUSDT/BTCUSDT-fundingRate-2026-06.zip.CHECKSUM",
+    "archiveSha256": "cff97ce688329592bccbbf5873b5c7021649e093f5f5806e332c5b4fb7fd6a00",
+    "archiveCsvHeader": [
+      "calc_time",
+      "funding_interval_hours",
+      "last_funding_rate"
+    ],
+    "apiProbeUrl": "https://fapi.binance.com/fapi/v1/fundingRate?symbol=BTCUSDT&limit=2",
+    "apiObservedFields": [
+      "symbol",
+      "fundingTime",
+      "fundingRate",
+      "markPrice",
+      "rateType"
+    ],
+    "interpretation": "Historical archive rows and the current REST response have different schemas. S-1N uses only fields actually present in each checksum-bound archive and never imputes REST-only fields into historical archive rows."
+  },
+  "researchBoundary": {
+    "privateOrSignedEndpoints": "PROHIBITED",
+    "currentExchangeInfoAsHistoricalUniverse": "PROHIBITED",
+    "accountEffectiveFees": "UNKNOWN_UNLESS_SANITIZED_EVIDENCE_IS_ALREADY_AVAILABLE",
+    "publicFeeAndExecutionInputs": "EXPLICIT_PROXY_ONLY",
+    "productOrCapitalAuthority": "NONE"
+  }
+}

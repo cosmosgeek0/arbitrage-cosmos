@@ -1,0 +1,193 @@
+{
+  "archive_root": "https://data.binance.vision/data/futures/um/monthly",
+  "artifact_chain": [
+    "preseal.v1.json binds exact Git lineage, every allowlisted static Git blob and raw SHA-256, and an immutable packet copy of each static file",
+    "screen_consumed.v1.json binds preseal and is created O_CREAT|O_EXCL|O_NOFOLLOW before any June CSV member opens",
+    "screen_universe.v1.json binds the complete June-only eligibility and exact-decimal volume-rank ledger, including every rejection and the frozen top-min(100, eligible_count) selection",
+    "source_manifest.v1.json binds the exhaustive compressed-file inventory for the fixed June top-min(100, eligible_count) selected universe, all three datasets, and all listed months without opening development or holdout data rows",
+    "freeze.v1.json binds preseal, screen marker, screen universe, source manifest, and the disclosed HEADER_ONLY_SCHEMA_EXPOSED members",
+    "run_consumed.v1.json binds freeze and is created O_CREAT|O_EXCL|O_NOFOLLOW before any development CSV member opens",
+    "event_universe.v1.json and opened_source_ledger.v1.json are run outputs that bind run_consumed and record every development member actually opened",
+    "development.v1.json binds run_consumed, event universe, opened-source ledger, the complete twelve-trial family, and selection",
+    "candidate_seal.v1.json, holdout_open.v1.json, and holdout.v1.json exist only after every development gate passes",
+    "result.v1.json binds the applicable terminal predecessor; REPORT.md records result.v1.json raw SHA-256 and explains it",
+    "SHA256SUMS lists every final packet file except itself in ascending bytewise relative-path order"
+  ],
+  "artifact_write_law": {
+    "canonical_json": "UTF-8, sorted keys, separators comma and colon with no insignificant whitespace, allow_nan=false, and exactly one trailing LF",
+    "completion_boundary": "a lifecycle file exists as a completed artifact only after its full bytes are written, first fsync succeeds, fchmod 0444 succeeds, second fsync succeeds, close succeeds, and parent-directory fsync succeeds",
+    "digest": "lowercase SHA-256 of exact raw bytes, never a reserialization digest",
+    "exclusive_create": "for every lifecycle JSON, marker, REPORT.md, and SHA256SUMS, open a new regular file in an already verified nonsymlink packet directory with O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW mode 0600, fully write the exact bytes, fsync the file, fchmod the same descriptor to 0444, fsync it again, close it, then fsync its parent directory; refuse if O_NOFOLLOW is unavailable",
+    "failed_or_partial_write": "any failure before completion_boundary makes the path incomplete and fail-closed, never an artifact; close the descriptor if it is still open, require lstat of the path still identifies the exact regular nonsymlink device and inode created by this attempt, unlink that incomplete path, and fsync its parent before any later successful-close or immutability claim; if exact cleanup cannot be proven and completed, the stage remains terminally failed",
+    "incomplete_acceptance": "an incomplete or partially written path is never hashed into the chain, parsed, accepted as a predecessor, reported, verified, or treated as a consumed marker",
+    "immutability": "after completion_boundary no lifecycle artifact, marker, REPORT.md, SHA256SUMS, static copy, or source copy may be overwritten, truncated, appended, renamed over, or deleted; required cleanup of a proven incomplete pre-completion path is not artifact deletion",
+    "packet_root": "preseal creates packet_root with an exclusive mkdir mode 0700 and refuses an existing path; subsequent stages require the same nonsymlink directory device and inode recorded by preseal",
+    "predecessor_record": "every JSON artifact after preseal contains predecessor_relative_path and predecessor_raw_sha256; artifacts with more than one input additionally contain a sorted input_bindings array of relative_path, raw_sha256, and byte_count",
+    "static_and_source_copies": "static copies and source ZIP/sidecar copies use their existing exclusive read-only copy laws and the same successful-completion versus incomplete-cleanup distinction",
+    "symlinks": "refuse symlink packet roots, source paths, destinations, and nonregular files"
+  },
+  "digest_chain_branches": {
+    "development_gate_failure": "result.v1.json directly binds development.v1.json; no holdout artifact exists",
+    "holdout_completed": "result.v1.json directly binds holdout.v1.json, whether the pointwise holdout gates pass or fail",
+    "post_marker_invalid_evidence": "result.v1.json binds the latest durably completed predecessor plus a failure_binding containing stage, error_code, and raw SHA-256 bindings for every completed artifact; no failed or partial file is treated as complete",
+    "pre_run_screen_failure": "screen_consumed.v1.json remains consumed; a terminal UNMEASURED result binds the screen marker and any last completed screen artifact",
+    "public_proxy_pass": "candidate_seal.v1.json binds development.v1.json, holdout_open.v1.json exclusively binds candidate_seal.v1.json, holdout.v1.json binds holdout_open.v1.json, and result.v1.json binds holdout.v1.json"
+  },
+  "cache": {
+    "manifest": "/private/tmp/cosmos-s1d-funding-dispersion-v1/s1d_acquisition_manifest.json",
+    "manifest_expected_schema": "S1DBinancePublicArchiveManifestV1",
+    "root": "/private/tmp/cosmos-s1d-funding-dispersion-v1/raw",
+    "reuse_rule": "read only; no hardlinks; each ZIP and sidecar is independently hashed, verified, and copied into a newly created packet file before any member is opened",
+    "upstream_outcomes": "FORBIDDEN"
+  },
+  "canonical_base": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "git_preseal": {
+    "clean_check": "git status --porcelain=v1 -z is empty and index/worktree bytes for every allowlisted path equal HEAD",
+    "lineage_check": "HEAD is the static_producer_commit, HEAD^ equals canonical_base exactly, and HEAD^{tree} is recorded; canonical_base is never mislabeled as the producer",
+    "packet_copy_root": "static/quant/research/s1t",
+    "path_set_check": "git ls-tree -r --name-only HEAD quant/research/s1t equals static_file_allowlist exactly; an absent, extra, modified, staged, or untracked path refuses preseal",
+    "per_file_binding": "record repository-relative path, Git mode, exact git blob object id from HEAD:path, raw SHA-256, byte_count, immutable-copy relative path, and immutable-copy raw SHA-256",
+    "static_file_allowlist": [
+      "quant/research/s1t/DISTINCTNESS.md",
+      "quant/research/s1t/OFFICIAL_SOURCE_RESEARCH.md",
+      "quant/research/s1t/README.md",
+      "quant/research/s1t/experiment.py",
+      "quant/research/s1t/protocol.v1.json",
+      "quant/research/s1t/source_plan.v1.json",
+      "quant/research/s1t/trial_ledger.v1.json",
+      "quant/research/s1t/verifier.py"
+    ],
+    "static_runtime": "preseal is the final stage allowed to execute the worktree engine; screen, run, and verify execute only the immutable packet copy and refuse unless its raw digest still matches preseal"
+  },
+  "months": [
+    "2025-06",
+    "2025-07",
+    "2025-08",
+    "2025-09",
+    "2025-10",
+    "2025-11",
+    "2025-12",
+    "2026-01",
+    "2026-02",
+    "2026-03",
+    "2026-04",
+    "2026-05",
+    "2026-06"
+  ],
+  "network_policy": {
+    "credentials": false,
+    "engine_network_access": false,
+    "private_endpoints": false,
+    "rest_fallback": false,
+    "signed_endpoints": false
+  },
+  "packet_root_default": "/private/tmp/cosmos-s1t-funding-interval-transition-v1",
+  "partition_custody": {
+    "development": {
+      "complete_horizon": "all baseline, confirmation, signal, decision, entry, funding, hourly-mark, exit, and 168 capacity-lookback hours must lie in [2025-07-01T00:00:00Z,2026-04-01T00:00:00Z)",
+      "member_open": "only after run_consumed.v1.json is durably created",
+      "months": [
+        "2025-07",
+        "2025-08",
+        "2025-09",
+        "2025-10",
+        "2025-11",
+        "2025-12",
+        "2026-01",
+        "2026-02",
+        "2026-03"
+      ]
+    },
+    "holdout": {
+      "compressed_bytes_may_be_hashed": true,
+      "complete_horizon": "all baseline, confirmation, signal, decision, entry, funding, hourly-mark, exit, and 168 capacity-lookback hours must lie in [2026-04-08T00:00:00Z,2026-07-01T00:00:00Z)",
+      "header_only_schema_exposed": [
+        "fundingRate/BTCUSDT/BTCUSDT-fundingRate-2026-06.zip:first CSV header",
+        "markPriceKlines/BTCUSDT/1h/BTCUSDT-1h-2026-06.zip:first CSV header",
+        "klines/BTCUSDT/1h/BTCUSDT-1h-2026-06.zip:first CSV header"
+      ],
+      "member_open": "only after every development gate passes, one champion is sealed, and holdout_open.v1.json is durably created by artifact_write_law",
+      "months": [
+        "2026-04",
+        "2026-05",
+        "2026-06"
+      ],
+      "outcome_row_state_before_gate": "SEALED_UNOPENED for all data rows; the three disclosed BTCUSDT June members are HEADER_ONLY_SCHEMA_EXPOSED rather than member-unopened",
+      "reselection": false,
+      "scored_start": "2026-04-08T00:00:00Z"
+    },
+    "screen": {
+      "month": "2025-06",
+      "outcome_scoring": false
+    }
+  },
+  "protocol_id": "s1t-binance-usdm-funding-interval-transition-v1",
+  "public_only": true,
+  "run_custody": {
+    "marker_creation": "artifact_write_law exclusive_create before the first July-2025 through March-2026 CSV member is decompressed or read",
+    "marker_or_result_deletion": false,
+    "partial_write_cleanup": "mandatory artifact_write_law cleanup of a proven incomplete pre-completion path is allowed and required; it is not marker or result deletion because no completed artifact existed",
+    "one_run": true,
+    "repair": false,
+    "rerun": false,
+    "second_invocation": "REFUSE"
+  },
+  "successor_handoff": {
+    "consumer": "N3 successor/final convergence",
+    "frozen_n3_v1_mutation": false,
+    "producer": "a clean later Git commit containing the exact protocol.v1.json and result.v1.json",
+    "state": "DEFERRED_EXACT_ACCEPTANCE"
+  },
+  "schema": "cosmos.quant.research.s1t.source_plan.v1",
+  "screen_custody": {
+    "june_only": "eligibility and ranking use only June-2025 files and values; later file presence, absence, completeness, metadata, or values cannot change membership or rank",
+    "marker_creation": "artifact_write_law exclusive_create before the first June-2025 CSV member is decompressed or read",
+    "rank_cutoff": "N=100 only; select the first min(100, eligible_count) by descending exact June klines/1h quote-volume total then ASCII symbol ascending; no alternate N may be tested or reported",
+    "rank_ledger": "for every eligible symbol record its canonical exact-decimal total, one-based rank, and SELECTED or REJECTED_BY_RANK; retain separate rejection records for every June-enumerated ineligible candidate",
+    "rank_math": "sum all 720 original quote_volume tokens with arbitrary-precision base-10 decimal arithmetic and no binary float, rounding, later-month input, or outcome input",
+    "one_screen": true,
+    "second_invocation": "REFUSE"
+  },
+  "selected_source": {
+    "datasets": [
+      "fundingRate",
+      "markPriceKlines/1h",
+      "klines/1h"
+    ],
+    "estimand_population": "only the fixed June-2025 top-min(100, eligible_count) contract-quote-volume stable-8h selected universe",
+    "inventory_population": "for every selected June top-min(100, eligible_count) symbol, every listed month, and all three datasets, record the expected path as PRESENT or MISSING before freeze; absence never changes universe membership or triggers replacement",
+    "later_absence_or_mismatch": "every selected-universe fundingRate member in an opened scored partition is required for complete transition surveillance; markPriceKlines/1h and klines/1h evidence is required for each in-horizon candidate; a missing or mismatched required member is INVALID_EVIDENCE_UNMEASURED and never removes or replaces the symbol",
+    "manifest_fields": [
+      "relative_path",
+      "source_url",
+      "dataset",
+      "symbol",
+      "month",
+      "inventory_state",
+      "cache_stat_identity",
+      "cache_zip_sha256",
+      "cache_sidecar_sha256",
+      "official_zip_sha256",
+      "byte_count",
+      "member_state",
+      "prior_schema_exposure"
+    ],
+    "member_state_before_holdout_gate": "HEADER_ONLY_SCHEMA_EXPOSED for the three disclosed BTCUSDT June members; SEALED_UNOPENED for every other April-through-June member",
+    "remote_revision": "no claim of equality to later remote revisions"
+  },
+  "source_copy_custody": {
+    "cache_identity": "before copy, open source with O_RDONLY|O_NOFOLLOW, require a regular file, and record device, inode, size, mtime_ns, and ctime_ns from fstat",
+    "copy": "stream bytes to a same-filesystem packet destination created by artifact_write_law; compute source and destination SHA-256 during copy; no hardlink, symlink, rename-over, or reuse of an existing destination",
+    "official_checksum": "copy and hash the adjacent .CHECKSUM under the same rules, parse exactly one lowercase or uppercase 64-hex SHA-256 token for the expected ZIP basename, and require it equals the ZIP digest",
+    "post_copy": "fstat the still-open cache source and require all recorded identity fields unchanged; fsync destination, fchmod it 0444, fsync it again, close it, and fsync its parent; reopen both cache source and packet copy with O_RDONLY|O_NOFOLLOW, require the cache device/inode identity still matches, independently rehash both, and require pre-copy, streamed, post-copy-source, post-copy-destination, manifest, and official digests all agree",
+    "pre_member_open": "immediately before each CSV-member read, open the packet ZIP once with O_RDONLY|O_NOFOLLOW, require unchanged regular-file stat identity, rehash that descriptor against source_manifest, rewind that same descriptor, and give only that descriptor to the ZIP reader",
+    "post_member_open": "immediately after member close, independently rehash the packet ZIP again; any identity or digest drift consumes the active stage and returns INVALID_EVIDENCE_UNMEASURED",
+    "toctou_failure": "fail closed; never fall back to cache bytes, network, REST, another symbol, or another file"
+  },
+  "templates": {
+    "checksum": "{zip_path}.CHECKSUM",
+    "fundingRate": "data/futures/um/monthly/fundingRate/{symbol}/{symbol}-fundingRate-{month}.zip",
+    "klines_1h": "data/futures/um/monthly/klines/{symbol}/1h/{symbol}-1h-{month}.zip",
+    "markPriceKlines_1h": "data/futures/um/monthly/markPriceKlines/{symbol}/1h/{symbol}-1h-{month}.zip"
+  }
+}

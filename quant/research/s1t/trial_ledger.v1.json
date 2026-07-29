@@ -1,0 +1,19 @@
+{
+  "family_size": 12,
+  "protocol_id": "s1t-binance-usdm-funding-interval-transition-v1",
+  "schema": "cosmos.quant.research.s1t.trial_ledger.v1",
+  "trials": [
+    {"confirmation_rows": 1, "entry_lag_hours": 1, "hold_hours": 4, "trial_id": "c1-l1-h04"},
+    {"confirmation_rows": 1, "entry_lag_hours": 1, "hold_hours": 8, "trial_id": "c1-l1-h08"},
+    {"confirmation_rows": 1, "entry_lag_hours": 1, "hold_hours": 12, "trial_id": "c1-l1-h12"},
+    {"confirmation_rows": 1, "entry_lag_hours": 2, "hold_hours": 4, "trial_id": "c1-l2-h04"},
+    {"confirmation_rows": 1, "entry_lag_hours": 2, "hold_hours": 8, "trial_id": "c1-l2-h08"},
+    {"confirmation_rows": 1, "entry_lag_hours": 2, "hold_hours": 12, "trial_id": "c1-l2-h12"},
+    {"confirmation_rows": 2, "entry_lag_hours": 1, "hold_hours": 4, "trial_id": "c2-l1-h04"},
+    {"confirmation_rows": 2, "entry_lag_hours": 1, "hold_hours": 8, "trial_id": "c2-l1-h08"},
+    {"confirmation_rows": 2, "entry_lag_hours": 1, "hold_hours": 12, "trial_id": "c2-l1-h12"},
+    {"confirmation_rows": 2, "entry_lag_hours": 2, "hold_hours": 4, "trial_id": "c2-l2-h04"},
+    {"confirmation_rows": 2, "entry_lag_hours": 2, "hold_hours": 8, "trial_id": "c2-l2-h08"},
+    {"confirmation_rows": 2, "entry_lag_hours": 2, "hold_hours": 12, "trial_id": "c2-l2-h12"}
+  ]
+}

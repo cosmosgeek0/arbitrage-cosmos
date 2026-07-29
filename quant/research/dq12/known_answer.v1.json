@@ -1,0 +1,25 @@
+{
+  "expectedReceiptSemantics": {
+    "authority": "NONE",
+    "canonicalQuoteId": "asset.USDT",
+    "canonicalSettlementId": "asset.USDT",
+    "canonicalUnderlyingId": "asset.BTC",
+    "decision": "MATCHED",
+    "historicalStatus": "UNKNOWN",
+    "reasonCodes": [],
+    "schema": "cosmos.dq12.spot-usdm-instrument-identity.v1",
+    "settlementBasis": "SETTLE_PROXY_FROM_MARGIN_ASSET",
+    "settlementSourceField": "marginAsset",
+    "spotBaseScale": {"denominator": 1, "numerator": 1},
+    "spotInstrumentId": "binance.spot.BTCUSDT",
+    "spotSymbol": "BTCUSDT",
+    "spotUnitsPerUsdmBaseUnit": {"denominator": 1, "numerator": 1},
+    "statusScope": "CURRENT_AT_RECEIPT_ONLY",
+    "usdmBaseScale": {"denominator": 1, "numerator": 1},
+    "usdmInstrumentId": "binance.usdm.BTCUSDT",
+    "usdmSymbol": "BTCUSDT"
+  },
+  "fixtureManifest": "fixture-manifest.v1.json",
+  "note": "Semantic expectations are independently precommitted; input and receipt digests are recomputed from exact committed bytes.",
+  "schema": "cosmos.dq12.known-answer.v1"
+}

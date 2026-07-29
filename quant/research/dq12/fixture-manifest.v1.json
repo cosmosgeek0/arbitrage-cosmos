@@ -1,0 +1,76 @@
+{
+  "cases": [
+    {"category": "positive", "id": "btc-direct-current", "expectedDecision": "MATCHED"},
+    {"category": "source-binding", "id": "spot-endpoint-drift", "expectedReason": "ENDPOINT_MISMATCH"},
+    {"category": "source-binding", "id": "usdm-market-role-swap", "expectedReason": "MARKET_TYPE_MISMATCH"},
+    {"category": "source-binding", "id": "payload-digest-drift", "expectedReason": "PAYLOAD_DIGEST_MISMATCH"},
+    {"category": "source-binding", "id": "payload-size-drift", "expectedReason": "PAYLOAD_SIZE_MISMATCH"},
+    {"category": "freshness", "id": "snapshot-stale", "expectedReason": "SNAPSHOT_STALE"},
+    {"category": "freshness", "id": "snapshot-future", "expectedReason": "SNAPSHOT_FROM_FUTURE"},
+    {"category": "freshness", "id": "snapshot-skew", "expectedReason": "SNAPSHOT_PAIR_SKEW"},
+    {"category": "current-status", "id": "historical-request", "expectedReason": "HISTORICAL_STATUS_UNSUPPORTED"},
+    {"category": "spot-eligibility", "id": "spot-nontrading", "expectedReason": "SPOT_NOT_TRADING"},
+    {"category": "spot-eligibility", "id": "spot-unknown-status", "expectedReason": "SPOT_STATUS_UNKNOWN"},
+    {"category": "spot-eligibility", "id": "spot-not-allowed", "expectedReason": "SPOT_TRADING_NOT_ALLOWED"},
+    {"category": "usdm-eligibility", "id": "usdm-nontrading", "expectedReason": "USDM_NOT_TRADING"},
+    {"category": "usdm-eligibility", "id": "usdm-unknown-status", "expectedReason": "USDM_STATUS_UNKNOWN"},
+    {"category": "usdm-eligibility", "id": "quarterly-contract", "expectedReason": "USDM_CONTRACT_NOT_PERPETUAL"},
+    {"category": "usdm-eligibility", "id": "tradifi-contract", "expectedReason": "USDM_CONTRACT_TYPE_UNKNOWN"},
+    {"category": "usdm-eligibility", "id": "index-underlying", "expectedReason": "USDM_UNDERLYING_NOT_COIN"},
+    {"category": "usdm-eligibility", "id": "pair-symbol-mismatch", "expectedReason": "USDM_PAIR_SYMBOL_MISMATCH"},
+    {"category": "identity", "id": "base-mismatch", "expectedReason": "EXPECTED_UNDERLYING_MISMATCH"},
+    {"category": "identity", "id": "quote-mismatch", "expectedReason": "QUOTE_ASSET_IDENTITY_MISMATCH"},
+    {"category": "identity", "id": "margin-settle-proxy-mismatch", "expectedReason": "SETTLEMENT_ASSET_IDENTITY_MISMATCH"},
+    {"category": "identity", "id": "quote-settlement-scale-mismatch", "expectedReason": "QUOTE_SETTLEMENT_SCALE_MISMATCH"},
+    {"category": "registry", "id": "symbol-alias", "expectedDecision": "MATCHED"},
+    {"category": "registry", "id": "symbol-migration", "expectedDecision": "MATCHED"},
+    {"category": "registry", "id": "migration-changes-underlying", "expectedReason": "MIGRATION_CHANGES_UNDERLYING"},
+    {"category": "registry", "id": "expired-binding", "expectedReason": "BINDING_MISSING"},
+    {"category": "registry", "id": "future-binding", "expectedReason": "BINDING_MISSING"},
+    {"category": "registry", "id": "ambiguous-binding", "expectedReason": "REGISTRY_AMBIGUOUS_EDGE"},
+    {"category": "registry", "id": "alias-cycle", "expectedReason": "ALIAS_CYCLE"},
+    {"category": "registry", "id": "alias-depth", "expectedReason": "ALIAS_DEPTH_EXCEEDED"},
+    {"category": "multiplier", "id": "1000shib-explicit-scale", "expectedDecision": "MATCHED"},
+    {"category": "multiplier", "id": "1000shib-implicit-trap", "expectedReason": "BINDING_MISSING"},
+    {"category": "digit-leading", "id": "1inch-exact-identity", "expectedDecision": "MATCHED"},
+    {"category": "json-hostility", "id": "duplicate-key", "expectedReason": "JSON_DUPLICATE_KEY"},
+    {"category": "json-hostility", "id": "duplicate-symbol", "expectedReason": "DUPLICATE_VENUE_SYMBOL"},
+    {"category": "json-hostility", "id": "malformed-json", "expectedReason": "JSON_SYNTAX_INVALID"},
+    {"category": "bounds", "id": "input-size", "expectedReason": "INPUT_SIZE_INVALID"},
+    {"category": "bounds", "id": "json-depth", "expectedReason": "JSON_DEPTH_EXCEEDED"},
+    {"category": "bounds", "id": "json-nodes", "expectedReason": "JSON_NODE_LIMIT"},
+    {"category": "bounds", "id": "json-string", "expectedReason": "JSON_STRING_LIMIT"},
+    {"category": "bounds", "id": "registry-edges", "expectedReason": "REGISTRY_CARDINALITY_INVALID"},
+    {"category": "determinism", "id": "repeat-exact-bytes", "expectedDecision": "MATCHED"},
+    {"category": "determinism", "id": "json-object-order", "expectedDecision": "MATCHED"}
+  ],
+  "fixtures": [
+    {
+      "bytes": 908,
+      "path": "fixtures/request-btcusdt.current.json",
+      "role": "request",
+      "sha256": "fcf5a543741e16e2de5aa670a89320c2aea834fd6e9e9b07879584c3e02ae73e"
+    },
+    {
+      "bytes": 120,
+      "path": "fixtures/spot-btcusdt.current.json",
+      "role": "spot-exchange-info",
+      "sha256": "818166935763b4504f48adaecaa6a3cdd4b37e304580c505245ce5c4bbf67066"
+    },
+    {
+      "bytes": 181,
+      "path": "fixtures/usdm-btcusdt.current.json",
+      "role": "usdm-exchange-info",
+      "sha256": "006e799ab51c81593888c1df9b2f35bc1aee01472a32f5e57677d3c4bd549eeb"
+    },
+    {
+      "bytes": 2028,
+      "path": "fixtures/registry-btcusdt.v1.json",
+      "role": "identity-registry",
+      "sha256": "e7bb69a52f3c0fbb9abfe43cc1f4c384f14cea574961c68c02d74bd178e046ef"
+    }
+  ],
+  "networkRequired": false,
+  "schema": "cosmos.dq12.fixture-manifest.v1",
+  "synthetic": true
+}

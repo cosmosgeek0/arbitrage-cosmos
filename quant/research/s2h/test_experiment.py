@@ -739,6 +739,25 @@ def test_exclusive_marker_is_canonical_durable_and_cannot_be_rewritten(
     assert json.loads(marker.read_text()) == {"a": 2, "z": 1}
 
 
+def test_exclusive_marker_survives_fsync_failure_and_consumes_name(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marker = tmp_path / "marker.v1.json"
+
+    def fail_fsync(_descriptor: int) -> None:
+        raise OSError("synthetic fsync failure")
+
+    monkeypatch.setattr(os, "fsync", fail_fsync)
+    with pytest.raises(OSError, match="synthetic fsync failure"):
+        sut.write_exclusive_json(marker, {"ordinal": 1})
+
+    assert marker.exists()
+    assert marker.stat().st_mode & 0o777 == 0o600
+    with pytest.raises(FileExistsError):
+        sut.write_exclusive_json(marker, {"ordinal": 2})
+
+
 def test_canonical_json_rejects_nonfinite_floats(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="Out of range float values"):
         sut.canonical_bytes({"invalid": float("nan")})

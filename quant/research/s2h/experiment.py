@@ -414,15 +414,12 @@ def write_exclusive_json(path: Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     raw = canonical_bytes(value)
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-    try:
-        with os.fdopen(descriptor, "wb", closefd=True) as output:
-            output.write(raw)
-            output.flush()
-            os.fsync(output.fileno())
-    except BaseException:
-        if path.exists():
-            path.unlink()
-        raise
+    # Existence consumes the lifecycle name. Preserve even a partial marker
+    # after write/fsync failure so interruption can never authorize a retry.
+    with os.fdopen(descriptor, "wb", closefd=True) as output:
+        output.write(raw)
+        output.flush()
+        os.fsync(output.fileno())
     _fsync_parent(path)
 
 

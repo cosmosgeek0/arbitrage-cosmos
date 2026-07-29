@@ -1,0 +1,83 @@
+{
+  "schema": "S1POfficialSourcesV1",
+  "retrievedAtUtc": "2026-07-29T16:14:26Z",
+  "officialOnly": true,
+  "publicOnly": true,
+  "privateOrSignedRequestsMade": false,
+  "repositoryPins": {
+    "binancePublicDataMaster": "5c7f3197591c0d54d85dc43066226bc4c671d47a",
+    "binanceSpotApiDocsMaster": "6b8372cad7cecbdf5dd88a3372eafff51988c5cf"
+  },
+  "sources": [
+    {
+      "id": "PUBLIC_ARCHIVES",
+      "url": "https://data.binance.vision/",
+      "contract": "PUBLIC_CHECKSUM_ADDRESSED_SPOT_AND_USD_M_ARCHIVES"
+    },
+    {
+      "id": "PUBLIC_ARCHIVE_SPEC",
+      "url": "https://github.com/binance/binance-public-data/blob/5c7f3197591c0d54d85dc43066226bc4c671d47a/README.md",
+      "contract": "ZIP_PATH_SCHEMA_CHECKSUM_SIDECARS_AND_SPOT_MICROSECOND_TRANSITION"
+    },
+    {
+      "id": "SPOT_KLINES",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/rest-api/market#kline-candlestick-data",
+      "contract": "PUBLIC_NONE_OPEN_CLOSE_AND_QUOTE_ASSET_VOLUME_FIELDS"
+    },
+    {
+      "id": "USD_M_MARKET_DATA",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data",
+      "contract": "PUBLIC_STANDARD_KLINES_MARK_PRICE_KLINES_AND_FUNDING_HISTORY"
+    },
+    {
+      "id": "SPOT_FILTERS",
+      "url": "https://developers.binance.com/en/docs/binance-spot-api-docs/filters",
+      "contract": "CURRENT_DYNAMIC_FILTERS_NOT_HISTORICAL_SNAPSHOTS"
+    },
+    {
+      "id": "USD_M_FILTERS",
+      "url": "https://developers.binance.com/en/docs/derivatives/usds-margined-futures/common-definition",
+      "contract": "CURRENT_DYNAMIC_FILTERS_NOT_HISTORICAL_SNAPSHOTS"
+    },
+    {
+      "id": "SPOT_COMMISSION_FAQ",
+      "url": "https://developers.binance.com/en/docs/products/spot/faqs/commission_faq",
+      "contract": "EXAMPLES_FICTIONAL_PROMOTIONS_AND_DISCOUNTS_MAY_CHANGE_RATES"
+    },
+    {
+      "id": "SPOT_ACCOUNT_COMMISSION",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/rest-api/account#account-commission-rates-user_data",
+      "contract": "SIGNED_USER_DATA_REQUIRED"
+    },
+    {
+      "id": "USD_M_ACCOUNT_COMMISSION",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/account#user-commission-rate",
+      "contract": "SIGNED_USER_DATA_REQUIRED"
+    }
+  ],
+  "feeTruth": {
+    "accountEffectiveSpot": "UNKNOWN",
+    "accountEffectiveUsdM": "UNKNOWN",
+    "historicalPromotionsTaxesAndDiscounts": "UNKNOWN",
+    "frozenNumbersAre": "RESEARCH_PROXY_ONLY"
+  },
+  "fundingArchiveSchemaBoundary": {
+    "officialNormativeCsvTablePublished": false,
+    "acceptedExactHeader": "calc_time,funding_interval_hours,last_funding_rate",
+    "withinMonthIntervalTransition": "TERMINAL_UNMEASURED_NO_NORMATIVE_TRANSITION_LAW",
+    "anyOtherShape": "TERMINAL_UNMEASURED_NO_COLUMN_GUESSING",
+    "missingFundingTreatment": "INVALID_EVIDENCE_NEVER_ZERO"
+  },
+  "archiveReuse": {
+    "policy": "READ_ONLY",
+    "discoveryPath": "/private/tmp/cosmos-s1h-btc-eth-rv-basis-v1/DISCOVERY.v1.json",
+    "discoverySha256": "5fd5924a63fd31c08378002e3d508d6de5d895383c3322ce3cd82caad35b1c0f",
+    "archiveRoot": "/private/tmp/cosmos-s1h-btc-eth-rv-basis-v1/archives",
+    "forbiddenSiblingArtifacts": [
+      "ACQUISITION.v1.json",
+      "FREEZE_CANDIDATE.v1.json",
+      "RESULT_CANDIDATE.v1.json",
+      "S1H_RUN_CONSUMED.v1.json"
+    ]
+  }
+}

@@ -38,3 +38,20 @@ holdout.
 - Capital authority: `NONE`.
 
 The terminal result and focused proof are appended here only after the single run.
+
+## Terminal result
+
+`UNMEASURED` — development source validation found two byte-identical daily records
+for the same AXSUSDT open timestamp in the checksum-valid February 2026 official
+archive. The protocol forbids deduplicating after outcomes, dropping the symbol, or
+rerunning.
+
+- Net edge: `UNMEASURED`; no value was produced.
+- Multiplicity/PBO: `UNMEASURED`; candidate evaluation never began.
+- Drawdown and public capacity proxy: `UNMEASURED`.
+- Holdout: `UNOPENED_UNTOUCHED` for all 122 declared final days.
+- Candidate seal and holdout-open receipt: absent.
+- N3 verdict: `UNMEASURED`; capital authority `NONE`.
+
+The exact checksum, duplicate-row, run-marker, and result bindings are in
+`SOURCE_ANOMALY_PROOF.md`. `result.v1.json` is the machine-readable terminal verdict.

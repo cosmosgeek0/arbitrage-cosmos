@@ -1,0 +1,227 @@
+{
+  "schema": "cosmos.dq13.causal-asof-policy.v1",
+  "status": "FROZEN",
+  "canonicalUnit": "MICROSECOND",
+  "timestampContract": {
+    "explicitUnits": [
+      "MILLISECOND",
+      "MICROSECOND"
+    ],
+    "magnitudeInference": false,
+    "millisecondBounds": "[n*1000,n*1000+999]",
+    "microsecondBounds": "[n,n]",
+    "uncertainty": "caller-declared symmetric maxErrorUs",
+    "overlap": "UNKNOWN unless same-clock sequence proves order",
+    "maximumCanonicalUs": 9223372036854775807
+  },
+  "apiContract": {
+    "entrypoints": [
+      "validate_causal_asof_v1",
+      "validate_causal_asof_mapping_v1",
+      "validate_causal_asof_json_v1"
+    ],
+    "totality": "every entrypoint returns a tri-state receipt and never raises",
+    "unexpectedException": "INVALID VALIDATOR_EXCEPTION receipt",
+    "jsonRecursion": "INVALID JSON_NESTING_INVALID receipt",
+    "objectEntrypointValidation": "full runtime type, enum, range, and identity validation",
+    "unknownEnumOrLookAlikeString": "INVALID",
+    "uncaughtKeyErrorOrIndexError": false
+  },
+  "endpointProfiles": {
+    "rule": "one profile is one documented endpoint response schema, not a transport family",
+    "spot": {
+      "SPOT_REST_KLINES_MS": "KLINE/INTERVAL",
+      "SPOT_REST_KLINES_US": "KLINE/INTERVAL",
+      "SPOT_WS_KLINE_MS": "KLINE/INTERVAL",
+      "SPOT_WS_KLINE_US": "KLINE/INTERVAL",
+      "SPOT_ARCHIVE_KLINES_PRE_2025_MS": "KLINE/INTERVAL",
+      "SPOT_ARCHIVE_KLINES_FROM_2025_US": "KLINE/INTERVAL",
+      "SPOT_REST_EXCHANGE_INFO_MS": "CURRENT_EXCHANGE_INFO/CURRENT_SNAPSHOT"
+    },
+    "usdM": {
+      "USDM_REST_KLINES_MS": "KLINE/INTERVAL",
+      "USDM_WS_KLINE_MS": "KLINE/INTERVAL",
+      "USDM_REST_MARK_PRICE_KLINES_MS": "MARK_PRICE/INTERVAL",
+      "USDM_REST_INDEX_PRICE_KLINES_MS": "INDEX_PRICE/INTERVAL",
+      "USDM_WS_MARK_PRICE_MS": "MARK_PRICE/INSTANT and INDEX_PRICE/INSTANT",
+      "USDM_REST_PREMIUM_INDEX_MS": "MARK_PRICE/INSTANT and INDEX_PRICE/INSTANT",
+      "USDM_REST_FUNDING_HISTORY_MS": "FUNDING/INSTANT",
+      "USDM_REST_EXCHANGE_INFO_MS": "CURRENT_EXCHANGE_INFO/CURRENT_SNAPSHOT",
+      "USDM_REST_FUNDING_INFO_MS": "CURRENT_FUNDING_INFO/CURRENT_SNAPSHOT"
+    },
+    "undocumentedKindShapeCombination": "INVALID",
+    "unserviceableRequirement": "INVALID",
+    "intervalZones": {
+      "spotRestKlines": [
+        "UTC",
+        "UTC+08:00"
+      ],
+      "spotWebSocketKlines": [
+        "UTC",
+        "UTC+08:00"
+      ],
+      "spotPublicArchiveKlines": [
+        "UTC"
+      ],
+      "usdMIntervalProfiles": [
+        "UTC"
+      ],
+      "profileContradiction": "INVALID",
+      "requirementWithNoServingProfile": "INVALID"
+    },
+    "spotArchiveCutoverUs": 1735689600000000,
+    "wrongOrMissingUnit": "INVALID",
+    "usdMSourceUnits": "MILLISECOND only"
+  },
+  "intervalIdentity": {
+    "grammar": "<step>@<zone>",
+    "zones": [
+      "UTC",
+      "UTC+08:00"
+    ],
+    "distinctZonesNeverCollide": true,
+    "fixedSteps": {
+      "1s": 1000000,
+      "1m": 60000000,
+      "3m": 180000000,
+      "5m": 300000000,
+      "15m": 900000000,
+      "30m": 1800000000,
+      "1h": 3600000000,
+      "2h": 7200000000,
+      "4h": 14400000000,
+      "6h": 21600000000,
+      "8h": 28800000000,
+      "12h": 43200000000,
+      "1d": 86400000000,
+      "3d": 259200000000,
+      "1w": 604800000000
+    },
+    "calendarSteps": [
+      "1M"
+    ],
+    "unsupportedStep": "INVALID (includes 7m and any undocumented step)",
+    "unsupportedZone": "INVALID",
+    "missingZone": "INVALID",
+    "durationRequired": true,
+    "fixedDurationDeclaration": "must equal the frozen step duration",
+    "calendarDurationDeclaration": "must be an exact 28..31 day month",
+    "calendarEdges": "open and exclusive end must be local month starts under the declared zone",
+    "fixedPhase": {
+      "subdayAndDaily": "local epoch grid under the declared zone",
+      "threeDay": "local day-one modulo three-day grid",
+      "weekly": "local Monday 00:00 grid"
+    },
+    "usdMSecondInterval": "INVALID under current endpoint ambiguity",
+    "misalignedFixedEdge": "INVALID"
+  },
+  "clockChain": {
+    "requiredOrder": "semanticEventOrEnd<=availability<=decision<=executedFill",
+    "availability": "OBSERVED_RECEIPT or FROZEN_RELEASE_EVIDENCE",
+    "streamAvailability": "OBSERVED_RECEIPT only",
+    "currentSnapshotAvailability": "OBSERVED_RECEIPT only",
+    "availabilityEvidenceRequired": "evidence id and SHA-256 digest for every non-null availability clock",
+    "bareFrozenReleaseEvidence": "INVALID",
+    "evidenceWithoutClock": "INVALID",
+    "availabilityAtDecision": "inclusive only when order is proven",
+    "fillState": {
+      "EXECUTED": "fill clock required",
+      "NO_FILL": "fill clock forbidden"
+    }
+  },
+  "intervalContract": {
+    "representation": "[openUs,endExclusiveUs)",
+    "endExclusiveRule": "(closeInclusiveNative+1)*nativeUnitUs",
+    "semanticTime": "exclusive interval end",
+    "streamEventClock": "WS event time is supplied and is not required to follow the close",
+    "restAndArchiveEventClock": "forbidden; no exchange emission clock is invented",
+    "streamFinalFlag": "source x must be true; missing is UNKNOWN",
+    "restAndArchiveFinalFlag": "forbidden; it cannot pretend to be source x",
+    "completenessProof": "availability must be proven at or after the exclusive end",
+    "availabilityBeforeEnd": "UNKNOWN partial",
+    "availabilityEndOrderAmbiguous": "UNKNOWN"
+  },
+  "feedContract": {
+    "KLINE": "final interval only",
+    "MARK_PRICE": "instant or final interval",
+    "INDEX_PRICE": "instant or final interval",
+    "FUNDING": "settled USD-M REST funding history only",
+    "CURRENT_EXCHANGE_INFO": "current exchange-info snapshot, effective prospectively from observed receipt",
+    "CURRENT_FUNDING_INFO": "current funding-info snapshot, effective prospectively from observed receipt",
+    "projectedPremiumIndexRateBecomesSettledFunding": false
+  },
+  "joinContract": {
+    "keys": [
+      "venue",
+      "product",
+      "instrument",
+      "feedKind",
+      "intervalId"
+    ],
+    "direction": "BACKWARD_ASOF_ONLY",
+    "selectionClock": "latest provable semantic event among records available by decision",
+    "futureRecordCanReplacePredecessor": false,
+    "lateOldEventCanReplaceNewerEvent": false,
+    "identicalDuplicate": "collapse only when payload, endpoint, semantic clocks, availability clock, availability basis, and availability evidence are identical; receipt all record IDs",
+    "sameEffectivePayloadConflict": "UNKNOWN even when same-clock sequences differ",
+    "dominanceCycle": "UNKNOWN",
+    "conflictingOrAmbiguousMaximum": "UNKNOWN",
+    "missingRequiredFeed": "UNKNOWN",
+    "coexistence": {
+      "causallyPresentAndContradictoryOrUnplaceableContender": "UNKNOWN even with a valid predecessor",
+      "ignorableWithValidPredecessor": [
+        "provably future availability",
+        "provably stale semantic event or receipt",
+        "provably partial nonfinal or pre-end interval"
+      ]
+    }
+  },
+  "freshnessContract": {
+    "semanticAndAvailabilityAgesRequired": true,
+    "currentSnapshotUsesAvailabilityAgeOnly": true,
+    "window": "[eventOrAvailability,eventOrAvailability+maxAgeUs)",
+    "atExpiry": "UNKNOWN_STALE"
+  },
+  "outcomes": {
+    "VALID": "every required feed and clock chain is complete, fresh, coherent, and definitely ordered",
+    "UNKNOWN": "missing, stale, ambiguous, unavailable, or contradictory evidence",
+    "INVALID": "malformed contract or definite causal-policy violation",
+    "precedence": "INVALID then UNKNOWN then VALID",
+    "admissible": "VALID only"
+  },
+  "receiptContract": {
+    "canonicalJsonWithLf": true,
+    "domainSeparatedSha256": true,
+    "inputOrderIndependent": true,
+    "bindsSelectedRecordIdsAndPayloadDigests": true,
+    "bindsAvailabilityEvidenceIdAndDigest": true,
+    "bindsAvailabilityBasis": true,
+    "bindsFreshnessThresholds": true
+  },
+  "proofContract": {
+    "fixtureReplay": "every hostile fixture is evaluated twice",
+    "focusedTestExecution": "verifier runs the frozen focused pytest file and requires exit zero",
+    "focusedTestSentinel": "exact executed call-phase count and deterministic node-id/outcome SHA-256",
+    "pytestEnvironment": "PYTEST_ADDOPTS and PYTEST_PLUGINS removed; plugin autoload and conftest loading disabled; dedicated config and explicit sentinel plugin used",
+    "focusedTestOutput": "not claimed or hash-bound because timing text is nondeterministic",
+    "caps": "JSON bytes, requirement count, and observation count are exercised by the focused test"
+  },
+  "consumerRule": {
+    "allowed": [
+      "FUTURE_S1_VG",
+      "N3_FINAL_CONVERGENCE"
+    ],
+    "pastPacketReclassification": false,
+    "validatorReceiptMustBeFrozenBeforeScoring": true,
+    "payloadDigestsAndClockClaimsMustMatch": true
+  },
+  "authority": {
+    "value": "NONE",
+    "canonicalLanding": false,
+    "ui": false,
+    "host": false,
+    "providerPrivate": false,
+    "ordersTransfersWithdrawalsMoney": false,
+    "economicOrCapitalAuthority": false
+  }
+}

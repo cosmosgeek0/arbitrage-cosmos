@@ -1,0 +1,2277 @@
+{
+  "schema": "cosmos.dq13.hostile-fixtures.v1",
+  "baseFrame": {
+    "schema": "cosmos.dq13.causal-asof-clock.v1",
+    "decisionId": "decision-all-feeds",
+    "decisionAt": {
+      "value": 1735689660003000,
+      "unit": "MICROSECOND",
+      "clockId": "local-capture",
+      "sequence": 20
+    },
+    "fillState": "EXECUTED",
+    "fillAt": {
+      "value": 1735689660004000,
+      "unit": "MICROSECOND",
+      "clockId": "local-capture",
+      "sequence": 21
+    },
+    "requirements": [
+      {
+        "key": {
+          "venue": "BINANCE",
+          "product": "SPOT",
+          "instrument": "BTCUSDT",
+          "kind": "KLINE",
+          "intervalId": "1m@UTC"
+        },
+        "shape": "INTERVAL",
+        "maxEventAgeUs": 120000000,
+        "maxAvailabilityAgeUs": 10000000,
+        "expectedIntervalUs": 60000000
+      },
+      {
+        "key": {
+          "venue": "BINANCE",
+          "product": "USD_M",
+          "instrument": "BTCUSDT",
+          "kind": "MARK_PRICE",
+          "intervalId": null
+        },
+        "shape": "INSTANT",
+        "maxEventAgeUs": 120000000,
+        "maxAvailabilityAgeUs": 10000000,
+        "expectedIntervalUs": null
+      },
+      {
+        "key": {
+          "venue": "BINANCE",
+          "product": "USD_M",
+          "instrument": "BTCUSDT",
+          "kind": "INDEX_PRICE",
+          "intervalId": null
+        },
+        "shape": "INSTANT",
+        "maxEventAgeUs": 120000000,
+        "maxAvailabilityAgeUs": 10000000,
+        "expectedIntervalUs": null
+      },
+      {
+        "key": {
+          "venue": "BINANCE",
+          "product": "USD_M",
+          "instrument": "BTCUSDT",
+          "kind": "FUNDING",
+          "intervalId": null
+        },
+        "shape": "INSTANT",
+        "maxEventAgeUs": 120000000,
+        "maxAvailabilityAgeUs": 10000000,
+        "expectedIntervalUs": null
+      },
+      {
+        "key": {
+          "venue": "BINANCE",
+          "product": "USD_M",
+          "instrument": "BTCUSDT",
+          "kind": "CURRENT_EXCHANGE_INFO",
+          "intervalId": null
+        },
+        "shape": "CURRENT_SNAPSHOT",
+        "maxEventAgeUs": null,
+        "maxAvailabilityAgeUs": 10000000,
+        "expectedIntervalUs": null
+      },
+      {
+        "key": {
+          "venue": "BINANCE",
+          "product": "USD_M",
+          "instrument": "BTCUSDT",
+          "kind": "CURRENT_FUNDING_INFO",
+          "intervalId": null
+        },
+        "shape": "CURRENT_SNAPSHOT",
+        "maxEventAgeUs": null,
+        "maxAvailabilityAgeUs": 10000000,
+        "expectedIntervalUs": null
+      },
+      {
+        "key": {
+          "venue": "BINANCE",
+          "product": "USD_M",
+          "instrument": "BTCUSDT",
+          "kind": "MARK_PRICE",
+          "intervalId": "1m@UTC"
+        },
+        "shape": "INTERVAL",
+        "maxEventAgeUs": 120000000,
+        "maxAvailabilityAgeUs": 10000000,
+        "expectedIntervalUs": 60000000
+      }
+    ],
+    "observations": [
+      {
+        "recordId": "spot-kline-final",
+        "key": {
+          "venue": "BINANCE",
+          "product": "SPOT",
+          "instrument": "BTCUSDT",
+          "kind": "KLINE",
+          "intervalId": "1m@UTC"
+        },
+        "sourceProfile": "SPOT_WS_KLINE_US",
+        "shape": "INTERVAL",
+        "availabilityBasis": "OBSERVED_RECEIPT",
+        "payloadDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "availabilityEvidenceId": "receipt:spot-ws-kline-1m:0001",
+        "availabilityEvidenceDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "eventAt": {
+          "value": 1735689660000100,
+          "unit": "MICROSECOND",
+          "clockId": "binance-spot"
+        },
+        "availableAt": {
+          "value": 1735689660000200,
+          "unit": "MICROSECOND",
+          "clockId": "local-capture",
+          "sequence": 10
+        },
+        "intervalOpen": {
+          "value": 1735689600000000,
+          "unit": "MICROSECOND",
+          "clockId": "binance-spot"
+        },
+        "intervalCloseInclusive": {
+          "value": 1735689659999999,
+          "unit": "MICROSECOND",
+          "clockId": "binance-spot"
+        },
+        "isFinal": true
+      },
+      {
+        "recordId": "mark-instant",
+        "key": {
+          "venue": "BINANCE",
+          "product": "USD_M",
+          "instrument": "BTCUSDT",
+          "kind": "MARK_PRICE",
+          "intervalId": null
+        },
+        "sourceProfile": "USDM_WS_MARK_PRICE_MS",
+        "shape": "INSTANT",
+        "availabilityBasis": "OBSERVED_RECEIPT",
+        "payloadDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "availabilityEvidenceId": "receipt:usdm-ws-mark-price:0002",
+        "availabilityEvidenceDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+        "eventAt": {
+          "value": 1735689660000,
+          "unit": "MILLISECOND",
+          "clockId": "binance-usdm"
+        },
+        "availableAt": {
+          "value": 1735689660001200,
+          "unit": "MICROSECOND",
+          "clockId": "local-capture",
+          "sequence": 11
+        },
+        "intervalOpen": null,
+        "intervalCloseInclusive": null,
+        "isFinal": null
+      },
+      {
+        "recordId": "index-instant",
+        "key": {
+          "venue": "BINANCE",
+          "product": "USD_M",
+          "instrument": "BTCUSDT",
+          "kind": "INDEX_PRICE",
+          "intervalId": null
+        },
+        "sourceProfile": "USDM_WS_MARK_PRICE_MS",
+        "shape": "INSTANT",
+        "availabilityBasis": "OBSERVED_RECEIPT",
+        "payloadDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "availabilityEvidenceId": "receipt:usdm-ws-index-price:0003",
+        "availabilityEvidenceDigest": "3333333333333333333333333333333333333333333333333333333333333333",
+        "eventAt": {
+          "value": 1735689660000,
+          "unit": "MILLISECOND",
+          "clockId": "binance-usdm"
+        },
+        "availableAt": {
+          "value": 1735689660001300,
+          "unit": "MICROSECOND",
+          "clockId": "local-capture",
+          "sequence": 12
+        },
+        "intervalOpen": null,
+        "intervalCloseInclusive": null,
+        "isFinal": null
+      },
+      {
+        "recordId": "settled-funding",
+        "key": {
+          "venue": "BINANCE",
+          "product": "USD_M",
+          "instrument": "BTCUSDT",
+          "kind": "FUNDING",
+          "intervalId": null
+        },
+        "sourceProfile": "USDM_REST_FUNDING_HISTORY_MS",
+        "shape": "INSTANT",
+        "availabilityBasis": "OBSERVED_RECEIPT",
+        "payloadDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "availabilityEvidenceId": "receipt:usdm-rest-funding-history:0004",
+        "availabilityEvidenceDigest": "4444444444444444444444444444444444444444444444444444444444444444",
+        "eventAt": {
+          "value": 1735689600000,
+          "unit": "MILLISECOND",
+          "clockId": "binance-usdm"
+        },
+        "availableAt": {
+          "value": 1735689660001400,
+          "unit": "MICROSECOND",
+          "clockId": "local-capture",
+          "sequence": 13
+        },
+        "intervalOpen": null,
+        "intervalCloseInclusive": null,
+        "isFinal": null
+      },
+      {
+        "recordId": "exchange-info-current",
+        "key": {
+          "venue": "BINANCE",
+          "product": "USD_M",
+          "instrument": "BTCUSDT",
+          "kind": "CURRENT_EXCHANGE_INFO",
+          "intervalId": null
+        },
+        "sourceProfile": "USDM_REST_EXCHANGE_INFO_MS",
+        "shape": "CURRENT_SNAPSHOT",
+        "availabilityBasis": "OBSERVED_RECEIPT",
+        "payloadDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "availabilityEvidenceId": "receipt:usdm-rest-exchange-info:0005",
+        "availabilityEvidenceDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+        "eventAt": null,
+        "availableAt": {
+          "value": 1735689660001500,
+          "unit": "MICROSECOND",
+          "clockId": "local-capture",
+          "sequence": 14
+        },
+        "intervalOpen": null,
+        "intervalCloseInclusive": null,
+        "isFinal": null
+      },
+      {
+        "recordId": "funding-info-current",
+        "key": {
+          "venue": "BINANCE",
+          "product": "USD_M",
+          "instrument": "BTCUSDT",
+          "kind": "CURRENT_FUNDING_INFO",
+          "intervalId": null
+        },
+        "sourceProfile": "USDM_REST_FUNDING_INFO_MS",
+        "shape": "CURRENT_SNAPSHOT",
+        "availabilityBasis": "OBSERVED_RECEIPT",
+        "payloadDigest": "8888888888888888888888888888888888888888888888888888888888888888",
+        "availabilityEvidenceId": "receipt:usdm-rest-funding-info:0006",
+        "availabilityEvidenceDigest": "6666666666666666666666666666666666666666666666666666666666666666",
+        "eventAt": null,
+        "availableAt": {
+          "value": 1735689660001600,
+          "unit": "MICROSECOND",
+          "clockId": "local-capture",
+          "sequence": 15
+        },
+        "intervalOpen": null,
+        "intervalCloseInclusive": null,
+        "isFinal": null
+      },
+      {
+        "recordId": "mark-kline-rest",
+        "key": {
+          "venue": "BINANCE",
+          "product": "USD_M",
+          "instrument": "BTCUSDT",
+          "kind": "MARK_PRICE",
+          "intervalId": "1m@UTC"
+        },
+        "sourceProfile": "USDM_REST_MARK_PRICE_KLINES_MS",
+        "shape": "INTERVAL",
+        "availabilityBasis": "OBSERVED_RECEIPT",
+        "payloadDigest": "9999999999999999999999999999999999999999999999999999999999999999",
+        "availabilityEvidenceId": "receipt:usdm-rest-mark-kline-1m:0007",
+        "availabilityEvidenceDigest": "7777777777777777777777777777777777777777777777777777777777777777",
+        "eventAt": null,
+        "availableAt": {
+          "value": 1735689660001700,
+          "unit": "MICROSECOND",
+          "clockId": "local-capture",
+          "sequence": 16
+        },
+        "intervalOpen": {
+          "value": 1735689600000,
+          "unit": "MILLISECOND",
+          "clockId": "binance-usdm"
+        },
+        "intervalCloseInclusive": {
+          "value": 1735689659999,
+          "unit": "MILLISECOND",
+          "clockId": "binance-usdm"
+        },
+        "isFinal": null
+      }
+    ]
+  },
+  "cases": [
+    {
+      "caseId": "valid-all-feeds",
+      "mutations": [],
+      "expectedStatus": "VALID",
+      "expectedReasons": []
+    },
+    {
+      "caseId": "observation-order-invariant",
+      "mutations": [
+        {
+          "op": "reverseObservations"
+        }
+      ],
+      "expectedStatus": "VALID",
+      "expectedReasons": [],
+      "digestEqualsCase": "valid-all-feeds"
+    },
+    {
+      "caseId": "missing-required-funding",
+      "mutations": [
+        {
+          "op": "dropObservation",
+          "recordId": "settled-funding"
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "MISSING_REQUIRED_FEED"
+      ]
+    },
+    {
+      "caseId": "future-mark-availability",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            1,
+            "availableAt",
+            "value"
+          ],
+          "value": 1735689660005000
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "AVAILABLE_AFTER_DECISION"
+      ]
+    },
+    {
+      "caseId": "stale-funding-event",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            3,
+            "eventAt",
+            "value"
+          ],
+          "value": 1735689480000
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "EVENT_STALE"
+      ]
+    },
+    {
+      "caseId": "exchange-info-exact-expiry",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            4,
+            "maxAvailabilityAgeUs"
+          ],
+          "value": 1500
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "AVAILABILITY_STALE"
+      ]
+    },
+    {
+      "caseId": "contradictory-mark-snapshot",
+      "mutations": [
+        {
+          "op": "duplicateObservation",
+          "index": 1,
+          "recordId": "mark-conflict",
+          "payloadDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "CONTRADICTORY_ASOF_RECORDS"
+      ]
+    },
+    {
+      "caseId": "record-id-contradiction",
+      "mutations": [
+        {
+          "op": "duplicateObservation",
+          "index": 1,
+          "recordId": "mark-instant",
+          "payloadDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "RECORD_ID_CONTRADICTION"
+      ]
+    },
+    {
+      "caseId": "coexisting-unplaceable-mark-poisons-feed",
+      "mutations": [
+        {
+          "op": "duplicateObservation",
+          "index": 1,
+          "recordId": "mark-unplaceable",
+          "payloadDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            7,
+            "availableAt"
+          ],
+          "value": {
+            "value": 1735689660003,
+            "unit": "MILLISECOND",
+            "clockId": "peer-capture"
+          }
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "AVAILABILITY_DECISION_ORDER_AMBIGUOUS"
+      ]
+    },
+    {
+      "caseId": "coexisting-eventless-mark-poisons-feed",
+      "mutations": [
+        {
+          "op": "duplicateObservation",
+          "index": 1,
+          "recordId": "mark-eventless",
+          "payloadDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            7,
+            "eventAt"
+          ],
+          "value": null
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "EVENT_TIME_MISSING"
+      ]
+    },
+    {
+      "caseId": "coexisting-ambiguous-interval-availability-poisons-feed",
+      "mutations": [
+        {
+          "op": "duplicateObservation",
+          "index": 6,
+          "recordId": "mark-kline-rest-ambiguous",
+          "payloadDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            7,
+            "availableAt"
+          ],
+          "value": {
+            "value": 1735689660000500,
+            "unit": "MICROSECOND",
+            "clockId": "peer-capture",
+            "maxErrorUs": 1000
+          }
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "INTERVAL_AVAILABILITY_END_ORDER_AMBIGUOUS"
+      ]
+    },
+    {
+      "caseId": "coexisting-future-mark-ignored",
+      "mutations": [
+        {
+          "op": "duplicateObservation",
+          "index": 1,
+          "recordId": "mark-future",
+          "payloadDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            7,
+            "availableAt",
+            "value"
+          ],
+          "value": 1735689660005000
+        }
+      ],
+      "expectedStatus": "VALID",
+      "expectedReasons": [],
+      "digestEqualsCase": "valid-all-feeds"
+    },
+    {
+      "caseId": "coexisting-stale-mark-ignored",
+      "mutations": [
+        {
+          "op": "duplicateObservation",
+          "index": 1,
+          "recordId": "mark-stale",
+          "payloadDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            7,
+            "eventAt",
+            "value"
+          ],
+          "value": 1735689480000
+        }
+      ],
+      "expectedStatus": "VALID",
+      "expectedReasons": [],
+      "digestEqualsCase": "valid-all-feeds"
+    },
+    {
+      "caseId": "coexisting-partial-kline-ignored",
+      "mutations": [
+        {
+          "op": "duplicateObservation",
+          "index": 0,
+          "recordId": "spot-kline-partial",
+          "payloadDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            7,
+            "isFinal"
+          ],
+          "value": false
+        }
+      ],
+      "expectedStatus": "VALID",
+      "expectedReasons": [],
+      "digestEqualsCase": "valid-all-feeds"
+    },
+    {
+      "caseId": "coexisting-incomplete-rest-kline-ignored",
+      "mutations": [
+        {
+          "op": "duplicateObservation",
+          "index": 6,
+          "recordId": "mark-kline-rest-early",
+          "payloadDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            7,
+            "availableAt",
+            "value"
+          ],
+          "value": 1735689659999000
+        }
+      ],
+      "expectedStatus": "VALID",
+      "expectedReasons": [],
+      "digestEqualsCase": "valid-all-feeds"
+    },
+    {
+      "caseId": "fill-before-decision",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "fillAt",
+            "value"
+          ],
+          "value": 1735689660002000
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "FILL_BEFORE_DECISION"
+      ]
+    },
+    {
+      "caseId": "executed-fill-missing",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "fillAt"
+          ],
+          "value": null
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "FILL_TIME_MISSING"
+      ]
+    },
+    {
+      "caseId": "no-fill-has-clock",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "fillState"
+          ],
+          "value": "NO_FILL"
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "NO_FILL_HAS_FILL_TIME"
+      ]
+    },
+    {
+      "caseId": "partial-kline",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "isFinal"
+          ],
+          "value": false
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "INTERVAL_NOT_FINAL"
+      ]
+    },
+    {
+      "caseId": "stream-kline-final-flag-missing",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "isFinal"
+          ],
+          "value": null
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "INTERVAL_FINAL_FLAG_MISSING"
+      ]
+    },
+    {
+      "caseId": "malformed-interval-duration",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalCloseInclusive",
+            "value"
+          ],
+          "value": 1735689659999998
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "INTERVAL_DURATION_INVALID"
+      ]
+    },
+    {
+      "caseId": "source-unit-contradiction",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "eventAt",
+            "unit"
+          ],
+          "value": "MILLISECOND"
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "SOURCE_UNIT_CONTRADICTION"
+      ]
+    },
+    {
+      "caseId": "stream-release-without-receipt",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            1,
+            "availabilityBasis"
+          ],
+          "value": "FROZEN_RELEASE_EVIDENCE"
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "STREAM_RECEIPT_REQUIRED"
+      ]
+    },
+    {
+      "caseId": "bare-frozen-release-evidence",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            3,
+            "availabilityBasis"
+          ],
+          "value": "FROZEN_RELEASE_EVIDENCE"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            3,
+            "availabilityEvidenceId"
+          ],
+          "value": null
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            3,
+            "availabilityEvidenceDigest"
+          ],
+          "value": null
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "AVAILABILITY_EVIDENCE_MISSING"
+      ]
+    },
+    {
+      "caseId": "bound-frozen-release-evidence-passes",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            3,
+            "availabilityBasis"
+          ],
+          "value": "FROZEN_RELEASE_EVIDENCE"
+        }
+      ],
+      "expectedStatus": "VALID",
+      "expectedReasons": []
+    },
+    {
+      "caseId": "availability-evidence-digest-missing",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            1,
+            "availabilityEvidenceDigest"
+          ],
+          "value": null
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "AVAILABILITY_EVIDENCE_MISSING"
+      ]
+    },
+    {
+      "caseId": "availability-evidence-without-clock",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            4,
+            "availableAt"
+          ],
+          "value": null
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "AVAILABILITY_EVIDENCE_WITHOUT_CLOCK"
+      ]
+    },
+    {
+      "caseId": "boolean-timestamp",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "decisionAt",
+            "value"
+          ],
+          "value": true
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "INTEGER_INVALID"
+      ]
+    },
+    {
+      "caseId": "timestamp-normalization-overflow",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            1,
+            "eventAt",
+            "value"
+          ],
+          "value": 9223372036854775807
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "TIMESTAMP_OVERFLOW"
+      ]
+    },
+    {
+      "caseId": "event-after-availability",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            1,
+            "eventAt",
+            "value"
+          ],
+          "value": 1735689660002
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "EVENT_AFTER_AVAILABILITY"
+      ]
+    },
+    {
+      "caseId": "event-availability-order-ambiguous",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            1,
+            "availableAt",
+            "value"
+          ],
+          "value": 1735689660000500
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "EVENT_AVAILABILITY_ORDER_AMBIGUOUS"
+      ]
+    },
+    {
+      "caseId": "decision-clock-missing",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "decisionAt"
+          ],
+          "value": null
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "DECISION_TIME_MISSING"
+      ]
+    },
+    {
+      "caseId": "event-clock-missing",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            1,
+            "eventAt"
+          ],
+          "value": null
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "EVENT_TIME_MISSING"
+      ]
+    },
+    {
+      "caseId": "availability-clock-missing",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            4,
+            "availableAt"
+          ],
+          "value": null
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            4,
+            "availabilityEvidenceId"
+          ],
+          "value": null
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            4,
+            "availabilityEvidenceDigest"
+          ],
+          "value": null
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "AVAILABILITY_TIME_MISSING"
+      ]
+    },
+    {
+      "caseId": "current-snapshot-backfill",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            4,
+            "availableAt",
+            "value"
+          ],
+          "value": 1735689660005000
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "CURRENT_SNAPSHOT_BACKFILL_FORBIDDEN"
+      ]
+    },
+    {
+      "caseId": "current-snapshot-event-forbidden",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            4,
+            "eventAt"
+          ],
+          "value": {
+            "value": 1735689660001,
+            "unit": "MILLISECOND",
+            "clockId": "binance-usdm"
+          }
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "CURRENT_SNAPSHOT_EVENT_OR_INTERVAL_FORBIDDEN"
+      ]
+    },
+    {
+      "caseId": "funding-info-cannot-come-from-exchange-info",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            5,
+            "sourceProfile"
+          ],
+          "value": "USDM_REST_EXCHANGE_INFO_MS"
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "SOURCE_ENDPOINT_CONTRADICTION"
+      ]
+    },
+    {
+      "caseId": "premium-index-cannot-settle-funding",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            3,
+            "sourceProfile"
+          ],
+          "value": "USDM_REST_PREMIUM_INDEX_MS"
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "SETTLED_FUNDING_SOURCE_INVALID"
+      ]
+    },
+    {
+      "caseId": "rest-interval-event-clock-forbidden",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            6,
+            "eventAt"
+          ],
+          "value": {
+            "value": 1735689660001,
+            "unit": "MILLISECOND",
+            "clockId": "binance-usdm"
+          }
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "INTERVAL_EVENT_CLOCK_FORBIDDEN"
+      ]
+    },
+    {
+      "caseId": "rest-interval-final-flag-forbidden",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            6,
+            "isFinal"
+          ],
+          "value": true
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "INTERVAL_FINAL_FLAG_FORBIDDEN"
+      ]
+    },
+    {
+      "caseId": "rest-interval-received-before-end",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            6,
+            "availableAt",
+            "value"
+          ],
+          "value": 1735689659999000
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "INTERVAL_INCOMPLETE_AT_AVAILABILITY"
+      ]
+    },
+    {
+      "caseId": "interval-identity-without-zone",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1m"
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "INTERVAL_ID_INVALID"
+      ]
+    },
+    {
+      "caseId": "interval-step-unsupported",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "7m@UTC"
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "INTERVAL_STEP_UNSUPPORTED"
+      ]
+    },
+    {
+      "caseId": "interval-zone-unsupported",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1m@UTC+05:45"
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "INTERVAL_ZONE_UNSUPPORTED"
+      ]
+    },
+    {
+      "caseId": "interval-duration-missing",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "expectedIntervalUs"
+          ],
+          "value": null
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "INTERVAL_DURATION_MISSING"
+      ]
+    },
+    {
+      "caseId": "interval-duration-declaration-invalid",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "expectedIntervalUs"
+          ],
+          "value": 30000000
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "INTERVAL_DURATION_DECLARATION_INVALID"
+      ]
+    },
+    {
+      "caseId": "usdm-second-interval-unsupported",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            6,
+            "key",
+            "intervalId"
+          ],
+          "value": "1s@UTC"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            6,
+            "expectedIntervalUs"
+          ],
+          "value": 1000000
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "USD_M_SECOND_INTERVAL_UNSUPPORTED"
+      ]
+    },
+    {
+      "caseId": "duplicate-availability-clock-contradiction",
+      "mutations": [
+        {
+          "op": "duplicateObservation",
+          "index": 1,
+          "recordId": "mark-availability-clock-copy",
+          "payloadDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            7,
+            "availableAt"
+          ],
+          "value": {
+            "value": 1735689660001250,
+            "unit": "MICROSECOND",
+            "clockId": "local-capture",
+            "sequence": 18
+          }
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "CONTRADICTORY_ASOF_RECORDS"
+      ]
+    },
+    {
+      "caseId": "duplicate-availability-evidence-contradiction",
+      "mutations": [
+        {
+          "op": "duplicateObservation",
+          "index": 1,
+          "recordId": "mark-availability-evidence-copy",
+          "payloadDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            7,
+            "availabilityEvidenceDigest"
+          ],
+          "value": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "CONTRADICTORY_ASOF_RECORDS"
+      ]
+    },
+    {
+      "caseId": "duplicate-availability-basis-contradiction",
+      "mutations": [
+        {
+          "op": "duplicateObservation",
+          "index": 3,
+          "recordId": "funding-availability-basis-copy",
+          "payloadDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            7,
+            "availabilityBasis"
+          ],
+          "value": "FROZEN_RELEASE_EVIDENCE"
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "CONTRADICTORY_ASOF_RECORDS"
+      ]
+    },
+    {
+      "caseId": "same-effective-sequence-payload-conflict",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            1,
+            "eventAt"
+          ],
+          "value": {
+            "value": 1735689660000,
+            "unit": "MILLISECOND",
+            "clockId": "binance-usdm",
+            "sequence": 1
+          }
+        },
+        {
+          "op": "duplicateObservation",
+          "index": 1,
+          "recordId": "mark-sequenced-conflict",
+          "payloadDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            7,
+            "eventAt",
+            "sequence"
+          ],
+          "value": 2
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "CONTRADICTORY_ASOF_RECORDS"
+      ]
+    },
+    {
+      "caseId": "cyclic-asof-dominance",
+      "mutations": [
+        {
+          "op": "keepFeed",
+          "requirementIndex": 1,
+          "observationIndex": 1
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "eventAt"
+          ],
+          "value": {
+            "value": 1735689659996,
+            "unit": "MILLISECOND",
+            "clockId": "binance-usdm",
+            "maxErrorUs": 1000,
+            "sequence": 3
+          }
+        },
+        {
+          "op": "duplicateObservation",
+          "index": 0,
+          "recordId": "cycle-b",
+          "payloadDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "op": "duplicateObservation",
+          "index": 0,
+          "recordId": "cycle-c",
+          "payloadDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "recordId"
+          ],
+          "value": "cycle-a"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            1,
+            "eventAt"
+          ],
+          "value": {
+            "value": 1735689659997,
+            "unit": "MILLISECOND",
+            "clockId": "binance-usdm",
+            "maxErrorUs": 1000,
+            "sequence": 2
+          }
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            2,
+            "eventAt"
+          ],
+          "value": {
+            "value": 1735689659999,
+            "unit": "MILLISECOND",
+            "clockId": "binance-usdm",
+            "maxErrorUs": 1000,
+            "sequence": 1
+          }
+        }
+      ],
+      "expectedStatus": "UNKNOWN",
+      "expectedReasons": [
+        "ASOF_ORDER_CYCLE"
+      ]
+    },
+    {
+      "caseId": "fixed-daily-phase-invalid",
+      "mutations": [
+        {
+          "op": "keepFeed",
+          "requirementIndex": 0,
+          "observationIndex": 0
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1d@UTC"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "expectedIntervalUs"
+          ],
+          "value": 86400000000
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1d@UTC"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalOpen",
+            "value"
+          ],
+          "value": 1735689600000001
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalCloseInclusive",
+            "value"
+          ],
+          "value": 1735776000000000
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "INTERVAL_PHASE_INVALID"
+      ]
+    },
+    {
+      "caseId": "fixed-three-day-phase-invalid",
+      "mutations": [
+        {
+          "op": "keepFeed",
+          "requirementIndex": 0,
+          "observationIndex": 0
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "3d@UTC+08:00"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "expectedIntervalUs"
+          ],
+          "value": 259200000000
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "3d@UTC+08:00"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalOpen",
+            "value"
+          ],
+          "value": 1735660800000001
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalCloseInclusive",
+            "value"
+          ],
+          "value": 1735920000000000
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "INTERVAL_PHASE_INVALID"
+      ]
+    },
+    {
+      "caseId": "fixed-weekly-phase-invalid",
+      "mutations": [
+        {
+          "op": "keepFeed",
+          "requirementIndex": 0,
+          "observationIndex": 0
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1w@UTC"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "expectedIntervalUs"
+          ],
+          "value": 604800000000
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1w@UTC"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalOpen",
+            "value"
+          ],
+          "value": 1735689600000001
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalCloseInclusive",
+            "value"
+          ],
+          "value": 1736294400000000
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "INTERVAL_PHASE_INVALID"
+      ]
+    },
+    {
+      "caseId": "calendar-month-utc-valid",
+      "mutations": [
+        {
+          "op": "keepFeed",
+          "requirementIndex": 0,
+          "observationIndex": 0
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1M@UTC"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "expectedIntervalUs"
+          ],
+          "value": 2678400000000
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1M@UTC"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalOpen",
+            "value"
+          ],
+          "value": 1733011200000000
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalCloseInclusive",
+            "value"
+          ],
+          "value": 1735689599999999
+        }
+      ],
+      "expectedStatus": "VALID",
+      "expectedReasons": []
+    },
+    {
+      "caseId": "calendar-month-shifted-zone-invalid",
+      "mutations": [
+        {
+          "op": "keepFeed",
+          "requirementIndex": 0,
+          "observationIndex": 0
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1M@UTC+08:00"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "expectedIntervalUs"
+          ],
+          "value": 2678400000000
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1M@UTC+08:00"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalOpen",
+            "value"
+          ],
+          "value": 1733011200000000
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalCloseInclusive",
+            "value"
+          ],
+          "value": 1735689599999999
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "INTERVAL_CALENDAR_EDGE_INVALID"
+      ]
+    },
+    {
+      "caseId": "archive-pre-cutover-ms-valid",
+      "mutations": [
+        {
+          "op": "keepFeed",
+          "requirementIndex": 0,
+          "observationIndex": 0
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1d@UTC"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "expectedIntervalUs"
+          ],
+          "value": 86400000000
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1d@UTC"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "sourceProfile"
+          ],
+          "value": "SPOT_ARCHIVE_KLINES_PRE_2025_MS"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "eventAt"
+          ],
+          "value": null
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalOpen"
+          ],
+          "value": {
+            "value": 1735603200000,
+            "unit": "MILLISECOND",
+            "clockId": "binance-spot"
+          }
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalCloseInclusive"
+          ],
+          "value": {
+            "value": 1735689599999,
+            "unit": "MILLISECOND",
+            "clockId": "binance-spot"
+          }
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "isFinal"
+          ],
+          "value": null
+        }
+      ],
+      "expectedStatus": "VALID",
+      "expectedReasons": []
+    },
+    {
+      "caseId": "archive-post-cutover-us-valid",
+      "mutations": [
+        {
+          "op": "keepFeed",
+          "requirementIndex": 0,
+          "observationIndex": 0
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "sourceProfile"
+          ],
+          "value": "SPOT_ARCHIVE_KLINES_FROM_2025_US"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "eventAt"
+          ],
+          "value": null
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "isFinal"
+          ],
+          "value": null
+        }
+      ],
+      "expectedStatus": "VALID",
+      "expectedReasons": []
+    },
+    {
+      "caseId": "archive-pre-cutover-profile-after-cutover",
+      "mutations": [
+        {
+          "op": "keepFeed",
+          "requirementIndex": 0,
+          "observationIndex": 0
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "sourceProfile"
+          ],
+          "value": "SPOT_ARCHIVE_KLINES_PRE_2025_MS"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "eventAt"
+          ],
+          "value": null
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalOpen"
+          ],
+          "value": {
+            "value": 1735689600000,
+            "unit": "MILLISECOND",
+            "clockId": "binance-spot"
+          }
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalCloseInclusive"
+          ],
+          "value": {
+            "value": 1735689659999,
+            "unit": "MILLISECOND",
+            "clockId": "binance-spot"
+          }
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "isFinal"
+          ],
+          "value": null
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "SPOT_ARCHIVE_UNIT_EPOCH_INVALID"
+      ]
+    },
+    {
+      "caseId": "spot-rest-shifted-zone-valid",
+      "mutations": [
+        {
+          "op": "keepFeed",
+          "requirementIndex": 0,
+          "observationIndex": 0
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1d@UTC+08:00"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "expectedIntervalUs"
+          ],
+          "value": 86400000000
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1d@UTC+08:00"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "sourceProfile"
+          ],
+          "value": "SPOT_REST_KLINES_US"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "eventAt"
+          ],
+          "value": null
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalOpen",
+            "value"
+          ],
+          "value": 1735574400000000
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalCloseInclusive",
+            "value"
+          ],
+          "value": 1735660799999999
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "availableAt",
+            "value"
+          ],
+          "value": 1735660800000200
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "isFinal"
+          ],
+          "value": null
+        },
+        {
+          "op": "replace",
+          "path": [
+            "decisionAt",
+            "value"
+          ],
+          "value": 1735660800003000
+        },
+        {
+          "op": "replace",
+          "path": [
+            "fillAt",
+            "value"
+          ],
+          "value": 1735660800004000
+        }
+      ],
+      "expectedStatus": "VALID",
+      "expectedReasons": []
+    },
+    {
+      "caseId": "spot-ws-shifted-zone-documented",
+      "mutations": [
+        {
+          "op": "keepFeed",
+          "requirementIndex": 0,
+          "observationIndex": 0
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1d@UTC+08:00"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "expectedIntervalUs"
+          ],
+          "value": 86400000000
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1d@UTC+08:00"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "eventAt",
+            "value"
+          ],
+          "value": 1735660800000100
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalOpen",
+            "value"
+          ],
+          "value": 1735574400000000
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "intervalCloseInclusive",
+            "value"
+          ],
+          "value": 1735660799999999
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "availableAt",
+            "value"
+          ],
+          "value": 1735660800000200
+        },
+        {
+          "op": "replace",
+          "path": [
+            "decisionAt",
+            "value"
+          ],
+          "value": 1735660800003000
+        },
+        {
+          "op": "replace",
+          "path": [
+            "fillAt",
+            "value"
+          ],
+          "value": 1735660800004000
+        }
+      ],
+      "expectedStatus": "VALID",
+      "expectedReasons": []
+    },
+    {
+      "caseId": "spot-archive-shifted-zone-invalid",
+      "mutations": [
+        {
+          "op": "keepFeed",
+          "requirementIndex": 0,
+          "observationIndex": 0
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1d@UTC+08:00"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "expectedIntervalUs"
+          ],
+          "value": 86400000000
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1d@UTC+08:00"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "sourceProfile"
+          ],
+          "value": "SPOT_ARCHIVE_KLINES_FROM_2025_US"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "eventAt"
+          ],
+          "value": null
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "isFinal"
+          ],
+          "value": null
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "SOURCE_INTERVAL_ZONE_CONTRADICTION"
+      ]
+    },
+    {
+      "caseId": "usdm-shifted-zone-unserviceable",
+      "mutations": [
+        {
+          "op": "keepFeed",
+          "requirementIndex": 6,
+          "observationIndex": 6
+        },
+        {
+          "op": "replace",
+          "path": [
+            "requirements",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1m@UTC+08:00"
+        },
+        {
+          "op": "replace",
+          "path": [
+            "observations",
+            0,
+            "key",
+            "intervalId"
+          ],
+          "value": "1m@UTC+08:00"
+        }
+      ],
+      "expectedStatus": "INVALID",
+      "expectedReasons": [
+        "INTERVAL_ZONE_PROFILE_UNSERVICEABLE"
+      ]
+    }
+  ]
+}

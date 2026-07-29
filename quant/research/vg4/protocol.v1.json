@@ -1,0 +1,154 @@
+{
+  "baseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "capacity": {
+    "entryGateUsd": "1000",
+    "participationBpsOfCausalDailyQuoteVolume": 1,
+    "proxy": "MIN(previous-complete-day quote volume, trailing-seven-complete-day median quote volume) * 1bp",
+    "truthBoundary": "PUBLIC_OHLCV_PARTICIPATION_PROXY_ONLY; HISTORICAL_BOOK_DEPTH_AND_EXECUTABLE_CAPACITY_UNMEASURED"
+  },
+  "costs": {
+    "accountEffectiveFeeTruth": "UNKNOWN",
+    "baseAdversePriceBpsPerLeg": 10,
+    "bnbDiscountAssumed": false,
+    "feeSource": "https://www.binance.com/en/fee/trading",
+    "publicRegularTakerFeeBpsPerLeg": 10,
+    "promotionalOrVipDiscountAssumed": false,
+    "stressAdversePriceBpsPerLeg": 25
+  },
+  "data": {
+    "archiveInterval": "1d",
+    "archiveSource": "https://data.binance.vision/data/spot/monthly/klines/",
+    "checksumLaw": "EVERY_ZIP_AND_CHECKSUM_BYTE_SHA256_MATCHES_THE_FROZEN_SOURCE_MANIFEST_AND_THE_OFFICIAL_SIDECAR_DIGEST_MATCHES_THE_ZIP",
+    "evaluationEndExclusiveUtc": "2026-07-01T00:00:00Z",
+    "evaluationStartUtc": "2025-07-01T00:00:00Z",
+    "holdoutEndExclusiveUtc": "2026-07-01T00:00:00Z",
+    "holdoutStartUtc": "2026-03-01T00:00:00Z",
+    "sourceCorpusRoot": "/private/tmp/cosmos-s1f-weekly-momentum-cash-v1",
+    "timestampUnitFrom2025": "MICROSECOND",
+    "warmupStartUtc": "2025-05-01T00:00:00Z",
+    "walkForwardEndExclusiveUtc": "2026-03-01T00:00:00Z"
+  },
+  "developmentGates": {
+    "activeCalendarMonthMinimum": 6,
+    "closedTradeMinimum": 40,
+    "holmFamilywiseAlphaPerMyriad": 500,
+    "maximumDrawdownFraction": "0.40",
+    "minimumDistinctSymbols": 12,
+    "oneSidedBootstrapLcbMustExceedUsdPerDay": "0",
+    "pboMaximum": "0.50",
+    "stressNetPointEstimateMustExceedUsdPerDay": "0"
+  },
+  "execution": {
+    "entry": "NEXT_AVAILABLE_DECLARED_SESSION_OPEN_AFTER_A_FULLY_CLOSED_CONFIRMATION_DAY; NO_SAME_CLOSE_FILL",
+    "exit": "DECLARED_CALENDAR_HOLD_DAY_OPEN; A_MISSING_OPENED_POSITION_BAR_IS_TERMINAL_UNMEASURED",
+    "leverage": false,
+    "maximumConcurrentPositions": 1,
+    "positionNotionalUsd": "MIN(current cash, 1000)",
+    "shorting": false,
+    "startingCashUsdPerSegment": "1000"
+  },
+  "holdoutGates": {
+    "activeCalendarMonthMinimum": 3,
+    "closedTradeMinimum": 20,
+    "maximumDrawdownFraction": "0.40",
+    "minimumDistinctSymbols": 8,
+    "oneSidedBootstrapLcbMustExceedUsdPerDay": "0",
+    "stressNetPointEstimateMustExceedUsdPerDay": "0"
+  },
+  "inference": {
+    "bootstrapBlockLengthDays": 7,
+    "bootstrapReplicates": 4096,
+    "bootstrapSeed": "202607290404",
+    "candidateSelection": "HIGHEST_BASE_NET_ONE_SIDED_95_PERCENT_LCB_THEN_FEWER_TRADES_THEN_LEXICOGRAPHIC_TRIAL_ID",
+    "cscvBlocks": "EIGHT_DEVELOPMENT_CALENDAR_MONTHS",
+    "cscvPboRole": "DEVELOPMENT_ONLY_SELECTION_OVERFITTING_DIAGNOSTIC_AND_FROZEN_CONSERVATIVE_GATE; NEVER_A_CAUSAL_RETURN_ESTIMATE",
+    "dailyObservation": "PORTFOLIO_NET_USD_CHANGE_PER_UTC_DAY_IN_WALK_FORWARD_VALIDATION_FOLDS",
+    "familyResampling": "ALL_TWELVE_CANDIDATE_DAILY_PATHS_SHARE_EACH_CIRCULAR_BLOCK_DRAW",
+    "holdoutMultiplicity": "ONE_PRESELECTED_CHAMPION_OPENED_ONCE; NO_RETUNING_OR_RUNNER_UP",
+    "interval": "CANONICAL_Q14_90_PERCENT_TWO_SIDED_CIRCULAR_BLOCK_PERCENTILE_INTERVAL; LOWER_ENDPOINT_USED_AS_ONE_SIDED_95_PERCENT_LCB",
+    "multiplicity": "CANONICAL_Q14_HOLM_BONFERRONI_OVER_ALL_TWELVE_ATTEMPTED_TRIALS",
+    "walkForward": {
+      "embargoDays": 37,
+      "foldCount": 4,
+      "maxFeatureLookbackDays": 30,
+      "maxLabelHorizonDays": 7,
+      "scheme": "EXPANDING",
+      "untouchedHoldoutDays": 122
+    }
+  },
+  "question": "Does a bullish reversal after a fresh price low that is not confirmed by volume deliver positive net public-scenario Spot edge over the declared twelve months?",
+  "schema": "VG4VolumePriceDivergenceReversalProtocolV1",
+  "signal": {
+    "candidateGrid": {
+      "holdCalendarDays": [
+        3,
+        5,
+        7
+      ],
+      "priceLookbackDays": [
+        5,
+        10
+      ],
+      "recentToBaselineQuoteVolumeRatioMaximum": [
+        "0.65",
+        "0.85"
+      ],
+      "trialCount": 12
+    },
+    "confirmationMinimumReturn": "0.005",
+    "divergenceDefinition": [
+      "On pivot day t-1, close is at or below every close in the preceding declared price lookback.",
+      "Pivot close return from the lookback anchor is at or below -0.05.",
+      "Median quote volume for pivot days t-3 through t-1 divided by the earlier lookback baseline median is at or below the trial cap.",
+      "Every recent pivot-leg quote-volume observation is below 1.50 times its causal baseline median.",
+      "Completed confirmation day t closes above pivot close and above its own open with return at least 0.005.",
+      "Enter no earlier than day t+1 open."
+    ],
+    "priceDrawdownMaximum": "-0.05",
+    "ranking": "DESCENDING((-priceReturn) * (1-volumeRatio) * confirmationReturn), THEN_SYMBOL_ASCENDING",
+    "semanticExclusion": "V-G4 REQUIRES RECENT_MAX_TO_BASELINE_VOLUME_RATIO_BELOW_1.50; ANY VOLUME-SHOCK EVENT AT_OR_ABOVE_2.00 IS INADMISSIBLE. THE STRATEGY FADES A PRICE_LOW_ONLY_AFTER_REVERSAL_CONFIRMATION, NOT A SHOCK, AND NEVER ENTERS CONTINUATION.",
+    "siblingShockFloor": "2.00"
+  },
+  "universe": {
+    "assetAgeAndCoverage": "AT_EACH_DECISION_REQUIRE_30_CONSECUTIVE_COMPLETE_PRIOR_DAILY_BARS; NEVER_REQUIRE_END_OF_WINDOW_COMPLETENESS",
+    "excludedBaseAssets": [
+      "AEUR",
+      "BIDR",
+      "BRL",
+      "BUSD",
+      "DAI",
+      "EUR",
+      "EURI",
+      "FDUSD",
+      "GBP",
+      "IDRT",
+      "NGN",
+      "PAX",
+      "RUB",
+      "TUSD",
+      "UAH",
+      "USD1",
+      "USDC",
+      "USDP",
+      "USDS",
+      "VAI"
+    ],
+    "excludedLeveragedBaseSuffixes": [
+      "BEAR",
+      "BULL",
+      "DOWN",
+      "UP"
+    ],
+    "minimumTrailingThirtyDayMedianQuoteVolumeUsd": "10000000",
+    "pointInTimeMembership": "A_SYMBOL_EXISTS_ONLY_WHEN_ITS_CHECKSUM_VERIFIED_ARCHIVE_BAR_EXISTS; NO_CURRENT_EXCHANGEINFO_OR_FINAL_MEMBERSHIP_FILTER",
+    "quoteAsset": "USDT"
+  },
+  "verdictLaw": {
+    "GO": "ALL_PROVENANCE_SAMPLE_MULTIPLICITY_ECONOMIC_STRESS_DRAWDOWN_AND_PUBLIC_CAPACITY_PROXY_GATES_PASS_IN_DEVELOPMENT_AND_THE_SINGLE_UNTOUCHED_HOLDOUT",
+    "NO_GO": "PUBLIC_MEASUREMENT_IS_VALID_BUT_ANY_DECLARED_GATE_FAILS; IF_DEVELOPMENT_FAILS_THE_HOLDOUT_STAYS_UNOPENED",
+    "UNMEASURED": "REQUIRED_SOURCE_SCHEMA_TIMESTAMP_CAUSALITY_RUN_CONTROL_OR_OPEN_POSITION_EXIT_PROOF_IS_INVALID_OR_INSUFFICIENT",
+    "capitalAuthority": "NONE",
+    "consumer": "N3",
+    "goScope": "PUBLIC_RESEARCH_SCENARIO_ONLY; NEVER_ACCOUNT_TRUTH_OR_CAPITAL_AUTHORITY"
+  }
+}

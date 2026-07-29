@@ -1,0 +1,33 @@
+{
+  "archive": {
+    "checksumBytes": 88,
+    "checksumSha256": "3b16313140110bfac82b1beef671ab866025eea4edd89ffdceedbc926330f250",
+    "checksumUrl": "https://data.binance.vision/data/spot/monthly/klines/AXSUSDT/1d/AXSUSDT-1d-2026-02.zip.CHECKSUM",
+    "month": "2026-02",
+    "officialChecksumBindingPassedBeforeBodyOpen": true,
+    "symbol": "AXSUSDT",
+    "zipBytes": 1666,
+    "zipSha256": "7f18d5a29f2e767389efce407d47a247dac3e0e309cef4a3b377040bddf001bf",
+    "zipUrl": "https://data.binance.vision/data/spot/monthly/klines/AXSUSDT/1d/AXSUSDT-1d-2026-02.zip"
+  },
+  "duplicate": {
+    "csvLineNumbersOneBased": [
+      10,
+      11
+    ],
+    "duplicateCountBeyondFirst": 1,
+    "duplicateOpenTimeUs": "1770681600000000",
+    "duplicateUtcDate": "2026-02-10",
+    "rowsByteIdentical": true,
+    "singleRowIncludingNewlineSha256": "36e86b2b8bdd586e5672faa0b9beda042442895f8de7bde3e4479c8d047a51ba"
+  },
+  "evaluatorExitCode": 2,
+  "evaluatorStderr": "VG2_ERROR:MeasurementError:duplicate or unsorted day: AXSUSDT 2026-02",
+  "frozenDisposition": "UNMEASURED",
+  "frozenProtocolRule": "missingness.duplicateOrConflictingFullBar",
+  "holdoutOpenCount": 0,
+  "observedAtUtc": "2026-07-29T15:56:00.590Z",
+  "phase": "DEVELOPMENT_SOURCE_SEMANTIC_VALIDATION",
+  "repairOrRerunPerformed": false,
+  "schema": "VG2TerminalEvidenceV1"
+}

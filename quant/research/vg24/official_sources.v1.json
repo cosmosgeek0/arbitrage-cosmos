@@ -1,0 +1,27 @@
+{
+  "accessedAtUtc": "2026-07-29T17:46:07Z",
+  "openedByVg24BeforeFreeze": false,
+  "binancePublicData": {
+    "commit": "5c7f3197591c0d54d85dc43066226bc4c671d47a",
+    "commitTimeUtc": "2025-01-09T09:41:15Z",
+    "rawReadmeSha256": "085ab91377aa9325d44f4c7ad27cce4ab381e158403e1d7df2bad39d1a66f7c6",
+    "url": "https://github.com/binance/binance-public-data/blob/5c7f3197591c0d54d85dc43066226bc4c671d47a/README.md?plain=1"
+  },
+  "binanceSpotApiDocs": {
+    "commit": "6b8372cad7cecbdf5dd88a3372eafff51988c5cf",
+    "commitTimeUtc": "2026-07-27T07:43:52Z",
+    "rawRestApiSha256": "49ea6809243fc7fb426e07f2fe662097736c7bb405bd2da5eef637d715427999",
+    "url": "https://github.com/binance/binance-spot-api-docs/blob/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/rest-api.md?plain=1"
+  },
+  "checkedCurrentMasterAtAccessTime": true,
+  "schema": "VG24OfficialSourcesV1",
+  "sourceRoot": {
+    "acquisitionManifestSha256": "01f58272602e43bfb914b649adc00d8273b2d423492220a55f86443bb6441176",
+    "discoverySha256": "b4a8f7abd36df19eff0510dfcc3c61fd0df9fdcab5f4d248892ee10010fb21c3",
+    "path": "/private/tmp/cosmos-s1f-weekly-momentum-cash-v1",
+    "acquisitionStateTruth": "S1F_NOT_DECOMPRESSED_WAS_TRUE_AT_ACQUISITION_TIME_ONLY;SHARED_BYTES_HAVE_SINCE_BEEN_USED_BY_SIBLING_LANES",
+    "programWideFreshHoldout": false,
+    "reuseMode": "READ_ONLY_METADATA_AND_COMPRESSED_BYTES",
+    "zipMemberAccessDuringFreeze": "FORBIDDEN"
+  }
+}

@@ -1,0 +1,212 @@
+{
+  "schema": "cosmos.quant.research.s1w.protocol.v1",
+  "milestone": "S-1W",
+  "title": "USD-M receive-funding carry conditioned only on lagged open-interest acceleration",
+  "baseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "consumer": "N3 successor / orchestrator scoreboard",
+  "authority": "NONE",
+  "strategyFamily": "USDM_LAGGED_BASE_OI_ACCELERATION_RECEIVE_FUNDING_COHORT_OR_CASH",
+  "distinctness": {
+    "selectionInputs": [
+      "symbol",
+      "create_time",
+      "sum_open_interest"
+    ],
+    "forbiddenSelectionInputs": [
+      "funding level or magnitude",
+      "funding surprise",
+      "funding sign streak or persistence",
+      "funding settlement proximity",
+      "funding transition or sign flip",
+      "cross-sectional funding rank or dispersion",
+      "funding acceleration",
+      "price or return momentum",
+      "basis or premium",
+      "quote or base volume",
+      "sum_open_interest_value",
+      "taker imbalance"
+    ],
+    "fundingUseAfterSelection": "SIGN_ONLY_TO_CHOOSE_RECEIVE_FUNDING_SIDE; MAGNITUDE_ACCOUNTING_ONLY",
+    "S1M": "S-1M scores funding acceleration; S-1W never scores funding.",
+    "S1O": "S-1O is BTC-only OI growth plus funding-sign persistence at settlement events; S-1W is a broad fixed-clock cohort, uses OI second difference, and has no funding threshold or streak.",
+    "S1J": "S-1J has a Spot hedge; S-1W is USD-M perpetual-only.",
+    "S1D_S1N_S1V": "Those families rank or transition funding dispersion; S-1W never ranks funding.",
+    "S1Q_S1R_S1S": "Those families use sign transition, surprise, or settlement timing; S-1W decisions are fixed and funding-blind until side assignment.",
+    "momentumFamilies": "S-1W has no price, return, volume, basis, premium, or OI-value input in selection."
+  },
+  "calendar": {
+    "timezone": "UTC",
+    "warmup": "[2025-04-01T00:00:00Z,2025-07-07T00:00:00Z)",
+    "development": "[2025-07-07T00:00:00Z,2026-02-02T00:00:00Z)",
+    "embargo": "[2026-02-02T00:00:00Z,2026-02-09T00:00:00Z)",
+    "holdout": "[2026-02-09T00:00:00Z,2026-07-06T00:00:00Z)",
+    "decisionClock": "02:00:00 UTC daily",
+    "entryClock": "03:00:00 UTC",
+    "decisionIndependentOfFundingSettlement": true
+  },
+  "causalSourceGate": {
+    "requiredBeforeAnyOutcomeArchiveOpen": [
+      "official mapping of archive create_time to the REST period-end timestamp",
+      "historical publication or availability time for every selected OI row",
+      "evidence that the acquired historical row revision was observable before the decision",
+      "historical point-in-time availability of the funding sign used for side assignment",
+      "complete checksum-bound fixed-universe archive plan"
+    ],
+    "currentState": "FAILED",
+    "reasonCodes": [
+      "HISTORICAL_OI_POINT_IN_TIME_AVAILABILITY_UNPROVEN",
+      "HISTORICAL_FUNDING_SIGN_POINT_IN_TIME_AVAILABILITY_UNPROVEN",
+      "ARCHIVE_CREATE_TIME_TO_REST_TIMESTAMP_MAPPING_UNPROVEN",
+      "REST_OPEN_INTEREST_HISTORY_LIMITED_TO_LATEST_ONE_MONTH"
+    ],
+    "outcomeArchiveMembersOpened": 0,
+    "failureVerdict": "UNMEASURED",
+    "exPostEventTimeAssociationSubstitutionAllowed": false
+  },
+  "signalAndCohort": {
+    "oiField": "sum_open_interest",
+    "oiValueFieldAllowedForSelection": false,
+    "asOfRule": "latest actual create_time <= decision_time - 30 minutes; age from each requested cutoff <= 10 minutes; no grid snapping; actual irregular timestamps retained",
+    "acceleration": "ln(OI_at_cutoff/OI_at_cutoff_minus_H) - ln(OI_at_cutoff_minus_H/OI_at_cutoff_minus_2H)",
+    "eligible": "acceleration strictly greater than the frozen trial threshold",
+    "membership": "all eligible 11-symbol fixed-universe members after BTCUSDT quarantine; no cross-sectional funding rank; no symbol replacement",
+    "cohortSealBeforeFundingOrPriceRead": true,
+    "side": "latest settled funding strictly before decision: positive => short, negative => long, zero or unknown => that symbol allocation remains cash",
+    "activation": "at least 3 OI-selected symbols with known prior funding sign and complete required evidence; otherwise the entire daily cohort remains cash",
+    "allocation": "original USD 1000 divided equally across all OI-selected symbols; a no-side symbol remains cash and its amount is not reallocated; an active leg is capped at one third of original capital",
+    "missingSelectedLeg": "any missing or invalid selected-leg signal, sign, price, funding, or capacity evidence invalidates the cohort and complete partition; never replace a symbol or silently convert a missing selected leg to cash",
+    "entry": "first contract 1h open at 03:00 UTC after the 02:00 decision",
+    "exit": "same fixed quantity at 03:00 UTC after the frozen holding days",
+    "pyramiding": false,
+    "compounding": false,
+    "leverageClaim": "NONE_1X_NOTIONAL_PUBLIC_PROXY"
+  },
+  "trials": {
+    "count": 12,
+    "oiHorizonHours": [
+      12,
+      24,
+      48
+    ],
+    "minimumPositiveAcceleration": [
+      "0",
+      "0.0025",
+      "0.005",
+      "0.01"
+    ],
+    "holdingDays": 1,
+    "primaryTrial": "H24_A0050_HOLD1D",
+    "primarySelectedBeforeOutcome": true,
+    "diagnosticsCannotReplacePrimary": true
+  },
+  "economics": {
+    "referenceCapitalUsd": "1000",
+    "fundingCash": "-position_sign * fixed_quantity * settlement_mark_proxy * archived_funding_rate",
+    "fundingEvents": "actual archived events with entry < funding_time < exit; entry and exit boundaries are excluded; archived funding_interval_hours retained",
+    "pricePnl": "position_sign * fixed_quantity * (exit_contract_open - entry_contract_open)",
+    "net": "price_pnl + funding_pnl - fee_proxy - adverse_fill_proxy",
+    "carryOnlyNet": "funding_pnl - fee_proxy - adverse_fill_proxy",
+    "pairedNoFundingBenchmark": "same cohort, sides, quantities, timestamps, prices, and costs with funding cash set to zero",
+    "unconditionedSignOnlyComparator": "same fixed clock, sign-side rule, holding period, costs, and complete calendar across all 11 eligible symbols without the OI acceleration filter; reported separately and never used to select an S-1W trial",
+    "cashComparator": "unremunerated USD 1000 cash path with zero nominal return on the complete daily calendar; actual account cash yield remains UNKNOWN",
+    "scenarios": {
+      "base": {
+        "feeBpsPerFill": "4",
+        "adverseFillBpsPerFill": "2"
+      },
+      "stress": {
+        "feeBpsPerFill": "8",
+        "adverseFillBpsPerFill": "5"
+      },
+      "severe": {
+        "feeBpsPerFill": "10",
+        "adverseFillBpsPerFill": "10"
+      }
+    },
+    "accountEffectiveFees": "UNKNOWN",
+    "settlementMark": "latest complete mark-price 1h close at or before actual funding timestamp; disclosed proxy",
+    "fundingRateType": "UNKNOWN_ARCHIVE_FIELD_ABSENT"
+  },
+  "statistics": {
+    "unit": "synchronized complete daily portfolio cohort including cash",
+    "seed": 2026073001,
+    "bootstrapReplicates": 4096,
+    "circularBlockDays": 7,
+    "intervals": "two-sided 95 percent and one-sided 95 percent lower bounds for total net, carry-only net, and paired incremental net versus the unconditioned sign-only comparator under every cost scenario",
+    "multiplicity": "one-sided Holm step-down across all 12 frozen trial daily series; primary must pass; cross-family adjusted evidence remains NON_AUTHORITATIVE_NOT_REGISTERED",
+    "whiteRealityCheck": "centered synchronized maximum across all 12 trials",
+    "pbo": {
+      "blocks": 12,
+      "splits": 924,
+      "selection": "six-block in-sample highest stress carry-only daily mean then stress total daily mean then trial id",
+      "lossEvent": "selected trial ranks in the out-of-sample bottom half",
+      "role": "DIAGNOSTIC_ONLY"
+    },
+    "holdout": "opened once only if the fixed primary passes every development gate; no diagnostic selects or replaces it"
+  },
+  "riskAndCapacity": {
+    "drawdown": "daily marked portfolio equity from original USD 1000, with incurred costs and funding; null when source gate fails",
+    "maximumStressDrawdownFraction": "0.20",
+    "publicCapacityProxy": "after cohort seal only: 0.0001 * min(previous complete UTC-day contract quote volume, median preceding seven complete UTC days) per selected symbol",
+    "perLegCapacityLaw": "every active selected leg public proxy must cover its frozen allocated USD notional; aggregate capacity cannot rescue a failing leg",
+    "requiredMinimumPortfolioCapacityUsd": "1000",
+    "executableDepth": "UNKNOWN",
+    "executableCapacity": "UNKNOWN",
+    "impactAndQueue": "UNKNOWN"
+  },
+  "developmentGates": {
+    "completeScheduleRequired": true,
+    "minimumCohorts": 120,
+    "minimumActiveCohorts": 40,
+    "minimumSymbols": 7,
+    "baseTotalNetPositive": true,
+    "stressTotalNetPositive": true,
+    "stressCarryOnlyNetPositive": true,
+    "stressIncrementalVsUnconditionedPositive": true,
+    "stressTotalLowerBoundPositive": true,
+    "stressCarryOnlyLowerBoundPositive": true,
+    "stressIncrementalLowerBoundPositive": true,
+    "holmPass": true,
+    "whiteRealityCheckPass": true,
+    "maximumStressDrawdownFraction": "0.20",
+    "capacityProxyPass": true
+  },
+  "holdoutGates": {
+    "completeScheduleRequired": true,
+    "minimumCohorts": 100,
+    "minimumActiveCohorts": 30,
+    "baseTotalNetPositive": true,
+    "stressTotalNetPositive": true,
+    "severeTotalNetPositive": true,
+    "stressCarryOnlyNetPositive": true,
+    "severeCarryOnlyNetPositive": true,
+    "stressIncrementalVsUnconditionedPositive": true,
+    "severeIncrementalVsUnconditionedPositive": true,
+    "stressTotalLowerBoundPositive": true,
+    "stressCarryOnlyLowerBoundPositive": true,
+    "stressIncrementalLowerBoundPositive": true,
+    "maximumStressDrawdownFraction": "0.20",
+    "capacityProxyPass": true
+  },
+  "oneRun": {
+    "declaredRuns": 1,
+    "freezeBeforeRun": true,
+    "runMarker": "generated/RUN_CONSUMED.v1.json",
+    "markerBeforeAnyDevelopmentOutcomeRead": true,
+    "candidateSeal": "generated/candidate-seal.v1.json",
+    "holdoutMarker": "generated/HOLDOUT_OPENED.v1.json",
+    "holdoutOpenOnlyAfterAllDevelopmentGatesPass": true,
+    "rerunAllowed": false,
+    "repairAfterConsumedFailureAllowed": false
+  },
+  "verdictLaw": {
+    "UNMEASURED": "causal source, checksum, schema, custody, fixed schedule, or complete economic evidence is invalid or unavailable; numeric outcomes remain null",
+    "NO_GO": "valid complete measurement fails any frozen economic, interval, multiplicity, drawdown, concentration, fee, or capacity gate",
+    "GO": "requires every development and holdout gate plus verified account-effective fees and executable capacity",
+    "publicOnlyPositiveProxy": "cannot exceed capital NO_GO while account-effective fees or executable capacity are UNKNOWN",
+    "currentTerminalState": "UNMEASURED",
+    "currentCapitalVerdict": "NO_GO",
+    "currentExecutionAuthority": "NONE"
+  },
+  "claimBoundary": "predictive archive association only; no instrument, randomization, or causal-mechanism claim"
+}

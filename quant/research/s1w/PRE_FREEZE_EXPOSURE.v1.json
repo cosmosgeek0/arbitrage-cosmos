@@ -1,0 +1,52 @@
+{
+  "schema": "cosmos.quant.research.s1w.pre-freeze-exposure.v1",
+  "milestone": "S-1W",
+  "status": "BOUNDED_SAMPLE_ACCESS_QUARANTINED",
+  "accesses": [
+    {
+      "actor": "PRIMARY_SOURCE_INSPECTION",
+      "symbol": "BTCUSDT",
+      "period": "2026-06",
+      "datasets": [
+        "daily metrics 2026-06-30 first rows",
+        "monthly fundingRate first rows",
+        "monthly contract kline 1h rows",
+        "monthly mark-price kline 1h rows"
+      ]
+    },
+    {
+      "actor": "BOUNDED_MAX_SOURCE_REVIEW",
+      "symbol": "BTCUSDT",
+      "period": "2025-07",
+      "datasets": [
+        "daily metrics 2025-07-01 header plus first seven rows",
+        "monthly fundingRate 2025-07 header plus first seven rows",
+        "daily bookDepth 2025-07-01 first five rows"
+      ]
+    },
+    {
+      "actor": "BOUNDED_HIGH_OFFICIAL_SOURCE_REVIEW",
+      "symbol": "BTCUSDT",
+      "period": "2025-01",
+      "datasets": [
+        "daily metrics 2025-01-01 header plus first two rows",
+        "monthly fundingRate 2025-01 header plus first two rows",
+        "monthly mark-price kline 5m header plus first two rows"
+      ]
+    }
+  ],
+  "aggregateCustody": {
+    "uniqueArchiveMembersOpened": 10,
+    "uniqueSymbolsOpened": 1,
+    "eligibleOutcomeArchiveMembersOpened": 0,
+    "allOpenedMembersQuarantined": true
+  },
+  "disposition": {
+    "symbol": "BTCUSDT",
+    "outcomeEligibility": "QUARANTINED_FOR_ALL_WARMUP_DEVELOPMENT_EMBARGO_HOLDOUT_AND_DIAGNOSTIC_WINDOWS",
+    "replacementAllowed": false,
+    "accessedValuesUsedForProtocolOrVerdict": false,
+    "uniqueArchiveMembersQuarantined": 10,
+    "remainingFrozenUniverseCount": 11
+  }
+}

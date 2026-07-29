@@ -1,0 +1,37 @@
+{
+  "schema": "cosmos.quant.research.s1w.universe.v1",
+  "milestone": "S-1W",
+  "status": "FROZEN_PRE_OUTCOME_EXTERNAL_SCREEN_WITH_BTCUSDT_QUARANTINE",
+  "baseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "screenMonth": "2025-06",
+  "selectionRule": "SUM_OF_2025_06_USDM_CONTRACT_KLINE_QUOTE_VOLUME_DESC_THEN_SYMBOL_ASC",
+  "sourceArtifact": {
+    "producerCommit": "266f7782f19d6eb6cc39f3e69427f7ee2334206d",
+    "relativePath": "quant/research/s1m/universe.v1.json",
+    "sha256": "365c318f016e7f6b2b8876f75a8f8e631934280d3942ef76207c725f0589134d",
+    "reuseBoundary": "SYMBOL_IDENTITIES_AND_PRE_OUTCOME_SCREEN_ONLY; NO_S1M_OUTCOME_OR_CUSTODY_CLAIM_REUSED"
+  },
+  "currentExchangeMembershipUsed": false,
+  "futureCoverageCanReplaceSymbol": false,
+  "quarantinedSymbols": [
+    {
+      "symbol": "BTCUSDT",
+      "reason": "PRE_FREEZE_SAMPLE_ROWS_OPENED_BY_PRIMARY_AND_BOUNDED_REVIEWER",
+      "replacementAllowed": false
+    }
+  ],
+  "symbols": [
+    "ETHUSDT",
+    "SOLUSDT",
+    "1000PEPEUSDT",
+    "XRPUSDT",
+    "DOGEUSDT",
+    "SUIUSDT",
+    "FARTCOINUSDT",
+    "WIFUSDT",
+    "AAVEUSDT",
+    "ADAUSDT",
+    "FUNUSDT"
+  ],
+  "symbolCount": 11
+}

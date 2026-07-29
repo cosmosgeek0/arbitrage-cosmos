@@ -1,0 +1,40 @@
+{
+  "schema": "cosmos.quant.research.s1w.source-plan.v1",
+  "milestone": "S-1W",
+  "status": "FROZEN_CAUSAL_GATE_FIRST",
+  "publisher": "https://data.binance.vision/",
+  "checksumAlgorithm": "SHA-256",
+  "sampleObservations": [
+    {
+      "dataset": "metrics",
+      "relativePath": "data/futures/um/daily/metrics/BTCUSDT/BTCUSDT-metrics-2026-06-30.zip"
+    },
+    {
+      "dataset": "fundingRate",
+      "relativePath": "data/futures/um/monthly/fundingRate/BTCUSDT/BTCUSDT-fundingRate-2026-06.zip"
+    },
+    {
+      "dataset": "contractKlines1h",
+      "relativePath": "data/futures/um/monthly/klines/BTCUSDT/1h/BTCUSDT-1h-2026-06.zip"
+    },
+    {
+      "dataset": "markPriceKlines1h",
+      "relativePath": "data/futures/um/monthly/markPriceKlines/BTCUSDT/1h/BTCUSDT-1h-2026-06.zip"
+    }
+  ],
+  "sampleSymbolOutcomeEligibility": "BTCUSDT_QUARANTINED_FROM_ALL_S1W_OUTCOME_WINDOWS",
+  "outcomeAcquisition": {
+    "warmup": "[2025-04-01T00:00:00Z,2025-07-07T00:00:00Z)",
+    "development": "[2025-07-07T00:00:00Z,2026-02-02T00:00:00Z)",
+    "embargo": "[2026-02-02T00:00:00Z,2026-02-09T00:00:00Z)",
+    "holdout": "[2026-02-09T00:00:00Z,2026-07-06T00:00:00Z)",
+    "datasets": [
+      "daily metrics",
+      "monthly fundingRate",
+      "monthly contract klines 1h",
+      "monthly markPriceKlines 1h"
+    ],
+    "state": "NO_ELIGIBLE_SYMBOL_OUTCOME_ARCHIVE_OPENED_OR_DOWNLOADED",
+    "gate": "POINT_IN_TIME_CAUSAL_OI_AND_FUNDING_SIGN_AVAILABILITY_MUST_BE_PROVEN_FIRST"
+  }
+}

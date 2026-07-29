@@ -38,6 +38,7 @@ _RECEIPT_DOMAIN: Final = b"cosmos-dq12-instrument-identity-receipt-v1\0"
 _REGISTRY_DOMAIN: Final = b"cosmos-dq12-identity-registry-v1\0"
 _ID_PATTERN: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:@+\-/]{0,127}$")
 _SHA256_PATTERN: Final = re.compile(r"^[0-9a-f]{64}$")
+_CLI_INTEGER_PATTERN: Final = re.compile(r"^-?[0-9]{1,19}$")
 
 _REQUEST_KEYS: Final = frozenset(
     {
@@ -1442,30 +1443,76 @@ def validate_spot_usdm_identity_v1(
 def _read_cli_input(path: Path, *, field: str) -> bytes:
     try:
         value = path.read_bytes()
-    except OSError as error:
+    except (OSError, ValueError) as error:
         raise IdentityContractError("CLI_INPUT_UNAVAILABLE", f"{field} is unavailable") from error
     if len(value) > MAX_INPUT_BYTES:
         _fail("INPUT_SIZE_INVALID", f"{field} exceeds the frozen byte bound")
     return value
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
+class _ReceiptArgumentParser(argparse.ArgumentParser):
+    """Parser that reports argument failures inside the fail-closed receipt path."""
+
+    def error(self, message: str) -> NoReturn:
+        _fail("CLI_ARGUMENTS_INVALID", "command-line arguments are outside the CLI contract")
+
+
+class _RejectDuplicateAction(argparse.Action):
+    """Store one option occurrence and reject every subsequent occurrence."""
+
+    def __call__(
+        self,
+        parser: argparse.ArgumentParser,
+        namespace: argparse.Namespace,
+        values: object,
+        option_string: str | None = None,
+    ) -> None:
+        seen_attribute = f"_dq12_seen_{self.dest}"
+        if getattr(namespace, seen_attribute, False) is True:
+            parser.error("repeated command-line option")
+        setattr(namespace, seen_attribute, True)
+        setattr(namespace, self.dest, values)
+
+
+def _cli_parser() -> argparse.ArgumentParser:
+    parser = _ReceiptArgumentParser(
         prog="dq12-instrument-identity",
         description="Offline Binance Spot to USD-M current instrument-identity validator",
+        allow_abbrev=False,
     )
-    parser.add_argument("--request", type=Path, required=True)
-    parser.add_argument("--spot", type=Path, required=True)
-    parser.add_argument("--usdm", type=Path, required=True)
-    parser.add_argument("--registry", type=Path, required=True)
-    parser.add_argument("--trusted-evaluation-time-ms", type=int, required=True)
-    arguments = parser.parse_args(argv)
+    parser.add_argument("--request", action=_RejectDuplicateAction, type=Path, required=True)
+    parser.add_argument("--spot", action=_RejectDuplicateAction, type=Path, required=True)
+    parser.add_argument("--usdm", action=_RejectDuplicateAction, type=Path, required=True)
+    parser.add_argument("--registry", action=_RejectDuplicateAction, type=Path, required=True)
+    parser.add_argument(
+        "--trusted-evaluation-time-ms",
+        action=_RejectDuplicateAction,
+        required=True,
+    )
+    return parser
+
+
+def _cli_trusted_evaluation_time_ms(value: object) -> int:
+    """Read the trusted time as exact text, without implicit numeric coercion.
+
+    ``int`` accepts digit separators, surrounding whitespace, and non-ASCII
+    decimal digits. None of those spellings may silently become a trusted
+    current-time boundary, so the CLI text contract is exact ASCII decimal.
+    """
+
+    if not isinstance(value, str) or _CLI_INTEGER_PATTERN.fullmatch(value) is None:
+        _fail(
+            "CLI_TRUSTED_TIME_INVALID",
+            "trusted evaluation time must be bounded exact ASCII decimal text",
+        )
+    return _strict_int(int(value), field="trustedEvaluationTimeMs")
+
+
+def main(argv: Sequence[str] | None = None) -> int:
     evaluation_time_ms: int | None = None
     try:
-        evaluation_time_ms = _strict_int(
-            arguments.trusted_evaluation_time_ms,
-            field="trustedEvaluationTimeMs",
-        )
+        arguments = _cli_parser().parse_args(argv)
+        evaluation_time_ms = _cli_trusted_evaluation_time_ms(arguments.trusted_evaluation_time_ms)
         request = _read_cli_input(arguments.request, field="request")
         spot = _read_cli_input(arguments.spot, field="spot")
         usdm = _read_cli_input(arguments.usdm, field="usdm")

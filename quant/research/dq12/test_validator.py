@@ -6,7 +6,7 @@ import json
 import os
 import subprocess
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
@@ -28,6 +28,9 @@ from research.dq12.validator import (
     PairIdentityReceiptV1,
     canonical_json_bytes,
     validate_spot_usdm_identity_v1,
+)
+from research.dq12.validator import (
+    main as cli_main,
 )
 
 JsonObject = dict[str, object]
@@ -1215,32 +1218,60 @@ def test_invalid_trusted_evaluation_time_is_a_stable_unknown(
     _assert_unknown(receipt, reason)
 
 
-def _run_cli(request_path: Path) -> subprocess.CompletedProcess[bytes]:
+def _run_cli_arguments(arguments: Sequence[str]) -> subprocess.CompletedProcess[bytes]:
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(HERE.parents[1])
     return subprocess.run(
-        [
-            sys.executable,
-            "-B",
-            "-m",
-            "research.dq12.cli",
-            "--trusted-evaluation-time-ms",
-            str(EVALUATION_TIME_MS),
-            "--request",
-            str(request_path),
-            "--spot",
-            str(FIXTURES / "spot-btcusdt.current.json"),
-            "--usdm",
-            str(FIXTURES / "usdm-btcusdt.current.json"),
-            "--registry",
-            str(FIXTURES / "registry-btcusdt.v1.json"),
-        ],
+        [sys.executable, "-B", "-m", "research.dq12.cli", *arguments],
         cwd=HERE.parents[2],
         env=environment,
         check=False,
         capture_output=True,
         timeout=10,
     )
+
+
+def _cli_arguments(
+    request_path: Path,
+    *,
+    trusted_evaluation_time_ms: str = str(EVALUATION_TIME_MS),
+) -> list[str]:
+    return [
+        "--trusted-evaluation-time-ms",
+        trusted_evaluation_time_ms,
+        "--request",
+        str(request_path),
+        "--spot",
+        str(FIXTURES / "spot-btcusdt.current.json"),
+        "--usdm",
+        str(FIXTURES / "usdm-btcusdt.current.json"),
+        "--registry",
+        str(FIXTURES / "registry-btcusdt.v1.json"),
+    ]
+
+
+def _run_cli(
+    request_path: Path,
+    *,
+    trusted_evaluation_time_ms: str = str(EVALUATION_TIME_MS),
+) -> subprocess.CompletedProcess[bytes]:
+    return _run_cli_arguments(
+        _cli_arguments(
+            request_path,
+            trusted_evaluation_time_ms=trusted_evaluation_time_ms,
+        )
+    )
+
+
+def _canonical_cli_receipt(result: subprocess.CompletedProcess[bytes]) -> JsonObject:
+    assert result.stderr == b""
+    receipt = _json_object(result.stdout)
+    assert result.stdout == canonical_json_bytes(receipt)
+    projection = dict(receipt)
+    digest = projection.pop("receiptDigest")
+    expected = hashlib.sha256(RECEIPT_DOMAIN + canonical_json_bytes(projection)).hexdigest()
+    assert digest == expected
+    return receipt
 
 
 def test_cli_matched_and_unknown_are_canonical_and_warning_free() -> None:
@@ -1260,5 +1291,156 @@ def test_cli_io_failure_is_a_canonical_unknown(tmp_path: Path) -> None:
     assert result.returncode == 2
     assert result.stderr == b""
     receipt = _json_object(result.stdout)
+    assert receipt["decision"] == "UNKNOWN"
+    assert receipt["reasonCodes"] == ["CLI_INPUT_UNAVAILABLE"]
+
+
+@pytest.mark.parametrize(
+    ("trusted_time", "reason"),
+    [
+        ("not-an-integer", "CLI_TRUSTED_TIME_INVALID"),
+        ("", "CLI_TRUSTED_TIME_INVALID"),
+        ("1.5", "CLI_TRUSTED_TIME_INVALID"),
+        ("1785356000000.0", "CLI_TRUSTED_TIME_INVALID"),
+        ("+1785356000000", "CLI_TRUSTED_TIME_INVALID"),
+        ("0x1a", "CLI_TRUSTED_TIME_INVALID"),
+        ("1_785_356_000_000", "CLI_TRUSTED_TIME_INVALID"),
+        (" 1785356000000", "CLI_TRUSTED_TIME_INVALID"),
+        ("1785356000000\n", "CLI_TRUSTED_TIME_INVALID"),
+        ("١٧٨٥٣٥٦٠٠٠٠٠٠", "CLI_TRUSTED_TIME_INVALID"),
+        ("9" * 20, "CLI_TRUSTED_TIME_INVALID"),
+        ("-1785356000000", "INTEGER_OUT_OF_RANGE"),
+        ("9" * 19, "INTEGER_OUT_OF_RANGE"),
+    ],
+)
+def test_cli_malformed_trusted_time_is_a_canonical_unknown(
+    trusted_time: str,
+    reason: str,
+) -> None:
+    result = _run_cli(
+        FIXTURES / "request-btcusdt.current.json",
+        trusted_evaluation_time_ms=trusted_time,
+    )
+    assert result.returncode == 2
+    receipt = _canonical_cli_receipt(result)
+    assert receipt["decision"] == "UNKNOWN"
+    assert receipt["reasonCodes"] == [reason]
+    assert receipt["evaluationTimeMs"] is None
+    assert receipt["statusScope"] == "CURRENT_AT_TRUSTED_EVALUATION_TIME"
+    assert receipt["authority"] == "NONE"
+
+
+def test_cli_malformed_trusted_time_repeats_exact_bytes() -> None:
+    first = _run_cli(
+        FIXTURES / "request-btcusdt.current.json",
+        trusted_evaluation_time_ms="not-an-integer",
+    )
+    second = _run_cli(
+        FIXTURES / "request-btcusdt.current.json",
+        trusted_evaluation_time_ms="not-an-integer",
+    )
+    assert first.returncode == 2
+    assert second.returncode == 2
+    assert first.stdout == second.stdout
+    assert first.stderr == b""
+    assert second.stderr == b""
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        [],
+        ["--trusted-evaluation-time-ms", str(EVALUATION_TIME_MS)],
+        ["--unknown-flag"],
+    ],
+)
+def test_cli_argument_contract_failure_is_a_canonical_unknown(
+    arguments: list[str],
+) -> None:
+    result = _run_cli_arguments(arguments)
+    assert result.returncode == 2
+    receipt = _canonical_cli_receipt(result)
+    assert receipt["decision"] == "UNKNOWN"
+    assert receipt["reasonCodes"] == ["CLI_ARGUMENTS_INVALID"]
+    assert receipt["evaluationTimeMs"] is None
+
+
+@pytest.mark.parametrize(
+    ("first_trusted_time", "second_trusted_time"),
+    [
+        ("not-an-integer", str(EVALUATION_TIME_MS)),
+        (str(EVALUATION_TIME_MS), str(EVALUATION_TIME_MS)),
+    ],
+)
+def test_cli_repeated_trusted_time_is_a_canonical_arguments_unknown(
+    first_trusted_time: str,
+    second_trusted_time: str,
+) -> None:
+    arguments = _cli_arguments(
+        FIXTURES / "request-btcusdt.current.json",
+        trusted_evaluation_time_ms=first_trusted_time,
+    )
+    arguments.extend(["--trusted-evaluation-time-ms", second_trusted_time])
+    result = _run_cli_arguments(arguments)
+    assert result.returncode == 2
+    receipt = _canonical_cli_receipt(result)
+    assert receipt["decision"] == "UNKNOWN"
+    assert receipt["reasonCodes"] == ["CLI_ARGUMENTS_INVALID"]
+    assert receipt["evaluationTimeMs"] is None
+
+
+@pytest.mark.parametrize(
+    "option",
+    ["--request", "--spot", "--usdm", "--registry"],
+)
+def test_cli_repeated_path_option_repeats_exact_unknown_bytes(option: str) -> None:
+    arguments = _cli_arguments(FIXTURES / "request-btcusdt.current.json")
+    original_value = arguments[arguments.index(option) + 1]
+    arguments.extend([option, original_value])
+    first = _run_cli_arguments(arguments)
+    second = _run_cli_arguments(arguments)
+    assert first.returncode == 2
+    assert second.returncode == 2
+    assert first.stdout == second.stdout
+    receipt = _canonical_cli_receipt(first)
+    assert receipt["decision"] == "UNKNOWN"
+    assert receipt["reasonCodes"] == ["CLI_ARGUMENTS_INVALID"]
+    assert receipt["evaluationTimeMs"] is None
+    assert second.stderr == b""
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    ["--trust", "--req", "--spo", "--usd", "--reg", "--hel"],
+)
+def test_cli_long_option_prefix_is_a_canonical_arguments_unknown(prefix: str) -> None:
+    result = _run_cli_arguments([prefix])
+    assert result.returncode == 2
+    receipt = _canonical_cli_receipt(result)
+    assert receipt["decision"] == "UNKNOWN"
+    assert receipt["reasonCodes"] == ["CLI_ARGUMENTS_INVALID"]
+    assert receipt["evaluationTimeMs"] is None
+
+
+@pytest.mark.parametrize("help_option", ["-h", "--help"])
+def test_cli_exact_help_option_is_warning_free_non_receipt_success(help_option: str) -> None:
+    result = _run_cli_arguments([help_option])
+    assert result.returncode == 0
+    assert result.stderr == b""
+    assert result.stdout.startswith(b"usage: dq12-instrument-identity ")
+    assert not result.stdout.startswith(b"{")
+
+
+def test_cli_unopenable_path_is_a_canonical_unknown(
+    capsysbinary: pytest.CaptureFixture[bytes],
+) -> None:
+    # A NUL byte cannot cross a subprocess argv boundary, so this hostile path
+    # is exercised in-process against the same entry point.
+    exit_code = cli_main(_cli_arguments(Path("request\x00.json")))
+    captured = capsysbinary.readouterr()
+    assert exit_code == 2
+    assert captured.err == b""
+    receipt = _json_object(captured.out)
+    assert captured.out == canonical_json_bytes(receipt)
     assert receipt["decision"] == "UNKNOWN"
     assert receipt["reasonCodes"] == ["CLI_INPUT_UNAVAILABLE"]

@@ -108,6 +108,17 @@ PYTHONPATH=quant python -B -m research.dq12.cli \
 The CLI writes canonical receipt JSON to stdout and exits `0` for `MATCHED` or
 `2` for `UNKNOWN`.
 
+A malformed invocation is a receipt, not a usage error. A missing, unknown, or
+repeated argument, a `--trusted-evaluation-time-ms` that is not exact ASCII
+decimal text, and an input path the process cannot open each produce one
+canonical `UNKNOWN` receipt on stdout with one stable reason code, nothing on
+stderr, and exit `2`. The trusted time is read as text: `int`-style coercion of
+digit separators, surrounding whitespace, or non-ASCII decimal digits is
+refused rather than normalized into a trusted current-time boundary. Every
+option is single-occurrence, and long-option abbreviations such as `--trust`,
+`--req`, and `--hel` are refused. Exact `-h` and `--help` are the only options
+that print usage instead of a receipt.
+
 ## Focused proof
 
 Run only the DQ-12 offline packet:
@@ -134,8 +145,9 @@ implicit multiplier traps such as `1000SHIB`, legitimate digit-leading assets
 such as `1INCH`, aliases/migrations and scales, active registry-wide cycles,
 simultaneous current old/new symbols on both markets, cross-market instrument
 collisions, unpaired Unicode surrogates, warning-free CLI `MATCHED`, `UNKNOWN`,
-and I/O outcomes, duplicates, malformed payloads, and deterministic input
-ordering.
+and I/O outcomes, malformed CLI arguments and trusted-time text, duplicates,
+long-option prefixes, exact help options, malformed payloads, and deterministic
+input ordering.
 
 [`fixture-manifest.v1.json`](fixture-manifest.v1.json) indexes those cases and
 pins the exact committed fixture bytes.

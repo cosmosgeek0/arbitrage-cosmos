@@ -64,8 +64,16 @@
     {"category": "bounds", "id": "registry-edges", "expectedReason": "REGISTRY_CARDINALITY_INVALID"},
     {"category": "determinism", "id": "repeat-exact-bytes", "expectedDecision": "MATCHED"},
     {"category": "determinism", "id": "json-object-order", "expectedDecision": "MATCHED"},
+    {"category": "determinism", "id": "cli-malformed-trusted-time-repeat", "expectedReason": "CLI_TRUSTED_TIME_INVALID"},
+    {"category": "determinism", "id": "cli-repeated-path-exact-bytes", "expectedReason": "CLI_ARGUMENTS_INVALID"},
     {"category": "cli", "id": "cli-matched-unknown-warning-free", "expectedDecision": "MATCHED"},
-    {"category": "cli", "id": "cli-input-unavailable", "expectedReason": "CLI_INPUT_UNAVAILABLE"}
+    {"category": "cli", "id": "cli-input-unavailable", "expectedReason": "CLI_INPUT_UNAVAILABLE"},
+    {"category": "cli", "id": "cli-unopenable-path", "expectedReason": "CLI_INPUT_UNAVAILABLE"},
+    {"category": "cli", "id": "cli-malformed-trusted-time", "expectedReason": "CLI_TRUSTED_TIME_INVALID"},
+    {"category": "cli", "id": "cli-out-of-range-trusted-time", "expectedReason": "INTEGER_OUT_OF_RANGE"},
+    {"category": "cli", "id": "cli-argument-contract", "expectedReason": "CLI_ARGUMENTS_INVALID"},
+    {"category": "cli", "id": "cli-repeated-option", "expectedReason": "CLI_ARGUMENTS_INVALID"},
+    {"category": "cli", "id": "cli-long-option-prefix", "expectedReason": "CLI_ARGUMENTS_INVALID"}
   ],
   "fixtures": [
     {

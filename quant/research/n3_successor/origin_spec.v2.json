@@ -1,0 +1,1031 @@
+{
+  "acceptanceLedgerAsOf": {
+    "recordId": "2026-07-30 ORCHESTRATOR DQ-14 ACCEPTANCE",
+    "rowSha256": "7969f6b26f06a0e8890a3b6bd355c946cca534b201a63c8a3b600a56ca71b5bb"
+  },
+  "baseline": {
+    "cardPath": "quant/research/n3_successor/owner_verdict_card.v1.md",
+    "cardRawSha256": "c5fcde6f7d219c560349bfb4df951a6a145fd3510b8491d7bd776d69ef2dd10b",
+    "originSpecPath": "quant/research/n3_successor/origin_spec.v1.json",
+    "originSpecRawSha256": "d9215f40bbc7c19fe862c5852a40c3e323492ef2f31d7ea8c314a11168e07f75",
+    "producerCommit": "13631f3cc31020d8ca377d57e24ad6b75d89dba6",
+    "producerParent": "a169b123fb186d1943a75ad648552c4d95be1be1",
+    "producerTree": "0d6fe288894fd61d267087158e67a1564cf31e5c",
+    "recordId": "2026-07-30 ORCHESTRATOR N3-S1 ACCEPTANCE + REFILL",
+    "registryPath": "quant/research/n3_successor/current_profitability_registry.v1.json",
+    "registryRawSha256": "7e62d2f0bb18b6f0ec73a367ab0ce1ff55d6b35a2c0ed750e8ab12340be9b218",
+    "rowSha256": "782961bc94190770849d2becc6a4b48b94fef004958bfa927c45fa3933ca0703"
+  },
+  "canonicalOrigin": {
+    "commit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+    "tree": "37d1b88aa7c8d9ee1f70dc35d0e78613b6ed32f9"
+  },
+  "deltaStartExclusive": {
+    "recordId": "2026-07-30 ORCHESTRATOR V-G31 ACCEPTANCE",
+    "rowSha256": "83506a85d714eb0546663214bcd936e5431795a052f571fe55d56701a69fa0a8"
+  },
+  "economicEvidenceThrough": {
+    "recordId": "2026-07-30 ORCHESTRATOR S-2I ACCEPTANCE + OPUS 5 FOLD-PREP REFILL",
+    "rowSha256": "a8eed34a68da51dd2a31638209bf6e60ea2fc630c70ee82aeaa751ac14eeae96"
+  },
+  "incrementalOrigins": [
+    {
+      "custodyState": "ACCEPTED_EXACT",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "BASE_INTERVAL_CROSSES_ZERO",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "HOLDOUT_UNOPENED",
+        "NINE_DEVELOPMENT_GATES_FAILED",
+        "PBO_ABOVE_PREDECLARED_THRESHOLD"
+      ],
+      "normalizedVerdict": "NO_GO",
+      "originId": "V-G28",
+      "path": "quant/research/vg28/result.v1.json",
+      "producerCommit": "5f87d03dff7cdde509e27a520c04829bd9f1c617",
+      "producerTree": "289bd525792c0d924187c13873fe768d9dc06829",
+      "recordId": "2026-07-30 ORCHESTRATOR V-G28 ACCEPTANCE",
+      "rowSha256": "1c4c1b73a215bc0206cab5d0c976fdbb73c242fd3fc30b09e06e6e07a18bde86",
+      "sourceVerdict": "NO_GO"
+    },
+    {
+      "custodyState": "ACCEPTED_EXACT",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "DAILY_CLOSE_BOUNDARY_INVALID_ALPACAUSDT_2025_05_ROW_2",
+        "ECONOMICS_INFERENCE_DRAWDOWN_AND_CAPACITY_UNMEASURED",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "HOLDOUT_SEALED_UNOPENED",
+        "NO_REPAIR_OR_RERUN"
+      ],
+      "normalizedVerdict": "UNMEASURED",
+      "originId": "V-G37",
+      "path": "quant/research/vg37/result.v1.json",
+      "producerCommit": "dced679389f3cc93ce7bd1adc41ab11076ffae34",
+      "producerTree": "ef62820bdc1192dad2fdca77de094d60c40bbbb8",
+      "recordId": "2026-07-30 ORCHESTRATOR V-G37 ACCEPTANCE",
+      "rowSha256": "40b0ec75efb4990c5cc0b7b5453ea2dd6bf657a56184c2ef2fca26a7f1bb0330",
+      "sourceVerdict": "UNMEASURED_CAPITAL_NO_GO"
+    },
+    {
+      "custodyState": "ACCEPTED_EXACT",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "BASE_AND_STRESS_INTERVALS_CROSS_ZERO",
+        "EXECUTABLE_FULL_WINDOW_CAPACITY_UNMEASURED",
+        "HOLM_P_ONE",
+        "HOLDOUT_UNOPENED",
+        "POSITIVE_BASE_PROXY_NOT_CREDIBLE",
+        "REALITY_CHECK_P_0_8711",
+        "STRESS_AND_SEVERE_NET_NEGATIVE"
+      ],
+      "normalizedVerdict": "NO_GO",
+      "originId": "S-1Y",
+      "path": "quant/research/s1y/result.v1.json",
+      "producerCommit": "79d4b4821acef8f88447e4c0c10904bffb17deb1",
+      "producerTree": "5c4430e358a86da4f86a7fef14a1e9d29aac632e",
+      "recordId": "2026-07-30 ORCHESTRATOR S-1Y ACCEPTANCE + REFILL",
+      "rowSha256": "f151ddf9327a033064fca505648082d65a5cd7b267f81907f457898e056e84a5",
+      "sourceVerdict": "NO_GO_POSITIVE_BASE_PROXY_NOT_CREDIBLE"
+    },
+    {
+      "custodyState": "ACCEPTED_EXACT",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "CANDIDATE_ABSENT",
+        "ECONOMICS_INFERENCE_DRAWDOWN_AND_CAPACITY_UNMEASURED",
+        "HOLDOUT_UNOPENED",
+        "NO_REPAIR_OR_RERUN",
+        "NON_HOURLY_FUNDING_TIMESTAMP",
+        "RAW_SOURCE_BODIES_EXTERNAL"
+      ],
+      "normalizedVerdict": "UNMEASURED",
+      "originId": "S-2C",
+      "path": "quant/research/s2c/result.v1.json",
+      "producerCommit": "64f93c91d38abe75111ac69957f5d1db17696102",
+      "producerTree": "e88a3626920dc5e85e372b17a140fd9651347d9b",
+      "recordId": "2026-07-30 ORCHESTRATOR S-2C ACCEPTANCE",
+      "rowSha256": "43bad734804c8c053856579e0f105d23774445dade6b07085b375d5f2b45a25e",
+      "sourceVerdict": "UNMEASURED_TERMINAL_EVIDENCE_ONLY"
+    },
+    {
+      "custodyState": "ACCEPTED_TREE_EXACT_COMMIT_FRAGMENT_NON_SUFFIX",
+      "limitations": [
+        "ACCEPTANCE_ROW_COMMIT_FRAGMENT_NON_SUFFIX",
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "BASE_STRESS_SEVERE_NET_NEGATIVE",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "HOLDOUT_CONSUMED_NO_REOPEN",
+        "HOLM_P_ONE",
+        "PBO_DIAGNOSTIC_ONLY",
+        "RAW_SOURCE_BODIES_EXTERNAL",
+        "STRESS_SEVERE_DRAWDOWN_EXCESSIVE",
+        "WHITE_P_0_9844"
+      ],
+      "normalizedVerdict": "NO_GO",
+      "originId": "S-1Z",
+      "path": "quant/research/s1z/result.v1.json",
+      "producerCommit": "0e85dadd57649f0cb13a82c93b9db592eab093d9",
+      "producerTree": "b864d5fafc1d78780a95bdaa50e8458d5095e89f",
+      "recordId": "2026-07-30 ORCHESTRATOR S-1Z ACCEPTANCE",
+      "rowSha256": "ae9595aab10813437c81332b13f716c33f2207e226957c78b44f06242a860c6a",
+      "sourceVerdict": "NO_GO_HOLDOUT_CONSUMED_NO_REOPEN"
+    },
+    {
+      "custodyState": "ACCEPTED_EXACT",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "BASE_STRESS_DRAWDOWN_EXCEEDS_20_PERCENT",
+        "EXECUTABLE_INTRADAY_CAPACITY_UNMEASURED",
+        "HOLDOUT_UNOPENED",
+        "HOLM_AND_WHITE_GATES_FAILED",
+        "NO_CHAMPION",
+        "PBO_DIAGNOSTIC_NOT_SELECTOR",
+        "POSITIVE_POINT_ESTIMATE_NOT_CREDIBLE",
+        "RUN_CONSUMED",
+        "ZERO_OF_12_TRIALS_PASSED"
+      ],
+      "normalizedVerdict": "NO_GO",
+      "originId": "V-G36",
+      "path": "quant/research/vg36/result.v1.json",
+      "producerCommit": "842358e9466fb05e45ee009dd15f787f985eac00",
+      "producerTree": "6f62e3fbf5647b1ed624cc5daee05c4340f27fb1",
+      "recordId": "2026-07-30 ORCHESTRATOR V-G36 ACCEPTANCE",
+      "rowSha256": "2852691f5676ccebd1cca714cf668f0680d76f8d097eedb0b688ee381472fcb1",
+      "sourceVerdict": "NO_GO_POSITIVE_POINT_ESTIMATE_NOT_CREDIBLE"
+    },
+    {
+      "custodyState": "ACCEPTED_EXACT",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "BASE_STRESS_FEE_STRESS_NET_NEGATIVE",
+        "CANDIDATE_SEAL_ABSENT",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "FIXED_COHORT_SURVIVORSHIP_FILTER_TRUTH_UNRESOLVED",
+        "GROSS_POSITIVE_PROXY_NOT_CREDIBLE",
+        "HOLDOUT_UNOPENED",
+        "HOLM_AND_WHITE_P_ONE",
+        "INFERENCE_CONDITIONAL",
+        "NO_DEVELOPMENT_QUALIFIER",
+        "NOMINAL_USDT_NOT_USD_PARITY",
+        "PBO_DIAGNOSTIC_ONLY",
+        "SHARED_HOLDOUT_REUSE_RISK_UNCERTIFIED",
+        "STRESS_DRAWDOWN_68_63_PERCENT",
+        "STRESS_INTERVAL_ENTIRELY_NEGATIVE",
+        "SYNTHETIC_SHORT_BORROW_UNKNOWN"
+      ],
+      "normalizedVerdict": "NO_GO",
+      "originId": "S-2G",
+      "path": "quant/research/s2g/result.v1.json",
+      "producerCommit": "36e9b0a4c8c06ac0f571c44285ccd0ef66b73f6b",
+      "producerTree": "77f44608b504597ba11338d0582be4e4b4b1e843",
+      "recordId": "2026-07-30 ORCHESTRATOR S-2G ACCEPTANCE",
+      "rowSha256": "7c6e50593f9bfc5d3f26d12074a038a9e37cea34fd7cbc596431f36497d87e55",
+      "sourceVerdict": "NO_GO"
+    },
+    {
+      "custodyState": "ACCEPTED_EXACT",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_COMMISSION_UNKNOWN",
+        "ALL_ECONOMIC_STATISTICAL_DRAWDOWN_CAPACITY_FIELDS_UNMEASURED",
+        "FROZEN_TOP30_RANK_EFFECT_OF_9_FALSE_REJECTIONS_UNMEASURED",
+        "FROZEN_USDT_AS_USD_ASSUMPTION_UNUSABLE_FOR_FUTURE_REUSE",
+        "GLOBAL_HOLDOUT_NOT_CERTIFIED_SHARED_REUSE_RISK",
+        "HISTORICAL_FILTERS_SPREAD_DEPTH_IMPACT_AND_EXECUTABLE_CAPACITY_UNMEASURED",
+        "HOLDOUT_SEALED_UNOPENED",
+        "NO_DEVELOPMENT_RESULT_OR_SELECTION",
+        "NO_REPAIR_OR_RERUN",
+        "PREDECLARED_UP_SUFFIX_FALSE_POSITIVE_EXCLUSIONS_JUPUSDT_AND_SYRUPUSDT",
+        "PRIOR_DISCOVERY_ASCII_CANDIDATE_GRAMMAR_LIMITATION",
+        "SCREEN_CONSUMED",
+        "SPOT_IS_CONTINUOUS_UTC_BOUNDARY_IS_NOT_A_MARKET_CLOSE",
+        "SYNTHETIC_SHORT_BORROW_INVENTORY_AND_INTEREST_UNKNOWN"
+      ],
+      "normalizedVerdict": "UNMEASURED",
+      "originId": "S-2H",
+      "path": "quant/research/s2h/screen-terminal.v1.json",
+      "producerCommit": "4358214f9d9d32b06b0de25d7d00a3ae0ce9fedf",
+      "producerTree": "b6231d7f04cc5a47e77ad9da5151ec9a166a8b4c",
+      "recordId": "2026-07-30 ORCHESTRATOR S-2H ACCEPTANCE + DQ-11 DURABILITY RESUME",
+      "rowSha256": "bba59063cc66b62b8c4b08e5b4f2be2513fd168f8da9a20d6047696afd64e418",
+      "sourceVerdict": "UNMEASURED_TERMINAL_EVIDENCE_ONLY"
+    },
+    {
+      "custodyState": "ACCEPTED_EXACT",
+      "limitations": [
+        "ACCEPTANCE_ROW_CORRECTS_WORKER_TREE_SUFFIX",
+        "ACCOUNT_EFFECTIVE_FEES_AND_PROFITABILITY_UNKNOWN",
+        "BASE_AND_STRESS_INTERVALS_ENTIRELY_NEGATIVE",
+        "BASE_STRESS_SEVERE_NET_NEGATIVE",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "FIXED_COHORT_SURVIVORSHIP_LIMITATION",
+        "GROSS_POSITIVE_PROXY_NOT_CREDIBLE",
+        "HOLDOUT_UNOPENED",
+        "HOLM_AND_WHITE_P_ONE",
+        "NINE_OF_TEN_FORMAL_GATES_FAILED",
+        "NOMINAL_SCREEN_BELOW_INITIAL_1000",
+        "PBO_DIAGNOSTIC_ONLY",
+        "PROGRAM_WIDE_MULTIPLICITY_NOT_CONVERGED",
+        "PUBLIC_QUOTE_VOLUME_AND_COSTS_NOT_EXECUTABLE_DEPTH_OR_ACCOUNT_TRUTH",
+        "STRESS_DRAWDOWN_26_76_PERCENT"
+      ],
+      "normalizedVerdict": "NO_GO",
+      "originId": "V-G27",
+      "path": "quant/research/vg27/result.v1.json",
+      "producerCommit": "5c2ae365c3217fecb1e90942dc02614779a1cc3c",
+      "producerTree": "d33101596e9d3d2b9d1be8335a48bc59aee97439",
+      "recordId": "2026-07-30 ORCHESTRATOR V-G27 ACCEPTANCE",
+      "rowSha256": "e90901f925adbd3e968915df2d38ec7a0f533caef01ec2a7adf006080fc87e42",
+      "sourceVerdict": "NO_GO"
+    },
+    {
+      "custodyState": "ACCEPTED_EXACT",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "BASE_INTERVAL_CROSSES_ZERO",
+        "BASE_STRESS_SEVERE_NET_NEGATIVE",
+        "CURRENT_EXCHANGE_INFO_NOT_HISTORICAL_UNIVERSE",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "HOLDOUT_SEALED_UNOPENED",
+        "HOLM_P_ONE",
+        "HOURLY_MARK_OPEN_NOT_EXACT_FUNDING_SETTLEMENT_MARK",
+        "NO_ELIGIBLE_CHAMPION",
+        "PBO_DIAGNOSTIC_ONLY",
+        "PROGRAM_WIDE_MULTIPLICITY_UNMEASURED",
+        "PUBLIC_TURNOVER_NOT_EXECUTABLE_DEPTH",
+        "REALIZED_DAILY_DRAWDOWN_NOT_INTRAPERIOD_MARK_DRAWDOWN",
+        "ROUND_TRIPS_39_BELOW_REQUIRED_96",
+        "STATIC_PANEL_SURVIVORSHIP_LIMITATION",
+        "USDT_USD_PARITY_UNMEASURED",
+        "WHITE_P_0_996583"
+      ],
+      "normalizedVerdict": "NO_GO",
+      "originId": "S-2A",
+      "path": "quant/research/s2a/result.v1.json",
+      "producerCommit": "d7278b1ac8cce0d32d14fe6d466b09cd28ec806e",
+      "producerTree": "e1bd94d1b3ac45eec0535250bb2cc7c94bea2976",
+      "recordId": "2026-07-30 ORCHESTRATOR S-2A ACCEPTANCE",
+      "rowSha256": "cd3ea18b204a24f581408dd4fbf7d098925130b198fc52b605c3e2a0282b5a65",
+      "sourceVerdict": "NO_GO"
+    },
+    {
+      "custodyState": "ACCEPTED_EXACT",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_AND_BORROW_COST_ARE_UNKNOWN",
+        "BASE_BOOTSTRAP_INTERVAL_ENTIRELY_NEGATIVE",
+        "BASE_FIVE_MINUTE_DRAWDOWN_96_10_PERCENT",
+        "BASE_STRESS_SEVERE_PUBLIC_PROXY_NET_NEGATIVE",
+        "CANDIDATE_ABSENT",
+        "EIGHT_OF_ELEVEN_DEVELOPMENT_GATES_FAILED",
+        "FIXED_20_SYMBOL_COHORT_DOES_NOT_PROVE_POINT_IN_TIME_FULL_MARKET_OR_REMOVE_SURVIVORSHIP",
+        "GROSS_PUBLIC_PROXY_NET_NEGATIVE",
+        "HOLDOUT_SEALED_UNOPENED",
+        "HOLM_AND_WHITE_0_999268",
+        "ONE_INTERNAL_HOLDOUT_IS_NOT_A_FRESH_GLOBAL_CORPUS",
+        "PUBLIC_5M_QUOTE_VOLUME_IS_NOT_EXECUTABLE_CAPACITY_OR_DEPTH",
+        "PUBLIC_CAPACITY_P05_1_14_USD_BELOW_1000",
+        "PUBLIC_PROXY_RESULTS_CANNOT_AUTHORIZE_CAPITAL_OR_EXECUTION",
+        "SPREAD_DEPTH_QUEUE_LATENCY_IMPACT_FILTERS_COLLATERAL_AND_LIQUIDATION_ARE_UNMEASURED",
+        "SYNTHETIC_SHORT_LEGS_REQUIRE_BORROW_OR_MARGIN_INVENTORY_NOT_PROVED_BY_SPOT_ARCHIVES",
+        "USDT_EQUALS_USD_IS_A_RESEARCH_NORMALIZATION_NOT_REDEMPTION_TRUTH"
+      ],
+      "normalizedVerdict": "NO_GO",
+      "originId": "S-2K",
+      "path": "quant/research/s2k/result.v1.json",
+      "producerCommit": "f101f1a3e16e2189ac7751371f85fb19e2bd19e9",
+      "producerTree": "4e69f194e0a5eab8d60d46c23b738dde91220cbe",
+      "recordId": "2026-07-30 ORCHESTRATOR S-2K ACCEPTANCE",
+      "rowSha256": "7584e05cfffbc4f5533bc05fda42f0b04ee0c9e85c7f4e4345653937d368aff8",
+      "sourceVerdict": "NO_GO"
+    },
+    {
+      "custodyState": "ACCEPTED_EXACT",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_AND_HISTORICAL_COMMISSION_UNKNOWN",
+        "BASE_STRESS_SEVERE_PUBLIC_PROXY_NET_NEGATIVE",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "FIXED_LONG_LIVED_UNIVERSE_HAS_SURVIVORSHIP_BIAS",
+        "HISTORICAL_CROSS_ENGINE_CLOCK_OFFSET_UNKNOWN",
+        "HOLDOUT_SEALED_UNOPENED_DEVELOPMENT_GATES_FAILED",
+        "HOLM_ABSOLUTE_1_MATCHED_EXCESS_0_8338",
+        "HOUR_BARS_CANNOT_IDENTIFY_SUB_HOUR_CAUSALITY",
+        "MATCHED_EXCESS_INTERVAL_POSITIVE_NOT_CREDIBLE_AFTER_MULTIPLICITY",
+        "MAXIMUM_MARKED_GROSS_1020_156266_EXCEEDS_1000_GATE",
+        "NO_HISTORICAL_SYNCHRONIZED_ORDER_BOOK_SPREAD_QUEUE_OR_IMPACT",
+        "PBO_ZERO_DIAGNOSTIC_ONLY",
+        "PROGRAM_WIDE_ALIAS_ATTEMPT_LEDGER_INCOMPLETE_EFFECTIVE_P_ONE",
+        "PUBLIC_PROXY_CANNOT_AUTHORIZE_CAPITAL_OR_EXECUTION",
+        "PUBLIC_QUOTE_VOLUME_CAPACITY_PROXY_13666_55_NOT_EXECUTABLE_CAPACITY",
+        "RAW_ARCHIVE_BODIES_EXTERNAL_TO_GIT",
+        "REMOVE_BEST_MONTH_STRESS_NEGATIVE",
+        "RESULT_EMBEDDED_GIT_IS_STATIC_PRE_ACCEPTANCE_PROVENANCE",
+        "RPI_BEGAN_DURING_SAMPLE_2025_11_18_PRE_RPI_COMPARABILITY_NOT_ESTABLISHED",
+        "RUN_CONSUMED_ONE_OF_ONE_NO_RERUN",
+        "SEVERE_DRAWDOWN_3677_866136_EXCEEDS_100_GATE",
+        "STRESS_90PCT_INTERVAL_ENTIRELY_NEGATIVE",
+        "USDT_PER_1000_NOT_FIAT_USD_CONVERSION",
+        "WHITE_REALITY_CHECK_0_2951",
+        "ZERO_NET_NOTIONAL_NOT_PROVEN_BETA_OR_FACTOR_NEUTRALITY"
+      ],
+      "normalizedVerdict": "NO_GO",
+      "originId": "S-2I",
+      "path": "quant/research/s2i/result.v1.json",
+      "producerCommit": "eb8e24f3acf230bab0c322773ad2d26371753e24",
+      "producerTree": "9f92883bce46255d464e6e947bfa9f815c21fec8",
+      "recordId": "2026-07-30 ORCHESTRATOR S-2I ACCEPTANCE + OPUS 5 FOLD-PREP REFILL",
+      "rowSha256": "a8eed34a68da51dd2a31638209bf6e60ea2fc630c70ee82aeaa751ac14eeae96",
+      "sourceVerdict": "NO_GO"
+    }
+  ],
+  "ledgerRows": [
+    {
+      "attemptDisposition": "PROPOSAL_STOP_ONLY",
+      "classification": "MATERIAL_DISTINCTNESS_STOP",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "MATERIAL_DUPLICATE_S_1B",
+        "V_G5_SIGNAL_COLLISION",
+        "NO_PRODUCT_BYTES"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-2B DISTINCTNESS STOP",
+      "rowSha256": "6ffbfb65775b6c94b9f236a86d63c3290ac3a62426e7da6898a4ea587e19c62b"
+    },
+    {
+      "attemptDisposition": "OUT_OF_SCOPE",
+      "classification": "OUT_OF_SCOPE_ACCEPTED_SAFE_STOP",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "NON_PROFITABILITY_SCOPE",
+        "NO_MONEY_EFFECT"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR CUTOVER ISSUER STOP ACCEPTANCE",
+      "rowSha256": "df9a34cd70773f82d88f3b8b566960d231da8c83d74ad05c15f4effc1c324233"
+    },
+    {
+      "attemptDisposition": "REJECTED_ATTEMPT_P_ONE",
+      "classification": "REJECTED_NONCONSUMABLE",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "PROTOCOL_EVALUATOR_VERIFIER_REUSE_FORBIDDEN",
+        "TERMINAL_UNMEASURED_EVIDENCE_RETAINED",
+        "NO_REPAIR_OR_RERUN"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-1W REJECTION",
+      "rowSha256": "74bd5399248e0f4ee4976470bc120f8bc30c41f016c37b955577bfcf764ad372"
+    },
+    {
+      "attemptDisposition": "PROPOSAL_STOP_ONLY",
+      "classification": "MATERIAL_DISTINCTNESS_STOP",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "MATERIAL_DUPLICATE_S_1G_S_1J",
+        "NO_PRODUCT_BYTES"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-2D DISTINCTNESS STOP",
+      "rowSha256": "7519d4cd0f19e8a6c0dca7a3452c4735af1ea0c2dd9501190b25e7f8c31e5898"
+    },
+    {
+      "attemptDisposition": "REJECTED_ATTEMPT_P_ONE",
+      "classification": "REJECTED_NONCONSUMABLE",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "ORIGIN_PROOF_NOT_DURABLE",
+        "NOT_CONSUMABLE_BY_N3",
+        "NO_RERUN"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR V-G12 REJECTION",
+      "rowSha256": "7e15a7f5e2a93ac87a71cc0dc091eccae83dcae253177eb754aed175fb44744d"
+    },
+    {
+      "attemptDisposition": "ACCEPTED_ORIGIN_P_ONE",
+      "classification": "ACCEPTED_ECONOMIC_ORIGIN",
+      "economicOriginConsumed": true,
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "BASE_INTERVAL_CROSSES_ZERO",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "HOLDOUT_UNOPENED",
+        "NINE_DEVELOPMENT_GATES_FAILED",
+        "PBO_ABOVE_PREDECLARED_THRESHOLD"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR V-G28 ACCEPTANCE",
+      "rowSha256": "1c4c1b73a215bc0206cab5d0c976fdbb73c242fd3fc30b09e06e6e07a18bde86"
+    },
+    {
+      "attemptDisposition": "REJECTED_ATTEMPT_P_ONE",
+      "classification": "REJECTED_NONCONSUMABLE",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "CAUSALITY_INVALID_FUTURE_MALFORMED_ROWS",
+        "VG31_SNAPSHOT_NOT_INDEPENDENTLY_RECONSTRUCTIBLE",
+        "NOT_CONSUMABLE_BY_N3",
+        "EVALUATOR_REUSE_FORBIDDEN"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR V-G32 REJECTION",
+      "rowSha256": "da7a2a8a6679aeb01473f6cb3f8a7a9152641716ae30fa29d76197521b61cd58"
+    },
+    {
+      "attemptDisposition": "NONE",
+      "classification": "ACCEPTED_SOURCE_LIMITATION",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "OFFICIAL_HISTORICAL_STATUS_SOURCE_NOT_FOUND",
+        "HISTORICAL_BACKFILL_FORBIDDEN",
+        "NO_PRODUCT_BYTES"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-2 SOURCE STOP",
+      "rowSha256": "507fb31993a860af34e72ae506838a4241eb30f49a45497de9db27dc7609b675"
+    },
+    {
+      "attemptDisposition": "PROPOSAL_STOP_ONLY",
+      "classification": "MATERIAL_DISTINCTNESS_STOP",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "MATERIAL_DUPLICATE_S_1B",
+        "V_G5_SIGNAL_COLLISION",
+        "NO_PRODUCT_BYTES"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-2F DISTINCTNESS STOP",
+      "rowSha256": "a715340cb6c0c062fe08da28938acb49edb3e627258dddbc118a78de10ee101b"
+    },
+    {
+      "attemptDisposition": "PROPOSAL_STOP_ONLY",
+      "classification": "MATERIAL_DISTINCTNESS_STOP",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "MATERIAL_DUPLICATE_S_1Y",
+        "NO_PRODUCT_BYTES"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-2J DISTINCTNESS STOP",
+      "rowSha256": "8a65d27e848b573930f1cd8ce2deca9557b359b7bede889c4f313e8e1c281adf"
+    },
+    {
+      "attemptDisposition": "REJECTED_ATTEMPT_P_ONE",
+      "classification": "REJECTED_NONCONSUMABLE",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "DRAWDOWN_DATE_LABEL_MISALIGNMENT",
+        "EVALUATOR_REUSE_FORBIDDEN",
+        "NO_REPAIR_OR_RERUN"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR V-G35 REJECTION",
+      "rowSha256": "e52e138867da1bd098878bb95dd7474cbc8c4134c3ce6b6c460e1a9d7f72dcba"
+    },
+    {
+      "attemptDisposition": "ACCEPTED_ORIGIN_P_ONE",
+      "classification": "ACCEPTED_ECONOMIC_ORIGIN",
+      "economicOriginConsumed": true,
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "DAILY_CLOSE_BOUNDARY_INVALID_ALPACAUSDT_2025_05_ROW_2",
+        "ECONOMICS_INFERENCE_DRAWDOWN_AND_CAPACITY_UNMEASURED",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "HOLDOUT_SEALED_UNOPENED",
+        "NO_REPAIR_OR_RERUN"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR V-G37 ACCEPTANCE",
+      "rowSha256": "40b0ec75efb4990c5cc0b7b5453ea2dd6bf657a56184c2ef2fca26a7f1bb0330"
+    },
+    {
+      "attemptDisposition": "PROPOSAL_STOP_ONLY",
+      "classification": "MATERIAL_DISTINCTNESS_STOP",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "MATERIAL_DUPLICATE_V_G2_V_G3_V_G4_V_G26",
+        "NO_PRODUCT_BYTES"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-2E DISTINCTNESS STOP",
+      "rowSha256": "e7f5371bb8b5d180cf6550130681a2cd351fec9cc9a870f9f47dc2d180ab3662"
+    },
+    {
+      "attemptDisposition": "PROPOSAL_STOP_ONLY",
+      "classification": "MATERIAL_DISTINCTNESS_STOP",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "MATERIAL_DUPLICATE_V_G17",
+        "NO_PRODUCT_BYTES"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-2L DISTINCTNESS STOP",
+      "rowSha256": "abf42270a24f4801e0e52c2d58df08ddc7fa795e1eb2c39bb79babe0e9f26f4c"
+    },
+    {
+      "attemptDisposition": "BASELINE_BOUND",
+      "classification": "ACCEPTED_BASELINE_SOURCE_ONLY",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "SOURCE_ONLY",
+        "NOT_LANDED"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR N3-S1 ACCEPTANCE + REFILL",
+      "rowSha256": "782961bc94190770849d2becc6a4b48b94fef004958bfa927c45fa3933ca0703"
+    },
+    {
+      "attemptDisposition": "NONE",
+      "classification": "ACCEPTED_SOURCE_ONLY",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "DUPLICATE_TRUNCATION_CAUSE_UNKNOWN",
+        "LIFECYCLE_INVENTORY_COVERAGE_UNASSESSED",
+        "WITH_EXCLUSIONS_NON_GREEN"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-1 ACCEPTANCE + REFILL",
+      "rowSha256": "02a45154afb6e5592b124919ee2aa46e3d44e2bb118438a5599dee57d77ca7d9"
+    },
+    {
+      "attemptDisposition": "ACCEPTED_ORIGIN_P_ONE",
+      "classification": "ACCEPTED_ECONOMIC_ORIGIN",
+      "economicOriginConsumed": true,
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "BASE_AND_STRESS_INTERVALS_CROSS_ZERO",
+        "EXECUTABLE_FULL_WINDOW_CAPACITY_UNMEASURED",
+        "HOLM_P_ONE",
+        "HOLDOUT_UNOPENED",
+        "POSITIVE_BASE_PROXY_NOT_CREDIBLE",
+        "REALITY_CHECK_P_0_8711",
+        "STRESS_AND_SEVERE_NET_NEGATIVE"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-1Y ACCEPTANCE + REFILL",
+      "rowSha256": "f151ddf9327a033064fca505648082d65a5cd7b267f81907f457898e056e84a5"
+    },
+    {
+      "attemptDisposition": "NONE",
+      "classification": "ACCEPTED_SOURCE_ONLY",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "FUTURE_ONLY_NON_RETROACTIVE",
+        "NOT_REGISTRY_COMPLETENESS",
+        "NOT_ECONOMICS_OR_AUTHORITY"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-3 ACCEPTANCE + REFILL",
+      "rowSha256": "a4a59c2a0f516ba385ce6a11ce095ec7af88e2abd15d35740f3c42c5ce12f011"
+    },
+    {
+      "attemptDisposition": "REJECTED_ATTEMPT_P_ONE",
+      "classification": "REJECTED_NONCONSUMABLE",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "TERMINAL_SOURCE_STATE_FALSE",
+        "EVALUATOR_VERIFIER_REUSE_FORBIDDEN",
+        "N3_ECONOMIC_CONSUMPTION_FORBIDDEN",
+        "NO_REPAIR_OR_RERUN"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR V-G38 REJECTION + REFILL",
+      "rowSha256": "fbe234950e66c5e49ee9f6f4b611cafdc0bb892b48059e1b814bda9c18c9317b"
+    },
+    {
+      "attemptDisposition": "OUT_OF_SCOPE",
+      "classification": "OUT_OF_SCOPE_ACCEPTED_BLOCKED_STATE",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "NON_PROFITABILITY_SCOPE",
+        "ACCEPTED_BLOCKED_STATE",
+        "NO_HOST_OR_MONEY_EFFECT"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR M-A CUTOVER BLOCKER ACCEPTANCE",
+      "rowSha256": "b45345cb8a2ac17a33625ec43f917fc7412ecf51a10b726f002d1c8bae8f1d0c"
+    },
+    {
+      "attemptDisposition": "PROPOSAL_STOP_ONLY",
+      "classification": "MATERIAL_DISTINCTNESS_STOP",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "MATERIAL_DUPLICATE_V_G6",
+        "NO_PRODUCT_BYTES",
+        "HOLDOUT_NOT_CREATED",
+        "RETIRED"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-2M ACCEPTANCE + RETIREMENT",
+      "rowSha256": "8e4f9c3babbaca90b421b8409e80d19721f46744e5d8d3c3b4467cb55463850f"
+    },
+    {
+      "attemptDisposition": "ACCEPTED_ORIGIN_P_ONE",
+      "classification": "ACCEPTED_ECONOMIC_ORIGIN",
+      "economicOriginConsumed": true,
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "CANDIDATE_ABSENT",
+        "ECONOMICS_INFERENCE_DRAWDOWN_AND_CAPACITY_UNMEASURED",
+        "HOLDOUT_UNOPENED",
+        "NO_REPAIR_OR_RERUN",
+        "NON_HOURLY_FUNDING_TIMESTAMP",
+        "RAW_SOURCE_BODIES_EXTERNAL"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-2C ACCEPTANCE",
+      "rowSha256": "43bad734804c8c053856579e0f105d23774445dade6b07085b375d5f2b45a25e"
+    },
+    {
+      "attemptDisposition": "ACCEPTED_ORIGIN_P_ONE",
+      "classification": "ACCEPTED_ECONOMIC_ORIGIN",
+      "economicOriginConsumed": true,
+      "limitations": [
+        "ACCEPTANCE_ROW_COMMIT_FRAGMENT_NON_SUFFIX",
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "BASE_STRESS_SEVERE_NET_NEGATIVE",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "HOLDOUT_CONSUMED_NO_REOPEN",
+        "HOLM_P_ONE",
+        "PBO_DIAGNOSTIC_ONLY",
+        "RAW_SOURCE_BODIES_EXTERNAL",
+        "STRESS_SEVERE_DRAWDOWN_EXCESSIVE",
+        "WHITE_P_0_9844"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-1Z ACCEPTANCE",
+      "rowSha256": "ae9595aab10813437c81332b13f716c33f2207e226957c78b44f06242a860c6a"
+    },
+    {
+      "attemptDisposition": "ACCEPTED_ORIGIN_P_ONE",
+      "classification": "ACCEPTED_ECONOMIC_ORIGIN",
+      "economicOriginConsumed": true,
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "BASE_STRESS_DRAWDOWN_EXCEEDS_20_PERCENT",
+        "EXECUTABLE_INTRADAY_CAPACITY_UNMEASURED",
+        "HOLDOUT_UNOPENED",
+        "HOLM_AND_WHITE_GATES_FAILED",
+        "NO_CHAMPION",
+        "PBO_DIAGNOSTIC_NOT_SELECTOR",
+        "POSITIVE_POINT_ESTIMATE_NOT_CREDIBLE",
+        "RUN_CONSUMED",
+        "ZERO_OF_12_TRIALS_PASSED"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR V-G36 ACCEPTANCE",
+      "rowSha256": "2852691f5676ccebd1cca714cf668f0680d76f8d097eedb0b688ee381472fcb1"
+    },
+    {
+      "attemptDisposition": "REJECTED_ATTEMPT_P_ONE",
+      "classification": "REJECTED_NONCONSUMABLE",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "LOCAL_UNVERIFIED_NO_REMOTE_REF",
+        "VERIFIER_EVIDENCE_CONTRACT_FAILURE",
+        "INTERVALS_CROSS_ZERO",
+        "NO_CHAMPION",
+        "N3_ECONOMICS_FORBIDDEN",
+        "NO_RERUN"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR V-G1 REJECTION",
+      "rowSha256": "28ca0b5d25c038698e99ed5af861d41868c97738568721fc4638ae28e36203a6"
+    },
+    {
+      "attemptDisposition": "REJECTED_ATTEMPT_P_ONE",
+      "classification": "REJECTED_NONCONSUMABLE",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "FROZEN_VERIFIER_SCHEMA_MISMATCH",
+        "OPERATIONAL_UNMEASURED_NO_GO",
+        "NO_PACKET_REPAIR_OR_ECONOMIC_RERUN",
+        "HOLDOUT_UNOPENED",
+        "FROZEN_VERIFIER_REUSE_FORBIDDEN",
+        "N3_STATE_ONLY"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-1V REJECTION",
+      "rowSha256": "c07a1d0207a1e7c84f50470b175fc3932d96c4e56ac11239fca3e24f29c8bccb"
+    },
+    {
+      "attemptDisposition": "NONE",
+      "classification": "ACCEPTED_SOURCE_ONLY",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "SOURCE_ONLY_ECONOMICS_TRUTH_VALIDATOR",
+        "SYNTHETIC_FIXTURES_NOT_PROFITABILITY_EVIDENCE",
+        "ACCOUNT_EFFECTIVE_FEE_AND_NET_REMAIN_UNKNOWN",
+        "EXECUTABLE_CAPACITY_REMAINS_UNMEASURED",
+        "USDT_TO_USD_CONVERSION_REMAINS_UNKNOWN",
+        "NO_ECONOMIC_ORIGIN_FAMILY_TRIAL_OR_P_VALUE"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-6 ACCEPTANCE",
+      "rowSha256": "02849bae38ade724d29b5eb8e0626dac65937475cddfb9598a76f92f8a52b6f8"
+    },
+    {
+      "attemptDisposition": "ACCEPTED_ORIGIN_P_ONE",
+      "classification": "ACCEPTED_ECONOMIC_ORIGIN",
+      "economicOriginConsumed": true,
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "BASE_STRESS_FEE_STRESS_NET_NEGATIVE",
+        "CANDIDATE_SEAL_ABSENT",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "FIXED_COHORT_SURVIVORSHIP_FILTER_TRUTH_UNRESOLVED",
+        "GROSS_POSITIVE_PROXY_NOT_CREDIBLE",
+        "HOLDOUT_UNOPENED",
+        "HOLM_AND_WHITE_P_ONE",
+        "INFERENCE_CONDITIONAL",
+        "NO_DEVELOPMENT_QUALIFIER",
+        "NOMINAL_USDT_NOT_USD_PARITY",
+        "PBO_DIAGNOSTIC_ONLY",
+        "SHARED_HOLDOUT_REUSE_RISK_UNCERTIFIED",
+        "STRESS_DRAWDOWN_68_63_PERCENT",
+        "STRESS_INTERVAL_ENTIRELY_NEGATIVE",
+        "SYNTHETIC_SHORT_BORROW_UNKNOWN"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-2G ACCEPTANCE",
+      "rowSha256": "7c6e50593f9bfc5d3f26d12074a038a9e37cea34fd7cbc596431f36497d87e55"
+    },
+    {
+      "attemptDisposition": "NONE",
+      "classification": "ACCEPTED_SOURCE_ONLY",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "SOURCE_ONLY_NAV_DRAWDOWN_COORDINATE_VALIDATOR",
+        "SYNTHETIC_KNOWN_ANSWER_NOT_PROFITABILITY_EVIDENCE",
+        "SOURCE_AUTHENTICITY_AND_CAPTURE_TIMING_REMAIN_CONSUMER_GATES",
+        "ACCOUNT_COMPLETE_COSTS_REMAIN_CONSUMER_GATE",
+        "NO_RETROACTIVE_PACKET_VALIDATION_OR_REPAIR",
+        "NO_ECONOMIC_ORIGIN_FAMILY_TRIAL_OR_P_VALUE"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-8 ACCEPTANCE + PRODUCT REFILL",
+      "rowSha256": "6a2b77937e3335c446e011cab746ad6f891a90137c7482c23f9aebd4e7eabbd6"
+    },
+    {
+      "attemptDisposition": "ACCEPTED_ORIGIN_P_ONE",
+      "classification": "ACCEPTED_ECONOMIC_ORIGIN",
+      "economicOriginConsumed": true,
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_COMMISSION_UNKNOWN",
+        "ALL_ECONOMIC_STATISTICAL_DRAWDOWN_CAPACITY_FIELDS_UNMEASURED",
+        "FROZEN_TOP30_RANK_EFFECT_OF_9_FALSE_REJECTIONS_UNMEASURED",
+        "FROZEN_USDT_AS_USD_ASSUMPTION_UNUSABLE_FOR_FUTURE_REUSE",
+        "GLOBAL_HOLDOUT_NOT_CERTIFIED_SHARED_REUSE_RISK",
+        "HISTORICAL_FILTERS_SPREAD_DEPTH_IMPACT_AND_EXECUTABLE_CAPACITY_UNMEASURED",
+        "HOLDOUT_SEALED_UNOPENED",
+        "NO_DEVELOPMENT_RESULT_OR_SELECTION",
+        "NO_REPAIR_OR_RERUN",
+        "PREDECLARED_UP_SUFFIX_FALSE_POSITIVE_EXCLUSIONS_JUPUSDT_AND_SYRUPUSDT",
+        "PRIOR_DISCOVERY_ASCII_CANDIDATE_GRAMMAR_LIMITATION",
+        "SCREEN_CONSUMED",
+        "SPOT_IS_CONTINUOUS_UTC_BOUNDARY_IS_NOT_A_MARKET_CLOSE",
+        "SYNTHETIC_SHORT_BORROW_INVENTORY_AND_INTEREST_UNKNOWN"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-2H ACCEPTANCE + DQ-11 DURABILITY RESUME",
+      "rowSha256": "bba59063cc66b62b8c4b08e5b4f2be2513fd168f8da9a20d6047696afd64e418"
+    },
+    {
+      "attemptDisposition": "NONE",
+      "classification": "ACCEPTED_SOURCE_ONLY",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "SOURCE_ONLY_SAMPLE_ADMISSION_DENOMINATOR_VALIDATOR",
+        "SYNTHETIC_KNOWN_ANSWER_COUNTS_NOT_ECONOMIC_EVIDENCE",
+        "GIT_PIN_NOT_SIGNATURE_OR_DEPLOYMENT_AUTHORITY",
+        "NO_ECONOMIC_ORIGIN_FAMILY_TRIAL_OR_P_VALUE"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-11 ACCEPTANCE",
+      "rowSha256": "e7829130c995101d2fb170fc5f32b2d516adf0fd3431834a132369c5fc4a7cfe"
+    },
+    {
+      "attemptDisposition": "NONE",
+      "classification": "ACCEPTED_SOURCE_ONLY",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "SOURCE_ONLY_SEALED_LIFECYCLE_VALIDATOR",
+        "SYNTHETIC_KNOWN_ANSWER_NO_GO_NOT_ECONOMIC_EVIDENCE",
+        "CANNOT_PROVE_UNDISCLOSED_PARALLEL_RUNS_OR_MARKER_TIMING",
+        "NO_EXPERIMENT_OR_HOLDOUT_OPENED",
+        "NO_ECONOMIC_ORIGIN_FAMILY_TRIAL_OR_P_VALUE"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-9 ACCEPTANCE",
+      "rowSha256": "dadb050b5da0ae6ced2edc3ce16267a6bd542dc92002783b5e6567c37911aaca"
+    },
+    {
+      "attemptDisposition": "ACCEPTED_ORIGIN_P_ONE",
+      "classification": "ACCEPTED_ECONOMIC_ORIGIN",
+      "economicOriginConsumed": true,
+      "limitations": [
+        "ACCEPTANCE_ROW_CORRECTS_WORKER_TREE_SUFFIX",
+        "ACCOUNT_EFFECTIVE_FEES_AND_PROFITABILITY_UNKNOWN",
+        "BASE_AND_STRESS_INTERVALS_ENTIRELY_NEGATIVE",
+        "BASE_STRESS_SEVERE_NET_NEGATIVE",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "FIXED_COHORT_SURVIVORSHIP_LIMITATION",
+        "GROSS_POSITIVE_PROXY_NOT_CREDIBLE",
+        "HOLDOUT_UNOPENED",
+        "HOLM_AND_WHITE_P_ONE",
+        "NINE_OF_TEN_FORMAL_GATES_FAILED",
+        "NOMINAL_SCREEN_BELOW_INITIAL_1000",
+        "PBO_DIAGNOSTIC_ONLY",
+        "PROGRAM_WIDE_MULTIPLICITY_NOT_CONVERGED",
+        "PUBLIC_QUOTE_VOLUME_AND_COSTS_NOT_EXECUTABLE_DEPTH_OR_ACCOUNT_TRUTH",
+        "STRESS_DRAWDOWN_26_76_PERCENT"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR V-G27 ACCEPTANCE",
+      "rowSha256": "e90901f925adbd3e968915df2d38ec7a0f533caef01ec2a7adf006080fc87e42"
+    },
+    {
+      "attemptDisposition": "ACCEPTED_ORIGIN_P_ONE",
+      "classification": "ACCEPTED_ECONOMIC_ORIGIN",
+      "economicOriginConsumed": true,
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "BASE_INTERVAL_CROSSES_ZERO",
+        "BASE_STRESS_SEVERE_NET_NEGATIVE",
+        "CURRENT_EXCHANGE_INFO_NOT_HISTORICAL_UNIVERSE",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "HOLDOUT_SEALED_UNOPENED",
+        "HOLM_P_ONE",
+        "HOURLY_MARK_OPEN_NOT_EXACT_FUNDING_SETTLEMENT_MARK",
+        "NO_ELIGIBLE_CHAMPION",
+        "PBO_DIAGNOSTIC_ONLY",
+        "PROGRAM_WIDE_MULTIPLICITY_UNMEASURED",
+        "PUBLIC_TURNOVER_NOT_EXECUTABLE_DEPTH",
+        "REALIZED_DAILY_DRAWDOWN_NOT_INTRAPERIOD_MARK_DRAWDOWN",
+        "ROUND_TRIPS_39_BELOW_REQUIRED_96",
+        "STATIC_PANEL_SURVIVORSHIP_LIMITATION",
+        "USDT_USD_PARITY_UNMEASURED",
+        "WHITE_P_0_996583"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-2A ACCEPTANCE",
+      "rowSha256": "cd3ea18b204a24f581408dd4fbf7d098925130b198fc52b605c3e2a0282b5a65"
+    },
+    {
+      "attemptDisposition": "NONE",
+      "classification": "ACCEPTED_SOURCE_ONLY",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "SOURCE_ONLY_ORIGIN_PROOF_VALIDATOR",
+        "SUPPLIED_OFFLINE_GIT_CONSISTENCY_ONLY",
+        "NO_REMOTE_FRESHNESS_AUTHORSHIP_SIGNING_OR_CHRONOLOGY_PROOF",
+        "NO_DATA_CUSTODY_ECONOMIC_OR_HOLDOUT_VALIDATION",
+        "NO_ECONOMIC_ORIGIN_FAMILY_TRIAL_OR_P_VALUE"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-4 ACCEPTANCE",
+      "rowSha256": "2be00f4b8949e7ea856a6966374e60067ecb2de589b79872baae4ca4824cd776"
+    },
+    {
+      "attemptDisposition": "ACCEPTED_ORIGIN_P_ONE",
+      "classification": "ACCEPTED_ECONOMIC_ORIGIN",
+      "economicOriginConsumed": true,
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_AND_BORROW_COST_ARE_UNKNOWN",
+        "BASE_BOOTSTRAP_INTERVAL_ENTIRELY_NEGATIVE",
+        "BASE_FIVE_MINUTE_DRAWDOWN_96_10_PERCENT",
+        "BASE_STRESS_SEVERE_PUBLIC_PROXY_NET_NEGATIVE",
+        "CANDIDATE_ABSENT",
+        "EIGHT_OF_ELEVEN_DEVELOPMENT_GATES_FAILED",
+        "FIXED_20_SYMBOL_COHORT_DOES_NOT_PROVE_POINT_IN_TIME_FULL_MARKET_OR_REMOVE_SURVIVORSHIP",
+        "GROSS_PUBLIC_PROXY_NET_NEGATIVE",
+        "HOLDOUT_SEALED_UNOPENED",
+        "HOLM_AND_WHITE_0_999268",
+        "ONE_INTERNAL_HOLDOUT_IS_NOT_A_FRESH_GLOBAL_CORPUS",
+        "PUBLIC_5M_QUOTE_VOLUME_IS_NOT_EXECUTABLE_CAPACITY_OR_DEPTH",
+        "PUBLIC_CAPACITY_P05_1_14_USD_BELOW_1000",
+        "PUBLIC_PROXY_RESULTS_CANNOT_AUTHORIZE_CAPITAL_OR_EXECUTION",
+        "SPREAD_DEPTH_QUEUE_LATENCY_IMPACT_FILTERS_COLLATERAL_AND_LIQUIDATION_ARE_UNMEASURED",
+        "SYNTHETIC_SHORT_LEGS_REQUIRE_BORROW_OR_MARGIN_INVENTORY_NOT_PROVED_BY_SPOT_ARCHIVES",
+        "USDT_EQUALS_USD_IS_A_RESEARCH_NORMALIZATION_NOT_REDEMPTION_TRUTH"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-2K ACCEPTANCE",
+      "rowSha256": "7584e05cfffbc4f5533bc05fda42f0b04ee0c9e85c7f4e4345653937d368aff8"
+    },
+    {
+      "attemptDisposition": "ACCEPTED_ORIGIN_P_ONE",
+      "classification": "ACCEPTED_ECONOMIC_ORIGIN",
+      "economicOriginConsumed": true,
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_AND_HISTORICAL_COMMISSION_UNKNOWN",
+        "BASE_STRESS_SEVERE_PUBLIC_PROXY_NET_NEGATIVE",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "FIXED_LONG_LIVED_UNIVERSE_HAS_SURVIVORSHIP_BIAS",
+        "HISTORICAL_CROSS_ENGINE_CLOCK_OFFSET_UNKNOWN",
+        "HOLDOUT_SEALED_UNOPENED_DEVELOPMENT_GATES_FAILED",
+        "HOLM_ABSOLUTE_1_MATCHED_EXCESS_0_8338",
+        "HOUR_BARS_CANNOT_IDENTIFY_SUB_HOUR_CAUSALITY",
+        "MATCHED_EXCESS_INTERVAL_POSITIVE_NOT_CREDIBLE_AFTER_MULTIPLICITY",
+        "MAXIMUM_MARKED_GROSS_1020_156266_EXCEEDS_1000_GATE",
+        "NO_HISTORICAL_SYNCHRONIZED_ORDER_BOOK_SPREAD_QUEUE_OR_IMPACT",
+        "PBO_ZERO_DIAGNOSTIC_ONLY",
+        "PROGRAM_WIDE_ALIAS_ATTEMPT_LEDGER_INCOMPLETE_EFFECTIVE_P_ONE",
+        "PUBLIC_PROXY_CANNOT_AUTHORIZE_CAPITAL_OR_EXECUTION",
+        "PUBLIC_QUOTE_VOLUME_CAPACITY_PROXY_13666_55_NOT_EXECUTABLE_CAPACITY",
+        "RAW_ARCHIVE_BODIES_EXTERNAL_TO_GIT",
+        "REMOVE_BEST_MONTH_STRESS_NEGATIVE",
+        "RESULT_EMBEDDED_GIT_IS_STATIC_PRE_ACCEPTANCE_PROVENANCE",
+        "RPI_BEGAN_DURING_SAMPLE_2025_11_18_PRE_RPI_COMPARABILITY_NOT_ESTABLISHED",
+        "RUN_CONSUMED_ONE_OF_ONE_NO_RERUN",
+        "SEVERE_DRAWDOWN_3677_866136_EXCEEDS_100_GATE",
+        "STRESS_90PCT_INTERVAL_ENTIRELY_NEGATIVE",
+        "USDT_PER_1000_NOT_FIAT_USD_CONVERSION",
+        "WHITE_REALITY_CHECK_0_2951",
+        "ZERO_NET_NOTIONAL_NOT_PROVEN_BETA_OR_FACTOR_NEUTRALITY"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR S-2I ACCEPTANCE + OPUS 5 FOLD-PREP REFILL",
+      "rowSha256": "a8eed34a68da51dd2a31638209bf6e60ea2fc630c70ee82aeaa751ac14eeae96"
+    },
+    {
+      "attemptDisposition": "NONE",
+      "classification": "REJECTED_SOURCE_DURABILITY",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "SOURCE_ONLY_DURABILITY_REJECTION",
+        "BRANCH_LOCAL_ONLY_NO_UPSTREAM_AT_REJECTION",
+        "SAME_TASK_RESUMED_FOR_PUSH_AND_UPSTREAM_PROOF_ONLY",
+        "NO_ECONOMIC_ORIGIN_FAMILY_TRIAL_OR_P_VALUE",
+        "AUTHORITY_NONE"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-14 DURABILITY REJECTION + SAME-TASK RESUME",
+      "rowSha256": "d315571546270e2f44f1417b8e6a3152882b052dfe726debb76455ee7c76fa4a"
+    },
+    {
+      "attemptDisposition": "NONE",
+      "classification": "ACCEPTED_SOURCE_ONLY",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "SOURCE_ONLY_SOURCE_ACCESS_REPLAY_VALIDATOR",
+        "SUPPLIED_LEDGER_CONSISTENCY_ONLY",
+        "INDEPENDENT_AUTHENTICATED_TERMINAL_TIP_AND_COUNT_REQUIRED",
+        "FACADE_BYPASS_NOT_DETECTABLE",
+        "INVENTORY_ROLES_AND_CONTENT_NOT_INDEPENDENTLY_PROVEN",
+        "UNOPENED_MEANS_NO_ELIGIBLE_ATTEMPT_AFTER_PRE_RUN_SEAL_ONLY",
+        "LEDGER_AND_VERIFIER_CLAIMS_NOT_AUTHENTICATED_PROVENANCE",
+        "NO_RETROACTIVE_PACKET_VALIDATION_OR_ARCHIVE_HOLDOUT_ACCESS",
+        "SYNTHETIC_KNOWN_ANSWER_NOT_PROFITABILITY_EVIDENCE",
+        "NO_ECONOMIC_ORIGIN_FAMILY_TRIAL_OR_P_VALUE",
+        "AUTHORITY_NONE"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-14 ACCEPTANCE",
+      "rowSha256": "7969f6b26f06a0e8890a3b6bd355c946cca534b201a63c8a3b600a56ca71b5bb"
+    }
+  ],
+  "pendingInputs": {
+    "activeOutsideBaselineCutoff": [],
+    "activeWithinBaselineCutoff": [
+      {
+        "milestoneId": "V-G10",
+        "taskRefSuffix": "99f9"
+      },
+      {
+        "milestoneId": "S-1T",
+        "taskRefSuffix": "fea0"
+      }
+    ],
+    "requiredTruth": [
+      "ACCEPTED_PRE_OUTCOME_FAMILY_ALIAS_REGISTRY",
+      "COMPLETE_GLOBAL_ATTEMPT_LEDGER",
+      "SANITIZED_ACCOUNT_EFFECTIVE_FEES",
+      "EXECUTABLE_CAPACITY_AND_EXECUTION_PROOF",
+      "COMPLETE_MARKED_EQUITY_PATHS",
+      "SINGLE_FRESH_HOLDOUT_RECEIPT_IF_A_WINNER_EMERGES"
+    ],
+    "terminalPending": []
+  },
+  "schema": "N3S2OriginSpecV1",
+  "sourceOnlyPins": [
+    {
+      "bindingId": "DQ-1",
+      "path": "quant/research/dq1/policy.v1.json",
+      "producerCommit": "ec0c9f436d01f25134c226057981b107dfc97f67",
+      "producerTree": "52f854d7fbcde842baa739333b0fc7b3e5fdc921",
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-1 ACCEPTANCE + REFILL"
+    },
+    {
+      "bindingId": "DQ-3",
+      "path": "quant/research/dq3/known_answer.v1.json",
+      "producerCommit": "2ed4c74802e436cf446fa983cfe16245383c66a1",
+      "producerTree": "55ddad0db43ee4309a42ce532db55cbfa237db96",
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-3 ACCEPTANCE + REFILL"
+    },
+    {
+      "bindingId": "DQ-6",
+      "path": "quant/research/dq6/known_answer.v1.json",
+      "producerCommit": "107bda07bf0da35be7844cc4abfe38577391ebae",
+      "producerTree": "45919cbe306d8113ae8a0e143e6bc8fb1031c28d",
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-6 ACCEPTANCE"
+    },
+    {
+      "bindingId": "DQ-8",
+      "path": "quant/research/dq8/fixtures/known_receipt.v1.json",
+      "producerCommit": "61501d5ea1605adc1133e2680870b1897b27a099",
+      "producerTree": "88fbca8a53c9c5b442acd4aa34e46383cb68bb08",
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-8 ACCEPTANCE + PRODUCT REFILL"
+    },
+    {
+      "bindingId": "DQ-11",
+      "path": "quant/research/dq11/known_answer.v1.json",
+      "producerCommit": "8f501fde341699355833555a988c2cdb03a5c075",
+      "producerTree": "7c861ca7910c8245042a5d4011ca3c5d89a83b78",
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-11 ACCEPTANCE"
+    },
+    {
+      "bindingId": "DQ-9",
+      "path": "quant/research/dq9/known_answer.v1.json",
+      "producerCommit": "4d42ffc037e5a20536b72c11d05fa0e68945a819",
+      "producerTree": "490234c14059737a8327e969aa695697ce0ae5e1",
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-9 ACCEPTANCE"
+    },
+    {
+      "bindingId": "DQ-4",
+      "path": "quant/research/dq4/policy.v1.json",
+      "producerCommit": "29740b692946557cf6615880fc41d9ded49f69fa",
+      "producerTree": "a5922b98e3f15b79de9308269304ee76b88365a1",
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-4 ACCEPTANCE"
+    },
+    {
+      "bindingId": "DQ-14",
+      "path": "quant/research/dq14/known_answer.v1.json",
+      "producerCommit": "0f17eb14279b2bd718fba48ea3da97b4f0f9709e",
+      "producerTree": "eecc24ae0f39320b97b601a2da8487173613d3f1",
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-14 ACCEPTANCE"
+    }
+  ],
+  "version": 1
+}

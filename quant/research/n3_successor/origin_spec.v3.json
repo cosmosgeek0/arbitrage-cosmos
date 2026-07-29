@@ -1,0 +1,266 @@
+{
+  "schema": "N3S3OriginSpecV1",
+  "version": 1,
+  "canonicalOrigin": {
+    "commit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+    "tree": "37d1b88aa7c8d9ee1f70dc35d0e78613b6ed32f9"
+  },
+  "baseline": {
+    "artifacts": [
+      {
+        "name": "readme",
+        "path": "quant/research/n3_successor/README_S2.md",
+        "rawSha256": "4898506d3726e71f3cf9f1f586f91c91b7829ba6948c7f6ded46fbdb2fcfdfb7"
+      },
+      {
+        "name": "originSpec",
+        "path": "quant/research/n3_successor/origin_spec.v2.json",
+        "rawSha256": "ee6fab1ded2fcea45494b9fb2d400c3dbf63238e0dd85ad51fcfde0153bb7090"
+      },
+      {
+        "name": "registry",
+        "path": "quant/research/n3_successor/current_profitability_registry.v2.json",
+        "rawSha256": "c06b134157ee3aac7c13bf1baa50a050722aa1500df0037f6f3bc401b9d07097"
+      },
+      {
+        "name": "card",
+        "path": "quant/research/n3_successor/owner_verdict_card.v2.md",
+        "rawSha256": "3ac83fd273706fb27fcdf09074c3a536dfc4be004c31fa461b9e93cd36c08230"
+      },
+      {
+        "name": "tool",
+        "path": "quant/research/n3_successor/registry_tool_v2.py",
+        "rawSha256": "dff3533a92a2f1db3d3182b5c4af07acb0685c9479f7656ad2d24bcdfce20d0e"
+      },
+      {
+        "name": "tests",
+        "path": "quant/research/n3_successor/test_registry_v2.py",
+        "rawSha256": "855b0a6d7e28ccb0a5ee89a743dc5f962418820d37037a6764af62551c863d05"
+      }
+    ],
+    "producerCommit": "cf00db3f44c030dc393639b4ea7493797fe2aba6",
+    "producerParent": "13631f3cc31020d8ca377d57e24ad6b75d89dba6",
+    "producerTree": "c0b0458169b2287808a763965d79611d6b2acaee",
+    "recordId": "2026-07-30 ORCHESTRATOR DQ-10 ACCEPTANCE + N3/FOLD REFILL",
+    "rowSha256": "1cde4548dffb2631ecac535f245f3e728b2bd1c083219e62146a99eef0fe1591"
+  },
+  "priorLedgerAsOf": {
+    "recordId": "2026-07-30 ORCHESTRATOR DQ-14 ACCEPTANCE",
+    "rowSha256": "7969f6b26f06a0e8890a3b6bd355c946cca534b201a63c8a3b600a56ca71b5bb"
+  },
+  "economicEvidenceThrough": {
+    "recordId": "2026-07-30 ORCHESTRATOR V-G10 ACCEPTANCE",
+    "rowSha256": "fe3d49ed4a4640f69f46dc43dacdb01319264e879843f1876e8d00f863d1d67f"
+  },
+  "acceptanceLedgerAsOf": {
+    "recordId": "2026-07-30 ORCHESTRATOR DQ-10 ACCEPTANCE + N3/FOLD REFILL",
+    "rowSha256": "1cde4548dffb2631ecac535f245f3e728b2bd1c083219e62146a99eef0fe1591"
+  },
+  "incrementalOrigin": {
+    "custodyState": "ACCEPTED_EXACT",
+    "limitations": [
+      "ACCOUNT_EFFECTIVE_HISTORICAL_SPECIAL_AND_TAX_FEES_UNKNOWN",
+      "ALPACAUSDT_2025_05_CLOSE_NOT_EXACT_INTERVAL_BOUNDARY",
+      "ANALYST_FEE_AND_ADVERSE_EXECUTION_SENSITIVITIES_NOT_APPLIED_OR_ACCOUNT_TRUTH",
+      "CAPITAL_NO_GO",
+      "COHORT_NOT_SELECTED",
+      "DEVELOPMENT_AND_HOLDOUT_BODY_OPEN_STATES_NOT_ATTEMPTED",
+      "DEVELOPMENT_OBJECT_NOT_REQUESTED_OUTCOME_MARKER_NOT_CONSUMED_AND_CANDIDATE_NOT_SEALED",
+      "ECONOMICS_INTERVAL_MULTIPLICITY_PBO_DRAWDOWN_AND_PUBLIC_CAPACITY_UNMEASURED",
+      "EXECUTABLE_CAPACITY_UNMEASURED",
+      "GLOBAL_SIBLING_CAMPAIGN_MULTIPLICITY_UNKNOWN_UNADJUSTED",
+      "HOLDOUT_NOT_REQUESTED_OR_OPENED",
+      "NO_OUTCOME_RECOMPUTATION_OR_ARCHIVE_DECOMPRESSION_IN_VERIFICATION",
+      "NO_REPAIR_SUBSTITUTION_REFIT_OR_RERUN",
+      "SOURCE_ADMISSIBILITY_ONLY_NOT_PROFITABILITY",
+      "SPREAD_BOOK_IMPACT_LATENCY_AND_HISTORICAL_FILTER_ADMISSIBILITY_UNMEASURED",
+      "USDT_EQUALS_USD_UNPROVEN_REPORTING_CONVENTION"
+    ],
+    "normalizedVerdict": "UNMEASURED",
+    "originId": "V-G10",
+    "producerCommit": "b2bb5551afee9e2dadafd0020bdd8243e33cb028",
+    "producerTree": "dfc66bf967e917b11f406538d4ea5dac78f14c10",
+    "protocolPath": "quant/research/vg10/protocol.v1.json",
+    "protocolRawSha256": "5b11993f366f531d42d041d624b4e4ab9c379f344ef9fa02f4db2f3d6a2a670e",
+    "recordId": "2026-07-30 ORCHESTRATOR V-G10 ACCEPTANCE",
+    "resultPath": "quant/research/vg10/result.v1.json",
+    "resultRawSha256": "fb10af3ed6913327af1551dc587ab0ecae03d97bef3bb6fa672c4dab68c8bb99",
+    "rowSha256": "fe3d49ed4a4640f69f46dc43dacdb01319264e879843f1876e8d00f863d1d67f",
+    "sourceVerdict": "UNMEASURED_CAPITAL_NO_GO"
+  },
+  "ledgerRows": [
+    {
+      "attemptDisposition": "NONE",
+      "classification": "ACCEPTED_SOURCE_ONLY",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "PROSPECTIVE_STRUCTURAL_ADMISSIBILITY_ONLY",
+        "EXTERNAL_ACCEPTED_ONTOLOGY_AND_PREOUTCOME_FREEZE_PINS_REQUIRED",
+        "CANNOT_DISCOVER_OMITTED_ATTEMPTS_OR_PROVE_GLOBAL_LEDGER_COMPLETENESS",
+        "DOES_NOT_EXECUTE_MULTIPLICITY_OR_VALIDATE_STATISTICS_OR_ECONOMICS",
+        "MANIFEST_DIGEST_BINDS_NORMALIZED_CONTENT_NOT_SUBMITTED_TRANSPORT_BYTES",
+        "PRIOR_EXPERIMENTS_AND_HOLDOUTS_UNTOUCHED",
+        "NO_ECONOMIC_ORIGIN_FAMILY_TRIAL_OR_P_VALUE",
+        "AUTHORITY_NONE"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-7 ACCEPTANCE",
+      "rowSha256": "0cc6e8211e6dc1a4ae61248c4ff2bcf2a89b54736c0dc0eb4fe2d2955c3865f9"
+    },
+    {
+      "attemptDisposition": "ACCEPTED_ORIGIN_P_ONE",
+      "classification": "ACCEPTED_ECONOMIC_ORIGIN",
+      "economicOriginConsumed": true,
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_HISTORICAL_SPECIAL_AND_TAX_FEES_UNKNOWN",
+        "ALPACAUSDT_2025_05_CLOSE_NOT_EXACT_INTERVAL_BOUNDARY",
+        "ANALYST_FEE_AND_ADVERSE_EXECUTION_SENSITIVITIES_NOT_APPLIED_OR_ACCOUNT_TRUTH",
+        "CAPITAL_NO_GO",
+        "COHORT_NOT_SELECTED",
+        "DEVELOPMENT_AND_HOLDOUT_BODY_OPEN_STATES_NOT_ATTEMPTED",
+        "DEVELOPMENT_OBJECT_NOT_REQUESTED_OUTCOME_MARKER_NOT_CONSUMED_AND_CANDIDATE_NOT_SEALED",
+        "ECONOMICS_INTERVAL_MULTIPLICITY_PBO_DRAWDOWN_AND_PUBLIC_CAPACITY_UNMEASURED",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "GLOBAL_SIBLING_CAMPAIGN_MULTIPLICITY_UNKNOWN_UNADJUSTED",
+        "HOLDOUT_NOT_REQUESTED_OR_OPENED",
+        "NO_OUTCOME_RECOMPUTATION_OR_ARCHIVE_DECOMPRESSION_IN_VERIFICATION",
+        "NO_REPAIR_SUBSTITUTION_REFIT_OR_RERUN",
+        "SOURCE_ADMISSIBILITY_ONLY_NOT_PROFITABILITY",
+        "SPREAD_BOOK_IMPACT_LATENCY_AND_HISTORICAL_FILTER_ADMISSIBILITY_UNMEASURED",
+        "USDT_EQUALS_USD_UNPROVEN_REPORTING_CONVENTION"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR V-G10 ACCEPTANCE",
+      "rowSha256": "fe3d49ed4a4640f69f46dc43dacdb01319264e879843f1876e8d00f863d1d67f"
+    },
+    {
+      "attemptDisposition": "NONE",
+      "classification": "ACCEPTED_SOURCE_ONLY",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "PROSPECTIVE_METADATA_ONLY",
+        "REQUIRES_COMPLETE_CUSTODY_VERIFIED_GLOBAL_REGISTRY",
+        "DOES_NOT_AUTHENTICATE_EXTERNAL_CUSTODY_RECEIPT",
+        "CANNOT_PROVE_DIFFERENTLY_NAMED_FAMILIES_ECONOMICALLY_DISTINCT",
+        "NO_DATASET_ARCHIVE_EXPERIMENT_OUTCOME_OR_HOLDOUT_OPENED",
+        "README_SELECTED_AS_COMPLETE_CONTRACT_BINDING_BECAUSE_NO_DECLARED_KNOWN_ANSWER_OR_POLICY",
+        "NO_ECONOMIC_ORIGIN_FAMILY_TRIAL_OR_P_VALUE",
+        "AUTHORITY_NONE"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-5 ACCEPTANCE",
+      "rowSha256": "12e1c6e0b1eedefc3f7bbae02dbc8b2450fd4acfb40e5b19c200f5c598007759"
+    },
+    {
+      "attemptDisposition": "NONE",
+      "classification": "ACCEPTED_SOURCE_ONLY",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "CURRENT_ONLY_SPOT_TO_USDM_INSTRUMENT_IDENTITY",
+        "HISTORICAL_STATUS_UNKNOWN",
+        "MARGIN_ASSET_IS_SETTLEMENT_PROXY_ONLY",
+        "ENDPOINT_METADATA_AND_PAYLOAD_DIGESTS_DO_NOT_AUTHENTICATE_COLLECTION",
+        "TRUSTED_EXTERNAL_EVALUATION_TIME_AND_COLLECTION_RECEIPT_REQUIRED",
+        "NO_ECONOMIC_ORIGIN_FAMILY_TRIAL_OR_P_VALUE",
+        "AUTHORITY_NONE"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-12 ACCEPTANCE",
+      "rowSha256": "b51d7538c889fb93b470ddaaada1ed878451ca8dd61403682311efbf125160e5"
+    },
+    {
+      "attemptDisposition": "NONE",
+      "classification": "ACCEPTED_SOURCE_ONLY",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "PROSPECTIVE_CLOCK_POLICY_ONLY",
+        "CANNOT_REOPEN_OR_RECLASSIFY_CONSUMED_RUNS",
+        "VALID_PROVES_ONLY_SUPPLIED_DIGEST_BOUND_EVIDENCE_SATISFIES_FROZEN_POLICY",
+        "SOURCE_COMPLETENESS_EXCHANGE_AUTHENTICITY_CLOCK_SYNC_EXTERNAL_LABEL_ISOLATION_FEE_TRUTH_EXECUTION_AND_PROFITABILITY_NOT_PROVEN",
+        "SAFETY_NOT_PROVEN",
+        "THREE_DAY_PHASE_IS_CONSERVATIVE_FAIL_CLOSED_PROJECT_RULE",
+        "NO_ECONOMIC_ORIGIN_FAMILY_TRIAL_OR_P_VALUE",
+        "AUTHORITY_NONE"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-13 ACCEPTANCE",
+      "rowSha256": "f985023dae30810d22b8cd1070b318e46552c0f7b28e44b9c66a17a2b59a693f"
+    },
+    {
+      "attemptDisposition": "BASELINE_BOUND",
+      "classification": "ACCEPTED_BASELINE_AND_SOURCE_ONLY",
+      "economicOriginConsumed": false,
+      "limitations": [
+        "DECLARED_RESULT_ENVELOPE_SEMANTICS_ONLY",
+        "DOES_NOT_CALCULATE_OR_AUTHENTICATE_RESEARCH_RESULTS",
+        "DOES_NOT_DEREFERENCE_EVIDENCE_BODIES_OR_APPROVE_CALLER_POLICY",
+        "DOES_NOT_CONSTRUCT_ADMISSION_IDENTITIES_OR_DENOMINATORS",
+        "DOES_NOT_VERIFY_CUSTODY_TRIAL_COMPLETENESS_STATISTICS_MULTIPLICITY_HOLDOUT_FEES_CAPACITY_OR_ECONOMICS",
+        "NO_ECONOMIC_ORIGIN_FAMILY_TRIAL_OR_P_VALUE",
+        "AUTHORITY_NONE"
+      ],
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-10 ACCEPTANCE + N3/FOLD REFILL",
+      "rowSha256": "1cde4548dffb2631ecac535f245f3e728b2bd1c083219e62146a99eef0fe1591"
+    }
+  ],
+  "sourceOnlyPins": [
+    {
+      "bindingId": "DQ-7",
+      "consumerScope": "SCHEDULER_AND_N3_INTAKE_FINAL_CONVERGENCE",
+      "path": "quant/research/dq7/fixtures/known_answer.v1.json",
+      "producerCommit": "73500e9fb2e3184ac28f764a053fb32f1a628aee",
+      "producerTree": "e265196b35ad1a1893a9bfd4f3ef84834163a3f8",
+      "rawSha256": "c3811ed1125142c12e37a78a77983ee4dfac896fa235bdfad8edc76e6716405f",
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-7 ACCEPTANCE"
+    },
+    {
+      "bindingId": "DQ-5",
+      "consumerScope": "N3_AND_FUTURE_RESEARCH_INTAKE",
+      "path": "quant/research/dq5/README.md",
+      "producerCommit": "e5850fd4236518c7b2081aac45e889a1ece8ec2e",
+      "producerTree": "87e66056482689c195af53c74114b0880782c6d6",
+      "rawSha256": "60fefdc8a6a8fb3d1b332bb9fd2a2d1f8a658d24668b56db3298e18161fbd508",
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-5 ACCEPTANCE"
+    },
+    {
+      "bindingId": "DQ-12",
+      "consumerScope": "N3_SUCCESSOR_AND_FINAL_CONVERGENCE",
+      "path": "quant/research/dq12/SHA256SUMS",
+      "producerCommit": "028b7eacea44a2f1df9e38a4b5c33352d908ee27",
+      "producerTree": "8b005d57f524463ae56985a41873422be7c12aca",
+      "rawSha256": "e7cda1fa5a3c45b2631837b7a92b01088fc823553ae66e311c13cfc275bd8a38",
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-12 ACCEPTANCE"
+    },
+    {
+      "bindingId": "DQ-13",
+      "consumerScope": "FUTURE_S1_VG_AND_N3_FINAL_CONVERGENCE",
+      "path": "quant/research/dq13/SHA256SUMS",
+      "producerCommit": "e2f15e7387212905022fecba840c1226dce408da",
+      "producerTree": "23d5020194436fc30bcb3e4786d3383a6123f4c5",
+      "rawSha256": "1b4775ff80c9d2ca59dc4b935b0902fa778cb7542d4068e1719161a90e4324bc",
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-13 ACCEPTANCE"
+    },
+    {
+      "bindingId": "DQ-10",
+      "consumerScope": "N3_SUCCESSOR_AND_FINAL_CONVERGENCE",
+      "path": "quant/research/dq10/SHA256SUMS",
+      "producerCommit": "43397a75062142796ce9e3f8979e8676469b6a4a",
+      "producerTree": "fe7d8ae3ab1dc98b82b4534f42a6f5cd2a7f06b6",
+      "rawSha256": "a2ea16ad741454f5b6d3d80d0633bbf7926e3dae16c3fbc6f311e84981190168",
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-10 ACCEPTANCE + N3/FOLD REFILL"
+    }
+  ],
+  "pendingInputs": {
+    "activeOutsideBaselineCutoff": [],
+    "activeWithinBaselineCutoff": [
+      {
+        "milestoneId": "S-1T",
+        "taskRefSuffix": "fea0"
+      }
+    ],
+    "requiredTruth": [
+      "ACCEPTED_PRE_OUTCOME_FAMILY_ALIAS_REGISTRY",
+      "COMPLETE_GLOBAL_ATTEMPT_LEDGER",
+      "SANITIZED_ACCOUNT_EFFECTIVE_FEES",
+      "EXECUTABLE_CAPACITY_AND_EXECUTION_PROOF",
+      "COMPLETE_MARKED_EQUITY_PATHS",
+      "SINGLE_FRESH_HOLDOUT_RECEIPT_IF_A_WINNER_EMERGES"
+    ],
+    "terminalPending": []
+  }
+}

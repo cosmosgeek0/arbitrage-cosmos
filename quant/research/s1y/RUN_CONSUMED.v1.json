@@ -1,0 +1,26 @@
+{
+  "bootstrap_seed": 2026073005,
+  "created_at": "2026-07-29T19:34:53.327419Z",
+  "created_before_development_member_open": true,
+  "freeze_sha256": "97babd9c5b38378e3c9af351e3ae3825c70e317874d6f83ed5f884795913952e",
+  "milestone": "S-1Y",
+  "preseal_sha256": "fda962de80509e781c6b2977ce1bc34a3ca21bfabb75cb6d7c3b154d5768d6a4",
+  "primary_trial_id": "lb1440_entry2p0_hold168",
+  "rerun": "REFUSED_FOREVER",
+  "schema": "cosmos.s1y.run_consumed.v1",
+  "source_manifest_sha256": "1c86bf54a1fe56f1812edde980613b0ecafe6224d35d5f424230fe0d75c3b110",
+  "trial_ids": [
+    "lb720_entry1p5_hold72",
+    "lb720_entry1p5_hold168",
+    "lb720_entry2p0_hold72",
+    "lb720_entry2p0_hold168",
+    "lb720_entry2p5_hold72",
+    "lb720_entry2p5_hold168",
+    "lb1440_entry1p5_hold72",
+    "lb1440_entry1p5_hold168",
+    "lb1440_entry2p0_hold72",
+    "lb1440_entry2p0_hold168",
+    "lb1440_entry2p5_hold72",
+    "lb1440_entry2p5_hold168"
+  ]
+}

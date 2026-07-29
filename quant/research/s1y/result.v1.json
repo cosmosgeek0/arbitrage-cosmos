@@ -1,0 +1,123 @@
+{
+  "authority": {
+    "capital": "NONE",
+    "execution": "NONE",
+    "money_effect_usd": 0,
+    "orders": "NONE"
+  },
+  "base_commit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "bindings": {
+    "candidate_seal_sha256": null,
+    "development_ledger_sha256": "9bc9d49701322fddda1bfa3db556e9fe692ecd3e167bd8e46af86826ffcea9ee",
+    "freeze_sha256": "97babd9c5b38378e3c9af351e3ae3825c70e317874d6f83ed5f884795913952e",
+    "holdout_open_sha256": null,
+    "run_marker_sha256": "484633f406fecf2d5a2b4832ef612b02c71fcb74876eaf3b03c1582855bf8f6e"
+  },
+  "capacity": {
+    "book_depth_spread_impact": "UNAVAILABLE",
+    "executable_capacity": "UNMEASURED",
+    "historical_exchange_filters": "UNAVAILABLE",
+    "public_prior_day_quote_volume_proxy": 23556.21
+  },
+  "cost_truth": {
+    "account_effective_commission": "UNKNOWN",
+    "base_proxy": "5 bps taker plus 2 bps adverse execution per fill",
+    "severe_proxy": "10 bps taker plus 10 bps adverse execution per fill",
+    "stress_proxy": "8 bps taker plus 5 bps adverse execution per fill"
+  },
+  "created_at": "2026-07-29T19:34:56.131938Z",
+  "development": {
+    "family_statistics": {
+      "all_primary_gates_pass": false,
+      "bootstrap_replicates": 4096,
+      "bootstrap_seed": 2026073005,
+      "multiplicity_method": "HOLM_12_PLUS_REALITY_CHECK",
+      "pbo": 0.52857143,
+      "pbo_cscv_splits": 70,
+      "pbo_role": "DIAGNOSTIC_ONLY",
+      "primary_gates": {
+        "base_total_gt_zero": true,
+        "capacity_proxy_p05_gte_1000": true,
+        "holm_adjusted_primary_p_lte_0p05": false,
+        "maximum_drawdown_lte_10pct": false,
+        "minimum_active_iso_weeks": true,
+        "minimum_distinct_pairs": true,
+        "minimum_primary_trades": true,
+        "reality_check_p_lte_0p05": false,
+        "stress_bootstrap_lower_gt_zero": false,
+        "stress_total_gt_zero": false,
+        "trade_directions": true
+      },
+      "primary_trial_id": "lb1440_entry2p0_hold168",
+      "reality_check_p": 0.87112521,
+      "trial_count": 12
+    },
+    "primary": {
+      "active_iso_weeks": 16,
+      "base_bootstrap_90pct_interval_usd_per_1000": [
+        -149.13390143,
+        212.99101845
+      ],
+      "base_cost_usd": 63.01792274,
+      "base_net_usd_per_1000": 33.97593301,
+      "capacity_proxy_p05_usd": 23556.21,
+      "centered_bootstrap_p": 0.57676349,
+      "directions": [
+        "LONG_A_SHORT_B",
+        "SHORT_A_LONG_B"
+      ],
+      "distinct_pairs": 6,
+      "entry_z_abs": 2.0,
+      "executable_capacity": "UNKNOWN",
+      "funding_pnl_usd": -0.60625203,
+      "holm_adjusted_p": 1.0,
+      "lookback_hours": 1440,
+      "maximum_hold_hours": 168,
+      "price_pnl_usd": 97.60010777,
+      "primary": true,
+      "severe_cost_usd": 180.05120782,
+      "severe_net_usd_per_1000": -83.05735207,
+      "stress_bootstrap_90pct_interval_usd_per_1000": [
+        -220.50768726,
+        169.43726649
+      ],
+      "stress_cost_usd": 117.03328508,
+      "stress_maximum_drawdown_fraction": 0.10047069,
+      "stress_maximum_drawdown_usd": 100.47068743,
+      "stress_net_usd_per_1000": -20.03942934,
+      "trade_count": 45,
+      "trial_id": "lb1440_entry2p0_hold168"
+    }
+  },
+  "full_window": {
+    "base_net_usd_per_1000": "UNMEASURED",
+    "bootstrap_90pct_interval_usd_per_1000": "UNMEASURED",
+    "reason": "HOLDOUT_UNOPENED_AFTER_DEVELOPMENT_REJECTION",
+    "status": "UNMEASURED",
+    "stress_net_usd_per_1000": "UNMEASURED"
+  },
+  "holdout": {
+    "gates": null,
+    "interval": "[2026-03-08T00:00:00Z,2026-07-01T00:00:00Z)",
+    "metrics": null,
+    "state": "UNOPENED_DEVELOPMENT_REJECTED",
+    "zip_payloads_read_or_hashed_by_s1y": false
+  },
+  "limitations": [
+    "Hourly contract and mark opens are not fills.",
+    "Historical tick, lot, market-lot, minimum-notional, and status snapshots are unavailable.",
+    "Account-effective commission, book depth, spread, impact, latency, queueing, and liquidation mechanics are unknown.",
+    "Funding settlement versus hourly-open ordering is unknown; only strictly interior funding events are booked.",
+    "Drawdown uses hourly public contract-open marks, not executable account equity.",
+    "A public-only positive proxy cannot authorize capital or execution."
+  ],
+  "milestone": "S-1Y",
+  "planned_window": "[2025-07-01T00:00:00Z,2026-07-01T00:00:00Z)",
+  "public_only": true,
+  "reason": "PREDECLARED_DEVELOPMENT_GATES_FAILED",
+  "reported_development_interval": "[2025-07-01T00:00:00Z,2026-03-01T00:00:00Z)",
+  "rerun_allowed": false,
+  "run_consumed": true,
+  "schema": "cosmos.s1y.result.v1",
+  "verdict": "NO_GO"
+}

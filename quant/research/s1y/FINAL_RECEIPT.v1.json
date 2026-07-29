@@ -1,0 +1,12 @@
+{
+  "candidate_seal_sha256": null,
+  "created_at": "2026-07-29T19:34:56.133283Z",
+  "development_ledger_sha256": "9bc9d49701322fddda1bfa3db556e9fe692ecd3e167bd8e46af86826ffcea9ee",
+  "freeze_sha256": "97babd9c5b38378e3c9af351e3ae3825c70e317874d6f83ed5f884795913952e",
+  "holdout_open_sha256": null,
+  "result_sha256": "0c10341196412e6323c2bc8539440e05dcf925fd87d7631a0f53c2d5b0e33bd1",
+  "run_marker_sha256": "484633f406fecf2d5a2b4832ef612b02c71fcb74876eaf3b03c1582855bf8f6e",
+  "schema": "cosmos.s1y.final_receipt.v1",
+  "terminal_failure_sha256": null,
+  "verdict": "NO_GO"
+}

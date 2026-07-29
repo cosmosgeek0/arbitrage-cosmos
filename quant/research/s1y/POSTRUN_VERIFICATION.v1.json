@@ -1,0 +1,25 @@
+{
+  "effects": {
+    "host": false,
+    "money_usd": 0,
+    "orders": false,
+    "private": false,
+    "provider": false,
+    "transfers": false,
+    "ui": false,
+    "withdrawals": false
+  },
+  "final_receipt_sha256": "08e2c9adccad82246dd15728223c0be28708e7e105d963eb1b066b9e675cf09a",
+  "freeze_sha256": "97babd9c5b38378e3c9af351e3ae3825c70e317874d6f83ed5f884795913952e",
+  "holdout_open_marker": false,
+  "holdout_zip_payload_verification": "SKIPPED_UNTOUCHED",
+  "python": "3.9.6",
+  "result_sha256": "0c10341196412e6323c2bc8539440e05dcf925fd87d7631a0f53c2d5b0e33bd1",
+  "schema": "cosmos.s1y.postrun_verification.v1",
+  "shared_archive_policy": "READ_ONLY",
+  "status": "PASS",
+  "test_count": 12,
+  "verified_at": "2026-07-29T19:35:36Z",
+  "verified_non_holdout_zip_count": 360,
+  "verdict": "NO_GO"
+}

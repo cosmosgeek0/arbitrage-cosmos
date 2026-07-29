@@ -1,0 +1,35 @@
+{
+  "schema": "cosmos.quant.research.s1m.custody-breach.v1",
+  "milestone": "S-1M",
+  "detectedAt": "2026-07-29T16:33:46Z",
+  "state": "HOLDOUT_PREOPEN_ROWS_OBSERVED",
+  "sourceThreadId": "019fa300-7f0e-7893-8a44-cbe002a47017",
+  "holdoutOpenMarkerExisted": false,
+  "economicEvaluationPerformed": false,
+  "incidents": [
+    {
+      "actor": "primary Codex worker",
+      "operation": "read final five CSV rows",
+      "publisherKeys": [
+        "fundingRate/FUNUSDT/FUNUSDT-fundingRate-2026-04.zip",
+        "klines/FUNUSDT/1h/FUNUSDT-1h-2026-04.zip",
+        "markPriceKlines/FUNUSDT/1h/FUNUSDT-1h-2026-04.zip"
+      ],
+      "phase": "before freeze and before HOLDOUT_OPEN"
+    },
+    {
+      "actor": "bounded read-only Codex auditor",
+      "operation": "read CSV header, first row, and final row",
+      "publisherKeys": [
+        "klines/FUNUSDT/1h/FUNUSDT-1h-2026-04.zip"
+      ],
+      "phase": "before freeze and before HOLDOUT_OPEN"
+    }
+  ],
+  "observedValuesReproducedHere": false,
+  "repairOrRerunAllowed": false,
+  "requiredTerminalState": "UNMEASURED",
+  "requiredReasonCode": "HOLDOUT_PREOPEN_ROW_ACCESS",
+  "holdoutState": "UNOPENED_INVALIDATED",
+  "authority": "NONE"
+}

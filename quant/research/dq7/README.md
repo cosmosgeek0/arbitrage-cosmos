@@ -121,6 +121,22 @@ would carry different membership sets and could reach opposite
 when the node is a root, flattening cannot erase it and its fingerprint is retained
 under both spellings.
 
+Erasing the intermediate node must not erase the containment it expressed. Each
+surviving commutative node therefore carries a canonical **counted term multiset**,
+and containment is tested by proper sub-multiset inclusion under the same anchor: a
+complete signal `SUM(a,b)` is a proper subgraph of `SUM(a,b,c)` whichever way the
+wider signal is spelled. Overlap evidence names the containing node, so it is exact
+and order-independent.
+
+Operands are counted, never expanded. Two distinct nodes may share one fingerprint —
+directly, or because two registered aliases canonicalize to one identifier — so an
+expanded operand list doubles at every level and reaches `2**63` terms inside the
+128-node bound. A counted multiset holds one entry per distinct term, giving
+`O(nodes x distinct terms)` time and memory. Total operand multiplicity is bounded by
+`_MAX_ASSOCIATIVE_TERMS` (1024 = 128 nodes x 8 inputs), checked on every increment, so
+a multiplying graph fails closed with `FEATURE_ASSOCIATIVE_TERMS_EXCEEDED` and no
+accumulated count can leave the interoperable safe-integer range.
+
 ### Exact operation role sets
 
 Every non-`SOURCE` operation binds an **exact** role set: no role is optional. Role
@@ -149,7 +165,7 @@ or similarity thresholds.
 | `SHARED_SIGNAL_COMPONENT` | Same-target candidates share a non-source signal subgraph | disclose |
 | `SHARED_SIGNAL_CROSS_TARGET` | Cross-target candidates share a non-source signal subgraph | disclose |
 | `SHARED_SOURCE_ONLY` | Candidates share only source roles | disclose |
-| `PREDICTIVE_FAMILY_OVERLAP` | A complete signal root is a proper subgraph of another family under the same anchor | block |
+| `PREDICTIVE_FAMILY_OVERLAP` | A complete signal root is a proper subgraph of another family under the same anchor, by exact fingerprint membership or proper sub-multiset containment of commutative terms | block |
 
 Blocking alias, duplicate, split, and overlap findings are unioned into deterministic
 family components. Shared-signal and shared-source findings disclose dependence but
@@ -279,7 +295,12 @@ The checked-in evidence is intentionally small and hostile:
 - `fixtures/valid_program.v1.json` — three distinct families with one exact
   program-wide plan and the closed semantic ontology;
 - `fixtures/accepted_registry.v1.json` — the out-of-band ontology and freeze pins,
-  standing in for the external accepted registry;
+  standing in for the external accepted registry. Fixture validation always takes
+  both pins from here and never reads them back out of the manifest under test; a
+  self-pinned fixture would only prove that a submission agrees with itself. Each
+  hostile record additionally checks in its own `acceptedPreOutcomeFreezeDigest`, so
+  a legitimately different program keeps focused distinctness coverage while a
+  plan-tampering case is still judged against the already-accepted coordinate;
 - `fixtures/hostile_cases.v1.json` — every semantic and multiplicity reason-code
   family, including venue/sizing/bookkeeping wrappers, alias canonicalization,
   overlap, shared signals, missing membership, foreign program and ontology

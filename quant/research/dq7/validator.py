@@ -45,6 +45,11 @@ _MAX_PARAMETERS: Final = 16
 _MAX_INPUTS: Final = 8
 _MAX_TEXT_BYTES: Final = 512
 _MAX_ONTOLOGY_ENTRIES: Final = 1024
+# Total multiplicity of one commutative node's flattened operands.  A legitimate
+# graph under the 128-node/8-input bounds stays far below this; exceeding it means
+# equal-fingerprint sharing is multiplying operands, so the graph is rejected
+# before any count could leave the interoperable safe-integer range.
+_MAX_ASSOCIATIVE_TERMS: Final = _MAX_NODES * _MAX_INPUTS
 
 _COMMUTATIVE_OPS: Final = frozenset({"INTERACTION", "PRODUCT", "SUM"})
 _UNARY_OPS: Final = frozenset(
@@ -400,14 +405,25 @@ class ProgramManifestV1:
     multiplicity_plan: MultiplicityPlanV1 | None
 
 
+# A commutative node's flattened operands are held as a counted multiset -- a
+# sorted tuple of (term fingerprint, multiplicity) pairs -- never as an expanded
+# term list.  Expansion is exponential on a shared DAG: two distinct nodes may
+# carry one fingerprint, so `SUM(x1, x2)` over a pair of equal-fingerprint nodes
+# doubles the operand count at every level, reaching 2**63 terms inside the
+# 128-node bound.  Counting keeps memory at one entry per distinct term and time
+# at O(nodes * distinct terms).
+_CountedTermsV1 = tuple[tuple[str, int], ...]
+
+
 @dataclass(frozen=True, slots=True)
 class _NodeIdentityV1:
     op_id: str
     family_fingerprint: str
     hypothesis_fingerprint: str
-    family_associative_terms: tuple[str, ...]
-    hypothesis_associative_terms: tuple[str, ...]
+    family_associative_terms: _CountedTermsV1
+    hypothesis_associative_terms: _CountedTermsV1
     non_source_family_fingerprints: frozenset[str]
+    associative_signatures: frozenset[tuple[str, str, _CountedTermsV1]]
     source_role_ids: frozenset[str]
 
 
@@ -426,6 +442,11 @@ class CandidateIdentityV1:
     design_nuisance_fingerprint: str
     nuisance_fingerprint: str
     nuisance: NuisanceV1
+    # Canonical commutative signatures of every surviving commutative node, as
+    # (family fingerprint, operation, counted terms).  These drive sub-multiset
+    # containment and are not published: the node fingerprints already commit
+    # them, so republishing would only enlarge the receipt.
+    associative_signatures: frozenset[tuple[str, str, _CountedTermsV1]]
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -1228,6 +1249,47 @@ def load_program_manifest_v1(path: Path) -> dict[str, object]:
     return _mapping(value, field=path.name)
 
 
+def _merge_associative_terms(
+    children: tuple[_NodeIdentityV1, ...],
+    *,
+    op_id: str,
+    hypothesis: bool,
+    attempt_id: str,
+) -> _CountedTermsV1:
+    """Flatten same-operation children into one bounded counted multiset.
+
+    Counts are accumulated, never expanded, and the running total is checked on
+    every increment.  A shared DAG that multiplies operands therefore fails closed
+    at ``_MAX_ASSOCIATIVE_TERMS`` instead of materializing an exponential operand
+    list, and no accumulated count can leave the safe-integer range.
+    """
+
+    counts: dict[str, int] = {}
+    total = 0
+    for child in children:
+        if child.op_id == op_id:
+            child_terms = (
+                child.hypothesis_associative_terms if hypothesis else child.family_associative_terms
+            )
+        else:
+            child_fingerprint = (
+                child.hypothesis_fingerprint if hypothesis else child.family_fingerprint
+            )
+            child_terms = ((child_fingerprint, 1),)
+        for fingerprint, count in child_terms:
+            total += count
+            if total > _MAX_ASSOCIATIVE_TERMS:
+                _fail(
+                    "FEATURE_ASSOCIATIVE_TERMS_EXCEEDED",
+                    (
+                        f"{attempt_id} commutative operand multiplicity exceeds the v1 "
+                        f"bound of {_MAX_ASSOCIATIVE_TERMS}"
+                    ),
+                )
+            counts[fingerprint] = counts.get(fingerprint, 0) + count
+    return tuple(sorted(counts.items()))
+
+
 def _candidate_identity(candidate: CandidateV1) -> CandidateIdentityV1:
     node_by_id = {node.node_id: node for node in candidate.nodes}
     for root_id in candidate.root_node_ids:
@@ -1288,62 +1350,60 @@ def _candidate_identity(candidate: CandidateV1) -> CandidateIdentityV1:
         visiting.add(node_id)
         node = node_by_id[node_id]
         children = tuple(visit(input_id) for input_id in node.input_node_ids)
-        family_inputs = tuple(child.family_fingerprint for child in children)
-        hypothesis_inputs = tuple(child.hypothesis_fingerprint for child in children)
-        if node.op_id in _COMMUTATIVE_OPS:
-            family_inputs = tuple(
-                sorted(
-                    term
-                    for child in children
-                    for term in (
-                        child.family_associative_terms
-                        if child.op_id == node.op_id
-                        else (child.family_fingerprint,)
-                    )
-                )
-            )
-            hypothesis_inputs = tuple(
-                sorted(
-                    term
-                    for child in children
-                    for term in (
-                        child.hypothesis_associative_terms
-                        if child.op_id == node.op_id
-                        else (child.hypothesis_fingerprint,)
-                    )
-                )
-            )
+        commutative = node.op_id in _COMMUTATIVE_OPS
+        family_terms: _CountedTermsV1 = ()
+        hypothesis_terms: _CountedTermsV1 = ()
         family_payload: dict[str, object] = {
-            "inputFingerprints": list(family_inputs),
             "opId": node.op_id,
             "parameterRoleIds": [parameter.role_id for parameter in node.parameter_bindings],
             "sourceRoleId": node.source_role_id,
         }
         hypothesis_payload: dict[str, object] = {
-            "inputFingerprints": list(hypothesis_inputs),
             "opId": node.op_id,
             "parameterBindings": [parameter.as_dict() for parameter in node.parameter_bindings],
             "sourceRoleId": node.source_role_id,
         }
+        if commutative:
+            family_terms = _merge_associative_terms(
+                children,
+                op_id=node.op_id,
+                hypothesis=False,
+                attempt_id=candidate.attempt_id,
+            )
+            hypothesis_terms = _merge_associative_terms(
+                children,
+                op_id=node.op_id,
+                hypothesis=True,
+                attempt_id=candidate.attempt_id,
+            )
+            family_payload["inputTermCounts"] = [list(term) for term in family_terms]
+            hypothesis_payload["inputTermCounts"] = [list(term) for term in hypothesis_terms]
+        else:
+            family_payload["inputFingerprints"] = [child.family_fingerprint for child in children]
+            hypothesis_payload["inputFingerprints"] = [
+                child.hypothesis_fingerprint for child in children
+            ]
         family_fingerprint = _digest(_FAMILY_NODE_DOMAIN, family_payload)
         hypothesis_fingerprint = _digest(_HYPOTHESIS_NODE_DOMAIN, hypothesis_payload)
         non_source = set().union(*(child.non_source_family_fingerprints for child in children))
         source_roles = set().union(*(child.source_role_ids for child in children))
+        signatures = set().union(*(child.associative_signatures for child in children))
         if node.op_id == "SOURCE":
             if node.source_role_id is None:
                 _fail("SOURCE_NODE_INVALID", "source role disappeared after parsing")
             source_roles.add(node.source_role_id)
         elif not absorbed_into_parent(node):
             non_source.add(family_fingerprint)
+            if commutative:
+                signatures.add((family_fingerprint, node.op_id, family_terms))
         identity = _NodeIdentityV1(
             op_id=node.op_id,
             family_fingerprint=family_fingerprint,
             hypothesis_fingerprint=hypothesis_fingerprint,
-            family_associative_terms=(family_inputs if node.op_id in _COMMUTATIVE_OPS else ()),
-            hypothesis_associative_terms=(
-                hypothesis_inputs if node.op_id in _COMMUTATIVE_OPS else ()
-            ),
+            family_associative_terms=family_terms,
+            hypothesis_associative_terms=hypothesis_terms,
             non_source_family_fingerprints=frozenset(non_source),
+            associative_signatures=frozenset(signatures),
             source_role_ids=frozenset(source_roles),
         )
         visiting.remove(node_id)
@@ -1385,6 +1445,7 @@ def _candidate_identity(candidate: CandidateV1) -> CandidateIdentityV1:
     )
     all_non_source = frozenset().union(*(root.non_source_family_fingerprints for root in roots))
     all_source_roles = frozenset().union(*(root.source_role_ids for root in roots))
+    all_signatures = frozenset().union(*(root.associative_signatures for root in roots))
     return CandidateIdentityV1(
         attempt_id=candidate.attempt_id,
         declared_family_id=candidate.declared_family_id,
@@ -1405,16 +1466,76 @@ def _candidate_identity(candidate: CandidateV1) -> CandidateIdentityV1:
             candidate.nuisance.as_dict(),
         ),
         nuisance=candidate.nuisance,
+        associative_signatures=all_signatures,
     )
 
 
-def _proper_signal_subgraph(left: CandidateIdentityV1, right: CandidateIdentityV1) -> bool:
-    left_roots = frozenset(left.signal_root_fingerprints)
-    return (
-        bool(left_roots)
-        and left_roots.issubset(right.non_source_family_fingerprints)
-        and left.family_fingerprint != right.family_fingerprint
+def _is_proper_sub_multiset(small: _CountedTermsV1, large: _CountedTermsV1) -> bool:
+    """Report whether ``small`` is contained in ``large`` with strictly fewer terms."""
+
+    large_counts = dict(large)
+    contained_total = 0
+    for fingerprint, count in small:
+        if large_counts.get(fingerprint, 0) < count:
+            return False
+        contained_total += count
+    return contained_total < sum(count for _, count in large)
+
+
+def _containing_fingerprint(
+    root_fingerprint: str,
+    root_signature: tuple[str, _CountedTermsV1] | None,
+    right: CandidateIdentityV1,
+) -> str | None:
+    """Return the right-side node that contains one complete left-side signal.
+
+    Containment is exact fingerprint membership, or -- for a commutative root --
+    proper sub-multiset containment inside a same-operation commutative node.  The
+    multiset test is what makes containment survive associative respelling:
+    ``SUM(a,b)`` is a complete signal inside both ``SUM(SUM(a,b),c)`` and
+    ``SUM(a,b,c)``, whose intermediate nodes canonicalize away but whose counted
+    term multisets are identical.
+    """
+
+    if root_fingerprint in right.non_source_family_fingerprints:
+        return root_fingerprint
+    if root_signature is None:
+        return None
+    op_id, terms = root_signature
+    containing = sorted(
+        fingerprint
+        for fingerprint, candidate_op, candidate_terms in right.associative_signatures
+        if candidate_op == op_id
+        and fingerprint != root_fingerprint
+        and _is_proper_sub_multiset(terms, candidate_terms)
     )
+    return containing[0] if containing else None
+
+
+def _proper_signal_subgraph(
+    left: CandidateIdentityV1,
+    right: CandidateIdentityV1,
+) -> tuple[str, ...]:
+    """Return sorted containment evidence, or empty when ``left`` is not contained."""
+
+    if not left.signal_root_fingerprints:
+        return ()
+    if left.family_fingerprint == right.family_fingerprint:
+        return ()
+    signatures = {
+        fingerprint: (op_id, terms) for fingerprint, op_id, terms in left.associative_signatures
+    }
+    evidence: set[str] = set()
+    for root_fingerprint in left.signal_root_fingerprints:
+        containing = _containing_fingerprint(
+            root_fingerprint,
+            signatures.get(root_fingerprint),
+            right,
+        )
+        if containing is None:
+            return ()
+        evidence.add(containing)
+    return tuple(sorted(evidence))
 
 
 def _nuisance_changed(left: NuisanceV1, right: NuisanceV1) -> frozenset[str]:
@@ -1480,8 +1601,10 @@ def _pair_findings_and_components(
             same_family = left.family_fingerprint == right.family_fingerprint
             same_hypothesis = left.hypothesis_fingerprint == right.hypothesis_fingerprint
             same_declared_family = left.declared_family_id == right.declared_family_id
-            left_subgraph = same_anchor and _proper_signal_subgraph(left, right)
-            right_subgraph = same_anchor and _proper_signal_subgraph(right, left)
+            left_containment = _proper_signal_subgraph(left, right) if same_anchor else ()
+            right_containment = _proper_signal_subgraph(right, left) if same_anchor else ()
+            left_subgraph = bool(left_containment)
+            right_subgraph = bool(right_containment)
 
             if same_family or left_subgraph or right_subgraph or same_declared_family:
                 union_find.union(left_index, right_index)
@@ -1527,15 +1650,10 @@ def _pair_findings_and_components(
                     )
 
             if not same_declared_family and (left_subgraph or right_subgraph):
-                subgraph_evidence = tuple(
-                    sorted(
-                        (set(left.signal_root_fingerprints) & right.non_source_family_fingerprints)
-                        | (
-                            set(right.signal_root_fingerprints)
-                            & left.non_source_family_fingerprints
-                        )
-                    )
-                )
+                # Evidence is the containing node on each side: either the exact
+                # shared fingerprint, or the commutative node whose counted term
+                # multiset properly contains the other side's complete signal.
+                subgraph_evidence = tuple(sorted(set(left_containment) | set(right_containment)))
                 findings.add(
                     _finding(
                         ReasonCode.PREDICTIVE_FAMILY_OVERLAP,

@@ -170,7 +170,7 @@
       "reasonCodes": [
         "PROGRAM_MULTIPLICITY_PLAN_MISSING"
       ],
-      "receiptDigest": "f64f6b9b20bb009b857d64800cd465a24c71bc8b18b2a96962874d0eaa164a53",
+      "receiptDigest": "d77ffef091b7d10e5fde3e0a3f967730e5b91be1d3723be7080a9fabe3b18fdd",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -178,9 +178,10 @@
       "mutationId": "DROP_ATTEMPT_MEMBERSHIP",
       "n3IntakeDisposition": "INADMISSIBLE",
       "reasonCodes": [
-        "PROGRAM_ATTEMPT_LEDGER_INCOMPLETE"
+        "PROGRAM_ATTEMPT_LEDGER_INCOMPLETE",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
       ],
-      "receiptDigest": "e941e7074065f63890e3005403b4aa8aafa80f48b0ca8d560e6ff4867d794b48",
+      "receiptDigest": "9efd76698ac87b88d66279e5bdee64a47a910971ae645a8cd7bd55206bc5ffa4",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -188,9 +189,10 @@
       "mutationId": "DROP_FAMILY_MEMBERSHIP",
       "n3IntakeDisposition": "INADMISSIBLE",
       "reasonCodes": [
-        "PROGRAM_FAMILY_SET_MISMATCH"
+        "PROGRAM_FAMILY_SET_MISMATCH",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
       ],
-      "receiptDigest": "ca035981a735d7d40c60ad7064b0eb3d467f71222be8d0792f561761cded1bcd",
+      "receiptDigest": "d9336642238e2d7a1d1cccb65f01b22b9bc088e66f59118adaf653918bd20a15",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -198,9 +200,10 @@
       "mutationId": "CORRUPT_MULTIPLICITY_DIGEST",
       "n3IntakeDisposition": "INADMISSIBLE",
       "reasonCodes": [
-        "PROGRAM_MULTIPLICITY_DIGEST_MISMATCH"
+        "PROGRAM_MULTIPLICITY_DIGEST_MISMATCH",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
       ],
-      "receiptDigest": "fee289836cf4ff92f7fcd3db99990eb8ab36c370f3c5432b924fcbb9278c3784",
+      "receiptDigest": "ad5f12f60bb6a36027b5d809c0435a711286f012ae394e8fa25fd009928f35f8",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -208,9 +211,10 @@
       "mutationId": "DROP_N3_CONSUMER",
       "n3IntakeDisposition": "INADMISSIBLE",
       "reasonCodes": [
-        "PROGRAM_MULTIPLICITY_CONSUMER_MISMATCH"
+        "PROGRAM_MULTIPLICITY_CONSUMER_MISMATCH",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
       ],
-      "receiptDigest": "101a8bba062b6cb1d4f26627c5117ad05d74e622aa0661236442fedd13ab0c06",
+      "receiptDigest": "d0babeefa4bc6b147e8560f903c947286b50dad58dfb3b30927f6837e6ea2229",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -218,9 +222,10 @@
       "mutationId": "CLEAR_PREOUTCOME_FREEZE",
       "n3IntakeDisposition": "INADMISSIBLE",
       "reasonCodes": [
-        "PROGRAM_MULTIPLICITY_NOT_PREOUTCOME"
+        "PROGRAM_MULTIPLICITY_NOT_PREOUTCOME",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
       ],
-      "receiptDigest": "2c56a1d5e791ee59b888a31a2dfe94a1d15ed68ad0c24e325496028178805b7f",
+      "receiptDigest": "75afc837e03f053ac55ffec1abec12d20f3db5c5ba10827214dae6965c826f07",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -228,9 +233,10 @@
       "mutationId": "SET_LOCAL_METHOD",
       "n3IntakeDisposition": "INADMISSIBLE",
       "reasonCodes": [
-        "PROGRAM_MULTIPLICITY_METHOD_INVALID"
+        "PROGRAM_MULTIPLICITY_METHOD_INVALID",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
       ],
-      "receiptDigest": "a93b24b8499be0ed3b67954a1d3abef8a9dbe272a58c9f4d11b0b3d96ef02226",
+      "receiptDigest": "c1b0f91fd0cca751cd17a70e9a854d211cd1d81e5a8a648a1ea4c96e8acf4f2e",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -238,9 +244,10 @@
       "mutationId": "SET_LOCAL_SCOPE",
       "n3IntakeDisposition": "INADMISSIBLE",
       "reasonCodes": [
-        "PROGRAM_MULTIPLICITY_SCOPE_INVALID"
+        "PROGRAM_MULTIPLICITY_SCOPE_INVALID",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
       ],
-      "receiptDigest": "e55d0b51ec11dec348b746917f5f1ef604bc2bdd7d6f28ed7cd4bc72f651949f",
+      "receiptDigest": "fff83037b6bf33f7b7d789ff607615a3cbca9ad6fb77738ccef1b28009bac90c",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -248,9 +255,10 @@
       "mutationId": "SET_OTHER_PROGRAM_IN_PLAN",
       "n3IntakeDisposition": "INADMISSIBLE",
       "reasonCodes": [
-        "PROGRAM_MULTIPLICITY_PROGRAM_MISMATCH"
+        "PROGRAM_MULTIPLICITY_PROGRAM_MISMATCH",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
       ],
-      "receiptDigest": "a3dec6ff6474163af4052f8de6ffd1e41de5cecf20fd52d005d0e66919362e27",
+      "receiptDigest": "9cd0693fc3cc0f5bb1bc15deb9b3621d00870b5d0ab52e0523daf7c97dd913b3",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -258,9 +266,10 @@
       "mutationId": "SET_OTHER_ONTOLOGY_IN_PLAN",
       "n3IntakeDisposition": "INADMISSIBLE",
       "reasonCodes": [
-        "PROGRAM_SEMANTIC_ONTOLOGY_MISMATCH"
+        "PROGRAM_SEMANTIC_ONTOLOGY_MISMATCH",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
       ],
-      "receiptDigest": "c86061dcd5f0bfd57018dedd601286956a5f93ebaad81a85070270e8e96652ad",
+      "receiptDigest": "21887516309f8ca8695790e5774b7a0c368cdeceac6017c297f6171df9f74ed9",
       "schedulerDisposition": "REJECT"
     }
   ]

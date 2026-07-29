@@ -68,24 +68,74 @@ def fixture_ontology_digest() -> str:
     return cast(str, load_accepted_registry()["semanticOntologyDigest"])
 
 
-def fixture_freeze_digest(manifest: JsonObject) -> str | None:
-    plan = manifest.get("globalMultiplicity")
-    if plan is None:
-        return None
-    freeze_digest = _object(plan, "globalMultiplicity")["preOutcomeFreezeDigest"]
-    if freeze_digest is None:
-        return None
-    return cast(str, freeze_digest)
+def registry_freeze_digest() -> str:
+    """Return the freeze coordinate the external registry accepted."""
+
+    return cast(str, load_accepted_registry()["preOutcomeFreezeDigest"])
 
 
 def validate_fixture_manifest(manifest: JsonObject) -> Any:
-    """Validate with ontology and freeze pins supplied out-of-band."""
+    """Validate exactly as an external consumer does: both pins from the registry.
+
+    Neither pin is ever read back out of the manifest under validation.  A fixture
+    that self-pinned -- taking the accepted freeze coordinate from the submitted
+    plan's own claim -- would assert only that the submission agrees with itself,
+    which is precisely the check `PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED` exists to
+    make impossible to pass by construction.
+    """
 
     return validate_program_v1(
         manifest,
         accepted_semantic_ontology_digest=fixture_ontology_digest(),
-        accepted_pre_outcome_freeze_digest=fixture_freeze_digest(manifest),
+        accepted_pre_outcome_freeze_digest=registry_freeze_digest(),
     )
+
+
+def validate_fixture_manifest_with_pin(
+    manifest: JsonObject,
+    accepted_pre_outcome_freeze_digest: str | None,
+) -> Any:
+    """Validate against an explicitly supplied, checked-in accepted freeze pin.
+
+    Hostile records name their own accepted coordinate so that a legitimately
+    different program keeps focused distinctness coverage, while a plan-tampering
+    case is still judged against the coordinate a registry had already accepted.
+    """
+
+    return validate_program_v1(
+        manifest,
+        accepted_semantic_ontology_digest=fixture_ontology_digest(),
+        accepted_pre_outcome_freeze_digest=accepted_pre_outcome_freeze_digest,
+    )
+
+
+def hostile_accepted_freeze_digest(record: JsonObject) -> str | None:
+    """Return one hostile record's checked-in accepted freeze coordinate."""
+
+    if "acceptedPreOutcomeFreezeDigest" not in record:
+        raise AssertionError(
+            f"hostile case {record.get('caseId')} is missing its checked-in "
+            "acceptedPreOutcomeFreezeDigest; regenerate with "
+            "verify_known_answer.py --write"
+        )
+    accepted = record["acceptedPreOutcomeFreezeDigest"]
+    return None if accepted is None else cast(str, accepted)
+
+
+def resolve_hostile_accepted_pin(mutation_id: str, manifest: JsonObject) -> str | None:
+    """Recompute what an external registry would already have accepted for one case.
+
+    Used only by regeneration, never by validation.  A ``CLONE_*`` case builds a
+    legitimately different program, so a registry would have accepted that program's
+    own freeze-open coordinate; every other case tampers with the valid program's
+    plan after the fact, so the accepted coordinate stays the valid program's.
+    """
+
+    if not mutation_id.startswith("CLONE_"):
+        return registry_freeze_digest()
+    if manifest.get("globalMultiplicity") is None:
+        return None
+    return calculate_pre_outcome_freeze_digest_v1(manifest)
 
 
 def _bind_freeze_digest(manifest: JsonObject) -> None:

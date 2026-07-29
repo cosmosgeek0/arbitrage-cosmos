@@ -10,12 +10,14 @@ from research.dq7 import validator as validator_module
 from research.dq7.fixture_harness import (
     FIXTURE_DIRECTORY,
     cover_manifest,
-    fixture_freeze_digest,
     fixture_ontology_digest,
+    hostile_accepted_freeze_digest,
     load_hostile_case_records,
     load_valid_fixture,
     materialize_hostile_case,
+    registry_freeze_digest,
     validate_fixture_manifest,
+    validate_fixture_manifest_with_pin,
 )
 from research.dq7.validator import (
     ContractError,
@@ -103,9 +105,10 @@ def test_hostile_fixture_matrix_has_exact_deterministic_outcome(
 ) -> None:
     mutation_id = cast(str, record["mutationId"])
     manifest = materialize_hostile_case(mutation_id)
+    accepted = hostile_accepted_freeze_digest(record)
 
-    first = validate_fixture_manifest(manifest)
-    second = validate_fixture_manifest(copy.deepcopy(manifest))
+    first = validate_fixture_manifest_with_pin(manifest, accepted)
+    second = validate_fixture_manifest_with_pin(copy.deepcopy(manifest), accepted)
 
     assert list(first.reason_codes) == record["expectedReasonCodes"]
     assert first.scheduler_disposition == record["expectedSchedulerDisposition"]
@@ -384,9 +387,7 @@ def test_freeze_coordinate_is_unmintable_once_any_outcome_is_acknowledged() -> N
         candidate["outcomeAccessed"] = True
         _object(candidate["nuisance"])["resultDigest"] = "d" * 64
 
-    assert calculate_pre_outcome_freeze_digest_v1(open_manifest) == fixture_freeze_digest(
-        open_manifest
-    )
+    assert calculate_pre_outcome_freeze_digest_v1(open_manifest) == registry_freeze_digest()
     with pytest.raises(ContractError) as raised:
         calculate_pre_outcome_freeze_digest_v1(closed_manifest)
     assert raised.value.code == "PREOUTCOME_FREEZE_CLOSED"
@@ -442,7 +443,7 @@ def test_post_freeze_design_mutation_breaks_ledger_and_freeze() -> None:
     mutated = validate_program_v1(
         mutated_manifest,
         accepted_semantic_ontology_digest=fixture_ontology_digest(),
-        accepted_pre_outcome_freeze_digest=fixture_freeze_digest(original_manifest),
+        accepted_pre_outcome_freeze_digest=registry_freeze_digest(),
     )
 
     assert mutated.reason_codes == (
@@ -488,7 +489,7 @@ def test_ontology_alias_injection_cannot_reuse_the_accepted_pin() -> None:
     receipt = validate_program_v1(
         manifest,
         accepted_semantic_ontology_digest=fixture_ontology_digest(),
-        accepted_pre_outcome_freeze_digest=fixture_freeze_digest(manifest),
+        accepted_pre_outcome_freeze_digest=registry_freeze_digest(),
     )
 
     assert "PROGRAM_SEMANTIC_ONTOLOGY_MISMATCH" in receipt.reason_codes
@@ -633,6 +634,31 @@ def _overlap_pair_manifest(*, nested: bool) -> JsonObject:
     return cover_manifest(manifest)
 
 
+def test_contained_signal_overlaps_under_every_associative_spelling() -> None:
+    """A complete signal inside a wider commutative term set must block, both ways.
+
+    ``SUM(a,b)`` is a proper sub-multiset of ``SUM(a,b,c)`` regardless of whether the
+    wider signal is written nested or flat, so both spellings must raise the blocking
+    overlap finding.  Detecting it only in the nested spelling was the false green.
+    """
+
+    for nested in (True, False):
+        receipt = validate_fixture_manifest(_overlap_pair_manifest(nested=nested))
+
+        assert "PREDICTIVE_FAMILY_OVERLAP" in receipt.reason_codes
+        assert receipt.scheduler_disposition == "REJECT"
+        assert receipt.n3_intake_disposition == "INADMISSIBLE"
+        assert receipt.verified_positive_structurally_eligible is False
+        overlap = next(
+            finding for finding in receipt.findings if finding.code == "PREDICTIVE_FAMILY_OVERLAP"
+        )
+        assert overlap.severity == "BLOCK"
+        # Evidence names the containing three-term node, not the erased inner node.
+        container = _identity(receipt, "ATTEMPT_MOMENTUM")
+        assert overlap.evidence_ids == container.signal_root_fingerprints
+        assert receipt.family_component_count == 1
+
+
 def test_associative_spelling_does_not_change_pair_verdicts() -> None:
     nested = validate_fixture_manifest(_overlap_pair_manifest(nested=True))
     flat = validate_fixture_manifest(_overlap_pair_manifest(nested=False))
@@ -745,7 +771,7 @@ def test_draft_plan_carries_a_null_freeze_coordinate() -> None:
         accepted_semantic_ontology_digest=fixture_ontology_digest(),
     )
 
-    assert fixture_freeze_digest(manifest) is None
+    assert _object(manifest["globalMultiplicity"])["preOutcomeFreezeDigest"] is None
     assert draft.computed_pre_outcome_freeze_digest == bound
     assert draft.accepted_pre_outcome_freeze_digest is None
     assert "PROGRAM_PREOUTCOME_FREEZE_DIGEST_MISMATCH" in draft.reason_codes
@@ -770,7 +796,7 @@ def test_zero_digest_placeholder_is_never_a_valid_freeze_coordinate() -> None:
 
 def test_receipt_separates_computed_and_accepted_freeze_coordinates() -> None:
     manifest = load_valid_fixture()
-    accepted = fixture_freeze_digest(manifest)
+    accepted = registry_freeze_digest()
 
     receipt = validate_fixture_manifest(manifest)
     payload = receipt.as_dict()
@@ -815,6 +841,88 @@ def test_attempt_ledger_digest_is_bound_to_the_semantic_ontology() -> None:
         rebound.candidates, original.candidates, strict=True
     ):
         assert rebound_candidate.family_fingerprint == original_candidate.family_fingerprint
+
+
+def test_shared_dag_associative_terms_stay_bounded() -> None:
+    """An equal-fingerprint doubling DAG must fail closed, not expand.
+
+    Each level pairs two distinct nodes that carry one fingerprint, so an expanded
+    operand list would double every level and reach 2**63 terms inside the 128-node
+    bound. Counted multisets make the operand total explicit, so the graph is
+    rejected at the bound; this test also has to finish quickly.
+    """
+
+    manifest = _without_plan()
+    candidate = _candidate(manifest, "ATTEMPT_MOMENTUM")
+    nodes: list[JsonObject] = [
+        {
+            "nodeId": "LEAF_A",
+            "opId": "SOURCE",
+            "inputNodeIds": [],
+            "sourceRoleId": "SPOT_MID_PRICE",
+            "parameterBindings": [],
+        },
+        {
+            "nodeId": "LEAF_B",
+            "opId": "SOURCE",
+            "inputNodeIds": [],
+            "sourceRoleId": "RENAMED_SPOT_MID",
+            "parameterBindings": [],
+        },
+    ]
+    left, right = "LEAF_A", "LEAF_B"
+    for level in range(40):
+        first, second = f"SUM_{level}_A", f"SUM_{level}_B"
+        nodes.append(_sum_node(first, [left, right]))
+        nodes.append(_sum_node(second, [left, right]))
+        left, right = first, second
+    nodes.append(_sum_node("ROOT_SUM", [left, right]))
+    graph = _object(candidate["featureGraph"])
+    graph["nodes"] = nodes
+    graph["rootNodeIds"] = ["ROOT_SUM"]
+
+    with pytest.raises(ContractError) as raised:
+        validate_fixture_manifest(manifest)
+
+    assert raised.value.code == "FEATURE_ASSOCIATIVE_TERMS_EXCEEDED"
+
+
+def test_alpha_change_with_recomputed_claim_is_rejected_by_the_registry() -> None:
+    """Self-consistency must not survive an external pin.
+
+    The plan's alpha moves and its own freeze claim is recomputed to match, so every
+    internal check agrees. The registry still holds the coordinate it accepted before
+    the change, so the receipt must report the submission untrusted.
+    """
+
+    manifest = load_valid_fixture()
+    plan = _object(manifest["globalMultiplicity"])
+    plan["alpha"] = {"numerator": 1, "denominator": 10}
+    plan["preOutcomeFreezeDigest"] = None
+    recomputed = calculate_pre_outcome_freeze_digest_v1(manifest)
+    plan["preOutcomeFreezeDigest"] = recomputed
+
+    receipt = validate_fixture_manifest(manifest)
+
+    assert recomputed != registry_freeze_digest()
+    assert receipt.computed_pre_outcome_freeze_digest == recomputed
+    assert receipt.accepted_pre_outcome_freeze_digest == registry_freeze_digest()
+    # The submission agrees with itself, so only the external pin can catch it.
+    assert "PROGRAM_PREOUTCOME_FREEZE_DIGEST_MISMATCH" not in receipt.reason_codes
+    assert receipt.reason_codes == ("PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED",)
+    assert receipt.scheduler_disposition == "REJECT"
+    assert receipt.n3_intake_disposition == "INADMISSIBLE"
+
+
+def test_fixture_validation_never_self_pins() -> None:
+    manifest = load_valid_fixture()
+    _object(manifest["globalMultiplicity"])["preOutcomeFreezeDigest"] = "b" * 64
+
+    receipt = validate_fixture_manifest(manifest)
+
+    assert receipt.accepted_pre_outcome_freeze_digest == registry_freeze_digest()
+    assert receipt.accepted_pre_outcome_freeze_digest != "b" * 64
+    assert "PROGRAM_PREOUTCOME_FREEZE_DIGEST_MISMATCH" in receipt.reason_codes
 
 
 def test_public_api_exports_every_validator_symbol() -> None:

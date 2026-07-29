@@ -1,0 +1,32 @@
+{
+  "archiveBodiesOpenedAtPlan": false,
+  "archiveInterval": "1d",
+  "archiveKind": "spot/monthly/klines",
+  "evaluationMonthsInclusive": [
+    "2025-07",
+    "2026-06"
+  ],
+  "localSourceRoot": "/private/tmp/cosmos-s1f-weekly-momentum-cash-v1",
+  "schema": "VG18SourcePlanV1",
+  "sourceMonthsInclusive": [
+    "2025-01",
+    "2026-06"
+  ],
+  "sourcePins": {
+    "acquisition-manifest.v1.json": {
+      "bytes": 7814495,
+      "sha256": "01f58272602e43bfb914b649adc00d8273b2d423492220a55f86443bb6441176"
+    },
+    "discovery.v1.json": {
+      "bytes": 4337787,
+      "sha256": "b4a8f7abd36df19eff0510dfcc3c61fd0df9fdcab5f4d248892ee10010fb21c3"
+    },
+    "run-marker.v1.json": {
+      "bytes": 618,
+      "sha256": "7160455ebb695bbf27f899c9a64aa71d50d2ecc9786fe7fefa4067b37c446489"
+    }
+  },
+  "timestampUnit": "MICROSECONDS",
+  "transport": "LOCAL_READ_ONLY_REUSE_OF_OFFICIAL_BINANCE_ARCHIVES",
+  "universe": "ARCHIVE_DISCOVERED_ASCII_SPOT_USDT_MINUS_FROZEN_STABLE_FIAT_AND_LEVERAGED_EXCLUSIONS"
+}

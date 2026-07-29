@@ -1,0 +1,25 @@
+{
+  "closedAtFreeze": true,
+  "familySize": 12,
+  "schema": "VG18TrialLedgerV1",
+  "selectionRule": "HIGHEST_STRESS_BONFERRONI_LCB_THEN_STRESS_NET_USD_PER_1000_THEN_TRIAL_ID_ASC",
+  "siblingDependence": {
+    "family": "V-G11",
+    "reason": "TRADE_COUNT_DIV_QUOTE_VOLUME_IS_THE_RECIPROCAL_INPUT",
+    "successorMultiplicityRequired": true
+  },
+  "trials": [
+    {"cohortSize": 3, "holdDays": 3, "shockFloor": "1.5", "trialId": "VG18-K03-S15-H03"},
+    {"cohortSize": 3, "holdDays": 7, "shockFloor": "1.5", "trialId": "VG18-K03-S15-H07"},
+    {"cohortSize": 3, "holdDays": 3, "shockFloor": "2", "trialId": "VG18-K03-S20-H03"},
+    {"cohortSize": 3, "holdDays": 7, "shockFloor": "2", "trialId": "VG18-K03-S20-H07"},
+    {"cohortSize": 3, "holdDays": 3, "shockFloor": "3", "trialId": "VG18-K03-S30-H03"},
+    {"cohortSize": 3, "holdDays": 7, "shockFloor": "3", "trialId": "VG18-K03-S30-H07"},
+    {"cohortSize": 5, "holdDays": 3, "shockFloor": "1.5", "trialId": "VG18-K05-S15-H03"},
+    {"cohortSize": 5, "holdDays": 7, "shockFloor": "1.5", "trialId": "VG18-K05-S15-H07"},
+    {"cohortSize": 5, "holdDays": 3, "shockFloor": "2", "trialId": "VG18-K05-S20-H03"},
+    {"cohortSize": 5, "holdDays": 7, "shockFloor": "2", "trialId": "VG18-K05-S20-H07"},
+    {"cohortSize": 5, "holdDays": 3, "shockFloor": "3", "trialId": "VG18-K05-S30-H03"},
+    {"cohortSize": 5, "holdDays": 7, "shockFloor": "3", "trialId": "VG18-K05-S30-H07"}
+  ]
+}

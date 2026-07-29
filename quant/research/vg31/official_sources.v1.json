@@ -1,0 +1,52 @@
+{
+  "checkedAtUtc": "2026-07-29",
+  "mutableObservations": [
+    {
+      "claim": "RETRIEVAL_DATED_REGULAR_USER_PUBLIC_SCENARIO_10_BPS_PER_FILL_ONLY",
+      "contentImmutable": false,
+      "url": "https://www.binance.com/en/fee/trading"
+    }
+  ],
+  "repositories": [
+    {
+      "documents": [
+        {
+          "path": "README.md",
+          "rawUrl": "https://raw.githubusercontent.com/binance/binance-public-data/5c7f3197591c0d54d85dc43066226bc4c671d47a/README.md",
+          "sha256": "085ab91377aa9325d44f4c7ad27cce4ab381e158403e1d7df2bad39d1a66f7c6"
+        }
+      ],
+      "head": "5c7f3197591c0d54d85dc43066226bc4c671d47a",
+      "ref": "refs/heads/master",
+      "repository": "https://github.com/binance/binance-public-data.git"
+    },
+    {
+      "documents": [
+        {
+          "path": "faqs/commission_faq.md",
+          "rawUrl": "https://raw.githubusercontent.com/binance/binance-spot-api-docs/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/faqs/commission_faq.md",
+          "sha256": "580cfa59c9f55adae0d27bf38d2bc7f268ad759fdf054486e356464c30bbd54c"
+        },
+        {
+          "path": "faqs/market_data_only.md",
+          "rawUrl": "https://raw.githubusercontent.com/binance/binance-spot-api-docs/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/faqs/market_data_only.md",
+          "sha256": "57d608507426215c43f11907c07ed693f02725840d9ee4d6630f134de402b6da"
+        },
+        {
+          "path": "filters.md",
+          "rawUrl": "https://raw.githubusercontent.com/binance/binance-spot-api-docs/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/filters.md",
+          "sha256": "4b5a8f0f5d15bcf68fd7ac2059ba6c88da641c06fd7885e642330c5ac8124dd3"
+        },
+        {
+          "path": "rest-api.md",
+          "rawUrl": "https://raw.githubusercontent.com/binance/binance-spot-api-docs/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/rest-api.md",
+          "sha256": "49ea6809243fc7fb426e07f2fe662097736c7bb405bd2da5eef637d715427999"
+        }
+      ],
+      "head": "6b8372cad7cecbdf5dd88a3372eafff51988c5cf",
+      "ref": "refs/heads/master",
+      "repository": "https://github.com/binance/binance-spot-api-docs.git"
+    }
+  ],
+  "schema": "VG31OfficialSourcesV1"
+}

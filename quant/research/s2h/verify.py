@@ -58,6 +58,7 @@ STATIC_FILES: Final = {
 GENERATED_FILES: Final = {
     "screen-consumed.v1.json",
     "universe.v1.json",
+    "screen-terminal.v1.json",
     "source-manifest.v1.json",
     "freeze.v1.json",
     "run-marker.v1.json",
@@ -79,6 +80,28 @@ EXPECTED_LIMITATIONS: Final = [
     "PRIOR_DISCOVERY_ASCII_CANDIDATE_GRAMMAR_LIMITATION",
     "GLOBAL_HOLDOUT_NOT_CERTIFIED_SHARED_REUSE_RISK",
 ]
+EXPECTED_SCREEN_TERMINAL_LIMITATIONS: Final = [
+    "FROZEN_TOP30_RANK_EFFECT_OF_9_FALSE_REJECTIONS_UNMEASURED",
+    "PREDECLARED_UP_SUFFIX_FALSE_POSITIVE_EXCLUSIONS_JUPUSDT_AND_SYRUPUSDT",
+    "PRIOR_DISCOVERY_ASCII_CANDIDATE_GRAMMAR_LIMITATION",
+    "SPOT_IS_CONTINUOUS_UTC_BOUNDARY_IS_NOT_A_MARKET_CLOSE",
+    "SYNTHETIC_SHORT_BORROW_INVENTORY_AND_INTEREST_UNKNOWN",
+    "ACCOUNT_EFFECTIVE_COMMISSION_UNKNOWN",
+    "HISTORICAL_FILTERS_SPREAD_DEPTH_IMPACT_AND_EXECUTABLE_CAPACITY_UNMEASURED",
+    "GLOBAL_HOLDOUT_NOT_CERTIFIED_SHARED_REUSE_RISK",
+]
+FALSE_REJECTED_RESUMED_VERIFIED: Final = [
+    "1000CATUSDT",
+    "1000CHEEMSUSDT",
+    "1000SATSUSDT",
+    "1INCHUSDT",
+    "1MBABYDOGEUSDT",
+    "AAVEUSDT",
+    "ACAUSDT",
+    "ACEUSDT",
+    "ACHUSDT",
+]
+PRE_OUTCOME_HEAD: Final = "c38ea3d07c567ce51623a5118c492209cb137d4e"
 
 
 class VerificationError(RuntimeError):
@@ -352,6 +375,8 @@ def validate_inherited_provenance(
     screen: Mapping[str, Any],
     universe: Mapping[str, Any],
     protocol: Mapping[str, Any],
+    *,
+    validate_selected_archives: bool,
 ) -> None:
     protocol_universe = cast(Mapping[str, Any], protocol.get("universe"))
     require(
@@ -471,6 +496,8 @@ def validate_inherited_provenance(
         screen.get("anchorCacheResolved") == str(anchor_root),
         "screen/universe anchor root",
     )
+    if not validate_selected_archives:
+        return
     for row in cast(list[Mapping[str, Any]], universe.get("selected")):
         symbol = cast(str, row.get("symbol"))
         inherited = acquisition_index.get((symbol, "2025-06"))
@@ -1516,6 +1543,227 @@ def validate_result(
     return cast(str, label)
 
 
+def validate_screen_terminal(
+    terminal: Mapping[str, Any],
+    screen: Mapping[str, Any],
+    universe: Mapping[str, Any],
+    protocol: Mapping[str, Any],
+    names: set[str],
+) -> None:
+    require(
+        set(terminal)
+        == {
+            "accountEffectiveNetUsdPerInitial1000",
+            "authority",
+            "capitalVerdict",
+            "consumer",
+            "createdAtUtc",
+            "economicMeasurements",
+            "executionAuthority",
+            "experimentSha256",
+            "falseRejectedInheritedPairs",
+            "falseRejectedInheritedPairCount",
+            "holdoutState",
+            "lifecycle",
+            "limitations",
+            "milestone",
+            "outcomeRowsOpened",
+            "preOutcomeHead",
+            "preOutcomeTree",
+            "protocolSha256",
+            "reason",
+            "reasonCode",
+            "repairAllowed",
+            "rerunAllowed",
+            "schema",
+            "screenAttemptCount",
+            "screenMarkerSha256",
+            "selectedCount",
+            "selectedRank30FloorMedianDailyQuoteVolumeUsdt",
+            "selectedRankEffect",
+            "state",
+            "strategyRunCount",
+            "successfulCandidateCount",
+            "terminalLabel",
+            "universeSha256",
+        },
+        "screen terminal field set",
+    )
+    require(
+        terminal.get("schema") == "cosmos.quant.research.s2h.screen_terminal.v1",
+        "screen terminal schema",
+    )
+    require(
+        terminal.get("state") == "TERMINAL_UNMEASURED_NO_REPAIR_OR_RERUN",
+        "screen terminal state",
+    )
+    require(terminal.get("milestone") == "S-2H", "screen terminal milestone")
+    require(terminal.get("terminalLabel") == "UNMEASURED", "screen terminal label")
+    require(
+        terminal.get("reasonCode") == "FROZEN_UNIVERSE_RANK_NOT_CERTIFIABLE",
+        "screen terminal reason code",
+    )
+    require(
+        terminal.get("reason")
+        == (
+            "Nine checksum-valid inherited candidates were rejected solely because "
+            "RESUMED_VERIFIED did not equal DOWNLOADED_VERIFIED; their June ranks "
+            "were discarded, so the frozen claimed top-30 cannot be certified "
+            "unaffected without forbidden re-screening."
+        ),
+        "screen terminal reason",
+    )
+    directed_hash(terminal, "protocolSha256", HERE / "protocol.v1.json")
+    directed_hash(terminal, "experimentSha256", HERE / "experiment.py")
+    directed_hash(terminal, "screenMarkerSha256", HERE / "screen-consumed.v1.json")
+    directed_hash(terminal, "universeSha256", HERE / "universe.v1.json")
+    require(
+        terminal.get("preOutcomeHead") == PRE_OUTCOME_HEAD == screen.get("preScreenHead"),
+        "screen terminal pre-outcome HEAD",
+    )
+    require(
+        terminal.get("preOutcomeTree") == screen.get("preScreenTree"),
+        "screen terminal pre-outcome tree",
+    )
+    require(terminal.get("repairAllowed") is False, "screen terminal repair")
+    require(terminal.get("rerunAllowed") is False, "screen terminal rerun")
+    require(terminal.get("outcomeRowsOpened") == 0, "screen terminal outcome rows")
+    require(terminal.get("strategyRunCount") == 0, "screen terminal run count")
+    require(terminal.get("screenAttemptCount") == 679, "screen terminal attempts")
+    require(
+        terminal.get("successfulCandidateCount") == universe.get("successfulCandidateCount"),
+        "screen terminal successful candidates",
+    )
+    require(
+        terminal.get("selectedCount") == universe.get("selectedCount") == 30,
+        "screen terminal selected count",
+    )
+    selected = cast(list[Mapping[str, Any]], universe.get("selected"))
+    require(
+        terminal.get("selectedRank30FloorMedianDailyQuoteVolumeUsdt")
+        == selected[-1].get("medianDailyQuoteVolumeUsdt"),
+        "screen terminal selected floor binding",
+    )
+    require(
+        terminal.get("selectedRankEffect") == "UNMEASURED",
+        "screen terminal selected-rank effect",
+    )
+    false_rejected = cast(list[Mapping[str, Any]], terminal.get("falseRejectedInheritedPairs"))
+    require(
+        terminal.get("falseRejectedInheritedPairCount") == 9 and len(false_rejected) == 9,
+        "screen terminal false-rejection count",
+    )
+    require(
+        [row.get("symbol") for row in false_rejected] == FALSE_REJECTED_RESUMED_VERIFIED,
+        "screen terminal false-rejected symbols",
+    )
+    require(
+        all(
+            set(row)
+            == {
+                "frozenManifestState",
+                "localZipAndSidecarMatchFrozenManifest",
+                "symbol",
+            }
+            and row.get("frozenManifestState") == "RESUMED_VERIFIED"
+            and row.get("localZipAndSidecarMatchFrozenManifest") is True
+            for row in false_rejected
+        ),
+        "screen terminal false-rejected evidence",
+    )
+    attempts = {
+        cast(str, row.get("symbol")): row
+        for row in cast(list[Mapping[str, Any]], universe.get("attempts"))
+    }
+    require(
+        all(
+            attempts[symbol].get("status") == "INVALID_EVIDENCE"
+            and attempts[symbol].get("reason") == "inherited June pair binding mismatch"
+            for symbol in FALSE_REJECTED_RESUMED_VERIFIED
+        ),
+        "screen terminal false-rejection attempt binding",
+    )
+    acquisition_path = resolve_physical_absolute(
+        universe.get("inheritedAcquisitionManifestResolved"), directory=False
+    )
+    acquisition = load_json(acquisition_path)
+    inherited_states = {
+        cast(str, row.get("symbol")): row.get("state")
+        for row in cast(list[Mapping[str, Any]], acquisition.get("artifactPairs"))
+        if row.get("month") == "2025-06" and row.get("symbol") in FALSE_REJECTED_RESUMED_VERIFIED
+    }
+    require(
+        inherited_states == dict.fromkeys(FALSE_REJECTED_RESUMED_VERIFIED, "RESUMED_VERIFIED"),
+        "screen terminal inherited-state binding",
+    )
+    expected_measurements = {
+        "capacity",
+        "drawdownPct",
+        "feeStressNetUsdPerInitial1000",
+        "grossNetUsdPerInitial1000",
+        "holmMultiplicity",
+        "interval95UsdPerInitial1000",
+        "pbo",
+        "publicBaseNetUsdPerInitial1000",
+        "publicStressNetUsdPerInitial1000",
+        "whiteStyleRealityCheck",
+    }
+    measurements = cast(Mapping[str, Mapping[str, Any]], terminal.get("economicMeasurements"))
+    require(set(measurements) == expected_measurements, "screen terminal measurements")
+    require(
+        all(
+            set(row) == {"state", "value"}
+            and row.get("state") == "UNMEASURED"
+            and row.get("value") is None
+            for row in measurements.values()
+        ),
+        "screen terminal null economics",
+    )
+    require(
+        terminal.get("accountEffectiveNetUsdPerInitial1000") is None,
+        "screen terminal account net",
+    )
+    require(terminal.get("holdoutState") == "SEALED_UNOPENED", "screen holdout")
+    require(terminal.get("consumer") == "N3-S1_OR_SUCCESSOR_SCOREBOARD", "consumer")
+    require(terminal.get("capitalVerdict") == "NO_GO", "screen capital verdict")
+    require(terminal.get("executionAuthority") == "NONE", "screen authority")
+    require(terminal.get("authority") == protocol.get("authority"), "authority object")
+    require(
+        cast(Mapping[str, Any], terminal.get("authority")).get("moneyMovedUsd") == 0,
+        "screen money moved",
+    )
+    require(
+        terminal.get("limitations") == EXPECTED_SCREEN_TERMINAL_LIMITATIONS,
+        "screen terminal limitations",
+    )
+    require(
+        terminal.get("lifecycle")
+        == {
+            "developmentExists": False,
+            "freezeExists": False,
+            "holdoutOpenExists": False,
+            "resultExists": False,
+            "runMarkerExists": False,
+            "selectionExists": False,
+            "sourceAcquisitionStarted": False,
+            "sourceManifestExists": False,
+            "sourcePairCount": 0,
+        },
+        "screen terminal lifecycle",
+    )
+    forbidden = {
+        "source-manifest.v1.json",
+        "freeze.v1.json",
+        "run-marker.v1.json",
+        "development.v1.json",
+        "selection.v1.json",
+        "holdout-open.v1.json",
+        "holdout.v1.json",
+        "result.v1.json",
+    }
+    require(not (names & forbidden), "downstream artifact after screen terminal")
+
+
 def validate_lifecycle(
     names: set[str],
     protocol: Mapping[str, Any],
@@ -1530,7 +1778,22 @@ def validate_lifecycle(
     screen = load_json(HERE / "screen-consumed.v1.json")
     universe = load_json(HERE / "universe.v1.json")
     symbols = validate_screen(screen, universe, HERE / "protocol.v1.json")
-    validate_inherited_provenance(screen, universe, protocol)
+    if "screen-terminal.v1.json" in names:
+        validate_inherited_provenance(
+            screen,
+            universe,
+            protocol,
+            validate_selected_archives=False,
+        )
+        terminal = load_json(HERE / "screen-terminal.v1.json")
+        validate_screen_terminal(terminal, screen, universe, protocol, names)
+        return "TERMINAL_UNMEASURED_SCREEN_INVALID", 0
+    validate_inherited_provenance(
+        screen,
+        universe,
+        protocol,
+        validate_selected_archives=True,
+    )
     validate_anchor_sources(universe)
     if "source-manifest.v1.json" not in names:
         require(

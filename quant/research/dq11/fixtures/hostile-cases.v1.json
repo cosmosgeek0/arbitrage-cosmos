@@ -1,0 +1,81 @@
+{
+  "schema": "cosmos.dq11.hostile-cases.v1",
+  "baseFixture": "valid-mixed.v1.json",
+  "cases": [
+    {
+      "caseId": "declared-count-drift",
+      "expectedCode": "COUNT_ID_MISMATCH",
+      "operations": [
+        {"operation": "replace", "path": ["stages", "available", "declaredCount"], "value": 7}
+      ]
+    },
+    {
+      "caseId": "declared-digest-drift",
+      "expectedCode": "STAGE_IDENTITY_DIGEST_MISMATCH",
+      "operations": [
+        {
+          "operation": "replace",
+          "path": ["stages", "scored", "declaredIdentityDigest"],
+          "value": "0000000000000000000000000000000000000000000000000000000000000000"
+        }
+      ]
+    },
+    {
+      "caseId": "duplicate-available-id",
+      "expectedCode": "DUPLICATE_ID",
+      "operations": [
+        {
+          "operation": "append",
+          "path": ["stages", "available", "identities"],
+          "value": {
+            "sampleId": "sample-a",
+            "originDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        }
+      ]
+    },
+    {
+      "caseId": "required-stage-missing",
+      "expectedCode": "STAGE_MISSING",
+      "operations": [
+        {"operation": "remove", "path": ["stages", "filled"]}
+      ]
+    },
+    {
+      "caseId": "admission-anchor-count-drift",
+      "expectedCode": "FROZEN_DENOMINATOR_DRIFT",
+      "operations": [
+        {
+          "operation": "replace",
+          "path": ["frozenAdmissionDenominator", "declaredCount"],
+          "value": 5
+        }
+      ]
+    },
+    {
+      "caseId": "silent-disposition-drop",
+      "expectedCode": "DISPOSITION_DRIFT",
+      "operations": [
+        {"operation": "remove", "path": ["dispositions", 2]}
+      ]
+    },
+    {
+      "caseId": "missing-transition-evidence",
+      "expectedCode": "DISPOSITION_EVIDENCE_MISSING",
+      "operations": [
+        {
+          "operation": "replace",
+          "path": ["dispositions", 3, "evidenceState"],
+          "value": "MISSING"
+        }
+      ]
+    },
+    {
+      "caseId": "boolean-count",
+      "expectedCode": "COUNT_TYPE",
+      "operations": [
+        {"operation": "replace", "path": ["stages", "eligible", "declaredCount"], "value": true}
+      ]
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "schema": "cosmos.dq11.sample-admission-denominator.v1",
+  "flowId": "dq11-known-answer-mixed",
+  "stages": {
+    "available": {
+      "observation": "OBSERVED",
+      "declaredCount": 6,
+      "declaredIdentityDigest": "55dc7bdde34b98fdb66cfbc003d95f8b5661bcf6033db54be06adc2eaf32d51d",
+      "identities": [
+        {"sampleId": "sample-a", "originDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+        {"sampleId": "sample-b", "originDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+        {"sampleId": "sample-c", "originDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
+        {"sampleId": "sample-d", "originDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"},
+        {"sampleId": "sample-e", "originDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"},
+        {"sampleId": "sample-f", "originDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"}
+      ]
+    },
+    "eligible": {
+      "observation": "OBSERVED",
+      "declaredCount": 5,
+      "declaredIdentityDigest": "c2257ec45ee59abf2e72b9c7781d41bc894cbf4219083f97c1849c09ff671fbf",
+      "identities": [
+        {"sampleId": "sample-a", "originDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+        {"sampleId": "sample-b", "originDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+        {"sampleId": "sample-c", "originDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
+        {"sampleId": "sample-d", "originDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"},
+        {"sampleId": "sample-e", "originDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}
+      ]
+    },
+    "quarantined": {
+      "observation": "OBSERVED",
+      "declaredCount": 1,
+      "declaredIdentityDigest": "a14e8ac9b638080ca88e8be674f5548a130e7add0b77184bff16634d9cc6216f",
+      "identities": [
+        {"sampleId": "sample-e", "originDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}
+      ]
+    },
+    "admitted": {
+      "observation": "OBSERVED",
+      "declaredCount": 4,
+      "declaredIdentityDigest": "7a9049cce91bef30980ece5ac43dd662b7183302a6eef4dac2f0b16939d868fb",
+      "identities": [
+        {"sampleId": "sample-a", "originDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+        {"sampleId": "sample-b", "originDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+        {"sampleId": "sample-c", "originDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
+        {"sampleId": "sample-d", "originDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"}
+      ]
+    },
+    "signaled": {
+      "observation": "OBSERVED",
+      "declaredCount": 3,
+      "declaredIdentityDigest": "712914efa3e95459dd0386c099ba28d07abcad8d4dab1813616ab2a352f3761d",
+      "identities": [
+        {"sampleId": "sample-a", "originDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+        {"sampleId": "sample-b", "originDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+        {"sampleId": "sample-c", "originDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}
+      ]
+    },
+    "filled": {
+      "observation": "OBSERVED",
+      "declaredCount": 2,
+      "declaredIdentityDigest": "055f6fe313eb374478c9861a37205e3db7cf483d22c0e7b7d7feabbca766f806",
+      "identities": [
+        {"sampleId": "sample-a", "originDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+        {"sampleId": "sample-b", "originDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}
+      ]
+    },
+    "scored": {
+      "observation": "OBSERVED",
+      "declaredCount": 1,
+      "declaredIdentityDigest": "1ce3c436cfabcb05f12086416378025a118088a5dc770710469be2d8282caf5a",
+      "identities": [
+        {"sampleId": "sample-a", "originDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+      ]
+    }
+  },
+  "dispositions": [
+    {
+      "identity": {"sampleId": "sample-f", "originDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"},
+      "afterStage": "AVAILABLE",
+      "reasonCode": "INELIGIBLE_PROTOCOL",
+      "evidenceState": "OBSERVED"
+    },
+    {
+      "identity": {"sampleId": "sample-e", "originDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"},
+      "afterStage": "ELIGIBLE",
+      "reasonCode": "QUARANTINED_MISSING_FEATURE",
+      "evidenceState": "OBSERVED"
+    },
+    {
+      "identity": {"sampleId": "sample-d", "originDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"},
+      "afterStage": "ADMITTED",
+      "reasonCode": "NO_SIGNAL_OBSERVED",
+      "evidenceState": "OBSERVED"
+    },
+    {
+      "identity": {"sampleId": "sample-c", "originDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"},
+      "afterStage": "SIGNALED",
+      "reasonCode": "NO_FILL_OBSERVED",
+      "evidenceState": "OBSERVED"
+    },
+    {
+      "identity": {"sampleId": "sample-b", "originDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+      "afterStage": "FILLED",
+      "reasonCode": "UNSCORED_MISSING_OUTCOME",
+      "evidenceState": "OBSERVED"
+    }
+  ],
+  "frozenAdmissionDenominator": {
+    "declaredCount": 4,
+    "identityDigest": "7a9049cce91bef30980ece5ac43dd662b7183302a6eef4dac2f0b16939d868fb"
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "schema": "S1IEvidenceV1",
+  "generatedAtUtc": "2026-07-29T17:14:22Z",
+  "consumer": "N3",
+  "scope": {
+    "exclusiveWriterPath": "quant/research/s1i/**",
+    "publicOnly": true,
+    "uiHostPrivateOrderMoneyEffects": "NONE"
+  },
+  "lineage": {
+    "canonicalBaseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+    "preOutcomeCommit": "58bce04a824e54b3004432ef627ffdf51e6df9bc",
+    "branch": "codex/s1i-premium-dislocation-1be1"
+  },
+  "screen": {
+    "screenManifestSha256": "61d2e7a1ebf4217a1ceab59b8b0f792edf7263a63f4640d51a5f8c20bc768898",
+    "archiveDirectoryIntersectionCount": 785,
+    "validFullMonthCount": 463,
+    "selectedCount": 30,
+    "selectionMonth": "2025-06"
+  },
+  "freeze": {
+    "freezeSha256": "246c5d5da23158cbc827eee912e0c0362faff27a14fb4d251604135a9cc2df05",
+    "protocolSha256": "4b857dc3711025ee5f434e7027b391a2f86e35cfc76d1191c06f7c1cedd8c8d4",
+    "evaluatorSha256": "dcf61bbae3bd7d7ef42aa4da28a710dae79959796454ba91d28ea0ecc70648a0",
+    "primaryTrialId": "lb06_tail20_hold02",
+    "holdoutStateAtFreeze": "SEALED_UNOPENED"
+  },
+  "acquisition": {
+    "manifestSha256": "49e028b24ee46017a30954422ed5db431027a5da781813e555952c2f057bd0c9",
+    "artifactCount": 1170,
+    "verifiedCompressedUnopenedCount": 1168,
+    "missingCount": 2,
+    "missing": [
+      {
+        "dataType": "fundingRate",
+        "symbol": "FUNUSDT",
+        "month": "2026-05",
+        "checksumHttpStatusRecheck": 404
+      },
+      {
+        "dataType": "fundingRate",
+        "symbol": "FUNUSDT",
+        "month": "2026-06",
+        "checksumHttpStatusRecheck": 404
+      }
+    ]
+  },
+  "terminal": {
+    "resultSha256": "643aa7de7cd329aad49fd7dcbcc3c4bc30da94786ae4f8a9a5138da6d7d1b81f",
+    "resultReceiptSha256": "36d607791ef119dd35f320c578b21260851ee9cbaaafa9c5a1438853d5182ec5",
+    "state": "TERMINAL_UNMEASURED_ACQUISITION_PREFLIGHT",
+    "measurementVerdict": "UNMEASURED",
+    "capitalVerdict": "NO_GO",
+    "executionAuthority": "NONE",
+    "crediblePositiveCount": 0,
+    "reason": "ACQUISITION_CONTAINS_MISSING_REQUIRED_ARTIFACTS",
+    "runMarkerCreated": false,
+    "candidateSealCreated": false,
+    "holdoutOpenMarkerCreated": false,
+    "archiveBodiesDecompressed": false,
+    "retryAllowed": false
+  },
+  "focusedProof": {
+    "ruffCheck": "PASS",
+    "ruffFormatCheck": "PASS",
+    "mypyStrictExplicitPackageBases": "PASS",
+    "pytestFocused": {
+      "status": "PASS",
+      "passed": 21
+    },
+    "resultAuthenticationChecks": {
+      "status": "PASS",
+      "passed": 14
+    },
+    "independentStatisticalReview": "PASS_NO_RESIDUAL_P0_P1_P2",
+    "independentLifecycleReview": "PASS_BOTH_PRIOR_P1_RESOLVED"
+  },
+  "limitation": "The frozen liquid cohort lacks two required official FUNUSDT funding-rate archives, so the causal development sample, untouched holdout, public fee scenarios, multiplicity, drawdown, and capacity outcomes were not opened or estimated. Missing evidence is not an economic zero."
+}

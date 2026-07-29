@@ -1,0 +1,1 @@
+{"closedAtFreeze":true,"schema":"VG11TrialLedgerV1","selectionRule":"HIGHEST_STRESS_NET_MEAN_THEN_TRIAL_ID_ASC","trials":[{"amendable":false,"thresholdMultiple":"1.5","trialId":"VG11-T1-1P5"},{"amendable":false,"thresholdMultiple":"2.0","trialId":"VG11-T2-2P0"},{"amendable":false,"thresholdMultiple":"3.0","trialId":"VG11-T3-3P0"}]}

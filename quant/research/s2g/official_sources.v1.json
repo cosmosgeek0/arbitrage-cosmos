@@ -1,0 +1,62 @@
+{
+  "accessedAtUtc": "2026-07-29T19:20:00Z",
+  "binancePublicDataCommit": "5c7f3197591c0d54d85dc43066226bc4c671d47a",
+  "binanceSpotApiDocsCommit": "6b8372cad7cecbdf5dd88a3372eafff51988c5cf",
+  "methodSources": [
+    {
+      "doi": "10.1016/0304-405X(80)90021-5",
+      "role": "DAY_OF_WEEK_EFFECT_PRIOR"
+    },
+    {
+      "doi": "10.1080/01621459.1994.10476870",
+      "role": "DEPENDENT_BOOTSTRAP"
+    },
+    {
+      "doi": "10.1111/1468-0262.00152",
+      "role": "DATA_SNOOPING_REALITY_CHECK"
+    },
+    {
+      "doi": "10.1111/j.1468-0262.2005.00615.x",
+      "role": "MULTIPLE_TESTING_CONTROL"
+    },
+    {
+      "doi": "10.21314/JCF.2016.322",
+      "role": "PROBABILITY_OF_BACKTEST_OVERFITTING"
+    },
+    {
+      "doi": "10.1093/rfs/hhv063",
+      "role": "TRADING_COST_DISCIPLINE"
+    }
+  ],
+  "officialSources": [
+    {
+      "role": "PUBLIC_ARCHIVE_AUTHORITY",
+      "url": "https://data.binance.vision"
+    },
+    {
+      "role": "COMMIT_PINNED_ARCHIVE_FORMAT_AND_CHECKSUM_POLICY",
+      "url": "https://github.com/binance/binance-public-data/blob/5c7f3197591c0d54d85dc43066226bc4c671d47a/README.md"
+    },
+    {
+      "role": "SPOT_KLINE_SCHEMA_AND_UTC_CLOCK",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/rest-api/market#klinecandlestick-data"
+    },
+    {
+      "role": "PUBLIC_MARKET_DATA_ONLY_BOUNDARY",
+      "url": "https://developers.binance.com/en/docs/products/spot/faqs/market_data_only"
+    },
+    {
+      "role": "CURRENT_PUBLIC_SPOT_FEE_SCHEDULE",
+      "url": "https://www.binance.com/en/fee/trading"
+    },
+    {
+      "role": "ACCOUNT_COMMISSION_LIMITATION",
+      "url": "https://developers.binance.com/en/docs/products/spot/faqs/commission_faq"
+    },
+    {
+      "role": "CURRENT_FILTER_SEMANTICS",
+      "url": "https://developers.binance.com/en/docs/products/spot/filters"
+    }
+  ],
+  "schema": "S2GOfficialSourcesV1"
+}

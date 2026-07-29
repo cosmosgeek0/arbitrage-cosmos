@@ -1,0 +1,92 @@
+{
+  "capitalAuthority": "NONE",
+  "capitalVerdict": "NO_GO",
+  "consumer": "N3 successor/final convergence",
+  "crediblePositive": {
+    "evidenceIds": [
+      "econ-estimate",
+      "econ-lower",
+      "econ-upper",
+      "gate-data",
+      "sample-observations"
+    ],
+    "reasonCodes": [],
+    "state": "VERIFIED",
+    "value": true
+  },
+  "economics": {
+    "estimate": {
+      "evidenceIds": [
+        "econ-estimate"
+      ],
+      "reasonCodes": [],
+      "state": "VERIFIED",
+      "value": 2
+    },
+    "lowerBound": {
+      "evidenceIds": [
+        "econ-lower"
+      ],
+      "reasonCodes": [],
+      "state": "VERIFIED",
+      "value": 1
+    },
+    "unit": "USD_PER_1K",
+    "upperBound": {
+      "evidenceIds": [
+        "econ-upper"
+      ],
+      "reasonCodes": [],
+      "state": "VERIFIED",
+      "value": 3
+    }
+  },
+  "executionAuthority": "NONE",
+  "gateSummary": {
+    "mandatoryFailed": 0,
+    "mandatoryPassed": 1,
+    "mandatoryTotal": 1,
+    "mandatoryUnknown": 0,
+    "mandatoryVerified": 1
+  },
+  "gates": [
+    {
+      "evidenceIds": [
+        "gate-data"
+      ],
+      "id": "data-integrity",
+      "mandatory": true,
+      "passed": true,
+      "reasonCodes": [],
+      "state": "VERIFIED"
+    },
+    {
+      "evidenceIds": [
+        "gate-optional"
+      ],
+      "id": "reporting-only",
+      "mandatory": false,
+      "passed": false,
+      "reasonCodes": [],
+      "state": "VERIFIED"
+    }
+  ],
+  "limitations": [
+    "CAPITAL_AUTHORITY_NOT_GRANTED"
+  ],
+  "measurementVerdict": "GO",
+  "policy": {
+    "id": "dq10-policy-v1",
+    "sha256": "efc3e4cc6c1c2b6d981f1557bb92e051422d6b9551947424bc4e861125d763ff"
+  },
+  "resultId": "go-fixture",
+  "sampleDenominator": {
+    "count": 100,
+    "evidenceIds": [
+      "sample-observations"
+    ],
+    "reasonCodes": [],
+    "state": "VERIFIED"
+  },
+  "schema": "DQ10ResearchResultV1"
+}

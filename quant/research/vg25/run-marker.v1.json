@@ -1,0 +1,7 @@
+{
+  "createdAtUtc": "2026-07-29T18:33:42Z",
+  "freezeSha256": "9b8279442c1920df6f94e46f6ce94cbc7f545a622746c685f2241a972948e5a3",
+  "protocolSha256": "ad090ccb3cf2c3a9d597cb0f2c6be5ca1b6e27bf6a0432730abdd6fef2e4952d",
+  "purpose": "CONSUMED_BEFORE_FIRST_ZIP_MEMBER_OPEN",
+  "version": "VG25RunMarkerV1"
+}

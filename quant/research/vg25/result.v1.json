@@ -1,0 +1,33 @@
+{
+  "accountEffectiveFee": "UNKNOWN",
+  "capitalAuthority": "NONE",
+  "causalIdentification": "NOT_CLAIMED",
+  "championTrialId": "VG25-S50-R125-H14",
+  "consumer": "N3 successor/final convergence",
+  "createdAtUtc": "2026-07-29T18:33:44Z",
+  "developmentGates": {
+    "activeWeeks": false,
+    "completedCohorts": false,
+    "distinctSelectedSymbols": false,
+    "holm": false,
+    "primaryInterval": false,
+    "profitConcentration": false,
+    "publicCapacity": true,
+    "sensitivityInterval": false,
+    "stressDrawdown": true,
+    "stressNet": true,
+    "timingBenchmarkInterval": false,
+    "whiteRealityCheck": false
+  },
+  "developmentOpened": true,
+  "developmentSha256": "14ec0e49f3d4728d6ac173165d807e0f50d67da5288c3aa61c9faf9cc76f5c2c",
+  "disposition": "DEVELOPMENT_GATE_FAILURE",
+  "executableCapacity": "UNMEASURED",
+  "freezeSha256": "9b8279442c1920df6f94e46f6ce94cbc7f545a622746c685f2241a972948e5a3",
+  "holdoutOpened": false,
+  "moneyEffectUsd": 0,
+  "protocolSha256": "ad090ccb3cf2c3a9d597cb0f2c6be5ca1b6e27bf6a0432730abdd6fef2e4952d",
+  "runMarkerSha256": "82bf57d6bd93b6b34482352c124d8396240080aed6010b1ed6f92f4a0ee0ad09",
+  "verdict": "NO_GO",
+  "version": "VG25ResultV1"
+}

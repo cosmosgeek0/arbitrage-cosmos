@@ -139,6 +139,20 @@ EXCLUDED_BASE_ASSETS = frozenset(
 )
 EXCLUDED_LEVERAGED_SUFFIXES = ("BEAR", "BULL", "DOWN", "UP")
 CHECKSUM_RE = re.compile(r"^([0-9a-f]{64})[ \t]+\*?([^\r\n]+)[\r\n]*$")
+KLINE_HEADER = (
+    "open_time",
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "close_time",
+    "quote_volume",
+    "count",
+    "taker_buy_volume",
+    "taker_buy_quote_volume",
+    "ignore",
+)
 
 
 class VG4Error(RuntimeError):
@@ -558,6 +572,8 @@ def parse_archive(artifact: Mapping[str, Any]) -> tuple[Bar, ...]:
             reader = csv.reader(wrapper)
             bars: list[Bar] = []
             for row_number, row in enumerate(reader, start=1):
+                if row_number == 1 and tuple(row) == KLINE_HEADER:
+                    continue
                 if len(row) != 12:
                     raise VG4Error(f"{zip_path}:{row_number} does not have 12 kline fields")
                 open_us, open_dt = parse_timestamp_us(row[0], field="openTime")
@@ -573,6 +589,28 @@ def parse_archive(artifact: Mapping[str, Any]) -> tuple[Bar, ...]:
                 low = decimal_from_text(row[3], field="low", nonnegative=True)
                 close = decimal_from_text(row[4], field="close", nonnegative=True)
                 quote_volume = decimal_from_text(row[7], field="quoteVolume", nonnegative=True)
+                base_volume = decimal_from_text(row[5], field="baseVolume", nonnegative=True)
+                taker_buy_base = decimal_from_text(
+                    row[9], field="takerBuyBaseVolume", nonnegative=True
+                )
+                taker_buy_quote = decimal_from_text(
+                    row[10], field="takerBuyQuoteVolume", nonnegative=True
+                )
+                decimal_from_text(row[11], field="ignore", nonnegative=True)
+                try:
+                    trade_count = int(row[8])
+                except ValueError as error:
+                    raise VG4Error(
+                        f"{zip_path}:{row_number} trade count is not an integer"
+                    ) from error
+                if (
+                    trade_count < 0
+                    or taker_buy_base > base_volume
+                    or taker_buy_quote > quote_volume
+                ):
+                    raise VG4Error(
+                        f"{zip_path}:{row_number} has invalid trade or taker-volume fields"
+                    )
                 if open_price <= 0 or close <= 0 or low <= 0:
                     raise VG4Error(f"{zip_path}:{row_number} has a non-positive price")
                 if high < max(open_price, close, low) or low > min(open_price, close, high):

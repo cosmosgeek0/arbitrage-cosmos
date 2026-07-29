@@ -41,6 +41,9 @@ from research.dq12.validator import (
     SPOT_ENDPOINT_V1 as SPOT_ENDPOINT_V1,
 )
 from research.dq12.validator import (
+    STATUS_SCOPE_V1 as STATUS_SCOPE_V1,
+)
+from research.dq12.validator import (
     USDM_ENDPOINT_V1 as USDM_ENDPOINT_V1,
 )
 from research.dq12.validator import (
@@ -105,6 +108,7 @@ PUBLIC_API_V1 = (
     "RationalScaleV1",
     "SCHEMA_V1",
     "SETTLEMENT_BASIS_V1",
+    "STATUS_SCOPE_V1",
     "SPOT_ENDPOINT_V1",
     "USDM_ENDPOINT_V1",
     "canonical_json_bytes",

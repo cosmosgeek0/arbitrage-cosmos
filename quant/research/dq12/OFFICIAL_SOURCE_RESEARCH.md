@@ -114,6 +114,17 @@ DQ-12 therefore supports only `CURRENT_ONLY`. A historical request, stale or
 future capture, excessive cross-endpoint skew, missing migration evidence, or
 unrecognized current enum fails closed as `UNKNOWN`.
 
+The evaluation time is injected by the trusted collector boundary, outside the
+self-described request bytes, and is disclosed in the receipt. The frozen
+request schema carries no evaluation-time field, so a request that authors one
+is rejected rather than trusted, and both capture times are then bound to the
+injected time by the freshness and cross-endpoint skew limits.
+
+This offline validator cannot establish currentness from a caller-authored
+timestamp alone. It proves only that the supplied bytes match the precommitted
+request at the injected time; it does not authenticate the collector, the
+transport, or the endpoint itself.
+
 ## Live shape check
 
 The one-time current payload check observed:

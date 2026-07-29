@@ -1,8 +1,9 @@
 # DQ-12 — Binance Spot↔USD-M instrument identity
 
 DQ-12 is a portable, deterministic, offline validator for one **current**
-Binance Spot instrument joined to one USD-M crypto perpetual. It was built from
-exact canonical
+Binance Spot instrument joined to one USD-M crypto perpetual. It was built only
+from the Binance-owned sources recorded in
+[`OFFICIAL_SOURCE_RESEARCH.md`](OFFICIAL_SOURCE_RESEARCH.md), on clean base
 `a169b123fb186d1943a75ad648552c4d95be1be1`. This packet is source-only,
 has `authority=NONE`, and grants no provider, private-read, order, transfer,
 withdrawal, execution, capital, profitability, deployment, or landing
@@ -10,10 +11,11 @@ authority.
 
 ## Contract
 
-`validate_spot_usdm_identity_v1` accepts the exact bytes of:
+`validate_spot_usdm_identity_v1` accepts a trusted current evaluation time
+injected outside the self-described JSON, plus the exact bytes of:
 
 1. a request that precommits the symbols, expected canonical identities,
-   evaluation time, source metadata, payload digests, and registry digest;
+   source metadata, payload digests, and registry digest;
 2. a Spot `/api/v3/exchangeInfo` snapshot;
 3. a USD-M `/fapi/v1/exchangeInfo` snapshot; and
 4. an explicit identity registry.
@@ -27,7 +29,8 @@ The only positive result is `MATCHED`. Every malformed, missing, stale,
 future-dated, skewed, contradictory, unsupported, ambiguous, or historically
 scoped input fails closed as `UNKNOWN` with one stable reason code. `MATCHED`
 means current identity at the receipt boundary only; `historicalStatus` remains
-`UNKNOWN`.
+`UNKNOWN`. The receipt discloses `evaluationTimeMs`, both capture times, and
+`statusScope="CURRENT_AT_TRUSTED_EVALUATION_TIME"`.
 
 A match requires all of the following:
 
@@ -39,7 +42,10 @@ A match requires all of the following:
 - Spot quote, USD-M quote, and USD-M `marginAsset` resolve to the same
   precommitted canonical quote identity with identical unit scales; and
 - both venue symbols resolve to their precommitted current instrument
-  identities.
+  identities;
+- no second currently eligible symbol on either market resolves to either
+  selected venue-contract identity; and
+- the Spot and USD-M instrument identities remain distinct.
 
 USD-M exposes `marginAsset`, not a distinct settlement-asset fact. DQ-12 treats
 it only as `SETTLE_PROXY_FROM_MARGIN_ASSET`; the receipt records
@@ -58,7 +64,9 @@ A registry edge's rational scale means canonical target units per one source
 unit; chained scales multiply. The receipt exposes the resulting exact base
 ratio as Spot units per one USD-M base unit.
 A migration marked as changing its underlying, an absent or inactive rule, a
-conflict, a cycle, or an unresolved chain returns `UNKNOWN`.
+conflict, a cycle, or an unresolved chain returns `UNKNOWN`. Every active
+registry path is validated, including paths not selected by the requested
+join.
 
 This is intentionally current-only. Binance's current exchange-info endpoints
 do not establish historical venue status, and archived market data does not
@@ -80,12 +88,17 @@ Because the validator is offline, endpoint metadata and payload digests prove
 that the supplied bytes match the precommitted request; they do not
 independently authenticate how a collector obtained those bytes. A consumer
 must preserve the trusted collection receipt as part of its own evidence
-boundary.
+boundary. In particular, the trusted evaluation time must come from that
+boundary and cannot be supplied from the request being validated: the frozen
+request schema has no evaluation-time field, so a request that authors one
+fails closed instead of being silently ignored. The committed fixtures are
+synthetic and use the explicit fixed proof time `1785356000000`.
 
 CLI usage:
 
 ```sh
-PYTHONPATH=quant python -B -m research.dq12.validator \
+PYTHONPATH=quant python -B -m research.dq12.cli \
+  --trusted-evaluation-time-ms EPOCH_MS \
   --request REQUEST.json \
   --spot SPOT_EXCHANGE_INFO.json \
   --usdm USDM_EXCHANGE_INFO.json \
@@ -106,6 +119,7 @@ ruff check quant/research/dq12
 ruff format --check quant/research/dq12
 MYPYPATH=quant mypy --strict --explicit-package-bases \
   quant/research/dq12/__init__.py \
+  quant/research/dq12/cli.py \
   quant/research/dq12/validator.py \
   quant/research/dq12/test_validator.py \
   quant/research/dq12/verify_known_answer.py
@@ -114,10 +128,20 @@ PYTHONPATH=quant python -B -m research.dq12.verify_known_answer
 ```
 
 Hostile fixtures must cover venue-leg swaps, endpoint/digest/time drift,
-ineligible and unknown statuses, delivery/non-coin contracts, quote or
-`marginAsset` mismatches, implicit multiplier traps such as `1000SHIB`,
-legitimate digit-leading assets such as `1INCH`, aliases/migrations and scales,
-duplicates, malformed payloads, and deterministic input ordering.
+requests that author their own evaluation time, ineligible and unknown
+statuses, delivery/non-coin contracts, quote or `marginAsset` mismatches,
+implicit multiplier traps such as `1000SHIB`, legitimate digit-leading assets
+such as `1INCH`, aliases/migrations and scales, active registry-wide cycles,
+simultaneous current old/new symbols on both markets, cross-market instrument
+collisions, unpaired Unicode surrogates, warning-free CLI `MATCHED`, `UNKNOWN`,
+and I/O outcomes, duplicates, malformed payloads, and deterministic input
+ordering.
+
+[`fixture-manifest.v1.json`](fixture-manifest.v1.json) indexes those cases and
+pins the exact committed fixture bytes.
+[`known_answer.v1.json`](known_answer.v1.json) precommits every non-digest
+receipt field of the positive case; the digests it deliberately omits are
+recomputed from the committed bytes on every run.
 
 The sole downstream consumer is the **N3 successor/final convergence** step.
 Until that step independently composes and lands the exact clean hash, DQ-12

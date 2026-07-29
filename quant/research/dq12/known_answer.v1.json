@@ -5,6 +5,7 @@
     "canonicalSettlementId": "asset.USDT",
     "canonicalUnderlyingId": "asset.BTC",
     "decision": "MATCHED",
+    "evaluationTimeMs": 1785356000000,
     "historicalStatus": "UNKNOWN",
     "reasonCodes": [],
     "schema": "cosmos.dq12.spot-usdm-instrument-identity.v1",
@@ -12,14 +13,16 @@
     "settlementSourceField": "marginAsset",
     "spotBaseScale": {"denominator": 1, "numerator": 1},
     "spotInstrumentId": "binance.spot.BTCUSDT",
+    "spotRetrievedAtMs": 1785355970000,
     "spotSymbol": "BTCUSDT",
     "spotUnitsPerUsdmBaseUnit": {"denominator": 1, "numerator": 1},
-    "statusScope": "CURRENT_AT_RECEIPT_ONLY",
+    "statusScope": "CURRENT_AT_TRUSTED_EVALUATION_TIME",
     "usdmBaseScale": {"denominator": 1, "numerator": 1},
     "usdmInstrumentId": "binance.usdm.BTCUSDT",
+    "usdmRetrievedAtMs": 1785355975000,
     "usdmSymbol": "BTCUSDT"
   },
   "fixtureManifest": "fixture-manifest.v1.json",
-  "note": "Semantic expectations are independently precommitted; input and receipt digests are recomputed from exact committed bytes.",
+  "note": "Semantic expectations are independently precommitted and cover every non-digest receipt field; input and receipt digests are recomputed from exact committed bytes. The evaluation time is injected out of band by the trusted caller and is never authored by the request fixture.",
   "schema": "cosmos.dq12.known-answer.v1"
 }

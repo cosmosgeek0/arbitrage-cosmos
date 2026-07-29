@@ -17,6 +17,17 @@ JsonObject = dict[str, object]
 
 HERE = Path(__file__).resolve().parent
 RECEIPT_DOMAIN = b"cosmos-dq12-instrument-identity-receipt-v1\0"
+TRUSTED_EVALUATION_TIME_MS = 1_785_356_000_000
+RECEIPT_DIGEST_FIELDS = frozenset(
+    {
+        "receiptDigest",
+        "registryCanonicalDigest",
+        "registrySha256",
+        "requestSha256",
+        "spotPayloadSha256",
+        "usdmPayloadSha256",
+    }
+)
 
 
 def _fail(message: str) -> NoReturn:
@@ -116,7 +127,13 @@ def main() -> int:
     )
 
     fixtures = _load_committed_fixtures(manifest)
+    request_value = _object_from_bytes(fixtures["request"], label="request")
+    _require(
+        "evaluationTimeMs" not in request_value,
+        "request bytes must not author the evaluation time",
+    )
     receipt = validate_spot_usdm_identity_v1(
+        trusted_evaluation_time_ms=TRUSTED_EVALUATION_TIME_MS,
         request_bytes=fixtures["request"],
         spot_snapshot_bytes=fixtures["spot-exchange-info"],
         usdm_snapshot_bytes=fixtures["usdm-exchange-info"],
@@ -135,6 +152,10 @@ def main() -> int:
     _require(
         "receiptDigest" not in expected,
         "known answer must not hardcode an executed receipt digest",
+    )
+    _require(
+        set(expected) == set(receipt_value) - RECEIPT_DIGEST_FIELDS,
+        "known answer does not cover the exact non-digest receipt schema",
     )
     for key, value in expected.items():
         _require(
@@ -170,6 +191,7 @@ def main() -> int:
 
     receipt_digest = _verify_receipt_digest(receipt_value)
     repeated = validate_spot_usdm_identity_v1(
+        trusted_evaluation_time_ms=TRUSTED_EVALUATION_TIME_MS,
         request_bytes=fixtures["request"],
         spot_snapshot_bytes=fixtures["spot-exchange-info"],
         usdm_snapshot_bytes=fixtures["usdm-exchange-info"],
@@ -184,6 +206,8 @@ def main() -> int:
         "authority": "NONE",
         "checks": [
             "fixture-bytes",
+            "request-authors-no-evaluation-time",
+            "known-answer-schema-coverage",
             "semantic-known-answer",
             "input-digest-bindings",
             "registry-canonical-digest",

@@ -21,6 +21,7 @@ REGISTRY_SCHEMA_V1: Final = "cosmos.dq12.identity-registry.v1"
 SPOT_ENDPOINT_V1: Final = "https://api.binance.com/api/v3/exchangeInfo"
 USDM_ENDPOINT_V1: Final = "https://fapi.binance.com/fapi/v1/exchangeInfo"
 SETTLEMENT_BASIS_V1: Final = "SETTLE_PROXY_FROM_MARGIN_ASSET"
+STATUS_SCOPE_V1: Final = "CURRENT_AT_TRUSTED_EVALUATION_TIME"
 
 MAX_INPUT_BYTES: Final = 8 * 1024 * 1024
 MAX_JSON_DEPTH: Final = 24
@@ -41,7 +42,6 @@ _SHA256_PATTERN: Final = re.compile(r"^[0-9a-f]{64}$")
 _REQUEST_KEYS: Final = frozenset(
     {
         "asOfMs",
-        "evaluationTimeMs",
         "expectedQuoteId",
         "expectedSettlementId",
         "expectedSpotInstrumentId",
@@ -178,6 +178,9 @@ class PairIdentityReceiptV1:
     decision: IdentityDecision
     reason_codes: tuple[str, ...]
     status_scope: str
+    evaluation_time_ms: int | None
+    spot_retrieved_at_ms: int | None
+    usdm_retrieved_at_ms: int | None
     spot_symbol: str | None
     usdm_symbol: str | None
     spot_instrument_id: str | None
@@ -206,6 +209,7 @@ class PairIdentityReceiptV1:
             "canonicalSettlementId": self.canonical_settlement_id,
             "canonicalUnderlyingId": self.canonical_underlying_id,
             "decision": self.decision.value,
+            "evaluationTimeMs": self.evaluation_time_ms,
             "historicalStatus": self.historical_status,
             "reasonCodes": list(self.reason_codes),
             "receiptDigest": self.receipt_digest,
@@ -220,6 +224,7 @@ class PairIdentityReceiptV1:
             ),
             "spotInstrumentId": self.spot_instrument_id,
             "spotPayloadSha256": self.spot_payload_sha256,
+            "spotRetrievedAtMs": self.spot_retrieved_at_ms,
             "spotSymbol": self.spot_symbol,
             "spotUnitsPerUsdmBaseUnit": (
                 None
@@ -232,6 +237,7 @@ class PairIdentityReceiptV1:
             ),
             "usdmInstrumentId": self.usdm_instrument_id,
             "usdmPayloadSha256": self.usdm_payload_sha256,
+            "usdmRetrievedAtMs": self.usdm_retrieved_at_ms,
             "usdmSymbol": self.usdm_symbol,
         }
 
@@ -296,6 +302,7 @@ class _SpotInstrument:
     symbol: str
     base_asset: str
     quote_asset: str
+    current_symbols: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -304,6 +311,7 @@ class _UsdmInstrument:
     base_asset: str
     quote_asset: str
     margin_asset: str
+    current_symbols: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -387,10 +395,20 @@ def _identifier(value: object, *, field: str) -> str:
     return value
 
 
+def _utf8_size(value: str, *, field: str) -> int:
+    try:
+        return len(value.encode("utf-8"))
+    except UnicodeEncodeError as error:
+        raise IdentityContractError(
+            "JSON_UNICODE_INVALID",
+            f"{field} contains an unpaired Unicode surrogate",
+        ) from error
+
+
 def _raw_identifier(value: object, *, field: str) -> str:
     if not isinstance(value, str) or not value:
         _fail("RAW_IDENTIFIER_INVALID", f"{field} must be a non-empty string")
-    if len(value.encode("utf-8")) > 128:
+    if _utf8_size(value, field=field) > 128:
         _fail("RAW_IDENTIFIER_INVALID", f"{field} exceeds the frozen byte bound")
     if value != value.strip():
         _fail("RAW_IDENTIFIER_INVALID", f"{field} has surrounding whitespace")
@@ -525,13 +543,13 @@ def _validate_json_tree(root: object) -> None:
         if depth > MAX_JSON_DEPTH:
             _fail("JSON_DEPTH_EXCEEDED", "input exceeds the frozen JSON depth")
         if isinstance(value, str):
-            if len(value.encode("utf-8")) > MAX_STRING_BYTES:
+            if _utf8_size(value, field="JSON string") > MAX_STRING_BYTES:
                 _fail("JSON_STRING_LIMIT", "input string exceeds the frozen byte bound")
         elif isinstance(value, list):
             stack.extend((item, depth + 1) for item in value)
         elif isinstance(value, dict):
             for key, item in cast(dict[str, object], value).items():
-                if len(key.encode("utf-8")) > MAX_STRING_BYTES:
+                if _utf8_size(key, field="JSON object key") > MAX_STRING_BYTES:
                     _fail("JSON_STRING_LIMIT", "input key exceeds the frozen byte bound")
                 stack.append((item, depth + 1))
 
@@ -592,7 +610,7 @@ def _parse_source(
     )
 
 
-def _parse_request(value: object) -> _Request:
+def _parse_request(value: object, *, trusted_evaluation_time_ms: int) -> _Request:
     raw = _mapping(value, field="request")
     _strict_keys(raw, expected=_REQUEST_KEYS, field="request")
     if raw["schema"] != REQUEST_SCHEMA_V1:
@@ -602,7 +620,7 @@ def _parse_request(value: object) -> _Request:
     if raw["asOfMs"] is not None:
         _fail("HISTORICAL_STATUS_UNSUPPORTED", "historical status is not established")
     return _Request(
-        evaluation_time_ms=_strict_int(raw["evaluationTimeMs"], field="request.evaluationTimeMs"),
+        evaluation_time_ms=trusted_evaluation_time_ms,
         spot_symbol=_raw_identifier(raw["spotSymbol"], field="request.spotSymbol"),
         usdm_symbol=_raw_identifier(raw["usdmSymbol"], field="request.usdmSymbol"),
         expected_spot_instrument_id=_identifier(
@@ -848,7 +866,8 @@ def _required_raw(row: Mapping[str, object], key: str, *, field: str) -> str:
 
 
 def _parse_spot_payload(value: object, *, symbol: str) -> _SpotInstrument:
-    row = _select_symbol(_symbols(value, field="spot"), symbol, field="spot")
+    rows = _symbols(value, field="spot")
+    row = _select_symbol(rows, symbol, field="spot")
     status = _required_raw(row, "status", field="spot.symbol")
     if status not in _SPOT_STATUSES:
         _fail("SPOT_STATUS_UNKNOWN", "Spot status is outside the documented current enum")
@@ -866,11 +885,18 @@ def _parse_spot_payload(value: object, *, symbol: str) -> _SpotInstrument:
         symbol=_required_raw(row, "symbol", field="spot.symbol"),
         base_asset=_required_raw(row, "baseAsset", field="spot.symbol"),
         quote_asset=_required_raw(row, "quoteAsset", field="spot.symbol"),
+        current_symbols=tuple(
+            cast(str, candidate["symbol"])
+            for candidate in rows
+            if candidate.get("status") == "TRADING"
+            and candidate.get("isSpotTradingAllowed") is True
+        ),
     )
 
 
 def _parse_usdm_payload(value: object, *, symbol: str) -> _UsdmInstrument:
-    row = _select_symbol(_symbols(value, field="usdm"), symbol, field="usdm")
+    rows = _symbols(value, field="usdm")
+    row = _select_symbol(rows, symbol, field="usdm")
     status = _required_raw(row, "status", field="usdm.symbol")
     if status not in _USDM_STATUSES:
         _fail("USDM_STATUS_UNKNOWN", "USD-M status is outside the documented current enum")
@@ -896,6 +922,14 @@ def _parse_usdm_payload(value: object, *, symbol: str) -> _UsdmInstrument:
         base_asset=_required_raw(row, "baseAsset", field="usdm.symbol"),
         quote_asset=_required_raw(row, "quoteAsset", field="usdm.symbol"),
         margin_asset=_required_raw(row, "marginAsset", field="usdm.symbol"),
+        current_symbols=tuple(
+            cast(str, candidate["symbol"])
+            for candidate in rows
+            if candidate.get("status") == "TRADING"
+            and candidate.get("contractType") == "PERPETUAL"
+            and candidate.get("underlyingType") == "COIN"
+            and candidate.get("pair") == candidate.get("symbol")
+        ),
     )
 
 
@@ -954,6 +988,58 @@ def _resolve_identity(
     _fail("ALIAS_DEPTH_EXCEEDED", "identity chain exceeds the frozen edge bound")
 
 
+def _validate_active_registry_graph(registry: _Registry, *, at_ms: int) -> None:
+    scoped_sources = {
+        (edge.market_type, edge.role, edge.source)
+        for edge in registry.edges
+        if _edge_active(edge, at_ms)
+    }
+    for market_type, role, source in sorted(
+        scoped_sources,
+        key=lambda item: (item[0].value, item[1].value, item[2]),
+    ):
+        resolved = _resolve_identity(
+            registry,
+            market_type=market_type,
+            role=role,
+            source=source,
+            at_ms=at_ms,
+        )
+        if role is IdentityRole.SYMBOL and resolved.scale != 1:
+            _fail("SYMBOL_SCALE_INVALID", "symbol identities must be one-to-one")
+
+
+def _require_unique_current_symbol_identity(
+    registry: _Registry,
+    *,
+    market_type: MarketType,
+    selected_symbol: str,
+    selected_identity: str,
+    current_symbols: tuple[str, ...],
+    at_ms: int,
+) -> None:
+    for candidate in current_symbols:
+        if candidate == selected_symbol:
+            continue
+        try:
+            resolved = _resolve_identity(
+                registry,
+                market_type=market_type,
+                role=IdentityRole.SYMBOL,
+                source=candidate,
+                at_ms=at_ms,
+            )
+        except IdentityContractError as error:
+            if error.code == "BINDING_MISSING":
+                continue
+            raise
+        if resolved.canonical_id == selected_identity:
+            _fail(
+                "CANONICAL_INSTRUMENT_COLLISION",
+                "multiple currently eligible venue symbols resolve to one instrument",
+            )
+
+
 def _require_identity(
     actual: _ResolvedIdentity,
     expected: str,
@@ -996,6 +1082,27 @@ def _validate_join(
         usdm_symbol,
         request.expected_usdm_instrument_id,
         code="USDM_INSTRUMENT_IDENTITY_MISMATCH",
+    )
+    if spot_symbol.canonical_id == usdm_symbol.canonical_id:
+        _fail(
+            "CROSS_MARKET_INSTRUMENT_COLLISION",
+            "Spot and USD-M legs must retain distinct instrument identities",
+        )
+    _require_unique_current_symbol_identity(
+        registry,
+        market_type=MarketType.SPOT,
+        selected_symbol=spot.symbol,
+        selected_identity=spot_symbol.canonical_id,
+        current_symbols=spot.current_symbols,
+        at_ms=at_ms,
+    )
+    _require_unique_current_symbol_identity(
+        registry,
+        market_type=MarketType.USD_M,
+        selected_symbol=usdm.symbol,
+        selected_identity=usdm_symbol.canonical_id,
+        current_symbols=usdm.current_symbols,
+        at_ms=at_ms,
     )
 
     spot_base = _resolve_identity(
@@ -1096,6 +1203,9 @@ def _build_receipt(
     usdm_payload_sha256: str | None,
     registry_sha256: str | None,
     registry_canonical_digest: str | None = None,
+    evaluation_time_ms: int | None = None,
+    spot_retrieved_at_ms: int | None = None,
+    usdm_retrieved_at_ms: int | None = None,
     matched: _Matched | None = None,
 ) -> PairIdentityReceiptV1:
     if decision is IdentityDecision.MATCHED:
@@ -1108,6 +1218,7 @@ def _build_receipt(
             "canonicalSettlementId": matched.settlement_id,
             "canonicalUnderlyingId": matched.underlying_id,
             "decision": decision.value,
+            "evaluationTimeMs": matched.request.evaluation_time_ms,
             "historicalStatus": "UNKNOWN",
             "reasonCodes": [],
             "registryCanonicalDigest": matched.registry.canonical_digest,
@@ -1119,14 +1230,16 @@ def _build_receipt(
             "spotBaseScale": RationalScaleV1.from_fraction(matched.spot_base_scale).as_dict(),
             "spotInstrumentId": matched.spot_instrument_id,
             "spotPayloadSha256": spot_payload_sha256,
+            "spotRetrievedAtMs": matched.request.spot_source.retrieved_at_ms,
             "spotSymbol": matched.spot.symbol,
             "spotUnitsPerUsdmBaseUnit": RationalScaleV1.from_fraction(
                 spot_units_per_usdm
             ).as_dict(),
-            "statusScope": "CURRENT_AT_RECEIPT_ONLY",
+            "statusScope": STATUS_SCOPE_V1,
             "usdmBaseScale": RationalScaleV1.from_fraction(matched.usdm_base_scale).as_dict(),
             "usdmInstrumentId": matched.usdm_instrument_id,
             "usdmPayloadSha256": usdm_payload_sha256,
+            "usdmRetrievedAtMs": matched.request.usdm_source.retrieved_at_ms,
             "usdmSymbol": matched.usdm.symbol,
         }
     else:
@@ -1138,6 +1251,7 @@ def _build_receipt(
             "canonicalSettlementId": None,
             "canonicalUnderlyingId": None,
             "decision": decision.value,
+            "evaluationTimeMs": evaluation_time_ms,
             "historicalStatus": "UNKNOWN",
             "reasonCodes": list(reason_codes),
             "registryCanonicalDigest": registry_canonical_digest,
@@ -1149,12 +1263,14 @@ def _build_receipt(
             "spotBaseScale": None,
             "spotInstrumentId": None,
             "spotPayloadSha256": spot_payload_sha256,
+            "spotRetrievedAtMs": spot_retrieved_at_ms,
             "spotSymbol": None,
             "spotUnitsPerUsdmBaseUnit": None,
-            "statusScope": "CURRENT_AT_RECEIPT_ONLY",
+            "statusScope": STATUS_SCOPE_V1,
             "usdmBaseScale": None,
             "usdmInstrumentId": None,
             "usdmPayloadSha256": usdm_payload_sha256,
+            "usdmRetrievedAtMs": usdm_retrieved_at_ms,
             "usdmSymbol": None,
         }
     digest = _receipt_digest(values)
@@ -1163,7 +1279,10 @@ def _build_receipt(
             schema=SCHEMA_V1,
             decision=decision,
             reason_codes=reason_codes,
-            status_scope="CURRENT_AT_RECEIPT_ONLY",
+            status_scope=STATUS_SCOPE_V1,
+            evaluation_time_ms=evaluation_time_ms,
+            spot_retrieved_at_ms=spot_retrieved_at_ms,
+            usdm_retrieved_at_ms=usdm_retrieved_at_ms,
             spot_symbol=None,
             usdm_symbol=None,
             spot_instrument_id=None,
@@ -1189,7 +1308,10 @@ def _build_receipt(
         schema=SCHEMA_V1,
         decision=decision,
         reason_codes=(),
-        status_scope="CURRENT_AT_RECEIPT_ONLY",
+        status_scope=STATUS_SCOPE_V1,
+        evaluation_time_ms=matched.request.evaluation_time_ms,
+        spot_retrieved_at_ms=matched.request.spot_source.retrieved_at_ms,
+        usdm_retrieved_at_ms=matched.request.usdm_source.retrieved_at_ms,
         spot_symbol=matched.spot.symbol,
         usdm_symbol=matched.usdm.symbol,
         spot_instrument_id=matched.spot_instrument_id,
@@ -1217,6 +1339,7 @@ def _build_receipt(
 
 def validate_spot_usdm_identity_v1(
     *,
+    trusted_evaluation_time_ms: int,
     request_bytes: bytes,
     spot_snapshot_bytes: bytes,
     usdm_snapshot_bytes: bytes,
@@ -1224,9 +1347,11 @@ def validate_spot_usdm_identity_v1(
 ) -> PairIdentityReceiptV1:
     """Validate one fresh current Binance Spot to USD-M perpetual identity join.
 
-    The function performs no I/O and catches every input-contract failure as an
-    ineligible ``UNKNOWN`` receipt. A ``MATCHED`` result proves current identity
-    only; it grants no execution, order, transfer, withdrawal, or capital authority.
+    The caller must inject a trusted current evaluation time outside the
+    self-described request bytes. The function performs no I/O and catches every
+    input-contract failure as an ineligible ``UNKNOWN`` receipt. A ``MATCHED``
+    result proves identity only at that disclosed current-time boundary; it grants
+    no execution, order, transfer, withdrawal, or capital authority.
     """
 
     request_digest = _digest_or_none(request_bytes)
@@ -1234,7 +1359,13 @@ def validate_spot_usdm_identity_v1(
     usdm_digest = _digest_or_none(usdm_snapshot_bytes)
     registry_digest = _digest_or_none(registry_bytes)
     registry_canonical_digest: str | None = None
+    evaluation_time_ms: int | None = None
+    request: _Request | None = None
     try:
+        evaluation_time_ms = _strict_int(
+            trusted_evaluation_time_ms,
+            field="trustedEvaluationTimeMs",
+        )
         for field, value in (
             ("request", request_bytes),
             ("spot", spot_snapshot_bytes),
@@ -1250,7 +1381,10 @@ def validate_spot_usdm_identity_v1(
         registry_value = _parse_json_bytes(registry_bytes, field="registry")
         spot_value = _parse_json_bytes(spot_snapshot_bytes, field="spot")
         usdm_value = _parse_json_bytes(usdm_snapshot_bytes, field="usdm")
-        request = _parse_request(request_value)
+        request = _parse_request(
+            request_value,
+            trusted_evaluation_time_ms=evaluation_time_ms,
+        )
         registry = _parse_registry(registry_value)
         registry_canonical_digest = registry.canonical_digest
 
@@ -1273,6 +1407,10 @@ def validate_spot_usdm_identity_v1(
             > MAX_SNAPSHOT_SKEW_MS
         ):
             _fail("SNAPSHOT_PAIR_SKEW", "Spot and USD-M snapshots exceed the skew bound")
+        _validate_active_registry_graph(
+            registry,
+            at_ms=request.evaluation_time_ms,
+        )
 
         spot = _parse_spot_payload(spot_value, symbol=request.spot_symbol)
         usdm = _parse_usdm_payload(usdm_value, symbol=request.usdm_symbol)
@@ -1295,6 +1433,9 @@ def validate_spot_usdm_identity_v1(
             usdm_payload_sha256=usdm_digest,
             registry_sha256=registry_digest,
             registry_canonical_digest=registry_canonical_digest,
+            evaluation_time_ms=evaluation_time_ms,
+            spot_retrieved_at_ms=(None if request is None else request.spot_source.retrieved_at_ms),
+            usdm_retrieved_at_ms=(None if request is None else request.usdm_source.retrieved_at_ms),
         )
 
 
@@ -1317,13 +1458,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--spot", type=Path, required=True)
     parser.add_argument("--usdm", type=Path, required=True)
     parser.add_argument("--registry", type=Path, required=True)
+    parser.add_argument("--trusted-evaluation-time-ms", type=int, required=True)
     arguments = parser.parse_args(argv)
+    evaluation_time_ms: int | None = None
     try:
+        evaluation_time_ms = _strict_int(
+            arguments.trusted_evaluation_time_ms,
+            field="trustedEvaluationTimeMs",
+        )
         request = _read_cli_input(arguments.request, field="request")
         spot = _read_cli_input(arguments.spot, field="spot")
         usdm = _read_cli_input(arguments.usdm, field="usdm")
         registry = _read_cli_input(arguments.registry, field="registry")
         receipt = validate_spot_usdm_identity_v1(
+            trusted_evaluation_time_ms=evaluation_time_ms,
             request_bytes=request,
             spot_snapshot_bytes=spot,
             usdm_snapshot_bytes=usdm,
@@ -1337,6 +1485,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             spot_payload_sha256=None,
             usdm_payload_sha256=None,
             registry_sha256=None,
+            evaluation_time_ms=evaluation_time_ms,
         )
     sys.stdout.buffer.write(receipt.canonical_bytes())
     return 0 if receipt.decision is IdentityDecision.MATCHED else 2

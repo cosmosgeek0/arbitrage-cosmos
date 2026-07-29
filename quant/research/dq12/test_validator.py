@@ -3,6 +3,9 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
+import subprocess
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,8 +35,18 @@ RequestMutator = Callable[[JsonObject], None]
 
 HERE = Path(__file__).resolve().parent
 FIXTURES = HERE / "fixtures"
-EVALUATION_TIME_MS = 2_000_000_000_000
+EVALUATION_TIME_MS = 1_785_356_000_000
 RECEIPT_DOMAIN = b"cosmos-dq12-instrument-identity-receipt-v1\0"
+RECEIPT_DIGEST_FIELDS = frozenset(
+    {
+        "receiptDigest",
+        "registryCanonicalDigest",
+        "registrySha256",
+        "requestSha256",
+        "spotPayloadSha256",
+        "usdmPayloadSha256",
+    }
+)
 
 
 @dataclass(slots=True)
@@ -264,7 +277,6 @@ def _request_for(
 ) -> JsonObject:
     return {
         "asOfMs": None,
-        "evaluationTimeMs": EVALUATION_TIME_MS,
         "expectedQuoteId": packet.expected_quote_id,
         "expectedSettlementId": packet.expected_settlement_id,
         "expectedSpotInstrumentId": packet.expected_spot_instrument_id,
@@ -295,6 +307,7 @@ def _request_for(
 def _validate_packet(
     packet: Packet,
     *,
+    trusted_evaluation_time_ms: int = EVALUATION_TIME_MS,
     request_mutator: RequestMutator | None = None,
     spot_bytes_after_binding: bytes | None = None,
     usdm_bytes_after_binding: bytes | None = None,
@@ -312,6 +325,7 @@ def _validate_packet(
     if request_mutator is not None:
         request_mutator(request)
     return validate_spot_usdm_identity_v1(
+        trusted_evaluation_time_ms=trusted_evaluation_time_ms,
         request_bytes=canonical_json_bytes(request),
         spot_snapshot_bytes=(
             spot_bytes if spot_bytes_after_binding is None else spot_bytes_after_binding
@@ -365,6 +379,7 @@ def test_committed_known_answer_fixture_is_matched_and_digest_bound() -> None:
     usdm = _fixture_bytes("usdm-btcusdt.current.json")
     registry = _fixture_bytes("registry-btcusdt.v1.json")
     receipt = validate_spot_usdm_identity_v1(
+        trusted_evaluation_time_ms=EVALUATION_TIME_MS,
         request_bytes=request,
         spot_snapshot_bytes=spot,
         usdm_snapshot_bytes=usdm,
@@ -375,6 +390,7 @@ def test_committed_known_answer_fixture_is_matched_and_digest_bound() -> None:
     expected = known["expectedReceiptSemantics"]
     assert isinstance(expected, dict)
     actual = receipt.as_dict()
+    assert set(cast(JsonObject, expected)) == set(actual) - RECEIPT_DIGEST_FIELDS
     for key, value in cast(JsonObject, expected).items():
         assert actual[key] == value
     assert receipt.request_sha256 == hashlib.sha256(request).hexdigest()
@@ -488,6 +504,38 @@ def test_historical_request_is_explicitly_unknown() -> None:
     _assert_unknown(
         _validate_packet(_packet(), request_mutator=mutate),
         "HISTORICAL_STATUS_UNSUPPORTED",
+    )
+
+
+def test_trusted_evaluation_time_is_out_of_band_and_disclosed() -> None:
+    receipt = _validate_packet(_packet())
+    assert receipt.decision is IdentityDecision.MATCHED
+    assert receipt.evaluation_time_ms == EVALUATION_TIME_MS
+    assert receipt.spot_retrieved_at_ms == EVALUATION_TIME_MS - 30_000
+    assert receipt.usdm_retrieved_at_ms == EVALUATION_TIME_MS - 25_000
+    assert receipt.status_scope == "CURRENT_AT_TRUSTED_EVALUATION_TIME"
+
+
+def test_request_cannot_self_authorize_an_evaluation_epoch() -> None:
+    def mutate(request: JsonObject) -> None:
+        request["evaluationTimeMs"] = EVALUATION_TIME_MS
+
+    _assert_unknown(
+        _validate_packet(_packet(), request_mutator=mutate),
+        "SCHEMA_KEYS_INVALID",
+    )
+
+
+def test_joint_backdate_is_stale_against_trusted_evaluation_time() -> None:
+    backdated_spot_ms = EVALUATION_TIME_MS - MAX_SNAPSHOT_AGE_MS - 30_000
+
+    def mutate(request: JsonObject) -> None:
+        _source(request, "spotSource")["retrievedAtMs"] = backdated_spot_ms
+        _source(request, "usdmSource")["retrievedAtMs"] = backdated_spot_ms + 5_000
+
+    _assert_unknown(
+        _validate_packet(_packet(), request_mutator=mutate),
+        "SNAPSHOT_STALE",
     )
 
 
@@ -676,6 +724,46 @@ def test_explicit_symbol_migration_can_resolve_current_row() -> None:
     assert receipt.spot_symbol == "XBTUSDT"
 
 
+@pytest.mark.parametrize("market_type", ["SPOT", "USD_M"])
+def test_two_current_symbols_cannot_share_one_canonical_instrument(
+    market_type: str,
+) -> None:
+    packet = _packet()
+    payload = packet.spot if market_type == "SPOT" else packet.usdm
+    old_row = copy.deepcopy(_row(payload))
+    old_row["symbol"] = "XBTUSDT"
+    if market_type == "USD_M":
+        old_row["pair"] = "XBTUSDT"
+    _rows(payload).insert(0, old_row)
+    _bindings(packet.registry).append(
+        _binding(
+            market_type=market_type,
+            role="SYMBOL",
+            source="XBTUSDT",
+            target="BTCUSDT",
+            kind="ALIAS",
+        )
+    )
+    _assert_unknown(
+        _validate_packet(packet),
+        "CANONICAL_INSTRUMENT_COLLISION",
+    )
+
+
+def test_spot_and_usdm_contracts_cannot_collapse_to_one_instrument_id() -> None:
+    packet = _packet()
+    common_id = "binance.instrument.BTCUSDT"
+    for binding in _bindings(packet.registry):
+        if binding["role"] == "SYMBOL":
+            binding["target"] = common_id
+    packet.expected_spot_instrument_id = common_id
+    packet.expected_usdm_instrument_id = common_id
+    _assert_unknown(
+        _validate_packet(packet),
+        "CROSS_MARKET_INSTRUMENT_COLLISION",
+    )
+
+
 def test_migration_that_changes_underlying_is_unknown() -> None:
     packet = _packet()
     _remove_binding(packet.registry, market_type="SPOT", role="BASE", source="BTC")
@@ -749,6 +837,29 @@ def test_alias_cycle_is_unknown() -> None:
                 role="BASE",
                 source="XBT",
                 target="BTC",
+                kind="ALIAS",
+            ),
+        ]
+    )
+    _assert_unknown(_validate_packet(packet), "ALIAS_CYCLE")
+
+
+def test_unused_active_registry_cycle_invalidates_the_registry() -> None:
+    packet = _packet()
+    _bindings(packet.registry).extend(
+        [
+            _binding(
+                market_type="SPOT",
+                role="BASE",
+                source="DOGE",
+                target="XDOGE",
+                kind="ALIAS",
+            ),
+            _binding(
+                market_type="SPOT",
+                role="BASE",
+                source="XDOGE",
+                target="DOGE",
                 kind="ALIAS",
             ),
         ]
@@ -888,6 +999,7 @@ def test_same_underlying_can_be_proven_only_by_explicit_scoped_alias() -> None:
 
 def test_duplicate_json_key_fails_closed() -> None:
     receipt = validate_spot_usdm_identity_v1(
+        trusted_evaluation_time_ms=EVALUATION_TIME_MS,
         request_bytes=b'{"schema":"first","schema":"second"}',
         spot_snapshot_bytes=_fixture_bytes("spot-btcusdt.current.json"),
         usdm_snapshot_bytes=_fixture_bytes("usdm-btcusdt.current.json"),
@@ -908,12 +1020,15 @@ def test_duplicate_venue_symbol_fails_closed() -> None:
     [
         (b"{", "JSON_SYNTAX_INVALID"),
         (b'{"number":1.5}', "JSON_NUMBER_INVALID"),
+        (b'{"value":"\\ud800"}', "JSON_UNICODE_INVALID"),
+        (b'{"\\ud800":1}', "JSON_UNICODE_INVALID"),
         (b"\xff", "INPUT_UTF8_INVALID"),
         (b"", "INPUT_SIZE_INVALID"),
     ],
 )
 def test_raw_json_hostility_is_unknown(request_bytes: bytes, reason: str) -> None:
     receipt = validate_spot_usdm_identity_v1(
+        trusted_evaluation_time_ms=EVALUATION_TIME_MS,
         request_bytes=request_bytes,
         spot_snapshot_bytes=_fixture_bytes("spot-btcusdt.current.json"),
         usdm_snapshot_bytes=_fixture_bytes("usdm-btcusdt.current.json"),
@@ -938,6 +1053,7 @@ def test_input_size_depth_string_and_node_bounds_fail_closed() -> None:
     valid_registry = _fixture_bytes("registry-btcusdt.v1.json")
 
     oversized = validate_spot_usdm_identity_v1(
+        trusted_evaluation_time_ms=EVALUATION_TIME_MS,
         request_bytes=b"x" * (MAX_INPUT_BYTES + 1),
         spot_snapshot_bytes=valid_spot,
         usdm_snapshot_bytes=valid_usdm,
@@ -946,6 +1062,7 @@ def test_input_size_depth_string_and_node_bounds_fail_closed() -> None:
     _assert_unknown(oversized, "INPUT_SIZE_INVALID")
 
     too_deep = validate_spot_usdm_identity_v1(
+        trusted_evaluation_time_ms=EVALUATION_TIME_MS,
         request_bytes=b"[" * (MAX_JSON_DEPTH + 1) + b"]" * (MAX_JSON_DEPTH + 1),
         spot_snapshot_bytes=valid_spot,
         usdm_snapshot_bytes=valid_usdm,
@@ -954,6 +1071,7 @@ def test_input_size_depth_string_and_node_bounds_fail_closed() -> None:
     _assert_unknown(too_deep, "JSON_DEPTH_EXCEEDED")
 
     long_string = validate_spot_usdm_identity_v1(
+        trusted_evaluation_time_ms=EVALUATION_TIME_MS,
         request_bytes=canonical_json_bytes({"x": "x" * (MAX_STRING_BYTES + 1)}),
         spot_snapshot_bytes=valid_spot,
         usdm_snapshot_bytes=valid_usdm,
@@ -962,6 +1080,7 @@ def test_input_size_depth_string_and_node_bounds_fail_closed() -> None:
     _assert_unknown(long_string, "JSON_STRING_LIMIT")
 
     many_nodes = validate_spot_usdm_identity_v1(
+        trusted_evaluation_time_ms=EVALUATION_TIME_MS,
         request_bytes=canonical_json_bytes({"x": [None] * MAX_JSON_NODES}),
         spot_snapshot_bytes=valid_spot,
         usdm_snapshot_bytes=valid_usdm,
@@ -1028,6 +1147,7 @@ def test_json_object_order_does_not_change_semantic_identity() -> None:
     )
     request_bytes = _unordered_json_bytes(_reverse_object_order(request))
     reordered_receipt = validate_spot_usdm_identity_v1(
+        trusted_evaluation_time_ms=EVALUATION_TIME_MS,
         request_bytes=request_bytes,
         spot_snapshot_bytes=spot_bytes,
         usdm_snapshot_bytes=usdm_bytes,
@@ -1041,6 +1161,7 @@ def test_json_object_order_does_not_change_semantic_identity() -> None:
         "canonicalSettlementId",
         "canonicalUnderlyingId",
         "decision",
+        "evaluationTimeMs",
         "historicalStatus",
         "reasonCodes",
         "schema",
@@ -1048,11 +1169,13 @@ def test_json_object_order_does_not_change_semantic_identity() -> None:
         "settlementSourceField",
         "spotBaseScale",
         "spotInstrumentId",
+        "spotRetrievedAtMs",
         "spotSymbol",
         "spotUnitsPerUsdmBaseUnit",
         "statusScope",
         "usdmBaseScale",
         "usdmInstrumentId",
+        "usdmRetrievedAtMs",
         "usdmSymbol",
     ):
         assert reordered_receipt.as_dict()[key] == canonical_receipt.as_dict()[key]
@@ -1061,9 +1184,81 @@ def test_json_object_order_does_not_change_semantic_identity() -> None:
 
 def test_non_bytes_input_is_a_stable_unknown() -> None:
     receipt = validate_spot_usdm_identity_v1(
+        trusted_evaluation_time_ms=EVALUATION_TIME_MS,
         request_bytes=cast(bytes, "not-bytes"),
         spot_snapshot_bytes=_fixture_bytes("spot-btcusdt.current.json"),
         usdm_snapshot_bytes=_fixture_bytes("usdm-btcusdt.current.json"),
         registry_bytes=_fixture_bytes("registry-btcusdt.v1.json"),
     )
     _assert_unknown(receipt, "INPUT_NOT_BYTES")
+
+
+@pytest.mark.parametrize(
+    ("trusted_time", "reason"),
+    [
+        (True, "INTEGER_INVALID"),
+        ("not-an-integer", "INTEGER_INVALID"),
+        (-1, "INTEGER_OUT_OF_RANGE"),
+    ],
+)
+def test_invalid_trusted_evaluation_time_is_a_stable_unknown(
+    trusted_time: object,
+    reason: str,
+) -> None:
+    receipt = validate_spot_usdm_identity_v1(
+        trusted_evaluation_time_ms=cast(int, trusted_time),
+        request_bytes=_fixture_bytes("request-btcusdt.current.json"),
+        spot_snapshot_bytes=_fixture_bytes("spot-btcusdt.current.json"),
+        usdm_snapshot_bytes=_fixture_bytes("usdm-btcusdt.current.json"),
+        registry_bytes=_fixture_bytes("registry-btcusdt.v1.json"),
+    )
+    _assert_unknown(receipt, reason)
+
+
+def _run_cli(request_path: Path) -> subprocess.CompletedProcess[bytes]:
+    environment = os.environ.copy()
+    environment["PYTHONPATH"] = str(HERE.parents[1])
+    return subprocess.run(
+        [
+            sys.executable,
+            "-B",
+            "-m",
+            "research.dq12.cli",
+            "--trusted-evaluation-time-ms",
+            str(EVALUATION_TIME_MS),
+            "--request",
+            str(request_path),
+            "--spot",
+            str(FIXTURES / "spot-btcusdt.current.json"),
+            "--usdm",
+            str(FIXTURES / "usdm-btcusdt.current.json"),
+            "--registry",
+            str(FIXTURES / "registry-btcusdt.v1.json"),
+        ],
+        cwd=HERE.parents[2],
+        env=environment,
+        check=False,
+        capture_output=True,
+        timeout=10,
+    )
+
+
+def test_cli_matched_and_unknown_are_canonical_and_warning_free() -> None:
+    matched = _run_cli(FIXTURES / "request-btcusdt.current.json")
+    assert matched.returncode == 0
+    assert matched.stderr == b""
+    assert _json_object(matched.stdout)["decision"] == "MATCHED"
+
+    unknown = _run_cli(FIXTURES / "spot-btcusdt.current.json")
+    assert unknown.returncode == 2
+    assert unknown.stderr == b""
+    assert _json_object(unknown.stdout)["decision"] == "UNKNOWN"
+
+
+def test_cli_io_failure_is_a_canonical_unknown(tmp_path: Path) -> None:
+    result = _run_cli(tmp_path / "missing-request.json")
+    assert result.returncode == 2
+    assert result.stderr == b""
+    receipt = _json_object(result.stdout)
+    assert receipt["decision"] == "UNKNOWN"
+    assert receipt["reasonCodes"] == ["CLI_INPUT_UNAVAILABLE"]

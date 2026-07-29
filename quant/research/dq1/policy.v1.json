@@ -1,0 +1,195 @@
+{
+  "schema": "dq1-boundary-policy-v1",
+  "policyId": "binance-spot-public-kline-1d-boundary-v1",
+  "status": "FROZEN",
+  "scope": {
+    "origin": "https://data.binance.vision",
+    "market": "spot",
+    "dataType": "klines",
+    "interval": "1d",
+    "cadences": [
+      "daily",
+      "monthly"
+    ],
+    "headerMode": "ABSENT",
+    "networkAccess": false
+  },
+  "sourceSemantics": {
+    "officialFacts": [
+      "The public archive documents 12 kline fields sourced from /api/v3/klines.",
+      "Spot archive timestamps from 2025-01-01 onward are documented as microseconds.",
+      "Each archive has an adjacent SHA-256 checksum sidecar.",
+      "The Spot API documents kline open time as logical identity and UTC as the default time zone."
+    ],
+    "projectPredicatesNotBinanceGuarantees": [
+      "UTC-midnight 1d opens are required by this boundary.",
+      "A complete published interval has closeNative equal to openNative plus dayNative minus one.",
+      "Only a final truncated interval may be quarantined.",
+      "Only contiguous byte-identical same-open records may collapse."
+    ],
+    "unknowns": [
+      "Binance does not document physical archive duplicate behavior or deduplication precedence.",
+      "Binance does not document the cause of a truncated terminal interval.",
+      "The archive documents that published files can later be replaced after errors.",
+      "Archive validation cannot establish symbol lifecycle, expected inventory, missing-file legitimacy, or consumer-required coverage."
+    ]
+  },
+  "timestampContract": {
+    "unitAuthority": "PARTITION_DATE_NOT_VALUE_MAGNITUDE",
+    "before2025-01-01": {
+      "nativeUnit": "MILLISECOND",
+      "canonicalUsMultiplier": 1000
+    },
+    "from2025-01-01": {
+      "nativeUnit": "MICROSECOND",
+      "canonicalUsMultiplier": 1
+    },
+    "mixedOrWrongUnit": "INADMISSIBLE",
+    "openRule": "exact UTC midnight inside the pinned partition",
+    "completeCloseRule": "closeNative==openNative+dayNative-1",
+    "canonicalPublishedCloseRule": "closeUs=closeNative*canonicalUsMultiplier",
+    "intervalRule": "[openUs,intervalEndExclusiveUs)",
+    "precisionNote": "A millisecond close normalized to microseconds ends in 999000; it is not replaced with a synthetic microsecond 999999 close."
+  },
+  "csvContract": {
+    "columns": [
+      "open_time",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "close_time",
+      "quote_asset_volume",
+      "number_of_trades",
+      "taker_buy_base_asset_volume",
+      "taker_buy_quote_asset_volume",
+      "ignore"
+    ],
+    "encoding": "ASCII",
+    "recordTerminator": "LF",
+    "canonicalNumericLexemes": true,
+    "quoting": false,
+    "blankRows": false,
+    "bom": false,
+    "nul": false,
+    "economicInvariants": [
+      "OHLC values are positive and obey OHLC geometry.",
+      "Volumes and trade count are nonnegative.",
+      "Taker base and quote volumes do not exceed their corresponding totals.",
+      "The ignore field is a nonnegative decimal but is not required to equal zero."
+    ]
+  },
+  "custodyContract": {
+    "requiredEquality": "computedZipSha256==sidecarEntrySha256==acquisitionReceipt.archiveSha256",
+    "pinned": [
+      "archive and checksum URLs",
+      "market, data type, cadence, interval, symbol, and partition",
+      "archive basename and expected member basename",
+      "retrieval time and HTTP ETag/Last-Modified",
+      "archive byte count",
+      "archive, checksum-file, and member SHA-256 digests",
+      "official source-document commits and content digests",
+      "policy, validator, and runtime-lock digests"
+    ],
+    "localContextVerification": "The executing checkout recomputes policy.v1.json, boundary.py, and quant/uv.lock SHA-256 digests and rejects declared drift.",
+    "officialDocumentPinVerification": "The declared commits and content digests must equal frozen validator constants; validation performs no live documentation fetch.",
+    "checksumMeaning": "transfer and current-publisher-byte evidence, not an independent signature or immutability guarantee",
+    "zipRules": {
+      "members": 1,
+      "directoriesSymlinksSpecialFiles": false,
+      "encryption": false,
+      "memberExtrasOrComments": false,
+      "hiddenOrTrailingBytes": false,
+      "supportedCompression": [
+        "STORED",
+        "DEFLATED"
+      ],
+      "maxArchiveBytes": 16777216,
+      "maxMemberBytes": 67108864,
+      "maxCompressionRatio": 200
+    }
+  },
+  "duplicateContract": {
+    "logicalIdentity": "open_time",
+    "sortBeforeValidation": false,
+    "allowed": "same-open records contiguous in physical order and byte-identical excluding only LF record terminators",
+    "keptRecord": "first physical record",
+    "maxGroupsPerArchive": 1,
+    "maxRunLength": 2,
+    "receipt": [
+      "kept and dropped 1-based ordinals",
+      "payload byte offsets",
+      "each record SHA-256 including LF",
+      "raw and logical sequence SHA-256 digests",
+      "extraCoverageGranted=false"
+    ],
+    "inadmissible": [
+      "parsed-equivalent but byte-distinct same-open rows",
+      "conflicting same-open rows",
+      "nonadjacent recurrence",
+      "descending unique opens",
+      "duplicate group or run cap exceeded"
+    ]
+  },
+  "truncatedIntervalContract": {
+    "classification": "TERMINAL_TRUNCATED when openNative<=closeNative<expectedCloseNative and the record is the final logical open-time group",
+    "allowedCount": 1,
+    "output": "excluded from complete-bar canonical CSV",
+    "mandatoryCensoringReceipt": true,
+    "reason": "UNKNOWN",
+    "inadmissible": [
+      "truncation before a later logical open",
+      "close before open",
+      "close after expected interval",
+      "no admitted complete row"
+    ]
+  },
+  "outcomes": {
+    "ADMISSIBLE": "All hard invariants pass, no row is collapsed or quarantined, and complete output is nonempty.",
+    "ADMISSIBLE_WITH_EXCLUSIONS": "All hard invariants pass, only frozen exclusions within caps occur, complete output is nonempty, and the censoring sidecar is mandatory.",
+    "INADMISSIBLE": "Any other defect; emit a failure receipt and no admitted-row artifact."
+  },
+  "coverageReceipt": {
+    "logicalOpenMissingRanges": "Partition dates for which no logical open-time group was physically observed.",
+    "noAdmittedCompleteRowRanges": "Partition dates for which no complete bar was emitted, including quarantined logical rows.",
+    "authority": "Neither range establishes lifecycle, legitimate absence, expected inventory, or consumer-required coverage."
+  },
+  "consumerRule": {
+    "twoStageFreeze": [
+      "Before future input inspection, freeze validator, runtime, policy, expected inventory, allowed exclusions and caps, and lifecycle/censoring behavior.",
+      "After offline custody validation and before evaluator or holdout access, freeze acquisition receipts, canonical-output digests, censoring receipts, and a dataset inventory manifest."
+    ],
+    "requiredDigestMatch": [
+      "policy",
+      "validator",
+      "runtime lock",
+      "acquisition receipt and input bytes",
+      "canonical output",
+      "censoring sidecar",
+      "expected dataset inventory",
+      "predeclared lifecycle/censoring rule"
+    ],
+    "completeBarsOnly": true,
+    "admissibleWithExclusionsIsNotGreen": true,
+    "terminalCensoringChoicesMustBePredeclared": [
+      "invalidate sample",
+      "missing-exit or terminal-loss handling",
+      "separately controlled conservative exit"
+    ],
+    "forbidden": [
+      "Treating a collapsed duplicate as extra coverage.",
+      "Treating an observed missing day as proof of delisting or harmless absence.",
+      "Reintroducing quarantined OHLC into features or marks.",
+      "Applying DQ-1 retroactively to repair, reclassify, or rerun a consumed packet.",
+      "Opening a sealed holdout without separate protocol authority."
+    ]
+  },
+  "authority": {
+    "canonicalLanding": false,
+    "ui": false,
+    "host": false,
+    "providerPrivate": false,
+    "ordersTransfersWithdrawalsMoney": false
+  }
+}

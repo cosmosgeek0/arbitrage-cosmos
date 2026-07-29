@@ -1,0 +1,17 @@
+6e263f00c6fecf856654174385b883b99bee8574e38612ee35d1eb9556686e82  quant/research/dq1/OFFICIAL_SOURCE_RESEARCH.md
+28b456890eaa7fc1096bbb1c1ec07864c6f1967dc2b57d494b5c33207c157a20  quant/research/dq1/README.md
+ab0646621e7bdc07fb100e29297038058873d16d9f1882ea457c9197302a4f47  quant/research/dq1/__init__.py
+7ac3663923350244b44bc8a2d8b61a7770511b14d02823cd683e4b50a61e3077  quant/research/dq1/boundary.py
+a699b46c184144f08580daed044551a24b1ba891a8ed2dc36e0b588b13583884  quant/research/dq1/fixtures/ACAUSDT-1d-2026-02.zip.CHECKSUM.b64
+01ad37723427fdeb1562a9f007a37c37119c454892e1b83ba3f82be97b6e0010  quant/research/dq1/fixtures/ACAUSDT-1d-2026-02.zip.b64
+9e097648d67312d149afc9c0d93e8796584aa4ce28e29c53b4008336a15aaf5e  quant/research/dq1/fixtures/AXSUSDT-1d-2026-02.zip.CHECKSUM.b64
+c2faf33ce9e9769be535380aaaefe59432705d19ebb1e6b574f25c2de2e54040  quant/research/dq1/fixtures/AXSUSDT-1d-2026-02.zip.b64
+904cd63ecae29bff1c69efbab9d4ff7993659851b5f7341a715801b12cd2e5f4  quant/research/dq1/fixtures/BTCUSDT-1d-2024-12-31.zip.CHECKSUM.b64
+bac6c87fddce498fd5ed302f51c5a1fe77d58a363df3f053e3e37325c44d5678  quant/research/dq1/fixtures/BTCUSDT-1d-2024-12-31.zip.b64
+7d1017a67324a356cbadc7c353a0802ecc24533a386dbad510fa224103bfd73b  quant/research/dq1/fixtures/BTCUSDT-1d-2025-01-01.zip.CHECKSUM.b64
+8fbf5e8227e90dda23fce09f23a70710e634d65f769f4aa20f547b8c676567fb  quant/research/dq1/fixtures/BTCUSDT-1d-2025-01-01.zip.b64
+528b3a02a9d490d6ae85eeb3615de0d9667530873de3d8217c77b472dac9bb2b  quant/research/dq1/fixtures/fixture-manifest.v1.json
+7c134e0f3d84c15460f7e05a3f911404b6d07cc73a36656d686b24370a5f1016  quant/research/dq1/policy.v1.json
+0ef7c606fef1c317d92cd7f200ebad491ae5c2c9a97387743f172977ad6701fa  quant/research/dq1/proof.v1.json
+fe882d7e94cd06aee5c5a7b1fc21a48354974aff52801330f9096721d7bca959  quant/research/dq1/test_boundary.py
+a42e74ee53a2cb95f9d861a256d35d262041eb1bdf8180de54193e1fffef2b7a  quant/research/dq1/verify.py

@@ -1,0 +1,55 @@
+{
+  "archive_member_opened": false,
+  "authority": "PUBLIC_RESEARCH_ONLY",
+  "base_commit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "bound_files": {
+    "OFFICIAL_SOURCE_RESEARCH.md": "0138b20ca62807ea5088de3965c2beecff5fc655d7a6081139e21aac62fd50e5",
+    "README.md": "2338a9d19b031868207de1087efe976477a1a6be446f37251fa5d24551103aa5",
+    "experiment.py": "4d7b2d3c95986945f15ba32e3402aba968c4db987f3c7937097c6c523c87b12f",
+    "protocol.v1.json": "6a43b7c069a51bdc98445d916a8a3475d9b141f662feb77d144363d3e71cb07c",
+    "test_experiment.py": "0c2507297c74e7d2c249852a77cf6bd1aa2f77d4a34e684fcf7c1ba77a2faabf"
+  },
+  "created_at": "2026-07-29T19:34:05.920949Z",
+  "milestone": "S-1Y",
+  "pairs": [
+    [
+      "BTCUSDT",
+      "ETHUSDT"
+    ],
+    [
+      "SOLUSDT",
+      "AVAXUSDT"
+    ],
+    [
+      "XRPUSDT",
+      "ADAUSDT"
+    ],
+    [
+      "DOGEUSDT",
+      "1000SHIBUSDT"
+    ],
+    [
+      "LTCUSDT",
+      "BCHUSDT"
+    ],
+    [
+      "LINKUSDT",
+      "DOTUSDT"
+    ]
+  ],
+  "schema": "cosmos.s1y.preseal.v1",
+  "trial_ids": [
+    "lb720_entry1p5_hold72",
+    "lb720_entry1p5_hold168",
+    "lb720_entry2p0_hold72",
+    "lb720_entry2p0_hold168",
+    "lb720_entry2p5_hold72",
+    "lb720_entry2p5_hold168",
+    "lb1440_entry1p5_hold72",
+    "lb1440_entry1p5_hold168",
+    "lb1440_entry2p0_hold72",
+    "lb1440_entry2p0_hold168",
+    "lb1440_entry2p5_hold72",
+    "lb1440_entry2p5_hold168"
+  ]
+}

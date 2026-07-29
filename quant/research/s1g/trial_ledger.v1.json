@@ -1,0 +1,105 @@
+{
+  "schema": "cosmos.quant.research.s1g.trial-ledger.v1",
+  "milestone": "S-1G",
+  "createdBeforeOutcomeAccess": true,
+  "family": "CAUSAL_FUNDED_BASIS_CARRY_LONG_SPOT_SHORT_USDM_PERPETUAL",
+  "attemptedTrialCount": 12,
+  "trialDefinition": {
+    "L": "TRAILING_SETTLED_FUNDING_OBSERVATION_COUNT",
+    "H": "MAXIMUM_HOLD_CALENDAR_DAYS",
+    "bufferBp": "ENTRY_GROSS_FORECAST_MARGIN_ABOVE_FULL_PRIMARY_MODELED_ROUNDTRIP_COST"
+  },
+  "trials": [
+    {
+      "trialId": "s1g-l06-h01-b000",
+      "L": 6,
+      "HDays": 1,
+      "bufferBp": 0,
+      "status": "PREDECLARED_UNRUN"
+    },
+    {
+      "trialId": "s1g-l06-h01-b005",
+      "L": 6,
+      "HDays": 1,
+      "bufferBp": 5,
+      "status": "PREDECLARED_UNRUN"
+    },
+    {
+      "trialId": "s1g-l06-h03-b000",
+      "L": 6,
+      "HDays": 3,
+      "bufferBp": 0,
+      "status": "PREDECLARED_UNRUN"
+    },
+    {
+      "trialId": "s1g-l06-h03-b005",
+      "L": 6,
+      "HDays": 3,
+      "bufferBp": 5,
+      "status": "PREDECLARED_UNRUN"
+    },
+    {
+      "trialId": "s1g-l06-h07-b000",
+      "L": 6,
+      "HDays": 7,
+      "bufferBp": 0,
+      "status": "PREDECLARED_UNRUN"
+    },
+    {
+      "trialId": "s1g-l06-h07-b005",
+      "L": 6,
+      "HDays": 7,
+      "bufferBp": 5,
+      "status": "PREDECLARED_UNRUN"
+    },
+    {
+      "trialId": "s1g-l18-h01-b000",
+      "L": 18,
+      "HDays": 1,
+      "bufferBp": 0,
+      "status": "PREDECLARED_UNRUN"
+    },
+    {
+      "trialId": "s1g-l18-h01-b005",
+      "L": 18,
+      "HDays": 1,
+      "bufferBp": 5,
+      "status": "PREDECLARED_UNRUN"
+    },
+    {
+      "trialId": "s1g-l18-h03-b000",
+      "L": 18,
+      "HDays": 3,
+      "bufferBp": 0,
+      "status": "PREDECLARED_UNRUN"
+    },
+    {
+      "trialId": "s1g-l18-h03-b005",
+      "L": 18,
+      "HDays": 3,
+      "bufferBp": 5,
+      "status": "PREDECLARED_UNRUN"
+    },
+    {
+      "trialId": "s1g-l18-h07-b000",
+      "L": 18,
+      "HDays": 7,
+      "bufferBp": 0,
+      "status": "PREDECLARED_UNRUN"
+    },
+    {
+      "trialId": "s1g-l18-h07-b005",
+      "L": 18,
+      "HDays": 7,
+      "bufferBp": 5,
+      "status": "PREDECLARED_UNRUN"
+    }
+  ],
+  "multiplicity": {
+    "familyIncludesEveryListedTrial": true,
+    "failedOrZeroTradeTrialsDropped": false,
+    "holmFwer": "0.05",
+    "cscvPboMaximum": "0.20"
+  },
+  "mutationRule": "NO_TRIAL_ADD_DELETE_RENAME_OR_PARAMETER_CHANGE_AFTER_DEVELOPMENT_OUTCOME_ACCESS"
+}

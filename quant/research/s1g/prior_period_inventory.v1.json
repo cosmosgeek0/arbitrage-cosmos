@@ -1,0 +1,84 @@
+{
+  "schema": "cosmos.quant.research.s1g.prior-period-inventory.v1",
+  "milestone": "S-1G",
+  "createdBeforeOutcomeAccess": true,
+  "s1gExperiment": {
+    "startInclusive": "2020-01-01T00:00:00Z",
+    "endExclusive": "2021-02-01T00:00:00Z",
+    "developmentScoreStartInclusive": "2020-01-01T00:00:00Z",
+    "developmentScoreEndExclusive": "2020-12-30T00:00:00Z",
+    "walkForwardOneWeekAheadSteps": 52,
+    "holdoutScoreStartInclusive": "2021-01-01T00:00:00Z",
+    "holdoutScoreEndExclusive": "2021-01-29T00:00:00Z"
+  },
+  "knownPriorResearchPeriods": [
+    {
+      "id": "F01_BASIS_TRIGGER_HOLD",
+      "knownIntervalStartInclusive": "2025-07-01T00:00:00Z",
+      "knownIntervalEndExclusive": "2026-07-01T00:00:00Z",
+      "knownState": "OPENED_OR_REUSED",
+      "overlapsS1g": false,
+      "disposition": "QUARANTINED_FROM_S1G_SELECTION"
+    },
+    {
+      "id": "S1B_STRATEGY_DISCOVERY",
+      "knownIntervalStartInclusive": "2021-02-01T00:00:00Z",
+      "knownIntervalEndExclusive": "2025-07-01T00:00:00Z",
+      "knownState": "RESEARCH_AND_PLANNED_VALIDATION_PERIOD",
+      "overlapsS1g": false,
+      "disposition": "QUARANTINED_FROM_S1G_SELECTION"
+    },
+    {
+      "id": "S1C",
+      "knownIntervalStartInclusive": "2025-07-01T00:00:00Z",
+      "knownIntervalEndExclusive": "2026-07-01T00:00:00Z",
+      "knownState": "DEVELOPMENT_AND_HOLDOUT_PERIOD",
+      "overlapsS1g": false,
+      "disposition": "QUARANTINED_FROM_S1G_SELECTION"
+    },
+    {
+      "id": "S1D",
+      "knownIntervalStartInclusive": "2024-07-01T00:00:00Z",
+      "knownIntervalEndExclusive": "2026-07-01T00:00:00Z",
+      "knownState": "DEVELOPMENT_AND_HOLDOUT_PERIOD",
+      "overlapsS1g": false,
+      "disposition": "QUARANTINED_FROM_S1G_SELECTION"
+    },
+    {
+      "id": "S1E",
+      "knownIntervalStartInclusive": "2025-07-01T00:00:00Z",
+      "knownIntervalEndExclusive": "2026-07-01T00:00:00Z",
+      "knownState": "DEVELOPMENT_AND_HOLDOUT_PERIOD",
+      "overlapsS1g": false,
+      "disposition": "QUARANTINED_FROM_S1G_SELECTION"
+    },
+    {
+      "id": "S1F",
+      "knownIntervalStartInclusive": "2024-07-01T00:00:00Z",
+      "knownIntervalEndExclusive": "2026-07-01T00:00:00Z",
+      "knownState": "DEVELOPMENT_AND_HOLDOUT_PERIOD",
+      "overlapsS1g": false,
+      "disposition": "QUARANTINED_FROM_S1G_SELECTION"
+    },
+    {
+      "id": "B_E2_PROSPECTIVE_MECHANICS",
+      "knownIntervalStartInclusive": "2026-07-29T00:00:00Z",
+      "knownIntervalEndExclusive": "2026-08-13T00:00:00Z",
+      "knownState": "PROSPECTIVE_MECHANICS_WINDOW",
+      "overlapsS1g": false,
+      "disposition": "OUTSIDE_S1G"
+    }
+  ],
+  "ruling": {
+    "knownPriorS1PeriodOverlap": false,
+    "holdoutLabel": "NO_KNOWN_PRIOR_S1_HOLDOUT_USE",
+    "globalNeverViewedClaim": false,
+    "statement": "The inspected control and predeclaration lineage shows no known prior S-1 scored or holdout interval overlapping 2020-01-01 through 2021-01-31; the earliest inventoried S-1B interval begins 2021-02-01. This is not proof that no human has ever viewed the public market history.",
+    "reuseRule": "ANY_DISCOVERED_PRIOR_OUTCOME_DRIVEN_USE_OF_2021_01_01_THROUGH_2021_01_29_INVALIDATES_UNTOUCHED_STATUS_BEFORE_OPEN"
+  },
+  "predeclarationWriter": {
+    "outcomeArchivesDownloaded": false,
+    "outcomeArchiveMembersOpened": false,
+    "outcomeMetricsInspected": false
+  }
+}

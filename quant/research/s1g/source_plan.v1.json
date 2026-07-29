@@ -1,0 +1,100 @@
+{
+  "schema": "cosmos.quant.research.s1g.source-plan.v1",
+  "milestone": "S-1G",
+  "createdBeforeOutcomeAccess": true,
+  "archiveOrigin": "https://data.binance.vision/data/",
+  "expansionOrder": "MONTH_ASCENDING_THEN_PRODUCT_IN_DECLARED_ORDER",
+  "expandedPairsCanonicalJsonSha256": "9d10060f718a43731f79cd6b9040e5e525bb02bcaa942c2a1525e1be1c5f058d",
+  "expandedPairCount": 52,
+  "expandedFetchObjectCount": 104,
+  "expectedArchiveCount": 52,
+  "expectedChecksumCount": 52,
+  "partitions": [
+    {
+      "id": "development",
+      "months": [
+        "2020-01",
+        "2020-02",
+        "2020-03",
+        "2020-04",
+        "2020-05",
+        "2020-06",
+        "2020-07",
+        "2020-08",
+        "2020-09",
+        "2020-10",
+        "2020-11",
+        "2020-12"
+      ],
+      "expandedPairCount": 48,
+      "expandedFetchObjectCount": 96,
+      "archiveCount": 48,
+      "checksumCount": 48,
+      "fixedRoot": "/private/tmp/cosmos-s1g-basis-carry-v1/development"
+    },
+    {
+      "id": "holdout",
+      "months": [
+        "2021-01"
+      ],
+      "expandedPairCount": 4,
+      "expandedFetchObjectCount": 8,
+      "archiveCount": 4,
+      "checksumCount": 4,
+      "fixedRoot": "/private/tmp/cosmos-s1g-basis-carry-v1/holdout",
+      "state": "UNOPENED"
+    }
+  ],
+  "products": [
+    {
+      "id": "SPOT_KLINES_1M",
+      "archiveUrlTemplate": "https://data.binance.vision/data/spot/monthly/klines/BTCUSDT/1m/BTCUSDT-1m-{month}.zip",
+      "checksumUrlTemplate": "https://data.binance.vision/data/spot/monthly/klines/BTCUSDT/1m/BTCUSDT-1m-{month}.zip.CHECKSUM",
+      "expectedMemberTemplate": "BTCUSDT-1m-{month}.csv",
+      "localArchivePathTemplate": "{partition}/SPOT_KLINES_1M/BTCUSDT-1m-{month}.zip",
+      "localChecksumPathTemplate": "{partition}/SPOT_KLINES_1M/BTCUSDT-1m-{month}.zip.CHECKSUM",
+      "schema": "KLINE_12_COLUMNS_UTC_MILLISECONDS"
+    },
+    {
+      "id": "USDM_KLINES_1M",
+      "archiveUrlTemplate": "https://data.binance.vision/data/futures/um/monthly/klines/BTCUSDT/1m/BTCUSDT-1m-{month}.zip",
+      "checksumUrlTemplate": "https://data.binance.vision/data/futures/um/monthly/klines/BTCUSDT/1m/BTCUSDT-1m-{month}.zip.CHECKSUM",
+      "expectedMemberTemplate": "BTCUSDT-1m-{month}.csv",
+      "localArchivePathTemplate": "{partition}/USDM_KLINES_1M/BTCUSDT-1m-{month}.zip",
+      "localChecksumPathTemplate": "{partition}/USDM_KLINES_1M/BTCUSDT-1m-{month}.zip.CHECKSUM",
+      "schema": "KLINE_12_COLUMNS_UTC_MILLISECONDS"
+    },
+    {
+      "id": "USDM_MARK_PRICE_KLINES_1M",
+      "archiveUrlTemplate": "https://data.binance.vision/data/futures/um/monthly/markPriceKlines/BTCUSDT/1m/BTCUSDT-1m-{month}.zip",
+      "checksumUrlTemplate": "https://data.binance.vision/data/futures/um/monthly/markPriceKlines/BTCUSDT/1m/BTCUSDT-1m-{month}.zip.CHECKSUM",
+      "expectedMemberTemplate": "BTCUSDT-1m-{month}.csv",
+      "localArchivePathTemplate": "{partition}/USDM_MARK_PRICE_KLINES_1M/BTCUSDT-1m-{month}.zip",
+      "localChecksumPathTemplate": "{partition}/USDM_MARK_PRICE_KLINES_1M/BTCUSDT-1m-{month}.zip.CHECKSUM",
+      "schema": "KLINE_12_COLUMNS_UTC_MILLISECONDS"
+    },
+    {
+      "id": "USDM_FUNDING_RATE",
+      "archiveUrlTemplate": "https://data.binance.vision/data/futures/um/monthly/fundingRate/BTCUSDT/BTCUSDT-fundingRate-{month}.zip",
+      "checksumUrlTemplate": "https://data.binance.vision/data/futures/um/monthly/fundingRate/BTCUSDT/BTCUSDT-fundingRate-{month}.zip.CHECKSUM",
+      "expectedMemberTemplate": "BTCUSDT-fundingRate-{month}.csv",
+      "localArchivePathTemplate": "{partition}/USDM_FUNDING_RATE/BTCUSDT-fundingRate-{month}.zip",
+      "localChecksumPathTemplate": "{partition}/USDM_FUNDING_RATE/BTCUSDT-fundingRate-{month}.zip.CHECKSUM",
+      "schema": "FUNDING_RATE_3_COLUMNS_UTC_MILLISECONDS_OR_YYYY_MM_DD_HH_MM_SS"
+    }
+  ],
+  "expansionRule": {
+    "archiveUrl": "SUBSTITUTE_MONTH_IN_PRODUCT_ARCHIVE_URL_TEMPLATE",
+    "checksumUrl": "SUBSTITUTE_MONTH_IN_PRODUCT_CHECKSUM_URL_TEMPLATE",
+    "expectedMember": "SUBSTITUTE_MONTH_IN_PRODUCT_EXPECTED_MEMBER_TEMPLATE",
+    "localPaths": "SUBSTITUTE_PARTITION_AND_MONTH; PRODUCT_DIRECTORY_IS_MANDATORY",
+    "canonicalDigestInput": "UTF8_JSON_ARRAY_COMPACT_KEYS_IN_DECLARED_OBJECT_FIELD_ORDER_PLUS_LF"
+  },
+  "integrity": {
+    "siblingChecksumRequiredForEveryArchive": true,
+    "archiveAndChecksumCountsMustMatchExactly": true,
+    "unexpectedOrMissingObjectFailsClosed": true,
+    "holdoutDownloadCountsAsOpen": true,
+    "developmentCodeMayNotEnumerateHoldoutRoot": true
+  }
+}

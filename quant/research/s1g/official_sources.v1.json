@@ -1,0 +1,165 @@
+{
+  "schema": "cosmos.quant.research.s1g.official-sources.v1",
+  "milestone": "S-1G",
+  "researchedAtUtc": "2026-07-29T00:00:00Z",
+  "purpose": "PREDECLARATION_ONLY_NO_OUTCOME_BYTES",
+  "officialSources": [
+    {
+      "id": "BINANCE_PUBLIC_DATA_README",
+      "publisher": "Binance",
+      "url": "https://github.com/binance/binance-public-data/blob/master/README.md?plain=1",
+      "accessed": "2026-07-29",
+      "supports": [
+        "PUBLIC_DAILY_AND_MONTHLY_ARCHIVES",
+        "SPOT_AND_USDM_KLINE_COLUMN_DEFINITIONS",
+        "SIBLING_CHECKSUM_FILES",
+        "ARCHIVES_MAY_BE_REPLACED_AFTER_DISCOVERED_ISSUES"
+      ],
+      "authorityLimit": "ARCHIVE_FORMAT_AND_PROVENANCE_ONLY"
+    },
+    {
+      "id": "BINANCE_DATA_VISION",
+      "publisher": "Binance",
+      "url": "https://data.binance.vision/",
+      "accessed": "2026-07-29",
+      "supports": [
+        "PUBLIC_ARCHIVE_ORIGIN"
+      ],
+      "authorityLimit": "EXPECTED_PATH_METADATA_WAS_CHECKED_PRE_OUTCOME; OUTCOME_ARCHIVES_NOT_OPENED_BY_PREDECLARATION"
+    },
+    {
+      "id": "BINANCE_USDM_FUNDING_HISTORY",
+      "publisher": "Binance",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data#get-funding-rate-history",
+      "accessed": "2026-07-29",
+      "supports": [
+        "PUBLIC_FUNDING_TIME",
+        "PUBLIC_FUNDING_RATE",
+        "PUBLIC_MARK_PRICE_AT_FUNDING"
+      ],
+      "authorityLimit": "MARKET_DATA_SEMANTICS_ONLY; NO ACCOUNT_FEE_OR_EXECUTION_TRUTH"
+    },
+    {
+      "id": "BINANCE_USDM_MARK_PRICE_KLINES",
+      "publisher": "Binance",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data#get-mark-price-kline-candlestick-data",
+      "accessed": "2026-07-29",
+      "supports": [
+        "PUBLIC_USDM_MARK_PRICE_KLINE_SEMANTICS"
+      ],
+      "authorityLimit": "MARK_PRICE_PROXY_NOT_EXECUTABLE_PRICE"
+    },
+    {
+      "id": "BINANCE_SPOT_MARKET_DATA_ONLY",
+      "publisher": "Binance",
+      "url": "https://developers.binance.com/en/docs/products/spot/faqs/market_data_only",
+      "accessed": "2026-07-29",
+      "supports": [
+        "PUBLIC_MARKET_DATA_ONLY_ORIGIN"
+      ],
+      "authorityLimit": "NO_SIGNED_OR_PRIVATE_ENDPOINT_REQUIRED"
+    },
+    {
+      "id": "BINANCE_SPOT_API_KLINES",
+      "publisher": "Binance",
+      "url": "https://github.com/binance/binance-spot-api-docs/blob/master/rest-api.md?plain=1",
+      "accessed": "2026-07-29",
+      "supports": [
+        "SPOT_KLINE_SEMANTICS",
+        "SPOT_EXCHANGE_INFO_PUBLIC_FILTER_CONTEXT"
+      ],
+      "authorityLimit": "CURRENT_PUBLIC_SPEC_DOES_NOT_PROVE_HISTORICAL_FILTERS"
+    },
+    {
+      "id": "BINANCE_USDM_EXCHANGE_INFO",
+      "publisher": "Binance",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data#get-exchange-information",
+      "accessed": "2026-07-29",
+      "supports": [
+        "CURRENT_PUBLIC_SYMBOL_AND_FILTER_CONTEXT"
+      ],
+      "authorityLimit": "CURRENT_CONTEXT_ONLY; HISTORICAL_FILTERS_UNKNOWN"
+    },
+    {
+      "id": "BINANCE_SPOT_FEE_PAGE",
+      "publisher": "Binance",
+      "url": "https://www.binance.com/en/fee/trading",
+      "accessed": "2026-07-29",
+      "supports": [
+        "CURRENT_PUBLIC_FEE_PAGE_EXISTS"
+      ],
+      "authorityLimit": "DYNAMIC_PAGE_DID_NOT SAFELY ESTABLISH ACCOUNT_EFFECTIVE_OR_HISTORICAL_RATE; 10_BP_IS_A_MODEL_PROXY"
+    },
+    {
+      "id": "BINANCE_USDM_FEE_PAGE",
+      "publisher": "Binance",
+      "url": "https://www.binance.com/en/fee/futureFee",
+      "accessed": "2026-07-29",
+      "supports": [
+        "CURRENT_PUBLIC_USDM_FEE_PAGE_EXISTS"
+      ],
+      "authorityLimit": "DYNAMIC_PAGE_DID_NOT SAFELY ESTABLISH ACCOUNT_EFFECTIVE_OR_HISTORICAL_RATE; 10_BP_IS_A_MODEL_PROXY"
+    }
+  ],
+  "headerOnlyAvailabilityChecks": {
+    "checkedAtUtcDate": "2026-07-29",
+    "outcomeBodiesDownloaded": false,
+    "outcomeMembersOpened": false,
+    "selectedBoundaryStatus": {
+      "2020-01_SPOT_KLINE": 200,
+      "2020-01_USDM_KLINE": 200,
+      "2020-01_USDM_MARK_PRICE_KLINE": 200,
+      "2020-01_USDM_FUNDING_RATE": 200,
+      "2021-01_SPOT_KLINE_CHECKSUM": 200,
+      "2021-01_USDM_KLINE_CHECKSUM": 200,
+      "2021-01_USDM_MARK_PRICE_KLINE_CHECKSUM": 200,
+      "2021-01_USDM_FUNDING_RATE_CHECKSUM": 200
+    },
+    "rejectedEarlierBoundary": "2019-10_THROUGH_2019-12_USDM_MONTHLY_ARCHIVES_HTTP_404"
+  },
+  "primaryResearch": [
+    {
+      "id": "CRYPTO_CARRY",
+      "citation": "Schmeling, Schrimpf, and Todorov, Crypto Carry, Management Science",
+      "url": "https://doi.org/10.1287/mnsc.2024.05069",
+      "supports": "CRYPTO_CARRY_IS_AN_EMPIRICALLY_STUDIED_RISK_PREMIUM",
+      "limit": "DOES_NOT_PROVE_THIS_RULE_OR_NET_ACCOUNT_EDGE"
+    },
+    {
+      "id": "FUNDAMENTALS_OF_PERPETUAL_FUTURES",
+      "citation": "He, Manela, Ross, and von Wachter, Fundamentals of Perpetual Futures",
+      "url": "https://arxiv.org/abs/2212.06888",
+      "supports": "PERPETUAL_FUNDING_AND_BASIS_ECONOMIC_MECHANICS",
+      "limit": "DOES_NOT SUPPLY BINANCE EXECUTION OR ACCOUNT COSTS"
+    },
+    {
+      "id": "MARKET_MAKERS_DILEMMA",
+      "citation": "Albers et al., The Market Maker's Dilemma: Navigating the Fill Probability vs. Post-Fill Returns Trade-Off",
+      "url": "https://arxiv.org/abs/2502.18625",
+      "supports": "MAKER_FILL_PROBABILITY_AND_POST_FILL_RETURNS_ARE_COUPLED",
+      "limit": "NOT A BTCUSDT QUEUE_RECEIPT; JUSTIFIES NONFILL_FAIL_CLOSED_MODEL"
+    },
+    {
+      "id": "TRADING_AND_ARBITRAGE_IN_CRYPTOCURRENCY_MARKETS",
+      "citation": "Makarov and Schoar, Trading and Arbitrage in Cryptocurrency Markets, Journal of Financial Economics",
+      "url": "https://doi.org/10.1016/j.jfineco.2019.07.001",
+      "supports": "OBSERVED_PRICE_DISLOCATIONS_NEED_NOT_BE_FRICTIONLESSLY_ARBITRAGEABLE",
+      "limit": "DOES_NOT PROVE S-1G EXECUTABILITY"
+    }
+  ],
+  "feeModel": {
+    "proxyBpPerVenuePerFill": 10,
+    "accountEffectiveFeeState": "UNKNOWN",
+    "historicalFeeState": "UNKNOWN",
+    "sourceClaim": "CONSERVATIVE_MODELING_ASSUMPTION_NOT_ACCOUNT_TRUTH"
+  },
+  "publicDataLimits": [
+    "NO_SPOT_AND_USDM_HISTORICAL_MATCHED_BBO_QUEUE_RECEIPTS_IN_REQUIRED_2020_MONTHLY_SERIES",
+    "NO_MAKER_QUEUE_POSITION",
+    "NO_ORDER_LEVEL_DEPTH",
+    "NO_ACCOUNT_FEE_TIER",
+    "NO_HISTORICAL_FILTER_PROOF",
+    "NO_USDT_USD_PARITY_PROOF",
+    "ARCHIVE_REPLACEMENT_REQUIRES_PINNED_CHECKSUM_MANIFEST"
+  ]
+}

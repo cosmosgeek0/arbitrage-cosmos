@@ -1,0 +1,400 @@
+{
+  "schema": "cosmos.quant.research.s1g.protocol.v1",
+  "executablePlanSha256": "d6bd2408a5a2281fbba5b7a67836974777e0cd3e8af5573aa964393b3a110f97",
+  "milestone": "S-1G",
+  "status": "PREDECLARED_HOLDOUT_CLOSED",
+  "consumer": "OWNER_PROFITABILITY_VERDICT",
+  "authority": "NONE",
+  "evidenceClass": "HISTORICAL_VALIDATION",
+  "symbol": "BTCUSDT",
+  "strategyFamily": "CAUSAL_FUNDED_BASIS_CARRY_LONG_SPOT_SHORT_USDM_PERPETUAL",
+  "hypothesis": "A causal positive perpetual premium plus a conservative positive-funding forecast can clear complete modeled all-taker fallback costs and later realize positive net basis compression and funding carry.",
+  "experiment": {
+    "startInclusive": "2020-01-01T00:00:00Z",
+    "endExclusive": "2021-02-01T00:00:00Z",
+    "calendarMonths": 13,
+    "walkForwardOneWeekAheadMonths": 12,
+    "timezone": "UTC",
+    "usdReportingProxy": "1_USDT_EQUALS_1_USD_UNKNOWN_DEPEG_RISK"
+  },
+  "custody": {
+    "sourcePlan": "source_plan.v1.json",
+    "expandedSourcePairCount": 52,
+    "expandedFetchObjectCount": 104,
+    "expectedArchiveCount": 52,
+    "expectedChecksumCount": 52,
+    "development": {
+      "months": [
+        "2020-01",
+        "2020-02",
+        "2020-03",
+        "2020-04",
+        "2020-05",
+        "2020-06",
+        "2020-07",
+        "2020-08",
+        "2020-09",
+        "2020-10",
+        "2020-11",
+        "2020-12"
+      ],
+      "scoreStartInclusive": "2020-01-01T00:00:00Z",
+      "scoreEndExclusive": "2020-12-30T00:00:00Z",
+      "scoreWeeks": 52,
+      "coldStartWarmup": "WITHIN_SCORED_PATH_UNTIL_L_AND_7_COMPLETE_VOLUME_DAYS_EXIST",
+      "terminalNoEntryRule": "FALLBACK_TIMESTAMP_PLUS_CANDIDATE_H_MUST_NOT_EXCEED_SCORE_END"
+    },
+    "embargo": {
+      "startInclusive": "2020-12-30T00:00:00Z",
+      "endExclusive": "2021-01-01T00:00:00Z",
+      "purpose": "FINAL_DEVELOPMENT_SELECTION_AND_CHAMPION_SEAL"
+    },
+    "holdout": {
+      "state": "UNOPENED",
+      "months": [
+        "2021-01"
+      ],
+      "scoreStartInclusive": "2021-01-01T00:00:00Z",
+      "scoreEndExclusive": "2021-01-29T00:00:00Z",
+      "scoreWeeks": 4,
+      "coldStartWarmup": "WITHIN_SCORED_PATH_UNTIL_L_AND_7_COMPLETE_VOLUME_DAYS_EXIST",
+      "priorStateImported": false,
+      "terminalNoEntryRule": "FALLBACK_TIMESTAMP_PLUS_CANDIDATE_H_MUST_NOT_EXCEED_SCORE_END",
+      "unscoredStartInclusive": "2021-01-29T00:00:00Z",
+      "unscoredEndExclusive": "2021-02-01T00:00:00Z",
+      "singleUse": true,
+      "reuseCount": 0,
+      "openedAfterFreeze": null,
+      "authorization": "ATOMIC_FIXED_ROOT_DIGEST_BOUND_ONE_USE",
+      "downloadCountsAsOpen": true
+    },
+    "developmentRequiresHoldoutArtifactsAbsent": [
+      "FIXED_HOLDOUT_ROOT",
+      "AUTHORIZATION_MARKER",
+      "EVALUATION_MARKER",
+      "HOLDOUT_SOURCE_MANIFEST"
+    ],
+    "requiredMonthlyProducts": [
+      "SPOT_KLINES_1M",
+      "USDM_KLINES_1M",
+      "USDM_MARK_PRICE_KLINES_1M",
+      "USDM_FUNDING_RATE"
+    ],
+    "integrity": {
+      "siblingChecksumRequired": true,
+      "localSha256MustEqualPublished": true,
+      "ordinaryCsvMemberCount": 1,
+      "rejectPathTraversal": true,
+      "rejectLinks": true,
+      "rejectUnexpectedSchema": true,
+      "rejectDuplicateOrNonmonotoneKeys": true,
+      "missingMinutesForwardFilled": false,
+      "selectedEventJoinLossMaximum": 0
+    }
+  },
+  "capital": {
+    "accountCapitalUsdEquivalent": "1000",
+    "spotCashUsdEquivalent": "400",
+    "futuresCollateralUsdEquivalent": "600",
+    "targetNotionalPerLegUsdEquivalent": "400",
+    "sameBaseQuantity": true,
+    "quantityStepProxyBtc": "0.001",
+    "quantityRounding": "FLOOR_USING_GREATER_RAW_FALLBACK_REFERENCE_PRICE",
+    "borrow": "FORBIDDEN",
+    "leverageMutation": "FORBIDDEN",
+    "collateralYield": "ZERO",
+    "reinvestment": false,
+    "historicalFilters": "UNKNOWN"
+  },
+  "candidates": {
+    "trialCount": 12,
+    "trailingSettledFundingCounts": [
+      6,
+      18
+    ],
+    "maximumHoldDays": [
+      1,
+      3,
+      7
+    ],
+    "entryBufferBp": [
+      0,
+      5
+    ],
+    "cartesianProduct": true,
+    "trialLedger": "trial_ledger.v1.json",
+    "postOpenChangesForbidden": true
+  },
+  "signal": {
+    "decisionClock": "FUNDING_SETTLEMENT",
+    "referenceBars": "LATEST_SHARED_ONE_MINUTE_BARS_WITH_CLOSE_STRICTLY_BEFORE_SETTLEMENT",
+    "allTrailingRatesStrictlyPositive": true,
+    "fundingRateForecast": "MINIMUM_TRAILING_L_SETTLED_RATE",
+    "intervalForecast": "MEDIAN_POSITIVE_DIFFERENCE_OF_TRAILING_L_SETTLEMENT_TIMESTAMPS",
+    "hardcodedEightHourInterval": false,
+    "expectedEventCount": "FLOOR_H_DAYS_TIMES_24_HOURS_DIVIDED_BY_CAUSAL_INTERVAL",
+    "fundingForecastUsd": "QUANTITY_TIMES_MARK_REFERENCE_TIMES_RATE_FLOOR_TIMES_EXPECTED_EVENT_COUNT",
+    "basisForecastUsd": "QUANTITY_TIMES_PERPETUAL_REFERENCE_MINUS_SPOT_REFERENCE",
+    "positiveBasisRequired": true,
+    "threshold": "BASIS_FORECAST_PLUS_FUNDING_FORECAST_GTE_FULL_PRIMARY_ROUNDTRIP_MODELED_COST_PLUS_BUFFER",
+    "forecastBookedAsRevenue": false,
+    "maximumConcurrentPositions": 1,
+    "cooldownHoursAfterExit": 24
+  },
+  "execution": {
+    "makerEntry": {
+      "attemptRecorded": true,
+      "attemptCountedEvenWhenFallbackSkipped": true,
+      "primaryState": "MAKER_NONFILL_PUBLIC_QUEUE_UNKNOWN",
+      "filledQuantity": "0",
+      "fee": "0",
+      "spreadCapture": "0",
+      "oneLegMakerFillAllowed": false,
+      "makerSensitivityDecisionAuthority": false
+    },
+    "fallback": {
+      "timeoutSeconds": 60,
+      "paired": true,
+      "orderTypeProxy": "TAKER",
+      "priceReference": "FIRST_COMMON_ELIGIBLE_ONE_MINUTE_OPEN_AFTER_TIMEOUT",
+      "missingCommonMinute": "DATA_FAILURE"
+    },
+    "exit": {
+      "paired": true,
+      "orderTypeProxy": "TAKER"
+    }
+  },
+  "costScenarios": {
+    "rateUnit": "BASIS_POINTS_OF_ABSOLUTE_FILL_NOTIONAL",
+    "feeTruth": "MODELED_PROXY_ACCOUNT_EFFECTIVE_UNKNOWN",
+    "primary": {
+      "feeBp": 10,
+      "spreadBp": 3,
+      "slippageBp": 4,
+      "latencyBp": 3,
+      "totalBpPerTakerFill": 20
+    },
+    "stress": {
+      "feeBp": 10,
+      "spreadBp": 5,
+      "slippageBp": 10,
+      "latencyBp": 5,
+      "totalBpPerTakerFill": 30
+    },
+    "severe": {
+      "feeBp": 10,
+      "spreadBp": 10,
+      "slippageBp": 25,
+      "latencyBp": 15,
+      "totalBpPerTakerFill": 60
+    },
+    "stressRepricesPrimaryTradesWithoutReselection": true,
+    "componentsReportedSeparately": [
+      "BASIS_PNL",
+      "FUNDING_PNL",
+      "FEES",
+      "SPREAD",
+      "SLIPPAGE",
+      "LATENCY",
+      "ROUNDING_RESIDUAL",
+      "NET"
+    ]
+  },
+  "fundingAccounting": {
+    "shortReceivesPositiveRate": true,
+    "formula": "SUM_QUANTITY_TIMES_EVENT_MARK_PRICE_TIMES_EVENT_FUNDING_RATE",
+    "onlyEventsStrictlyAfterActualFallbackEntry": true,
+    "onlyEventsWhilePositionOpen": true,
+    "futureForecastBooked": false
+  },
+  "exitPriority": [
+    "SOURCE_DATA_INVALID",
+    "PORTFOLIO_DRAWDOWN_10_PERCENT",
+    "BASIS_ADVERSE_WIDENING_100_BP",
+    "NEW_SETTLED_FUNDING_NONPOSITIVE",
+    "BASIS_NONPOSITIVE_CONVERGENCE",
+    "MAXIMUM_HOLD_H",
+    "SCORE_REGION_TERMINAL_BOUNDARY"
+  ],
+  "risk": {
+    "drawdownLimitFractionOfInitialCapital": "0.10",
+    "drawdownLimitUsdEquivalent": "100",
+    "drawdownTerminal": true,
+    "adverseBasisWideningBp": 100,
+    "dataFailureVerdict": "UNMEASURED",
+    "validScarcityVerdict": "NO_GO"
+  },
+  "weeklyScoring": {
+    "blockDays": 7,
+    "halfOpenUtc": true,
+    "stateResetAtInternalWeekBoundary": false,
+    "metric": "CHANGE_IN_CONSERVATIVE_LIQUIDATION_EQUITY_USD_EQUIVALENT_PER_ORIGINAL_1000",
+    "openFullRoundTripCostReserve": true,
+    "observeActualFallbackOpenImmediately": true,
+    "positiveExposureWeekUsesFallbackFillTimestamp": true,
+    "doubleCountExitReserve": false
+  },
+  "walkForward": {
+    "developmentWeeks": 52,
+    "initialSelectionWeeks": 0,
+    "oneWeekAheadSteps": 52,
+    "oneWeekAheadSpanDays": 364,
+    "coldStartCandidateId": "s1g-l06-h01-b000",
+    "training": "EXPANDING_PRIOR_DEVELOPMENT_WEEKS_ONLY",
+    "diagnosticPortfolio": "FLAT_TO_FLAT_EACH_WEEK_WITH_PAIRED_TAKER_BOUNDARY_EXIT",
+    "diagnosticFundingAndVolumeHistory": "CAUSAL_PRIOR_TIMESTAMPS_ALLOWED",
+    "diagnosticMaximumCausalHistoryDaysLoaded": 18,
+    "diagnosticOpenPositionStateImportedAcrossWeeks": false,
+    "diagnosticStateCarriedAcrossWeeks": [
+      "REALIZED_EQUITY",
+      "RUNNING_PEAK",
+      "DRAWDOWN_TERMINAL_STOP",
+      "RESIDUAL_24_HOUR_COOLDOWN"
+    ],
+    "nextWeekBackPropagationForbidden": true,
+    "diagnosticDoesNotReplaceFinalSelection": true,
+    "diagnosticCandidateEligibility": "ALL_12_DATA_VALID_CANDIDATES",
+    "diagnosticTieBreakLowerBoundAndWeeklyCloseDrawdownApply_ONLY_ON_PRIOR_MEAN_TIES": true,
+    "earlyTieRulePriorWeeks1Through3": "SKIP_UNDEFINED_FOUR_WEEK_BOOTSTRAP_THEN_DRAWDOWN_THEN_ID",
+    "finalSelectionWeeks": 52,
+    "finalCandidateEligibility": [
+      "SAMPLE_GATE_PASS",
+      "PRIMARY_TOTAL_NET_USD_PER_1000_GT_ZERO",
+      "PRIMARY_95_PERCENT_LOWER_BOUND_GT_ZERO",
+      "STRESS_TOTAL_NET_GT_ZERO",
+      "HOLM_FWER_0_05_PASS",
+      "PRIMARY_AND_STRESS_MAXIMUM_DRAWDOWN_LT_10_PERCENT",
+      "BASE_AND_STRESS_CAPACITY_PASS",
+      "COST_RECONCILIATION_EXACT"
+    ],
+    "finalTieBreak": [
+      "HIGHEST_PRIMARY_MEAN_NET_USD_PER_1000",
+      "HIGHEST_PRIMARY_95_PERCENT_STATIONARY_BOOTSTRAP_LOWER_BOUND",
+      "LOWEST_MAXIMUM_DRAWDOWN",
+      "LEXICOGRAPHIC_CANDIDATE_ID"
+    ]
+  },
+  "statistics": {
+    "stationaryCircularBootstrap": {
+      "developmentBlocks": 52,
+      "holdoutBlocks": 4,
+      "expectedBlockLengthWeeks": 4,
+      "replicates": 9999,
+      "seed": 9999,
+      "interval": "TWO_SIDED_PERCENTILE_95_PERCENT",
+      "null": "ONE_SIDED_MEAN_NET_LTE_ZERO_CENTERED_BOOTSTRAP",
+      "holdoutApproximateEffectiveBlocks": 1,
+      "holdoutIntervalDecisionAuthority": "NONE_NOMINAL_DESCRIPTIVE_ONLY",
+      "holdoutUncertaintyState": "UNMEASURED_INSUFFICIENT_EFFECTIVE_BLOCKS"
+    },
+    "holm": {
+      "family": "ALL_12_ATTEMPTED_TRIALS",
+      "fwer": "0.05",
+      "method": "STEP_DOWN",
+      "invalidTrialsDropped": false
+    },
+    "pbo": {
+      "method": "CSCV",
+      "matrix": "DEVELOPMENT_WEEKS_5_THROUGH_52_BY_12_TRIALS",
+      "excludedColdStartWeeks": 4,
+      "contiguousBlocks": 12,
+      "weeksPerBlock": 4,
+      "symmetricTrainingBlocks": 6,
+      "splitCount": 924,
+      "inSampleSelection": "HIGHEST_MEAN_THEN_LEXICOGRAPHIC_CANDIDATE_ID_ON_EXACT_TIE",
+      "maximum": "0.20",
+      "validZeroTradeTrialsRetainedAsZero": true,
+      "invalidTrialDisposition": "PBO_UNMEASURED_NO_DROPPING_OR_SENTINEL"
+    }
+  },
+  "sampleGates": {
+    "developmentMinimumCompletedRoundTrips": 12,
+    "developmentMinimumPositiveExposureWeeks": 8,
+    "holdoutMinimumCompletedRoundTrips": 6,
+    "holdoutMinimumPositiveExposureWeeks": 3,
+    "validBelowMinimumVerdict": "NO_GO"
+  },
+  "capacity": {
+    "label": "VOLUME_PROXY_CAPACITY",
+    "venueReference": "MIN_PREVIOUS_COMPLETE_UTC_DAY_QUOTE_VOLUME_AND_TRAILING_7_COMPLETE_DAY_MEDIAN",
+    "pairedReference": "MIN_SPOT_AND_USDM_VENUE_REFERENCE",
+    "baseParticipationFraction": "0.00005",
+    "baseParticipationBp": "0.5",
+    "stressParticipationFraction": "0.000025",
+    "stressParticipationBp": "0.25",
+    "targetLegUsdEquivalent": "400",
+    "requiredAtEveryFill": true,
+    "accountCapitalCapacityFormula": "PAIRED_LEG_CAPACITY_TIMES_1000_DIVIDED_BY_ACTUAL_MAX_LEG_FILL_NOTIONAL",
+    "minimumAcrossEntryAndExit": true,
+    "executableDepthProof": false
+  },
+  "developmentAuthorizationGates": [
+    "CHECKSUMMED_DATA_COMPLETE",
+    "SELECTED_EVENT_JOIN_LOSS_ZERO",
+    "SAMPLE_GATE_PASS",
+    "PRIMARY_TOTAL_NET_USD_PER_1000_GT_ZERO",
+    "PRIMARY_95_PERCENT_LOWER_BOUND_GT_ZERO",
+    "STRESS_TOTAL_NET_GT_ZERO",
+    "HOLM_FWER_0_05_PASS",
+    "CSCV_PBO_LTE_0_20",
+    "PRIMARY_AND_STRESS_MAXIMUM_DRAWDOWN_LT_10_PERCENT",
+    "BASE_AND_STRESS_CAPACITY_PASS",
+    "COST_RECONCILIATION_EXACT"
+  ],
+  "holdoutGates": [
+    "ATOMIC_SINGLE_USE_AUTHORIZATION_PASS",
+    "CHECKSUMMED_DATA_COMPLETE",
+    "SELECTED_EVENT_JOIN_LOSS_ZERO",
+    "SEALED_CHAMPION_ONLY",
+    "SAMPLE_GATE_PASS",
+    "PRIMARY_TOTAL_NET_USD_PER_1000_GT_ZERO",
+    "PRIMARY_95_PERCENT_LOWER_BOUND_GT_ZERO",
+    "UNCERTAINTY_EFFECTIVE_BLOCKS_GTE_2",
+    "STRESS_TOTAL_NET_GT_ZERO",
+    "PRIMARY_AND_STRESS_MAXIMUM_DRAWDOWN_LT_10_PERCENT",
+    "BASE_AND_STRESS_CAPACITY_PASS",
+    "COST_RECONCILIATION_EXACT"
+  ],
+  "verdictLaw": {
+    "UNMEASURED": "INVALID_OR_INCOMPLETE_CUSTODY_SCHEMA_CHRONOLOGY_JOIN_ATOMIC_HOLDOUT_ACCOUNTING_OR_INSUFFICIENT_EFFECTIVE_BLOCKS",
+    "NO_GO": "MEASURABLE_SAMPLE_ECONOMICS_UNCERTAINTY_HOLM_PBO_STRESS_DRAWDOWN_OR_CAPACITY_FAILURE",
+    "GO": "RESERVED_FOR_ACCOUNT_EFFECTIVE_COSTS_EXECUTABLE_MAKER_DEPTH_AND_SEALED_FORWARD_VERIFIED_POSITIVE",
+    "publicHistoricalExperimentCanIssueGo": false,
+    "allPublicProxyGatesPositive": "UNMEASURED_FOR_OWNER_VERIFIED_POSITIVE_GATE_WITH_PROXY_POSITIVE_REPORTED_SEPARATELY",
+    "zeroPositives": "NO_GO"
+  },
+  "outputTruth": {
+    "verifiedPositiveCountWhenDecisionUnknown": null,
+    "crediblePositiveCountWhenDecisionUnknown": null,
+    "proxyPositiveCountSeparate": true,
+    "positiveEdgeClaim": "NOT_MADE"
+  },
+  "unknowns": [
+    "ACCOUNT_EFFECTIVE_FEES",
+    "MAKER_FILL_PROBABILITY",
+    "QUEUE_POSITION",
+    "ORDER_BOOK_DEPTH",
+    "HISTORICAL_SYMBOL_FILTERS",
+    "HISTORICAL_MIN_NOTIONAL",
+    "USDT_USD_PARITY",
+    "SEALED_FORWARD_PERFORMANCE"
+  ],
+  "forbidden": [
+    "SIGNED_OR_PRIVATE_CALL",
+    "API_KEY",
+    "ORDER",
+    "TEST_ORDER",
+    "BORROW",
+    "REPAY",
+    "TRANSFER",
+    "WITHDRAWAL",
+    "LEVERAGE_MUTATION",
+    "MONEY_EFFECT",
+    "LIVE_HOST",
+    "PROVIDER",
+    "UI",
+    "CANONICAL_WRITE",
+    "PUSH",
+    "LANDING"
+  ]
+}

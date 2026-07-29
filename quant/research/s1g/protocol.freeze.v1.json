@@ -1,0 +1,16 @@
+{
+  "schema": "cosmos.quant.research.s1g.protocol-freeze.v1",
+  "milestone": "S-1G",
+  "createdBeforeOutcomeAccess": true,
+  "holdoutStateAtFreeze": "UNOPENED",
+  "rawRootStateAtFreeze": "ABSENT",
+  "protocolSha256": "dece1ea380153bf66466d83c75118b0764ed82d21daf23ddee024322c2e44ce4",
+  "experimentPySha256": "2e25d3dfe5b29b0430f50eb732d9fcd0c9af2b88d83b72b44d3ad37002767c48",
+  "methodologyMdSha256": "325508156ad10fb1ed03b291419734e21acf05108eb19b30c29a019418167259",
+  "officialSourcesSha256": "32361cd305950650aba4f1235a8e9d006e4fae36492418f793928858460b95d6",
+  "priorPeriodInventorySha256": "aa7b8cf0c7e46496fc774fa6bc7983d16324fecd67a28f3e4d0b9b811048e1d3",
+  "readmeMdSha256": "9568f18d1ba860bb06cde30fa2339a903f29351d87f5db2f229b4cccea45c8ad",
+  "sourcePlanSha256": "c9b6c372ca232100091d80893266441da7b7a2434d5f2d6531ed8b125476accd",
+  "trialLedgerSha256": "e1b91b7ea3d860ee2963f77230961a0440523108dfe548cdf1c106d19b6cc455",
+  "testExperimentPySha256": "908a6a41dfdac2d52b5ca3def32f91b05fdea4d66343d3fc2cd2159339552b97"
+}

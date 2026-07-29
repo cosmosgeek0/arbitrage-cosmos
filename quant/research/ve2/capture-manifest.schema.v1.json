@@ -1,0 +1,802 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmos.local/schemas/ve2.capture-manifest.v1.json",
+  "title": "VE2 recomputed segmented terminal prospective capture manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "manifestId",
+    "activationId",
+    "state",
+    "activationSha256",
+    "packetMeasurementPolicySha256",
+    "detectorCoverageCorePolicyDigest",
+    "detectorInputSourceId",
+    "detectorInputSourceDigest",
+    "intervalStartUtc",
+    "intervalEndExclusiveUtc",
+    "maturityAtUtc",
+    "evidenceCaptureStartedAtUtc",
+    "evidenceCaptureEndedAtUtc",
+    "terminalRecordedAtUtc",
+    "maturityPassed",
+    "evidenceSchema",
+    "evidenceSegmentCount",
+    "evidenceSegmentInventorySha256",
+    "evidenceSegments",
+    "detectorCoverageSegmentCount",
+    "symbolLifecycleSegmentCount",
+    "detectorCoverageState",
+    "detectorSegmentGapCount",
+    "detectorSegmentOverlapCount",
+    "detectorCutCount",
+    "missingDetectorCutCount",
+    "maximumDetectorCutGapMs",
+    "sourceUncoveredDurationMs",
+    "acceptedProposalUniverseSha256",
+    "acceptedDetectorProposalCount",
+    "nonPseudoDetectorProposalCount",
+    "proposalEligibilitySnapshotCount",
+    "pseudoProposalExcludedCount",
+    "proposalSampleState",
+    "lifecycleProposalCount",
+    "lifecycleCount",
+    "terminalLifecycleCount",
+    "blockedLifecycleCount",
+    "openLifecycleCount",
+    "packetPolicyBindingCount",
+    "coreReplaySourceMechanics",
+    "lifecycleReplayPerformed",
+    "complete",
+    "warmupRowsIncludedInScoredSample",
+    "smokeRowsIncluded",
+    "outcomeBytesAccessedBeforeMaturity",
+    "economicsState",
+    "profitabilityClaim",
+    "consumerGate",
+    "externalEffects"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ve2.capture-manifest.v1"
+    },
+    "manifestId": {
+      "type": "string",
+      "pattern": "^ve2_manifest_[a-f0-9]{64}$"
+    },
+    "activationId": {
+      "type": "string",
+      "pattern": "^ve2_activation_[a-f0-9]{64}$"
+    },
+    "state": {
+      "const": "TERMINAL_CAPTURE_RECOMPUTED"
+    },
+    "activationSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "packetMeasurementPolicySha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "detectorCoverageCorePolicyDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "detectorInputSourceId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$"
+    },
+    "detectorInputSourceDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "intervalStartUtc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "T00:00:00\\.000Z$"
+    },
+    "intervalEndExclusiveUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "maturityAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "evidenceCaptureStartedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "evidenceCaptureEndedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "terminalRecordedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "maturityPassed": {
+      "const": true
+    },
+    "evidenceSchema": {
+      "const": "cosmos.engine.volume.forward-measurement-evidence.v1"
+    },
+    "evidenceSegmentCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "evidenceSegmentInventorySha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "evidenceSegments": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/evidenceSegment"
+      }
+    },
+    "detectorCoverageSegmentCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "symbolLifecycleSegmentCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "detectorCoverageState": {
+      "const": "COMPLETE_EXACT_PARTITION"
+    },
+    "detectorSegmentGapCount": {
+      "const": 0
+    },
+    "detectorSegmentOverlapCount": {
+      "const": 0
+    },
+    "detectorCutCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "missingDetectorCutCount": {
+      "const": 0
+    },
+    "maximumDetectorCutGapMs": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 2000
+    },
+    "sourceUncoveredDurationMs": {
+      "const": 0
+    },
+    "acceptedProposalUniverseSha256": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "acceptedDetectorProposalCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "nonPseudoDetectorProposalCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "proposalEligibilitySnapshotCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "pseudoProposalExcludedCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "proposalSampleState": {
+      "enum": [
+        "NO_ACCEPTED_PROPOSALS",
+        "ACCEPTED_PROPOSALS_RECORDED"
+      ]
+    },
+    "lifecycleProposalCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "lifecycleCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "terminalLifecycleCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "blockedLifecycleCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "openLifecycleCount": {
+      "const": 0
+    },
+    "packetPolicyBindingCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "coreReplaySourceMechanics": {
+      "const": "EXACT_CANONICAL_RECOMPUTED"
+    },
+    "lifecycleReplayPerformed": {
+      "const": true
+    },
+    "complete": {
+      "const": true
+    },
+    "warmupRowsIncludedInScoredSample": {
+      "const": 0
+    },
+    "smokeRowsIncluded": {
+      "const": 0
+    },
+    "outcomeBytesAccessedBeforeMaturity": {
+      "const": false
+    },
+    "economicsState": {
+      "const": "UNKNOWN"
+    },
+    "profitabilityClaim": {
+      "const": false
+    },
+    "consumerGate": {
+      "const": "BLOCKED_UNTIL_TERMINAL_RESULT_INDEPENDENTLY_ACCEPTED"
+    },
+    "externalEffects": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "privateOrSignedCalls",
+        "orders",
+        "transfers",
+        "withdrawals",
+        "moneyUsd"
+      ],
+      "properties": {
+        "privateOrSignedCalls": {
+          "const": 0
+        },
+        "orders": {
+          "const": 0
+        },
+        "transfers": {
+          "const": 0
+        },
+        "withdrawals": {
+          "const": 0
+        },
+        "moneyUsd": {
+          "const": 0
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256Anchor": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "proposalId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$"
+    },
+    "sourceIdentifier": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$"
+    },
+    "evidenceSegment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "profile",
+        "purpose",
+        "activationId",
+        "captureId",
+        "segmentId",
+        "coverageRole",
+        "chainKey",
+        "symbol",
+        "segmentIndex",
+        "previousTerminalHash",
+        "corePolicyDigest",
+        "packetMeasurementPolicySha256",
+        "terminalHash",
+        "evidenceBytesSha256",
+        "detectorInputSourceId",
+        "detectorInputSourceDigest",
+        "coverageStartMs",
+        "coverageEndExclusiveMs",
+        "firstRecordHash",
+        "lastRecordHash",
+        "firstLocalReceivedAtMs",
+        "lastLocalReceivedAtMs",
+        "firstLocalMonotonicNs",
+        "lastLocalMonotonicNs",
+        "recordCount",
+        "canonicalJsonlBytes",
+        "cumulativeRawPayloadBytes",
+        "generationCount",
+        "allGenerationsClosed",
+        "continuityGapCount",
+        "unresolvedContinuityGapCount",
+        "detectorCutFirstIndex",
+        "detectorCutCount",
+        "detectorExpectedCutCount",
+        "detectorCadenceMs",
+        "missingDetectorCutCount",
+        "detectorMissingCutRanges",
+        "maximumDetectorCutGapMs",
+        "sourceUncoveredDurationMs",
+        "detectorBatchPreviousDigest",
+        "detectorBatchTerminalDigest",
+        "detectorEvaluationUniverseDigest",
+        "detectorEvaluationUniverseCount",
+        "detectorCoverageComplete",
+        "acceptedProposals",
+        "acceptedProposalIds",
+        "pseudoProposalExcludedCount",
+        "lifecycleProposals",
+        "lifecycleProposalIds",
+        "lifecycleCount",
+        "terminalLifecycleCount",
+        "blockedLifecycleCount",
+        "openLifecycleCount",
+        "nonTruncated",
+        "quiescent",
+        "profitabilityClaim",
+        "consumerGate"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "ve2.evidence-segment-descriptor.v1"
+        },
+        "profile": {
+          "const": "TERMINAL_SEGMENT"
+        },
+        "purpose": {
+          "const": "FORWARD_MEASUREMENT_SEGMENT_V1"
+        },
+        "activationId": {
+          "type": "string",
+          "pattern": "^ve2_activation_[a-f0-9]{64}$"
+        },
+        "captureId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$"
+        },
+        "segmentId": {
+          "type": "string",
+          "pattern": "^ve2_segment_[a-f0-9]{64}$"
+        },
+        "coverageRole": {
+          "enum": [
+            "DETECTOR_COVERAGE",
+            "SYMBOL_LIFECYCLE"
+          ]
+        },
+        "chainKey": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$"
+        },
+        "symbol": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Z0-9]{2,30}$"
+        },
+        "segmentIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "previousTerminalHash": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/sha256Anchor"
+            }
+          ]
+        },
+        "corePolicyDigest": {
+          "$ref": "#/$defs/sha256Anchor"
+        },
+        "packetMeasurementPolicySha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "terminalHash": {
+          "$ref": "#/$defs/sha256Anchor"
+        },
+        "evidenceBytesSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "detectorInputSourceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$"
+        },
+        "detectorInputSourceDigest": {
+          "$ref": "#/$defs/sha256Anchor"
+        },
+        "coverageStartMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "coverageEndExclusiveMs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "firstRecordHash": {
+          "$ref": "#/$defs/sha256Anchor"
+        },
+        "lastRecordHash": {
+          "$ref": "#/$defs/sha256Anchor"
+        },
+        "firstLocalReceivedAtMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lastLocalReceivedAtMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "firstLocalMonotonicNs": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "lastLocalMonotonicNs": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "recordCount": {
+          "type": "integer",
+          "minimum": 3,
+          "maximum": 100000
+        },
+        "canonicalJsonlBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 268435456
+        },
+        "cumulativeRawPayloadBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 268435456
+        },
+        "generationCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "allGenerationsClosed": {
+          "const": true
+        },
+        "continuityGapCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unresolvedContinuityGapCount": {
+          "const": 0
+        },
+        "detectorCutFirstIndex": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "detectorCutCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "detectorExpectedCutCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "detectorCadenceMs": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "missingDetectorCutCount": {
+          "const": 0
+        },
+        "detectorMissingCutRanges": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "maximumDetectorCutGapMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2000
+        },
+        "sourceUncoveredDurationMs": {
+          "const": 0
+        },
+        "detectorBatchTerminalDigest": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/sha256Anchor"
+            }
+          ]
+        },
+        "detectorBatchPreviousDigest": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/sha256Anchor"
+            }
+          ]
+        },
+        "detectorEvaluationUniverseDigest": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/sha256Anchor"
+            }
+          ]
+        },
+        "detectorEvaluationUniverseCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "detectorCoverageComplete": {
+          "type": "boolean"
+        },
+        "acceptedProposals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/proposalBinding"
+          }
+        },
+        "acceptedProposalIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/proposalId"
+          }
+        },
+        "lifecycleProposals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/lifecycleProposalBinding"
+          }
+        },
+        "pseudoProposalExcludedCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lifecycleProposalIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/proposalId"
+          }
+        },
+        "lifecycleCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "terminalLifecycleCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "blockedLifecycleCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "openLifecycleCount": {
+          "const": 0
+        },
+        "nonTruncated": {
+          "const": true
+        },
+        "quiescent": {
+          "const": true
+        },
+        "profitabilityClaim": {
+          "const": false
+        },
+        "consumerGate": {
+          "const": "BLOCKED_VE2_INTERVAL_NOT_TERMINAL_ACCEPTED"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "coverageRole": {
+                "const": "DETECTOR_COVERAGE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "symbol": {
+                "type": "null"
+              },
+              "detectorCutFirstIndex": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "detectorCutCount": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "detectorExpectedCutCount": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "detectorCadenceMs": {
+                "const": 2000
+              },
+              "detectorBatchTerminalDigest": {
+                "$ref": "#/$defs/sha256Anchor"
+              },
+              "detectorEvaluationUniverseDigest": {
+                "$ref": "#/$defs/sha256Anchor"
+              },
+              "detectorCoverageComplete": {
+                "const": true
+              },
+              "lifecycleProposals": {
+                "maxItems": 0
+              },
+              "lifecycleProposalIds": {
+                "maxItems": 0
+              },
+              "lifecycleCount": {
+                "const": 0
+              },
+              "terminalLifecycleCount": {
+                "const": 0
+              },
+              "blockedLifecycleCount": {
+                "const": 0
+              }
+            }
+          },
+      "else": {
+        "properties": {
+          "symbol": {
+            "type": "string",
+            "pattern": "^[A-Z0-9]{2,30}$"
+          },
+          "detectorCutFirstIndex": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "detectorCutCount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "detectorExpectedCutCount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "detectorCadenceMs": {
+            "const": 2000
+          },
+          "detectorBatchTerminalDigest": {
+            "$ref": "#/$defs/sha256Anchor"
+          },
+          "detectorEvaluationUniverseDigest": {
+            "$ref": "#/$defs/sha256Anchor"
+          },
+          "detectorEvaluationUniverseCount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "detectorCoverageComplete": {
+            "const": true
+          },
+          "acceptedProposals": {
+            "minItems": 1
+          },
+          "acceptedProposalIds": {
+            "minItems": 1
+          },
+          "lifecycleProposals": {
+            "minItems": 1
+          },
+          "lifecycleProposalIds": {
+            "minItems": 1
+          },
+          "lifecycleCount": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+        }
+      ]
+    },
+    "proposalBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cutOffset",
+        "proposalId",
+        "proposalRevision",
+        "proposalDigest",
+        "symbol",
+        "detectorDecisionDigest",
+        "featureDigest"
+      ],
+      "properties": {
+        "cutOffset": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "proposalId": {
+          "$ref": "#/$defs/proposalId"
+        },
+        "proposalRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+      "proposalDigest": {
+        "$ref": "#/$defs/sourceIdentifier"
+        },
+        "symbol": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{2,30}$"
+        },
+      "detectorDecisionDigest": {
+        "$ref": "#/$defs/sourceIdentifier"
+      },
+      "featureDigest": {
+        "$ref": "#/$defs/sourceIdentifier"
+        }
+      }
+    },
+    "lifecycleProposalBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "proposalId",
+        "proposalRevision",
+        "proposalDigest",
+        "symbol",
+        "state"
+      ],
+      "properties": {
+        "proposalId": {
+          "$ref": "#/$defs/proposalId"
+        },
+        "proposalRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+      "proposalDigest": {
+        "$ref": "#/$defs/sourceIdentifier"
+        },
+        "symbol": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{2,30}$"
+        },
+        "state": {
+          "enum": [
+            "TERMINAL",
+            "BLOCKED"
+          ]
+        }
+      }
+    }
+  }
+}

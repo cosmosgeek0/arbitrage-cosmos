@@ -1,0 +1,151 @@
+{
+  "schemaVersion": "ve2.measurement-policy.v1",
+  "milestone": "V-I2",
+  "policyId": "VOLUME_MEASUREMENT_MAX_HOLD_60S_V1",
+  "frozenForProspectiveUseOn": "2026-07-28",
+  "baseCandidateCommit": "6c8184331d85d098d2919e37d217f220f4c3214c",
+  "purpose": "Prospectively close the V-E1 public input-mapping gap without inventing history or opening outcomes before the frozen interval is terminal and independently accepted.",
+  "activation": {
+    "state": "PROSPECTIVE_NOT_ACTIVATED",
+    "independentlyAcceptedCaptureReadyAtUtc": null,
+    "intervalStartUtc": null,
+    "intervalEndExclusiveUtc": null,
+    "maturityAtUtc": null,
+    "rule": "intervalStartUtc is the first UTC midnight at least 24 hours after independentlyAcceptedCaptureReadyAtUtc; intervalEndExclusiveUtc is exactly durationMs later; maturityAtUtc is exactly maturityLagMs after intervalEndExclusiveUtc.",
+    "minimumLeadMs": 86400000,
+    "startBoundary": "UTC_MIDNIGHT",
+    "durationMs": 2592000000,
+    "maturityLagMs": 62000,
+    "activationEvidenceRequired": [
+      "independent exact-hash capture-ready acceptance",
+      "policy SHA-256",
+      "capture implementation SHA-256",
+      "clean source candidate commit",
+      "DEFAULT_OFF and KILL_ON state",
+      "no prior outcome record at or after the derived interval start"
+    ],
+    "activationEvidenceSchema": "ve2.capture-activation.v1",
+    "terminalManifestSchema": "ve2.capture-manifest.v1",
+    "outcomeOpenReceiptSchema": "ve2.outcome-open-receipt.v1",
+    "fabricatedStartForbidden": true
+  },
+  "warmup": {
+    "durationMs": 14400000,
+    "derivation": "intervalStartUtc minus 4 hours",
+    "scored": false,
+    "outcomeAccess": "FORBIDDEN"
+  },
+  "universe": {
+    "mode": "PROSPECTIVE_ACCEPTED_DETECTOR_PROPOSALS",
+    "selectionRule": "The scored sample contains every non-pseudo Volume detector proposal accepted and prospectively captured during the frozen interval whose symbol is proven under the point-in-time exchangeInfo and captured configuration bound to that proposal to be TRADING, Spot-enabled, USDT-quoted, and not blocked. No volume threshold or independently reconstructed symbol universe is introduced.",
+    "proposalOrigin": "VOLUME_DETECTOR",
+    "proposalCapturedProspectivelyRequired": true,
+    "completeAcceptedProposalSetRequired": true,
+    "nonPseudoProposalRequired": true,
+    "pointInTimeEligibilitySnapshotChecksummed": true,
+    "symbols": null,
+    "smokeSymbol": "BTCUSDT",
+    "smokeSymbolExcludedFromUniverseClaim": true,
+    "selectionRuleFrozen": true,
+    "pointInTimeExchangeInfoRequired": true,
+    "substitutionForbidden": true
+  },
+  "publicCapture": {
+    "restOrigin": "https://data-api.binance.vision",
+    "webSocketOrigin": "wss://data-stream.binance.vision:443",
+    "restGets": [
+      "/api/v3/exchangeInfo",
+      "/api/v3/depth?symbol=<eligible-symbol>&limit=100"
+    ],
+    "streams": [
+      "<eligible-symbol-lowercase>@depth@100ms",
+      "<eligible-symbol-lowercase>@aggTrade",
+      "<eligible-symbol-lowercase>@trade",
+      "<eligible-symbol-lowercase>@bookTicker"
+    ],
+    "timestampUnit": "MILLISECOND",
+    "timestampConversion": "FORBIDDEN",
+    "receiptClock": "process.hrtime.bigint",
+    "rawByteRule": "Record exact application payload bytes after transport decompression and before JSON parse.",
+    "depthProtocol": "Buffer diff-depth before the REST snapshot, discard buffered events whose final update ID is at or below lastUpdateId, require the first retained event to cover lastUpdateId+1, then require continuity; a gap invalidates the generation and requires a new snapshot.",
+    "continuityRequired": true,
+    "silentGapFillForbidden": true,
+    "currentBookHistorySubstitutionForbidden": true,
+    "generationAndReconnectEvidenceRequired": true,
+    "pointInTimeStateRequired": [
+      "exchangeInfo raw bytes and symbol filters",
+      "accepted non-pseudo detector proposal raw bytes and identity",
+      "measurement policy raw bytes and SHA-256",
+      "DEFAULT_OFF state",
+      "KILL_ON state",
+      "capture generation",
+      "continuity state"
+    ]
+  },
+  "detectorBinding": {
+    "required": true,
+    "proposalOrigin": "VOLUME_DETECTOR",
+    "proposalIdentityRequired": true,
+    "proposalObservationDigestRequired": true,
+    "evaluationCutPeriodMs": 2000,
+    "entryRule": "For each accepted detector proposal, create at most one shadow record-only entry at the first accepted source-native 2-second cut bound to that proposal.",
+    "entryQuoteNotional": "10.00",
+    "entryQuoteAsset": "USDT",
+    "entryFillRule": "Walk only the exact synchronized displayed opposite-side depth at the accepted entry cut; reject the lifecycle if the full 10.00 USDT cannot be modeled exactly under point-in-time filters.",
+    "exitRule": "Use the first accepted source-native 2-second cut whose monotonic receive time is at or after entryReceiveMonotonicNs plus 60000000000 nanoseconds.",
+    "maximumHoldMs": 60000,
+    "duplicateProposalPolicy": "ONE_LIFECYCLE_PER_PROPOSAL_ID",
+    "missingCutPolicy": "REJECT_LIFECYCLE_NO_SUBSTITUTION",
+    "partialDepthPolicy": "REJECT_LIFECYCLE_NO_PARTIAL_ECONOMICS"
+  },
+  "economics": {
+    "sourceNativeFeeState": "UNKNOWN",
+    "sourceNativeEconomicsState": "NOT_ESTIMABLE",
+    "publicScenarioOnly": true,
+    "scenarios": [
+      {
+        "id": "PUBLIC_10_BPS_PER_SIDE",
+        "entryFeeBps": 10,
+        "exitFeeBps": 10,
+        "roundTripFeeBps": 20,
+        "accountEffective": false
+      },
+      {
+        "id": "PUBLIC_12_BPS_PER_SIDE_STRESS",
+        "entryFeeBps": 12,
+        "exitFeeBps": 12,
+        "roundTripFeeBps": 24,
+        "accountEffective": false
+      }
+    ],
+    "outcomeAccessBeforeMaturity": "FORBIDDEN",
+    "partialIntervalEconomics": "FORBIDDEN",
+    "smokeEconomics": "FORBIDDEN",
+    "profitabilityClaimFromSmoke": "FORBIDDEN",
+    "smokeExclusion": "SMOKE_MECHANICS_ONLY — validates capture, schema, clocks, chain/dedupe, checksums, and serialization using synthetic or pre-interval data. Smoke rows are permanently excluded from the VE2 universe, sample counts, economics, uncertainty, N-3, and every profitability or capacity claim. A passing smoke is not a strategy sample, fill, return, fee or slippage measurement, drawdown, capacity proof, edge, or execution authority."
+  },
+  "evidence": {
+    "format": "APPEND_ONLY_CHECKSUM_CHAINED_JSONL",
+    "recordHash": "SHA-256",
+    "rawPayloadHash": "SHA-256",
+    "networkFreeDeterministicReplayRequired": true,
+    "proposalLifecycleMode": "SHADOW_RECORD_ONLY",
+    "submitAuthority": false,
+    "casAuthority": false,
+    "privateOrSignedAuthority": false,
+    "keyOrCookieUse": false,
+    "orderTransferWithdrawalMoneyAuthority": false
+  },
+  "consumerGate": {
+    "consumer": "N-3",
+    "state": "BLOCKED_VE2_INTERVAL_NOT_TERMINAL_ACCEPTED",
+    "openCondition": "The derived prospective interval is complete, maturityAtUtc has passed, the full evidence chain and deterministic lifecycle replay pass, and the exact terminal evidence candidate is independently accepted.",
+    "smokeCannotOpenGate": true
+  },
+  "defaults": {
+    "strategyEnabled": false,
+    "killSwitchEngaged": true,
+    "mode": "SHADOW_ONLY",
+    "recordOnly": true
+  }
+}

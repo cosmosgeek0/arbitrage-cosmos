@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmos.local/schemas/ve2.capture-activation.v1.json",
+  "title": "VE2 independently accepted capture-ready activation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "activationId",
+    "state",
+    "acceptedCaptureCandidateCommit",
+    "acceptedAtUtc",
+    "acceptedByIndependentExactHashReview",
+    "packetMeasurementPolicySha256",
+    "detectorCoverageCorePolicyDigest",
+    "detectorInputSourceId",
+    "detectorInputSourceDigest",
+    "detectorBindingState",
+    "detectorCoverageChainKey",
+    "captureImplementationSha256",
+    "warmupStartUtc",
+    "intervalStartUtc",
+    "intervalEndExclusiveUtc",
+    "maturityAtUtc",
+    "sampleUniverse",
+    "outcomeBytesAccessed",
+    "consumerGate"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "ve2.capture-activation.v1"
+    },
+    "activationId": {
+      "type": "string",
+      "pattern": "^ve2_activation_[a-f0-9]{64}$"
+    },
+    "state": {
+      "const": "CAPTURE_READY_ACCEPTED"
+    },
+    "acceptedCaptureCandidateCommit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "acceptedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "acceptedByIndependentExactHashReview": {
+      "const": true
+    },
+    "packetMeasurementPolicySha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "detectorCoverageCorePolicyDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "Externally accepted digest of the first core POLICY record for every detector-coverage segment. This is deliberately distinct from packetMeasurementPolicySha256."
+    },
+    "detectorInputSourceId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,255}$",
+      "description": "Frozen identity of the prospective detector-output source covered by the terminal segment inventory."
+    },
+    "detectorInputSourceDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "Externally accepted digest of the detector implementation/configuration that produces the scored proposal universe."
+    },
+    "detectorBindingState": {
+      "const": "ACCEPTED_PROSPECTIVE_BINDING"
+    },
+    "detectorCoverageChainKey": {
+      "type": "string",
+      "pattern": "^ve2_detector_coverage_[a-f0-9]{64}$",
+      "description": "Frozen chain key whose ordered detector-coverage segments must exactly partition the scored interval."
+    },
+    "captureImplementationSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "warmupStartUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Exactly 14400000 ms before intervalStartUtc; permanently unscored."
+    },
+    "intervalStartUtc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "T00:00:00\\.000Z$",
+      "description": "First UTC midnight at least 86400000 ms after acceptedAtUtc."
+    },
+    "intervalEndExclusiveUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Exactly 2592000000 ms after intervalStartUtc."
+    },
+    "maturityAtUtc": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Exactly 62000 ms after intervalEndExclusiveUtc."
+    },
+    "sampleUniverse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "proposalOrigin",
+        "prospectiveCaptureRequired",
+        "nonPseudoRequired",
+        "pointInTimeEligibilityRequired",
+        "currentStateSubstitutionForbidden"
+      ],
+      "properties": {
+        "mode": {
+          "const": "PROSPECTIVE_ACCEPTED_DETECTOR_PROPOSALS"
+        },
+        "proposalOrigin": {
+          "const": "VOLUME_DETECTOR"
+        },
+        "prospectiveCaptureRequired": {
+          "const": true
+        },
+        "nonPseudoRequired": {
+          "const": true
+        },
+        "pointInTimeEligibilityRequired": {
+          "const": true
+        },
+        "currentStateSubstitutionForbidden": {
+          "const": true
+        }
+      }
+    },
+    "outcomeBytesAccessed": {
+      "const": false
+    },
+    "consumerGate": {
+      "const": "BLOCKED_VE2_INTERVAL_NOT_TERMINAL_ACCEPTED"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "state": {
+            "const": "CAPTURE_READY_ACCEPTED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "acceptedByIndependentExactHashReview": {
+            "const": true
+          },
+          "outcomeBytesAccessed": {
+            "const": false
+          }
+        }
+      }
+    }
+  ]
+}

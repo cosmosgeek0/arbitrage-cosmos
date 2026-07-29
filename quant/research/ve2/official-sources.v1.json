@@ -1,0 +1,109 @@
+{
+  "schemaVersion": "ve2.official-sources.v1",
+  "inspectedAt": "2026-07-28",
+  "repository": "binance/binance-spot-api-docs",
+  "headAtInspection": "6b8372cad7cecbdf5dd88a3372eafff51988c5cf",
+  "sources": [
+    {
+      "id": "SPOT_WEBSOCKET_STREAMS",
+      "official": true,
+      "path": "web-socket-streams.md",
+      "url": "https://github.com/binance/binance-spot-api-docs/blob/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/web-socket-streams.md",
+      "currentUrl": "https://developers.binance.com/docs/binance-spot-api-docs/web-socket-streams",
+      "rawUrl": "https://raw.githubusercontent.com/binance/binance-spot-api-docs/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/web-socket-streams.md",
+      "bytes": 22958,
+      "sha256": "32bf73a0bed3b75e3ca981fdbaf48c53544bbdfb5944ef8ed1c4d7af9aceba0a",
+      "claimCoverage": [
+        "data-stream.binance.vision is public market data only and excludes user data",
+        "combined streams use /stream?streams=<stream1>/<stream2> and wrap payloads as {stream,data}",
+        "timestamps default to milliseconds and timeUnit=MICROSECOND requests microseconds",
+        "aggregate-trade stream fields and real-time cadence",
+        "trade stream fields and real-time cadence",
+        "bookTicker fields and real-time cadence",
+        "diff-depth fields and depth@100ms cadence",
+        "snapshot plus buffered diff-depth local-order-book procedure",
+        "missed update IDs require discarding the local book and restarting"
+      ]
+    },
+    {
+      "id": "SPOT_REST_API",
+      "official": true,
+      "path": "rest-api.md",
+      "url": "https://github.com/binance/binance-spot-api-docs/blob/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/rest-api.md",
+      "currentUrl": "https://developers.binance.com/docs/binance-spot-api-docs/rest-api/market-data-endpoints",
+      "rawUrl": "https://raw.githubusercontent.com/binance/binance-spot-api-docs/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/rest-api.md",
+      "bytes": 181189,
+      "sha256": "49ea6809243fc7fb426e07f2fe662097736c7bb405bd2da5eef637d715427999",
+      "claimCoverage": [
+        "GET /api/v3/exchangeInfo returns current trading rules and symbol information",
+        "GET /api/v3/depth returns lastUpdateId and up to 5000 levels",
+        "depth request weight is bounded by requested limit"
+      ]
+    },
+    {
+      "id": "SPOT_FILTERS",
+      "official": true,
+      "path": "filters.md",
+      "url": "https://github.com/binance/binance-spot-api-docs/blob/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/filters.md",
+      "currentUrl": "https://developers.binance.com/docs/binance-spot-api-docs/filters",
+      "rawUrl": "https://raw.githubusercontent.com/binance/binance-spot-api-docs/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/filters.md",
+      "bytes": 13528,
+      "sha256": "4b5a8f0f5d15bcf68fd7ac2059ba6c88da641c06fd7885e642330c5ac8124dd3",
+      "claimCoverage": [
+        "PRICE_FILTER",
+        "PERCENT_PRICE",
+        "PERCENT_PRICE_BY_SIDE",
+        "LOT_SIZE",
+        "MIN_NOTIONAL",
+        "NOTIONAL",
+        "MARKET_LOT_SIZE"
+      ]
+    },
+    {
+      "id": "SPOT_MARKET_DATA_ONLY_URLS",
+      "official": true,
+      "path": "faqs/market_data_only.md",
+      "url": "https://github.com/binance/binance-spot-api-docs/blob/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/faqs/market_data_only.md",
+      "currentUrl": "https://github.com/binance/binance-spot-api-docs/blob/master/faqs/market_data_only.md",
+      "rawUrl": "https://raw.githubusercontent.com/binance/binance-spot-api-docs/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/faqs/market_data_only.md",
+      "bytes": 1616,
+      "sha256": "57d608507426215c43f11907c07ed693f02725840d9ee4d6630f134de402b6da",
+      "claimCoverage": [
+        "data-api.binance.vision public REST market-data allowlist",
+        "data-stream.binance.vision public WebSocket market data",
+        "user data streams are unavailable from the market-data-only origin"
+      ]
+    }
+  ],
+  "captureAllowlist": {
+    "rest": {
+      "origin": "https://data-api.binance.vision",
+      "method": "GET",
+      "paths": [
+        "/api/v3/exchangeInfo",
+        "/api/v3/depth"
+      ],
+      "redirects": "FORBIDDEN",
+      "authentication": "FORBIDDEN"
+    },
+    "webSocket": {
+      "origin": "wss://data-stream.binance.vision:443",
+      "path": "/stream",
+      "streams": [
+        "<symbol>@depth@100ms",
+        "<symbol>@aggTrade",
+        "<symbol>@trade",
+        "<symbol>@bookTicker"
+      ],
+      "userData": "FORBIDDEN",
+      "authentication": "FORBIDDEN"
+    }
+  },
+  "mappingBoundary": {
+    "historicalSubstitution": "FORBIDDEN",
+    "currentBookAsHistory": "FORBIDDEN",
+    "silentGapFill": "FORBIDDEN",
+    "publicSmoke": "SMOKE_MECHANICS_ONLY",
+    "economicClaim": "NOT_ESTIMABLE_UNTIL_PROSPECTIVE_INTERVAL_TERMINAL_ACCEPTED"
+  }
+}

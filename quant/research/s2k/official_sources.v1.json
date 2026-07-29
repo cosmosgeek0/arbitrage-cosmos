@@ -1,0 +1,38 @@
+{
+  "schema": "S2KOfficialSourcesV1",
+  "checkedAtUtc": "2026-07-29T19:32:45Z",
+  "officialRepositories": [
+    {
+      "name": "binance-public-data",
+      "commit": "5c7f3197591c0d54d85dc43066226bc4c671d47a",
+      "url": "https://github.com/binance/binance-public-data"
+    },
+    {
+      "name": "binance-spot-api-docs",
+      "commit": "6b8372cad7cecbdf5dd88a3372eafff51988c5cf",
+      "url": "https://github.com/binance/binance-spot-api-docs"
+    }
+  ],
+  "officialClaims": {
+    "archiveRoot": "https://data.binance.vision",
+    "archiveTemplate": "https://data.binance.vision/data/spot/monthly/klines/{SYMBOL}/5m/{SYMBOL}-5m-{YYYY}-{MM}.zip",
+    "checksumTemplate": "ARCHIVE_URL_PLUS_.CHECKSUM",
+    "archiveReplacementPossible": true,
+    "klineColumns": 12,
+    "spotArchiveTimestampCutoverUtc": "2025-01-01T00:00:00Z",
+    "s2kTimestampUnit": "MICROSECONDS",
+    "currentExchangeInfoIsHistoricalProof": false,
+    "regularSpotMakerBpsPublicTable": "10",
+    "regularSpotTakerBpsPublicTable": "10",
+    "accountEffectiveCommission": "UNKNOWN_PUBLIC_ONLY",
+    "spotShortBorrowAvailabilityAndCost": "UNKNOWN_PUBLIC_ONLY"
+  },
+  "urls": [
+    "https://github.com/binance/binance-public-data/blob/5c7f3197591c0d54d85dc43066226bc4c671d47a/README.md",
+    "https://github.com/binance/binance-spot-api-docs/blob/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/rest-api.md",
+    "https://github.com/binance/binance-spot-api-docs/blob/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/filters.md",
+    "https://github.com/binance/binance-spot-api-docs/blob/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/faqs/commission_faq.md",
+    "https://www.binance.com/en/fee/trading",
+    "https://developers.binance.com/en/docs/catalog"
+  ]
+}

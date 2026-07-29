@@ -1,0 +1,37 @@
+{
+  "schema": "S2KAttemptLedgerV1",
+  "familyId": "SPOT_CROSS_SECTIONAL_REALIZED_THIRD_MOMENT_LOW_MINUS_HIGH",
+  "authoritativeAttemptCount": 1,
+  "attempts": [
+    {
+      "attemptId": "S2K-RS5M-D1-K4-EQ",
+      "state": "FROZEN_PRIMARY",
+      "estimator": "SQRT_288_SUM_CUBED_LOG_RETURN_DIV_REALIZED_VARIANCE_POWER_3_OVER_2",
+      "direction": "LONG_FOUR_LOWEST_SHORT_FOUR_HIGHEST",
+      "formation": "ONE_COMPLETE_UTC_DAY",
+      "entry": "NEXT_UTC_DAY_00_05_TO_00_10_VWAP",
+      "exit": "FOLLOWING_UTC_DAY_00_05_TO_00_10_VWAP",
+      "weighting": "EQUAL_ABSOLUTE_NOTIONAL_500_LONG_500_SHORT",
+      "outcomeInspectedBeforeFreeze": false
+    }
+  ],
+  "manualAbandonedFailedOrAlternateSkewnessAttempts": [],
+  "forbiddenUnledgeredAlternates": [
+    "DIRECTION_FLIP",
+    "OTHER_BAR_INTERVAL",
+    "OTHER_FORMATION_HORIZON",
+    "OTHER_HOLD_HORIZON",
+    "OTHER_TAIL_SIZE",
+    "WINSORIZATION",
+    "SAMPLE_SKEWNESS",
+    "IDIOSYNCRATIC_SKEWNESS",
+    "COSKEWNESS",
+    "POST_OUTCOME_UNIVERSE_CHANGE"
+  ],
+  "pbo": {
+    "state": "NOT_APPLICABLE_SINGLE_FROZEN_CONFIGURATION",
+    "attemptCount": 1,
+    "role": "DIAGNOSTIC_ONLY_NOT_A_P_VALUE",
+    "numericValue": null
+  }
+}

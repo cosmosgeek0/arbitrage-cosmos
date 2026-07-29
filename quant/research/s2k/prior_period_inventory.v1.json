@@ -1,0 +1,29 @@
+{
+  "schema": "S2KPriorPeriodInventoryV1",
+  "frozenAtUtc": "2026-07-30T00:00:00Z",
+  "s2kInternalOutcomeAccessBeforeFreeze": false,
+  "s2kInternalHoldoutState": "UNOPENED_NOT_ACQUIRED",
+  "globalHoldoutState": "SHARED_2025_07_TO_2026_06_CORPUS_NOT_FRESH_GLOBAL_HOLDOUT",
+  "knownOverlap": [
+    {
+      "family": "S-1F",
+      "period": "[2025-07-01,2026-07-01)",
+      "state": "TERMINAL_UNMEASURED_HOLDOUT_UNOPENED",
+      "relation": "DIFFERENT_SIGNAL_SHARED_SPOT_PRICE_CORPUS"
+    },
+    {
+      "family": "V-G_ACCEPTED_AND_ACTIVE_SET",
+      "period": "[2025-07-01,2026-07-01)",
+      "state": "MULTIPLE_DISCLOSED_RESULTS",
+      "relation": "DIFFERENT_SIGNALS_SHARED_PUBLIC_CORPUS"
+    },
+    {
+      "family": "S-2C_AND_OTHER_ACTIVE_S2",
+      "period": "[2025-07-01,2026-07-01)",
+      "state": "SIMULTANEOUS_INDEPENDENT_TASKS",
+      "relation": "DIFFERENT_SIGNALS_SHARED_PUBLIC_CORPUS"
+    }
+  ],
+  "law": "S2K_INTERNAL_HOLDOUT_CAN_TEST_THE_FROZEN_S2K_CANDIDATE_BUT_CANNOT_BE_CALLED_FRESH_GLOBAL_CONFIRMATION_OR_CAPITAL_AUTHORITY",
+  "consumerBoundary": "N3_SUCCESSOR_OR_NEW_ACCEPTED_REGISTRY_MUST_COUNT_S2K_AND_SHARED_CORPUS_REUSE_EXPLICITLY"
+}

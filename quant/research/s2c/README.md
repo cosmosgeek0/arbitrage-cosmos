@@ -9,6 +9,11 @@ public archives outside Git. The evaluator has one permitted economic run, uses
 development data first, and opens the sealed holdout only if every frozen
 development gate passes.
 
+`protocol.freeze.v2.json` is the operative freeze. It preserves and supersedes the
+first pre-outcome freeze after an independent STOP found missing funding-cadence
+validation and a contradictory holdout-failure state. No archive body had been
+opened and no economic run had been consumed before this correction.
+
 Commands are run from `quant/` with `PYTHONPATH=.`:
 
 ```text
@@ -21,4 +26,3 @@ python3.13 research/s2c/verifier.py
 The frozen family uses only the second moment of prior-only market-model residuals.
 Residual sign, residual momentum, raw return momentum, reversal, funding rank, volume
 rank, and outcome-conditioned universe changes are forbidden.
-

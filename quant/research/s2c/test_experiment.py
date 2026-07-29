@@ -93,11 +93,38 @@ def test_parse_funding_zip_requires_exact_schema(tmp_path: Path) -> None:
         "funding.csv",
         f"calc_time,funding_interval_hours,last_funding_rate\n{timestamp},8,0.0001\n",
     )
-    assert exp.parse_funding_zip(good) == [exp.Funding(timestamp, 0.0001)]
+    assert exp.parse_funding_zip(good) == [exp.Funding(timestamp, 8, 0.0001)]
     bad = tmp_path / "bad.zip"
     write_zip(bad, "funding.csv", f"time,rate\n{timestamp},0.0001\n")
     with pytest.raises(exp.ExperimentError, match="FUNDING_HEADER_INVALID"):
         exp.parse_funding_zip(bad)
+
+
+def test_funding_window_requires_complete_declared_cadence() -> None:
+    start = int(datetime(2026, 1, 1, tzinfo=UTC).timestamp() * 1000)
+    complete = [
+        exp.Funding(start + offset * exp.HOUR_MS, 8, 0.0001)
+        for offset in (0, 8, 16, 24, 32)
+    ]
+    events = exp.funding_events_for_window(
+        "BTCUSDT",
+        complete,
+        start + exp.HOUR_MS,
+        start + 25 * exp.HOUR_MS,
+    )
+    assert [item.time_ms for item in events] == [
+        start + 8 * exp.HOUR_MS,
+        start + 16 * exp.HOUR_MS,
+        start + 24 * exp.HOUR_MS,
+    ]
+    missing = [complete[0], *complete[2:]]
+    with pytest.raises(exp.ExperimentError, match="FUNDING_COVERAGE_GAP"):
+        exp.funding_events_for_window(
+            "BTCUSDT",
+            missing,
+            start + exp.HOUR_MS,
+            start + 25 * exp.HOUR_MS,
+        )
 
 
 def test_daily_maps_requires_complete_24_hour_day() -> None:

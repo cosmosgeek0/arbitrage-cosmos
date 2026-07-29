@@ -29,7 +29,8 @@ HERE = Path(__file__).resolve().parent
 PROTOCOL_PATH = HERE / "protocol.v1.json"
 SOURCES_PATH = HERE / "official_sources.v1.json"
 SOURCE_PLAN_PATH = HERE / "source_plan.v1.json"
-FREEZE_PATH = HERE / "protocol.freeze.v1.json"
+PRIOR_FREEZE_PATH = HERE / "protocol.freeze.v1.json"
+FREEZE_PATH = HERE / "protocol.freeze.v2.json"
 MANIFEST_PATH = HERE / "source_manifest.v1.json"
 RUN_STARTED_PATH = HERE / "RUN_STARTED.v1.json"
 DEVELOPMENT_PATH = HERE / "development.v1.json"
@@ -51,6 +52,7 @@ STATIC_FILES = (
     "__init__.py",
     "experiment.py",
     "official_sources.v1.json",
+    "protocol.freeze.v1.json",
     "protocol.v1.json",
     "source_plan.v1.json",
     "test_experiment.py",
@@ -73,6 +75,7 @@ class HourBar:
 @dataclass(frozen=True)
 class Funding:
     time_ms: int
+    interval_hours: int
     rate: float
 
 
@@ -193,11 +196,15 @@ def freeze_protocol() -> dict[str, Any]:
     if protocol.get("canonicalBaseCommit") != BASE_COMMIT:
         raise ExperimentError("CANONICAL_BASE_MISMATCH")
     freeze = {
-        "schema": "S2CProtocolFreezeV1",
+        "schema": "S2CProtocolFreezeV2",
         "state": "PROTOCOL_BYTES_FROZEN_BEFORE_ARCHIVE_OUTCOME_ACCESS",
         "canonicalBaseCommit": BASE_COMMIT,
         "frozenAtUtc": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "staticSha256": {name: sha256_path(HERE / name) for name in STATIC_FILES},
+        "supersedesSha256": sha256_path(PRIOR_FREEZE_PATH),
+        "supersessionReason": (
+            "PRE_OUTCOME_REVIEW_STOP_FIXED_FUNDING_COVERAGE_AND_HOLDOUT_FAILURE_STATE"
+        ),
         "plannedArtifactCount": len(planned_artifacts()),
         "economicRunsAllowed": 1,
         "holdoutOpensAllowed": 1,
@@ -412,14 +419,69 @@ def parse_funding_zip(path: Path) -> list[Funding]:
             rate = float(row[2])
         except ValueError as error:
             raise ExperimentError(f"FUNDING_VALUE_INVALID:{path.name}:{ordinal}") from error
-        if timestamp in seen or timestamp <= prior or interval <= 0 or not math.isfinite(rate):
+        if (
+            timestamp in seen
+            or timestamp <= prior
+            or interval <= 0
+            or interval > 24
+            or not math.isfinite(rate)
+        ):
             raise ExperimentError(f"FUNDING_ROW_INVALID:{path.name}:{ordinal}")
         if timestamp % HOUR_MS != 0:
             raise ExperimentError(f"FUNDING_TIME_NOT_HOURLY:{path.name}:{ordinal}")
         seen.add(timestamp)
         prior = timestamp
-        parsed.append(Funding(timestamp, rate))
+        parsed.append(Funding(timestamp, interval, rate))
     return parsed
+
+
+def validate_funding_series(symbol: str, values: list[Funding]) -> None:
+    if not values:
+        raise ExperimentError(f"FUNDING_SERIES_EMPTY:{symbol}")
+    for left, right in itertools.pairwise(values):
+        difference = right.time_ms - left.time_ms
+        if difference <= 0 or difference % HOUR_MS != 0:
+            raise ExperimentError(f"FUNDING_CADENCE_INVALID:{symbol}:{right.time_ms}")
+        hours = difference // HOUR_MS
+        if hours not in {left.interval_hours, right.interval_hours}:
+            raise ExperimentError(f"FUNDING_COVERAGE_GAP:{symbol}:{right.time_ms}")
+
+
+def funding_events_for_window(
+    symbol: str,
+    values: list[Funding],
+    entry_ms: int,
+    exit_ms: int,
+) -> list[Funding]:
+    if entry_ms >= exit_ms:
+        raise ExperimentError(f"FUNDING_WINDOW_INVALID:{symbol}")
+    relevant = [
+        item
+        for item in values
+        if item.time_ms <= entry_ms
+        or entry_ms <= item.time_ms < exit_ms
+        or item.time_ms >= exit_ms
+    ]
+    before = [item for item in relevant if item.time_ms <= entry_ms]
+    after = [item for item in relevant if item.time_ms >= exit_ms]
+    if not before or not after:
+        raise ExperimentError(f"FUNDING_BOUNDARY_COVERAGE_MISSING:{symbol}")
+    prior = before[-1]
+    following = after[0]
+    if entry_ms - prior.time_ms > prior.interval_hours * HOUR_MS:
+        raise ExperimentError(f"FUNDING_ENTRY_COVERAGE_GAP:{symbol}:{entry_ms}")
+    if following.time_ms - exit_ms > following.interval_hours * HOUR_MS:
+        raise ExperimentError(f"FUNDING_EXIT_COVERAGE_GAP:{symbol}:{exit_ms}")
+    span = [
+        item
+        for item in values
+        if prior.time_ms <= item.time_ms <= following.time_ms
+    ]
+    validate_funding_series(symbol, span)
+    settlements = [item for item in span if entry_ms <= item.time_ms < exit_ms]
+    if not settlements:
+        raise ExperimentError(f"FUNDING_SETTLEMENTS_MISSING:{symbol}:{entry_ms}")
+    return settlements
 
 
 def load_data(
@@ -452,6 +514,7 @@ def load_data(
         if len({item.time_ms for item in symbol_funding}) != len(symbol_funding):
             raise ExperimentError(f"FUNDING_DUPLICATE_ACROSS_MONTHS:{symbol}")
         funding[symbol] = sorted(symbol_funding, key=lambda item: item.time_ms)
+        validate_funding_series(symbol, funding[symbol])
         symbol_marks: dict[int, HourBar] = {}
         for month in mark_months or funding_months:
             row = index[("markPriceKlines", symbol, month)]
@@ -633,16 +696,19 @@ def evaluate_formation(
         exit_notional = quantity * exit_bar.open_price
         gross_price += side * quantity * (exit_bar.open_price - entry.open_price)
         entry_exit_notional += abs(signed_notional) + exit_notional
-        for settlement in funding[symbol]:
-            if entry_ms <= settlement.time_ms < exit_ms:
-                mark = marks[symbol].get(settlement.time_ms)
-                if mark is None:
-                    return invalid_formation(
-                        trial_id,
-                        formation_ms,
-                        f"FUNDING_MARK_MISSING:{symbol}:{settlement.time_ms}",
-                    )
-                funding_pnl += -side * quantity * mark.open_price * settlement.rate
+        settlements = funding_events_for_window(
+            symbol,
+            funding[symbol],
+            entry_ms,
+            exit_ms,
+        )
+        for settlement in settlements:
+            mark = marks[symbol].get(settlement.time_ms)
+            if mark is None:
+                raise ExperimentError(
+                    f"FUNDING_MARK_MISSING:{symbol}:{settlement.time_ms}"
+                )
+            funding_pnl += -side * quantity * mark.open_price * settlement.rate
         liquidity = median_prior_volume(symbol, formation_day, volumes)
         fraction = abs(signed_notional) / 1000
         if liquidity is None or fraction <= 0:
@@ -1162,6 +1228,12 @@ def run_experiment() -> dict[str, Any]:
         fsync_json(RESULT_PATH, result, exclusive=True)
         return result
     except Exception as error:
+        holdout_opened = STATE_HOLDOUT_MARKER.exists() or HOLDOUT_PATH.exists()
+        selected_trial: str | None = None
+        if CANDIDATE_PATH.exists():
+            candidate_value = load_json(CANDIDATE_PATH)
+            raw_trial = candidate_value.get("trialId")
+            selected_trial = str(raw_trial) if raw_trial is not None else None
         terminal = {
             "schema": "S2CResultV1",
             "state": "TERMINAL_UNMEASURED",
@@ -1169,7 +1241,7 @@ def run_experiment() -> dict[str, Any]:
             "capitalVerdict": "NO_GO",
             "executionAuthority": "NONE",
             "consumer": "N3 successor/final convergence",
-            "selectedTrialId": None,
+            "selectedTrialId": selected_trial,
             "reporting": {
                 "partition": None,
                 "baseNetUsdPer1000": None,
@@ -1181,13 +1253,21 @@ def run_experiment() -> dict[str, Any]:
                 "accountEffectiveFees": "UNKNOWN",
             },
             "holdout": {
-                "state": "UNOPENED",
-                "openedCount": 0,
-                "reason": "DEVELOPMENT_MEASUREMENT_INVALID",
+                "state": (
+                    "OPENED_ONCE_MEASUREMENT_FAILED"
+                    if holdout_opened
+                    else "UNOPENED"
+                ),
+                "openedCount": 1 if holdout_opened else 0,
+                "reason": (
+                    "HOLDOUT_MEASUREMENT_INVALID"
+                    if holdout_opened
+                    else "DEVELOPMENT_MEASUREMENT_INVALID"
+                ),
             },
             "lifecycle": {
                 "runCount": 1,
-                "holdoutOpenCount": 0,
+                "holdoutOpenCount": 1 if holdout_opened else 0,
                 "networkCallsDuringEvaluation": 0,
                 "repairRerunRetuneAllowed": False,
             },

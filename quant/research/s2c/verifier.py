@@ -27,6 +27,7 @@ PACKET_FILES = (
     "experiment.py",
     "official_sources.v1.json",
     "protocol.freeze.v1.json",
+    "protocol.freeze.v2.json",
     "protocol.v1.json",
     "result.v1.json",
     "source_manifest.v1.json",
@@ -56,7 +57,7 @@ def digest(path: Path) -> str:
 
 
 def verify_static() -> None:
-    freeze = load(HERE / "protocol.freeze.v1.json")
+    freeze = load(HERE / "protocol.freeze.v2.json")
     hashes = freeze.get("staticSha256")
     if not isinstance(hashes, dict):
         raise VerificationError("FREEZE_HASH_MAP_INVALID")
@@ -68,7 +69,7 @@ def verify_static() -> None:
 
 def verify_manifest() -> int:
     manifest = load(HERE / "source_manifest.v1.json")
-    if manifest.get("freezeSha256") != digest(HERE / "protocol.freeze.v1.json"):
+    if manifest.get("freezeSha256") != digest(HERE / "protocol.freeze.v2.json"):
         raise VerificationError("MANIFEST_FREEZE_INVALID")
     rows = manifest.get("rows")
     if not isinstance(rows, list) or not rows:

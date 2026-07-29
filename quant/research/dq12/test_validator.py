@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-
 from research.dq12.validator import (
     MAX_ALIAS_DEPTH,
     MAX_INPUT_BYTES,
@@ -280,7 +279,7 @@ def _request_for(
             "payloadSize": len(spot_bytes),
             "retrievedAtMs": EVALUATION_TIME_MS - 30_000,
         },
-        "spotSymbol": _row(packet.spot)["symbol"],
+        "spotSymbol": _rows(packet.spot)[0]["symbol"],
         "statusScope": "CURRENT",
         "usdmSource": {
             "endpoint": USDM_ENDPOINT_V1,
@@ -289,7 +288,7 @@ def _request_for(
             "payloadSize": len(usdm_bytes),
             "retrievedAtMs": EVALUATION_TIME_MS - 25_000,
         },
-        "usdmSymbol": _row(packet.usdm)["symbol"],
+        "usdmSymbol": _rows(packet.usdm)[0]["symbol"],
     }
 
 

@@ -10,6 +10,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from fractions import Fraction
+from itertools import pairwise
 from pathlib import Path
 from typing import Final, NoReturn, cast
 
@@ -538,7 +539,7 @@ def _validate_json_tree(root: object) -> None:
 def _parse_json_bytes(value: object, *, field: str) -> object:
     if type(value) is not bytes:
         _fail("INPUT_NOT_BYTES", f"{field} must be exact bytes")
-    payload = cast(bytes, value)
+    payload = value
     if not 1 <= len(payload) <= MAX_INPUT_BYTES:
         _fail("INPUT_SIZE_INVALID", f"{field} exceeds the frozen byte bound")
     _scan_json_depth(payload)
@@ -757,7 +758,7 @@ def _validate_registry_edges(edges: tuple[_RegistryEdge, ...]) -> None:
                 item.target,
             ),
         )
-        for previous, current in zip(ordered, ordered[1:], strict=False):
+        for previous, current in pairwise(ordered):
             if _intervals_overlap(previous, current):
                 _fail(
                     "REGISTRY_AMBIGUOUS_EDGE",
@@ -777,11 +778,9 @@ def _parse_registry(value: object) -> _Registry:
         _fail("JSON_SHAPE_INVALID", "registry bindings and migrations must be arrays")
     if len(bindings_raw) + len(migrations_raw) > MAX_REGISTRY_EDGES:
         _fail("REGISTRY_CARDINALITY_INVALID", "registry edge count exceeds the bound")
-    edges = tuple(
-        [
-            *(_parse_binding(value, index=index) for index, value in enumerate(bindings_raw)),
-            *(_parse_migration(value, index=index) for index, value in enumerate(migrations_raw)),
-        ]
+    edges = (
+        *(_parse_binding(value, index=index) for index, value in enumerate(bindings_raw)),
+        *(_parse_migration(value, index=index) for index, value in enumerate(migrations_raw)),
     )
     _validate_registry_edges(edges)
     return _Registry(

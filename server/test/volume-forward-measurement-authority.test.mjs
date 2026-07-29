@@ -278,9 +278,11 @@ function changedPaths() {
   return [...new Set([...committed, ...working])].sort();
 }
 
-test('V-I2 changes remain inside the exclusive forward-measurement source and test scope', () => {
+test('V-I2/V-I3 changes remain inside the exclusive forward-measurement source and test scope', () => {
   const allowed = [
     /^server\/src\/engine\/volume\/forwardMeasurement[^/]*\.ts$/,
+    /^server\/src\/engine\/volume\/engine\.ts$/,
+    /^server\/src\/services\/volumeRuntime\.ts$/,
     /^server\/test\/volume-forward-measurement[^/]*\.mjs$/,
     /^quant\/research\/ve2\/.+$/,
   ];
@@ -290,7 +292,7 @@ test('V-I2 changes remain inside the exclusive forward-measurement source and te
     changed.filter((path) => !allowed.some((pattern) => pattern.test(path))),
     [],
   );
-  assert.equal(changed.some((path) => /(?:^|\/)(?:package(?:-lock)?\.json|volumeRuntime\.ts|index\.ts|bootstrap[^/]*)$/i.test(path)), false);
+  assert.equal(changed.some((path) => /(?:^|\/)(?:package(?:-lock)?\.json|index\.ts|bootstrap[^/]*)$/i.test(path)), false);
 });
 
 test('forward-measurement local import graph is deterministic, network-free, and authority-free', () => {

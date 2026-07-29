@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmos.local/schemas/vi3.capture-ready-acceptance.v1.json",
+  "title": "V-I3 independently reviewed capture-ready acceptance receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "verdict",
+    "independentExactHashReview",
+    "acceptedCaptureCandidateCommit",
+    "acceptedCaptureCandidateTree",
+    "directParentCommit",
+    "baseMeasurementTree",
+    "acceptedAtUtc",
+    "captureImplementationSha256",
+    "packetMeasurementPolicySha256",
+    "detectorCoverageCorePolicyDigest",
+    "detectorInputSourceId",
+    "detectorInputSourceDigest",
+    "detectorCoverageChainKey",
+    "terminalMetricsPolicySha256",
+    "vI3ChecksumFileSha256",
+    "outcomeBytesAccessed"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "vi3.capture-ready-acceptance.v1"
+    },
+    "verdict": {
+      "const": "ACCEPT"
+    },
+    "independentExactHashReview": {
+      "const": true
+    },
+    "acceptedCaptureCandidateCommit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "acceptedCaptureCandidateTree": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "directParentCommit": {
+      "const": "285810ec3264a6a9edd61c283f809ae6291f1c83"
+    },
+    "baseMeasurementTree": {
+      "const": "316b560a33477547197ece86a333f54ebc8605ef"
+    },
+    "acceptedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "captureImplementationSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "packetMeasurementPolicySha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "detectorCoverageCorePolicyDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "detectorInputSourceId": {
+      "const": "local://volume-engine/detector-evaluation-cut/v1"
+    },
+    "detectorInputSourceDigest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "detectorCoverageChainKey": {
+      "type": "string",
+      "pattern": "^ve2_detector_coverage_[a-f0-9]{64}$"
+    },
+    "terminalMetricsPolicySha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "vI3ChecksumFileSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "outcomeBytesAccessed": {
+      "const": false
+    }
+  }
+}

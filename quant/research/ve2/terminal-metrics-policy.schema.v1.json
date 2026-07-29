@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmos.local/schemas/vi3.terminal-metrics-policy.v1.json",
+  "title": "V-I3 exact pre-activation terminal metrics policy",
+  "const": {
+    "schemaVersion": "vi3.terminal-metrics-policy.v1",
+    "milestone": "V-I3",
+    "policyId": "VOLUME_FORWARD_TERMINAL_METRICS_V1",
+    "frozenBeforeActivation": true,
+    "scope": "PUBLIC_SCENARIO_RESEARCH_ONLY",
+    "evaluationUnit": "EXACT_TERMINAL_LIFECYCLE",
+    "ordering": [
+      "detectorCutOffset",
+      "proposalId"
+    ],
+    "measurementWindow": {
+      "source": "ve2.capture-activation.v1",
+      "warmupScored": false,
+      "intervalDurationMs": 2592000000,
+      "maturityLagMs": 62000,
+      "shorteningForbidden": true,
+      "partialIntervalMetricsForbidden": true
+    },
+    "sample": {
+      "acceptedProposalLifecycleBijectionRequired": true,
+      "terminalStateRequired": "EXACT",
+      "sourceNativeEconomicsStateRequired": "PUBLIC_SOURCE_FACTS_ONLY",
+      "blockedLifecycleCountRequired": 0,
+      "minimumExactTerminalLifecycles": 30,
+      "zeroIsUnmeasuredNotZero": true
+    },
+    "edgePer1000": {
+      "valuationNotional": "1000",
+      "quoteAsset": "USDT",
+      "pointEstimator": "ARITHMETIC_MEAN_OF_EXACT_LIFECYCLE_EDGE_PER_1000",
+      "scenarios": [
+        {
+          "id": "GROSS_PUBLIC_SOURCE_FACTS",
+          "sourceField": "grossEdgePer1000ValuationNotional",
+          "accountEffective": false
+        },
+        {
+          "id": "PUBLIC_10_BPS_PER_SIDE",
+          "sourceFeeBpsPerSide": "10",
+          "sourceField": "netEdgePer1000ValuationNotional",
+          "accountEffective": false
+        },
+        {
+          "id": "PUBLIC_12_BPS_PER_SIDE_STRESS",
+          "sourceFeeBpsPerSide": "12",
+          "sourceField": "netEdgePer1000ValuationNotional",
+          "accountEffective": false
+        }
+      ],
+      "exactDecimalRule": "Parse canonical decimal strings as integer coefficient plus scale, compute exact rational sums, and render 12 decimal places by half-away-from-zero rounding; null never becomes zero."
+    },
+    "uncertainty": {
+      "method": "SEEDED_CIRCULAR_UTC_DAY_BLOCK_BOOTSTRAP_OF_LIFECYCLE_MEAN",
+      "blockLengthUtcDays": 7,
+      "windowUtcDays": 30,
+      "replicates": 2000,
+      "seed": 20260728,
+      "prng": "MULBERRY32_UINT32",
+      "intervalLevel": "0.95",
+      "quantileRule": "NEAREST_RANK_CEILING",
+      "resampleRule": "For each replicate, sample circular seven-consecutive-UTC-day blocks with replacement until at least 30 UTC days are present, truncate to 30 days, retain all exact lifecycles in their detector order within selected days, and compute the lifecycle-weighted arithmetic mean. A replicate with no lifecycle is invalid and makes the terminal result UNMEASURED."
+    },
+    "drawdown": {
+      "metric": "MAX_PEAK_TO_TROUGH_CUMULATIVE_OPPORTUNITY_EDGE_PER_1000",
+      "ordering": [
+        "detectorCutOffset",
+        "proposalId"
+      ],
+      "scenarios": [
+        "GROSS_PUBLIC_SOURCE_FACTS",
+        "PUBLIC_10_BPS_PER_SIDE",
+        "PUBLIC_12_BPS_PER_SIDE_STRESS"
+      ],
+      "capitalDrawdownClaim": false,
+      "decisionThreshold": null
+    },
+    "capacity": {
+      "exactModeledQuoteNotionalPerLifecycle": "10.00",
+      "fullFillAtModeledNotionalRequired": true,
+      "capacityBeyondModeledNotional": "UNKNOWN",
+      "supports1000QuoteNotional": "UNKNOWN",
+      "extrapolationForbidden": true
+    },
+    "feePosture": {
+      "publicScenariosOnly": true,
+      "accountEffectiveFeeBpsPerSide": null,
+      "accountEffectiveFeeState": "UNKNOWN"
+    },
+    "verdict": {
+      "UNMEASURED": [
+        "activation, terminal manifest, outcome-open receipt, independent exact-hash anchors, or hashes are absent or invalid",
+        "the full unshortened interval, maturity, detector coverage, segment inventory, or accepted-proposal lifecycle bijection is incomplete",
+        "the exact terminal lifecycle count is below 30, any accepted lifecycle is blocked, any required economics value is null, or any bootstrap replicate is invalid"
+      ],
+      "NO_GO": "All measurability gates pass and the PUBLIC_12_BPS_PER_SIDE_STRESS 95% bootstrap lower bound is less than or equal to 0 USDT per $1k.",
+      "GO": "All measurability gates pass and the PUBLIC_12_BPS_PER_SIDE_STRESS 95% bootstrap lower bound is strictly greater than 0 USDT per $1k.",
+      "boundary": "A lower bound exactly equal to 0 is NO_GO.",
+      "accountEffectiveVerdict": "UNMEASURED",
+      "profitabilityClaim": false,
+      "executionAuthority": "NONE"
+    },
+    "consumerGate": {
+      "consumer": "Volume forward measurement activation, then N-3/post-F15 profitability intake",
+      "state": "BLOCKED_VE2_INTERVAL_NOT_TERMINAL_ACCEPTED",
+      "openCondition": "The exact terminal result and evidence candidate are independently accepted; a public-scenario GO does not establish account-effective profitability or $1k capacity."
+    }
+  }
+}

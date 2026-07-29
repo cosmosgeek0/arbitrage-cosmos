@@ -4,6 +4,11 @@ import { mapAggTrade, type RawAggTrade } from '../engine/volume/adapters.js';
 import type { VolumeConfig } from '../engine/volume/config.js';
 import { deriveVolumeConfigVersion } from '../engine/volume/config.js';
 import { VolumeEngine } from '../engine/volume/engine.js';
+import type { VolumeForwardDetectorSourceCut } from '../engine/volume/forwardMeasurementDetectorSource.js';
+import {
+  VOLUME_FORWARD_RUNTIME_DETECTOR_CUT_SCHEMA,
+  type VolumeRuntimeForwardDetectorCut,
+} from '../engine/volume/forwardMeasurementRunner.js';
 import {
   assessVolumeEconomics,
   VOLUME_CURRENT_CONDITIONAL_PROXY,
@@ -185,6 +190,21 @@ export interface VolumeRuntimeOptions {
   sourceRecoveryBaseMs?: number;
   random?: () => number;
   streamFactory?: VolumeStreamFactory;
+  /**
+   * Explicit, synchronous, observation-only V-I3 seam. Production remains
+   * unbound by default. The observer receives only sanitized public detector
+   * cuts and has no submit, CAS, private-read, or mutable engine authority.
+   */
+  forwardMeasurementObserver?: (
+    cut: Readonly<VolumeRuntimeForwardDetectorCut>,
+  ) => void;
+  /**
+   * Accepted V-I3 capture-generation identity. Omitted production composition
+   * continues to report the runtime's own generation.
+   */
+  forwardMeasurementRuntimeGeneration?: number;
+  /** Deterministic test seam for the local monotonic receive clock. */
+  forwardMeasurementMonotonicNowNs?: () => bigint;
 }
 
 const STREAM_CHUNK = 140;
@@ -305,6 +325,12 @@ export class VolumeRuntime {
   private tradeMessages = 0;
   private evidenceRevision = 0;
   private evidenceObserver: ((cut: VolumeRuntimeEvidenceCut) => void) | null = null;
+  private readonly forwardMeasurementObserver:
+    ((cut: Readonly<VolumeRuntimeForwardDetectorCut>) => void) | null;
+  private readonly forwardMeasurementRuntimeGeneration: number | null;
+  private readonly forwardMeasurementMonotonicNowNs: () => bigint;
+  private forwardMeasurementTickRevision = 0;
+  private forwardMeasurementObserverFailureCount = 0;
   private configKey = '';
   private persistedEventKeys = new Set<string>();
   private persistedEventOrder: string[] = [];
@@ -349,10 +375,37 @@ export class VolumeRuntime {
     if (options.streamFactory !== undefined && typeof options.streamFactory !== 'function') {
       throw new TypeError('VOLUME_STREAM_FACTORY_INVALID');
     }
+    if (
+      options.forwardMeasurementObserver !== undefined
+      && typeof options.forwardMeasurementObserver !== 'function'
+    ) {
+      throw new TypeError('VOLUME_FORWARD_MEASUREMENT_OBSERVER_INVALID');
+    }
+    if (
+      options.forwardMeasurementMonotonicNowNs !== undefined
+      && typeof options.forwardMeasurementMonotonicNowNs !== 'function'
+    ) {
+      throw new TypeError('VOLUME_FORWARD_MEASUREMENT_MONOTONIC_CLOCK_INVALID');
+    }
+    if (
+      options.forwardMeasurementRuntimeGeneration !== undefined
+      && (
+        !Number.isSafeInteger(options.forwardMeasurementRuntimeGeneration)
+        || options.forwardMeasurementRuntimeGeneration < 1
+      )
+    ) {
+      throw new TypeError('VOLUME_FORWARD_MEASUREMENT_GENERATION_INVALID');
+    }
     this.sourceRecoveryBaseMs = recoveryBaseMs;
     this.recoveryRandom = options.random ?? Math.random;
     this.streamFactory = options.streamFactory
       ?? ((name, url, onMessage, onStatus) => new BinanceStream(name, url, onMessage, onStatus));
+    this.forwardMeasurementObserver =
+      options.forwardMeasurementObserver ?? null;
+    this.forwardMeasurementRuntimeGeneration =
+      options.forwardMeasurementRuntimeGeneration ?? null;
+    this.forwardMeasurementMonotonicNowNs =
+      options.forwardMeasurementMonotonicNowNs ?? (() => process.hrtime.bigint());
     this.engine = new VolumeEngine(systemClock, undefined, {
       emit: (event) => this.persistEvent(event),
     });
@@ -398,6 +451,8 @@ export class VolumeRuntime {
     }
     const generation = ++this.generation;
     this.evidenceRevision = 0;
+    this.forwardMeasurementTickRevision = 0;
+    this.forwardMeasurementObserverFailureCount = 0;
     this.lastAggTradeId.clear();
     this.lastRawTradeId.clear();
     this.sourceContinuityLatch.clear();
@@ -527,7 +582,13 @@ export class VolumeRuntime {
       if (nextKey !== previousKey) {
         this.launch('config universe refresh', generation, () => this.refreshUniverse(generation));
       }
-      this.engine.tick();
+      const detectorSourceCut = this.engine.tick(
+        this.forwardMeasurementObserver !== null,
+      );
+      this.publishForwardMeasurementDetectorCut(
+        generation,
+        detectorSourceCut,
+      );
       const tickAtMs = this.engine.lastTick();
       if (tickAtMs !== null) {
         this.evaluateStrategySlice();
@@ -570,6 +631,59 @@ export class VolumeRuntime {
           message: error instanceof Error ? error.message : String(error),
         });
       }
+    }
+  }
+
+  private publishForwardMeasurementDetectorCut(
+    generation: number,
+    sourceCut: Readonly<VolumeForwardDetectorSourceCut> | null,
+  ): void {
+    if (this.forwardMeasurementObserver === null) return;
+    if (sourceCut === null || generation !== this.generation) {
+      this.forwardMeasurementObserverFailureCount += 1;
+      return;
+    }
+    let localMonotonicNs: bigint;
+    try {
+      localMonotonicNs = this.forwardMeasurementMonotonicNowNs();
+      if (typeof localMonotonicNs !== 'bigint' || localMonotonicNs < 0n) {
+        throw new TypeError('invalid forward measurement monotonic clock');
+      }
+      if (
+        !Number.isSafeInteger(this.forwardMeasurementTickRevision)
+        || this.forwardMeasurementTickRevision >= Number.MAX_SAFE_INTEGER
+      ) {
+        throw new RangeError('forward measurement tick revision exhausted');
+      }
+      this.forwardMeasurementTickRevision += 1;
+      const cut: Readonly<VolumeRuntimeForwardDetectorCut> = Object.freeze({
+        schemaVersion: VOLUME_FORWARD_RUNTIME_DETECTOR_CUT_SCHEMA,
+        runtimeGeneration:
+          this.forwardMeasurementRuntimeGeneration ?? generation,
+        detectorTickRevision: this.forwardMeasurementTickRevision,
+        localReceivedAtMs: this.latchedNowMs(),
+        localMonotonicNs: String(localMonotonicNs),
+        observerFailureCount:
+          this.forwardMeasurementObserverFailureCount,
+        sourceCut,
+      });
+      const result = this.forwardMeasurementObserver(cut) as unknown;
+      if (
+        result !== null
+        && (
+          typeof result === 'object'
+          || typeof result === 'function'
+        )
+        && typeof (result as PromiseLike<unknown>).then === 'function'
+      ) {
+        throw new TypeError('forward measurement observer must be synchronous');
+      }
+    } catch (error) {
+      this.forwardMeasurementObserverFailureCount += 1;
+      this.safeLog('error_event', null, {
+        source: 'volume-runtime.forward-measurement-observer',
+        message: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 

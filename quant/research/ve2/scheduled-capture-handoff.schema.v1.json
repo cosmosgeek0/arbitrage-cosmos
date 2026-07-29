@@ -1,0 +1,244 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmos.local/schemas/vi3.scheduled-capture-handoff.v1.json",
+  "title": "V-I3 independently accepted scheduled public capture handoff",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "handoffId",
+    "captureId",
+    "state",
+    "acceptanceReceiptUtf8",
+    "acceptanceReceiptSha256",
+    "acceptedCaptureCandidateCommit",
+    "acceptedCaptureCandidateTree",
+    "acceptedAtUtc",
+    "activation",
+    "activationSha256",
+    "terminalMetricsPolicySha256",
+    "vI3ChecksumFileSha256",
+    "schedule",
+    "detector",
+    "evidenceRoot",
+    "controls",
+    "explicitRunRequired",
+    "outcomeBytesAccessed",
+    "consumerGate"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "vi3.scheduled-capture-handoff.v1"
+    },
+    "handoffId": {
+      "type": "string",
+      "pattern": "^vi3_handoff_[a-f0-9]{64}$"
+    },
+    "captureId": {
+      "type": "string",
+      "pattern": "^ve2_capture_[a-f0-9]{64}$"
+    },
+    "state": {
+      "const": "READY_NOT_STARTED"
+    },
+    "acceptanceReceiptUtf8": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 131072,
+      "description": "Exact UTF-8 bytes of the independently held receipt, embedded without canonical rewriting so its externally held SHA-256 remains verifiable."
+    },
+    "acceptanceReceiptSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "acceptedCaptureCandidateCommit": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "acceptedCaptureCandidateTree": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "acceptedAtUtc": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "activation": {
+      "$ref": "activation.schema.v1.json"
+    },
+    "activationSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "terminalMetricsPolicySha256": {
+      "const": "78e30c081b52e21f604af86566fed293606f51b00cf38f6bddcacfe9a140c4c6"
+    },
+    "vI3ChecksumFileSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "schedule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "warmupStartUtc",
+        "scheduledCaptureStartUtc",
+        "admissionStartUtc",
+        "admissionEndExclusiveUtc",
+        "captureStopNotBeforeUtc",
+        "terminalizeNotBeforeUtc",
+        "detectorCadenceMs",
+        "detectorCutsPerSegment"
+      ],
+      "properties": {
+        "warmupStartUtc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "scheduledCaptureStartUtc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "admissionStartUtc": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "T00:00:00\\.000Z$"
+        },
+        "admissionEndExclusiveUtc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "captureStopNotBeforeUtc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "terminalizeNotBeforeUtc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "detectorCadenceMs": {
+          "const": 2000
+        },
+        "detectorCutsPerSegment": {
+          "const": 99998
+        }
+      }
+    },
+    "detector": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceId",
+        "sourceDigest",
+        "coverageCorePolicyDigest",
+        "coverageChainKey"
+      ],
+      "properties": {
+        "sourceId": {
+          "const": "local://volume-engine/detector-evaluation-cut/v1"
+        },
+        "sourceDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "coverageCorePolicyDigest": {
+          "type": "string",
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        },
+        "coverageChainKey": {
+          "type": "string",
+          "pattern": "^ve2_detector_coverage_[a-f0-9]{64}$"
+        }
+      }
+    },
+    "evidenceRoot": {
+      "type": "string",
+      "pattern": "^/"
+    },
+    "controls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "killSwitchEngaged",
+        "mode",
+        "recordOnly",
+        "publicOnly",
+        "executionAuthority",
+        "submitAuthority",
+        "casAuthority",
+        "privateDataAuthority",
+        "signedRequestAuthority",
+        "keyAuthority",
+        "providerAuthority",
+        "hostAuthority",
+        "orderAuthority",
+        "transferAuthority",
+        "withdrawalAuthority",
+        "moneyAuthority"
+      ],
+      "properties": {
+        "enabled": {
+          "const": false
+        },
+        "killSwitchEngaged": {
+          "const": true
+        },
+        "mode": {
+          "const": "SHADOW_ONLY"
+        },
+        "recordOnly": {
+          "const": true
+        },
+        "publicOnly": {
+          "const": true
+        },
+        "executionAuthority": {
+          "const": "NONE"
+        },
+        "submitAuthority": {
+          "const": "NONE"
+        },
+        "casAuthority": {
+          "const": "NONE"
+        },
+        "privateDataAuthority": {
+          "const": "NONE"
+        },
+        "signedRequestAuthority": {
+          "const": "NONE"
+        },
+        "keyAuthority": {
+          "const": "NONE"
+        },
+        "providerAuthority": {
+          "const": "NONE"
+        },
+        "hostAuthority": {
+          "const": "NONE"
+        },
+        "orderAuthority": {
+          "const": "NONE"
+        },
+        "transferAuthority": {
+          "const": "NONE"
+        },
+        "withdrawalAuthority": {
+          "const": "NONE"
+        },
+        "moneyAuthority": {
+          "const": "NONE"
+        }
+      }
+    },
+    "explicitRunRequired": {
+      "const": true
+    },
+    "outcomeBytesAccessed": {
+      "const": false
+    },
+    "consumerGate": {
+      "const": "BLOCKED_VE2_INTERVAL_NOT_TERMINAL_ACCEPTED"
+    }
+  }
+}

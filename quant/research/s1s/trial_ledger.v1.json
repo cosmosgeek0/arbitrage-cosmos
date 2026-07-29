@@ -1,0 +1,22 @@
+{
+  "schema": "S1STrialLedgerV1",
+  "protocolId": "s1s-binance-usdm-pre-settlement-funding-squeeze-v1",
+  "familySize": 12,
+  "primaryTrialId": "lb12_z2p5_lead60",
+  "trials": [
+    {"trialId": "lb6_z1p5_lead30", "lookbackEvents": 6, "zThreshold": 1.5, "entryLeadMinutes": 30, "exitLeadMinutes": 5},
+    {"trialId": "lb6_z1p5_lead60", "lookbackEvents": 6, "zThreshold": 1.5, "entryLeadMinutes": 60, "exitLeadMinutes": 5},
+    {"trialId": "lb6_z1p5_lead120", "lookbackEvents": 6, "zThreshold": 1.5, "entryLeadMinutes": 120, "exitLeadMinutes": 5},
+    {"trialId": "lb6_z2p5_lead30", "lookbackEvents": 6, "zThreshold": 2.5, "entryLeadMinutes": 30, "exitLeadMinutes": 5},
+    {"trialId": "lb6_z2p5_lead60", "lookbackEvents": 6, "zThreshold": 2.5, "entryLeadMinutes": 60, "exitLeadMinutes": 5},
+    {"trialId": "lb6_z2p5_lead120", "lookbackEvents": 6, "zThreshold": 2.5, "entryLeadMinutes": 120, "exitLeadMinutes": 5},
+    {"trialId": "lb12_z1p5_lead30", "lookbackEvents": 12, "zThreshold": 1.5, "entryLeadMinutes": 30, "exitLeadMinutes": 5},
+    {"trialId": "lb12_z1p5_lead60", "lookbackEvents": 12, "zThreshold": 1.5, "entryLeadMinutes": 60, "exitLeadMinutes": 5},
+    {"trialId": "lb12_z1p5_lead120", "lookbackEvents": 12, "zThreshold": 1.5, "entryLeadMinutes": 120, "exitLeadMinutes": 5},
+    {"trialId": "lb12_z2p5_lead30", "lookbackEvents": 12, "zThreshold": 2.5, "entryLeadMinutes": 30, "exitLeadMinutes": 5},
+    {"trialId": "lb12_z2p5_lead60", "lookbackEvents": 12, "zThreshold": 2.5, "entryLeadMinutes": 60, "exitLeadMinutes": 5},
+    {"trialId": "lb12_z2p5_lead120", "lookbackEvents": 12, "zThreshold": 2.5, "entryLeadMinutes": 120, "exitLeadMinutes": 5}
+  ],
+  "abandonedOrInspectedActualDataVariants": [],
+  "extraTrialDisposition": "FAMILY_CONTAMINATED"
+}

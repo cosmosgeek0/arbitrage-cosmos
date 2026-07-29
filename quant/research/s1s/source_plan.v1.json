@@ -1,0 +1,37 @@
+{
+  "schema": "S1SSourcePlanV1",
+  "protocolId": "s1s-binance-usdm-pre-settlement-funding-squeeze-v1",
+  "sourceAuthority": "https://data.binance.vision",
+  "sharedDiscoveryPath": "/private/tmp/cosmos-s1h-btc-eth-rv-basis-v1/DISCOVERY.v1.json",
+  "sharedArchiveRoot": "/private/tmp/cosmos-s1h-btc-eth-rv-basis-v1/archives",
+  "expectedArchiveCount": 96,
+  "expectedKinds": [
+    "fundingRate",
+    "markPriceKlines",
+    "perpetualKlines",
+    "spotKlines"
+  ],
+  "expectedSymbols": [
+    "BTCUSDT",
+    "ETHUSDT"
+  ],
+  "expectedMonths": [
+    "2025-07",
+    "2025-08",
+    "2025-09",
+    "2025-10",
+    "2025-11",
+    "2025-12",
+    "2026-01",
+    "2026-02",
+    "2026-03",
+    "2026-04",
+    "2026-05",
+    "2026-06"
+  ],
+  "historicalScheduleSnapshotPaths": [],
+  "historicalScheduleSnapshotInventoryStatus": "ABSENT",
+  "preparePolicy": "verify discovery and raw ZIP SHA-256 only; never open ZIP members",
+  "sharedArchivePolicy": "read-only",
+  "holdoutPolicy": "S1S evaluator must not open holdout members before a candidate seal"
+}

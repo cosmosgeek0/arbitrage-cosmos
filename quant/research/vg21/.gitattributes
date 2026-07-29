@@ -1,0 +1,3 @@
+# The sealed preregistration preserves exact pre-run EOF bytes.
+*.json whitespace=-blank-at-eof
+*.md whitespace=-blank-at-eof

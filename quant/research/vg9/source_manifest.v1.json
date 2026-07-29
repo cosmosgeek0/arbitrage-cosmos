@@ -1,0 +1,110 @@
+{
+  "archiveBodyBytesRead": false,
+  "currentExchangeInfoUsed": false,
+  "enumerationRow": "canonical JSON of month,symbol,venue-relative ZIP path, ZIP byte size, CHECKSUM-declared ZIP SHA256, CHECKSUM byte size, and CHECKSUM SHA256",
+  "frozenForDateUtc": "2026-07-29",
+  "futureCompleteUniverseIntersection": false,
+  "inventorySha256": "23d6c912d0b8c3a80dfb5dd84ba5d86e06d647bf0b1521ed30b12d404b1a7251",
+  "monthInventory": [
+    {
+      "enumeratedRowsSha256": "e4a27b6bba2a2520fa54f539cafdf3fabe6ea680e56588fc755b7f2d63d11e2b",
+      "firstSymbol": "1000CATUSDT",
+      "lastSymbol": "ZRXUSDT",
+      "month": "2025-07",
+      "pairCount": 342,
+      "symbolsSha256": "01a258358b9b0fb2eb23fa9f34fcce0c3c5215d9cbdecd0478d6069b73ecd2fd"
+    },
+    {
+      "enumeratedRowsSha256": "d09ab9bc07c3ae3bca0bb850098d427f3a1672de3f1a0d55fafc76f770637b20",
+      "firstSymbol": "1000CATUSDT",
+      "lastSymbol": "ZRXUSDT",
+      "month": "2025-08",
+      "pairCount": 343,
+      "symbolsSha256": "411dc273b5d7d61bb23d29d47558ae27e7b0f0dacd6426966bf2785230fe209a"
+    },
+    {
+      "enumeratedRowsSha256": "3dd5305ed04fe21ac9e90780e9d474fb6139d4cbce4b1baaf8f21b6c508d4c9a",
+      "firstSymbol": "0GUSDT",
+      "lastSymbol": "ZRXUSDT",
+      "month": "2025-09",
+      "pairCount": 359,
+      "symbolsSha256": "92b432c92f4a3d2c35b9322caff988cfd96e82abc0d2b1cb90b0865d72db451e"
+    },
+    {
+      "enumeratedRowsSha256": "9b6e2c70e8ffdb864dee7ab737cf40ea6ceaf4bccd2382548f732db73768d653",
+      "firstSymbol": "0GUSDT",
+      "lastSymbol": "ZRXUSDT",
+      "month": "2025-10",
+      "pairCount": 367,
+      "symbolsSha256": "94f17edef58c3aa4c1804b1bb0edfeafbbe95584edd2e4030196cfcd94697d01"
+    },
+    {
+      "enumeratedRowsSha256": "72db9cc08b3f2038cea5da18b0876bc4cf321ea627b0f48b11a76c7bc9ae1251",
+      "firstSymbol": "0GUSDT",
+      "lastSymbol": "ZRXUSDT",
+      "month": "2025-11",
+      "pairCount": 374,
+      "symbolsSha256": "4522007077009f2a743d9479e301c2aeb72fc6295dd7850609cfbc25c9edf1bb"
+    },
+    {
+      "enumeratedRowsSha256": "04e626cc0a4c1af59b07e586226d60af2dca4478ab90ddeac506f58918f62f01",
+      "firstSymbol": "0GUSDT",
+      "lastSymbol": "ZRXUSDT",
+      "month": "2025-12",
+      "pairCount": 370,
+      "symbolsSha256": "34016da6cfeb2be51705a3a7f7dc93850d3c1481363fb55c12e12ababbf923f4"
+    },
+    {
+      "enumeratedRowsSha256": "afef8b83b579244356dd9ce942d8fe0e26b4ee875adcb02d50c26268b4cb234b",
+      "firstSymbol": "0GUSDT",
+      "lastSymbol": "ZRXUSDT",
+      "month": "2026-01",
+      "pairCount": 370,
+      "symbolsSha256": "a0cb18c1f2df5e5952b6e3c709e02431e61c5ea4cb96ddbe6f11f461553708c4"
+    },
+    {
+      "enumeratedRowsSha256": "387d982f6134159640060acd46d291fa32cf3ec8c7512faad1618c72718b2190",
+      "firstSymbol": "0GUSDT",
+      "lastSymbol": "ZRXUSDT",
+      "month": "2026-02",
+      "pairCount": 371,
+      "symbolsSha256": "bff75c57a663c520863f1320c2f5d259a2bf900d30a3ed3d12769512f4a8336b"
+    },
+    {
+      "enumeratedRowsSha256": "3ebcedae2a2344e351db97b5e38cce6c136cb1c5d9fdd8e1ee9aa210c7820f39",
+      "firstSymbol": "0GUSDT",
+      "lastSymbol": "ZRXUSDT",
+      "month": "2026-03",
+      "pairCount": 373,
+      "symbolsSha256": "698225660b361c2e48282b48d046c1c7a2e03cdf9a01932258d1023881941229"
+    },
+    {
+      "enumeratedRowsSha256": "f313d4992d370ef0a53a2c403058c272ae8f3f8b9e7374878e1261addaa84998",
+      "firstSymbol": "0GUSDT",
+      "lastSymbol": "ZRXUSDT",
+      "month": "2026-04",
+      "pairCount": 369,
+      "symbolsSha256": "9cfa84d59bb0d25c68c67d1f2f6aa352dd3a9597a4ccbf46809c2a65c413bf9e"
+    },
+    {
+      "enumeratedRowsSha256": "8c5014b36eb1a7622216bd69c3e01e0d1f0173921b10d577bdd27bcb55b114ee",
+      "firstSymbol": "0GUSDT",
+      "lastSymbol": "ZRXUSDT",
+      "month": "2026-05",
+      "pairCount": 365,
+      "symbolsSha256": "91e7f31465780689706db75b3a2d17b7ded6a22caedbdae111b7097cb31d98e2"
+    },
+    {
+      "enumeratedRowsSha256": "a9daf35a97cfc55bd2728e5c134e8aed1d4c96e82988ce66bee674652d34dfac",
+      "firstSymbol": "0GUSDT",
+      "lastSymbol": "ZRXUSDT",
+      "month": "2026-06",
+      "pairCount": 362,
+      "symbolsSha256": "babb44b7e29bcdfd12a1e2963557f95ca50f58d88049eb2d7d9f824bc24e8262"
+    }
+  ],
+  "protocolSha256": "d8539d23a46aface73bfc6a72c08fcd548a7c8590b0fc7e1c6210b31a8c94b66",
+  "schema": "VG9ChecksumMetadataSourceManifestV1",
+  "spotRoot": "/private/tmp/cosmos-s1f-weekly-momentum-cash-v1/archives",
+  "usdMRoot": "/private/tmp/cosmos-s1d-funding-dispersion-v1/raw/data/futures/um/monthly/klines"
+}

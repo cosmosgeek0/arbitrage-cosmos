@@ -2,6 +2,16 @@
   "schema": "S2KAttemptLedgerV1",
   "familyId": "SPOT_CROSS_SECTIONAL_REALIZED_THIRD_MOMENT_LOW_MINUS_HIGH",
   "authoritativeAttemptCount": 1,
+  "preflightLifecycleHistory": [
+    {
+      "staticCommit": "828cada0ee25a477c6d840e3c596710f4730744f",
+      "state": "ABORTED_BEFORE_RUN_MARKER",
+      "reason": "GIT_OBJECT_ID_GRAMMAR_REJECTED_VALID_SHA1_40",
+      "archiveBodiesOpened": 0,
+      "outcomesInspected": false,
+      "countsAsEconomicAttempt": false
+    }
+  ],
   "attempts": [
     {
       "attemptId": "S2K-RS5M-D1-K4-EQ",

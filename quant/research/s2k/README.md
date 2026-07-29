@@ -58,5 +58,9 @@ MYPYPATH=. mypy --strict --explicit-package-bases \
 PYTHONPATH=. PYTHONHASHSEED=0 pytest -q research/s2k/test_experiment.py
 ```
 
-The committed packet contains no raw archives. External state is frozen at
-`/private/tmp/cosmos-s2k-realized-skewness-2afc-v1`.
+The committed packet contains no raw archives. Authoritative external state is
+frozen at `/private/tmp/cosmos-s2k-realized-skewness-2afc-v2`. The preserved
+`v1` state is a pre-run abort: a Git object-ID grammar guard rejected the valid
+40-character SHA-1 commit before `RUN_STARTED`, with zero decompressions and no
+outcome access. `preflight_abort.v1.json` and the aborted freeze bind that
+history; it is not an additional economic attempt.

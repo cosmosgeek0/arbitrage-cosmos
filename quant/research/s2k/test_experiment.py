@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 import research.s2k.experiment as s2k
 from research.s2k.experiment import (
+    GIT_OBJECT_ID_PATTERN,
     Bar,
     DayEvaluation,
     EvidenceError,
@@ -41,6 +42,12 @@ def test_microsecond_timestamp_rejects_milliseconds_and_misalignment() -> None:
         parse_microsecond_timestamp("1735689600000", field="open")
     with pytest.raises(EvidenceError):
         parse_microsecond_timestamp("1735689600000001", field="open")
+
+
+def test_git_object_id_grammar_accepts_sha1_and_sha256() -> None:
+    assert GIT_OBJECT_ID_PATTERN.fullmatch("a" * 40)
+    assert GIT_OBJECT_ID_PATTERN.fullmatch("b" * 64)
+    assert GIT_OBJECT_ID_PATTERN.fullmatch("c" * 41) is None
 
 
 def test_checksum_sidecar_is_identity_bound() -> None:

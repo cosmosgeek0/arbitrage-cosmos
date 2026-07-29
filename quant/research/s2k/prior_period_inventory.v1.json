@@ -2,6 +2,12 @@
   "schema": "S2KPriorPeriodInventoryV1",
   "frozenAtUtc": "2026-07-30T00:00:00Z",
   "s2kInternalOutcomeAccessBeforeFreeze": false,
+  "preflightAbort": {
+    "staticCommit": "828cada0ee25a477c6d840e3c596710f4730744f",
+    "state": "NO_RUN_MARKER_ZERO_DECOMPRESSION",
+    "outcomeAccess": false,
+    "replacementFreezeRequired": true
+  },
   "s2kInternalHoldoutState": "UNOPENED_NOT_ACQUIRED",
   "globalHoldoutState": "SHARED_2025_07_TO_2026_06_CORPUS_NOT_FRESH_GLOBAL_HOLDOUT",
   "knownOverlap": [

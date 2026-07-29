@@ -1,0 +1,19 @@
+{
+  "schema": "S2KPreflightAbortV1",
+  "createdAtUtc": "2026-07-29T20:20:24Z",
+  "staticCommit": "828cada0ee25a477c6d840e3c596710f4730744f",
+  "stateRoot": "/private/tmp/cosmos-s2k-realized-skewness-2afc-v1",
+  "protocolFreezeSha256": "89470ae1f3b4b288d5a5c554cf150bec52886a87564810f4a26035454eee10d5",
+  "acquisitionSha256": "b2b855a85c2f0914e920140e54b617147fffb0389258d9e681d379023c731df0",
+  "archiveCount": 260,
+  "archiveBodiesOpened": 0,
+  "memberReceipts": 0,
+  "runMarkerExists": false,
+  "resultExists": false,
+  "economicRunConsumed": false,
+  "holdoutOpened": false,
+  "outcomeBytesInspected": false,
+  "reason": "PREFLIGHT_GIT_OBJECT_ID_GRAMMAR_REJECTED_VALID_SHA1_40",
+  "replacementStateRoot": "/private/tmp/cosmos-s2k-realized-skewness-2afc-v2",
+  "strategyProtocolOrOutcomeChoiceChanged": false
+}

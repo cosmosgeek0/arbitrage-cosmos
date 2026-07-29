@@ -34,8 +34,10 @@ from typing import Any, Final, cast
 
 PACKAGE_DIR: Final = Path(__file__).resolve().parent
 REPO_ROOT: Final = PACKAGE_DIR.parents[2]
-STATE_ROOT: Final = Path("/private/tmp/cosmos-s2k-realized-skewness-2afc-v1")
+STATE_ROOT: Final = Path("/private/tmp/cosmos-s2k-realized-skewness-2afc-v2")
+ABORTED_STATE_ROOT: Final = Path("/private/tmp/cosmos-s2k-realized-skewness-2afc-v1")
 BASE_COMMIT: Final = "a169b123fb186d1943a75ad648552c4d95be1be1"
+PREFLIGHT_ABORTED_COMMIT: Final = "828cada0ee25a477c6d840e3c596710f4730744f"
 ARCHIVE_ROOT: Final = "https://data.binance.vision/data/spot/monthly/klines"
 INTERVAL: Final = "5m"
 USER_AGENT: Final = "cosmos-s2k-public-research/1.0"
@@ -43,6 +45,7 @@ DECIMAL_CONTEXT: Final = Context(prec=50, rounding=ROUND_HALF_EVEN)
 FIVE_MINUTES: Final = timedelta(minutes=5)
 DAY: Final = timedelta(days=1)
 SHA256_PATTERN: Final = re.compile(r"^[0-9a-f]{64}$")
+GIT_OBJECT_ID_PATTERN: Final = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
 MONTH_PATTERN: Final = re.compile(r"^\d{4}-\d{2}$")
 SYMBOL_PATTERN: Final = re.compile(r"^[A-Z0-9]+USDT$")
 STATIC_FILES: Final = (
@@ -54,7 +57,9 @@ STATIC_FILES: Final = (
     "attempt_ledger.v1.json",
     "experiment.py",
     "official_sources.v1.json",
+    "preflight_abort.v1.json",
     "prior_period_inventory.v1.json",
+    "protocol.freeze.aborted-pre-run.v1.json",
     "protocol.v1.json",
     "source_plan.v1.json",
     "test_experiment.py",
@@ -360,27 +365,76 @@ def static_hashes() -> dict[str, str]:
     return hashes
 
 
+def verify_preflight_abort() -> str:
+    """Authenticate the preserved no-outcome v1 preflight abort."""
+
+    receipt, _ = load_json(PACKAGE_DIR / "preflight_abort.v1.json")
+    aborted_freeze = PACKAGE_DIR / "protocol.freeze.aborted-pre-run.v1.json"
+    external_freeze = ABORTED_STATE_ROOT / "protocol.freeze.v1.json"
+    acquisition_path = ABORTED_STATE_ROOT / "acquisition.v1.json"
+    if (
+        receipt.get("schema") != "S2KPreflightAbortV1"
+        or receipt.get("staticCommit") != PREFLIGHT_ABORTED_COMMIT
+        or receipt.get("stateRoot") != str(ABORTED_STATE_ROOT)
+        or receipt.get("replacementStateRoot") != str(STATE_ROOT)
+        or receipt.get("economicRunConsumed") is not False
+        or receipt.get("outcomeBytesInspected") is not False
+        or receipt.get("strategyProtocolOrOutcomeChoiceChanged") is not False
+    ):
+        raise EvidenceError("preflight-abort receipt mismatch")
+    if (
+        not aborted_freeze.is_file()
+        or not external_freeze.is_file()
+        or aborted_freeze.read_bytes() != external_freeze.read_bytes()
+        or sha256_path(aborted_freeze) != receipt.get("protocolFreezeSha256")
+    ):
+        raise EvidenceError("aborted freeze preservation mismatch")
+    if not acquisition_path.is_file() or sha256_path(acquisition_path) != receipt.get(
+        "acquisitionSha256"
+    ):
+        raise EvidenceError("aborted acquisition receipt mismatch")
+    acquisition, _ = load_json(acquisition_path)
+    entries = acquisition.get("entries")
+    if (
+        not isinstance(entries, list)
+        or len(entries) != 260
+        or any(
+            not isinstance(entry, dict)
+            or entry.get("openState") != "CHECKSUM_VERIFIED_NOT_DECOMPRESSED"
+            or entry.get("member") is not None
+            for entry in entries
+        )
+        or (ABORTED_STATE_ROOT / "RUN_STARTED.v1.json").exists()
+        or (ABORTED_STATE_ROOT / "result.v1.json").exists()
+    ):
+        raise EvidenceError("aborted state is not pre-run sealed")
+    return sha256_path(PACKAGE_DIR / "preflight_abort.v1.json")
+
+
 def freeze_protocol() -> dict[str, Any]:
     """Create the pre-outcome static freeze exactly once."""
 
     load_protocol()
     load_source_plan()
-    freeze_path = PACKAGE_DIR / "protocol.freeze.v1.json"
+    preflight_abort_sha = verify_preflight_abort()
+    freeze_path = PACKAGE_DIR / "protocol.freeze.v2.json"
     if freeze_path.exists():
         raise EvidenceError("protocol freeze already exists")
     if STATE_ROOT.exists():
         raise EvidenceError("external state root already exists")
-    if git_output("rev-parse", "HEAD") != BASE_COMMIT:
-        raise EvidenceError("freeze must start at exact canonical base")
+    if git_output("rev-parse", "HEAD") != PREFLIGHT_ABORTED_COMMIT:
+        raise EvidenceError("replacement freeze must start at the preflight-aborted commit")
     for name in TERMINAL_NAMES:
         if (PACKAGE_DIR / name).exists():
             raise EvidenceError(f"terminal artifact exists before freeze: {name}")
     STATE_ROOT.mkdir(mode=0o700, parents=True)
     fsync_directory(STATE_ROOT.parent)
     payload = {
-        "schema": "S2KProtocolFreezeV1",
+        "schema": "S2KProtocolFreezeV2",
         "createdAtUtc": utc_now_text(),
         "canonicalBaseCommit": BASE_COMMIT,
+        "preflightAbortedCommit": PREFLIGHT_ABORTED_COMMIT,
+        "preflightAbortReceiptSha256": preflight_abort_sha,
         "scope": "quant/research/s2k/**",
         "python": {
             "implementation": sys.implementation.name,
@@ -398,25 +452,30 @@ def freeze_protocol() -> dict[str, Any]:
     }
     raw = canonical_bytes(payload)
     exclusive_write(freeze_path, raw)
-    exclusive_write(STATE_ROOT / "protocol.freeze.v1.json", raw)
+    exclusive_write(STATE_ROOT / "protocol.freeze.v2.json", raw)
     return payload
 
 
 def load_freeze() -> tuple[dict[str, Any], str]:
     """Authenticate the static freeze and all frozen input bytes."""
 
-    path = PACKAGE_DIR / "protocol.freeze.v1.json"
+    path = PACKAGE_DIR / "protocol.freeze.v2.json"
     freeze, raw = load_json(path)
-    if freeze.get("schema") != "S2KProtocolFreezeV1":
+    if freeze.get("schema") != "S2KProtocolFreezeV2":
         raise EvidenceError("freeze schema mismatch")
     if freeze.get("canonicalBaseCommit") != BASE_COMMIT:
         raise EvidenceError("freeze base mismatch")
+    if (
+        freeze.get("preflightAbortedCommit") != PREFLIGHT_ABORTED_COMMIT
+        or freeze.get("preflightAbortReceiptSha256") != verify_preflight_abort()
+    ):
+        raise EvidenceError("freeze preflight-abort binding mismatch")
     if freeze.get("stateRoot") != str(STATE_ROOT):
         raise EvidenceError("freeze state root mismatch")
     expected = freeze.get("staticFileSha256")
     if not isinstance(expected, dict) or expected != static_hashes():
         raise EvidenceError("static input drift after freeze")
-    external = STATE_ROOT / "protocol.freeze.v1.json"
+    external = STATE_ROOT / "protocol.freeze.v2.json"
     if not external.is_file() or external.read_bytes() != raw:
         raise EvidenceError("external freeze copy mismatch")
     return freeze, sha256_bytes(raw)
@@ -1844,7 +1903,10 @@ def assert_run_preconditions() -> str:
     """Bind the one run to a clean static commit with exclusive S-2K history."""
 
     head = git_output("rev-parse", "HEAD")
-    if head == BASE_COMMIT or SHA256_PATTERN.fullmatch(head) is None:
+    if (
+        head in {BASE_COMMIT, PREFLIGHT_ABORTED_COMMIT}
+        or GIT_OBJECT_ID_PATTERN.fullmatch(head) is None
+    ):
         raise EvidenceError("run requires the committed post-freeze static packet")
     if git_output("status", "--porcelain", "--untracked-files=all"):
         raise EvidenceError("run requires a clean worktree")
@@ -2332,7 +2394,7 @@ def verify_terminal_packet() -> dict[str, Any]:
     if result.get("acquisitionSha256") != acquisition_sha:
         raise EvidenceError("result acquisition binding mismatch")
     static_commit = require_text(result.get("staticCommit"), field="result.staticCommit")
-    if SHA256_PATTERN.fullmatch(static_commit) is None:
+    if GIT_OBJECT_ID_PATTERN.fullmatch(static_commit) is None:
         raise EvidenceError("result static commit malformed")
     external_result = STATE_ROOT / "result.v1.json"
     if not external_result.is_file() or external_result.read_bytes() != result_raw:

@@ -168,7 +168,10 @@
     }
   },
   "lifecycle": {
-    "stateRoot": "/private/tmp/cosmos-s2k-realized-skewness-2afc-v1",
+    "stateRoot": "/private/tmp/cosmos-s2k-realized-skewness-2afc-v2",
+    "preflightAbortedStateRoot": "/private/tmp/cosmos-s2k-realized-skewness-2afc-v1",
+    "preflightAbortedStaticCommit": "828cada0ee25a477c6d840e3c596710f4730744f",
+    "preflightAbortReason": "GIT_OBJECT_ID_GRAMMAR_ONLY_NO_RUN_MARKER_NO_OUTCOME_OPEN",
     "allowedEconomicRunCount": 1,
     "runMarker": "O_CREAT_O_EXCL_MODE_0600_FSYNC_FILE_AND_DIRECTORY",
     "holdoutMarker": "O_CREAT_O_EXCL_MODE_0600_FSYNC_FILE_AND_DIRECTORY",

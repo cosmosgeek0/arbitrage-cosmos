@@ -1,0 +1,11 @@
+{
+  "schema": "VG21SeedTableV1",
+  "bootstrap14": 210014,
+  "bootstrap28": 210028,
+  "centeredPValues": 210105,
+  "whiteMaxT": 210205,
+  "negativeControlRandomRank": 210301,
+  "negativeControlDayPermutation": 210302,
+  "negativeControlSymbolPermutation": 210303
+}
+

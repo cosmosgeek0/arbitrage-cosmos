@@ -1,0 +1,19 @@
+{
+  "schema": "VG21TrialLedgerV1",
+  "familyId": "VG21_LAGGED_MARKET_RESIDUAL_VOLUME",
+  "attemptedCount": 12,
+  "trials": [
+    {"trialId": "VG21-L30-Q10-H1", "regressionLookbackDays": 30, "topFraction": "0.10", "holdDays": 1, "status": "REGISTERED"},
+    {"trialId": "VG21-L30-Q10-H3", "regressionLookbackDays": 30, "topFraction": "0.10", "holdDays": 3, "status": "REGISTERED"},
+    {"trialId": "VG21-L30-Q10-H5", "regressionLookbackDays": 30, "topFraction": "0.10", "holdDays": 5, "status": "REGISTERED"},
+    {"trialId": "VG21-L30-Q20-H1", "regressionLookbackDays": 30, "topFraction": "0.20", "holdDays": 1, "status": "REGISTERED"},
+    {"trialId": "VG21-L30-Q20-H3", "regressionLookbackDays": 30, "topFraction": "0.20", "holdDays": 3, "status": "REGISTERED"},
+    {"trialId": "VG21-L30-Q20-H5", "regressionLookbackDays": 30, "topFraction": "0.20", "holdDays": 5, "status": "REGISTERED"},
+    {"trialId": "VG21-L60-Q10-H1", "regressionLookbackDays": 60, "topFraction": "0.10", "holdDays": 1, "status": "REGISTERED"},
+    {"trialId": "VG21-L60-Q10-H3", "regressionLookbackDays": 60, "topFraction": "0.10", "holdDays": 3, "status": "REGISTERED"},
+    {"trialId": "VG21-L60-Q10-H5", "regressionLookbackDays": 60, "topFraction": "0.10", "holdDays": 5, "status": "REGISTERED"},
+    {"trialId": "VG21-L60-Q20-H1", "regressionLookbackDays": 60, "topFraction": "0.20", "holdDays": 1, "status": "REGISTERED"},
+    {"trialId": "VG21-L60-Q20-H3", "regressionLookbackDays": 60, "topFraction": "0.20", "holdDays": 3, "status": "REGISTERED"},
+    {"trialId": "VG21-L60-Q20-H5", "regressionLookbackDays": 60, "topFraction": "0.20", "holdDays": 5, "status": "REGISTERED"}
+  ]
+}

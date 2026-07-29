@@ -1,0 +1,37 @@
+{
+  "schema": "VG21CollisionAuditV1",
+  "auditedAtUtc": "2026-07-29T16:56:00Z",
+  "status": "DISTINCT",
+  "vg21Contract": "daily symbol log-quote-volume surprise, per-symbol prior-only time-series beta on a lagged leave-one-out market-wide factor, trailing prior residual MAD scaling, positive residual cohort or cash",
+  "siblings": [
+    {
+      "lane": "V-G2",
+      "protocolSha256": "9a6f8d0520f0ea6f9cfcb3e22cff765bebaf4c2079fc49c56233f759710f0cb2",
+      "contract": "raw own-volume shock continuation",
+      "difference": "V-G21 estimates a lagged market-factor beta and ranks scaled residuals; it never uses V-G2 raw shock as the score"
+    },
+    {
+      "lane": "V-G8",
+      "protocolSha256": "5dddd302a69be73494cb5ed06d674982a5ecebfa5dcc573799b2c0207965a579",
+      "contract": "weekly abnormal-volume rotation via short/long market-share acceleration",
+      "difference": "V-G21 is daily, forbids market share, and uses prior time-series factor residuals"
+    },
+    {
+      "lane": "V-G14",
+      "protocolSha256": "ae9455ef5e87e09d4e77fb3e237ef55cc4cd6027d9836bab1c72a59a315f46c3",
+      "contract": "intraday weekly-seasonality residual",
+      "difference": "V-G21 is daily and removes a lagged cross-symbol factor, not clock-slot seasonality"
+    },
+    {
+      "lane": "V-G20",
+      "protocolSha256": "6c8f73a7121f76efb86ec45d35f02f11e683ae6045daf3f5741430d97c3ad669",
+      "contract": "joint BTC/ETH volume shock followed by a fixed liquid-alt cohort",
+      "difference": "V-G21 forbids a large-cap subset, factor-alone event direction, fixed-alt diffusion, and lead-lag portfolio construction"
+    }
+  ],
+  "sharedFamilyHoldout": {
+    "status": "NOT_CERTIFIED_SHARED_REUSE_RISK",
+    "consumerTreatment": "N3 p-value forced to 1 and admission SOURCE_ONLY pending a prospectively frozen successor plus fresh evidence"
+  }
+}
+

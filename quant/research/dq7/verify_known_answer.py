@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import sys
+from collections.abc import Sequence
 from typing import Any, cast
 
 from research.dq7.fixture_harness import (
@@ -10,8 +12,8 @@ from research.dq7.fixture_harness import (
     load_hostile_case_records,
     load_valid_fixture,
     materialize_hostile_case,
+    validate_fixture_manifest,
 )
-from research.dq7.validator import validate_program_v1
 
 KNOWN_ANSWER_PATH = FIXTURE_DIRECTORY / "known_answer.v1.json"
 
@@ -19,11 +21,11 @@ KNOWN_ANSWER_PATH = FIXTURE_DIRECTORY / "known_answer.v1.json"
 def build_known_answer() -> dict[str, Any]:
     """Compute the compact deterministic answer committed by the fixture set."""
 
-    valid_receipt = validate_program_v1(load_valid_fixture())
+    valid_receipt = validate_fixture_manifest(load_valid_fixture())
     hostile_receipts: list[dict[str, Any]] = []
     for record in load_hostile_case_records():
         mutation_id = cast(str, record["mutationId"])
-        receipt = validate_program_v1(materialize_hostile_case(mutation_id))
+        receipt = validate_fixture_manifest(materialize_hostile_case(mutation_id))
         hostile_receipts.append(
             {
                 "caseId": record["caseId"],
@@ -60,7 +62,22 @@ def verify_known_answer() -> None:
         )
 
 
-def main() -> int:
+def write_known_answer() -> None:
+    """Rewrite the frozen answer; only run this for a reviewed contract change."""
+
+    payload = json.dumps(build_known_answer(), indent=2, ensure_ascii=False)
+    KNOWN_ANSWER_PATH.write_text(f"{payload}\n", encoding="utf-8")
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    arguments = sys.argv[1:] if argv is None else list(argv)
+    if arguments == ["--write"]:
+        write_known_answer()
+        print("DQ7_KNOWN_ANSWER_WRITTEN")
+        return 0
+    if arguments:
+        print("usage: verify_known_answer.py [--write]")
+        return 2
     verify_known_answer()
     print("DQ7_KNOWN_ANSWER_PASS")
     return 0

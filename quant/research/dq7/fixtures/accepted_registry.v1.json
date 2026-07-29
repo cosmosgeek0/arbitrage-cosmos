@@ -1,0 +1,7 @@
+{
+  "schema": "cosmos.dq7.accepted-registry.v1",
+  "programId": "DQ7_VALID_PROGRAM",
+  "semanticOntologyDigest": "d8fbc18ce708822d04b9ae68058cafe9bfd4c3a97d002781f5dab6e0cd6a2cab",
+  "preOutcomeFreezeDigest": "3eba2e6511d6321138aac3bb78c937395c99fae129a64f683282624e918a7c59",
+  "authority": "EXTERNAL_TEST_REGISTRY"
+}

@@ -47,6 +47,39 @@
       "expectedN3Disposition": "INADMISSIBLE"
     },
     {
+      "caseId": "PARAMETER_ROLE_ALIAS_DUPLICATE",
+      "mutationId": "CLONE_PARAMETER_ROLE_ALIAS",
+      "expectedReasonCodes": [
+        "FAMILY_RENAME_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "SOURCE_ROLE_ALIAS_DUPLICATE",
+      "mutationId": "CLONE_SOURCE_ALIAS",
+      "expectedReasonCodes": [
+        "FAMILY_RENAME_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PREDICTION_ALIAS_DUPLICATE",
+      "mutationId": "CLONE_OUTCOME_ALIAS",
+      "expectedReasonCodes": [
+        "FAMILY_RENAME_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
       "caseId": "NONPREDICTIVE_ONLY_DUPLICATE",
       "mutationId": "CLONE_NONPREDICTIVE",
       "expectedReasonCodes": [
@@ -175,6 +208,24 @@
       "mutationId": "SET_LOCAL_SCOPE",
       "expectedReasonCodes": [
         "PROGRAM_MULTIPLICITY_SCOPE_INVALID"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_PROGRAM_MISMATCH",
+      "mutationId": "SET_OTHER_PROGRAM_IN_PLAN",
+      "expectedReasonCodes": [
+        "PROGRAM_MULTIPLICITY_PROGRAM_MISMATCH"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_SEMANTIC_ONTOLOGY_MISMATCH",
+      "mutationId": "SET_OTHER_ONTOLOGY_IN_PLAN",
+      "expectedReasonCodes": [
+        "PROGRAM_SEMANTIC_ONTOLOGY_MISMATCH"
       ],
       "expectedSchedulerDisposition": "REJECT",
       "expectedN3Disposition": "INADMISSIBLE"

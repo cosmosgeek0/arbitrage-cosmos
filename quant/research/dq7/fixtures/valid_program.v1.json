@@ -2,6 +2,202 @@
   "schema": "cosmos.dq7.predictive-family-program.v1",
   "version": 1,
   "programId": "DQ7_VALID_PROGRAM",
+  "semanticOntology": {
+    "schema": "cosmos.dq7.semantic-ontology.v1",
+    "ontologyId": "DQ7_FIXTURE_ONTOLOGY",
+    "entries": [
+      {
+        "aliasId": "RANK_LONG_SHORT",
+        "canonicalId": "RANK_LONG_SHORT",
+        "kind": "ACTION_MAPPING"
+      },
+      {
+        "aliasId": "RISK_SCALING_ONLY",
+        "canonicalId": "RISK_SCALING_ONLY",
+        "kind": "ACTION_MAPPING"
+      },
+      {
+        "aliasId": "EIGHT_HOURS_AHEAD",
+        "canonicalId": "EIGHT_HOURS_AHEAD",
+        "kind": "FORECAST_CLOCK"
+      },
+      {
+        "aliasId": "ONE_DAY_AHEAD",
+        "canonicalId": "ONE_DAY_AHEAD",
+        "kind": "FORECAST_CLOCK"
+      },
+      {
+        "aliasId": "ONE_HOUR_AHEAD",
+        "canonicalId": "ONE_HOUR_AHEAD",
+        "kind": "FORECAST_CLOCK"
+      },
+      {
+        "aliasId": "CROSS_INSTRUMENT",
+        "canonicalId": "CROSS_INSTRUMENT",
+        "kind": "INSTRUMENT_TOPOLOGY"
+      },
+      {
+        "aliasId": "PER_INSTRUMENT",
+        "canonicalId": "PER_INSTRUMENT",
+        "kind": "INSTRUMENT_TOPOLOGY"
+      },
+      {
+        "aliasId": "FORWARD_RETURN",
+        "canonicalId": "FORWARD_RETURN",
+        "kind": "OUTCOME"
+      },
+      {
+        "aliasId": "FORWARD_RETURN_ALIAS",
+        "canonicalId": "FORWARD_RETURN",
+        "kind": "OUTCOME"
+      },
+      {
+        "aliasId": "FORWARD_VOLATILITY",
+        "canonicalId": "FORWARD_VOLATILITY",
+        "kind": "OUTCOME"
+      },
+      {
+        "aliasId": "BINNING_POLICY",
+        "canonicalId": "BINNING_POLICY",
+        "kind": "PARAMETER_ROLE"
+      },
+      {
+        "aliasId": "COMPARISON_DIRECTION",
+        "canonicalId": "COMPARISON_DIRECTION",
+        "kind": "PARAMETER_ROLE"
+      },
+      {
+        "aliasId": "LAG_PERIOD",
+        "canonicalId": "LAG_PERIOD",
+        "kind": "PARAMETER_ROLE"
+      },
+      {
+        "aliasId": "LOOKBACK",
+        "canonicalId": "LOOKBACK",
+        "kind": "PARAMETER_ROLE"
+      },
+      {
+        "aliasId": "SEMANTICALLY_SAME_LAG_PERIOD",
+        "canonicalId": "LAG_PERIOD",
+        "kind": "PARAMETER_ROLE"
+      },
+      {
+        "aliasId": "THRESHOLD_VALUE",
+        "canonicalId": "THRESHOLD_VALUE",
+        "kind": "PARAMETER_ROLE"
+      },
+      {
+        "aliasId": "EQUAL_WIDTH_BINS",
+        "canonicalId": "EQUAL_WIDTH_BINS",
+        "kind": "PARAMETER_VALUE"
+      },
+      {
+        "aliasId": "FOUR_HOURS",
+        "canonicalId": "FOUR_HOURS",
+        "kind": "PARAMETER_VALUE"
+      },
+      {
+        "aliasId": "GREATER_THAN",
+        "canonicalId": "GREATER_THAN",
+        "kind": "PARAMETER_VALUE"
+      },
+      {
+        "aliasId": "ONE_DAY",
+        "canonicalId": "ONE_DAY",
+        "kind": "PARAMETER_VALUE"
+      },
+      {
+        "aliasId": "ONE_HOUR",
+        "canonicalId": "ONE_HOUR",
+        "kind": "PARAMETER_VALUE"
+      },
+      {
+        "aliasId": "SEVEN_DAYS",
+        "canonicalId": "SEVEN_DAYS",
+        "kind": "PARAMETER_VALUE"
+      },
+      {
+        "aliasId": "ZERO_LEVEL",
+        "canonicalId": "ZERO_LEVEL",
+        "kind": "PARAMETER_VALUE"
+      },
+      {
+        "aliasId": "INVERTED",
+        "canonicalId": "INVERTED",
+        "kind": "POLARITY"
+      },
+      {
+        "aliasId": "POSITIVE",
+        "canonicalId": "POSITIVE",
+        "kind": "POLARITY"
+      },
+      {
+        "aliasId": "SIGNED",
+        "canonicalId": "SIGNED",
+        "kind": "POLARITY"
+      },
+      {
+        "aliasId": "LIQUID_DERIVATIVES",
+        "canonicalId": "LIQUID_DERIVATIVES",
+        "kind": "POPULATION_TOPOLOGY"
+      },
+      {
+        "aliasId": "LIQUID_PERPETUALS",
+        "canonicalId": "LIQUID_PERPETUALS",
+        "kind": "POPULATION_TOPOLOGY"
+      },
+      {
+        "aliasId": "LIQUID_SPOT_PAIRS",
+        "canonicalId": "LIQUID_SPOT_PAIRS",
+        "kind": "POPULATION_TOPOLOGY"
+      },
+      {
+        "aliasId": "PERPETUAL_FUNDING_RATE",
+        "canonicalId": "PERPETUAL_FUNDING_RATE",
+        "kind": "SOURCE_ROLE"
+      },
+      {
+        "aliasId": "RENAMED_SPOT_MID",
+        "canonicalId": "SPOT_MID_PRICE",
+        "kind": "SOURCE_ROLE"
+      },
+      {
+        "aliasId": "SIGNED_TRADE_FLOW",
+        "canonicalId": "SIGNED_TRADE_FLOW",
+        "kind": "SOURCE_ROLE"
+      },
+      {
+        "aliasId": "SPOT_MID_PRICE",
+        "canonicalId": "SPOT_MID_PRICE",
+        "kind": "SOURCE_ROLE"
+      },
+      {
+        "aliasId": "RETURN_HORIZON",
+        "canonicalId": "RETURN_HORIZON",
+        "kind": "TARGET_ROLE"
+      },
+      {
+        "aliasId": "VOLATILITY_HORIZON",
+        "canonicalId": "VOLATILITY_HORIZON",
+        "kind": "TARGET_ROLE"
+      },
+      {
+        "aliasId": "EIGHT_HOURS",
+        "canonicalId": "EIGHT_HOURS",
+        "kind": "TARGET_VALUE"
+      },
+      {
+        "aliasId": "ONE_DAY",
+        "canonicalId": "ONE_DAY",
+        "kind": "TARGET_VALUE"
+      },
+      {
+        "aliasId": "ONE_HOUR",
+        "canonicalId": "ONE_HOUR",
+        "kind": "TARGET_VALUE"
+      }
+    ]
+  },
   "candidates": [
     {
       "attemptId": "ATTEMPT_MOMENTUM",
@@ -134,6 +330,10 @@
               {
                 "roleId": "LOOKBACK",
                 "valueId": "ONE_DAY"
+              },
+              {
+                "roleId": "BINNING_POLICY",
+                "valueId": "EQUAL_WIDTH_BINS"
               }
             ]
           }
@@ -162,6 +362,7 @@
     }
   ],
   "globalMultiplicity": {
+    "programId": "DQ7_VALID_PROGRAM",
     "scopeId": "PROGRAM_WIDE",
     "methodId": "PROGRAM_HOLM_FWER",
     "alpha": {
@@ -177,10 +378,12 @@
     "familyComponentIds": [
       "76d722c7269eb013982b377d313f6a1cb914aa0b99da366838882f2e8fa5e13a",
       "771699ff90232daf86a88e61334433a2e8d12b3c7099a603511c86c6081ae295",
-      "8f20fe07ff6e76a710984b70d441600badecbf1560aa77594b84e39687e6a1c1"
+      "ee11d17e2f639505345781a749408de2f4485c19bd8ac6769699fbd98aff0aff"
     ],
-    "attemptLedgerDigest": "2134f4e1e888d1d933b7fe8ff9c04d717878a00d2d0346e6279691fc60667598",
-    "familyUniverseDigest": "da930549d88e46bf6ab0f3537bce7bf3d32eff240b0d66e4b54a370705075e2f",
+    "attemptLedgerDigest": "80f024d5f6629527ffb92d87fe882879aa967d485f3bf54b50e2b65ed7e287ab",
+    "familyUniverseDigest": "59dea0caf3d6d5a0eed06a0e847e3f3eeee289b3398d9fe10b35f8011e73c0e1",
+    "semanticOntologyDigest": "d8fbc18ce708822d04b9ae68058cafe9bfd4c3a97d002781f5dab6e0cd6a2cab",
+    "preOutcomeFreezeDigest": "3eba2e6511d6321138aac3bb78c937395c99fae129a64f683282624e918a7c59",
     "consumerIds": [
       "N3_INTAKE",
       "SCHEDULER"

@@ -17,6 +17,7 @@ from typing import Final, NoReturn, cast
 
 SCHEMA_V1: Final = "cosmos.dq7.predictive-family-program.v1"
 RECEIPT_SCHEMA_V1: Final = "cosmos.dq7.predictive-family-receipt.v1"
+ONTOLOGY_SCHEMA_V1: Final = "cosmos.dq7.semantic-ontology.v1"
 CANONICALIZATION_V1: Final = "RFC8785_ASCII_KEY_SAFE_INTEGER_SUBSET_WITH_LF"
 
 _FAMILY_NODE_DOMAIN: Final = b"cosmos-dq7-family-node-v1\0"
@@ -28,6 +29,9 @@ _NUISANCE_FINGERPRINT_DOMAIN: Final = b"cosmos-dq7-nuisance-fingerprint-v1\0"
 _ATTEMPT_LEDGER_DOMAIN: Final = b"cosmos-dq7-attempt-ledger-v1\0"
 _FAMILY_COMPONENT_DOMAIN: Final = b"cosmos-dq7-family-component-v1\0"
 _FAMILY_UNIVERSE_DOMAIN: Final = b"cosmos-dq7-family-universe-v1\0"
+_ONTOLOGY_DOMAIN: Final = b"cosmos-dq7-semantic-ontology-v1\0"
+_EXECUTION_STATE_DOMAIN: Final = b"cosmos-dq7-execution-state-v1\0"
+_PREOUTCOME_FREEZE_DOMAIN: Final = b"cosmos-dq7-preoutcome-freeze-v1\0"
 _MANIFEST_DOMAIN: Final = b"cosmos-dq7-normalized-manifest-v1\0"
 _RECEIPT_DOMAIN: Final = b"cosmos-dq7-receipt-v1\0"
 
@@ -40,6 +44,7 @@ _MAX_ROOTS: Final = 16
 _MAX_PARAMETERS: Final = 16
 _MAX_INPUTS: Final = 8
 _MAX_TEXT_BYTES: Final = 512
+_MAX_ONTOLOGY_ENTRIES: Final = 1024
 
 _COMMUTATIVE_OPS: Final = frozenset({"INTERACTION", "PRODUCT", "SUM"})
 _UNARY_OPS: Final = frozenset(
@@ -62,6 +67,32 @@ _UNARY_OPS: Final = frozenset(
 _BINARY_OPS: Final = frozenset({"DIFFERENCE", "RATIO", "RESIDUAL"})
 _NARY_OPS: Final = _COMMUTATIVE_OPS
 _ALLOWED_OPS: Final = frozenset({"SOURCE"}) | _UNARY_OPS | _BINARY_OPS | _NARY_OPS
+
+# Every non-SOURCE operation binds an exact role set.  Role presence is never a
+# semantic channel: an omitted role cannot mean "the default", because omission
+# would then split one hypothesis into two family fingerprints without any
+# registered semantics to justify the split.
+_EXACT_PARAMETER_ROLES: Final[dict[str, frozenset[str]]] = {
+    "ABS": frozenset(),
+    "AUTOCORRELATION": frozenset({"LAG_PERIOD", "LOOKBACK"}),
+    "CHANGE": frozenset({"LAG_PERIOD"}),
+    "CLIP": frozenset({"LOWER_BOUND", "UPPER_BOUND"}),
+    "DIFFERENCE": frozenset(),
+    "ENTROPY": frozenset({"BINNING_POLICY", "LOOKBACK"}),
+    "INTERACTION": frozenset(),
+    "LAG": frozenset({"LAG_PERIOD"}),
+    "MEAN": frozenset({"LOOKBACK"}),
+    "NEGATE": frozenset(),
+    "PRODUCT": frozenset(),
+    "RANK": frozenset({"LOOKBACK"}),
+    "RATIO": frozenset(),
+    "RESIDUAL": frozenset({"LOOKBACK"}),
+    "RETURN": frozenset({"RETURN_HORIZON"}),
+    "STDDEV": frozenset({"LOOKBACK"}),
+    "SUM": frozenset(),
+    "THRESHOLD": frozenset({"COMPARISON_DIRECTION", "THRESHOLD_VALUE"}),
+    "ZSCORE": frozenset({"LOOKBACK"}),
+}
 
 _ALLOWED_PROGRAM_METHODS: Final = frozenset(
     {
@@ -89,6 +120,20 @@ class AttemptStatus(StrEnum):
     FAILED = "FAILED"
     ABANDONED = "ABANDONED"
     RETIRED_DUPLICATE = "RETIRED_DUPLICATE"
+
+
+class SemanticKind(StrEnum):
+    SOURCE_ROLE = "SOURCE_ROLE"
+    PARAMETER_ROLE = "PARAMETER_ROLE"
+    PARAMETER_VALUE = "PARAMETER_VALUE"
+    OUTCOME = "OUTCOME"
+    INSTRUMENT_TOPOLOGY = "INSTRUMENT_TOPOLOGY"
+    FORECAST_CLOCK = "FORECAST_CLOCK"
+    POPULATION_TOPOLOGY = "POPULATION_TOPOLOGY"
+    TARGET_ROLE = "TARGET_ROLE"
+    TARGET_VALUE = "TARGET_VALUE"
+    POLARITY = "POLARITY"
+    ACTION_MAPPING = "ACTION_MAPPING"
 
 
 class FindingSeverity(StrEnum):
@@ -129,6 +174,11 @@ class ReasonCode(StrEnum):
     PROGRAM_FAMILY_SET_MISMATCH = "PROGRAM_FAMILY_SET_MISMATCH"
     PROGRAM_MULTIPLICITY_DIGEST_MISMATCH = "PROGRAM_MULTIPLICITY_DIGEST_MISMATCH"
     PROGRAM_MULTIPLICITY_CONSUMER_MISMATCH = "PROGRAM_MULTIPLICITY_CONSUMER_MISMATCH"
+    PROGRAM_MULTIPLICITY_PROGRAM_MISMATCH = "PROGRAM_MULTIPLICITY_PROGRAM_MISMATCH"
+    PROGRAM_SEMANTIC_ONTOLOGY_MISMATCH = "PROGRAM_SEMANTIC_ONTOLOGY_MISMATCH"
+    PROGRAM_SEMANTIC_ONTOLOGY_UNTRUSTED = "PROGRAM_SEMANTIC_ONTOLOGY_UNTRUSTED"
+    PROGRAM_PREOUTCOME_FREEZE_DIGEST_MISMATCH = "PROGRAM_PREOUTCOME_FREEZE_DIGEST_MISMATCH"
+    PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED = "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
 
 
 _REASON_ORDER: Final = {code: ordinal for ordinal, code in enumerate(ReasonCode)}
@@ -151,8 +201,59 @@ _BLOCKING_CODES: Final = frozenset(
         ReasonCode.PROGRAM_FAMILY_SET_MISMATCH,
         ReasonCode.PROGRAM_MULTIPLICITY_DIGEST_MISMATCH,
         ReasonCode.PROGRAM_MULTIPLICITY_CONSUMER_MISMATCH,
+        ReasonCode.PROGRAM_MULTIPLICITY_PROGRAM_MISMATCH,
+        ReasonCode.PROGRAM_SEMANTIC_ONTOLOGY_MISMATCH,
+        ReasonCode.PROGRAM_SEMANTIC_ONTOLOGY_UNTRUSTED,
+        ReasonCode.PROGRAM_PREOUTCOME_FREEZE_DIGEST_MISMATCH,
+        ReasonCode.PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED,
     }
 )
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticEntryV1:
+    alias_id: str
+    canonical_id: str
+    kind: SemanticKind
+
+    def as_dict(self) -> dict[str, str]:
+        return {
+            "aliasId": self.alias_id,
+            "canonicalId": self.canonical_id,
+            "kind": self.kind.value,
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class SemanticOntologyV1:
+    ontology_id: str
+    entries: tuple[SemanticEntryV1, ...]
+    digest: str
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            "entries": [entry.as_dict() for entry in self.entries],
+            "ontologyId": self.ontology_id,
+            "schema": ONTOLOGY_SCHEMA_V1,
+        }
+
+    def resolve(self, alias_id: str, *, kind: SemanticKind, field: str) -> str:
+        alias_seen = False
+        for entry in self.entries:
+            if entry.alias_id != alias_id:
+                continue
+            alias_seen = True
+            if entry.kind is kind:
+                return entry.canonical_id
+        if alias_seen:
+            _fail(
+                "SEMANTIC_KIND_MISMATCH",
+                f"{field} is not registered as {kind.value}",
+            )
+        _fail(
+            "SEMANTIC_ID_UNREGISTERED",
+            f"{field} is absent from the accepted semantic ontology",
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,15 +313,20 @@ class NuisanceV1:
     implementation_digest: str
     result_digest: str | None
 
-    def as_dict(self) -> dict[str, object]:
+    def design_dict(self) -> dict[str, object]:
         return {
             "bookkeepingPolicyId": self.bookkeeping_policy_id,
             "dataWindowId": self.data_window_id,
             "implementationDigest": self.implementation_digest,
-            "resultDigest": self.result_digest,
             "sizingPolicyId": self.sizing_policy_id,
             "universeId": self.universe_id,
             "venueProviderIds": list(self.venue_provider_ids),
+        }
+
+    def as_dict(self) -> dict[str, object]:
+        return {
+            **self.design_dict(),
+            "resultDigest": self.result_digest,
         }
 
 
@@ -239,6 +345,7 @@ class CandidateV1:
 
 @dataclass(frozen=True, slots=True)
 class MultiplicityPlanV1:
+    program_id: str
     scope_id: str
     method_id: str
     alpha_numerator: int
@@ -248,9 +355,17 @@ class MultiplicityPlanV1:
     family_component_ids: tuple[str, ...]
     attempt_ledger_digest: str
     family_universe_digest: str
+    semantic_ontology_digest: str
+    pre_outcome_freeze_digest: str | None
     consumer_ids: tuple[str, ...]
 
-    def as_dict(self) -> dict[str, object]:
+    def freeze_preimage_dict(self) -> dict[str, object]:
+        """Return the cycle-free plan payload that the freeze digest commits.
+
+        ``preOutcomeFreezeDigest`` is deliberately absent: it is the digest of
+        this payload, so including it would demand an unsatisfiable fixed point.
+        """
+
         return {
             "alpha": {
                 "denominator": self.alpha_denominator,
@@ -263,21 +378,35 @@ class MultiplicityPlanV1:
             "familyUniverseDigest": self.family_universe_digest,
             "frozenBeforeAnyOutcome": self.frozen_before_any_outcome,
             "methodId": self.method_id,
+            "programId": self.program_id,
+            "semanticOntologyDigest": self.semantic_ontology_digest,
             "scopeId": self.scope_id,
+        }
+
+    def as_dict(self) -> dict[str, object]:
+        """Return the full plan payload, including its freeze coordinate."""
+
+        return {
+            **self.freeze_preimage_dict(),
+            "preOutcomeFreezeDigest": self.pre_outcome_freeze_digest,
         }
 
 
 @dataclass(frozen=True, slots=True)
 class ProgramManifestV1:
     program_id: str
+    semantic_ontology: SemanticOntologyV1
     candidates: tuple[CandidateV1, ...]
     multiplicity_plan: MultiplicityPlanV1 | None
 
 
 @dataclass(frozen=True, slots=True)
 class _NodeIdentityV1:
+    op_id: str
     family_fingerprint: str
     hypothesis_fingerprint: str
+    family_associative_terms: tuple[str, ...]
+    hypothesis_associative_terms: tuple[str, ...]
     non_source_family_fingerprints: frozenset[str]
     source_role_ids: frozenset[str]
 
@@ -294,6 +423,7 @@ class CandidateIdentityV1:
     signal_root_fingerprints: tuple[str, ...]
     non_source_family_fingerprints: frozenset[str]
     source_role_ids: tuple[str, ...]
+    design_nuisance_fingerprint: str
     nuisance_fingerprint: str
     nuisance: NuisanceV1
 
@@ -302,6 +432,7 @@ class CandidateIdentityV1:
             "attemptId": self.attempt_id,
             "attemptStatus": self.attempt_status.value,
             "declaredFamilyId": self.declared_family_id,
+            "designNuisanceFingerprint": self.design_nuisance_fingerprint,
             "familyAnchorFingerprint": self.family_anchor_fingerprint,
             "familyFingerprint": self.family_fingerprint,
             "hypothesisFingerprint": self.hypothesis_fingerprint,
@@ -357,6 +488,10 @@ class ValidationReceiptV1:
     manifest_digest: str
     attempt_ledger_digest: str
     family_universe_digest: str
+    semantic_ontology_digest: str
+    execution_state_digest: str
+    computed_pre_outcome_freeze_digest: str | None
+    accepted_pre_outcome_freeze_digest: str | None
     candidate_count: int
     declared_family_count: int
     predictive_family_count: int
@@ -374,12 +509,15 @@ class ValidationReceiptV1:
 
     def as_dict(self) -> dict[str, object]:
         return {
+            "acceptedPreOutcomeFreezeDigest": self.accepted_pre_outcome_freeze_digest,
             "attemptLedgerDigest": self.attempt_ledger_digest,
             "authority": self.authority,
             "candidateCount": self.candidate_count,
             "candidates": [candidate.as_dict() for candidate in self.candidates],
             "canonicalization": self.canonicalization,
+            "computedPreOutcomeFreezeDigest": self.computed_pre_outcome_freeze_digest,
             "declaredFamilyCount": self.declared_family_count,
+            "executionStateDigest": self.execution_state_digest,
             "familyComponentCount": self.family_component_count,
             "familyComponents": [component.as_dict() for component in self.family_components],
             "familyUniverseDigest": self.family_universe_digest,
@@ -393,6 +531,7 @@ class ValidationReceiptV1:
             "receiptDigest": self.receipt_digest,
             "schedulerDisposition": self.scheduler_disposition.value,
             "schema": self.schema,
+            "semanticOntologyDigest": self.semantic_ontology_digest,
             "verifiedPositiveStructurallyEligible": (self.verified_positive_structurally_eligible),
         }
 
@@ -524,20 +663,115 @@ def _digests(
     return tuple(sorted(digests))
 
 
-def _parse_parameter(value: object, *, field: str) -> ParameterBindingV1:
+def _parse_semantic_entry(value: object, *, field: str) -> SemanticEntryV1:
+    mapping = _mapping(value, field=field)
+    _exact_keys(
+        mapping,
+        expected=frozenset({"aliasId", "canonicalId", "kind"}),
+        field=field,
+    )
+    kind_raw = _identifier(mapping["kind"], field=f"{field}.kind")
+    try:
+        kind = SemanticKind(kind_raw)
+    except ValueError as error:
+        raise ContractError(
+            "SEMANTIC_KIND_INVALID",
+            f"{field}.kind is outside the closed v1 set",
+        ) from error
+    return SemanticEntryV1(
+        alias_id=_identifier(mapping["aliasId"], field=f"{field}.aliasId"),
+        canonical_id=_identifier(
+            mapping["canonicalId"],
+            field=f"{field}.canonicalId",
+        ),
+        kind=kind,
+    )
+
+
+def _parse_semantic_ontology(value: object, *, field: str) -> SemanticOntologyV1:
+    mapping = _mapping(value, field=field)
+    _exact_keys(
+        mapping,
+        expected=frozenset({"entries", "ontologyId", "schema"}),
+        field=field,
+    )
+    if _text(mapping["schema"], field=f"{field}.schema") != ONTOLOGY_SCHEMA_V1:
+        _fail("SEMANTIC_ONTOLOGY_SCHEMA_INVALID", f"{field}.schema is not DQ-7 ontology v1")
+    entry_values = _array(mapping["entries"], field=f"{field}.entries")
+    if not 1 <= len(entry_values) <= _MAX_ONTOLOGY_ENTRIES:
+        _fail(
+            "CARDINALITY_INVALID",
+            f"{field}.entries cardinality is outside the v1 bound",
+        )
+    entries = tuple(
+        _parse_semantic_entry(entry, field=f"{field}.entries[{index}]")
+        for index, entry in enumerate(entry_values)
+    )
+    if len({(entry.alias_id, entry.kind) for entry in entries}) != len(entries):
+        _fail(
+            "SEMANTIC_ALIAS_DUPLICATE",
+            f"{field}.entries repeats an alias ID within one semantic kind",
+        )
+    by_alias_and_kind = {(entry.alias_id, entry.kind): entry for entry in entries}
+    for entry in entries:
+        canonical = by_alias_and_kind.get((entry.canonical_id, entry.kind))
+        if (
+            canonical is None
+            or canonical.alias_id != canonical.canonical_id
+            or canonical.kind is not entry.kind
+        ):
+            _fail(
+                "SEMANTIC_CANONICAL_TARGET_INVALID",
+                f"{field} alias {entry.alias_id} has no self-canonical target",
+            )
+    entries = tuple(sorted(entries, key=lambda entry: (entry.kind.value, entry.alias_id)))
+    ontology_id = _identifier(mapping["ontologyId"], field=f"{field}.ontologyId")
+    payload = {
+        "entries": [entry.as_dict() for entry in entries],
+        "ontologyId": ontology_id,
+        "schema": ONTOLOGY_SCHEMA_V1,
+    }
+    return SemanticOntologyV1(
+        ontology_id=ontology_id,
+        entries=entries,
+        digest=_digest(_ONTOLOGY_DOMAIN, payload),
+    )
+
+
+def _parse_parameter(
+    value: object,
+    *,
+    field: str,
+    ontology: SemanticOntologyV1,
+) -> ParameterBindingV1:
     mapping = _mapping(value, field=field)
     _exact_keys(
         mapping,
         expected=frozenset({"roleId", "valueId"}),
         field=field,
     )
+    role_alias = _identifier(mapping["roleId"], field=f"{field}.roleId")
+    value_alias = _identifier(mapping["valueId"], field=f"{field}.valueId")
     return ParameterBindingV1(
-        role_id=_identifier(mapping["roleId"], field=f"{field}.roleId"),
-        value_id=_identifier(mapping["valueId"], field=f"{field}.valueId"),
+        role_id=ontology.resolve(
+            role_alias,
+            kind=SemanticKind.PARAMETER_ROLE,
+            field=f"{field}.roleId",
+        ),
+        value_id=ontology.resolve(
+            value_alias,
+            kind=SemanticKind.PARAMETER_VALUE,
+            field=f"{field}.valueId",
+        ),
     )
 
 
-def _parse_node(value: object, *, field: str) -> FeatureNodeV1:
+def _parse_node(
+    value: object,
+    *,
+    field: str,
+    ontology: SemanticOntologyV1,
+) -> FeatureNodeV1:
     mapping = _mapping(value, field=field)
     _exact_keys(
         mapping,
@@ -570,7 +804,11 @@ def _parse_node(value: object, *, field: str) -> FeatureNodeV1:
     if len(parameter_values) > _MAX_PARAMETERS:
         _fail("CARDINALITY_INVALID", f"{field}.parameterBindings exceeds the v1 bound")
     parameters = tuple(
-        _parse_parameter(parameter, field=f"{field}.parameterBindings[{index}]")
+        _parse_parameter(
+            parameter,
+            field=f"{field}.parameterBindings[{index}]",
+            ontology=ontology,
+        )
         for index, parameter in enumerate(parameter_values)
     )
     if len({parameter.role_id for parameter in parameters}) != len(parameters):
@@ -580,9 +818,14 @@ def _parse_node(value: object, *, field: str) -> FeatureNodeV1:
         )
     parameters = tuple(sorted(parameters, key=lambda parameter: parameter.role_id))
     source_raw = mapping["sourceRoleId"]
-    source_role_id = (
-        None if source_raw is None else _identifier(source_raw, field=f"{field}.sourceRoleId")
-    )
+    source_role_id = None
+    if source_raw is not None:
+        source_alias = _identifier(source_raw, field=f"{field}.sourceRoleId")
+        source_role_id = ontology.resolve(
+            source_alias,
+            kind=SemanticKind.SOURCE_ROLE,
+            field=f"{field}.sourceRoleId",
+        )
     if op_id == "SOURCE":
         if input_node_ids or parameters or source_role_id is None:
             _fail(
@@ -601,6 +844,12 @@ def _parse_node(value: object, *, field: str) -> FeatureNodeV1:
                 "FEATURE_ARITY_INVALID",
                 f"{field} n-ary operation requires two to {_MAX_INPUTS} inputs",
             )
+        actual_roles = frozenset(parameter.role_id for parameter in parameters)
+        if actual_roles != _EXACT_PARAMETER_ROLES[op_id]:
+            _fail(
+                "FEATURE_PARAMETER_ROLE_INVALID",
+                f"{field} parameters do not match the exact {op_id} role contract",
+            )
     return FeatureNodeV1(
         node_id=node_id,
         op_id=op_id,
@@ -610,7 +859,12 @@ def _parse_node(value: object, *, field: str) -> FeatureNodeV1:
     )
 
 
-def _parse_prediction(value: object, *, field: str) -> PredictionV1:
+def _parse_prediction(
+    value: object,
+    *,
+    field: str,
+    ontology: SemanticOntologyV1,
+) -> PredictionV1:
     mapping = _mapping(value, field=field)
     _exact_keys(
         mapping,
@@ -628,33 +882,33 @@ def _parse_prediction(value: object, *, field: str) -> PredictionV1:
         ),
         field=field,
     )
+    fields: tuple[tuple[str, SemanticKind], ...] = (
+        ("outcomeId", SemanticKind.OUTCOME),
+        ("instrumentTopologyId", SemanticKind.INSTRUMENT_TOPOLOGY),
+        ("forecastClockId", SemanticKind.FORECAST_CLOCK),
+        ("populationTopologyId", SemanticKind.POPULATION_TOPOLOGY),
+        ("targetRoleId", SemanticKind.TARGET_ROLE),
+        ("targetValueId", SemanticKind.TARGET_VALUE),
+        ("polarityId", SemanticKind.POLARITY),
+        ("actionMappingId", SemanticKind.ACTION_MAPPING),
+    )
+    resolved = {
+        name: ontology.resolve(
+            _identifier(mapping[name], field=f"{field}.{name}"),
+            kind=kind,
+            field=f"{field}.{name}",
+        )
+        for name, kind in fields
+    }
     return PredictionV1(
-        outcome_id=_identifier(mapping["outcomeId"], field=f"{field}.outcomeId"),
-        instrument_topology_id=_identifier(
-            mapping["instrumentTopologyId"],
-            field=f"{field}.instrumentTopologyId",
-        ),
-        forecast_clock_id=_identifier(
-            mapping["forecastClockId"],
-            field=f"{field}.forecastClockId",
-        ),
-        population_topology_id=_identifier(
-            mapping["populationTopologyId"],
-            field=f"{field}.populationTopologyId",
-        ),
-        target_role_id=_identifier(
-            mapping["targetRoleId"],
-            field=f"{field}.targetRoleId",
-        ),
-        target_value_id=_identifier(
-            mapping["targetValueId"],
-            field=f"{field}.targetValueId",
-        ),
-        polarity_id=_identifier(mapping["polarityId"], field=f"{field}.polarityId"),
-        action_mapping_id=_identifier(
-            mapping["actionMappingId"],
-            field=f"{field}.actionMappingId",
-        ),
+        outcome_id=resolved["outcomeId"],
+        instrument_topology_id=resolved["instrumentTopologyId"],
+        forecast_clock_id=resolved["forecastClockId"],
+        population_topology_id=resolved["populationTopologyId"],
+        target_role_id=resolved["targetRoleId"],
+        target_value_id=resolved["targetValueId"],
+        polarity_id=resolved["polarityId"],
+        action_mapping_id=resolved["actionMappingId"],
     )
 
 
@@ -707,7 +961,12 @@ def _parse_nuisance(value: object, *, field: str) -> NuisanceV1:
     )
 
 
-def _parse_candidate(value: object, *, field: str) -> CandidateV1:
+def _parse_candidate(
+    value: object,
+    *,
+    field: str,
+    ontology: SemanticOntologyV1,
+) -> CandidateV1:
     mapping = _mapping(value, field=field)
     _exact_keys(
         mapping,
@@ -735,7 +994,11 @@ def _parse_candidate(value: object, *, field: str) -> CandidateV1:
     if not 1 <= len(node_values) <= _MAX_NODES:
         _fail("CARDINALITY_INVALID", f"{field}.featureGraph.nodes is outside the v1 bound")
     nodes = tuple(
-        _parse_node(node, field=f"{field}.featureGraph.nodes[{index}]")
+        _parse_node(
+            node,
+            field=f"{field}.featureGraph.nodes[{index}]",
+            ontology=ontology,
+        )
         for index, node in enumerate(node_values)
     )
     if len({node.node_id for node in nodes}) != len(nodes):
@@ -768,7 +1031,11 @@ def _parse_candidate(value: object, *, field: str) -> CandidateV1:
         ),
         nodes=nodes,
         root_node_ids=root_node_ids,
-        prediction=_parse_prediction(mapping["prediction"], field=f"{field}.prediction"),
+        prediction=_parse_prediction(
+            mapping["prediction"],
+            field=f"{field}.prediction",
+            ontology=ontology,
+        ),
         nuisance=_parse_nuisance(mapping["nuisance"], field=f"{field}.nuisance"),
     )
 
@@ -787,6 +1054,9 @@ def _parse_multiplicity_plan(value: object, *, field: str) -> MultiplicityPlanV1
                 "familyUniverseDigest",
                 "frozenBeforeAnyOutcome",
                 "methodId",
+                "preOutcomeFreezeDigest",
+                "programId",
+                "semanticOntologyDigest",
                 "scopeId",
             }
         ),
@@ -812,7 +1082,17 @@ def _parse_multiplicity_plan(value: object, *, field: str) -> MultiplicityPlanV1
     )
     if numerator >= denominator:
         _fail("ALPHA_INVALID", f"{field}.alpha must lie strictly between zero and one")
+    # A draft plan carries an explicit null freeze coordinate.  The coordinate is
+    # the digest of the rest of the plan, so a draft cannot supply it, and no
+    # placeholder digest is ever a legitimate value.
+    freeze_raw = mapping["preOutcomeFreezeDigest"]
+    freeze_digest = (
+        None
+        if freeze_raw is None
+        else _digest_value(freeze_raw, field=f"{field}.preOutcomeFreezeDigest")
+    )
     return MultiplicityPlanV1(
+        program_id=_identifier(mapping["programId"], field=f"{field}.programId"),
         scope_id=_identifier(mapping["scopeId"], field=f"{field}.scopeId"),
         method_id=_identifier(mapping["methodId"], field=f"{field}.methodId"),
         alpha_numerator=numerator,
@@ -841,6 +1121,11 @@ def _parse_multiplicity_plan(value: object, *, field: str) -> MultiplicityPlanV1
             mapping["familyUniverseDigest"],
             field=f"{field}.familyUniverseDigest",
         ),
+        semantic_ontology_digest=_digest_value(
+            mapping["semanticOntologyDigest"],
+            field=f"{field}.semanticOntologyDigest",
+        ),
+        pre_outcome_freeze_digest=freeze_digest,
         consumer_ids=_identifiers(
             mapping["consumerIds"],
             field=f"{field}.consumerIds",
@@ -862,6 +1147,7 @@ def parse_program_manifest_v1(value: object) -> ProgramManifestV1:
                 "globalMultiplicity",
                 "programId",
                 "schema",
+                "semanticOntology",
                 "version",
             }
         ),
@@ -879,11 +1165,20 @@ def parse_program_manifest_v1(value: object) -> ProgramManifestV1:
         != 1
     ):
         _fail("VERSION_INVALID", "manifest.version must be one")
+    program_id = _identifier(mapping["programId"], field="manifest.programId")
+    semantic_ontology = _parse_semantic_ontology(
+        mapping["semanticOntology"],
+        field="manifest.semanticOntology",
+    )
     candidate_values = _array(mapping["candidates"], field="manifest.candidates")
     if not 1 <= len(candidate_values) <= _MAX_CANDIDATES:
         _fail("CARDINALITY_INVALID", "manifest.candidates is outside the v1 bound")
     candidates = tuple(
-        _parse_candidate(candidate, field=f"manifest.candidates[{index}]")
+        _parse_candidate(
+            candidate,
+            field=f"manifest.candidates[{index}]",
+            ontology=semantic_ontology,
+        )
         for index, candidate in enumerate(candidate_values)
     )
     if len({candidate.attempt_id for candidate in candidates}) != len(candidates):
@@ -899,7 +1194,8 @@ def parse_program_manifest_v1(value: object) -> ProgramManifestV1:
         )
     )
     return ProgramManifestV1(
-        program_id=_identifier(mapping["programId"], field="manifest.programId"),
+        program_id=program_id,
+        semantic_ontology=semantic_ontology,
         candidates=candidates,
         multiplicity_plan=multiplicity_plan,
     )
@@ -953,6 +1249,31 @@ def _candidate_identity(candidate: CandidateV1) -> CandidateIdentityV1:
                     f"{candidate.attempt_id} node {node.node_id} references {input_id}",
                 )
 
+    consumers: dict[str, list[str]] = {node.node_id: [] for node in candidate.nodes}
+    for node in candidate.nodes:
+        for input_id in node.input_node_ids:
+            consumers[input_id].append(node.node_id)
+    root_ids = frozenset(candidate.root_node_ids)
+
+    def absorbed_into_parent(node: FeatureNodeV1) -> bool:
+        """Report whether associative flattening erases this node's identity.
+
+        A commutative node whose every consumer is a same-operation commutative
+        node contributes only its flattened terms to those consumers, so its own
+        fingerprint does not survive normalization.  ``SUM(SUM(a,b),c)`` and
+        ``SUM(a,b,c)`` already share one family fingerprint; excluding the
+        absorbed inner node keeps subgraph membership -- and therefore the
+        overlap and shared-signal verdicts -- identical across both spellings.
+        A root is never absorbed, because a root is a complete signal.
+        """
+
+        if node.op_id not in _COMMUTATIVE_OPS or node.node_id in root_ids:
+            return False
+        parents = consumers[node.node_id]
+        return bool(parents) and all(
+            node_by_id[parent_id].op_id == node.op_id for parent_id in parents
+        )
+
     visiting: set[str] = set()
     memo: dict[str, _NodeIdentityV1] = {}
 
@@ -970,8 +1291,28 @@ def _candidate_identity(candidate: CandidateV1) -> CandidateIdentityV1:
         family_inputs = tuple(child.family_fingerprint for child in children)
         hypothesis_inputs = tuple(child.hypothesis_fingerprint for child in children)
         if node.op_id in _COMMUTATIVE_OPS:
-            family_inputs = tuple(sorted(family_inputs))
-            hypothesis_inputs = tuple(sorted(hypothesis_inputs))
+            family_inputs = tuple(
+                sorted(
+                    term
+                    for child in children
+                    for term in (
+                        child.family_associative_terms
+                        if child.op_id == node.op_id
+                        else (child.family_fingerprint,)
+                    )
+                )
+            )
+            hypothesis_inputs = tuple(
+                sorted(
+                    term
+                    for child in children
+                    for term in (
+                        child.hypothesis_associative_terms
+                        if child.op_id == node.op_id
+                        else (child.hypothesis_fingerprint,)
+                    )
+                )
+            )
         family_payload: dict[str, object] = {
             "inputFingerprints": list(family_inputs),
             "opId": node.op_id,
@@ -992,11 +1333,16 @@ def _candidate_identity(candidate: CandidateV1) -> CandidateIdentityV1:
             if node.source_role_id is None:
                 _fail("SOURCE_NODE_INVALID", "source role disappeared after parsing")
             source_roles.add(node.source_role_id)
-        else:
+        elif not absorbed_into_parent(node):
             non_source.add(family_fingerprint)
         identity = _NodeIdentityV1(
+            op_id=node.op_id,
             family_fingerprint=family_fingerprint,
             hypothesis_fingerprint=hypothesis_fingerprint,
+            family_associative_terms=(family_inputs if node.op_id in _COMMUTATIVE_OPS else ()),
+            hypothesis_associative_terms=(
+                hypothesis_inputs if node.op_id in _COMMUTATIVE_OPS else ()
+            ),
             non_source_family_fingerprints=frozenset(non_source),
             source_role_ids=frozenset(source_roles),
         )
@@ -1050,6 +1396,10 @@ def _candidate_identity(candidate: CandidateV1) -> CandidateIdentityV1:
         signal_root_fingerprints=root_family_fingerprints,
         non_source_family_fingerprints=all_non_source,
         source_role_ids=tuple(sorted(all_source_roles)),
+        design_nuisance_fingerprint=_digest(
+            _NUISANCE_FINGERPRINT_DOMAIN,
+            candidate.nuisance.design_dict(),
+        ),
         nuisance_fingerprint=_digest(
             _NUISANCE_FINGERPRINT_DOMAIN,
             candidate.nuisance.as_dict(),
@@ -1260,25 +1610,60 @@ def _pair_findings_and_components(
     return ordered_findings, tuple(components)
 
 
-def _attempt_ledger_digest(candidates: tuple[CandidateIdentityV1, ...]) -> str:
+def _attempt_ledger_digest(
+    program_id: str,
+    semantic_ontology_digest: str,
+    candidates: tuple[CandidateIdentityV1, ...],
+) -> str:
+    # The ledger commits the ontology that gave its fingerprints their meaning.
+    # Without that binding the same ledger digest could be produced under two
+    # different alias maps, so a consumer treating the ledger digest alone as
+    # program identity would be reading an ontology-independent value.
     return _digest(
         _ATTEMPT_LEDGER_DOMAIN,
         {
             "attempts": [
                 {
                     "attemptId": candidate.attempt_id,
-                    "attemptStatus": candidate.attempt_status.value,
+                    "declaredFamilyId": candidate.declared_family_id,
+                    "designNuisanceFingerprint": (candidate.design_nuisance_fingerprint),
                     "familyFingerprint": candidate.family_fingerprint,
                     "hypothesisFingerprint": candidate.hypothesis_fingerprint,
-                    "outcomeAccessed": candidate.outcome_accessed,
                 }
                 for candidate in candidates
-            ]
+            ],
+            "programId": program_id,
+            "semanticOntologyDigest": semantic_ontology_digest,
         },
     )
 
 
-def _family_universe_digest(components: tuple[FamilyComponentV1, ...]) -> str:
+def _execution_state_digest(
+    program_id: str,
+    candidates: tuple[CandidateIdentityV1, ...],
+) -> str:
+    return _digest(
+        _EXECUTION_STATE_DOMAIN,
+        {
+            "attempts": [
+                {
+                    "attemptId": candidate.attempt_id,
+                    "attemptStatus": candidate.attempt_status.value,
+                    "outcomeAccessed": candidate.outcome_accessed,
+                    "resultDigest": candidate.nuisance.result_digest,
+                }
+                for candidate in candidates
+            ],
+            "programId": program_id,
+        },
+    )
+
+
+def _family_universe_digest(
+    program_id: str,
+    semantic_ontology_digest: str,
+    components: tuple[FamilyComponentV1, ...],
+) -> str:
     return _digest(
         _FAMILY_UNIVERSE_DOMAIN,
         {
@@ -1288,33 +1673,88 @@ def _family_universe_digest(components: tuple[FamilyComponentV1, ...]) -> str:
                     "familyFingerprints": list(component.family_fingerprints),
                 }
                 for component in components
-            ]
+            ],
+            "programId": program_id,
+            "semanticOntologyDigest": semantic_ontology_digest,
+        },
+    )
+
+
+def _pre_outcome_freeze_digest(
+    *,
+    program_id: str,
+    semantic_ontology_digest: str,
+    attempt_ledger_digest: str,
+    family_universe_digest: str,
+    plan: MultiplicityPlanV1,
+) -> str:
+    return _digest(
+        _PREOUTCOME_FREEZE_DOMAIN,
+        {
+            "actualAttemptLedgerDigest": attempt_ledger_digest,
+            "actualFamilyUniverseDigest": family_universe_digest,
+            "actualProgramId": program_id,
+            "actualSemanticOntologyDigest": semantic_ontology_digest,
+            "plan": plan.freeze_preimage_dict(),
         },
     )
 
 
 def _multiplicity_findings(
     plan: MultiplicityPlanV1 | None,
+    program_id: str,
+    semantic_ontology_digest: str,
     candidates: tuple[CandidateIdentityV1, ...],
     components: tuple[FamilyComponentV1, ...],
     attempt_ledger_digest: str,
     family_universe_digest: str,
+    computed_pre_outcome_freeze_digest: str | None,
+    accepted_semantic_ontology_digest: str | None,
+    accepted_pre_outcome_freeze_digest: str | None,
 ) -> tuple[tuple[FindingV1, ...], str]:
-    if plan is None:
-        if len(candidates) == 1:
-            return (), "NOT_REQUIRED_SINGLE_ATTEMPT"
-        return (
-            (
-                _finding(
-                    ReasonCode.PROGRAM_MULTIPLICITY_PLAN_MISSING,
-                    candidates,
-                    (attempt_ledger_digest, family_universe_digest),
-                ),
-            ),
-            "MISSING",
-        )
     findings: list[FindingV1] = []
+    if accepted_semantic_ontology_digest != semantic_ontology_digest:
+        evidence = tuple(
+            digest
+            for digest in (
+                accepted_semantic_ontology_digest,
+                semantic_ontology_digest,
+            )
+            if digest is not None
+        )
+        findings.append(
+            _finding(
+                ReasonCode.PROGRAM_SEMANTIC_ONTOLOGY_UNTRUSTED,
+                candidates,
+                evidence,
+            )
+        )
+    if plan is None:
+        findings.append(
+            _finding(
+                ReasonCode.PROGRAM_MULTIPLICITY_PLAN_MISSING,
+                candidates,
+                (attempt_ledger_digest, family_universe_digest),
+            )
+        )
+        return tuple(findings), "MISSING"
     all_candidates = candidates
+    if plan.program_id != program_id:
+        findings.append(
+            _finding(
+                ReasonCode.PROGRAM_MULTIPLICITY_PROGRAM_MISMATCH,
+                all_candidates,
+                (plan.program_id, program_id),
+            )
+        )
+    if plan.semantic_ontology_digest != semantic_ontology_digest:
+        findings.append(
+            _finding(
+                ReasonCode.PROGRAM_SEMANTIC_ONTOLOGY_MISMATCH,
+                all_candidates,
+                (plan.semantic_ontology_digest, semantic_ontology_digest),
+            )
+        )
     if plan.scope_id != "PROGRAM_WIDE":
         findings.append(
             _finding(
@@ -1381,11 +1821,47 @@ def _multiplicity_findings(
                 tuple(sorted(_REQUIRED_CONSUMERS - set(plan.consumer_ids))),
             )
         )
+    if computed_pre_outcome_freeze_digest != plan.pre_outcome_freeze_digest:
+        evidence = tuple(
+            digest
+            for digest in (
+                plan.pre_outcome_freeze_digest,
+                computed_pre_outcome_freeze_digest,
+            )
+            if digest is not None
+        )
+        findings.append(
+            _finding(
+                ReasonCode.PROGRAM_PREOUTCOME_FREEZE_DIGEST_MISMATCH,
+                all_candidates,
+                evidence,
+            )
+        )
+    # The pin is compared against the coordinate DQ-7 derived, not against the
+    # submission's own claim: a manifest that merely agrees with itself has shown
+    # nothing, and a draft carrying a null claim must still be reported untrusted.
+    if accepted_pre_outcome_freeze_digest != computed_pre_outcome_freeze_digest:
+        evidence = tuple(
+            digest
+            for digest in (
+                accepted_pre_outcome_freeze_digest,
+                computed_pre_outcome_freeze_digest,
+            )
+            if digest is not None
+        )
+        findings.append(
+            _finding(
+                ReasonCode.PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED,
+                all_candidates,
+                evidence,
+            )
+        )
     return tuple(findings), ("COVERED" if not findings else "INVALID")
 
 
 def _normalized_manifest_payload(
     program_id: str,
+    semantic_ontology: SemanticOntologyV1,
     candidates: tuple[CandidateIdentityV1, ...],
     plan: MultiplicityPlanV1 | None,
 ) -> dict[str, object]:
@@ -1400,24 +1876,127 @@ def _normalized_manifest_payload(
         "globalMultiplicity": None if plan is None else plan.as_dict(),
         "programId": program_id,
         "schema": SCHEMA_V1,
+        "semanticOntology": semantic_ontology.as_dict(),
         "version": 1,
     }
 
 
-def validate_program_v1(value: object) -> ValidationReceiptV1:
+def _assert_pre_outcome_open(manifest: ProgramManifestV1) -> None:
+    """Fail closed unless every attempt is still freeze-open.
+
+    A freeze coordinate is only evidence of pre-outcome commitment if it cannot
+    be minted after outcomes are known.  The coordinate itself is deliberately
+    invariant to execution state, so that an already-pinned program keeps
+    validating as it executes; that invariance is exactly why minting has to be
+    gated here rather than inside the digest.
+    """
+
+    for candidate in manifest.candidates:
+        if (
+            candidate.attempt_status is not AttemptStatus.PLANNED
+            or candidate.outcome_accessed
+            or candidate.nuisance.result_digest is not None
+        ):
+            _fail(
+                "PREOUTCOME_FREEZE_CLOSED",
+                f"{candidate.attempt_id} is not planned, unaccessed, and result-free",
+            )
+
+
+def calculate_pre_outcome_freeze_digest_v1(value: object) -> str:
+    """Calculate an untrusted freeze coordinate; this does not register it."""
+
+    manifest = parse_program_manifest_v1(value)
+    if manifest.multiplicity_plan is None:
+        _fail(
+            "PROGRAM_MULTIPLICITY_PLAN_MISSING",
+            "a plan is required before calculating its freeze coordinate",
+        )
+    _assert_pre_outcome_open(manifest)
+    identities = tuple(_candidate_identity(candidate) for candidate in manifest.candidates)
+    _, components = _pair_findings_and_components(identities)
+    attempt_ledger_digest = _attempt_ledger_digest(
+        manifest.program_id,
+        manifest.semantic_ontology.digest,
+        identities,
+    )
+    family_universe_digest = _family_universe_digest(
+        manifest.program_id,
+        manifest.semantic_ontology.digest,
+        components,
+    )
+    return _pre_outcome_freeze_digest(
+        program_id=manifest.program_id,
+        semantic_ontology_digest=manifest.semantic_ontology.digest,
+        attempt_ledger_digest=attempt_ledger_digest,
+        family_universe_digest=family_universe_digest,
+        plan=manifest.multiplicity_plan,
+    )
+
+
+def semantic_ontology_digest_v1(value: object) -> str:
+    """Return the digest of the manifest's closed semantic ontology."""
+
+    return parse_program_manifest_v1(value).semantic_ontology.digest
+
+
+def validate_program_v1(
+    value: object,
+    *,
+    accepted_semantic_ontology_digest: str | None = None,
+    accepted_pre_outcome_freeze_digest: str | None = None,
+) -> ValidationReceiptV1:
     """Validate distinctness and exact program-level multiplicity membership."""
 
+    if accepted_semantic_ontology_digest is not None:
+        accepted_semantic_ontology_digest = _digest_value(
+            accepted_semantic_ontology_digest,
+            field="accepted_semantic_ontology_digest",
+        )
+    if accepted_pre_outcome_freeze_digest is not None:
+        accepted_pre_outcome_freeze_digest = _digest_value(
+            accepted_pre_outcome_freeze_digest,
+            field="accepted_pre_outcome_freeze_digest",
+        )
     manifest = parse_program_manifest_v1(value)
     identities = tuple(_candidate_identity(candidate) for candidate in manifest.candidates)
     pair_findings, components = _pair_findings_and_components(identities)
-    attempt_ledger_digest = _attempt_ledger_digest(identities)
-    family_universe_digest = _family_universe_digest(components)
+    attempt_ledger_digest = _attempt_ledger_digest(
+        manifest.program_id,
+        manifest.semantic_ontology.digest,
+        identities,
+    )
+    execution_state_digest = _execution_state_digest(
+        manifest.program_id,
+        identities,
+    )
+    family_universe_digest = _family_universe_digest(
+        manifest.program_id,
+        manifest.semantic_ontology.digest,
+        components,
+    )
+    computed_pre_outcome_freeze_digest = (
+        None
+        if manifest.multiplicity_plan is None
+        else _pre_outcome_freeze_digest(
+            program_id=manifest.program_id,
+            semantic_ontology_digest=manifest.semantic_ontology.digest,
+            attempt_ledger_digest=attempt_ledger_digest,
+            family_universe_digest=family_universe_digest,
+            plan=manifest.multiplicity_plan,
+        )
+    )
     multiplicity_findings, multiplicity_status = _multiplicity_findings(
         manifest.multiplicity_plan,
+        manifest.program_id,
+        manifest.semantic_ontology.digest,
         identities,
         components,
         attempt_ledger_digest,
         family_universe_digest,
+        computed_pre_outcome_freeze_digest,
+        accepted_semantic_ontology_digest,
+        accepted_pre_outcome_freeze_digest,
     )
     findings = tuple(
         sorted(
@@ -1455,17 +2034,21 @@ def validate_program_v1(value: object) -> ValidationReceiptV1:
         _MANIFEST_DOMAIN,
         _normalized_manifest_payload(
             manifest.program_id,
+            manifest.semantic_ontology,
             identities,
             manifest.multiplicity_plan,
         ),
     )
     receipt_without_digest: dict[str, object] = {
+        "acceptedPreOutcomeFreezeDigest": accepted_pre_outcome_freeze_digest,
         "attemptLedgerDigest": attempt_ledger_digest,
         "authority": "NONE",
         "candidateCount": len(identities),
         "candidates": [candidate.as_dict() for candidate in identities],
         "canonicalization": CANONICALIZATION_V1,
+        "computedPreOutcomeFreezeDigest": computed_pre_outcome_freeze_digest,
         "declaredFamilyCount": len({candidate.declared_family_id for candidate in identities}),
+        "executionStateDigest": execution_state_digest,
         "familyComponentCount": len(components),
         "familyComponents": [component.as_dict() for component in components],
         "familyUniverseDigest": family_universe_digest,
@@ -1478,6 +2061,7 @@ def validate_program_v1(value: object) -> ValidationReceiptV1:
         "reasonCodes": list(reason_codes),
         "schedulerDisposition": scheduler_disposition.value,
         "schema": RECEIPT_SCHEMA_V1,
+        "semanticOntologyDigest": manifest.semantic_ontology.digest,
         "verifiedPositiveStructurallyEligible": not blocked,
     }
     receipt_digest = _digest(_RECEIPT_DOMAIN, receipt_without_digest)
@@ -1488,6 +2072,10 @@ def validate_program_v1(value: object) -> ValidationReceiptV1:
         manifest_digest=manifest_digest,
         attempt_ledger_digest=attempt_ledger_digest,
         family_universe_digest=family_universe_digest,
+        semantic_ontology_digest=manifest.semantic_ontology.digest,
+        execution_state_digest=execution_state_digest,
+        computed_pre_outcome_freeze_digest=computed_pre_outcome_freeze_digest,
+        accepted_pre_outcome_freeze_digest=accepted_pre_outcome_freeze_digest,
         candidate_count=len(identities),
         declared_family_count=len({candidate.declared_family_id for candidate in identities}),
         predictive_family_count=len({candidate.family_fingerprint for candidate in identities}),
@@ -1505,7 +2093,16 @@ def validate_program_v1(value: object) -> ValidationReceiptV1:
     )
 
 
-def validate_program_file_v1(path: Path) -> ValidationReceiptV1:
+def validate_program_file_v1(
+    path: Path,
+    *,
+    accepted_semantic_ontology_digest: str | None = None,
+    accepted_pre_outcome_freeze_digest: str | None = None,
+) -> ValidationReceiptV1:
     """Load and validate one program manifest."""
 
-    return validate_program_v1(load_program_manifest_v1(path))
+    return validate_program_v1(
+        load_program_manifest_v1(path),
+        accepted_semantic_ontology_digest=accepted_semantic_ontology_digest,
+        accepted_pre_outcome_freeze_digest=accepted_pre_outcome_freeze_digest,
+    )

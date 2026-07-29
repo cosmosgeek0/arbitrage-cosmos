@@ -1,15 +1,15 @@
 {
   "schema": "cosmos.dq7.known-answer.v1",
   "validReceipt": {
-    "attemptLedgerDigest": "2134f4e1e888d1d933b7fe8ff9c04d717878a00d2d0346e6279691fc60667598",
+    "attemptLedgerDigest": "80f024d5f6629527ffb92d87fe882879aa967d485f3bf54b50e2b65ed7e287ab",
     "familyComponentIds": [
       "76d722c7269eb013982b377d313f6a1cb914aa0b99da366838882f2e8fa5e13a",
       "771699ff90232daf86a88e61334433a2e8d12b3c7099a603511c86c6081ae295",
-      "8f20fe07ff6e76a710984b70d441600badecbf1560aa77594b84e39687e6a1c1"
+      "ee11d17e2f639505345781a749408de2f4485c19bd8ac6769699fbd98aff0aff"
     ],
-    "familyUniverseDigest": "da930549d88e46bf6ab0f3537bce7bf3d32eff240b0d66e4b54a370705075e2f",
-    "manifestDigest": "5cd36404eb6a154e4173295dd73e0dc950c41d52a7a48b85d6715502b95d1a4f",
-    "receiptDigest": "592e89c0b4dad57abe922ee29153024586e5fda9215cce9f267ffe6234481e33"
+    "familyUniverseDigest": "59dea0caf3d6d5a0eed06a0e847e3f3eeee289b3398d9fe10b35f8011e73c0e1",
+    "manifestDigest": "1cfe643b236f7a3863551d726cfc80cf9f51a8be61a272ba7ea8fbb5cce40a1b",
+    "receiptDigest": "743049e33f5f1d2f5e3b6e204dc1a41bd7caa910c9b78c333cea9ffb391ef7ed"
   },
   "hostileReceipts": [
     {
@@ -21,7 +21,7 @@
         "DECLARED_FAMILY_ALIAS",
         "SHARED_SIGNAL_COMPONENT"
       ],
-      "receiptDigest": "153b078f0311a984060bdb96eea92a0fab735e90918ade92e8bcf4d0652a6fb5",
+      "receiptDigest": "5663a54723c9b781af98099f47863f8a9a75008ec9d1da264b9703f597b8bd79",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -33,7 +33,7 @@
         "DECLARED_FAMILY_ALIAS",
         "SHARED_SIGNAL_COMPONENT"
       ],
-      "receiptDigest": "d405bc428c6f843bdccb480846dd0bececa22a69ade6e230b7bcfb77545582a3",
+      "receiptDigest": "7c46c78901453a8b7b4940ccea5da143c5a2392035501715ece4c4964aa912c0",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -45,7 +45,7 @@
         "DECLARED_FAMILY_ALIAS",
         "SHARED_SIGNAL_COMPONENT"
       ],
-      "receiptDigest": "8f7fd81de03d86a988e28ee77675a435f2d0f14eb7550dae8dd7de240e614f38",
+      "receiptDigest": "f50f4103bdf52dd576a4727aff19a740624392b8dec51a3c2d0864a7e7553a6e",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -57,7 +57,43 @@
         "DECLARED_FAMILY_ALIAS",
         "SHARED_SIGNAL_COMPONENT"
       ],
-      "receiptDigest": "a977e3451f84c420fe85c7b47b48d77582ccf862becd2700ee12ed75d706daeb",
+      "receiptDigest": "3233309fde8a263e28cf304686b435ebfd780bff36c45f29672142fe709db965",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PARAMETER_ROLE_ALIAS_DUPLICATE",
+      "mutationId": "CLONE_PARAMETER_ROLE_ALIAS",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "FAMILY_RENAME_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "1146107a7f8438cb79eeb53158646ab9675962b84d7e9eaa17ed2eeba7083ebe",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "SOURCE_ROLE_ALIAS_DUPLICATE",
+      "mutationId": "CLONE_SOURCE_ALIAS",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "FAMILY_RENAME_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "db9c8f809e6130c06617d3b32cebf3a3a1d288cee7e6f65a590aa4f06240d56a",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PREDICTION_ALIAS_DUPLICATE",
+      "mutationId": "CLONE_OUTCOME_ALIAS",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "FAMILY_RENAME_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "05bf06ec180de984b164559e5a1176dd87daca0070109173f18bc3653bf96f23",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -69,7 +105,7 @@
         "DECLARED_FAMILY_ALIAS",
         "SHARED_SIGNAL_COMPONENT"
       ],
-      "receiptDigest": "7fa57fe52728f95ce8a858b189fb2c7f004ddcd7696fd7cdea49b4bf043f7364",
+      "receiptDigest": "7a1252b13b8f3d6f2ec52fd1e672c89baa04527be49311d6e29fd4e7b7a7d5ed",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -82,7 +118,7 @@
         "DECLARED_FAMILY_ALIAS",
         "SHARED_SIGNAL_COMPONENT"
       ],
-      "receiptDigest": "13ce64bfd565164eababfe0358253a1a05a28bed9fbb8ed5916d8d3360082d46",
+      "receiptDigest": "75b3574e13b24960bc5959fdc2f1d89bf7c0cd16d009409f6b8e407bd4f611fb",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -93,7 +129,7 @@
         "DECLARED_FAMILY_SPLIT",
         "SHARED_SOURCE_ONLY"
       ],
-      "receiptDigest": "41084bb0e0724c6baeb888da13a098ddc8629799bca29be511fc1b1a585b9db0",
+      "receiptDigest": "6915b83c03846e2e7d06564b9cca77743cac22f507deade168930c2104324ec4",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -103,7 +139,7 @@
       "reasonCodes": [
         "SHARED_SIGNAL_CROSS_TARGET"
       ],
-      "receiptDigest": "899dded8a438621758009f4e8aa671de2bd61c4852f99c4e501633f7f2c681e0",
+      "receiptDigest": "829ef7960918f697b44a4421204cee216a1aed0d46e976003edf2fde1bf21f28",
       "schedulerDisposition": "ADMIT_WITH_DISCLOSURES"
     },
     {
@@ -114,7 +150,7 @@
         "SHARED_SIGNAL_COMPONENT",
         "PREDICTIVE_FAMILY_OVERLAP"
       ],
-      "receiptDigest": "565edd734a975901000959f0ed7098295332f5ed36e71b114398266b5c5bdb74",
+      "receiptDigest": "f12d5af16d5df0f532fca25a995aec9947c201142019aa79198459b8b34ffdb0",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -124,7 +160,7 @@
       "reasonCodes": [
         "SHARED_SOURCE_ONLY"
       ],
-      "receiptDigest": "321b02a1b4836dc3d2456c30df6f8b4e818025c993ed948200cff46f6e9b86a1",
+      "receiptDigest": "dc9ac43b14b1d901ae68fe177c0f82e4459894098d712027963bc64ea25f2556",
       "schedulerDisposition": "ADMIT_WITH_DISCLOSURES"
     },
     {
@@ -134,7 +170,7 @@
       "reasonCodes": [
         "PROGRAM_MULTIPLICITY_PLAN_MISSING"
       ],
-      "receiptDigest": "0ad1418105ef8060c062f2e2e55b124fc86cb79bc75c1f45a13e57da8ba0cd74",
+      "receiptDigest": "f64f6b9b20bb009b857d64800cd465a24c71bc8b18b2a96962874d0eaa164a53",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -144,7 +180,7 @@
       "reasonCodes": [
         "PROGRAM_ATTEMPT_LEDGER_INCOMPLETE"
       ],
-      "receiptDigest": "b48f49c0a76444ab18da0e75e28eb1ea28b64847b9093bbb75b3c8e0a84e6ec2",
+      "receiptDigest": "e941e7074065f63890e3005403b4aa8aafa80f48b0ca8d560e6ff4867d794b48",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -154,7 +190,7 @@
       "reasonCodes": [
         "PROGRAM_FAMILY_SET_MISMATCH"
       ],
-      "receiptDigest": "f57ad8f3c2ce634c9687fa9660a131faa50e6587052ca8212ff32e6d6d668198",
+      "receiptDigest": "ca035981a735d7d40c60ad7064b0eb3d467f71222be8d0792f561761cded1bcd",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -164,7 +200,7 @@
       "reasonCodes": [
         "PROGRAM_MULTIPLICITY_DIGEST_MISMATCH"
       ],
-      "receiptDigest": "5fd53dfb246b7903b2c64442098816193362257548bced53505efcdfc8756e02",
+      "receiptDigest": "fee289836cf4ff92f7fcd3db99990eb8ab36c370f3c5432b924fcbb9278c3784",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -174,7 +210,7 @@
       "reasonCodes": [
         "PROGRAM_MULTIPLICITY_CONSUMER_MISMATCH"
       ],
-      "receiptDigest": "64e579c76fe695cd68737006306fb65eb8f95bae618634bddbdff0bec43b9429",
+      "receiptDigest": "101a8bba062b6cb1d4f26627c5117ad05d74e622aa0661236442fedd13ab0c06",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -184,7 +220,7 @@
       "reasonCodes": [
         "PROGRAM_MULTIPLICITY_NOT_PREOUTCOME"
       ],
-      "receiptDigest": "1a08bfa4cefc84a07a10b3d2e8e1eed6aca8321c5e24120b1e3b3e969867d483",
+      "receiptDigest": "2c56a1d5e791ee59b888a31a2dfe94a1d15ed68ad0c24e325496028178805b7f",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -194,7 +230,7 @@
       "reasonCodes": [
         "PROGRAM_MULTIPLICITY_METHOD_INVALID"
       ],
-      "receiptDigest": "e4a283f648e21d3670e61c4a7e1840b8b1dfa430d1c866aadf54a56d2e752b34",
+      "receiptDigest": "a93b24b8499be0ed3b67954a1d3abef8a9dbe272a58c9f4d11b0b3d96ef02226",
       "schedulerDisposition": "REJECT"
     },
     {
@@ -204,7 +240,27 @@
       "reasonCodes": [
         "PROGRAM_MULTIPLICITY_SCOPE_INVALID"
       ],
-      "receiptDigest": "d29edadf1947a793434623401d5461996f75cd008aeb47167dae718eb9db1cc6",
+      "receiptDigest": "e55d0b51ec11dec348b746917f5f1ef604bc2bdd7d6f28ed7cd4bc72f651949f",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_PROGRAM_MISMATCH",
+      "mutationId": "SET_OTHER_PROGRAM_IN_PLAN",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_MULTIPLICITY_PROGRAM_MISMATCH"
+      ],
+      "receiptDigest": "a3dec6ff6474163af4052f8de6ffd1e41de5cecf20fd52d005d0e66919362e27",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_SEMANTIC_ONTOLOGY_MISMATCH",
+      "mutationId": "SET_OTHER_ONTOLOGY_IN_PLAN",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_SEMANTIC_ONTOLOGY_MISMATCH"
+      ],
+      "receiptDigest": "c86061dcd5f0bfd57018dedd601286956a5f93ebaad81a85070270e8e96652ad",
       "schedulerDisposition": "REJECT"
     }
   ]

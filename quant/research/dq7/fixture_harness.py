@@ -7,11 +7,15 @@ import json
 from pathlib import Path
 from typing import Any, cast
 
-from research.dq7.validator import validate_program_v1
+from research.dq7.validator import (
+    calculate_pre_outcome_freeze_digest_v1,
+    validate_program_v1,
+)
 
 FIXTURE_DIRECTORY = Path(__file__).with_name("fixtures")
 VALID_FIXTURE_PATH = FIXTURE_DIRECTORY / "valid_program.v1.json"
 HOSTILE_FIXTURE_PATH = FIXTURE_DIRECTORY / "hostile_cases.v1.json"
+ACCEPTED_REGISTRY_PATH = FIXTURE_DIRECTORY / "accepted_registry.v1.json"
 
 JsonObject = dict[str, Any]
 
@@ -51,13 +55,63 @@ def load_hostile_case_records() -> list[JsonObject]:
     ]
 
 
+def load_accepted_registry() -> JsonObject:
+    """Return the external trust pins used by the fixture program."""
+
+    registry = _load_object(ACCEPTED_REGISTRY_PATH)
+    if registry.get("schema") != "cosmos.dq7.accepted-registry.v1":
+        raise AssertionError("accepted registry fixture schema mismatch")
+    return registry
+
+
+def fixture_ontology_digest() -> str:
+    return cast(str, load_accepted_registry()["semanticOntologyDigest"])
+
+
+def fixture_freeze_digest(manifest: JsonObject) -> str | None:
+    plan = manifest.get("globalMultiplicity")
+    if plan is None:
+        return None
+    freeze_digest = _object(plan, "globalMultiplicity")["preOutcomeFreezeDigest"]
+    if freeze_digest is None:
+        return None
+    return cast(str, freeze_digest)
+
+
+def validate_fixture_manifest(manifest: JsonObject) -> Any:
+    """Validate with ontology and freeze pins supplied out-of-band."""
+
+    return validate_program_v1(
+        manifest,
+        accepted_semantic_ontology_digest=fixture_ontology_digest(),
+        accepted_pre_outcome_freeze_digest=fixture_freeze_digest(manifest),
+    )
+
+
+def _bind_freeze_digest(manifest: JsonObject) -> None:
+    """Resolve the draft plan's null freeze coordinate into a bound one.
+
+    The validator owns the freeze-open gate, so this raises ``ContractError``
+    with ``PREOUTCOME_FREEZE_CLOSED`` from inside
+    ``calculate_pre_outcome_freeze_digest_v1`` for any acknowledged outcome.
+    """
+
+    plan = _object(manifest.get("globalMultiplicity"), "globalMultiplicity")
+    plan["preOutcomeFreezeDigest"] = None
+    plan["preOutcomeFreezeDigest"] = calculate_pre_outcome_freeze_digest_v1(manifest)
+
+
 def cover_manifest(manifest: JsonObject) -> JsonObject:
     """Bind a manifest's current attempts and family components into one plan."""
 
     covered = copy.deepcopy(manifest)
     covered["globalMultiplicity"] = None
-    draft_receipt = validate_program_v1(covered)
+    draft_receipt = validate_program_v1(
+        covered,
+        accepted_semantic_ontology_digest=fixture_ontology_digest(),
+    )
     covered["globalMultiplicity"] = {
+        "programId": covered["programId"],
         "scopeId": "PROGRAM_WIDE",
         "methodId": "PROGRAM_HOLM_FWER",
         "alpha": {"numerator": 1, "denominator": 20},
@@ -68,8 +122,11 @@ def cover_manifest(manifest: JsonObject) -> JsonObject:
         ],
         "attemptLedgerDigest": draft_receipt.attempt_ledger_digest,
         "familyUniverseDigest": draft_receipt.family_universe_digest,
+        "semanticOntologyDigest": draft_receipt.semantic_ontology_digest,
+        "preOutcomeFreezeDigest": None,
         "consumerIds": ["N3_INTAKE", "SCHEDULER"],
     }
+    _bind_freeze_digest(covered)
     return covered
 
 
@@ -107,6 +164,28 @@ def materialize_hostile_case(mutation_id: str) -> JsonObject:
             nuisance["sizingPolicyId"] = "HOSTILE_SIZING"
         elif mutation_id == "CLONE_BOOKKEEPING":
             nuisance["bookkeepingPolicyId"] = "HOSTILE_BOOKKEEPING"
+        elif mutation_id == "CLONE_PARAMETER_ROLE_ALIAS":
+            graph = _object(clone["featureGraph"], "clone.featureGraph")
+            for raw_node in _array(graph["nodes"], "clone.featureGraph.nodes"):
+                node = _object(raw_node, "clone.featureGraph.node")
+                if node.get("nodeId") == "MID_LAG":
+                    binding = _object(
+                        _array(
+                            node["parameterBindings"],
+                            "clone.parameterBindings",
+                        )[0],
+                        "clone.parameterBinding",
+                    )
+                    binding["roleId"] = "SEMANTICALLY_SAME_LAG_PERIOD"
+        elif mutation_id == "CLONE_SOURCE_ALIAS":
+            graph = _object(clone["featureGraph"], "clone.featureGraph")
+            for raw_node in _array(graph["nodes"], "clone.featureGraph.nodes"):
+                node = _object(raw_node, "clone.featureGraph.node")
+                if node.get("nodeId") == "MID":
+                    node["sourceRoleId"] = "RENAMED_SPOT_MID"
+        elif mutation_id == "CLONE_OUTCOME_ALIAS":
+            prediction = _object(clone["prediction"], "clone.prediction")
+            prediction["outcomeId"] = "FORWARD_RETURN_ALIAS"
         elif mutation_id == "CLONE_NONPREDICTIVE":
             nuisance["venueProviderIds"] = ["VENUE_RENAMED"]
             nuisance["sizingPolicyId"] = "HOSTILE_SIZING"
@@ -185,6 +264,12 @@ def materialize_hostile_case(mutation_id: str) -> JsonObject:
         plan["methodId"] = "LOCAL_FAMILY_BH_FDR"
     elif mutation_id == "SET_LOCAL_SCOPE":
         plan["scopeId"] = "LOCAL_FAMILY"
+    elif mutation_id == "SET_OTHER_PROGRAM_IN_PLAN":
+        plan["programId"] = "OTHER_PROGRAM"
+    elif mutation_id == "SET_OTHER_ONTOLOGY_IN_PLAN":
+        plan["semanticOntologyDigest"] = "0" * 64
     else:
         raise AssertionError(f"unknown hostile mutation {mutation_id}")
+    if manifest["globalMultiplicity"] is not None:
+        _bind_freeze_digest(manifest)
     return manifest

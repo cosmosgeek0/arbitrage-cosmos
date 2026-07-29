@@ -1,0 +1,756 @@
+{
+  "schema": "N3S1OriginSpecV1",
+  "version": 1,
+  "canonicalOrigin": {
+    "commit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+    "tree": "37d1b88aa7c8d9ee1f70dc35d0e78613b6ed32f9"
+  },
+  "cutoff": {
+    "recordId": "2026-07-29 ORCHESTRATOR V-G26 ACCEPTANCE",
+    "rowSha256": "9cdbb8ee0e3cf40dbc9deef232a3ec7f4a29d8e32f658f0c331868c5bf21a718"
+  },
+  "aggregateBindings": [
+    {
+      "bindingId": "S-META1",
+      "recordId": "2026-07-29 ORCHESTRATOR S-META1 ACCEPTANCE",
+      "expectedRowSha256": "2147b6c153280c792f8f76a09f4e35dabe09b2ffa11a01f45c29ef5e3715a4fd",
+      "producerCommit": "1fb305a7a57724a6904d624894d8e620db19b636",
+      "producerTree": "e1c6c1c4a7cff468229cdd8a54020e456b6c3718",
+      "path": "quant/registry/smeta1_profitability_evidence_registry.v1.json",
+      "status": "ACCEPTED_SOURCE_ONLY"
+    },
+    {
+      "bindingId": "N3-BASELINE",
+      "recordId": "2026-07-29 ORCHESTRATOR N3 FINAL ACCEPTANCE + REFILL",
+      "expectedRowSha256": "ec3ff8d824e270843aa57e7daabe8db8942bb7ebbdadf1289588f8354b18e4db",
+      "producerCommit": "45fa1ac2a67fc782dad978a4ba3388ba1a2e03db",
+      "producerTree": "cd1c82972cfcac10acb7611083cac4295095f023",
+      "path": "quant/research/n3i1/smeta1_n3_bridge.v1.json",
+      "status": "ACCEPTED_SOURCE_ONLY"
+    }
+  ],
+  "origins": [
+    {
+      "originId": "E-1",
+      "familyKey": "F01_BASIS_TRIGGER_HOLD",
+      "recordId": "2026-07-28 ORCHESTRATOR E-1 FINAL ACCEPTANCE",
+      "producerCommit": "eab86ad297f4d7eaa7d647bb7da7835b748a652c",
+      "producerTree": "ca082220e9c3419db6c995657ec82ead853f175c",
+      "path": null,
+      "custodyState": "ACCEPTED_RECEIPT_ONLY",
+      "sourceVerdict": "BOUNDED_NO_GO",
+      "normalizedVerdict": "NO_GO",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "RESULT_PACKET_ABSENT_RECEIPT_ONLY",
+        "NOMINAL_ENVELOPE_NOT_FORECAST"
+      ]
+    },
+    {
+      "originId": "BASIS-SUCCESSOR",
+      "familyKey": "F01_BASIS_TRIGGER_HOLD",
+      "recordId": "2026-07-28 ORCHESTRATOR BASIS SUCCESSOR ACCEPTANCE",
+      "producerCommit": null,
+      "producerTree": null,
+      "path": null,
+      "custodyState": "ACCEPTED_RECEIPT_ONLY",
+      "sourceVerdict": "BOUNDED_NO_GO_FOR_THIS_RULE",
+      "normalizedVerdict": "NO_GO",
+      "limitations": [
+        "GLOBAL_TRIAL_LEDGER_INCOMPLETE",
+        "HOLDOUT_UNOPENED",
+        "SCHEDULE_LABEL_HARNESS_FAILED",
+        "SECOND_RULE_FORBIDDEN"
+      ]
+    },
+    {
+      "originId": "VOLUME-CONDITIONAL-PROXY",
+      "familyKey": "F02_VOLUME_PROXY_THRESHOLD",
+      "recordId": "2026-07-28 ORCHESTRATOR VOLUME EDGE ACCEPTANCE",
+      "producerCommit": null,
+      "producerTree": null,
+      "path": null,
+      "custodyState": "ACCEPTED_RECEIPT_ONLY",
+      "sourceVerdict": "BOUNDED_NO_GO_FOR_THIS_8_SYMBOL_61S_CONDITIONAL_PROXY",
+      "normalizedVerdict": "NO_GO",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "EXECUTABLE_CAPACITY_UNKNOWN",
+        "EXACT_HISTORICAL_BOOK_RAW_TAPE_GATES_ZERO",
+        "LIMITED_SYMBOL_COVERAGE_8_OF_87",
+        "NOT_FULL_STRATEGY_TRUTH"
+      ]
+    },
+    {
+      "originId": "S-1B",
+      "familyKey": "F03_SPOT_PMA_TREND",
+      "recordId": "2026-07-28 ORCHESTRATOR S-1B NO-GO ACCEPTANCE",
+      "producerCommit": "bd86b009b7ff5e0d01596919e843d3f14c0daa2b",
+      "producerTree": "53c971a4d4aab9dc7fad7690617a410d72a13bb8",
+      "path": "quant/fixtures/s1b_spot_trend_research_stop_v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "NO_GO",
+      "normalizedVerdict": "NO_GO",
+      "limitations": [
+        "DRAWDOWN_CAP_FAIL",
+        "PRIMARY_INTERVAL_CROSSES_ZERO",
+        "VALIDATION_UNOPENED"
+      ]
+    },
+    {
+      "originId": "V-E1",
+      "familyKey": "F05_VOLUME_ACCEPTED_EXIT_REPLAY",
+      "recordId": "2026-07-28 ORCHESTRATOR V-E1 ACCEPTANCE",
+      "producerCommit": "9017cda8b20dddf5e415bddb965a904ef1286893",
+      "producerTree": "ed1353e939c0b7a73541e226df09005903b53cdb",
+      "path": "quant/research/ve1/verdict.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ECONOMICS_NOT_ESTIMABLE",
+        "LIFECYCLE_NON_ADMISSIBLE",
+        "SYNCHRONIZED_BOOK_RECEIVE_TIME_PROVENANCE_UNAVAILABLE"
+      ]
+    },
+    {
+      "originId": "S-1C",
+      "familyKey": "F04_USDM_POST_FUNDING_CROWD_UNWIND",
+      "recordId": "2026-07-29 ORCHESTRATOR S-1C ACCEPTANCE",
+      "producerCommit": "fe6100eaa5b3c57a4786fceaab4122a19096deda",
+      "producerTree": "430b56aca13a3a248a08700c8cc2d26fbb9038d7",
+      "path": "quant/generated/s1c/s1c_result_v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "NO_GO",
+      "normalizedVerdict": "NO_GO",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "DEVELOPMENT_MULTIPLICITY_LOWER_BOUNDS_FAIL",
+        "DEVELOPMENT_SAMPLE_FLOOR_FAIL",
+        "HISTORICAL_MAKER_RESTING_VALIDITY_UNKNOWN",
+        "HOLDOUT_UNOPENED",
+        "INTERVALS_CROSS_ZERO"
+      ]
+    },
+    {
+      "originId": "S-1D",
+      "familyKey": "F06_USDM_FUNDING_DISPERSION",
+      "recordId": "2026-07-28 ORCHESTRATOR S-1D ACCEPTANCE",
+      "producerCommit": "8f98b3cd30aaf5cad46a16214f5e5808216bc4e5",
+      "producerTree": "b9bf915b323b5a76822f453c9ea1bf2ec4eece2a",
+      "path": "quant/fixtures/s1d_funding_dispersion_result_v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "NO_GO",
+      "normalizedVerdict": "NO_GO",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "DEVELOPMENT_PARTIAL_ONLY_2_OF_51",
+        "EXECUTABLE_CAPACITY_UNKNOWN",
+        "HOLDOUT_UNTOUCHED_0_OF_51",
+        "METRICS_UNMEASURABLE"
+      ]
+    },
+    {
+      "originId": "S-1E",
+      "familyKey": "F07_SPOT_LIQUIDITY_SHOCK_REVERSAL",
+      "recordId": "2026-07-29 ORCHESTRATOR F15 ACCEPTANCE",
+      "producerCommit": "77e133fe8ebff3253fa158572c5fa3a1f0642dfd",
+      "producerTree": "0379d68deb7ceca058827175edb8533f60728976",
+      "path": "quant/fixtures/s1e_spot_liquidity_shock_reversal_terminal_result_v1.json",
+      "custodyState": "ACCEPTED_VIA_F15_COMPOSITE",
+      "sourceVerdict": "NO_GO_NOT_ESTIMABLE",
+      "normalizedVerdict": "NO_GO",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "EXECUTABLE_CAPACITY_UNKNOWN",
+        "F15_COMPOSITE_ONLY",
+        "HOLDOUT_UNOPENED",
+        "MALFORMED_OFFICIAL_SYMBOL_FOLDER_STOP",
+        "NO_STANDALONE_ACCEPTANCE",
+        "NO_TRIAL_EVALUATED"
+      ]
+    },
+    {
+      "originId": "S-1F",
+      "familyKey": "S1F_WEEKLY_MOMENTUM",
+      "recordId": "2026-07-29 ORCHESTRATOR F15 ACCEPTANCE",
+      "producerCommit": "9d30bdf3bf21033f0d1522eb45d7a9cfc1860620",
+      "producerTree": "9287f5a37d4a95a368b79bb6ad7535061282bd97",
+      "path": "quant/research/s1f/result.v1.json",
+      "custodyState": "ACCEPTED_VIA_F15_COMPOSITE",
+      "sourceVerdict": "UNMEASURED",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "DAILY_CLOSE_BOUNDARY_INVALID",
+        "F15_COMPOSITE_ONLY",
+        "NO_REPAIR_OR_RERUN",
+        "NO_STANDALONE_ACCEPTANCE"
+      ]
+    },
+    {
+      "originId": "S-1G",
+      "familyKey": "S1G_BASIS_CARRY",
+      "recordId": "2026-07-29 ORCHESTRATOR S-1G ACCEPTANCE + REFILL",
+      "producerCommit": "dd8d7bf353e973e1fb297aca1336dfc1c58f4386",
+      "producerTree": "dd05e0d7c196d96cd821f3fd278c046690d26e9e",
+      "path": "quant/research/s1g/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "COMPLETE_GRID_VALIDATION_FAIL",
+        "HOLDOUT_UNOPENED",
+        "MARK_PRICE_GAP_29_MINUTES"
+      ]
+    },
+    {
+      "originId": "S-1H",
+      "familyKey": "S1H_BASIS_DISLOCATION",
+      "recordId": "2026-07-29 ORCHESTRATOR S-1H ACCEPTANCE + REFILL",
+      "producerCommit": "8574a72deedf96966cb2a7d794152c61e6737a50",
+      "producerTree": "a5a9ce8562491516cee2e13fdb0c6943a8e340f2",
+      "path": "quant/research/s1h/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED_PUBLIC_PROXY_INVALID",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "EXACT_SAME_CLOCK_MARK_ROW_MISSING",
+        "HOLDOUT_UNOPENED",
+        "PUBLIC_PROXY_INVALID"
+      ]
+    },
+    {
+      "originId": "S-1I",
+      "familyKey": "S1I_PREMIUM_DISLOCATION",
+      "recordId": "2026-07-29 ORCHESTRATOR S-1I ACCEPTANCE",
+      "producerCommit": "493436ba347996c777cdbb4f8b4cee80c7acf98c",
+      "producerTree": "9c5fb83f15fcd34bee9aca75b44d88deff782c67",
+      "path": "quant/research/s1i/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "HOLDOUT_UNOPENED",
+        "REQUIRED_ARCHIVES_1168_OF_1170",
+        "STOPPED_BEFORE_DECOMPRESSION"
+      ]
+    },
+    {
+      "originId": "S-1J",
+      "familyKey": "S1J_SPOT_HEDGED_FUNDING_CARRY",
+      "recordId": "2026-07-29 ORCHESTRATOR S-1J ACCEPTANCE + REFILL",
+      "producerCommit": "87d00fea625c100a95627f33aedfbe09501c8c85",
+      "producerTree": "503040aa92797c206e99e2531a301baa438eb0c7",
+      "path": "quant/research/s1j/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED_PUBLIC_PROXY_INVALID",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "EXECUTABLE_CAPACITY_UNKNOWN",
+        "HOLDOUT_UNOPENED",
+        "PAIRED_ENTRY_EXIT_EVIDENCE_INCOMPLETE",
+        "PUBLIC_PROXY_INVALID"
+      ]
+    },
+    {
+      "originId": "S-1K",
+      "familyKey": "S1K_COINM_USDM_CARRY",
+      "recordId": "2026-07-29 ORCHESTRATOR S-1K ACCEPTANCE + REFILL GATE",
+      "producerCommit": "4dc59376505017a40f59c14f59774de3887f9837",
+      "producerTree": "e382610f614eb333bb0d0a07e7e339c26486d21c",
+      "path": "quant/research/s1k/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "EXECUTABLE_CAPACITY_UNKNOWN",
+        "HOLDOUT_UNOPENED",
+        "MIDDLE_DEVELOPMENT_FUNDING_EVENT_MISSING"
+      ]
+    },
+    {
+      "originId": "S-1L",
+      "familyKey": "S1L_QUARTERLY_PERP_BASIS",
+      "recordId": "2026-07-29 ORCHESTRATOR S-1L ACCEPTANCE + REFILL GATE",
+      "producerCommit": "9f45c7cda7d3119b3e7841bff7d81cdd00201d7e",
+      "producerTree": "9bb28678dcb590571a85b3812949b2c6ed7bd4e4",
+      "path": "quant/research/s1l/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED_PUBLIC_PROXY_INVALID",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "DIRECTIONAL_DEPTH_FRESHNESS_FAIL",
+        "EXECUTABLE_CAPACITY_UNKNOWN",
+        "PUBLIC_PROXY_INVALID",
+        "RERUN_PROHIBITED"
+      ]
+    },
+    {
+      "originId": "S-1M",
+      "familyKey": "S1M_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR S-1M ACCEPTANCE + REFILL",
+      "producerCommit": "266f7782f19d6eb6cc39f3e69427f7ee2334206d",
+      "producerTree": "6a64d26781b3fededd91eaf13228a3f3a2107ae2",
+      "path": "quant/research/s1m/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "EXECUTABLE_CAPACITY_UNKNOWN",
+        "HOLDOUT_CUSTODY_INVALIDATED",
+        "NO_ECONOMIC_EVALUATION",
+        "RERUN_PROHIBITED"
+      ]
+    },
+    {
+      "originId": "S-1N",
+      "familyKey": "S1N_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR S-1N ACCEPTANCE",
+      "producerCommit": "7fcc01b0240e4cc820239bb4d3827d071acbc828",
+      "producerTree": "c63f4719dda7fed2845b796f9082fbc796e4962a",
+      "path": "quant/research/s1n/acquisition-stop.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "HOLDOUT_SIDECARS_MISSING_2_OF_1170",
+        "RUN_COUNT_0_OF_1"
+      ]
+    },
+    {
+      "originId": "S-1O",
+      "familyKey": "S1O_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR S-1O ACCEPTANCE",
+      "producerCommit": "065c2a917ed2a3e9393691332f79d4bb0ca75164",
+      "producerTree": "2c85e96b5fecf5c48379d759b088d775ffa94376",
+      "path": "quant/research/s1o/generated/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "FIVE_MINUTE_GRID_VIOLATION",
+        "HOLDOUT_UNOPENED",
+        "STOPPED_BEFORE_STATISTICS"
+      ]
+    },
+    {
+      "originId": "S-1Q",
+      "familyKey": "S1Q_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR S-1Q ACCEPTANCE",
+      "producerCommit": "b191ae1f4be2e1df17a2d7e4baf58db8fef29f8d",
+      "producerTree": "3db77b28993b94bb20b22ae714a13b7102915c16",
+      "path": "quant/research/s1q/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "NO_GO",
+      "normalizedVerdict": "NO_GO",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "CAPACITY_GATE_FAIL",
+        "EXECUTABLE_CAPACITY_UNKNOWN",
+        "FAMILYWISE_LOWER_BOUND_NEGATIVE",
+        "HOLM_P_ONE",
+        "HOLDOUT_UNTOUCHED",
+        "ROBUSTNESS_GATE_FAIL"
+      ]
+    },
+    {
+      "originId": "S-1R",
+      "familyKey": "S1R_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR S-1R ACCEPTANCE",
+      "producerCommit": "61a31422a1a16e50868628852bb72ff662cf9b9f",
+      "producerTree": "82845994028689f5e6069882db058cb8aa31ca28",
+      "path": "quant/research/s1r/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "NO_GO_ZERO_TRADES",
+      "normalizedVerdict": "NO_GO",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "CAPACITY_UNMEASURED",
+        "HOLDOUT_UNOPENED",
+        "PUBLICATION_LATENCY_UNMEASURED",
+        "ZERO_RETURNS_ONLY_FROM_ZERO_EXPOSURE",
+        "ZERO_TRADES"
+      ]
+    },
+    {
+      "originId": "S-1S",
+      "familyKey": "S1S_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR S-1S ACCEPTANCE",
+      "producerCommit": "185646e7b25cac1a1fd8b7681a2d9d4aafde11e0",
+      "producerTree": "d87ee2f4f70f1a13234c664e726454fa14054aa1",
+      "path": "quant/research/s1s/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "CAUSAL_SETTLEMENT_SCHEDULE_UNAVAILABLE",
+        "DEVELOPMENT_AND_HOLDOUT_OUTCOMES_UNOPENED"
+      ]
+    },
+    {
+      "originId": "V-G2",
+      "familyKey": "VG2_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR V-G2 ACCEPTANCE + REFILL",
+      "producerCommit": "c863cf8adad264d53683b92c237e61497993e065",
+      "producerTree": "cdd7f3129b323d263740e1c31bd14eebbaaecb63",
+      "path": "quant/research/vg2/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED_NOT_ESTIMABLE",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "BYTE_IDENTICAL_DUPLICATE_DAILY_ROW",
+        "HOLDOUT_UNOPENED",
+        "STOPPED_BEFORE_SELECTION"
+      ]
+    },
+    {
+      "originId": "V-G3",
+      "familyKey": "VG3_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR V-G3 ACCEPTANCE",
+      "producerCommit": "d40e893009ab75667fcc4f0dda1343a1b5c520fd",
+      "producerTree": "bd42037ed998d3236d55ccf0e275e0c8542e6bfb",
+      "path": "quant/research/vg3/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "EXECUTABLE_CAPACITY_UNKNOWN",
+        "MISSING_REQUIRED_OMUSDT_ARCHIVES",
+        "ONLY_R5_ACCEPTED",
+        "STOPPED_BEFORE_DEVELOPMENT"
+      ]
+    },
+    {
+      "originId": "V-G4",
+      "familyKey": "VG4_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR V-G4 ACCEPTANCE + REFILL",
+      "producerCommit": "29cb431819a14ea5e2775de4ca346df6ef37c28c",
+      "producerTree": "84e16e80d96208b8ab277faf333b8f3deb259b39",
+      "path": "quant/research/vg4/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "BYTE_IDENTICAL_DUPLICATE_DAILY_ROW",
+        "HOLDOUT_UNOPENED",
+        "NO_REPAIR_OR_RERUN"
+      ]
+    },
+    {
+      "originId": "V-G5",
+      "familyKey": "VG5_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR V-G5 ACCEPTANCE",
+      "producerCommit": "708349080700b7edb7036db2011aac66fb795ee8",
+      "producerTree": "e377a8a76df741076a8b4e76483d61528d96b86c",
+      "path": "quant/research/vg5/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "DAILY_TIMESTAMP_BOUNDARY_INVALID",
+        "EXECUTABLE_CAPACITY_UNKNOWN",
+        "HOLDOUT_UNOPENED",
+        "MEASURED_PATH_REUSE_FORBIDDEN"
+      ]
+    },
+    {
+      "originId": "V-G6",
+      "familyKey": "VG6_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR V-G6 ACCEPTANCE",
+      "producerCommit": "daa651696b586e09c989c1b41b4fe692fc904ed5",
+      "producerTree": "7d732bc2616538deb0c75c562c4ca56f5050b5bf",
+      "path": "quant/research/vg6/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "CHECKSUM_VALID_ROW_TIMESTAMP_BOUNDARY_INVALID",
+        "HOLDOUT_UNOPENED"
+      ]
+    },
+    {
+      "originId": "V-G7",
+      "familyKey": "VG7_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR V-G7 ACCEPTANCE",
+      "producerCommit": "a3033ef7dab03d3454cc775820459698ccfdefa6",
+      "producerTree": "d9725628eee790a9438ba46fcf864fc0e482bbc8",
+      "path": "quant/research/vg7/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "HOLDOUT_UNOPENED",
+        "SEMANTIC_UNAVAILABLE_LIMIT_EXCEEDED",
+        "STOPPED_BEFORE_VALID_FAMILY_EVALUATION"
+      ]
+    },
+    {
+      "originId": "V-G8",
+      "familyKey": "VG8_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR V-G8 ACCEPTANCE + REFILL",
+      "producerCommit": "77216b60011cc3de7abcfc90a43ad5459cc59d3c",
+      "producerTree": "ecad99703f05165fa731e6d704b89812838c13e7",
+      "path": "quant/research/vg8/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "NO_GO",
+      "normalizedVerdict": "NO_GO",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "HELD_OUT_BASE_AND_STRESS_NEGATIVE",
+        "STRESS_INTERVAL_CROSSES_ZERO"
+      ]
+    },
+    {
+      "originId": "V-G9",
+      "familyKey": "VG9_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR V-G9 ACCEPTANCE",
+      "producerCommit": "24093cfd058b840f479d24cdc859f765bab4d4ce",
+      "producerTree": "f1005a0198bc9be98b5fc4664d03ca234271ec7d",
+      "path": "quant/research/vg9/evidence/development_result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "EXECUTABLE_CAPACITY_UNKNOWN",
+        "FIRST_USDM_ARCHIVE_TIMESTAMP_NON_INTEGER",
+        "HOLDOUT_UNOPENED",
+        "NO_TRIAL_MATRIX_OR_CANDIDATE"
+      ]
+    },
+    {
+      "originId": "V-G11",
+      "familyKey": "VG11_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR V-G11 ACCEPTANCE",
+      "producerCommit": "f10287bb791711e416f087d746831d29c186b7e1",
+      "producerTree": "18b790af376c52e30026ab2e8fed0360b295ddd3",
+      "path": "quant/research/vg11/verdict.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED_CURRENT_N3_INELIGIBLE",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "CHECKSUM_SIDECAR_BYTE_CONTRACT_FAIL",
+        "CURRENT_N3_INELIGIBLE",
+        "HOLDOUT_BODIES_OPENED_0",
+        "NO_REPAIR_OR_RERUN"
+      ]
+    },
+    {
+      "originId": "V-G13",
+      "familyKey": "VG13_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR V-G13 ACCEPTANCE",
+      "producerCommit": "a7f72c06553af07fd85efb69b12dedaac5cba58e",
+      "producerTree": "bc5d559f30cae0ed43557b393d45bcce680272e6",
+      "path": "quant/research/vg13/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "UNMEASURED_EVALUATOR_REUSE_FORBIDDEN",
+      "normalizedVerdict": "UNMEASURED",
+      "limitations": [
+        "ECONOMICS_UNMEASURED",
+        "EVALUATOR_REUSE_FORBIDDEN",
+        "HOLDOUT_UNOPENED",
+        "NON_UTC_MICROSECOND_DAILY_GRID",
+        "PACKET_VERIFIER_NOT_ACCEPTED",
+        "UNREACHABLE_SUCCESS_ORDERING_DEFECT"
+      ]
+    },
+    {
+      "originId": "V-G17",
+      "familyKey": "VG17_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR V-G17 ACCEPTANCE",
+      "producerCommit": "4f196ec0826043555518b90457bc693b87961c80",
+      "producerTree": "b6bf62c57619959e4cc491bbe6bef43b0668d07e",
+      "path": "quant/research/vg17/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "NO_GO",
+      "normalizedVerdict": "NO_GO",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "HOLM_REJECTED_0_OF_12",
+        "HOLDOUT_UNOPENED",
+        "LOWER_BOUNDS_NEGATIVE"
+      ]
+    },
+    {
+      "originId": "V-G19",
+      "familyKey": "VG19_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR V-G19 ACCEPTANCE",
+      "producerCommit": "537043bdc148bb223e361d41edda944d2b5c27f7",
+      "producerTree": "77b673de69ab78f455f482a9ea1f23ef58fbb4ce",
+      "path": "quant/research/vg19/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "PROFITABILITY_NO_GO",
+      "normalizedVerdict": "NO_GO",
+      "limitations": [
+        "ABSOLUTE_LOWER_BOUND_NEGATIVE",
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "FROZEN_RETURN_AND_EXCESS_NEGATIVE"
+      ]
+    },
+    {
+      "originId": "V-G20",
+      "familyKey": "VG20_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR V-G20 ACCEPTANCE",
+      "producerCommit": "7666fbc16e09938408547f5c21dabc7beee167ec",
+      "producerTree": "38579ecf8604c1a9c6872ca092da26ba873bd5da",
+      "path": "quant/research/vg20/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "NO_GO_POSITIVE_POINT_ESTIMATE_NOT_CREDIBLE",
+      "normalizedVerdict": "NO_GO",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "HOLM_P_ONE",
+        "HOLDOUT_UNOPENED",
+        "LOWER_BOUND_NEGATIVE",
+        "POSITIVE_POINT_ESTIMATE_NOT_CREDIBLE"
+      ]
+    },
+    {
+      "originId": "V-G23",
+      "familyKey": "VG23_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR V-G23 ACCEPTANCE",
+      "producerCommit": "2c6f7767f8a01692991765924b86f4e26180724d",
+      "producerTree": "cb60401d8a8ac56d336f364150e5fb58597dfd45",
+      "path": "quant/research/vg23/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "NO_GO",
+      "normalizedVerdict": "NO_GO",
+      "limitations": [
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "GLOBAL_FAMILY_HOLDOUT_REUSE_UNCERTIFIED",
+        "HELD_OUT_BASE_AND_STRESS_NEGATIVE",
+        "STRESS_INTERVAL_CROSSES_ZERO"
+      ]
+    },
+    {
+      "originId": "V-G26",
+      "familyKey": "VG26_ACCEPTED_FAMILY",
+      "recordId": "2026-07-29 ORCHESTRATOR V-G26 ACCEPTANCE",
+      "producerCommit": "897e3c13ef1e91131f20098de776b2ea5fb8db1a",
+      "producerTree": "7932d54b08760b12e8aff241354a730bcb7b7ac4",
+      "path": "quant/research/vg26/result.v1.json",
+      "custodyState": "ACCEPTED_EXACT",
+      "sourceVerdict": "NO_GO_POSITIVE_POINT_ESTIMATE_NOT_CREDIBLE",
+      "normalizedVerdict": "NO_GO",
+      "limitations": [
+        "ABSOLUTE_AND_EXCESS_INTERVALS_CROSS_ZERO",
+        "ACCOUNT_EFFECTIVE_FEES_UNKNOWN",
+        "EXECUTABLE_CAPACITY_UNMEASURED",
+        "HOLM_P_ONE",
+        "HOLDOUT_UNOPENED",
+        "NO_DEVELOPMENT_GATE_PASSER",
+        "POSITIVE_POINT_ESTIMATE_NOT_CREDIBLE"
+      ]
+    }
+  ],
+  "postCutoffAcceptedExcluded": [
+    "2026-07-29 ORCHESTRATOR V-G14 ACCEPTANCE",
+    "2026-07-29 ORCHESTRATOR V-G15 ACCEPTANCE",
+    "2026-07-29 ORCHESTRATOR V-G24 ACCEPTANCE",
+    "2026-07-29 ORCHESTRATOR V-G16 ACCEPTANCE",
+    "2026-07-29 ORCHESTRATOR V-G18 ACCEPTANCE",
+    "2026-07-29 ORCHESTRATOR V-G21 ACCEPTANCE",
+    "2026-07-29 ORCHESTRATOR V-G22 ACCEPTANCE",
+    "2026-07-30 ORCHESTRATOR V-G29 ACCEPTANCE",
+    "2026-07-30 ORCHESTRATOR S-1P DURABILITY ACCEPTANCE",
+    "2026-07-30 ORCHESTRATOR S-1U ACCEPTANCE",
+    "2026-07-30 ORCHESTRATOR V-G25 ACCEPTANCE",
+    "2026-07-30 ORCHESTRATOR V-G30 ACCEPTANCE",
+    "2026-07-30 ORCHESTRATOR V-G31 ACCEPTANCE"
+  ],
+  "pendingInputs": {
+    "activeUnpublishedWithinCutoff": [
+      {
+        "milestoneId": "V-G1",
+        "taskRefSuffix": "cbbc"
+      },
+      {
+        "milestoneId": "V-G10",
+        "taskRefSuffix": "99f9"
+      },
+      {
+        "milestoneId": "V-G12",
+        "taskRefSuffix": "67aa"
+      },
+      {
+        "milestoneId": "S-1T",
+        "taskRefSuffix": "fea0"
+      },
+      {
+        "milestoneId": "S-1V",
+        "taskRefSuffix": "2058"
+      }
+    ],
+    "awaitingAcceptanceWithinCutoff": [],
+    "outsideCutoffExcluded": [
+      {
+        "milestoneId": "S-1W",
+        "taskRefSuffix": "d575"
+      },
+      {
+        "milestoneId": "V-G27",
+        "taskRefSuffix": "d010"
+      },
+      {
+        "milestoneId": "V-G28",
+        "taskRefSuffix": "d38a"
+      },
+      {
+        "milestoneId": "V-G32",
+        "taskRefSuffix": "a0fe"
+      },
+      {
+        "milestoneId": "V-G33",
+        "taskRefSuffix": "366e"
+      },
+      {
+        "milestoneId": "V-G34",
+        "taskRefSuffix": "1c43"
+      },
+      {
+        "milestoneId": "V-G35",
+        "taskRefSuffix": "d704"
+      },
+      {
+        "milestoneId": "V-G36",
+        "taskRefSuffix": "c56f"
+      },
+      {
+        "milestoneId": "V-G37",
+        "taskRefSuffix": "e9ad"
+      },
+      {
+        "milestoneId": "V-G38",
+        "taskRefSuffix": "a07d"
+      }
+    ],
+    "requiredTruth": [
+      "ACCEPTED_PRE_OUTCOME_FAMILY_ALIAS_REGISTRY",
+      "COMPLETE_GLOBAL_ATTEMPT_LEDGER",
+      "SANITIZED_ACCOUNT_EFFECTIVE_FEES",
+      "EXECUTABLE_CAPACITY_AND_EXECUTION_PROOF",
+      "COMPLETE_MARKED_EQUITY_PATHS",
+      "SINGLE_FRESH_HOLDOUT_RECEIPT_IF_A_WINNER_EMERGES"
+    ]
+  }
+}

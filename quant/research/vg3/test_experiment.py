@@ -662,6 +662,37 @@ def test_external_child_symlink_cannot_escape_state_root(
     assert not (escape / "page-001.xml").exists()
 
 
+def test_external_parent_creation_tolerates_concurrent_winner(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "state"
+    monkeypatch.setenv("VG3_STATE_ROOT", str(root))
+    original_mkdir = Path.mkdir
+    race_injected = False
+
+    def racing_mkdir(
+        path: Path,
+        mode: int = 0o777,
+        parents: bool = False,
+        exist_ok: bool = False,
+    ) -> None:
+        nonlocal race_injected
+        if path.name == "shared" and not race_injected:
+            race_injected = True
+            original_mkdir(path, mode=mode, parents=parents, exist_ok=exist_ok)
+            raise FileExistsError(path)
+        original_mkdir(path, mode=mode, parents=parents, exist_ok=exist_ok)
+
+    monkeypatch.setattr(Path, "mkdir", racing_mkdir)
+    exp._guard_external_path(
+        root / "shared" / "nested" / "evidence.bin",
+        create_parent=True,
+    )
+    assert race_injected
+    assert (root / "shared" / "nested").is_dir()
+
+
 def test_external_result_recovery_requires_full_verification(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

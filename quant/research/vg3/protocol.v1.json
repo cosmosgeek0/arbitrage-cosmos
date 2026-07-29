@@ -66,6 +66,7 @@
     "maximumDevelopmentCompressedBytes": 4294967296,
     "maximumHoldoutCompressedBytes": 4294967296,
     "streamDownloadsToDisk": true,
+    "concurrentExternalParentCreationIsRaceSafe": true,
     "rawArchiveRootMustBeOutsideGit": true
   },
   "universe": {

@@ -33,6 +33,7 @@ import zipfile
 from array import array
 from collections.abc import Iterable, Mapping, Sequence
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from datetime import time as daytime
@@ -60,9 +61,9 @@ PYPROJECT_PATH: Final = QUANT_ROOT / "pyproject.toml"
 UV_LOCK_PATH: Final = QUANT_ROOT / "uv.lock"
 
 BASE_COMMIT: Final = "a169b123fb186d1943a75ad648552c4d95be1be1"
-PROTOCOL_SHA256: Final = "6db826ef6181f825a9e651c19537d9f911d24ee131bcb661024896978109516d"
+PROTOCOL_SHA256: Final = "97af90d4c2e50c5f5cc9609a7ea87882fb8f1ec4d4ed5f7fd1259301c6c61555"
 DEFAULT_STATE_ROOT: Final = Path(
-    "/Users/cosmosgeek/.codex/evidence/cosmos-vg3-public-volume-v1-4ddd-r2"
+    "/Users/cosmosgeek/.codex/evidence/cosmos-vg3-public-volume-v1-4ddd-r3"
 )
 DATA_ORIGIN: Final = "https://data.binance.vision"
 LISTING_ORIGIN: Final = "https://s3-ap-northeast-1.amazonaws.com/data.binance.vision"
@@ -232,7 +233,10 @@ def _guard_external_path(path: Path, *, create_parent: bool = False) -> None:
             if current.is_symlink() or not current.is_dir():
                 raise EvidenceError(f"external evidence parent is unsafe: {current}")
         elif create_parent:
-            current.mkdir(mode=0o700)
+            with suppress(FileExistsError):
+                current.mkdir(mode=0o700)
+            if current.is_symlink() or not current.is_dir():
+                raise EvidenceError(f"external evidence parent is unsafe: {current}")
         else:
             raise EvidenceError(f"external evidence parent is missing: {current}")
     if os.path.lexists(absolute) and absolute.is_symlink():

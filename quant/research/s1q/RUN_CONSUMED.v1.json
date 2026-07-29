@@ -1,0 +1,16 @@
+{
+  "bootstrap_seed": 2026072904,
+  "costs_digest": "b051ec0f739e25f16fe889977342e81fea0203ebd44988fba9b4452b59853ddb",
+  "created_at": "2026-07-29T16:43:25.080334Z",
+  "failure_policy": "RUN_REMAINS_CONSUMED",
+  "freeze_bound_files_digest": "ed36a52a18283b4e9ee167555590b7a5501abab82179c236b4b304a968cb53ff",
+  "freeze_sha256": "12fe50842ff15020d1051a43ebf74863336c2a2a6cfb27fa74d178c361d110f1",
+  "gates_digest": "f5937d06da86471ad95446ee5603ffc5a121e5ae5bf5671f55a29b92d38e40f9",
+  "policy": "CREATED_BEFORE_FIRST_DEVELOPMENT_ARCHIVE_MEMBER_DECOMPRESSION",
+  "protocol_authority_digest": "0773c334cc0c629edef31b3d83ec0fe31c5826282bf34fc3e3bd4e9d07c0ef32",
+  "schema": "cosmos.s1q.run_consumed.v1",
+  "source_manifest_sha256": "57a2fbd73579a830f67a54180366b5af26383475187060df0859b46c03c776d0",
+  "transitive_binding": "freeze_sha256 binds protocol, evaluator, tests, official source note, preseal, June receipt, universe, and source manifest",
+  "trial_family_digest": "134856cf8eb7d492771fbd284c70c985317de636c70ad9183bbdd4072af02909",
+  "universe_sha256": "3255ad80d2014cfa90c0ba35af3e4e00556bf8435a7b5df9cbaf9c39b5328624"
+}

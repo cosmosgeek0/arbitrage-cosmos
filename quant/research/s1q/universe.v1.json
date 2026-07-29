@@ -1,0 +1,2826 @@
+{
+  "candidate_count": 462,
+  "candidate_rule": "Pre-July official archive keys with June fundingRate, contract 1h, and mark-price 1h cells; stable, fiat, and leveraged-token exclusions.",
+  "created_at": "2026-07-29T16:37:21.387379Z",
+  "future_completeness_used": false,
+  "schema": "cosmos.s1q.universe.v1",
+  "screen": [
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "472260562053.87690",
+      "june_2025_zip_sha256": "d1d9d5dbc540c19dd882305937f864f59ffffe3f5449a6b05b3f95efe7ca4fbc",
+      "symbol": "BTCUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "448074810409.11787",
+      "june_2025_zip_sha256": "45763ee27ad110703c6f71d9ec80711de151b8211b14ad98cc978c4d5ede82ce",
+      "symbol": "ETHUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "97538344436.824050",
+      "june_2025_zip_sha256": "72d6fb9cab913d98220a06a08eab70a361b5d3fe84ea9701420e5f2cc6600c7c",
+      "symbol": "SOLUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "36643163870.8638765",
+      "june_2025_zip_sha256": "204142661f05e60aa2fec7d1a1f41bdd27dfd101d1716c0a04101e43c84b6dad",
+      "symbol": "1000PEPEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "36478634963.31122",
+      "june_2025_zip_sha256": "fdc070996205a34c55c14eeed845d0bd1fe61df6fe88f4425de239e450410895",
+      "symbol": "XRPUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "27801028754.032530",
+      "june_2025_zip_sha256": "9a15a61f50ede3a051bcd04f31f5989f01bc4d07c4421fa84d53e65bb75eee04",
+      "symbol": "DOGEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "19472556453.5679600",
+      "june_2025_zip_sha256": "1a74bf1ec6784a46a3598abca120d7f6c36558de9f6b676b0a6c0dd880bebad7",
+      "symbol": "SUIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "17655625099.30933000",
+      "june_2025_zip_sha256": "6318152034e21a0d87f61a0e7a09301aee2ea08e657fda64dc97b0a47da2662f",
+      "symbol": "FARTCOINUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "11009556833.32993000",
+      "june_2025_zip_sha256": "aabe6449ac76705d12c69b658e52d2a46a6299691a974c3b1ab39405fcfb0b4c",
+      "symbol": "WIFUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "10743306724.5670",
+      "june_2025_zip_sha256": "150fe71337d2c0ecfd98b3673df4579121f7ed582d1bb7afb19a61b88aa64add",
+      "symbol": "AAVEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "10724289906.6977100",
+      "june_2025_zip_sha256": "918e1d416503ada74e6b05f157cec19e6ea709fe4c79dc98a0e3d90f67ddf2c1",
+      "symbol": "HYPEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "10511464436.47050",
+      "june_2025_zip_sha256": "6db0555c0976c8795430b788ab0e811714f784bb177dd523750fd9cf053dbb39",
+      "symbol": "ADAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "10311772404.9801440",
+      "june_2025_zip_sha256": "dd876ec1b7f7569766fe1ce13e2c6b8617ca20047a372527d2070924adbd3335",
+      "symbol": "FUNUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "9892836887.6020",
+      "june_2025_zip_sha256": "0c57483f21e3a6c7394d6de8da29fee135a3b0438b1805cda983183fd4b3e279",
+      "symbol": "UNIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "9102233785.7069000",
+      "june_2025_zip_sha256": "2e0bc69a767e78ce68d232b10088ae559f68ea90619ab2009df2f632d8473b34",
+      "symbol": "ENAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "8884826720.20078000",
+      "june_2025_zip_sha256": "52b454be9867694265ab841d39284d4c14210ce7241e2974173b7cf923d31b6b",
+      "symbol": "TRUMPUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "8374417650.24350",
+      "june_2025_zip_sha256": "b828c5ecd697ea470abb5745a41589987198213d08a2c205ffa128258d071f84",
+      "symbol": "BNBUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "7617527520.58253",
+      "june_2025_zip_sha256": "e5db5f3c3586190e79f3a07d2de9128ae8f8a8b57e2fd7cf0fdd275954c89f24",
+      "symbol": "LINKUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "7447139921.5727",
+      "june_2025_zip_sha256": "0a324c03ebd24bc4d4e5f5be597aebdc21e9c8de9ecf369f38b79c71f6773c2c",
+      "symbol": "MASKUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "7156855881.26068",
+      "june_2025_zip_sha256": "2fcea8ec5becd3f8817ab6eb7e664209c6526e88a49a28aeb6ad1afad927495c",
+      "symbol": "BCHUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "7054544728.1390",
+      "june_2025_zip_sha256": "704b2961a9bc86f1e817962ba8cf63f3a6b0a55559595c6b51a020bdedf7771f",
+      "symbol": "AVAXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "6286981946.93662000",
+      "june_2025_zip_sha256": "839a5572da160ef719a4a08afc4cce5168c3d96bf2a1078d2fcb0fca4084880d",
+      "symbol": "VIRTUALUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "6285236913.46510",
+      "june_2025_zip_sha256": "cbaacc8f949d4242e37764c8eafc01c7fa670ae66b23e14a6d984b151e3ce00e",
+      "symbol": "RVNUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "6194198641.8578",
+      "june_2025_zip_sha256": "5ce8138b11fc3101265dd56df69b021d66109660d6b05a41a20631ceca3894cf",
+      "symbol": "LPTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "5646695453.4430000",
+      "june_2025_zip_sha256": "9e6d4b26f665cdf4fe8fae36c745fbef16cbe3f3be9a8afa222d5a15ac154f0f",
+      "symbol": "SEIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "5440548780.0554",
+      "june_2025_zip_sha256": "3ac3a8355609f6d167d3db840af18765ef568c3f22eedd78199063dc79c00cde",
+      "symbol": "TRBUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "5250206931.6190600",
+      "june_2025_zip_sha256": "e9a05e7f0843905df69c844d4ef52b601559cc7fce299fac2f2125753e2f37a3",
+      "symbol": "ANIMEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "4609950435.67177000",
+      "june_2025_zip_sha256": "501f69b8b13e7258ac9b213d61dc85abc1570da97d7e65cfab79d3ad6ff71826",
+      "symbol": "OPUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "4527893612.86065",
+      "june_2025_zip_sha256": "73368142c29a402d9d265ba0aabf1869c1a8cce06a0e2bfc8bd9a56011d47f69",
+      "symbol": "LTCUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "4509493910.7905900",
+      "june_2025_zip_sha256": "1e8b9455280b52f0151f8e381bdd04bfee8be06384ec994214a35dca6bb5ca2b",
+      "symbol": "MOODENGUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "4451791924.0344000",
+      "june_2025_zip_sha256": "e137c39ecb763e6d8dd3d45ac4045b2900d92dab965082e620d3bd0cd4087667",
+      "symbol": "SPXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "4378739620.9169000",
+      "june_2025_zip_sha256": "3ec142efbbda598632216e063d6caf88317ba66fffeb92fd12baa986b2e85b0c",
+      "symbol": "WLDUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "4285816764.3449850",
+      "june_2025_zip_sha256": "9f1e50b0440feeaf6212c2973956aa5ae14c29e901bf1656302199d0e84d730e",
+      "symbol": "BANANAS31USDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "4212641803.3717000",
+      "june_2025_zip_sha256": "e8db731c37e78987f746baefa9568309928ed3591eeb815a2eac298b5cd7a326",
+      "symbol": "WCTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "4020991965.45937690",
+      "june_2025_zip_sha256": "ae03382f84f921e781e6289784e2a46c32ab662f4cb4b656ecd277272e06bcae",
+      "symbol": "NEIROUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3978659009.4325430",
+      "june_2025_zip_sha256": "25bd2deff68c0fd3936bf23fe2231788bb262e35618007692a33bb6ffe2e0b7d",
+      "symbol": "SOPHUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3907476289.3946",
+      "june_2025_zip_sha256": "9ab765c4d91da288a8537681a6d55c9c275f37b82b6a66546b1b538042ccbade",
+      "symbol": "DOTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3898043069.29948",
+      "june_2025_zip_sha256": "21f4c204d90c6483e83634e3ac107bb3b078ecf3fa93dd2b85b9dade0367bcbb",
+      "symbol": "TAOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3813209275.6850200",
+      "june_2025_zip_sha256": "09703cc620fc9afa1cbeec774695b24e8738fb6a020dd8ab162f0ba85abd4f88",
+      "symbol": "ARBUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3801933728.6830",
+      "june_2025_zip_sha256": "940daa15380674b073409aa6dc541c96a4d06daf8fb886092d03137386a4cd8f",
+      "symbol": "NEARUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3749403228.2894480",
+      "june_2025_zip_sha256": "07c4d1825f2f3fcb48bc4ae90aa30d376ca31334da4959bab797561a13079d47",
+      "symbol": "PENGUUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3710265421.6856400",
+      "june_2025_zip_sha256": "e8a61c467d8230a67f0c95615e7f4b92a04be807f0c5f84f861bc8c295c4a254",
+      "symbol": "PNUTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3657427553.18116",
+      "june_2025_zip_sha256": "9282c1d0bdede69eab16e5ef9f7e2fbbf3d35d65d744a2e6648ab7e6c0bdb78b",
+      "symbol": "TRXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3568350775.4811800",
+      "june_2025_zip_sha256": "2e10254cfd7c199e35a077f7effa9b236fbfa79a528d97b8272482fba73663c6",
+      "symbol": "BIDUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3559374853.3880600",
+      "june_2025_zip_sha256": "62480509f9f57a1f18ec769af43453e790dcc1cd9de3fbc01f76991243b4475d",
+      "symbol": "ZKJUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3495641149.1126100",
+      "june_2025_zip_sha256": "679501317fb270acc6cc61e2594c32955c20039e6ad7aa1d86c88ca3486baa3e",
+      "symbol": "NXPCUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3470261334.3286",
+      "june_2025_zip_sha256": "fa955345965d334046cbf9d39e140e6037bc5661a5df50735e13ec921812ae33",
+      "symbol": "FILUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3345162198.9062280",
+      "june_2025_zip_sha256": "88f085ebc8cdb645520fca2d845cdaa6b3ca6b47e1e4d8e3cad0996d059dfb33",
+      "symbol": "HUMAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3296055754.9474000",
+      "june_2025_zip_sha256": "7dce562dd075111f7cad9817056978c4c9b34488b927a31a3f1524834a0c340a",
+      "symbol": "TIAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3290867006.7844",
+      "june_2025_zip_sha256": "97c852cf81b055a8bf309f6b0482e35551a82ca863610d51fc79567ad5353432",
+      "symbol": "CRVUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3264399697.27764000",
+      "june_2025_zip_sha256": "bea3f46545f8a1e2c5d88d1b0cdc835c4d1154283f5d4f25cfd698b43031aa21",
+      "symbol": "ETHFIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3112081338.2637000",
+      "june_2025_zip_sha256": "db423cbe895525e9ec461a4f5e21f4cd88d8ee7f816f5b7700250ac7691a97d9",
+      "symbol": "INJUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3080633213.519838",
+      "june_2025_zip_sha256": "6e58d1d505816a62ba7d309768da98f4506d4aa52642748fce17b56bfbffc1d6",
+      "symbol": "1000SHIBUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "3054829586.311200",
+      "june_2025_zip_sha256": "a34a0f7ac02c8ce2d67825aebf1815c6c632617ec6fc7884b5f326fa26dcba67",
+      "symbol": "APTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "2854826473.28250",
+      "june_2025_zip_sha256": "9dbc24b609021fe8b93608fd015eb49b3ee17f27623af270a9f5d015fa22a770",
+      "symbol": "MKRUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "2819010746.0109000",
+      "june_2025_zip_sha256": "1ad0644b2a2de68852e4a51ae1945be48a5f1e5d61b27437d87d0f60798b050b",
+      "symbol": "FETUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "2710352431.30570000",
+      "june_2025_zip_sha256": "6cb81e84da450df0a306d3a759e6c41c127f3050011f4fe95d66496058de88c1",
+      "symbol": "ONDOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "2502443754.2983000",
+      "june_2025_zip_sha256": "90dde1ec5fccf30a71f3841a13e196fde93bce17592e4431aaf9a232355699ff",
+      "symbol": "KAIAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "2463094865.79766000",
+      "june_2025_zip_sha256": "ff8ce770e229fdc42988b29676f7b1687e2c67df6e95205f0e001d2130466595",
+      "symbol": "AXLUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "2460290749.7212000",
+      "june_2025_zip_sha256": "516fe317d12df9babfc9abbb538c1174011b1aabd464e0002db74e0faa0495bc",
+      "symbol": "MOVEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "2425281986.8500800",
+      "june_2025_zip_sha256": "6bea1151552d42fc70dba85e7e65a8a8928df14a851e78ba2f434ebd09464a98",
+      "symbol": "KAITOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "2329406078.387800",
+      "june_2025_zip_sha256": "66dbe483123447a522eaf6a74409f282cc81ccdc0c7e4674802df42fe434a84f",
+      "symbol": "LDOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "2309442695.0995000",
+      "june_2025_zip_sha256": "2855c188d03ca6029f40a4a4f42c45d510986e5610eff629c4ffb0f0c09faaab",
+      "symbol": "POPCATUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "2083640195.37318000",
+      "june_2025_zip_sha256": "30099d2f70658bee86a63b99ae733535871ed92adc91ee3d97f131fdbfa6d621",
+      "symbol": "EIGENUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "2030999700.02038",
+      "june_2025_zip_sha256": "a8e9ebe8adf00305e83e8d607ba3e87244b624254dd066e44815c55ce1de1d45",
+      "symbol": "ETCUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "2021426935.8951660",
+      "june_2025_zip_sha256": "16b83116aa24e0a295ac4203144af02efb0637d6423f166401528bf390591181",
+      "symbol": "1000BONKUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "2020754945.8713200",
+      "june_2025_zip_sha256": "569af3e7f64a67632f804b84102d64a58a106f78283ed75de7d4e492eecf6298",
+      "symbol": "ALTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1946107543.6955100",
+      "june_2025_zip_sha256": "54a6bc009896aa5239f9cf17d895383d7371b6733724fbdb033595862c292c5e",
+      "symbol": "MAGICUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1897180557.3103200",
+      "june_2025_zip_sha256": "5d1a0142bc850fa10d46c38be77679af1203237e80c3edf89c2d8df3724a48ee",
+      "symbol": "AIXBTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1892698062.54631",
+      "june_2025_zip_sha256": "33624fdd304fdd4959f2fd35cce9de67c5b1ee71f23bfa166b7c42a263b9ce88",
+      "symbol": "COMPUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1820095966.6040800",
+      "june_2025_zip_sha256": "f06a1c5707b0c443c1984ce25d5547e51fe84bf1caf10ffce41857a5c3a364eb",
+      "symbol": "BMTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1691504816.54230",
+      "june_2025_zip_sha256": "b2dce4d3a9dc3c6c9e2462488119fe369c44369e5d52d2a332025772cb165f31",
+      "symbol": "GALAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1670131297.10073000",
+      "june_2025_zip_sha256": "58812b48c4ff3ad8191c86f6c0ea7571c728e23d9a7ab73bb6d31cc9f5ff0a5e",
+      "symbol": "AI16ZUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1658816162.31684",
+      "june_2025_zip_sha256": "d50a396ff996a06429fe3a9a60befd8383ef2993e1d8a32391f6a7482de59fc4",
+      "symbol": "HBARUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1649498053.3603000",
+      "june_2025_zip_sha256": "7611d697a548b51137781a04fc4ab3164bf4c1db06cd8e3bf617337b2951d48b",
+      "symbol": "COOKIEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1639661701.20510000",
+      "june_2025_zip_sha256": "56f996dca6f5fb1c3758254340f515ebd812dac957793688a2ddc47fb69574bb",
+      "symbol": "TONUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1608847866.6913600",
+      "june_2025_zip_sha256": "998e3a1ef1e90fdeeeff0c8ea607574d123ba80101865d0d84a97baa5cb699bc",
+      "symbol": "PAXGUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1602522084.4899100",
+      "june_2025_zip_sha256": "13c180f917cd6fa4e02c982fd816ff60c582c545683e11a27d5f5d1f3bef4653",
+      "symbol": "TUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1601139267.7872000",
+      "june_2025_zip_sha256": "ff0dfa012fbb97d1493cc0c96fe52e75206464bbd030db57b6fdb180839c9d7a",
+      "symbol": "AERGOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1601010839.63177",
+      "june_2025_zip_sha256": "f3cc0f0b4269d89db4130058f495f5250eb86a20aca315d480a50258085beeb7",
+      "symbol": "XLMUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1594933251.940000",
+      "june_2025_zip_sha256": "22a9da581fe4f3e92546ac94e7d4bed573b22a0314a2a7e7459bb58246345f39",
+      "symbol": "JTOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1552602349.06595000",
+      "june_2025_zip_sha256": "2802b774c76e8a8d5ca4d3da2ae5c909ddd0207b519df8075473bd0c2d5042dd",
+      "symbol": "AEROUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1523351146.7454000",
+      "june_2025_zip_sha256": "566486190d9145cebdf44428d55696d741f20c0926d5700e9c965e70b64d576d",
+      "symbol": "INITUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1519240282.75574100",
+      "june_2025_zip_sha256": "65b12ad4a09a8bd69f3c1aff4ba276928940898c7282b24c849f460da3445eee",
+      "symbol": "OMUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1496849852.4445000",
+      "june_2025_zip_sha256": "df667f4c9a08386451ee022535a09ab4e3316520f3b4e2460c35db4b5609d1cc",
+      "symbol": "ORDIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1396576392.11669000",
+      "june_2025_zip_sha256": "0547ec199e8d4bcd6cd584675a0fe1a862b434408eec8eff037a7fc2ed841aa6",
+      "symbol": "MEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1363105262.8881100",
+      "june_2025_zip_sha256": "47b1bf29488b1b56f4f6fbc1dc7ad3e00bf58919854d02846479b35f82a1207a",
+      "symbol": "LAYERUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1290148189.3555600",
+      "june_2025_zip_sha256": "0b77eb4a4de10ef72e7a985c9e7acb93eed71a81d053b128ddee226d4768d19c",
+      "symbol": "MUBARAKUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1264779857.4293000",
+      "june_2025_zip_sha256": "05dd18cbd4f19111f72ed6acda128b3703ff480cd7d20f99e3e4abf59c918ef1",
+      "symbol": "SUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1263655468.87036",
+      "june_2025_zip_sha256": "fcae8c544151a5842b6946e2086bc71d43d55cd8ae981fd4757468e4d1e153d0",
+      "symbol": "PEOPLEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1261044296.471000",
+      "june_2025_zip_sha256": "e68075276fde14302239599abe5b6304feeb8908dfd56c0808414fedefc21716",
+      "symbol": "UMAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1256793657.812000",
+      "june_2025_zip_sha256": "9d7c3fe6175ad4775718b06b74c32f584b2d5b85215a607f4beb68b976fa9c01",
+      "symbol": "ICPUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1235331152.7049000",
+      "june_2025_zip_sha256": "89014e3c2ad155d4ef48259ec0f78fbb65e66d58c541543f718717d89cd66d14",
+      "symbol": "PENDLEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1190641521.2969",
+      "june_2025_zip_sha256": "a1f2d7b10ee42762081a49d5a386312e6d036cb6e3b3a449bec640afbbf1d84b",
+      "symbol": "DYDXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1173479388.54740",
+      "june_2025_zip_sha256": "caabc5775ee5c6b74cbccf6486f99a9ccc1cf51d1fb1cbc2db97a3035eeac246",
+      "symbol": "ATOMUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1164961039.0601400",
+      "june_2025_zip_sha256": "16648c51c360230673f75c19fa83362d4a17a6044f1c968da7dcd1c8c60a4382",
+      "symbol": "LQTYUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1157510699.8466700",
+      "june_2025_zip_sha256": "1c208f515a077129600a40c071c7d2de9a73019742c9dcf31251eb858e58768c",
+      "symbol": "1000FLOKIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1121702711.66824000",
+      "june_2025_zip_sha256": "392c85a280aaa83e4d6816988be771909a47812fe3e2475f55882ab9768a6905",
+      "symbol": "DEXEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1104443730.2211",
+      "june_2025_zip_sha256": "67687da985b7f5c7c94f619839f77434c811a04446e87479b2c2f80412c698b4",
+      "symbol": "ENSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1078553921.8714470",
+      "june_2025_zip_sha256": "220e0a95ea14e8a45511d952d79f3d64017afde9e08bda1b3df85f9a9ca4ce9c",
+      "symbol": "HAEDALUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1071377650.5916300",
+      "june_2025_zip_sha256": "c49900e7e509932caa9d0f0e3bcce3327ce10d54b43b41670a28072e83616d0c",
+      "symbol": "SOONUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1040449410.1699",
+      "june_2025_zip_sha256": "f686fab202b0ab1337178849cf6937f2869c604f6edeb6c986909b3abec12902",
+      "symbol": "APEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1015149181.8660",
+      "june_2025_zip_sha256": "95edcd06f78d2c742181c95b3e0aa4c7eb163546540970968f2e8b91e6382146",
+      "symbol": "ZENUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "1003518789.66959000",
+      "june_2025_zip_sha256": "1d3f7e0b466523f3a0cbdf78b6c991042ca857e36aeaa0ff5d4e2aeefd2361d0",
+      "symbol": "RAYSOLUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "997753244.13340000",
+      "june_2025_zip_sha256": "5d7c8cc3b4b2ec12574453c66de679b81209fd68f5e1d5cd23b2166531b9589c",
+      "symbol": "RENDERUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "988220460.3853500",
+      "june_2025_zip_sha256": "60e71f18da9898c26d371d9d1037261114eb88934f01f5117e3a556153b2a3f0",
+      "symbol": "BUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "976008519.2200200",
+      "june_2025_zip_sha256": "84c352782809448cc5db640f99bfcaaf0c6bab32d7905632c6f6dc237798f486",
+      "symbol": "GOATUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "949477495.3569640",
+      "june_2025_zip_sha256": "4e3237565ac777ed7cb0d7e64134e09ebb17a1cb1f8ae947eaf38b837c19d941",
+      "symbol": "HMSTRUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "948157802.0980780",
+      "june_2025_zip_sha256": "d2402c4c6dc638914088a6df32da9ff2d2f6ebeefdb5a3a476314412abe94e8f",
+      "symbol": "TURBOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "933185019.2695250",
+      "june_2025_zip_sha256": "92291288b057dba052e135a34194c6a6c42199a8af5f02023cfb68896b7b5f58",
+      "symbol": "IPUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "921194952.9875000",
+      "june_2025_zip_sha256": "a99efc017b18bfead895df1e421b5c0a957780f87730a4c3ab42daf94d9bdaca",
+      "symbol": "HIFIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "910891206.3839000",
+      "june_2025_zip_sha256": "f599ad1efb01a7c759b8f0fe3922e975da6d9fe998a7ec15c17772a099ce560e",
+      "symbol": "GPSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "900917544.6376940",
+      "june_2025_zip_sha256": "97098d9aed7a77e4c3b5d3e36bd9e5aeb38f37c1523b4701923a6fc429bdcf83",
+      "symbol": "BOMEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "894983819.39745600",
+      "june_2025_zip_sha256": "2248f95ce56497f49d382a87080206ae5cfdbf6f9b0bbc8e4b5dd7992aa5c75f",
+      "symbol": "WUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "882848395.7776400",
+      "june_2025_zip_sha256": "e27125ccce30f5093509aca236a62df037e5b62f754ac0779f9b6731f1c22f8b",
+      "symbol": "BSWUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "881419186.5799000",
+      "june_2025_zip_sha256": "0727b976963ee8fbd2f0a647790b3a6ad315a7036e81cdbb5bdb114f642f7416",
+      "symbol": "CAKEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "881160570.9412800",
+      "june_2025_zip_sha256": "b6f4c3a091b353e2c434585ccecd1c55a61e7e829034987d29ace39e1c2489d6",
+      "symbol": "HFTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "849588207.93710000",
+      "june_2025_zip_sha256": "cf531e286f5f33bcd6ec1d4e04a99c4d85cafc3503c7e1c972ab4370992d4877",
+      "symbol": "RPLUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "848934926.9691",
+      "june_2025_zip_sha256": "d83ec2ce37c68c0566aea1b4517d5a1b6a7305f921af44fc5aa201503d0d9f62",
+      "symbol": "ICXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "845952001.19525",
+      "june_2025_zip_sha256": "ab0feb7be2a77c46183694ef93e3396b4670599c0e3d54d44d9a3fd32948c97c",
+      "symbol": "ALGOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "784702410.6635700",
+      "june_2025_zip_sha256": "1b8c0d4147da6a72bfa6d00a55c148c5cf5a6452155639e5709d0866d8a33a05",
+      "symbol": "TUTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "745802660.23227",
+      "june_2025_zip_sha256": "dde3e9df647d83f934490d80969da15c0deca18b0c8e85de8068f2b9e573f997",
+      "symbol": "SANDUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "745095951.8029000",
+      "june_2025_zip_sha256": "bd6f7b25bd08243c81cfd976ee89c4bd3fa7b3aedebbefc08369ec980d36430e",
+      "symbol": "BERAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "743365117.92495000",
+      "june_2025_zip_sha256": "2ad1ba30542236b53e9975082ceb709ae28f34409673d47d10bdf2676ebe9b6c",
+      "symbol": "DEGOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "727641819.96016000",
+      "june_2025_zip_sha256": "91ff2fdebc263de9811afba2ca02777b2f191a20a452bcb411512761654d4406",
+      "symbol": "ZROUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "722804570.66048000",
+      "june_2025_zip_sha256": "03c10b2c2a51cc139289f40e409412089a775747c40487d9e7c12b7835f69fd0",
+      "symbol": "GRASSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "718723530.5509100",
+      "june_2025_zip_sha256": "84470b8ded12634ffc282aa0637adb61c52a8168d795ba2b46df3e8f93b5bed0",
+      "symbol": "CHILLGUYUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "717977620.9995200",
+      "june_2025_zip_sha256": "2744126fe3642123a3635bebe68a44fce73c11c20f17d362f8e8f9c9c2076596",
+      "symbol": "GRIFFAINUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "710973318.01134",
+      "june_2025_zip_sha256": "abd0e6e3a2b153a82ade590e819363a6a0312b9ebff3a5122d4cf724df1067b5",
+      "symbol": "XMRUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "710467165.8678000",
+      "june_2025_zip_sha256": "5a056e4f8feab3804748ac646cc9278e712900ea7240cb8366daafe32208131f",
+      "symbol": "STXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "664426059.3917000",
+      "june_2025_zip_sha256": "655e38932deb649b88e6ff866ae711c658deaf0d39edb0571ae264825763dec7",
+      "symbol": "POLUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "652966588.0572000",
+      "june_2025_zip_sha256": "b9b66653423e4df3a6d95fee32556c73da33cee0f82c544c9040a0e3568fa8ce",
+      "symbol": "JELLYJELLYUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "647227255.86426000",
+      "june_2025_zip_sha256": "64f6d3a033889829d390dc2a35139d6453276e7c0de896f082ae5c6df06960a1",
+      "symbol": "SSVUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "639044163.6880400",
+      "june_2025_zip_sha256": "0ee8f61d5cf7605ce3d6c5305c6122c1fc946a0e40ec79447ec28b5a4e94848c",
+      "symbol": "BRETTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "636915279.7652659",
+      "june_2025_zip_sha256": "a933e82e811f443914937d72549f477d72d4147198a843cad8fde6b5952236b7",
+      "symbol": "1000SATSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "625725170.6931000",
+      "june_2025_zip_sha256": "3faeb512fe71d5302ccf33b026b005e9c4709df535eeed4df8d45812e86454bd",
+      "symbol": "USUALUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "622883075.4531500",
+      "june_2025_zip_sha256": "cce8a579eddae9e9e44891d0b7dd82699c6d13e714f4f12fa93c2e63c1e0c6da",
+      "symbol": "AUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "609243911.9990400",
+      "june_2025_zip_sha256": "410e78c00a42df7f7111c03f2186529c34c080caeb0b3c5253ad7d04aa3be032",
+      "symbol": "OBOLUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "608025498.0694100",
+      "june_2025_zip_sha256": "9b4f3dcd72d59336110b8fd92038f028565581ba7e4284f10db09335a1a41a55",
+      "symbol": "ZEREBROUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "593502778.9748200",
+      "june_2025_zip_sha256": "a19b9043267e7936729dd9eaee5b0e06b14d572187563f3f39d93758ac529571",
+      "symbol": "ALCHUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "588924063.4258200",
+      "june_2025_zip_sha256": "c79470b0780f100f33267477dc27d20eca4b994e8a81484fb989318542879e58",
+      "symbol": "PYTHUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "578008991.7256",
+      "june_2025_zip_sha256": "b9bc0c6960a4ffdd50d71b9bbfe80c0f252dd9249eed312c87446ebaff66a829",
+      "symbol": "SUSHIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "573047427.2822000",
+      "june_2025_zip_sha256": "f368f4544e37dbc2a022781d491bfbd29df1045886709063d8e0a75d64f3c1c8",
+      "symbol": "ARKMUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "571678103.9578000",
+      "june_2025_zip_sha256": "611a0aca78dcc4f764fb1c17f049c13c646d6b63c638761b4590c7bc8caf7ffe",
+      "symbol": "LISTAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "553182808.6880100",
+      "june_2025_zip_sha256": "722ffce993f229ed842a2d30b59df2da4d85baa8019e677e828e4cdee3284679",
+      "symbol": "NEIROETHUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "552398618.9708",
+      "june_2025_zip_sha256": "d6a9429e98be22083d16340f18eee7b3804ec9d3c048c1b74f056e9861e56107",
+      "symbol": "FLMUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "544234044.5575000",
+      "june_2025_zip_sha256": "33bffd4fa87a9566be41727b3f70b18d0fb24640c30a08f6fbeca8559c976937",
+      "symbol": "TSTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "524385941.9860",
+      "june_2025_zip_sha256": "0593cfcbda19bf03413aa6741f68199501dfbaa07d43488a6b79ddebaa74eeda",
+      "symbol": "RUNEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "523286437.8805600",
+      "june_2025_zip_sha256": "7a6931205c3a459ad3b7c6fc8a30f05d45f964bf0f249e285369eb28c22e60d0",
+      "symbol": "SIRENUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "519597072.47657000",
+      "june_2025_zip_sha256": "27d26656edc41877fcda368a218a0fbbb192f9a9d33ce8deec8a661d18cdbb61",
+      "symbol": "VANAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "517660123.76471000",
+      "june_2025_zip_sha256": "d249ffe1bf8e892828bbd5c48c54e6562098689aaa06f30afc89c4ae4a7da436",
+      "symbol": "1000000MOGUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "509726614.59726000",
+      "june_2025_zip_sha256": "d30f3fd92a559a1ed3daed5f47e9ca1e416ab9d244d7531d89dd202604da8b89",
+      "symbol": "STRKUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "507151655.8375000",
+      "june_2025_zip_sha256": "3ba8909cfe22a9b5281d9dd91f13c45499162eb346aef6c45abb48032228b179",
+      "symbol": "SOLVUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "505234859.5568300",
+      "june_2025_zip_sha256": "a13811edbf7eaeb6ebc188c76974065926d84c57327f1dbdb5586daa3022f947",
+      "symbol": "KMNOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "495986314.64305400",
+      "june_2025_zip_sha256": "a8eb00e6d2040730597d4d03739c416a5b52b922e345a83e016cb9fe68e11c24",
+      "symbol": "MELANIAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "488796640.6133000",
+      "june_2025_zip_sha256": "8fc657e6a5db536232563fd694a2b14e72f3e5cf7db43c6942955d038c08283a",
+      "symbol": "CETUSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "484675246.8710000",
+      "june_2025_zip_sha256": "2c4489e78528e9f5ff068a04a8675455ba497deab14996cd92fac90236c28e61",
+      "symbol": "RAREUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "480523074.2416100",
+      "june_2025_zip_sha256": "a40ab3875f97db584c3eaff5bf022a519927de345e73c79950499aa99771337e",
+      "symbol": "ARCUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "479051173.1865900",
+      "june_2025_zip_sha256": "e5eca8ea2ea279664db5bd6fe45689ac54eaaee335f81e84d84ae660fc62b5aa",
+      "symbol": "KASUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "476182011.8136800",
+      "june_2025_zip_sha256": "599a0aef13ad3d6df2368e206950e46db65c2f29f6ae60a0360e8a62342f5c68",
+      "symbol": "ACTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "470813783.3850049",
+      "june_2025_zip_sha256": "d8e4055e71d235047ced08e20b3cece3038f2f257e4124d3e855b896763194d1",
+      "symbol": "LEVERUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "469299779.29357000",
+      "june_2025_zip_sha256": "b42e8a39e277812b40c8e446031bfad029357485db3d9a43afb09dcca73a2ca7",
+      "symbol": "IOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "468379847.2706",
+      "june_2025_zip_sha256": "4a75d7517f3e4488457a0e8afb8db72dd335649c116de4c82bcf00e7242d3df5",
+      "symbol": "IMXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "467803487.6167",
+      "june_2025_zip_sha256": "f7b4c8048a3752bde1785c9a5d2c7c55ea2b43486cca6c0da51e5c22833c2cfb",
+      "symbol": "ARUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "466159518.55400",
+      "june_2025_zip_sha256": "d83252d13d3de996e495caf61590116a0c1a524b2154f7dcf27e5ad80190c614",
+      "symbol": "AXSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "458431839.1740500",
+      "june_2025_zip_sha256": "8a317cfabc24a1678c0a7af8870e400651754d6ba0bf3a72bd54f601dbc1f6c1",
+      "symbol": "SWARMSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "449191776.1234000",
+      "june_2025_zip_sha256": "dd6e618a790c87d1159f281fb040db440461dba3f57d62e971b1c602135d64e7",
+      "symbol": "PARTIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "441128474.3258000",
+      "june_2025_zip_sha256": "197e263dfb8919ff7c527ecf6a79f813527204c1b122baf4cec6c811d93b5788",
+      "symbol": "CTKUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "428500469.8656600",
+      "june_2025_zip_sha256": "806a87108f0844fb53eec9e5c7ad922ca1472e18830e45fd89b35e9b16e93652",
+      "symbol": "SIGNUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "426476116.5400700",
+      "june_2025_zip_sha256": "e4de9884b126d238705d4d1d069fc8758e9b667344b28d877dbd5f66d639cade",
+      "symbol": "AGTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "424657249.933241",
+      "june_2025_zip_sha256": "e30d2c8a00798a6b68d5fec74a6a59964ba2e7c5494db61531b8e81fb616f4f7",
+      "symbol": "VETUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "423237648.0008",
+      "june_2025_zip_sha256": "302857300667ad14ad9b44cc2100236aa97851c0ad37e71cf435f79c2b445cd4",
+      "symbol": "BTCDOMUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "418772241.6668900",
+      "june_2025_zip_sha256": "6389301bb0e2af3d36fb88c47be0ebd7d32a956ddb18228cb9e1cd561f521bc2",
+      "symbol": "ZKUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "411585095.93416",
+      "june_2025_zip_sha256": "3e2b1d58703a85e262bdefc7273e975908fc00344b479dda8212a7239a76cdc8",
+      "symbol": "THETAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "410101271.2955800",
+      "june_2025_zip_sha256": "0da3288030c88b8137f465e4a02965d5968ff555c117eb44c20da7ab0190074a",
+      "symbol": "CHESSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "408510901.1214200",
+      "june_2025_zip_sha256": "c9d7571e3e446e063eb555e57e0f477a742f2420a6ca29d6d3761987b862588c",
+      "symbol": "SXTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "402641953.875915",
+      "june_2025_zip_sha256": "fab603944b16470605e0bb848f2c13ceb2a8269a629903ecd43328ea715c4464",
+      "symbol": "IOSTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "401712171.7206460",
+      "june_2025_zip_sha256": "895f25d50e00dd89e2662a974c8191b2437492b702bd0a094ec51ad8ae0a71d3",
+      "symbol": "NOTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "400539306.1326000",
+      "june_2025_zip_sha256": "aed78cb522f5a68c69c7e3abe4405a6379dba320771c940a7d928fd8ba763316",
+      "symbol": "KERNELUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "398546914.4978930",
+      "june_2025_zip_sha256": "2ba3616f9cfd906a24aab6981910bfcc04ae2b1514d9fa08a9879861626446dc",
+      "symbol": "MEMEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "392168544.67941",
+      "june_2025_zip_sha256": "859c453e71b4d78c984f5b247241ae21d4f6f4261611c78b2ffc8d37b1dec09b",
+      "symbol": "NEOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "383644524.5149498",
+      "june_2025_zip_sha256": "9014a60c519a8f72304784bf10f4e48e8e0db900c7f9e78e9343ff73866675f9",
+      "symbol": "DOGSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "377762446.4095000",
+      "june_2025_zip_sha256": "81b63a5361bf0c980de24e795dd7b7723c7b876d5d3d5be699f123abc5bdc280",
+      "symbol": "BRUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "376471945.55324",
+      "june_2025_zip_sha256": "9efffc8b733f54bef2aa9a251f9720a3df090a860e0cef471c07a974c505611e",
+      "symbol": "GRTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "372015651.9105690",
+      "june_2025_zip_sha256": "5742278ef1c93ee6b6c42ec33196c49ab2e36c3a555205e2b18039d1955dce51",
+      "symbol": "MEWUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "367186737.2591090",
+      "june_2025_zip_sha256": "76b2d5005aca4148392dea2c65f942cadfa4db20a4f15f6978fa78a5842849a9",
+      "symbol": "MEMEFIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "365437013.59211000",
+      "june_2025_zip_sha256": "be99d154cec2f7d2fe837456a0f2385724a5c58df068bf5f812d5555b1ffef42",
+      "symbol": "VVVUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "364029716.8850100",
+      "june_2025_zip_sha256": "8a909f1064d3edde99c2f8681c03b13824526b49555e65000944a29bd39e9a53",
+      "symbol": "GUNUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "360004190.5140600",
+      "june_2025_zip_sha256": "8351cad50a3429634c6e04c06666319f1138abfe52a7ae27715b95b16e6f3472",
+      "symbol": "BABYUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "353386627.381290",
+      "june_2025_zip_sha256": "ebb7b50e82c321f43266bad8cb13a0ba22ac0cfaea907dc188b4eceef48dd007",
+      "symbol": "JASMYUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "344752620.43071",
+      "june_2025_zip_sha256": "f069cfc4f2bd5de9e6a682cf4eac39f0b06322a26a155077c4172bf26b1a7c67",
+      "symbol": "ALPHAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "344705212.9755",
+      "june_2025_zip_sha256": "03caea606d1f6b9f07a98c063c6512f3df39335550159e613b15ea2694af4640",
+      "symbol": "FLOWUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "344331825.6805700",
+      "june_2025_zip_sha256": "6c805ed7318d32ec5520a97af2ac83913e9fa72a6abc8481a49e7085e7641075",
+      "symbol": "AVAAIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "339221126.7005000",
+      "june_2025_zip_sha256": "e30ad2711faed7c83fc981b6a80ee5c896b9b955fd1e4687ddbb99ff9f5ecfbb",
+      "symbol": "FORMUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "338660052.7022000",
+      "june_2025_zip_sha256": "0105062bdb7c9b01e9f944e136b1be0ba7713cdfcd15333b2d75e1a00e973f72",
+      "symbol": "VINEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "334745672.08694",
+      "june_2025_zip_sha256": "d376f2018ab8c3effe51d5a4b0b7be25600c8a2a5f265fa0129d6a7845cd8021",
+      "symbol": "GMTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "329095350.1270000",
+      "june_2025_zip_sha256": "51ea743510be06a47f38c2ec8083c1a3e899e4e9d737011e4a764fd759660369",
+      "symbol": "B2USDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "327410031.7617",
+      "june_2025_zip_sha256": "195efc99f77c5465a5aee7befb91287376d4933cb3a593262762d5f22e4645f7",
+      "symbol": "XTZUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "326566164.3859300",
+      "june_2025_zip_sha256": "b2f2feddb4af08b8779517f7fabd8b6398c6ac077484a318dec55632dd9a3f8e",
+      "symbol": "XAIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "326173835.8497900",
+      "june_2025_zip_sha256": "f293f28a24214f50a691c740c67e80c3dff25a82ed7e1fdaaf3bd97ad80f9554",
+      "symbol": "BROCCOLI714USDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "325618125.9232",
+      "june_2025_zip_sha256": "4399126cc3a4aac519642829539d95896915074c33913d889db1656630986b61",
+      "symbol": "MANAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "324035782.6515300",
+      "june_2025_zip_sha256": "ddc6f5e47d096be349c7fe9abb7bc920e51892188bd041fb2431022e2e8362cc",
+      "symbol": "CFXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "312925103.96989",
+      "june_2025_zip_sha256": "2ad3ebf9a78e239abaa9d1b6e2084a08452783f189f68050b8b147c3935f3362",
+      "symbol": "KAVAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "311840733.02409000",
+      "june_2025_zip_sha256": "17bb689cb5723e2c7bfdf758e31a2e3142fd9803aae3b7a31ef74ae960c82d93",
+      "symbol": "THEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "309594188.8015920",
+      "june_2025_zip_sha256": "16f7020f68344027fd46187cfeeafee2f70515a1c70a2619834a75319c0483fe",
+      "symbol": "EPTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "307983085.91409000",
+      "june_2025_zip_sha256": "87f1cb1f7dd46e3bcb9a5e78f9cfc2675bb4b19b18e7e518011b9bb135d7ebff",
+      "symbol": "SAGAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "305756523.31600",
+      "june_2025_zip_sha256": "ae0f0754f99f04a2db17c9899dc22d1bbb9bd8240eec8a7e05161b8cc8639b5c",
+      "symbol": "CHZUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "302656411.6306000",
+      "june_2025_zip_sha256": "7482ee973bea5bb707e4212657bf395a0165d1fbe1ea12754ba3f40e86fe7a6b",
+      "symbol": "UXLINKUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "301539120.0734",
+      "june_2025_zip_sha256": "daf44ffccbb06915619ad1eca2feb6ca1cc7d2412ab816a5813f6591d7f8da6d",
+      "symbol": "CELOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "301216215.4008820",
+      "june_2025_zip_sha256": "be42f78796efdf424780df60d97b122906185ec80214bfdc9b1ffbf4fdf54256",
+      "symbol": "USTCUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "301067810.3662100",
+      "june_2025_zip_sha256": "3dcdb2616ae62c9104e065f5eeab693e568735d1b116ca563da51c255a8647dd",
+      "symbol": "MILKUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "299269509.4220000",
+      "june_2025_zip_sha256": "994812b99296095f3edbe11e4dd9bcfe18448be2c54b4c5898d9a6fe4ca7eb70",
+      "symbol": "MERLUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "296490079.75058000",
+      "june_2025_zip_sha256": "bf2a2d62a1829ea5161509a47dd8400f61e29f109919dd87abbfcb3418e2b61a",
+      "symbol": "MANTAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "294300084.7910000",
+      "june_2025_zip_sha256": "d523d5a40d869bf5011eb8fbb6371e515d9a62cfa423af61ffd00db4559d63b7",
+      "symbol": "QNTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "293491558.179935",
+      "june_2025_zip_sha256": "e8323609cbc0e5b15cb317a98e498fa778214acb05466998a673eff3533ea618",
+      "symbol": "RSRUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "286179349.1849000",
+      "june_2025_zip_sha256": "60eb26eaa23d73bd4711a27de84513011bfabc7dfced97439965508fa6246000",
+      "symbol": "SHELLUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "285818819.9324200",
+      "june_2025_zip_sha256": "33f5f75f3701d9983ebdd29623bb0d3bd47f94eef3a2158d4e2e0a9f863e4245",
+      "symbol": "REZUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "281451937.2644",
+      "june_2025_zip_sha256": "c720606db06ca33fe3a6b13c0596e5fbef69a3b4885199a987e24316aadbc487",
+      "symbol": "SNXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "279385167.0158600",
+      "june_2025_zip_sha256": "c089208cfc5d0d48cc2be2a150258c44b7a8ac148d7f60a7cb93d1df2f29b573",
+      "symbol": "XCNUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "273381287.5638560",
+      "june_2025_zip_sha256": "2aa4cad02028dfd2e5de56bad37d33ee9e2c96112f628e01b8d9f5e0d14c9f54",
+      "symbol": "ACHUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "271184442.6301900",
+      "june_2025_zip_sha256": "00da9f9c88f3a0771ded4c35108820348f790416c03d305f1d6f544f7ec7cdb2",
+      "symbol": "FIDAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "267721569.4689900",
+      "june_2025_zip_sha256": "7388838142c72c78233a2c348b13cfdc42d337abe4a2b9b3f205d91606d48afc",
+      "symbol": "1000RATSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "264241680.0228000",
+      "june_2025_zip_sha256": "c1f28025a424ac9fe45d8d3ddd75b3d714f845c36fb04c7f0eb9bf03caf649f4",
+      "symbol": "NILUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "264105381.9609600",
+      "june_2025_zip_sha256": "6660ed74065430fbe5008c460149d513a4347ba06922fff13cef63e04e2c94ab",
+      "symbol": "ATHUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "259402571.3229970",
+      "june_2025_zip_sha256": "6d5227dde11fdab902290a0618f2bfc879948550c4e45778329d8d98ca4178bd",
+      "symbol": "1000CATUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "253647032.2715000",
+      "june_2025_zip_sha256": "bba22491621bd6a11ca10f7dc63c1b8a3fdba64402de6a45ad73e4138b2e2ef4",
+      "symbol": "WALUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "253483221.12882700",
+      "june_2025_zip_sha256": "7839a2b7f2c4f0138ef619062b73394767a48cb4203a9149a768dd515cbd8f49",
+      "symbol": "PORTALUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "250343092.6727900",
+      "june_2025_zip_sha256": "b28a389cd7348d4b980b667c5bb73071caee23a327ce6c500f83de428453a3a7",
+      "symbol": "DEEPUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "246573417.7898000",
+      "june_2025_zip_sha256": "2c6a3c0f624601eabfbe95e172370749384e1dd11f2e71b0924e1eab356fcd6a",
+      "symbol": "COWUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "245078927.44450000",
+      "june_2025_zip_sha256": "0d86fb9a3764f85b876a5308309f6af7cf007a6d3fc57e08e7d4d832f8ea7e6f",
+      "symbol": "ORCAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "244968257.1032100",
+      "june_2025_zip_sha256": "a8e5cdf157d2e0bd4a5eb81193ad3726288adb7153d1e29cdefd5440aedcc4a4",
+      "symbol": "BIOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "241035417.8494000",
+      "june_2025_zip_sha256": "7de61ff5e16c54e4bf4ee39f5ffead303b80fc8767f51e3a93015d91cefc6c13",
+      "symbol": "AGLDUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "239787129.14310",
+      "june_2025_zip_sha256": "7321f89261fb313ff77a139641e5fd70bb0578c6ee29926ac44d9c4c6cd55e5b",
+      "symbol": "IOTXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "239592189.7463600",
+      "june_2025_zip_sha256": "7a3604be60f2a037f24a4345a4ad87b1fd84190b046309fe62d47bf11b327194",
+      "symbol": "AIOTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "237873651.8585000",
+      "june_2025_zip_sha256": "91356b36a4bbdb5480dccca3aadac46149ad0fd327140bb057856eed0c8a09a3",
+      "symbol": "MINAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "236676194.53351",
+      "june_2025_zip_sha256": "bf73fb6a8b19de5da65b59d34917f6684f350896115d264a73dfd61705cccd89",
+      "symbol": "ZRXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "236339832.5374710",
+      "june_2025_zip_sha256": "dfad7e6278357db92dfbf26dde8e80ffbff209637c1a64342d6a8c42e53cef57",
+      "symbol": "HIPPOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "236196656.23320000",
+      "june_2025_zip_sha256": "2200833f62fd0d201e0ebf28a0f0c9b1871d39333a1a2e553257d050c10d0a73",
+      "symbol": "PROMUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "235357827.70640000",
+      "june_2025_zip_sha256": "4e623967eb03c1df421b7167540562b75f51545fb8a4a6e3018d7432c3fb00a2",
+      "symbol": "BANANAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "234973252.6914257",
+      "june_2025_zip_sha256": "62e8ee979752394152baa7596f8f5dee0128853e925b62b475a034b1b4b5656c",
+      "symbol": "1MBABYDOGEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "234645620.9993000",
+      "june_2025_zip_sha256": "1d58cf9da3b224af90274f5eee67cf7c5154d163598aa5792ba4e2e2b2451520",
+      "symbol": "CYBERUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "234509779.4562000",
+      "june_2025_zip_sha256": "edde2f46f8af8758332571edd0298ef48553aefbe7ad54cbf1873e72b4d940d2",
+      "symbol": "PROMPTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "233646720.7519600",
+      "june_2025_zip_sha256": "01709cee27a1c6ce15114904445b220080111a8b299363e348684fdecfeb333e",
+      "symbol": "BIGTIMEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "229925458.27364",
+      "june_2025_zip_sha256": "329db3c7e82b283b292e44635259a695899f73f99095b8cefbcf7a5d9f1ec7b4",
+      "symbol": "IOTAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "228057229.7390",
+      "june_2025_zip_sha256": "ee100abcfb0e42410e0d1e85c166a30a1aa5f9c53ea7c53c48e9d5b01318a0a0",
+      "symbol": "OGNUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "223909377.8615000",
+      "june_2025_zip_sha256": "21ae4f5dc3d68fed3616438c128a25e26995636407c503e6632237e11beeae51",
+      "symbol": "HYPERUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "221739784.33801",
+      "june_2025_zip_sha256": "d2e4c9f89b3aad2adbb5a3700e8d87d1ff61968e7c33aa32b619c61998dd6ef4",
+      "symbol": "ZECUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "219630921.5746900",
+      "june_2025_zip_sha256": "60c58eed103a30c1f4d8c985ba4f3bae6d76abef28e84fa033ea21759852d28b",
+      "symbol": "1000LUNCUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "219412040.4302500",
+      "june_2025_zip_sha256": "d79f9e3a5c7aeb1fd0210cb03b99e34c7743742df530c450589b98fef2264396",
+      "symbol": "SKYAIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "218485328.86455",
+      "june_2025_zip_sha256": "64da126975b88ad3bb906fb5813d9f0694e919f32b101fa05735c16cc9561d22",
+      "symbol": "SXPUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "217739222.53288",
+      "june_2025_zip_sha256": "c6dc4ae6f7797d16f8088f17dc6f4265cbc7297876e7a3e10216ef8144a86dcb",
+      "symbol": "ROSEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "216735636.6469300",
+      "june_2025_zip_sha256": "9337332f590d79d9a13fd8cabb3291e15e27dd9d75a1f8911e4e6f14aa3ca017",
+      "symbol": "QUICKUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "214050424.26966",
+      "june_2025_zip_sha256": "dc363baac0d7322a1c75a4bc30d627fb139b05a57bf0449ca4db9c7e19ae540c",
+      "symbol": "API3USDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "211822880.1648400",
+      "june_2025_zip_sha256": "331ff6478e037c635c25b3747c5d565a3695d3e1e0d9772936cbaea7def57a17",
+      "symbol": "PIXELUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "209890904.9028000",
+      "june_2025_zip_sha256": "4f9261a6b3f7e3b04bb31d4beba6619fd729220559016dd52e5944bf06428434",
+      "symbol": "SUPERUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "209015239.8837580",
+      "june_2025_zip_sha256": "10eae68e41f8c75e633ca8b0a06a3d93c4e7017bbe49223853484a70be20e786",
+      "symbol": "BROCCOLIF3BUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "207770242.0030700",
+      "june_2025_zip_sha256": "c1fe26bbdf1d8de47b6d19ccc9c45716e5a8ddd6234769049e02e2c0c629a7ad",
+      "symbol": "PIPPINUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "206112372.1553",
+      "june_2025_zip_sha256": "f52c5a8330b9619a7aa3e7a9201608fb52191177d2ec29f2722cb296ecbe1bc8",
+      "symbol": "1INCHUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "206025413.47973",
+      "june_2025_zip_sha256": "66e0b797963b7a0bb3579e985cc582fa1c05a738ef815a834e8185f00b608475",
+      "symbol": "ZILUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "205291495.9437540",
+      "june_2025_zip_sha256": "ba60e1dc73430631fe4ef18831a514dfdf43928f12da569c55713a4138ceebd4",
+      "symbol": "DEGENUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "205126216.4934",
+      "june_2025_zip_sha256": "7358a2cd1f0dca57f8f900609630ba655f5367e2ed52f4528826ef039066af13",
+      "symbol": "EGLDUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "204739412.1321000",
+      "june_2025_zip_sha256": "639e05824d08355224b4028023c52a1728c5e3e5e537e64dc879e116f7d3ed2c",
+      "symbol": "NMRUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "199428867.5064000",
+      "june_2025_zip_sha256": "66d1422bea1c1f8270bc68afc7e449e7736f3b6625b7d6c7660903b87f3d1982",
+      "symbol": "CATIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "198331809.03346000",
+      "june_2025_zip_sha256": "ac2c38632fb2a8b705583918209421044972819af4f0439aedc5854b3162037f",
+      "symbol": "AUCTIONUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "197006599.9064600",
+      "june_2025_zip_sha256": "a63b7fecd9dd6d6e3c35474fcf8decd1ed63d8b83c4739adef2e690f8fbd588a",
+      "symbol": "STOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "195755860.01584000",
+      "june_2025_zip_sha256": "d90d4200b55e56fa9f3c548754d68f725c4a36239366f1c603928d9268aa695e",
+      "symbol": "AEVOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "193938802.3093",
+      "june_2025_zip_sha256": "3b6c3f535861d8d6b595d89877f6cad2d45752dedac63a8d03a1c35f15bd38cc",
+      "symbol": "ALICEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "193306638.1563800",
+      "june_2025_zip_sha256": "56814954c5d3db85bbc1b1909428c3625cd24d6c3aad410e793f8883fb7d6af9",
+      "symbol": "BLURUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "193209124.0232931",
+      "june_2025_zip_sha256": "6f682e8208b9d5964645325697a78bc28ab51dd0cda5ca9d112e94bd925b051f",
+      "symbol": "DOODUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "191253329.2969",
+      "june_2025_zip_sha256": "65c5e3a916ac1423bf2510d2d222ddd39c25c467516fac5ef841e4636e485842",
+      "symbol": "C98USDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "189147795.2852000",
+      "june_2025_zip_sha256": "71004c6ef74585134ad1dfd1032882c566ca564f9955c88caadbe432da5cb78b",
+      "symbol": "MOCAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "188974243.9131014",
+      "june_2025_zip_sha256": "8f6ded41d8fea6cbf8d0516429faabdea8f8df8a4af98f470b4b87b598835ef5",
+      "symbol": "1000CHEEMSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "188102920.1377700",
+      "june_2025_zip_sha256": "f2964d8bac874f10d664f5661790faa3fcea7ceb8ed9f0422ad0fcfeb93b12e2",
+      "symbol": "FXSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "186288468.18353",
+      "june_2025_zip_sha256": "cadede8c43a4fdecc1297e74e1a6d41c85a16d3f83e3caadde2bee1637534bc9",
+      "symbol": "ONEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "184749179.7712000",
+      "june_2025_zip_sha256": "c30811a1d0d7fc9a0c2aabe8d586381df97fae70af7b4ab925085015367423c6",
+      "symbol": "PLUMEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "175392527.6119290",
+      "june_2025_zip_sha256": "3e00880c39b4fc581c8d04434b75dc605b25fe14137a6bcca769e7bae42af8cc",
+      "symbol": "BANKUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "173035562.3717460",
+      "june_2025_zip_sha256": "88a11bb936c6b032884f38a785492a6fcf56bc4e533b1dc2b1eca565f0b576f4",
+      "symbol": "AWEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "171689285.9975700",
+      "june_2025_zip_sha256": "2c0ca79f7721e02b0ba96d548d018fb0129fdcba18d6053d224681ed609d256c",
+      "symbol": "VOXELUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "170624779.6270",
+      "june_2025_zip_sha256": "8d83715e7ca20601f2275adf1f777462f6e2a6ef1e9a4672e5c191dc00fa7f4e",
+      "symbol": "YFIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "166214717.775790",
+      "june_2025_zip_sha256": "8edd961e76d8949b5b8a82107eece0f68c4cae0cbe134601b39acfde6c7f3e82",
+      "symbol": "OMNIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "165893070.1308890",
+      "june_2025_zip_sha256": "61b10a4ef99d684066ae092500db96ddcc186298f429466040c35e1587596d63",
+      "symbol": "BEAMXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "165373035.6403000",
+      "june_2025_zip_sha256": "ecba66770cc12780c1987d6a9104032a4562672c84e6d4746ae5f669652c44ff",
+      "symbol": "PUNDIXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "164128680.6677000",
+      "june_2025_zip_sha256": "95557c57d43151d42db420481639e9de518086216a57875f7ce58e24f1632fef",
+      "symbol": "GASUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "161748629.464000",
+      "june_2025_zip_sha256": "9547d2145ee5989962285238249e24d5425d7c4ea31fc5282f33d993a4c1f9e7",
+      "symbol": "BSVUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "161590132.7787400",
+      "june_2025_zip_sha256": "95ad38bbb783f40553cab0c7ca427cdd92daea7fd8f0d6f0b8bf039cfb5168d4",
+      "symbol": "BBUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "159685021.5094900",
+      "june_2025_zip_sha256": "9fd89ec9cd8f4286e40f64abb62a2a64beeab8e52de7d560b467fe86731a4ac6",
+      "symbol": "PHAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "158285505.95430",
+      "june_2025_zip_sha256": "d630f288a83fdeb824be4ffed13b5fefb333677af3cfbacd0a19b017f7a2cd46",
+      "symbol": "LRCUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "154072381.54420",
+      "june_2025_zip_sha256": "4a523f7bf6e992cc1938e6f3561e7da4d6a0e739e5cc998beab2c71593d2a441",
+      "symbol": "ENJUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "153771380.5116000",
+      "june_2025_zip_sha256": "f9ab2ecb411d14b7d8714ac7656fb044fadb1b3c1387ec25be0506f80a121996",
+      "symbol": "VANRYUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "151634139.5223300",
+      "june_2025_zip_sha256": "98bee781cc94d2f1ea684a6d4e8c2dafa114ba759c54ce651d086e73b30d937f",
+      "symbol": "PONKEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "150355522.5891500",
+      "june_2025_zip_sha256": "1e0cbe7ecf7d90d0b90fe9fef344787e18825cbafc3ea70ff450c58e7e25f7ed",
+      "symbol": "DFUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "149821318.0524",
+      "june_2025_zip_sha256": "d68bf8572ffa7cf3cd2c51a4f637a8dfe5fad7253c8c89d21be4024f72eb4cb7",
+      "symbol": "QTUMUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "149454597.8647000",
+      "june_2025_zip_sha256": "ff6fcaad880acb4cef18fe72d29e2a001a1be3a16a6347b46c7977ad4d081a3c",
+      "symbol": "LUNA2USDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "148521238.881700",
+      "june_2025_zip_sha256": "b1fc7bf65b4ef0a6d497480bbdb2f4cfe266a219aeaec2cc9af87f500a59bc96",
+      "symbol": "AIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "147378718.2785000",
+      "june_2025_zip_sha256": "2a32fbd15dcb78af41a399f8ac7cb6fd0e803a1cdc747ed118db92ffb2069a78",
+      "symbol": "1000XUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "146634709.0081000",
+      "june_2025_zip_sha256": "9fa4511a815772dd347311d4635e37ee6e8d81f3050953703f1c1cf2b59069b5",
+      "symbol": "YGGUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "146613228.2008000",
+      "june_2025_zip_sha256": "46298436c2e0b1b3f3c6f40f3cb6adf1fe5877746d8874c6ded131106ae66578",
+      "symbol": "DRIFTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "144086667.2368",
+      "june_2025_zip_sha256": "29e916ffaf2ca0d34cc6811f95c0e88a72cb902b5432f5ee8c193bb06c3c90f0",
+      "symbol": "KSMUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "141834948.0160200",
+      "june_2025_zip_sha256": "dd07337323183da574278094d7525ef39f4fefe4553558e0ba1bd7a036ea1c02",
+      "symbol": "EPICUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "140318026.54641",
+      "june_2025_zip_sha256": "e3efc230165d55c25c5089e188a257c27c65123f284d800e21555d9e42fad44b",
+      "symbol": "RLCUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "138754550.0008",
+      "june_2025_zip_sha256": "fdf8544546ebde740e45a65cda6368bd1b70f257818685e83ca21c5dff7ebd52",
+      "symbol": "BAKEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "136929815.2117510",
+      "june_2025_zip_sha256": "18ec28841cb37bde319368e53e7d3877e2429511fd870921a1f152c1ce0c86af",
+      "symbol": "B3USDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "135300501.87791",
+      "june_2025_zip_sha256": "951f8d0d63561d90534ada26f7c845e71a6ec05637267cbf96f0de94897d29f5",
+      "symbol": "COTIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "133283742.0458900",
+      "june_2025_zip_sha256": "86d91c7e0b5feb34858c4ab23ec0f482658025081784e3861419b0283aaa44a2",
+      "symbol": "MYROUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "132786543.8891000",
+      "june_2025_zip_sha256": "76ba62e24a3d36b98278bd8aa04f423d868e4a80bd9f847f448fc427c3911e35",
+      "symbol": "ASRUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "132581096.566105",
+      "june_2025_zip_sha256": "fd3e3d0277049832ee41c5b0cfe79502cf79c603e50ee0f2db769106a577f6c8",
+      "symbol": "HOTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "131617418.616500",
+      "june_2025_zip_sha256": "fd9e0a7e702bb73014a97e50f6b68e0d3f809d9071ab171a124c582c9fddb904",
+      "symbol": "ZETAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "128188173.1100000",
+      "june_2025_zip_sha256": "386eb8e85409f45c5857fe45a25b3f9dcc89742b7b25248f7edb3fb28cb5bce1",
+      "symbol": "EDUUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "128018752.4320000",
+      "june_2025_zip_sha256": "fb0997405fb1fe5df8db6ae9bb54540069882a63f48e8f09f8e3885ff586c71d",
+      "symbol": "REDUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "127236025.2726296",
+      "june_2025_zip_sha256": "17749cf8d979d6a34fa3a9e709b51d76ee5b81bf7f7896659074a702ea4202d0",
+      "symbol": "XVGUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "126816947.63870",
+      "june_2025_zip_sha256": "3632fa2e6eb6faa551fe690c6a85e3a06f9f2fbb550d695f885cf1e985c27a2a",
+      "symbol": "BELUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "126479999.82549000",
+      "june_2025_zip_sha256": "5fe988884b0616b7e9266b63ba9b79c05bc4ae3bec1d1b6d57216ebbc6943dca",
+      "symbol": "GMXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "124254340.8045300",
+      "june_2025_zip_sha256": "113c3f832d4e2071a04eeb6a4ade152ca604f8a515beb7dd4a7a194d5259cb5d",
+      "symbol": "CVCUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "122335859.5505",
+      "june_2025_zip_sha256": "abb45ed4972bcdc35cf4c6e2ed907db1e9601e4080d0ccc259965af91805ec38",
+      "symbol": "STORJUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "121931835.50235000",
+      "june_2025_zip_sha256": "3e394bec060af8a9ef02945be66278d7faeceb45c53736b71aab5c775f6bf261",
+      "symbol": "MORPHOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "120003081.3916500",
+      "june_2025_zip_sha256": "ec09ed8d065b8ebe8dfa9f4abea9f2fdc3e465829e090fc7206535d4fdded8af",
+      "symbol": "FHEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "119119700.5183240",
+      "june_2025_zip_sha256": "edd1a17e953af93d5d1d40931abf3be48cbc6b33ce04134114ce32037d38cbe5",
+      "symbol": "SPELLUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "118248788.8809430",
+      "june_2025_zip_sha256": "648e3b9e1b5ef13618be0088287c9ea04f4ddb2dca18d5de51d90505446d65cb",
+      "symbol": "CKBUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "118169640.8478100",
+      "june_2025_zip_sha256": "d887977a23023afbdca81cdcc68669f991f88f1d4d07e3a51d9a5731780cab93",
+      "symbol": "DYMUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "117260481.992180",
+      "june_2025_zip_sha256": "136bfa6ea45af5c2a482ae826d46ba1a81bc4c7772bc389f37a15056ed919ecd",
+      "symbol": "ANKRUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "116688248.88115000",
+      "june_2025_zip_sha256": "34c97f676e3917746597f7f7da1230257bfede35258e8009a674507755372177",
+      "symbol": "SONICUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "115794746.44689",
+      "june_2025_zip_sha256": "2fd6f79109fcc5470f9c2c0fd690954e78c5571fd43bc604ec6d6ced0a22fa3b",
+      "symbol": "WOOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "115769905.59290",
+      "june_2025_zip_sha256": "e1a82ab226a26b86b22cbe6e58add6640dc8e5b6050c408ea6a4e7aa676464d2",
+      "symbol": "ARPAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "113938454.8236000",
+      "june_2025_zip_sha256": "380f83627cbcde33a1480f587f986b7734f91ad306ff4beb861763aacba66e67",
+      "symbol": "FISUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "113888766.0854100",
+      "june_2025_zip_sha256": "ea4a36aecc832babd5a971e01d67ae574bf1c7ed65f01ff3fdf4e1746026710c",
+      "symbol": "IDUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "113795046.36436000",
+      "june_2025_zip_sha256": "87a278ab926017578165917f209844c297f715d6d063f0133637eb3e5d1872b3",
+      "symbol": "TNSRUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "113435444.3992",
+      "june_2025_zip_sha256": "7d1d9e13b87731922632bbe8235f9851920e47205ff1bb3517b807ec3573c378",
+      "symbol": "CHRUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "112374943.6149300",
+      "june_2025_zip_sha256": "9b19ad1241c789f1c9d21816c8428bd60d0e9fc4c50aae12fcf9db2be16cd5c5",
+      "symbol": "CGPTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "110674512.2666000",
+      "june_2025_zip_sha256": "12cf7889b32869faf33d7244b907131395fde6198caaa753a619ebebfdbbbc08",
+      "symbol": "SAFEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "107344828.62490000",
+      "june_2025_zip_sha256": "756efa41270aa821fdb3cce63b9494e5d2304e6b2aabd2d4079437c2de11f480",
+      "symbol": "MOVRUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "106349231.741300",
+      "june_2025_zip_sha256": "071f2602d85b0d1537b664cb5a9d72310dba13888bab929cfb854e072914d861",
+      "symbol": "METISUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "105654009.2861000",
+      "june_2025_zip_sha256": "6b8fd67854aad9e3f2d92ff0ab48bfcbea3ed8edffb90ee655c9321dea3d4e88",
+      "symbol": "SCRUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "105003117.3230",
+      "june_2025_zip_sha256": "0a30d624090f0a0356cb2cdb2fe3be9dc7221617192dbb1e7e4b478424a491f8",
+      "symbol": "ATAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "104035456.23323",
+      "june_2025_zip_sha256": "82f6cb9bb187152078aba0779835c15ed44cfd953091f889082f63d4bfe26120",
+      "symbol": "DASHUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "103752061.16174",
+      "june_2025_zip_sha256": "90322643dca59d157c64123bbb45c650ca41d49d020640ff169edc101d838c7c",
+      "symbol": "CELRUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "103071585.51138",
+      "june_2025_zip_sha256": "f9ded43ddf2d7a8586f0ae09479a2ad204d8eb260532c26fc783e3966e504418",
+      "symbol": "BATUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "101887848.8739000",
+      "june_2025_zip_sha256": "3485dd1d95a226bd82413ff51446e6598cba97b8873eacffb6edafb412d03354",
+      "symbol": "KDAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "100766436.3893270",
+      "june_2025_zip_sha256": "dbeb8ce4004ae1278a4d4f84dcf27814dffd2147cfe2f1ee4ff2ae3b6f9da32d",
+      "symbol": "JSTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "98990673.4853000",
+      "june_2025_zip_sha256": "a273a469109b71e39d2cf9ae92b88398a93af26b777cead36f0e323ae8f01e77",
+      "symbol": "MAVIAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "98245017.9665300",
+      "june_2025_zip_sha256": "8413191ea64bcb1a131158c0db0dd92ccb47b451f1ffa1320b99bf86ae881975",
+      "symbol": "SWELLUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "97598073.7557200",
+      "june_2025_zip_sha256": "894b852448ff9f4ef1c5d888a54f4bca5d9490fd0323823ae489d241b9ca3a02",
+      "symbol": "BANUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "97515060.5172800",
+      "june_2025_zip_sha256": "c9282012315c1dd07761d4438560073024e2ed12dfeae85c881886fd570eea66",
+      "symbol": "HIGHUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "97420373.51338",
+      "june_2025_zip_sha256": "aeb8258a07459d59d98aee1f4064349a25ac090208fab3af1cac8f46d6ca18de",
+      "symbol": "NKNUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "94570645.8328",
+      "june_2025_zip_sha256": "08d586f00ae8584e467574a2f190bf6af67440cdb2ade8cc6a83008a9296c6d8",
+      "symbol": "GTCUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "93927358.9005",
+      "june_2025_zip_sha256": "5dc7785afe54363a19205f1ae979f839af2ac893ca8c21a353aa25cc3884c1fa",
+      "symbol": "SFPUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "93656070.13258",
+      "june_2025_zip_sha256": "29de5db17dfe8d19d9419f57b929a0c78b13fd562e70b8170df39cd85341f5a5",
+      "symbol": "ONTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "93556139.8339000",
+      "june_2025_zip_sha256": "6b497db5d41792eb2a543e7fa39d897cfdfbe8f38b74a84f738027edab2d219b",
+      "symbol": "OGUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "93251268.9970000",
+      "june_2025_zip_sha256": "768e6c0c92c2bae95787f61f3360d6878b337c27ed71e5a51cdf5bb1681bda63",
+      "symbol": "SYNUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "93115748.4879500",
+      "june_2025_zip_sha256": "563a2a8679b00f3686c4e57bab8747fa43dd4bdbff5a97755cfda056069b93c0",
+      "symbol": "REIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "92188075.46353000",
+      "june_2025_zip_sha256": "77894392557ec053da4ff94b1f74da0415e8e6793eb748308237895e4c0c872e",
+      "symbol": "ACXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "91002367.083215",
+      "june_2025_zip_sha256": "af8e6d07856387155b32f19d04020468a10dc95f82d4be0deab7a3dfea3cc60c",
+      "symbol": "DENTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "90274943.48920000",
+      "june_2025_zip_sha256": "52f2c4f761441eb47881866be56b3ff584e09bc5e387dcd9d5c223917aa60c12",
+      "symbol": "AKTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "88384328.9136500",
+      "june_2025_zip_sha256": "eb1833600193575f107964ed5b3a09339e7ebbc5be3c7494a89de620d9e22536",
+      "symbol": "KOMAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "88203102.4026300",
+      "june_2025_zip_sha256": "dc7bfcea3b5b4aa8ef2326003c4918fe7219295ff5db2c5658426f7e4bf62941",
+      "symbol": "JOEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "87357376.97231200",
+      "june_2025_zip_sha256": "e9d59f72fef59743b89d255dbe331a9d15da35019e72096eed26c53d2581e66b",
+      "symbol": "NFPUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "86461360.6937490",
+      "june_2025_zip_sha256": "0bffcf59d763add68e30c0b19dd5197d2827ec2090b93d53c66093ee97d0caff",
+      "symbol": "ASTRUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "85966502.3790000",
+      "june_2025_zip_sha256": "c8c3bf67aec25c428d1e36e9b405fa80981b66d14c1ded08796055a5f73dc662",
+      "symbol": "ARKUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "85857707.4758300",
+      "june_2025_zip_sha256": "8004f34fe5132ab9da24ab58093e6fbd322feb9ff520121810c84fe53f93be82",
+      "symbol": "GLMUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "85706566.8476000",
+      "june_2025_zip_sha256": "a241b93ab6b6f6f8e25600af0ddd17d0d19738ae447c1dfa7d3ce3b2533d3348",
+      "symbol": "PHBUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "85480070.5705030",
+      "june_2025_zip_sha256": "2af2fecffa4ace0c54452ed8a7ae7a87f185af654cb2277ad175abbaaa7c74db",
+      "symbol": "DOLOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "85352200.6915",
+      "june_2025_zip_sha256": "9e303ac4ae396f80da365c00c451ce38ac9a280fe1dd020132fbdc5f45f00895",
+      "symbol": "CTSIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "85000242.56450",
+      "june_2025_zip_sha256": "50ff1acdae02eb3a1303c5cf2f95a85074755e96912b28e8fa754f3f1399f04a",
+      "symbol": "KNCUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "84728893.3922200",
+      "june_2025_zip_sha256": "bde7a6447dc0f7fc5446110735bce8216d9b48635a90ba944daf3133fcd54ec1",
+      "symbol": "HEIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "84332256.5964100",
+      "june_2025_zip_sha256": "2bcf31b397e1512db5ebb8915d8f4ba23136a0ef3bd42fe82406bf7200818e37",
+      "symbol": "HOOKUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "84035443.14566",
+      "june_2025_zip_sha256": "87ef7c6f9f2459c0fc171273e2c67864398dda97b9421de3ab5af3c4adf6e8c5",
+      "symbol": "BANDUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "83535286.8566600",
+      "june_2025_zip_sha256": "4b018ec2b91a52cb268217c8b1b4f28e9f7e2344937751b339cdea8a96806774",
+      "symbol": "TOKENUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "82860703.1363200",
+      "june_2025_zip_sha256": "19578419307ad8ebbffe7ef9789abf3ac3ab42e1e7c69e64b6887d08380eb090",
+      "symbol": "MBOXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "82848292.95991",
+      "june_2025_zip_sha256": "129770d3b65decd0f5dae589b9410af30f304df918db79a7adf0af1a4ae323fb",
+      "symbol": "1000XECUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "82571976.4498400",
+      "june_2025_zip_sha256": "c441ebfc50054a8e3c36df872290c453436bffc54be1b0fca6ee887e4d94f7d1",
+      "symbol": "POLYXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "82075899.9070000",
+      "june_2025_zip_sha256": "65862b9e2b1d4e15233df608e82b503e467f35b45a0167747ebe8d9acaf7e969",
+      "symbol": "BICOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "80374281.7478200",
+      "june_2025_zip_sha256": "4597c80f87af039246195dd80f2fe0479112e310918f1d21462851dfc85ec12b",
+      "symbol": "RONINUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "79872550.1740000",
+      "june_2025_zip_sha256": "cad68187487411bb61612f9d58102a9c61571c93e4ff698d5ea86cbe8b5f1065",
+      "symbol": "STGUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "79471962.47995",
+      "june_2025_zip_sha256": "188c875386df717b3762063fc40dfe97365beefc65ff69296a4b7a5e7ba2a636",
+      "symbol": "DUSKUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "78951970.5964500",
+      "june_2025_zip_sha256": "0010c63e79b41058ea7046416b8d90a06ec9dccf3af5be39656f3af988249190",
+      "symbol": "BNTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "77600415.8866400",
+      "june_2025_zip_sha256": "70f2df3ee904c1ec71daf5050b66b3e3e5d91accb5ea431f5ac38ce5ea8d7014",
+      "symbol": "TRUUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "76363076.2754900",
+      "june_2025_zip_sha256": "2a6195d5b9210b347d1838e36d8435990a7700b86b7d8ff672912e60e64bc7f8",
+      "symbol": "DUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "75165788.6905066",
+      "june_2025_zip_sha256": "2ada79b808af3ff3ea0aedcdfa967e0133fe7b38b74a21888d3324dd3dd13e3b",
+      "symbol": "1000WHYUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "74125686.1436900",
+      "june_2025_zip_sha256": "e7de701a63493bde4e689c2752ff2f39248df640674d50ee3b0afdf097d8efe2",
+      "symbol": "MAVUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "72683867.92933600",
+      "june_2025_zip_sha256": "a9f26819f90adf6d2cce095504906d6693d9bc41625c9e4d6ed87e6d79409ef0",
+      "symbol": "ACEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "71949673.58333000",
+      "june_2025_zip_sha256": "a0b424aeae4715d428ab3e56fc43530fc752a62b748c476c02d9bff483d38c3b",
+      "symbol": "LUMIAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "71880150.7261810",
+      "june_2025_zip_sha256": "c072f832ea25f92a67b3922a85acbdf22c0ce725ee89b82688b61ac3b3596dd7",
+      "symbol": "SUNUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "71321445.0729300",
+      "june_2025_zip_sha256": "2bef45d0cdb921cf195eb325dd093ddf2e8e5d381d42f30355047908ae414034",
+      "symbol": "LOKAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "70234429.688300",
+      "june_2025_zip_sha256": "1c4ed3fecfeca327f90f4abf57b1c0343cb6a2c8522838536e306eacbda31b0e",
+      "symbol": "TWTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "68262881.53358",
+      "june_2025_zip_sha256": "740e6d28dfbe66279d376ee78739acf7f16774a90bd273ed11540dc1dc188131",
+      "symbol": "SKLUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "68111322.7328700",
+      "june_2025_zip_sha256": "59909e5998cb41e23d340c25e37820f3e35a75ae16f2c347b8bf177b46a47dea",
+      "symbol": "RDNTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "66832019.0709800",
+      "june_2025_zip_sha256": "09c0d36867b3154ba8fc8dfda4a35e9fed3b25181b8b036082a7cd239f8d6d8a",
+      "symbol": "PUMPUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "65284818.1940",
+      "june_2025_zip_sha256": "617fb5f7fb5362c2c2acd77b0f6096e388f31b9c79803c73a72cf7f5658cd6ed",
+      "symbol": "MTLUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "64803575.0948200",
+      "june_2025_zip_sha256": "2154b07b718f6624f437646e4b4ffd55df4b1354cab44dcbc2ae22200c7ff280",
+      "symbol": "WAXPUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "63926141.3364900",
+      "june_2025_zip_sha256": "b87bd26d80cd9e8df921cf3fe4b76a54b023e7eff0730997f95ffe0abb34dcba",
+      "symbol": "HIVEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "63694759.004100",
+      "june_2025_zip_sha256": "568ae64bb7cd0c1b126b64b085171e7803686ad11ad6298fed6c7bddadd96f5f",
+      "symbol": "LSKUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "63684759.1222180",
+      "june_2025_zip_sha256": "bfe2285e93d9e9320b80e030f65fb656a0cc57e8c65245a5ce8ceacc9200503c",
+      "symbol": "TLMUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "61017730.5407200",
+      "june_2025_zip_sha256": "10f598d9b4505323820498661cf37f6e873e45d67fa7a77192d150fee486d49a",
+      "symbol": "VELODROMEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "59505833.2405400",
+      "june_2025_zip_sha256": "6f795948c45ec584af922de4f7084fd0098fd4f96a1e5c11941b79f0c5dc96c9",
+      "symbol": "PERPUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "59039758.985000",
+      "june_2025_zip_sha256": "fbba3350c9d2fe554685bbd846f917a4e7229f5607230f27c360aac00d935bcc",
+      "symbol": "ILVUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "58015699.0707000",
+      "june_2025_zip_sha256": "a1da4411af2e9ff13acf9aaeb0bca852eb9d6a8b9625ec9dbec132bc6f2269d8",
+      "symbol": "GHSTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "57053251.3752130",
+      "june_2025_zip_sha256": "cbd38e2d3e750a3ab703c20d3c56e89cfd36c87745df13dd1c47bda5d9c29400",
+      "symbol": "VTHOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "55018377.1087000",
+      "june_2025_zip_sha256": "d571eb85a5050564f38152c76266c044b4fad5b198fb809aa425ffbdbf8eeac5",
+      "symbol": "DIAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "54598934.21183000",
+      "june_2025_zip_sha256": "79668c8e37be821d0db51951c40b4e52122c2e819bed69234fab56d4aa26e552",
+      "symbol": "AVAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "54529170.7176600",
+      "june_2025_zip_sha256": "e3bfb3e6cbda4fc348bfb6cfdf802a5afc3dbbc5c68930f1e882ac6cc6c95a39",
+      "symbol": "MLNUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "54403864.0362700",
+      "june_2025_zip_sha256": "89860c014ab0817e0acda5773a1e1b45a03e44e236c482272d739412e38b64e5",
+      "symbol": "OXTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "54298469.5110000",
+      "june_2025_zip_sha256": "a11e2d574070ab11f743893dd2f54ca8bacdcfcdbe2ce39c051e9c66e0bfeddd",
+      "symbol": "POWRUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "52493686.2283280",
+      "june_2025_zip_sha256": "d5b44e452396706ee1fb6b90560f03211374ec06574b9f1f17376b39e0f7bacc",
+      "symbol": "COSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "51471540.4822100",
+      "june_2025_zip_sha256": "782c26ea9673c404f4e75e38aac42bb7dcbd2d9a94aadad0ef4eb0bebaed1ff0",
+      "symbol": "ALPINEUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "50052915.405300",
+      "june_2025_zip_sha256": "a267d1e89e7d99de75f98bb821690bc193064b3d9ae5edf9ba59e1dea23cb7ae",
+      "symbol": "ETHWUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "49222731.304800",
+      "june_2025_zip_sha256": "f6e481122e0ecdc2014739821ba40e686ca09f2cdd45bb6823c3bcd2edeb467b",
+      "symbol": "NTRNUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "48589033.5554000",
+      "june_2025_zip_sha256": "3289fd5a51f6d27897c128f5066adbd24c86a053d1add9c0fd44a792b8c22e37",
+      "symbol": "FLUXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "47821569.7923200",
+      "june_2025_zip_sha256": "3493801461874c5ba81899aa3e73753b22e10368c0fa79cb53ad83414ce961ac",
+      "symbol": "GUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "47305601.4192480",
+      "june_2025_zip_sha256": "8351035b7dbe60023def4ec2997041be821ce2cae50d992b608dd46583b72778",
+      "symbol": "DODOXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "46819041.1619000",
+      "june_2025_zip_sha256": "e19d4294a8ed0b047463dc1b0f59e780daa4ea523cdd956803adf86c4c35e830",
+      "symbol": "XVSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "43919354.6488800",
+      "june_2025_zip_sha256": "f7edf2ef2e776aa5a77facc75617796817d4ea20239a07455a35a953d6ca611f",
+      "symbol": "RIFUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "42776741.4990600",
+      "june_2025_zip_sha256": "95019506197afd8e997ed56e118b9379899955dbcde52a85e05a156271c7ed84",
+      "symbol": "ONGUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "42771189.0944000",
+      "june_2025_zip_sha256": "0a310ee6fd29a2a69b9c3b5d51a78ca48e135afc218cb3dcc45c0642ffae7ca0",
+      "symbol": "FORTHUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "41412743.184990",
+      "june_2025_zip_sha256": "0d20d4a843bb3e9225ef61a35e808a2dd32fd9d3e208c153a1fb8a3483926f86",
+      "symbol": "STEEMUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "39824802.8114000",
+      "june_2025_zip_sha256": "b5bf47dfa1bc8d86d0ef5c582fbc1c37f38518dd05c057621ef1d1e084e87053",
+      "symbol": "VICUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "37662338.8378",
+      "june_2025_zip_sha256": "4f6dc6040e270c01af2c0410bf3705d577172057bfb3855f5e3e6850b9daca40",
+      "symbol": "DEFIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "37620677.07740000",
+      "june_2025_zip_sha256": "92302aa2a802f37ec44fec32db8bfef0febe0c2ce29415389c3c3cacaa7a91bf",
+      "symbol": "SANTOSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "37422318.2813500",
+      "june_2025_zip_sha256": "a1d5356bf6919c23305aa2efe01e7e8aba59afd50b4359fd1ce2635c9e2b1cdd",
+      "symbol": "SYSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "34477557.5690600",
+      "june_2025_zip_sha256": "55fd3da5f3d29e122a24fe6327f384e3b22c4955dd2b07ca3907338ac83bfbc8",
+      "symbol": "FIOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "32446906.1429000",
+      "june_2025_zip_sha256": "8c002c3460c127f9cf3c22d49dd7ebae7929abd987c2f0fb771817c9b53ec236",
+      "symbol": "SCRTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "31226495.2450500",
+      "june_2025_zip_sha256": "f01196de416af157e6feb7330d0645799d19f8e8b3b2c190739cb6d7e9057c46",
+      "symbol": "SLERFUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "1eacf16625b7e9ac2128365f3a974202240d82954be00bfc7ecb4d76635d1311",
+      "symbol": "AGIXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "7aba9c5e5a364a7704891404e02026eea552eaea5f91dc49be54649eddd7a177",
+      "symbol": "ALPACAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "394a93555c7544c97aa67f0181bad465f5b224add52bfb799f41d0cf0abf7a5c",
+      "symbol": "AMBUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "fb741b75bbcaa99c6ae1beb1f1bbb2ac73fc05325b76aff36881a3baba588adb",
+      "symbol": "BADGERUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "5133f57748b572ff455731c62ed1908f54a9681dd6c23612b4ff287ab6298273",
+      "symbol": "BALUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "237ae3b6ae96fcaffac8b35db8dabb9f5e069dc3260fe7004db2a605c87445bd",
+      "symbol": "BLZUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "e281b8c023e9ac933001c693a9aeaa59c290bee200be2bb702115c0f4953e64e",
+      "symbol": "BNXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "2548e9b4733ca8f7565cdfa6927affa768bb6173157cd54e3d688503f5175550",
+      "symbol": "BONDUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "2129f4029671fc6a1e25132bec091462dfd32a770a78058131973eda50dcbdf3",
+      "symbol": "BTCSTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "05f87fbe366bb72671f146794497b333f1296d67941d69723d585ebaf75134a5",
+      "symbol": "COMBOUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "6ff316d607d482305c4f5f2555a3ad19338dfc7f5c36780276e3f5ee1c9387b9",
+      "symbol": "CVXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "fd2a80b66291d62a5c8320adb0f152e0f8ee3a5a68962f4ad9b0bdf626036710",
+      "symbol": "DARUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "17cdc8d03b1ca7b5936290903cb13c5db1fd57e0b474f8243b9357d6b25f0d3b",
+      "symbol": "DGBUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "c7f0de45851298c895b81230a2ac966cb1f686e5bd4279dfb375491ce1069edf",
+      "symbol": "FTMUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "e1e44b3a99175f6a480d88f55753c0b5609041b7076a85b788de25157c4307c1",
+      "symbol": "FTTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "3859392d086209d9667d99fbe0eb4a0590f216d8427cff8b5195dee3c419fa2e",
+      "symbol": "GLMRUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "b338f76595b6e591355565b3720c677a52429f223c7dcc1b151f1bd515314dea",
+      "symbol": "IDEXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "6836d59f66ff15a671cefbf88d830b592e37d4413c28767ee87d9e4800fc5b35",
+      "symbol": "KEYUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "a9085dc0d1d1c097c2d1c37514a76b407c9b14734dd552b5b82e10aea81f1e96",
+      "symbol": "KLAYUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "a10e18aab5caa6c0fec0dc23fcd2b1ce61782a640f3fcb9df3a5f42a65e19f19",
+      "symbol": "LINAUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "ee3253eb654cde75cbed9177a61a07d4eff2ca987482b94adf8261bf1301b85c",
+      "symbol": "LITUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "1f6e300dc880fcea5c4d81b9bc6a5b62c535a8e102eddaffb8a47fd596673b9d",
+      "symbol": "LOOMUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "7c0c8b5c2e21e04ef26638212287e623240ac7aa1a44d3ab22b99a93e4f31056",
+      "symbol": "MDTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "1c7254fd1b7db997468661f3ca0f76df9ba215fd66461fa19c5a5d976b75c644",
+      "symbol": "NULSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "1a82f0b8fb7471236a4fd1a7efb4639208f58ed4b731f11dcbfdce5897109cf4",
+      "symbol": "OCEANUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "099929d138a7eda017544e8e7ecf5f756222b68a2c0e54904e7c28dfb322f541",
+      "symbol": "OMGUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "96d6e33f67da15da452c9134ccd5f22a6f1689b4047ee37a1170cdbb13329534",
+      "symbol": "ORBSUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "34bad9af98e4c5f2e86df6d6d9e712898a7eea639dcc056f7033f9e97ccdf60c",
+      "symbol": "RADUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "be0233c506cf6d0870fba3f1fb2154df7f51f7cbdf9610b1995931c069e2a115",
+      "symbol": "RAYUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "7a891050943fa4a5ccd509c5e71f842acf0ce2bc3c945dacc74983b06acb2b55",
+      "symbol": "REEFUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "20d16b6a611a58002ac0d6663a8bffa6bb45300f58af0b58f908f1e93088216e",
+      "symbol": "RENUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "29301de4d831ca7a5df4e4803dd84ef0af8c61a1e20516fc454b794aee8ce8f1",
+      "symbol": "SCUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "5c95c4a8c1324728c69d60bb9e814740b2a1a999af5d5f11ceee600823ad9013",
+      "symbol": "SLPUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "707dcb3f12c90ccbe2a25e17c6cf8b8f5226b722504797650eabd1fa5a11fd11",
+      "symbol": "SNTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "9f0d5fedb268e6c04f432e01e001723123c4bd283def60803441a6086f8864f0",
+      "symbol": "STMXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "6a2126231fad61038662a0a72d8cc3953e7d8d9f1de512346aa0ca7c662e670f",
+      "symbol": "STPTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "b63d23d9629cce6b82bda32fe211db360bfa131c14ac8104bdfd6b7a6544e10e",
+      "symbol": "STRAXUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "718f2feb68511e2190be4f25d2a01e4b9d48343bbd4735704993908488294766",
+      "symbol": "TROYUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "a6cada15f65dcfad3f6b26c44dbc8a089050cdb09d59fe6d06a14af7be154872",
+      "symbol": "UNFIUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "5bdc56684167b80de057ff9940529ce8d7f081ee03828c65f805c0f434242786",
+      "symbol": "VIDTUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "b7418c71f35b01acc2af96cf2f71d3db487d2692df33ed690b087d61e336a81b",
+      "symbol": "WAVESUSDT"
+    },
+    {
+      "june_2025_hourly_rows": 720,
+      "june_2025_quote_volume": "0",
+      "june_2025_zip_sha256": "87ec3ee9a6b5b0191e7d67d451a6a905fbb592e650d261ea8017ae15b0c55d0a",
+      "symbol": "XEMUSDT"
+    }
+  ],
+  "screen_month": "2025-06",
+  "selected_count": 40,
+  "selected_symbols": [
+    "BTCUSDT",
+    "ETHUSDT",
+    "SOLUSDT",
+    "1000PEPEUSDT",
+    "XRPUSDT",
+    "DOGEUSDT",
+    "SUIUSDT",
+    "FARTCOINUSDT",
+    "WIFUSDT",
+    "AAVEUSDT",
+    "HYPEUSDT",
+    "ADAUSDT",
+    "FUNUSDT",
+    "UNIUSDT",
+    "ENAUSDT",
+    "TRUMPUSDT",
+    "BNBUSDT",
+    "LINKUSDT",
+    "MASKUSDT",
+    "BCHUSDT",
+    "AVAXUSDT",
+    "VIRTUALUSDT",
+    "RVNUSDT",
+    "LPTUSDT",
+    "SEIUSDT",
+    "TRBUSDT",
+    "ANIMEUSDT",
+    "OPUSDT",
+    "LTCUSDT",
+    "MOODENGUSDT",
+    "SPXUSDT",
+    "WLDUSDT",
+    "BANANAS31USDT",
+    "WCTUSDT",
+    "NEIROUSDT",
+    "SOPHUSDT",
+    "DOTUSDT",
+    "TAOUSDT",
+    "ARBUSDT",
+    "NEARUSDT"
+  ],
+  "selection_rule": "Top 40 complete June 2025 symbols by contract quote volume descending, symbol ascending."
+}

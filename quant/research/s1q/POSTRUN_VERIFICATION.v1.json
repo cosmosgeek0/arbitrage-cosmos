@@ -1,0 +1,28 @@
+{
+  "authoritative_count_semantics": {
+    "frozen_field": "publisher_checksum_count",
+    "frozen_value": 1560,
+    "interpret_as": "source_cell_count",
+    "publisher_checksums_present": 1554,
+    "source_cells": 1560,
+    "unavailable_cells": 6,
+    "verified_non_holdout_zip_payloads": 1200,
+    "holdout_zip_payloads_deferred_unread_unhashed": 354
+  },
+  "bindings": {
+    "freeze.v1.json": "12fe50842ff15020d1051a43ebf74863336c2a2a6cfb27fa74d178c361d110f1",
+    "result.v1.json": "c87894923c2296eef74bc434c595418f6c2ad3d5c8d2aa8b48c7e1b9cd5df5dd",
+    "source_manifest.v1.json": "57a2fbd73579a830f67a54180366b5af26383475187060df0859b46c03c776d0"
+  },
+  "created_at": "2026-07-29T16:45:53Z",
+  "effect": {
+    "frozen_artifacts_mutated": false,
+    "holdout_opened": false,
+    "outcomes_recomputed": false,
+    "protocol_changed": false,
+    "research_verdict_changed": false,
+    "run_repeated": false
+  },
+  "finding": "The frozen publisher_checksum_count field counts manifest source cells, not present publisher checksums. Six explicit UNAVAILABLE FUNUSDT holdout cells have no ZIP or sidecar.",
+  "schema": "cosmos.s1q.postrun_verification.v1"
+}

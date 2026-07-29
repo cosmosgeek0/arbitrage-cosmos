@@ -46,6 +46,7 @@
     "unselectedMinuteArchiveMayBeAbsent": true,
     "optionalMinuteChecksumWithoutArchiveBodyIsMissingNotVerified": true,
     "selectedEventMinuteArchiveMustBeVerified": true,
+    "missingRequiredDailyArchive": "TERMINAL_UNMEASURED_BEFORE_DEVELOPMENT_OPEN",
     "spotTimestampUnitFromUtc": "2025-01-01T00:00:00Z",
     "spotTimestampUnit": "MICROSECONDS",
     "archiveFilesMayBeReplacedByPublisher": true,
@@ -67,6 +68,8 @@
     "maximumHoldoutCompressedBytes": 4294967296,
     "streamDownloadsToDisk": true,
     "concurrentExternalParentCreationIsRaceSafe": true,
+    "preOutcomeGitScopeAndCleanlinessRequired": true,
+    "terminalRecoveryDirtyException": "EXACT_BYTE_IDENTICAL_TRACKED_RESULT_ONLY",
     "rawArchiveRootMustBeOutsideGit": true
   },
   "universe": {

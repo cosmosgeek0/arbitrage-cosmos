@@ -20,6 +20,9 @@ or money authority.
 - Every present archive is matched to its official SHA-256 sidecar; an absent
   minute archive, including a sidecar whose body returns 404, remains missing
   evidence and becomes terminal only if a selected event requires it.
+- An absent required daily archive is sealed in the acquisition receipt and
+  terminalizes `UNMEASURED` before the development marker; neither development
+  nor holdout may be opened to work around the missing cross-section.
 - Development makes one terminal decision. Holdout bytes may be present but cannot
   be decompressed until one immutable candidate passes all development gates.
   After a result exists, `verify` may re-read the same checksum-bound bytes only
@@ -33,7 +36,7 @@ or money authority.
 Run from `quant/` with the repository's pinned environment:
 
 ```sh
-export VG3_STATE_ROOT=/Users/cosmosgeek/.codex/evidence/cosmos-vg3-public-volume-v1-4ddd-r3
+export VG3_STATE_ROOT=/Users/cosmosgeek/.codex/evidence/cosmos-vg3-public-volume-v1-4ddd-r4
 PYTHONPATH=src:. .venv/bin/python research/vg3/experiment.py discover
 git add research/vg3
 git commit -m "research(vg3): preregister public volume-shock reversal"

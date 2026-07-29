@@ -61,9 +61,9 @@ PYPROJECT_PATH: Final = QUANT_ROOT / "pyproject.toml"
 UV_LOCK_PATH: Final = QUANT_ROOT / "uv.lock"
 
 BASE_COMMIT: Final = "a169b123fb186d1943a75ad648552c4d95be1be1"
-PROTOCOL_SHA256: Final = "97af90d4c2e50c5f5cc9609a7ea87882fb8f1ec4d4ed5f7fd1259301c6c61555"
+PROTOCOL_SHA256: Final = "107d0c734f5ae622ae756aa7c9cf2650fdc2118f7f718fd0d3ee65678c6e8117"
 DEFAULT_STATE_ROOT: Final = Path(
-    "/Users/cosmosgeek/.codex/evidence/cosmos-vg3-public-volume-v1-4ddd-r3"
+    "/Users/cosmosgeek/.codex/evidence/cosmos-vg3-public-volume-v1-4ddd-r4"
 )
 DATA_ORIGIN: Final = "https://data.binance.vision"
 LISTING_ORIGIN: Final = "https://s3-ap-northeast-1.amazonaws.com/data.binance.vision"
@@ -1020,7 +1020,7 @@ def download_archive(
                     budget=budget,
                 )
             except ArchiveMissing:
-                if not (allow_missing and spec.interval == "1m"):
+                if not allow_missing:
                     raise EvidenceError(
                         f"official checksum exists but archive body is absent: {spec.identity}"
                     ) from None
@@ -1074,7 +1074,7 @@ def download_archive(
             budget=budget,
         )
     except ArchiveMissing:
-        if not (allow_missing and spec.interval == "1m"):
+        if not allow_missing:
             raise EvidenceError(
                 f"official checksum exists but archive body is absent: {spec.identity}"
             ) from None
@@ -1773,6 +1773,21 @@ def verify_freeze() -> dict[str, Any]:
         != 0
     ):
         raise EvidenceError("current HEAD does not descend from the frozen protocol commit")
+    _assert_scope_from_base(current_head)
+    dirty_lines = tuple(line for line in git_output("status", "--porcelain").splitlines() if line)
+    if dirty_lines:
+        external_result = state_root() / "result.v1.json"
+        exact_recovering_result = (
+            RESULT_PATH.exists()
+            and external_result.exists()
+            and RESULT_PATH.read_bytes() == external_result.read_bytes()
+        )
+        dirty_paths = tuple(line[3:] if len(line) > 3 else "" for line in dirty_lines)
+        if not (exact_recovering_result and dirty_paths == ("quant/research/vg3/result.v1.json",)):
+            raise EvidenceError(
+                "pre-outcome lifecycle requires a clean worktree; "
+                "only an exact recovering result may be dirty"
+            )
     if git_blob_at_head("quant/research/vg3/freeze.v1.json") != tracked:
         raise EvidenceError("freeze receipt must be committed unchanged before acquisition")
     return freeze
@@ -1852,7 +1867,7 @@ def acquire_archives() -> dict[str, object]:
         raise EvidenceError(f"archive acquisition plan exceeds record bound: {planned_count}")
     development = download_many(
         development_plan,
-        allow_missing=False,
+        allow_missing=True,
         maximum_total_bytes=MAX_DEVELOPMENT_COMPRESSED_BYTES,
         optional_identities=frozenset(
             spec.identity for spec in development_plan if spec.interval == "1m"
@@ -1860,7 +1875,7 @@ def acquire_archives() -> dict[str, object]:
     )
     holdout = download_many(
         holdout_plan,
-        allow_missing=False,
+        allow_missing=True,
         maximum_total_bytes=MAX_HOLDOUT_COMPRESSED_BYTES,
         optional_identities=frozenset(
             spec.identity for spec in holdout_plan if spec.interval == "1m"
@@ -1877,9 +1892,13 @@ def acquire_archives() -> dict[str, object]:
         "compressedBytes": sum(record.compressed_bytes for record in all_records),
         "discoveryReceiptSha256": sha256_file(state_root() / "discovery.v1.json"),
         "freezeReceiptSha256": sha256_file(FREEZE_PATH),
-        "missingFormationArchiveCount": sum(record.state == "MISSING" for record in formation),
+        "missingFormationArchiveCount": sum(record.state != "VERIFIED" for record in formation),
         "missingOptionalMinuteArchiveCount": sum(
             record.state != "VERIFIED" and record.spec.interval == "1m"
+            for record in (*development, *holdout)
+        ),
+        "missingRequiredDailyArchiveCount": sum(
+            record.state != "VERIFIED" and record.spec.interval == "1d"
             for record in (*development, *holdout)
         ),
         "officialSourceReceiptsSha256": sha256_file(SOURCE_RECEIPTS_PATH),
@@ -1937,12 +1956,15 @@ def _archive_record_from_mapping(raw_record: object) -> ArchiveRecord:
     zip_value = record.get("zipSha256")
     sidecar_value = record.get("checksumTextSha256")
     if state == "MISSING":
+        path = spec.local_path()
+        sidecar_path = path.with_name(f"{path.name}.CHECKSUM")
         if (
-            not (spec.partition == "FORMATION" or spec.interval == "1m")
-            or compressed_bytes != 0
+            compressed_bytes != 0
             or zip_value is not None
             or sidecar_value is not None
             or last_modified is not None
+            or path.exists()
+            or sidecar_path.exists()
         ):
             raise EvidenceError(f"invalid missing archive record: {spec.identity}")
         return ArchiveRecord(spec, state, None, None, 0, None)
@@ -1951,9 +1973,7 @@ def _archive_record_from_mapping(raw_record: object) -> ArchiveRecord:
         path = spec.local_path()
         sidecar_path = path.with_name(f"{path.name}.CHECKSUM")
         if (
-            spec.partition not in {"DEVELOPMENT", "HOLDOUT"}
-            or spec.interval != "1m"
-            or compressed_bytes != 0
+            compressed_bytes != 0
             or zip_value is not None
             or re.fullmatch(r"[0-9a-f]{64}", sidecar_digest) is None
             or last_modified is not None
@@ -2022,6 +2042,7 @@ def verify_acquisition() -> tuple[
             "freezeReceiptSha256",
             "missingFormationArchiveCount",
             "missingOptionalMinuteArchiveCount",
+            "missingRequiredDailyArchiveCount",
             "officialSourceReceiptsSha256",
             "partitionCounts",
             "protocolCommit",
@@ -2034,6 +2055,29 @@ def verify_acquisition() -> tuple[
         },
         "acquisition",
     )
+    for field_name in (
+        "compressedBytes",
+        "missingFormationArchiveCount",
+        "missingOptionalMinuteArchiveCount",
+        "missingRequiredDailyArchiveCount",
+        "recordCount",
+        "verifiedArchiveCount",
+    ):
+        require_int(acquisition.get(field_name), f"acquisition.{field_name}")
+    raw_partition_counts = require_mapping(
+        acquisition.get("partitionCounts"),
+        "acquisition.partitionCounts",
+    )
+    require_exact_keys(
+        raw_partition_counts,
+        {"DEVELOPMENT", "FORMATION", "HOLDOUT"},
+        "acquisition.partitionCounts",
+    )
+    for partition in ("DEVELOPMENT", "FORMATION", "HOLDOUT"):
+        require_int(
+            raw_partition_counts.get(partition),
+            f"acquisition.partitionCounts.{partition}",
+        )
     raw_records = require_list(acquisition.get("records"), "acquisition.records")
     if sha256_bytes(canonical_json_bytes(raw_records)) != acquisition.get("recordsSha256"):
         raise EvidenceError("acquisition record digest mismatch")
@@ -2080,13 +2124,6 @@ def verify_acquisition() -> tuple[
                 require_text(record.zip_sha256, "record.zipSha256"),
                 require_text(record.checksum_text_sha256, "record.checksumTextSha256"),
             )
-    required_identities = {
-        spec.identity for spec in (*development_plan, *holdout_plan) if spec.interval == "1d"
-    }
-    missing = sorted(required_identities - set(expected_hashes))
-    if missing:
-        raise EvidenceError(f"required acquired archive identities missing: {missing[:3]}")
-
     formation = tuple(record for record in records if record.spec.partition == "FORMATION")
     computed_universe = cast(dict[str, Any], select_universe(eligible, formation))
     sealed_at = require_text(universe.get("sealedAtUtc"), "universe.sealedAtUtc")
@@ -2129,10 +2166,16 @@ def verify_acquisition() -> tuple[
         raise EvidenceError("acquisition partition byte budget exceeded")
     expected_summary: dict[str, object] = {
         "compressedBytes": sum(record.compressed_bytes for record in records),
-        "missingFormationArchiveCount": sum(record.state == "MISSING" for record in formation),
+        "missingFormationArchiveCount": sum(record.state != "VERIFIED" for record in formation),
         "missingOptionalMinuteArchiveCount": sum(
             record.state != "VERIFIED"
             and record.spec.interval == "1m"
+            and record.spec.partition in {"DEVELOPMENT", "HOLDOUT"}
+            for record in records
+        ),
+        "missingRequiredDailyArchiveCount": sum(
+            record.state != "VERIFIED"
+            and record.spec.interval == "1d"
             and record.spec.partition in {"DEVELOPMENT", "HOLDOUT"}
             for record in records
         ),
@@ -3194,6 +3237,7 @@ def _source_summary(acquisition: Mapping[str, Any]) -> dict[str, object]:
         "entryWindowStartInclusive": "2025-07-01",
         "historicalFilters": "UNKNOWN",
         "missingOptionalMinuteArchiveCount": acquisition.get("missingOptionalMinuteArchiveCount"),
+        "missingRequiredDailyArchiveCount": acquisition.get("missingRequiredDailyArchiveCount"),
         "privateDataUsed": False,
         "publicFeeBpsPerFill": 10,
         "signedEndpointUsed": False,
@@ -3304,6 +3348,31 @@ def _write_result(result: Mapping[str, object]) -> None:
     payload = canonical_json_bytes(dict(result))
     exclusive_write(external_path, payload)
     exclusive_write(RESULT_PATH, payload)
+
+
+def _missing_required_daily_identities(
+    acquisition: Mapping[str, Any],
+) -> tuple[str, ...]:
+    identities: list[str] = []
+    for raw_record in require_list(acquisition.get("records"), "acquisition.records"):
+        record = require_mapping(raw_record, "acquisition.records[]")
+        if (
+            record.get("partition") in {"DEVELOPMENT", "HOLDOUT"}
+            and record.get("interval") == "1d"
+            and record.get("state") != "VERIFIED"
+        ):
+            identities.append(
+                ":".join(
+                    (
+                        require_text(record.get("partition"), "record.partition"),
+                        require_text(record.get("cadence"), "record.cadence").upper(),
+                        "1d",
+                        require_text(record.get("symbol"), "record.symbol"),
+                        require_text(record.get("period"), "record.period"),
+                    )
+                )
+            )
+    return tuple(sorted(identities))
 
 
 def _terminal_unmeasured(
@@ -3438,6 +3507,16 @@ def run_sealed_experiment() -> dict[str, object]:
         return _terminal_unmeasured(
             "ONE_USE_STATE_INCONSISTENT",
             f"one-use files existed before development marker: {unexpected_state}",
+            acquisition=acquisition,
+            universe=universe,
+            development_evidence=None,
+        )
+    missing_required = _missing_required_daily_identities(acquisition)
+    if missing_required:
+        return _terminal_unmeasured(
+            "REQUIRED_DAILY_ARCHIVE_MISSING",
+            f"{len(missing_required)} required public daily archives were absent; "
+            f"first={missing_required[0]}; development and holdout remained unopened",
             acquisition=acquisition,
             universe=universe,
             development_evidence=None,
@@ -3952,7 +4031,7 @@ def verify_result(*, require_terminal_commit: bool = True) -> dict[str, Any]:
         else:
             if development != {"status": "UNMEASURED"}:
                 raise EvidenceError("UNMEASURED development shape mismatch")
-            if holdout_opened:
+            if holdout_opened and reason_codes != ["ONE_USE_STATE_INCONSISTENT"]:
                 raise EvidenceError("holdout marker exists without measured development")
             if (
                 evidence.get("developmentDigest") != "UNAVAILABLE"
@@ -3968,7 +4047,29 @@ def verify_result(*, require_terminal_commit: bool = True) -> dict[str, Any]:
         )
         if evidence.get("candidateSealSha256") != expected_candidate_digest:
             raise EvidenceError("UNMEASURED candidate digest mismatch")
-        if not development_marker_opened and reason_codes != ["ONE_USE_STATE_INCONSISTENT"]:
+        if reason_codes == ["REQUIRED_DAILY_ARCHIVE_MISSING"]:
+            missing_required = _missing_required_daily_identities(acquisition)
+            forbidden_state = (
+                state_root() / "development-evidence.v1.json",
+                state_root() / "candidate-seal.v1.json",
+                state_root() / "holdout-opened.v1.json",
+            )
+            if (
+                development_marker_opened
+                or not missing_required
+                or acquisition.get("missingRequiredDailyArchiveCount") != len(missing_required)
+                or any(path.exists() for path in forbidden_state)
+            ):
+                raise EvidenceError("required-source UNMEASURED custody mismatch")
+        elif reason_codes == ["ONE_USE_STATE_INCONSISTENT"]:
+            inconsistent_paths = (
+                state_root() / "development-evidence.v1.json",
+                state_root() / "candidate-seal.v1.json",
+                state_root() / "holdout-opened.v1.json",
+            )
+            if development_marker_opened or not any(path.exists() for path in inconsistent_paths):
+                raise EvidenceError("one-use-state UNMEASURED custody mismatch")
+        elif not development_marker_opened:
             raise EvidenceError("UNMEASURED result lacks development-open marker")
     else:
         if not development_marker_opened:

@@ -217,6 +217,41 @@ def test_optional_minute_without_sidecar_is_missing(
     )
     assert record.state == "MISSING"
     assert exp._archive_record_from_mapping(record.as_mapping()) == record
+    spec.local_path().write_bytes(b"contradictory-local-source")
+    with pytest.raises(exp.EvidenceError, match="invalid missing archive"):
+        exp._archive_record_from_mapping(record.as_mapping())
+
+
+def test_required_daily_without_sidecar_is_recorded_as_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VG3_STATE_ROOT", str(tmp_path))
+    spec = exp.ArchiveSpec(
+        "HOLDOUT",
+        "monthly",
+        "1d",
+        "OMUSDT",
+        "2026-05",
+    )
+
+    def missing_bytes(
+        url: str,
+        *,
+        maximum_bytes: int,
+        retries: int = 4,
+    ) -> tuple[bytes, str | None]:
+        del maximum_bytes, retries
+        raise exp.ArchiveMissing(url)
+
+    monkeypatch.setattr(exp, "_http_bytes", missing_bytes)
+    record = exp.download_archive(
+        spec,
+        allow_missing=True,
+        budget=exp._CompressedByteBudget(1024),
+    )
+    assert record.state == "MISSING"
+    assert exp._archive_record_from_mapping(record.as_mapping()) == record
 
 
 def test_leveraged_pair_exclusion_requires_discovered_pair() -> None:
@@ -732,6 +767,137 @@ def test_external_result_recovery_requires_full_verification(
     assert not tracked.exists()
 
 
+def test_required_daily_absence_terminalizes_before_development_open(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("VG3_STATE_ROOT", str(tmp_path))
+    missing = exp.ArchiveRecord(
+        spec=exp.ArchiveSpec(
+            "HOLDOUT",
+            "monthly",
+            "1d",
+            "OMUSDT",
+            "2026-05",
+        ),
+        state="MISSING",
+        zip_sha256=None,
+        checksum_text_sha256=None,
+        compressed_bytes=0,
+        last_modified=None,
+    )
+    acquisition: dict[str, Any] = {
+        "missingRequiredDailyArchiveCount": 1,
+        "records": [missing.as_mapping()],
+    }
+    universe: dict[str, Any] = {"selectedSymbols": [f"S{i:02d}USDT" for i in range(40)]}
+    terminal_call: dict[str, object] = {}
+
+    def fake_verify_acquisition() -> tuple[
+        dict[str, Any],
+        dict[str, Any],
+        dict[str, tuple[str, str]],
+    ]:
+        return acquisition, universe, {}
+
+    def fake_terminal(
+        reason: str,
+        detail: str,
+        *,
+        acquisition: object,
+        universe: object,
+        development_evidence: object,
+    ) -> dict[str, object]:
+        del acquisition, universe, development_evidence
+        terminal_call.update({"detail": detail, "reason": reason})
+        return {"verdict": "UNMEASURED"}
+
+    def forbidden_evaluation(symbols: object, expected_hashes: object) -> object:
+        del symbols, expected_hashes
+        raise AssertionError("development evaluation must remain unopened")
+
+    monkeypatch.setattr(exp, "verify_acquisition", fake_verify_acquisition)
+    monkeypatch.setattr(exp, "_terminal_unmeasured", fake_terminal)
+    monkeypatch.setattr(exp, "evaluate_development", forbidden_evaluation)
+    assert exp.run_sealed_experiment() == {"verdict": "UNMEASURED"}
+    assert terminal_call["reason"] == "REQUIRED_DAILY_ARCHIVE_MISSING"
+    assert "HOLDOUT:MONTHLY:1d:OMUSDT:2026-05" in str(terminal_call["detail"])
+    assert not (tmp_path / "development-opened.v1.json").exists()
+
+
+def test_required_daily_terminal_packet_round_trips_real_verifier(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = tmp_path / "state"
+    tracked_result = tmp_path / "result.v1.json"
+    freeze_path = tmp_path / "freeze.v1.json"
+    monkeypatch.setenv("VG3_STATE_ROOT", str(root))
+    monkeypatch.setattr(exp, "RESULT_PATH", tracked_result)
+    monkeypatch.setattr(exp, "FREEZE_PATH", freeze_path)
+    missing = exp.ArchiveRecord(
+        spec=exp.ArchiveSpec(
+            "HOLDOUT",
+            "monthly",
+            "1d",
+            "OMUSDT",
+            "2026-05",
+        ),
+        state="MISSING",
+        zip_sha256=None,
+        checksum_text_sha256=None,
+        compressed_bytes=0,
+        last_modified=None,
+    )
+    acquisition: dict[str, Any] = {
+        "compressedBytes": 0,
+        "missingOptionalMinuteArchiveCount": 0,
+        "missingRequiredDailyArchiveCount": 1,
+        "recordCount": 1,
+        "records": [missing.as_mapping()],
+        "recordsSha256": exp.sha256_bytes(exp.canonical_json_bytes([missing.as_mapping()])),
+        "verifiedArchiveCount": 0,
+    }
+    universe: dict[str, Any] = {
+        "asOfUtc": "2025-06-01T00:00:00Z",
+        "selectedSymbols": [f"S{i:02d}USDT" for i in range(40)],
+    }
+    exp.exclusive_write(
+        root / "acquisition.v1.json",
+        exp.canonical_json_bytes(acquisition),
+    )
+    exp.exclusive_write(
+        root / "universe-seal.v1.json",
+        exp.canonical_json_bytes(universe),
+    )
+    exp.exclusive_write(freeze_path, exp.canonical_json_bytes({"frozen": True}))
+
+    def fake_verify_freeze() -> dict[str, Any]:
+        return {}
+
+    def fake_verify_acquisition() -> tuple[
+        dict[str, Any],
+        dict[str, Any],
+        dict[str, tuple[str, str]],
+    ]:
+        return acquisition, universe, {}
+
+    monkeypatch.setattr(exp, "verify_freeze", fake_verify_freeze)
+    monkeypatch.setattr(exp, "verify_acquisition", fake_verify_acquisition)
+    produced = exp._terminal_unmeasured(
+        "REQUIRED_DAILY_ARCHIVE_MISSING",
+        "one required daily archive was absent before development open",
+        acquisition=acquisition,
+        universe=universe,
+        development_evidence=None,
+    )
+    verified = exp.verify_result(require_terminal_commit=False)
+    assert verified == produced
+    assert verified["verdict"] == "UNMEASURED"
+    assert verified["reasonCodes"] == ["REQUIRED_DAILY_ARCHIVE_MISSING"]
+    assert not (root / "development-opened.v1.json").exists()
+
+
 def test_real_verifier_rejects_fabricated_measured_development(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -845,3 +1011,5 @@ def test_canonical_json_rejects_floats() -> None:
     assert exp.canonical_json_bytes({"integer": 1, "text": "ok"}) == (
         b'{"integer":1,"text":"ok"}\n'
     )
+    with pytest.raises(exp.EvidenceError, match="must be an integer"):
+        exp.require_int(True, "booleanCount")

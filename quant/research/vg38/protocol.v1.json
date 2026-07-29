@@ -1,0 +1,181 @@
+{
+  "baseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "capacity": {
+    "executableCapacityUsd": null,
+    "participationSensitivity": "at each cohort entry or exit, twelve times the minimum constituent 1bp amount from that constituent's 30-complete-day median quote volume ending at D-2; the D-1 gap remains unused",
+    "truthBoundary": "UNMEASURED: public daily quote volume cannot prove LOT_SIZE, MARKET_LOT_SIZE, MIN_NOTIONAL, spread, depth, fill probability, or impact"
+  },
+  "costs": {
+    "accountEffectiveFeeTruth": "UNKNOWN",
+    "baseAdversePriceBpsPerExecutedSide": 10,
+    "baseTotalBpsPerExecutedSide": 20,
+    "bnbDiscountAssumed": false,
+    "publicRegularTakerFeeBpsPerExecutedSide": 10,
+    "specialCommissionTaxVipOrPromotionAssumed": false,
+    "stressAdversePriceBpsPerExecutedSide": 25,
+    "stressTotalBpsPerExecutedSide": 35
+  },
+  "data": {
+    "acquisitionManifestSha256": "fb9335c4372b979cb930bee059e41f02db355973ddf1e1ae4d878b828df3517a",
+    "archiveInterval": "1d",
+    "archiveSource": "https://data.binance.vision/data/spot/monthly/klines/",
+    "boundaryPurge": "for an open on D the latest feature bar is D-2 and D-1 is a complete unused gap bar; the first development feature ends 2025-03-01, gap is 2025-03-02, and entry is 2025-03-03; the first holdout feature ends 2025-12-31, gap is 2026-01-01, and entry is 2026-01-02; final liquidation scores are computed but forcibly ignored",
+    "checksumLaw": "hash every shared ZIP and CHECKSUM sidecar and match the official compressed-byte SHA-256 before any member is opened",
+    "developmentEndExclusiveUtc": "2026-01-01T00:00:00Z",
+    "developmentStartUtc": "2025-03-03T00:00:00Z",
+    "holdoutEndExclusiveUtc": "2026-04-01T00:00:00Z",
+    "holdoutStartUtc": "2026-01-02T00:00:00Z",
+    "readOnlyReuse": "the exact V-G26 public archive corpus is shared read-only; V-G38 writes only quant/research/vg38/** and does not inherit V-G26 outcomes",
+    "sourceCorpusRoot": "/private/tmp/cosmos-vg26-price-volume-correlation-v1",
+    "sourceMonths": [
+      "2025-01",
+      "2025-02",
+      "2025-03",
+      "2025-04",
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03"
+    ],
+    "timestampUnitFrom2025": "MICROSECOND",
+    "warmupStartUtc": "2025-01-01T00:00:00Z"
+  },
+  "developmentGates": {
+    "absoluteBaseOneSided95LcbMustExceedUsdPerDayPer1000": "0",
+    "baseExcessTotalUsdPer1000MustExceed": "0",
+    "excessOneSided95LcbMustExceedUsdPerDayPer1000": "0",
+    "holmFamilywiseAlpha": "0.05",
+    "maximumDrawdownFraction": "0.20",
+    "minimumOffDays": 30,
+    "minimumOnDays": 30,
+    "minimumPositiveAbsoluteTwoMonthFolds": 4,
+    "minimumPositiveExcessTwoMonthFolds": 4,
+    "pboMustBeAvailableAndAtMost": "0.20",
+    "stressExcessTotalUsdPer1000MustExceed": "0",
+    "stressNetTotalUsdPer1000MustExceed": "0"
+  },
+  "distinctness": {
+    "accelerationCurvature": "no second difference or curvature term; paths may share a compression ratio while current curvature differs and may share current curvature while compression differs",
+    "entropy": "no histogram, bin, probability, concentration, or entropy term; equal-sign-entropy paths may have different compression ratios",
+    "level": "uniformly multiplying the complete BTC quote-volume path by any positive constant leaves every score unchanged",
+    "seasonality": "no UTC-slot or weekday normalization, comparison, or parameter appears in the score",
+    "shock": "no latest-change, maximum, tail, or threshold shock predicate appears; MAD over two windows is the only dispersion statistic",
+    "synchronization": "only BTCUSDT quote volume enters the score; altering any peer path leaves the score unchanged",
+    "turnover": "quote-volume level and level rank never enter the score or portfolio weights",
+    "volatilityOfVolume": "dispersion is the median absolute deviation of daily log quote-volume changes, not the quote-volume level",
+    "priceVolumeCorrelation": "price and price return never enter the score; arbitrary price-path changes leave it unchanged"
+  },
+  "execution": {
+    "alwaysOnComparator": "the identical static equal-weight cohort entered at the same first open and liquidated at the same final open under the same cost scenario",
+    "cashYield": "0",
+    "entry": "score using quote-volume bars only through D-2, leave D-1 unused, enter at D open",
+    "exit": "when the strictly lagged score is above threshold, exit the entire cohort at D open; every entry requires an authenticated exit",
+    "fractionalResearchQuantities": true,
+    "internalRebalancing": "none; on entry split current notional equally across all twelve members and hold fixed units until exit",
+    "leverage": false,
+    "missingConstituentPolicy": "terminal UNMEASURED; never partial cohort and never backfill",
+    "shorting": false,
+    "startingCashUsd": "1000"
+  },
+  "holdoutGates": {
+    "absoluteBaseMeanMustExceedUsdPerDayPer1000": "0",
+    "absoluteBaseOneSided95LcbMustExceedUsdPerDayPer1000": "0",
+    "excessMeanMustExceedUsdPerDayPer1000": "0",
+    "excessOneSided95LcbMustExceedUsdPerDayPer1000": "0",
+    "excessOneSidedBootstrapPValueMustBeBelow": "0.05",
+    "maximumDrawdownFraction": "0.20",
+    "minimumOffDays": 10,
+    "minimumOnDays": 10,
+    "minimumPositiveAbsoluteCalendarMonths": 2,
+    "minimumPositiveExcessCalendarMonths": 2,
+    "stressExcessTotalUsdPer1000MustExceed": "0",
+    "stressNetTotalUsdPer1000MustExceed": "0"
+  },
+  "inference": {
+    "bootstrapBlockLengthDays": 7,
+    "bootstrapReplicates": 4096,
+    "bootstrapSeed": "202607292026",
+    "bootstrapSeeds": {
+      "developmentAbsolute": "202607292026",
+      "developmentExcess": "202607302026",
+      "holdoutAbsolute": "202607292027",
+      "holdoutExcess": "202607302027"
+    },
+    "candidateSelection": "highest excess one-sided 95 percent LCB, then absolute LCB, fewer transitions, lower compression threshold, longer baseline, longer recent window, then trial id",
+    "cscvBlocks": "TEN_DEVELOPMENT_CALENDAR_MONTHS_CHOOSE_FIVE",
+    "dailyObservation": "synchronous post-cost simple return of the single cohort-or-cash NAV and excess versus the identical always-on cohort",
+    "drawdownObservation": "peak-to-trough over starting 1000 cash and every marked daily open; intraday drawdown UNMEASURED",
+    "holdoutMultiplicity": "one preselected champion opened at most once; no retuning, runner-up, repair, or rerun",
+    "interval": "Q14 90 percent two-sided circular-block percentile interval; lower endpoint is the one-sided 95 percent LCB",
+    "multiplicity": "Q14_HOLM_BONFERRONI_OVER_ALL_EIGHT_EXCESS_ONE_SIDED_P_VALUES",
+    "pValueNull": "center each seeded circular-block replicate mean by the observed mean and compare with the observed mean",
+    "pboGateMaximum": "0.20",
+    "programWideMultiplicity": "UNRESOLVED; this packet controls only its frozen eight-trial family"
+  },
+  "provenance": {
+    "binancePublicDataCommit": "5c7f3197591c0d54d85dc43066226bc4c671d47a",
+    "binanceSpotApiDocsCommit": "6b8372cad7cecbdf5dd88a3372eafff51988c5cf",
+    "refreshDateUtc": "2026-07-29",
+    "scope": "BINANCE_PUBLIC_ONLY_NO_CREDENTIALS_NO_SIGNED_ENDPOINTS"
+  },
+  "question": "Does strictly lagged compression in the volatility of BTCUSDT quote-volume changes identify a post-cost fixed-cohort-or-cash regime with positive absolute and always-on-excess performance?",
+  "schema": "VG38QuoteVolumeVoVCompressionProtocolV1",
+  "signal": {
+    "candidateGrid": {
+      "baselineCompleteChanges": [
+        30,
+        45
+      ],
+      "compressionRatioThreshold": [
+        "0.50",
+        "0.75"
+      ],
+      "recentCompleteChanges": [
+        7,
+        14
+      ],
+      "trialCount": 8
+    },
+    "cohortOrCash": "if recent MAD divided by prior MAD is at or below the trial threshold hold the complete frozen cohort; otherwise hold USDT cash",
+    "definition": "for BTCUSDT only, x_s=ln(Q_s/Q_s-1); compare MAD of the latest recent window with MAD of the immediately preceding disjoint baseline window",
+    "degeneracy": "prior-window MAD must be strictly positive; otherwise terminal UNMEASURED; recent MAD may be zero",
+    "strictLag": "for target open D the latest input quote-volume bar is D-2; D-1 and every later field are excluded",
+    "trialIdentity": "vg38-r{recent}-b{baseline}-c{threshold-percent}"
+  },
+  "universe": {
+    "cohort": [
+      "BTCUSDT",
+      "ETHUSDT",
+      "BNBUSDT",
+      "XRPUSDT",
+      "ADAUSDT",
+      "DOGEUSDT",
+      "SOLUSDT",
+      "TRXUSDT",
+      "LTCUSDT",
+      "BCHUSDT",
+      "LINKUSDT",
+      "AVAXUSDT"
+    ],
+    "cohortLaw": "static predeclared benchmark cohort; no ranking, addition, removal, backfill, or current exchangeInfo filter",
+    "historicalUniverseLimitation": "static retrospective membership may have survivor-selection bias and does not prove a point-in-time market-wide universe",
+    "quoteAsset": "USDT",
+    "requiredCoverage": "every member requires one unique valid contiguous daily bar for every declared day"
+  },
+  "verdictLaw": {
+    "GO": "all custody, causal, development, Q14 multiplicity, PBO, absolute, excess, stress, drawdown, and activity gates pass and the single holdout passes every frozen gate",
+    "NO_GO": "public measurement is valid but any declared economic, statistical, activity, or risk gate fails; development failure leaves holdout unopened",
+    "UNMEASURED": "required source hash, schema, timestamp, daily boundary, uniqueness, continuity, causality, run control, or exit proof is invalid or missing",
+    "capitalAuthority": "NONE",
+    "consumer": "N3_SUCCESSOR_ORCHESTRATOR_SCOREBOARD",
+    "goScope": "PUBLIC_RETROSPECTIVE_SHADOW_RESEARCH_ONLY; never account truth or capital authority",
+    "widerProfitability": "UNKNOWN unless accepted by the global attempt ledger and successor scoreboard"
+  }
+}

@@ -1,0 +1,246 @@
+{
+  "artifacts": {
+    "candidateSealSchema": "VG7CandidateSealV1",
+    "developmentMarkerSchema": "VG7DevelopmentRunMarkerV1",
+    "freezeSchema": "VG7FreezeV1",
+    "holdoutMarkerSchema": "VG7HoldoutOpenMarkerV1",
+    "resultSchema": "VG7ResultV1",
+    "sourceManifestSchema": "VG7SourceManifestV1",
+    "universeSchema": "VG7UniverseV1"
+  },
+  "canonicalBaseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "calendar": {
+    "development": {
+      "endExclusive": "2026-04-01",
+      "startInclusive": "2025-07-01"
+    },
+    "holdout": {
+      "allowedOpenCount": 1,
+      "causalWarmupDays": 100,
+      "endExclusive": "2026-07-01",
+      "startInclusive": "2026-04-01"
+    },
+    "sourceMonths": {
+      "first": "2025-03",
+      "last": "2026-06"
+    },
+    "warmup": {
+      "endExclusive": "2025-07-01",
+      "startInclusive": "2025-03-01"
+    }
+  },
+  "capacity": {
+    "gateMinimumP05SupportedInitialCapitalUsdt": "1000",
+    "historicalBook": "UNAVAILABLE",
+    "participationBps": "1",
+    "proxy": "PER_LEG_ONE_BP_CAUSAL_MEDIAN_QUOTE_VOLUME_DIVIDED_BY_MODELED_LEG_NOTIONAL_SHARE_OF_INITIAL_1000_USDT",
+    "verifiedExecutableCapacity": "UNMEASURED"
+  },
+  "costs": {
+    "accountEffectiveFee": "UNKNOWN",
+    "historicalAccountFee": "UNKNOWN",
+    "primaryRequiredScenario": "FEE_STRESS",
+    "scenarios": [
+      {
+        "adverseExecutionBpsPerFill": "0",
+        "feeBpsPerFill": "10",
+        "name": "PUBLIC_FEE_ONLY",
+        "required": false
+      },
+      {
+        "adverseExecutionBpsPerFill": "10",
+        "feeBpsPerFill": "10",
+        "name": "BASE",
+        "required": true
+      },
+      {
+        "adverseExecutionBpsPerFill": "25",
+        "feeBpsPerFill": "10",
+        "name": "STRESS",
+        "required": true
+      },
+      {
+        "adverseExecutionBpsPerFill": "25",
+        "feeBpsPerFill": "20",
+        "name": "FEE_STRESS",
+        "required": true
+      },
+      {
+        "adverseExecutionBpsPerFill": "50",
+        "feeBpsPerFill": "20",
+        "name": "SEVERE_DIAGNOSTIC",
+        "required": false
+      }
+    ],
+    "specialCommission": "UNKNOWN",
+    "taxCommission": "UNKNOWN"
+  },
+  "dataQuality": {
+    "knownBeforeVg7Freeze": "THE_OFFICIAL_CHECKSUMMED_AERGOUSDT_1D_2025_03_ARCHIVE_PREVIOUSLY_FAILED_THE_DAILY_CLOSE_BOUNDARY_CONTRACT",
+    "measurementMonthSemanticFailure": "UNMEASURED_FOR_THE_SEALED_EXPERIMENT",
+    "noRepairOrRowDeletion": true,
+    "ruleForEverySymbolMonth": "A_SEMANTICALLY_INVALID_ARCHIVE_MAKES_THE_WHOLE_SYMBOL_MONTH_UNAVAILABLE",
+    "warmupSemanticUnavailableSymbolMonthMaximum": 1,
+    "warmupSemanticFailure": "PRESERVE_THE_SYMBOL_BUT_BREAK_CONSECUTIVE_CAUSAL_ELIGIBILITY_UNTIL_90_VALID_PRIOR_DAYS_REACCUMULATE"
+  },
+  "distinctness": {
+    "family": "DAILY_OWN_HISTORY_DOWNSIDE_VOLUME_CLIMAX_FAILED_LOW_CONFIRMED_EXHAUSTION_REVERSAL",
+    "notVg1": "NO_TAKER_BUY_IMBALANCE_OR_INTRADAY_COMPRESSION_CONTINUATION",
+    "notVg2OrVg5": "NO_POSITIVE_SHOCK_BAR_CONTINUATION_OR_BREAKOUT",
+    "notVg3": "NO_CROSS_SECTIONAL_RESIDUAL_NO_IMMEDIATE_NEXT_OPEN_NO_FIXED_24H_EXIT",
+    "notVg4": "PIVOT_VOLUME_MULTIPLE_AT_LEAST_2X_AND_THEREFORE_NOT_CONTRACTING_VOLUME",
+    "notVg6": "NO_LOW_VOLUME_COMPRESSION_BREAKOUT"
+  },
+  "definitions": {
+    "completedTrade": "ONE_SELECTED_ENTRY_REFERENCE_AND_ITS_SCHEDULED_EXIT_REFERENCE_WITH_TWO_COSTED_FILLS",
+    "executableOpportunity": "CLUSTERED_CONFIRMED_SIGNAL_WITH_EVERY_REQUIRED_ENTRY_MARK_AND_EXIT_DAILY_BAR_PRESENT",
+    "fill": "ONE_COUNTERFACTUAL_BAR_OPEN_REFERENCE_ADJUSTED_BY_THE_FROZEN_ADVERSE_EXECUTION_AND_FEE_SCENARIO_NOT_A_VENUE_FILL_CLAIM",
+    "clusteredEvent": "FIRST_CONFIRMED_SIGNAL_FOR_A_SYMBOL_WITHIN_A_FROZEN_10_CALENDAR_DAY_CLUSTER_NOT_A_CLAIM_OF_CROSS_SYMBOL_STATISTICAL_INDEPENDENCE",
+    "order": "NONE_PUBLIC_RESEARCH_ONLY",
+    "roundTrip": "ONE_COMPLETED_COUNTERFACTUAL_ENTRY_EXIT_PAIR",
+    "signalEvent": "TRIAL_THRESHOLD_MATCH_AFTER_PIVOT_AND_COMPLETED_T_PLUS_1_CONFIRMATION_BEFORE_CLUSTERING",
+    "verifiedFill": "UNMEASURED"
+  },
+  "execution": {
+    "allocation": "THREE_FIXED_EQUAL_INITIAL_SLEEVES_EACH_COMPOUNDS_INDEPENDENTLY",
+    "entry": "OPEN_OF_T_PLUS_2_AFTER_COMPLETED_T_PLUS_1_CONFIRMATION",
+    "exit": "OPEN_EXACTLY_HOLD_DAYS_AFTER_ENTRY",
+    "maxConcurrentPositions": 3,
+    "missingConfirmationEntryOrPostEntryBar": "SEALED_MEASUREMENT_UNMEASURED_NEVER_DISCARD_THE_SIGNAL",
+    "portfolio": "LONG_CASH_THREE_EQUAL_INDEPENDENT_COMPOUNDING_SLEEVES",
+    "ranking": [
+      "VOLUME_MULTIPLE_DESC",
+      "ABS_PIVOT_RETURN_DESC",
+      "LOWER_WICK_FRACTION_DESC",
+      "SYMBOL_ASC"
+    ],
+    "sameBarFill": false
+  },
+  "gates": {
+    "development": {
+      "activeMonthsMinimum": 6,
+      "activeWeeksMinimum": 20,
+      "bootstrapOneSidedLowerNetPer1000GreaterThan": "0",
+      "capacityP05SupportedInitialCapitalUsdtMinimum": "1000",
+      "distinctSymbolsMinimum": 8,
+      "holmFamilyWiseAlpha": "0.05",
+      "maxDailyCloseMarkedDrawdownPctMaximum": "20",
+      "selectedRoundTripsMinimum": 60,
+      "signalEventsMinimum": 60
+    },
+    "holdout": {
+      "activeMonthsMinimum": 3,
+      "activeWeeksMinimum": 8,
+      "bootstrapOneSidedLowerNetPer1000GreaterThan": "0",
+      "capacityP05SupportedInitialCapitalUsdtMinimum": "1000",
+      "distinctSymbolsMinimum": 4,
+      "maxDailyCloseMarkedDrawdownPctMaximum": "20",
+      "selectedRoundTripsMinimum": 20,
+      "signalEventsMinimum": 20
+    }
+  },
+  "hypothesis": "A_CAUSAL_DOWNSIDE_DAILY_VOLUME_CLIMAX_WITH_LOWER_WICK_REJECTION_AND_A_COMPLETED_FAILED_LOW_CONFIRMATION_HAS_POSITIVE_NET_LONG_CASH_EXPECTANCY_AFTER_PREDECLARED_PUBLIC_FEE_AND_ADVERSE_EXECUTION_STRESS",
+  "limitation": "This is a sealed 12-month public Binance Spot daily-bar simulation, not account-specific fee or fill truth, live profitability evidence, forward assurance, verified executable capacity, capital authorization, or execution authority.",
+  "protocolId": "vg7-binance-spot-daily-volume-climax-exhaustion-reversal-v1",
+  "runControl": {
+    "archiveContentOpenRunsAllowed": 1,
+    "holdoutOpenRunsAllowed": 1,
+    "networkDuringEvaluation": false,
+    "repairOrRerunAfterContentOpen": false,
+    "sharedArchiveMutationAllowed": false
+  },
+  "schema": "VG7VolumeClimaxExhaustionProtocolV1",
+  "signal": {
+    "clusterDaysPerSymbol": 10,
+    "confirmation": {
+      "closeAbovePivotMidpoint": true,
+      "closeReturnMinimum": "0.005",
+      "greenClose": true,
+      "lowAtOrAbovePivotLow": true
+    },
+    "eligibility": {
+      "consecutivePriorDailyBars": 90,
+      "minimumPrior30dMedianQuoteVolumeUsd": "10000000",
+      "pointInTime": true
+    },
+    "fixedPivotRules": {
+      "freshLowLookbackDays": 10,
+      "rangeMultipleMinimum": "1.5",
+      "rangePriorMedianDays": 20,
+      "volumePriorMedianDays": 30
+    },
+    "trials": {
+      "familySize": 36,
+      "holdDays": [
+        3,
+        5,
+        7
+      ],
+      "lowerWickFractions": [
+        "0.25",
+        "0.40"
+      ],
+      "pivotReturnMaximums": [
+        "-0.03",
+        "-0.05"
+      ],
+      "volumeMultiples": [
+        "2",
+        "4",
+        "8"
+      ]
+    }
+  },
+  "statistics": {
+    "bootstrap": {
+      "blockLengthDays": 7,
+      "confidenceInterval": "PERCENTILE_95",
+      "oneSidedLowerQuantile": "0.05",
+      "replicates": 4096,
+      "seed": 2026072907,
+      "series": "ALIGNED_UTC_DAILY_PORTFOLIO_RETURNS_INCLUDING_ZERO_DAYS"
+    },
+    "holm": {
+      "alpha": "0.05",
+      "familySize": 36,
+      "method": "CENTERED_CIRCULAR_BLOCK_BOOTSTRAP_MEAN_DAILY_LOG_GROWTH_ONE_SIDED_P_VALUES_THEN_HOLM_STEP_DOWN"
+    },
+    "pbo": {
+      "developmentOnly": true,
+      "diagnosticConcernThreshold": "0.5",
+      "diagnosticOnly": true,
+      "partitions": 8,
+      "purgeDaysAtAssignmentBoundary": 7,
+      "selectionProcedure": "MAX_FEE_STRESS_PARTITION_NET_WITH_TRIAL_ID_ASC_TIE_NO_ELIGIBILITY_FILTER",
+      "splitCount": 70,
+      "tieBreak": "TRIAL_ID_ASC"
+    },
+    "drawdown": {
+      "mark": "AGGREGATE_PORTFOLIO_UTC_DAILY_CLOSE_HYPOTHETICAL_IMMEDIATE_LIQUIDATION_AFTER_ADVERSE_EXECUTION_AND_SELL_FEE",
+      "markingFrequency": "UTC_DAILY_CLOSE"
+    },
+    "selectionMetric": "FEE_STRESS_NET_PER_INITIAL_1000_USDT"
+  },
+  "taskId": "V-G7",
+  "trialLedger": {
+    "discardedOutcomeInspectedVariants": 0,
+    "registeredFamilySize": 36,
+    "selectionHistory": "ONE_PREREGISTERED_FAMILY_NO_OUTCOME_INSPECTION_BEFORE_FREEZE",
+    "siblingFamilies": "V_G1_THROUGH_V_G6_ARE_DISTINCT_AND_NOT_RESET_OR_COUNTED_AS_V_G7_TRIALS"
+  },
+  "truth": {
+    "accountEffectiveFees": "UNKNOWN",
+    "capitalAuthority": "NONE",
+    "historicalFilterAdmissibility": "UNKNOWN",
+    "historicalOrderBook": "UNAVAILABLE",
+    "publicBarExecution": "SENSITIVITY_ONLY",
+    "verifiedExecutableCapacity": "UNMEASURED"
+  },
+  "universe": {
+    "discovery": "EXACT_FROZEN_605_SYMBOL_S1F_OFFICIAL_ARCHIVE_PREFIX_UNIVERSE",
+    "exclusions": "DISCOVERY_FROZEN_STABLE_FIAT_AND_PAIRED_LEVERAGED_EXCLUSIONS",
+    "quoteAsset": "USDT",
+    "selection": "NO_FINAL_COMPLETENESS_OR_OUTCOME_FILTER_POINT_IN_TIME_ELIGIBILITY_ONLY",
+    "venue": "BINANCE_SPOT"
+  }
+}

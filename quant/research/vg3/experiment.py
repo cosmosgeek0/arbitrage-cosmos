@@ -63,7 +63,7 @@ UV_LOCK_PATH: Final = QUANT_ROOT / "uv.lock"
 BASE_COMMIT: Final = "a169b123fb186d1943a75ad648552c4d95be1be1"
 PROTOCOL_SHA256: Final = "107d0c734f5ae622ae756aa7c9cf2650fdc2118f7f718fd0d3ee65678c6e8117"
 DEFAULT_STATE_ROOT: Final = Path(
-    "/Users/cosmosgeek/.codex/evidence/cosmos-vg3-public-volume-v1-4ddd-r4"
+    "/Users/cosmosgeek/.codex/evidence/cosmos-vg3-public-volume-v1-4ddd-r5"
 )
 DATA_ORIGIN: Final = "https://data.binance.vision"
 LISTING_ORIGIN: Final = "https://s3-ap-northeast-1.amazonaws.com/data.binance.vision"

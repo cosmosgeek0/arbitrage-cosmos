@@ -36,7 +36,7 @@ or money authority.
 Run from `quant/` with the repository's pinned environment:
 
 ```sh
-export VG3_STATE_ROOT=/Users/cosmosgeek/.codex/evidence/cosmos-vg3-public-volume-v1-4ddd-r4
+export VG3_STATE_ROOT=/Users/cosmosgeek/.codex/evidence/cosmos-vg3-public-volume-v1-4ddd-r5
 PYTHONPATH=src:. .venv/bin/python research/vg3/experiment.py discover
 git add research/vg3
 git commit -m "research(vg3): preregister public volume-shock reversal"

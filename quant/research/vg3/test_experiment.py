@@ -772,6 +772,7 @@ def test_required_daily_absence_terminalizes_before_development_open(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("VG3_STATE_ROOT", str(tmp_path))
+    monkeypatch.setattr(exp, "RESULT_PATH", tmp_path / "tracked-result.v1.json")
     missing = exp.ArchiveRecord(
         spec=exp.ArchiveSpec(
             "HOLDOUT",

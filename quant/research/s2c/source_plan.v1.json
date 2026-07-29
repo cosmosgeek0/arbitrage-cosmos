@@ -1,0 +1,52 @@
+{
+  "schema": "S2CSourcePlanV1",
+  "authority": "BINANCE_PUBLIC_ONLY",
+  "archiveRoot": "https://data.binance.vision/data/futures/um/monthly",
+  "datasets": [
+    {
+      "name": "klines",
+      "interval": "1h",
+      "pathTemplate": "klines/{symbol}/1h/{symbol}-1h-{month}.zip"
+    },
+    {
+      "name": "fundingRate",
+      "interval": null,
+      "pathTemplate": "fundingRate/{symbol}/{symbol}-fundingRate-{month}.zip"
+    },
+    {
+      "name": "markPriceKlines",
+      "interval": "1h",
+      "pathTemplate": "markPriceKlines/{symbol}/1h/{symbol}-1h-{month}.zip"
+    }
+  ],
+  "symbols": {
+    "factorOnly": ["BTCUSDT", "ETHUSDT"],
+    "trade": [
+      "AAVEUSDT",
+      "ADAUSDT",
+      "AVAXUSDT",
+      "BCHUSDT",
+      "BNBUSDT",
+      "DOGEUSDT",
+      "DOTUSDT",
+      "ETCUSDT",
+      "LINKUSDT",
+      "LTCUSDT",
+      "NEARUSDT",
+      "SOLUSDT",
+      "TRXUSDT",
+      "XRPUSDT"
+    ]
+  },
+  "months": {
+    "klineInclusive": ["2025-05", "2026-06"],
+    "markPriceKlineInclusive": ["2025-07", "2026-06"],
+    "fundingInclusive": ["2025-07", "2026-06"]
+  },
+  "checksumSidecarRequired": true,
+  "archiveBodyOpenBeforeProtocolFreeze": false,
+  "holdoutBodyOpenBeforeDevelopmentGates": false,
+  "networkDuringEvaluation": false,
+  "historicalExchangeInfoSnapshots": "UNAVAILABLE",
+  "currentExchangeInfoMaySelectHistoricalUniverse": false
+}

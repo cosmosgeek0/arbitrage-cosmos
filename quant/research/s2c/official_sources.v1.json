@@ -1,0 +1,123 @@
+{
+  "schema": "S2COfficialSourcesV1",
+  "researchedAtUtc": "2026-07-30T00:00:00Z",
+  "sources": [
+    {
+      "id": "BINANCE_PUBLIC_DATA",
+      "publisher": "Binance",
+      "url": "https://github.com/binance/binance-public-data/blob/master/README.md",
+      "observed": [
+        "public daily and monthly archives",
+        "USD-M klines originate from GET /fapi/v1/klines",
+        "each ZIP has a SHA-256 CHECKSUM sidecar",
+        "archived files may later be replaced after discovered issues"
+      ]
+    },
+    {
+      "id": "BINANCE_USDM_EXCHANGE_INFO",
+      "publisher": "Binance",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data#exchange-information",
+      "endpoint": "GET /fapi/v1/exchangeInfo",
+      "observed": [
+        "current trading rules and symbol information",
+        "current metadata is not a historical listing-status archive"
+      ]
+    },
+    {
+      "id": "BINANCE_USDM_KLINES",
+      "publisher": "Binance",
+      "url": "https://developers.binance.com/en/docs/products/derivatives-trading-usds-futures/market-data/rest-api/Kline-Candlestick-Data",
+      "endpoint": "GET /fapi/v1/klines",
+      "observed": [
+        "klines are keyed by open time",
+        "1h is an official interval",
+        "response includes OHLC and quote asset volume"
+      ]
+    },
+    {
+      "id": "BINANCE_USDM_FUNDING_HISTORY",
+      "publisher": "Binance",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data#get-funding-rate-history",
+      "endpoint": "GET /fapi/v1/fundingRate",
+      "observed": [
+        "public funding records include symbol, funding rate, funding time, and associated mark price",
+        "records are returned in ascending order",
+        "current endpoint limits do not prove historical archive completeness"
+      ]
+    },
+    {
+      "id": "BINANCE_USDM_FUNDING_MECHANICS",
+      "publisher": "Binance",
+      "url": "https://www.binance.com/en/support/faq/detail/360033525031",
+      "observed": [
+        "positive funding is paid by longs to shorts",
+        "only positions open at settlement participate",
+        "funding intervals may change from the default"
+      ]
+    },
+    {
+      "id": "BINANCE_USDM_PUBLIC_FEE_PAGE",
+      "publisher": "Binance",
+      "url": "https://www.binance.com/en/fee/futureFee",
+      "observed": [
+        "public USD-M fee schedule exists",
+        "account-effective commission remains private and UNKNOWN",
+        "no VIP, BNB, promotion, tax, or special-commission benefit is assumed"
+      ]
+    },
+    {
+      "id": "BINANCE_USDM_FEE_FAQ",
+      "publisher": "Binance",
+      "url": "https://www.binance.com/en/support/faq/detail/360033544231",
+      "observed": [
+        "regular-user example uses 2 bp maker and 5 bp taker",
+        "example is hypothetical and points to the dynamic current fee table"
+      ]
+    },
+    {
+      "id": "CRYPTO_LOW_VOL_2021",
+      "publisher": "Finance Research Letters",
+      "url": "https://doi.org/10.1016/j.frl.2020.101683",
+      "observed": [
+        "published crypto low-volatility evidence was not uniformly positive",
+        "literature motivation is not a profitability result"
+      ]
+    },
+    {
+      "id": "CRYPTO_CROSS_SECTION_2022",
+      "publisher": "Journal of Finance",
+      "url": "https://doi.org/10.1111/jofi.13119",
+      "observed": [
+        "published crypto cross-sectional work defines idiosyncratic volatility from market-model residual standard deviation",
+        "reported IVOL evidence was not itself a reliable positive trading result"
+      ]
+    },
+    {
+      "id": "CRYPTO_LOW_VOL_2026",
+      "publisher": "Finance Research Letters",
+      "url": "https://doi.org/10.1016/j.frl.2026.109851",
+      "observed": [
+        "recent spot-market study reports a low-volatility premium in later samples",
+        "spot evidence does not establish a Binance USD-M after-cost result"
+      ]
+    },
+    {
+      "id": "PBO_CSCV",
+      "publisher": "Journal of Computational Finance",
+      "url": "https://doi.org/10.21314/JCF.2016.322",
+      "observed": [
+        "CSCV probability of backtest overfitting is diagnostic",
+        "PBO does not replace multiplicity-adjusted inference"
+      ]
+    }
+  ],
+  "feeTruth": {
+    "publicBaseFeeBpPerFill": 5,
+    "basis": "conservative regular-user public proxy frozen for research",
+    "accountEffectiveFee": "UNKNOWN",
+    "bnbDiscount": false,
+    "vipTier": "NOT_ASSUMED",
+    "promotion": "NOT_ASSUMED",
+    "specialOrTaxCommission": "UNKNOWN"
+  }
+}

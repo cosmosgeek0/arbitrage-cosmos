@@ -1,0 +1,88 @@
+{
+  "schema": "VG22OfficialSourcesV1",
+  "retrievedAtUtc": "2026-07-29T16:36:26Z",
+  "policy": {
+    "authority": "PUBLIC_RESEARCH_ONLY",
+    "privateApiUsed": false,
+    "orderBookInferenceAllowed": false,
+    "mutableDocumentationClaimsRequirePinnedCapture": true
+  },
+  "repositories": [
+    {
+      "name": "binance/binance-spot-api-docs",
+      "commit": "6b8372cad7cecbdf5dd88a3372eafff51988c5cf",
+      "repositoryUrl": "https://github.com/binance/binance-spot-api-docs",
+      "files": [
+        {
+          "path": "faqs/commission_faq.md",
+          "sha256": "580cfa59c9f55adae0d27bf38d2bc7f268ad759fdf054486e356464c30bbd54c",
+          "bytes": 6508
+        },
+        {
+          "path": "enums.md",
+          "sha256": "5708fe6fdea8013f6c8a8388074c8cef8482b2b69a09181e4b2b36e0c2b4ab4b",
+          "bytes": 5244
+        },
+        {
+          "path": "filters.md",
+          "sha256": "4b5a8f0f5d15bcf68fd7ac2059ba6c88da641c06fd7885e642330c5ac8124dd3",
+          "bytes": 13528
+        },
+        {
+          "path": "faqs/market_data_only.md",
+          "sha256": "57d608507426215c43f11907c07ed693f02725840d9ee4d6630f134de402b6da",
+          "bytes": 1616
+        },
+        {
+          "path": "rest-api.md",
+          "sha256": "49ea6809243fc7fb426e07f2fe662097736c7bb405bd2da5eef637d715427999",
+          "bytes": 181189
+        },
+        {
+          "path": "web-socket-streams.md",
+          "sha256": "32bf73a0bed3b75e3ca981fdbaf48c53544bbdfb5944ef8ed1c4d7af9aceba0a",
+          "bytes": 22958
+        }
+      ]
+    },
+    {
+      "name": "binance/binance-public-data",
+      "commit": "5c7f3197591c0d54d85dc43066226bc4c671d47a",
+      "repositoryUrl": "https://github.com/binance/binance-public-data",
+      "files": [
+        {
+          "path": "README.md",
+          "sha256": "085ab91377aa9325d44f4c7ad27cce4ab381e158403e1d7df2bad39d1a66f7c6",
+          "bytes": 5144
+        }
+      ]
+    }
+  ],
+  "documentation": [
+    {
+      "topic": "spot klines",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/rest-api/market",
+      "frozenUse": "Klines are public, unique by open time, and expose close time and quote-asset volume."
+    },
+    {
+      "topic": "websocket closed-bar semantics",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-spot-trading/api/ws-streams/~",
+      "frozenUse": "The kline payload exposes closed flag x and quote volume q."
+    },
+    {
+      "topic": "market-data-only endpoints",
+      "url": "https://developers.binance.com/en/docs/products/spot/faqs/market_data_only",
+      "frozenUse": "Public market-data hosts require no API key and exclude private streams."
+    },
+    {
+      "topic": "spot filters",
+      "url": "https://developers.binance.com/en/docs/products/spot/filters",
+      "frozenUse": "Tradability filters do not measure spread, depth, queue position, impact, or executable capacity."
+    }
+  ],
+  "unknowns": [
+    "Historical symbol status and filter snapshots are not supplied by the reviewed public endpoints.",
+    "Account-effective fee tier and discounts are private and unmeasured.",
+    "Bid-ask spread, order-book depth, queue position, market impact, and executable capacity are absent from kline quote volume."
+  ]
+}

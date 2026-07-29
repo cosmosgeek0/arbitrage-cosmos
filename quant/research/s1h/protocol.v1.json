@@ -1,0 +1,244 @@
+{
+  "schema": "S1HBtcEthRelativeBasisDislocationProtocolV1",
+  "protocolId": "s1h-binance-btc-eth-relative-basis-dislocation-v1",
+  "frozenForDateUtc": "2026-07-29",
+  "canonicalBaseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "consumer": {
+    "task": "N3",
+    "purpose": "PROFITABILITY_VERDICT",
+    "productAuthority": "NONE"
+  },
+  "scope": {
+    "publicOnly": true,
+    "privateApi": false,
+    "orders": false,
+    "money": false,
+    "host": false,
+    "ui": false,
+    "executionAuthority": "NONE"
+  },
+  "distinctness": {
+    "family": "BTC_ETH_RELATIVE_NORMAL_BASIS_DISLOCATION_MEAN_REVERSION",
+    "relativeTrigger": "ETH_BASIS_MINUS_BTC_BASIS",
+    "routedTrade": "ONLY_RICHER_ASSET_LONG_SPOT_SHORT_PERPETUAL_EQUAL_BASE",
+    "notS1G": [
+      "FIXED_FIVE_MINUTE_UTC_CLOCK_NOT_FUNDING_SETTLEMENT_CLOCK",
+      "FUNDING_RATE_SIGN_FORECAST_AND_TIME_FORBIDDEN_FROM_SIGNAL_SELECTION_AND_EXIT",
+      "RELATIVE_BTC_ETH_RESIDUAL_NOT_SINGLE_BTC_EXPECTED_CARRY",
+      "POSITIVE_FUNDING_CREDITS_DISCARDED",
+      "EXIT_ON_RESIDUAL_NORMALIZATION_RISK_OR_TIMEOUT_NOT_FUNDING_EVENT"
+    ],
+    "symmetricFourLegRelativeValue": "FORBIDDEN_SPOT_SHORT_BORROW_UNMEASURED"
+  },
+  "data": {
+    "authority": "https://data.binance.vision",
+    "interval": "5m",
+    "symbols": [
+      "BTCUSDT",
+      "ETHUSDT"
+    ],
+    "targetMonthsInclusive": [
+      "2025-07",
+      "2026-06"
+    ],
+    "series": [
+      "SPOT_KLINES",
+      "USD_M_KLINES",
+      "USD_M_MARK_PRICE_KLINES",
+      "USD_M_FUNDING_RATE"
+    ],
+    "checksumRequired": true,
+    "archiveCount": 96,
+    "archiveBodiesMayDownloadOnlyAfterFreeze": true,
+    "archiveBodiesMayOpenOnlyAfterRunMarker": true,
+    "holdoutArchiveBodiesMayOpenOnlyAfterCandidateSealAndHoldoutMarker": true,
+    "spotTimestampUnitTransitionUtc": "2025-01-01",
+    "historicalExchangeInfoSnapshots": "UNAVAILABLE"
+  },
+  "calendar": {
+    "timezone": "UTC",
+    "sample": {
+      "startInclusive": "2025-07-01T00:00:00Z",
+      "endExclusive": "2026-07-01T00:00:00Z",
+      "completeMonths": 12
+    },
+    "development": {
+      "startInclusive": "2025-07-01T00:00:00Z",
+      "endExclusive": "2026-04-01T00:00:00Z",
+      "months": [
+        "2025-07",
+        "2025-08",
+        "2025-09",
+        "2025-10",
+        "2025-11",
+        "2025-12",
+        "2026-01",
+        "2026-02",
+        "2026-03"
+      ]
+    },
+    "walkForward": [
+      {
+        "trainStart": "2025-07-01T00:00:00Z",
+        "trainEnd": "2025-10-01T00:00:00Z",
+        "forwardStart": "2025-10-01T00:00:00Z",
+        "forwardEnd": "2026-01-01T00:00:00Z"
+      },
+      {
+        "trainStart": "2025-07-01T00:00:00Z",
+        "trainEnd": "2026-01-01T00:00:00Z",
+        "forwardStart": "2026-01-01T00:00:00Z",
+        "forwardEnd": "2026-04-01T00:00:00Z"
+      }
+    ],
+    "holdout": {
+      "startInclusive": "2026-04-01T00:00:00Z",
+      "endExclusive": "2026-07-01T00:00:00Z",
+      "months": [
+        "2026-04",
+        "2026-05",
+        "2026-06"
+      ],
+      "allowedOpenCount": 1,
+      "championOnly": true
+    }
+  },
+  "signal": {
+    "basisBps": "10000_TIMES_LOG_PERPETUAL_CLOSE_DIV_SPOT_CLOSE",
+    "relativeResidualBps": "ETH_BASIS_BPS_MINUS_BTC_BASIS_BPS",
+    "clock": "COMPLETE_SYNCHRONIZED_FIVE_MINUTE_BARS",
+    "calibration": "PREVIOUS_28_COMPLETE_UTC_DAYS_MEDIAN_AND_MAD_FROZEN_AT_EACH_UTC_DAY_START",
+    "scale": "MAX_1_POINT_4826_TIMES_MAD_1_BPS",
+    "currentBucketExcluded": true,
+    "entryPersistenceBars": 2,
+    "entry": "ROUTE_RICHER_ASSET_ONLY_IF_RAW_BASIS_POSITIVE_AND_ABOVE_ITS_OWN_CAUSAL_MEDIAN",
+    "rearm": "ABS_Z_MUST_RETURN_BELOW_1_BEFORE_ANOTHER_CLUSTER",
+    "entryExecution": "NEXT_SYNCHRONIZED_BAR_OPEN",
+    "exit": [
+      "FROZEN_ENTRY_CALIBRATION_ABS_Z_AT_OR_BELOW_0_POINT_5",
+      "FROZEN_ENTRY_CALIBRATION_RESIDUAL_WORSENS_1_POINT_5_Z",
+      "MAXIMUM_HOLD",
+      "DATA_INVALID"
+    ],
+    "exitExecution": "NEXT_SYNCHRONIZED_BAR_OPEN",
+    "fundingSignalUse": "FORBIDDEN"
+  },
+  "trials": {
+    "familySize": 4,
+    "entryThresholdZ": [
+      "2.5",
+      "3.5"
+    ],
+    "maximumHoldBars": [
+      72,
+      288
+    ],
+    "maximumHoldHours": [
+      6,
+      24
+    ],
+    "onePortfolioPositionMaximum": 1,
+    "overlap": "FORBIDDEN",
+    "legNotionalUsd": "500",
+    "portfolioCapitalUsd": "1000",
+    "leverage": false,
+    "borrowing": false,
+    "championSelection": "HIGHEST_STRESS_DAILY_BLOCK_LOWER_BOUND_THEN_STRESS_NET_THEN_TRIAL_ID",
+    "championSealedBeforeHoldoutOpen": true
+  },
+  "costs": {
+    "reportingDenomination": "USDT_TREATED_AS_USD_AT_FROZEN_1_TO_1",
+    "orderStyle": "FOUR_MARKET_TAKER_FILLS",
+    "entryReference": "NEXT_FIVE_MINUTE_OPEN",
+    "exitReference": "NEXT_FIVE_MINUTE_OPEN",
+    "base": {
+      "spotFeeBpsPerFill": "10",
+      "perpetualFeeBpsPerFill": "5",
+      "adverseExecutionBpsPerFill": "2"
+    },
+    "stress": {
+      "spotFeeBpsPerFill": "10",
+      "perpetualFeeBpsPerFill": "10",
+      "adverseExecutionBpsPerFill": "5"
+    },
+    "severe": {
+      "spotFeeBpsPerFill": "10",
+      "perpetualFeeBpsPerFill": "10",
+      "adverseExecutionBpsPerFill": "10"
+    },
+    "favorableFundingCredit": "DISCARDED",
+    "adverseFundingDebit": "ACTUAL_SETTLEMENT_RATE_TIMES_MARK_TIMES_BASE_QUANTITY",
+    "accountEffectiveCommission": "UNMEASURED_PUBLIC_ONLY",
+    "historicalPromotionTaxAndDiscountState": "UNMEASURED_PUBLIC_ONLY",
+    "borrowCost": "NOT_APPLICABLE_NO_SPOT_SHORT",
+    "capitalOpportunityCost": "UNMEASURED"
+  },
+  "statistics": {
+    "dailyMatrix": "SYNCHRONOUS_UTC_DAYS_ALL_FOUR_TRIALS_INCLUDING_ZERO_RETURN_DAYS",
+    "bootstrap": {
+      "method": "SEEDED_SYNCHRONOUS_CIRCULAR_BLOCK",
+      "replicates": 8192,
+      "seed": 2026072901,
+      "blockLengthDays": 7,
+      "oneSidedAlpha": "0.05",
+      "lowerBound": "ONE_SIDED_95_PERCENT_BASIC_BOOTSTRAP_MEAN_RETURN"
+    },
+    "multiplicity": {
+      "family": "ALL_FOUR_FROZEN_TRIALS",
+      "holmFwer": "0.05",
+      "synchronousMaxRealityCheckAlpha": "0.05"
+    },
+    "pbo": {
+      "method": "CSCV",
+      "developmentBlocks": 8,
+      "inSampleBlocks": 4,
+      "splits": 70,
+      "selectionStatistic": "STRESS_SUM_DAILY_RETURN",
+      "tieBreak": "LOWEST_TRIAL_ID",
+      "underperformanceRule": "SELECTED_OOS_SCORE_AT_OR_BELOW_CROSS_TRIAL_OOS_MEDIAN",
+      "maximum": "0.50",
+      "diagnosticOnly": true,
+      "holdoutIncluded": false
+    }
+  },
+  "capacity": {
+    "authority": "CAUSAL_PRIOR_COMPLETE_FIVE_MINUTE_QUOTE_VOLUME_PROXY_ONLY",
+    "baseParticipationBps": "1",
+    "stressParticipationBps": "0.5",
+    "legNotionalUsd": "500",
+    "bothLegsAndEntryExitRequired": true,
+    "historicalMatchedDepth": "UNAVAILABLE",
+    "queueAndImpact": "UNAVAILABLE",
+    "executableCapacity": "UNMEASURED"
+  },
+  "gates": {
+    "minimumDevelopmentRoundTrips": 24,
+    "minimumRoundTripsPerAsset": 8,
+    "minimumActiveCalendarQuarters": 3,
+    "minimumHoldoutRoundTrips": 8,
+    "maximumLiquidationDrawdownPct": "10",
+    "maximumPbo": "0.50",
+    "requireBaseStressAndSevereNetPositive": true,
+    "requireStressWalkForwardNetPositiveEachFold": true,
+    "requireStressLowerBoundPositive": true,
+    "requireHolmPass": true,
+    "requireMaxRealityCheckPass": true,
+    "requireCapacityProxyPass": true,
+    "requireBothAssetsStressPositive": true,
+    "requireRemoveBestQuarterStressPositive": true,
+    "positivePublicResultVerdict": "UNMEASURED",
+    "negativeValidResultVerdict": "NO_GO",
+    "invalidEvidenceVerdict": "UNMEASURED",
+    "capitalVerdictRegardlessOfResearch": "NO_GO",
+    "executionAuthority": "NONE"
+  },
+  "runControl": {
+    "archiveContentOpenRunsAllowed": 1,
+    "runMarkerMustPrecedeFirstArchiveDecompression": true,
+    "candidateSealMustPrecedeFirstHoldoutArchiveDecompression": true,
+    "holdoutOpenMarkerMustPrecedeFirstHoldoutArchiveDecompression": true,
+    "secondRunRefused": true,
+    "postRunRepairOrRerun": "FORBIDDEN",
+    "networkDuringEvaluation": false
+  }
+}

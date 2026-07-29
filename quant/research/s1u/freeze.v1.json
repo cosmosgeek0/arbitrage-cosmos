@@ -1,0 +1,20 @@
+{
+  "schema": "s1u.freeze.v1",
+  "strategy_id": "S-1U",
+  "canonical_base": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "frozen_at_utc": "2026-07-29T18:42:48Z",
+  "source_research": "official Binance sources only",
+  "outcome_bodies_opened_before_freeze": 0,
+  "one_run_rule": "RUN_STARTED.v1.json is created in the committed packet before the external marker and before the first source body request; any later failure consumes the run and forbids repair or rerun.",
+  "holdout_rule": "2026-04 through 2026-06 bodies remain not requested, not hashed, not decompressed, and not parsed unless every frozen development gate passes.",
+  "frozen_files": {
+    "DISTINCTNESS.md": "a4ad64b93b89076237ddc746c2cf7e6860decbcfc285de225d510b21d460ab6e",
+    "OFFICIAL_SOURCE_RESEARCH.md": "38055db3cbe17364db327ae2df108d49ad197363eceb58110a92754bd266a059",
+    "README.md": "352366bdc285529cdfa76b90d716170d45cc6baa81600e85a7874385dff1d741",
+    "experiment.py": "efa5d260ef5516fed22530a352a7ba2e4de9ba55f67c7052da11a240c2a4d279",
+    "protocol.v1.json": "215c65372406709251d0096038cadd5e0afad2be75776b57e596ce6f7cf625b6",
+    "test_experiment.py": "92517faec58898f1a27d54aa97dae41ab3670c2c82b53e11880d4cd798e761b7",
+    "test_verifier.py": "9a9607ee52460c027d5d54c6d8c8e41dcaede56181a17adda32cccdcb7d551d8",
+    "verifier.py": "c153092b1e9985c92ea800c3a0bae3f9c1b421c6fffb7c21e1dc91d005c5378e"
+  }
+}

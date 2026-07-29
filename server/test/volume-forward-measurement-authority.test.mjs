@@ -97,8 +97,9 @@ function analyzePureCore(source) {
     [/\bperformance\s*(?:\.|\[\s*["'])now(?:["']\s*\])?\s*\(/, 'ambient monotonic clock'],
     [/\bMath\s*(?:\.|\[\s*["'])random(?:["']\s*\])?\s*\(/, 'randomness'],
     [/\bcrypto\s*(?:\.|\[\s*["'])(?:randomUUID|getRandomValues|randomBytes)(?:["']\s*\])?\s*\(/, 'randomness'],
-    [/\b(?:setTimeout|setInterval|setImmediate|queueMicrotask)\s*\(/, 'timer'],
-    [/\bglobalThis\s*\[\s*["'](?:setTimeout|setInterval|setImmediate|queueMicrotask)["']\s*\]/, 'computed timer'],
+    [/(?<![.\w])(?:setTimeout|setInterval|setImmediate|queueMicrotask)\s*\(/, 'timer'],
+    [/\b(?:globalThis|global)\s*(?:\?\.|\.)\s*(?:setTimeout|setInterval|setImmediate|queueMicrotask)\b/, 'global timer'],
+    [/\b(?:globalThis|global)\s*(?:\?\.)?\s*\[\s*["'](?:setTimeout|setInterval|setImmediate|queueMicrotask)["']\s*\]/, 'computed timer'],
   ];
   for (const [pattern, label] of ambientPatterns) {
     if (pattern.test(normalized)) violations.push(label);
@@ -278,7 +279,7 @@ function changedPaths() {
   return [...new Set([...committed, ...working])].sort();
 }
 
-test('V-I2/V-I3 changes remain inside the exclusive forward-measurement source and test scope', () => {
+test('V-I2/V-I3/V-I4 changes remain inside the exclusive forward-measurement source and test scope', () => {
   const allowed = [
     /^server\/src\/engine\/volume\/forwardMeasurement[^/]*\.ts$/,
     /^server\/src\/engine\/volume\/engine\.ts$/,
@@ -323,12 +324,25 @@ test('negative controls catch static, aliased, computed, and dynamically assembl
     `new globalThis['Web' + 'Socket'](endpoint);`,
     `process['e' + 'nv'].VOLUME_ENDPOINT`,
     `Date['n' + 'ow'](); Math['ran' + 'dom']();`,
+    `globalThis.setTimeout(callback, 1);`,
+    `globalThis?.setInterval(callback, 1);`,
+    `global.setImmediate(callback);`,
+    `global?.queueMicrotask(callback);`,
+    `globalThis['set' + 'Timeout'](callback, 1);`,
+    `global?.['queue' + 'Microtask'](callback);`,
     `ports['sub' + 'mit'](plan);`,
     `store['compare' + 'AndSet'](expected, next);`,
   ];
   for (const fixture of fixtures) {
     assert.notDeepEqual(analyzePureCore(fixture), [], fixture);
   }
+  assert.deepEqual(
+    analyzePureCore(
+      `this.timers.setTimeout(callback, 1);`
+        + ` this.timers.clearTimeout(handle);`,
+    ),
+    [],
+  );
 });
 
 test('negative control catches forbidden authority in a transitive local helper', () => {

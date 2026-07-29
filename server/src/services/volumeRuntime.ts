@@ -10,6 +10,15 @@ import {
   type VolumeRuntimeForwardDetectorCut,
 } from '../engine/volume/forwardMeasurementRunner.js';
 import {
+  createVolumeForwardMeasurementScheduler,
+  validateVolumeForwardMeasurementActivation,
+  type VolumeForwardMeasurementActivationConfig,
+  type VolumeForwardMeasurementCapturePort,
+  type VolumeForwardMeasurementSchedulerSnapshot,
+  type VolumeForwardMeasurementTimerHandle,
+  type VolumeForwardMeasurementTimerPort,
+} from '../engine/volume/forwardMeasurementScheduler.js';
+import {
   assessVolumeEconomics,
   VOLUME_CURRENT_CONDITIONAL_PROXY,
   type VolumeEconomicsAssessment,
@@ -190,19 +199,15 @@ export interface VolumeRuntimeOptions {
   sourceRecoveryBaseMs?: number;
   random?: () => number;
   streamFactory?: VolumeStreamFactory;
+  /** Explicit V-I4 capture activation. Absence is the literal default OFF. */
+  forwardMeasurementActivation?: unknown;
   /**
-   * Explicit, synchronous, observation-only V-I3 seam. Production remains
-   * unbound by default. The observer receives only sanitized public detector
-   * cuts and has no submit, CAS, private-read, or mutable engine authority.
+   * The already-armed V-I3 detector-to-capture owner. V-I4 never constructs a
+   * second runner or store; active configuration requires this exact port.
    */
-  forwardMeasurementObserver?: (
-    cut: Readonly<VolumeRuntimeForwardDetectorCut>,
-  ) => void;
-  /**
-   * Accepted V-I3 capture-generation identity. Omitted production composition
-   * continues to report the runtime's own generation.
-   */
-  forwardMeasurementRuntimeGeneration?: number;
+  forwardMeasurementCapture?: Readonly<VolumeForwardMeasurementCapturePort>;
+  /** Injected one-shot timer seam for deterministic scheduler proof. */
+  forwardMeasurementTimerPort?: Readonly<VolumeForwardMeasurementTimerPort>;
   /** Deterministic test seam for the local monotonic receive clock. */
   forwardMeasurementMonotonicNowNs?: () => bigint;
 }
@@ -325,12 +330,19 @@ export class VolumeRuntime {
   private tradeMessages = 0;
   private evidenceRevision = 0;
   private evidenceObserver: ((cut: VolumeRuntimeEvidenceCut) => void) | null = null;
-  private readonly forwardMeasurementObserver:
-    ((cut: Readonly<VolumeRuntimeForwardDetectorCut>) => void) | null;
-  private readonly forwardMeasurementRuntimeGeneration: number | null;
+  private readonly forwardMeasurementActivation:
+    Readonly<VolumeForwardMeasurementActivationConfig>;
+  private readonly forwardMeasurementCapture:
+    Readonly<VolumeForwardMeasurementCapturePort> | null;
+  private readonly forwardMeasurementTimerPort:
+    Readonly<VolumeForwardMeasurementTimerPort>;
   private readonly forwardMeasurementMonotonicNowNs: () => bigint;
+  private forwardMeasurementScheduler: ReturnType<
+    typeof createVolumeForwardMeasurementScheduler
+  > | null = null;
+  private forwardMeasurementSchedulerSnapshot:
+    Readonly<VolumeForwardMeasurementSchedulerSnapshot>;
   private forwardMeasurementTickRevision = 0;
-  private forwardMeasurementObserverFailureCount = 0;
   private configKey = '';
   private persistedEventKeys = new Set<string>();
   private persistedEventOrder: string[] = [];
@@ -361,6 +373,18 @@ export class VolumeRuntime {
     private readonly nowSource: () => number = () => Date.now(),
     options: Readonly<VolumeRuntimeOptions> = Object.freeze({}),
   ) {
+    if (
+      [
+        'forwardMeasurementObserver',
+        'forwardMeasurementRuntimeGeneration',
+      ].some((key) =>
+        Object.prototype.hasOwnProperty.call(options, key)
+      )
+    ) {
+      throw new TypeError(
+        'VOLUME_FORWARD_MEASUREMENT_LEGACY_OPTIONS_FORBIDDEN',
+      );
+    }
     const recoveryBaseMs = options.sourceRecoveryBaseMs ?? SOURCE_RECOVERY_BASE_MS;
     if (
       !Number.isSafeInteger(recoveryBaseMs)
@@ -376,36 +400,87 @@ export class VolumeRuntime {
       throw new TypeError('VOLUME_STREAM_FACTORY_INVALID');
     }
     if (
-      options.forwardMeasurementObserver !== undefined
-      && typeof options.forwardMeasurementObserver !== 'function'
-    ) {
-      throw new TypeError('VOLUME_FORWARD_MEASUREMENT_OBSERVER_INVALID');
-    }
-    if (
       options.forwardMeasurementMonotonicNowNs !== undefined
       && typeof options.forwardMeasurementMonotonicNowNs !== 'function'
     ) {
       throw new TypeError('VOLUME_FORWARD_MEASUREMENT_MONOTONIC_CLOCK_INVALID');
     }
+    this.forwardMeasurementActivation =
+      validateVolumeForwardMeasurementActivation(
+        options.forwardMeasurementActivation,
+      );
     if (
-      options.forwardMeasurementRuntimeGeneration !== undefined
-      && (
-        !Number.isSafeInteger(options.forwardMeasurementRuntimeGeneration)
-        || options.forwardMeasurementRuntimeGeneration < 1
-      )
+      this.forwardMeasurementActivation.captureEnabled
+        !== (options.forwardMeasurementCapture !== undefined)
     ) {
-      throw new TypeError('VOLUME_FORWARD_MEASUREMENT_GENERATION_INVALID');
+      throw new TypeError(
+        'VOLUME_FORWARD_MEASUREMENT_ACTIVATION_PORT_MISMATCH',
+      );
     }
     this.sourceRecoveryBaseMs = recoveryBaseMs;
     this.recoveryRandom = options.random ?? Math.random;
     this.streamFactory = options.streamFactory
       ?? ((name, url, onMessage, onStatus) => new BinanceStream(name, url, onMessage, onStatus));
-    this.forwardMeasurementObserver =
-      options.forwardMeasurementObserver ?? null;
-    this.forwardMeasurementRuntimeGeneration =
-      options.forwardMeasurementRuntimeGeneration ?? null;
+    this.forwardMeasurementCapture =
+      options.forwardMeasurementCapture ?? null;
+    this.forwardMeasurementTimerPort =
+      options.forwardMeasurementTimerPort
+      ?? Object.freeze({
+        setTimeout: (
+          callback: () => void,
+          delayMs: number,
+        ): VolumeForwardMeasurementTimerHandle =>
+          setTimeout(callback, delayMs),
+        clearTimeout: (
+          handle: VolumeForwardMeasurementTimerHandle,
+        ): void => clearTimeout(handle as NodeJS.Timeout),
+      });
     this.forwardMeasurementMonotonicNowNs =
       options.forwardMeasurementMonotonicNowNs ?? (() => process.hrtime.bigint());
+    this.forwardMeasurementSchedulerSnapshot = Object.freeze({
+      schemaVersion: 'volume.forward.capture-activation.v1',
+      state: this.forwardMeasurementActivation.captureEnabled
+        ? 'WAITING'
+        : 'OFF',
+      captureEnabled: this.forwardMeasurementActivation.captureEnabled,
+      activationId: this.forwardMeasurementActivation.captureEnabled
+        ? this.forwardMeasurementActivation.activationId
+        : null,
+      runtimeGeneration: this.forwardMeasurementActivation.captureEnabled
+        ? this.forwardMeasurementActivation.runtimeGeneration
+        : null,
+      resume: this.forwardMeasurementActivation.captureEnabled
+        && this.forwardMeasurementActivation.resume,
+      warmupStartMs: this.forwardMeasurementActivation.captureEnabled
+        ? this.forwardMeasurementActivation.warmupStartMs
+        : null,
+      maturityAtMs: this.forwardMeasurementActivation.captureEnabled
+        ? this.forwardMeasurementActivation.maturityAtMs
+        : null,
+      detectorCadenceMs: this.forwardMeasurementActivation.captureEnabled
+        ? this.forwardMeasurementActivation.detectorCadenceMs
+        : null,
+      running: false,
+      disposed: false,
+      timerPending: false,
+      tickInFlight: false,
+      nextDeadlineMs: null,
+      nextCaptureCutIndex: 0,
+      expectedCaptureCutCount: 0,
+      forwardedCutCount: 0,
+      overlapPreventedCount: 0,
+      failureCount: 0,
+      closeCount: 0,
+      runnerState: null,
+      reasonCodes: Object.freeze([
+        this.forwardMeasurementActivation.captureEnabled
+          ? 'CAPTURE_SCHEDULER_NOT_STARTED'
+          : 'CAPTURE_ACTIVATION_OFF',
+      ]),
+      consumerGate:
+        'BLOCKED_VE2_INTERVAL_NOT_TERMINAL_ACCEPTED',
+      profitabilityClaim: false,
+    });
     this.engine = new VolumeEngine(systemClock, undefined, {
       emit: (event) => this.persistEvent(event),
     });
@@ -435,6 +510,30 @@ export class VolumeRuntime {
           }),
         )
       : null;
+    if (this.forwardMeasurementActivation.captureEnabled) {
+      this.forwardMeasurementScheduler =
+        createVolumeForwardMeasurementScheduler({
+          config: this.forwardMeasurementActivation,
+          capture: this.forwardMeasurementCapture,
+          clock: () => this.latchedNowMs(),
+          timers: this.forwardMeasurementTimerPort,
+          runDetectorTick: (
+            captureCut: boolean,
+            admittedAtMs: number,
+          ) => this.onTick(
+            this.generation,
+            captureCut ? admittedAtMs : null,
+          ),
+          onCaptureDetached: () => {
+            this.forwardMeasurementSchedulerSnapshot =
+              this.forwardMeasurementScheduler?.snapshot()
+              ?? this.forwardMeasurementSchedulerSnapshot;
+            this.installStandardTickTimer(this.generation);
+          },
+        });
+      this.forwardMeasurementSchedulerSnapshot =
+        this.forwardMeasurementScheduler.snapshot();
+    }
   }
 
   async start(): Promise<void> {
@@ -452,7 +551,6 @@ export class VolumeRuntime {
     const generation = ++this.generation;
     this.evidenceRevision = 0;
     this.forwardMeasurementTickRevision = 0;
-    this.forwardMeasurementObserverFailureCount = 0;
     this.lastAggTradeId.clear();
     this.lastRawTradeId.clear();
     this.sourceContinuityLatch.clear();
@@ -475,7 +573,13 @@ export class VolumeRuntime {
       && !this.engine.isRunning()
       && this.streams.length === 0
       && this.streamStopQuarantine.size === 0
-    ) return;
+    ) {
+      if (this.forwardMeasurementScheduler !== null) {
+        this.forwardMeasurementSchedulerSnapshot =
+          this.forwardMeasurementScheduler.dispose();
+      }
+      return;
+    }
     this.stopping = true;
     try {
       const closingGeneration = this.generation;
@@ -527,6 +631,10 @@ export class VolumeRuntime {
       this.streamRetryMs = 1_000;
       this.bookBusyGeneration = null;
       this.warmingSymbols.clear();
+      if (this.forwardMeasurementScheduler !== null) {
+        this.forwardMeasurementSchedulerSnapshot =
+          this.forwardMeasurementScheduler.dispose();
+      }
       this.engine.stop();
     } finally {
       this.stopping = false;
@@ -538,7 +646,19 @@ export class VolumeRuntime {
       this.configKey = this.applyDynamicConfig();
       await this.refreshUniverse(generation);
       if (!this.isActive(generation)) return;
-      this.tickTimer = setInterval(() => this.onTick(generation), this.engine.cfg.tickMs);
+      if (this.forwardMeasurementScheduler === null) {
+        this.installStandardTickTimer(generation);
+      } else {
+        this.forwardMeasurementSchedulerSnapshot =
+          this.forwardMeasurementScheduler.start();
+        if (
+          this.forwardMeasurementSchedulerSnapshot.state === 'FAILED'
+          || this.forwardMeasurementSchedulerSnapshot.state === 'STOPPED'
+          || this.forwardMeasurementSchedulerSnapshot.state === 'READY'
+        ) {
+          this.installStandardTickTimer(generation);
+        }
+      }
       this.bookTimer = setInterval(
         () => this.launch('book refresh', generation, () => this.refreshBooks(generation)),
         BOOK_REFRESH_MS,
@@ -573,7 +693,21 @@ export class VolumeRuntime {
     }
   }
 
-  private onTick(generation: number): void {
+  private installStandardTickTimer(generation: number): void {
+    if (
+      this.tickTimer !== null
+      || !this.isActive(generation)
+    ) return;
+    this.tickTimer = setInterval(
+      () => this.onTick(generation),
+      this.engine.cfg.tickMs,
+    );
+  }
+
+  private onTick(
+    generation: number,
+    forwardMeasurementAdmittedAtMs: number | null = null,
+  ): void {
     if (!this.isActive(generation)) return;
     try {
       const previousKey = this.configKey;
@@ -582,13 +716,40 @@ export class VolumeRuntime {
       if (nextKey !== previousKey) {
         this.launch('config universe refresh', generation, () => this.refreshUniverse(generation));
       }
+      let captureCut =
+        this.forwardMeasurementScheduler?.wantsDetectorCut() === true;
+      const captureCadenceMs =
+        this.forwardMeasurementActivation.captureEnabled
+          ? this.forwardMeasurementActivation.detectorCadenceMs
+          : null;
+      if (
+        captureCut
+        && (
+          forwardMeasurementAdmittedAtMs === null
+          || this.engine.killSwitch() !== true
+          || this.engine.cfg.tickMs !== captureCadenceMs
+        )
+      ) {
+        this.forwardMeasurementSchedulerSnapshot =
+          this.forwardMeasurementScheduler?.failClosed(
+            forwardMeasurementAdmittedAtMs === null
+              ? 'CAPTURE_ADMISSION_TIME_MISSING'
+              : this.engine.killSwitch() !== true
+              ? 'CAPTURE_REQUIRES_KILL_SWITCH_ON'
+              : 'CAPTURE_DETECTOR_CADENCE_DRIFT',
+          ) ?? this.forwardMeasurementSchedulerSnapshot;
+        captureCut = false;
+      }
       const detectorSourceCut = this.engine.tick(
-        this.forwardMeasurementObserver !== null,
+        captureCut,
       );
-      this.publishForwardMeasurementDetectorCut(
-        generation,
-        detectorSourceCut,
-      );
+      if (captureCut) {
+        this.publishForwardMeasurementDetectorCut(
+          generation,
+          detectorSourceCut,
+          forwardMeasurementAdmittedAtMs,
+        );
+      }
       const tickAtMs = this.engine.lastTick();
       if (tickAtMs !== null) {
         this.evaluateStrategySlice();
@@ -637,10 +798,24 @@ export class VolumeRuntime {
   private publishForwardMeasurementDetectorCut(
     generation: number,
     sourceCut: Readonly<VolumeForwardDetectorSourceCut> | null,
+    admittedAtMs: number | null,
   ): void {
-    if (this.forwardMeasurementObserver === null) return;
-    if (sourceCut === null || generation !== this.generation) {
-      this.forwardMeasurementObserverFailureCount += 1;
+    const scheduler = this.forwardMeasurementScheduler;
+    if (scheduler === null || !scheduler.wantsDetectorCut()) return;
+    if (
+      sourceCut === null
+      || generation !== this.generation
+      || admittedAtMs === null
+      || !Number.isSafeInteger(admittedAtMs)
+      || admittedAtMs < 0
+    ) {
+      this.forwardMeasurementSchedulerSnapshot = scheduler.failClosed(
+        generation !== this.generation
+          ? 'CAPTURE_RUNTIME_GENERATION_STALE'
+          : sourceCut === null
+          ? 'CAPTURE_DETECTOR_SOURCE_CUT_MISSING'
+          : 'CAPTURE_ADMISSION_TIME_INVALID',
+      );
       return;
     }
     let localMonotonicNs: bigint;
@@ -659,29 +834,23 @@ export class VolumeRuntime {
       const cut: Readonly<VolumeRuntimeForwardDetectorCut> = Object.freeze({
         schemaVersion: VOLUME_FORWARD_RUNTIME_DETECTOR_CUT_SCHEMA,
         runtimeGeneration:
-          this.forwardMeasurementRuntimeGeneration ?? generation,
+          this.forwardMeasurementActivation.captureEnabled
+            ? this.forwardMeasurementActivation.runtimeGeneration
+            : generation,
         detectorTickRevision: this.forwardMeasurementTickRevision,
-        localReceivedAtMs: this.latchedNowMs(),
+        localReceivedAtMs: admittedAtMs,
         localMonotonicNs: String(localMonotonicNs),
-        observerFailureCount:
-          this.forwardMeasurementObserverFailureCount,
+        observerFailureCount: 0,
         sourceCut,
       });
-      const result = this.forwardMeasurementObserver(cut) as unknown;
-      if (
-        result !== null
-        && (
-          typeof result === 'object'
-          || typeof result === 'function'
-        )
-        && typeof (result as PromiseLike<unknown>).then === 'function'
-      ) {
-        throw new TypeError('forward measurement observer must be synchronous');
-      }
+      this.forwardMeasurementSchedulerSnapshot =
+        scheduler.observe(cut);
     } catch (error) {
-      this.forwardMeasurementObserverFailureCount += 1;
+      this.forwardMeasurementSchedulerSnapshot = scheduler.failClosed(
+        'CAPTURE_RUNTIME_FORWARD_FAILED',
+      );
       this.safeLog('error_event', null, {
-        source: 'volume-runtime.forward-measurement-observer',
+        source: 'volume-runtime.forward-measurement-scheduler',
         message: error instanceof Error ? error.message : String(error),
       });
     }
@@ -1972,6 +2141,10 @@ export class VolumeRuntime {
 
   snapshot(): Record<string, unknown> {
     const now = this.latchedNowMs();
+    if (this.forwardMeasurementScheduler !== null) {
+      this.forwardMeasurementSchedulerSnapshot =
+        this.forwardMeasurementScheduler.snapshot();
+    }
     const decisions = this.engine.decisions(2_000);
     const latestDecision = new Map<string, (typeof decisions)[number]>();
     for (const decision of decisions) latestDecision.set(decision.symbol, decision);
@@ -2102,6 +2275,8 @@ export class VolumeRuntime {
       },
       strategySlice: this.strategySliceSnapshot(),
       economicExit: this.economicExitSnapshot(),
+      forwardMeasurementCapture:
+        this.forwardMeasurementSchedulerSnapshot,
       rows,
     };
   }

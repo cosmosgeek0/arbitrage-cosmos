@@ -1,0 +1,9 @@
+1c81f292e6c0ed3259f8ebcc5dbd30298e2fa354f1097a36d7d40c126b7d75f8  quant/research/ve2/V-I4-README.md
+bb84729a13f575f538d050f440ffa007fd96f1d8861bea71103e0222421a951a  quant/research/ve2/v-i4-runtime-adapter.mjs
+8de5394d5069bd01b43cfc99ecd1adfff7de267160aa9b23e80145eba495066e  quant/research/ve2/v-i4-runtime-adapter.test.mjs
+22d1849a8daee5cc22837645b12db0b285c5d80a39e54734cf0e3f1d68052b8e  quant/research/ve2/verify-v-i4.mjs
+825b476c67ee7582096646e49deeb896974893b9512f7a246816697707860e3c  server/src/engine/volume/forwardMeasurementScheduler.ts
+303a3f6cd427e0ae113a3ac750f3f94284a74bce6950b57cc7b7ffd003d8b7e4  server/src/services/volumeRuntime.ts
+eed848db8a7be732ebc5d55f0b7a89d026a4758afea11c4b044a8940c82813a5  server/test/volume-forward-measurement-authority.test.mjs
+90910b5dd826c1e8aa4e75b64f4339060e0fc21f5fec0d65fb2fb23541efe73d  server/test/volume-forward-measurement-runner.test.mjs
+bc2b8cdecb4bc284010a34a3dd77dca391b605dc94dfc629470f5a2fc26deaed  server/test/volume-forward-measurement-scheduler.test.mjs

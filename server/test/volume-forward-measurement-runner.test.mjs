@@ -12,6 +12,9 @@ import {
   createVolumeForwardMeasurementRunner,
   VOLUME_FORWARD_MEASUREMENT_RUNNER_AUTHORITY,
 } from '../dist/engine/volume/forwardMeasurementRunner.js';
+import {
+  VOLUME_FORWARD_MEASUREMENT_ACTIVATION_SCHEMA,
+} from '../dist/engine/volume/forwardMeasurementScheduler.js';
 import { ManualClock } from '../dist/engine/v0/clock.js';
 import { VolumeRuntime } from '../dist/services/volumeRuntime.js';
 
@@ -137,6 +140,100 @@ function schedule() {
       recordOnly: true,
     },
   };
+}
+
+function runtimeConfig(killSwitch = true) {
+  return {
+    allowedSymbols: [],
+    blockedSymbols: [],
+    killSwitch,
+    maxOrderNotionalUsd: 10,
+    minQuoteVolume24h: 1,
+  };
+}
+
+function runtimeActivation({
+  runtimeGeneration = 1,
+  resume = false,
+} = {}) {
+  return {
+    schemaVersion: VOLUME_FORWARD_MEASUREMENT_ACTIVATION_SCHEMA,
+    captureEnabled: true,
+    activationId: schedule().activationId,
+    runtimeGeneration,
+    resume,
+    warmupStartMs: WARMUP_START_MS,
+    maturityAtMs: MATURITY_AT_MS,
+    detectorCadenceMs: 2_000,
+  };
+}
+
+function runtimeCapture({ observeFailure = false } = {}) {
+  let state = 'SCHEDULED';
+  let generation = null;
+  let warmup = 0;
+  let observeCount = 0;
+  let closeCount = 0;
+  return {
+    observe(cut) {
+      observeCount += 1;
+      if (observeFailure) throw new Error('capture unavailable');
+      generation = cut.runtimeGeneration;
+      warmup += 1;
+      state = 'WARMING';
+    },
+    advanceTime() {},
+    snapshot() {
+      return {
+        state,
+        activationId: schedule().activationId,
+        recordedWarmupCutCount: warmup,
+        expectedWarmupCutCount: 7_200,
+        recordedDetectorCutCount: 0,
+        expectedDetectorCutCount: 1_296_031,
+        runtimeGeneration: generation,
+      };
+    },
+    close() {
+      closeCount += 1;
+    },
+    counts() {
+      return { observeCount, closeCount };
+    },
+  };
+}
+
+function runtimeTimers() {
+  const handles = [];
+  let setCount = 0;
+  let clearCount = 0;
+  return {
+    port: {
+      setTimeout(callback, delayMs) {
+        setCount += 1;
+        const handle = {
+          callback,
+          delayMs,
+          cleared: false,
+          unref() {},
+        };
+        handles.push(handle);
+        return handle;
+      },
+      clearTimeout(handle) {
+        clearCount += 1;
+        handle.cleared = true;
+      },
+    },
+    handles,
+    counts() {
+      return { setCount, clearCount };
+    },
+  };
+}
+
+function flush() {
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 function runtimeCut({
@@ -450,45 +547,286 @@ test('durable checkpoint resumes the exact cut cursor across one runtime generat
   assert.equal(resumed.checkpoint().checkpointRevision, 7_202);
 });
 
-test('VolumeRuntime forwards every direct engine evaluation cut synchronously and latches observer failure', () => {
+test('VolumeRuntime rejects every removed V-I3 observer option even when undefined', () => {
+  for (const legacyKey of [
+    'forwardMeasurementObserver',
+    'forwardMeasurementRuntimeGeneration',
+  ]) {
+    assert.throws(
+      () => new VolumeRuntime(
+        { logEvent() {} },
+        () => runtimeConfig(),
+        () => [],
+        null,
+        () => WARMUP_START_MS,
+        { [legacyKey]: undefined },
+      ),
+      /VOLUME_FORWARD_MEASUREMENT_LEGACY_OPTIONS_FORBIDDEN/,
+    );
+  }
+});
+
+test('VolumeRuntime forwards the admitted slot time despite a late post-tick clock read', async () => {
   const observed = [];
-  let observerCalls = 0;
   let monotonic = 1_000_000_000n;
+  let runnerState = 'SCHEDULED';
+  let runnerGeneration = null;
+  let closeCount = 0;
+  const timerHandles = [];
+  const timerPort = {
+    setTimeout(callback, delayMs) {
+      const handle = {
+        callback,
+        delayMs,
+        unrefCount: 0,
+        unref() {
+          this.unrefCount += 1;
+        },
+      };
+      timerHandles.push(handle);
+      return handle;
+    },
+    clearTimeout() {},
+  };
+  const capture = {
+    observe(cut) {
+      observed.push(cut);
+      runnerGeneration = cut.runtimeGeneration;
+      runnerState = 'WARMING';
+    },
+    advanceTime() {},
+    snapshot() {
+      return {
+        state: runnerState,
+        activationId: schedule().activationId,
+        recordedWarmupCutCount: observed.length,
+        expectedWarmupCutCount: 7_200,
+        recordedDetectorCutCount: 0,
+        expectedDetectorCutCount: 1_296_031,
+        runtimeGeneration: runnerGeneration,
+      };
+    },
+    close() {
+      closeCount += 1;
+    },
+  };
+  let wallReads = 0;
   const runtime = new VolumeRuntime(
     { logEvent() {} },
-    () => ({
-      allowedSymbols: [],
-      blockedSymbols: [],
-      killSwitch: true,
-      maxOrderNotionalUsd: 10,
-      minQuoteVolume24h: 1,
-    }),
+    () => runtimeConfig(),
     () => [],
     null,
-    () => INTERVAL_START_MS,
+    () => {
+      wallReads += 1;
+      return wallReads <= 2
+        ? WARMUP_START_MS
+        : WARMUP_START_MS + 2_000;
+    },
     {
+      forwardMeasurementActivation: runtimeActivation(),
+      forwardMeasurementCapture: capture,
+      forwardMeasurementTimerPort: timerPort,
       forwardMeasurementMonotonicNowNs: () => {
         const value = monotonic;
         monotonic += 2_000_000_000n;
         return value;
-      },
-      forwardMeasurementObserver: (cut) => {
-        observerCalls += 1;
-        if (observerCalls === 1) throw new Error('durable sink unavailable');
-        observed.push(cut);
       },
     },
   );
   runtime.running = true;
   runtime.generation = 1;
   runtime.engine.start();
-  runtime.onTick(1);
-  runtime.onTick(1);
+  runtime.applyDynamicConfig();
+  runtime.forwardMeasurementScheduler.start();
+  assert.equal(timerHandles.length, 1);
+  assert.equal(timerHandles[0].delayMs, 0);
+  assert.equal(timerHandles[0].unrefCount, 1);
+  timerHandles[0].callback();
+  await new Promise((resolve) => setImmediate(resolve));
+
   assert.equal(observed.length, 1);
   assert.equal(observed[0].runtimeGeneration, 1);
-  assert.equal(observed[0].detectorTickRevision, 2);
-  assert.equal(observed[0].observerFailureCount, 1);
+  assert.equal(observed[0].detectorTickRevision, 1);
+  assert.equal(observed[0].observerFailureCount, 0);
+  assert.equal(observed[0].localReceivedAtMs, WARMUP_START_MS);
+  assert.equal(wallReads, 3);
   assert.equal(observed[0].sourceCut.sourceId, VOLUME_FORWARD_DETECTOR_SOURCE_ID);
   assert.equal(observed[0].sourceCut.evaluationUniverseCount, 0);
+  assert.equal(runtime.forwardMeasurementScheduler.snapshot().state, 'WARMING');
   runtime.stop();
+  assert.equal(closeCount, 1);
+});
+
+test('VolumeRuntime refuses capture immediately when actual operator kill switch is OFF', async () => {
+  const timerHandles = [];
+  let observeCount = 0;
+  let closeCount = 0;
+  const runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => runtimeConfig(false),
+    () => [],
+    null,
+    () => WARMUP_START_MS,
+    {
+      forwardMeasurementActivation: runtimeActivation(),
+      forwardMeasurementCapture: {
+        observe() {
+          observeCount += 1;
+        },
+        advanceTime() {},
+        snapshot() {
+          return {
+            state: 'SCHEDULED',
+            activationId: schedule().activationId,
+            recordedWarmupCutCount: 0,
+            expectedWarmupCutCount: 7_200,
+            recordedDetectorCutCount: 0,
+            expectedDetectorCutCount: 1_296_031,
+            runtimeGeneration: null,
+          };
+        },
+        close() {
+          closeCount += 1;
+        },
+      },
+      forwardMeasurementTimerPort: {
+        setTimeout(callback, delayMs) {
+          const handle = { callback, delayMs, unref() {} };
+          timerHandles.push(handle);
+          return handle;
+        },
+        clearTimeout() {},
+      },
+      forwardMeasurementMonotonicNowNs: () => 1n,
+    },
+  );
+  runtime.running = true;
+  runtime.generation = 1;
+  runtime.engine.start();
+  runtime.applyDynamicConfig();
+  runtime.forwardMeasurementScheduler.start();
+  timerHandles[0].callback();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(observeCount, 0);
+  assert.equal(runtime.forwardMeasurementScheduler.snapshot().state, 'FAILED');
+  assert.deepEqual(
+    runtime.forwardMeasurementScheduler.snapshot().reasonCodes,
+    ['CAPTURE_REQUIRES_KILL_SWITCH_ON'],
+  );
+  assert.equal(closeCount, 1);
+  runtime.stop();
+});
+
+test('active capture replaces the normal detector timer with exactly one scheduler timer', async () => {
+  const timers = runtimeTimers();
+  const capture = runtimeCapture();
+  const runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => runtimeConfig(),
+    () => [],
+    null,
+    () => WARMUP_START_MS,
+    {
+      forwardMeasurementActivation: runtimeActivation(),
+      forwardMeasurementCapture: capture,
+      forwardMeasurementTimerPort: timers.port,
+      forwardMeasurementMonotonicNowNs: () => 1n,
+    },
+  );
+  try {
+    await runtime.start();
+    assert.equal(runtime.tickTimer, null);
+    assert.equal(timers.counts().setCount, 1);
+    assert.equal(timers.handles.length, 1);
+    assert.equal(
+      runtime.forwardMeasurementScheduler.snapshot().timerPending,
+      true,
+    );
+  } finally {
+    runtime.stop();
+  }
+  assert.equal(timers.counts().clearCount, 1);
+  assert.equal(capture.counts().closeCount, 1);
+});
+
+test('capture failure detaches to one ordinary detector cadence only', async () => {
+  const timers = runtimeTimers();
+  const capture = runtimeCapture({ observeFailure: true });
+  const runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => runtimeConfig(),
+    () => [],
+    null,
+    () => WARMUP_START_MS,
+    {
+      forwardMeasurementActivation: runtimeActivation(),
+      forwardMeasurementCapture: capture,
+      forwardMeasurementTimerPort: timers.port,
+      forwardMeasurementMonotonicNowNs: () => 1n,
+    },
+  );
+  try {
+    await runtime.start();
+    assert.equal(runtime.tickTimer, null);
+    timers.handles[0].callback();
+    await flush();
+    const ordinaryTimer = runtime.tickTimer;
+    assert.notEqual(ordinaryTimer, null);
+    assert.equal(
+      runtime.forwardMeasurementScheduler.snapshot().state,
+      'FAILED',
+    );
+    assert.equal(timers.counts().setCount, 1);
+    timers.handles[0].callback();
+    await flush();
+    assert.equal(runtime.tickTimer, ordinaryTimer);
+    assert.equal(timers.counts().setCount, 1);
+  } finally {
+    runtime.stop();
+  }
+  assert.deepEqual(capture.counts(), {
+    observeCount: 1,
+    closeCount: 1,
+  });
+});
+
+test('stop and restart cannot rearm the same capture activation', async () => {
+  const timers = runtimeTimers();
+  const capture = runtimeCapture();
+  const runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => runtimeConfig(),
+    () => [],
+    null,
+    () => WARMUP_START_MS,
+    {
+      forwardMeasurementActivation: runtimeActivation(),
+      forwardMeasurementCapture: capture,
+      forwardMeasurementTimerPort: timers.port,
+      forwardMeasurementMonotonicNowNs: () => 1n,
+    },
+  );
+  await runtime.start();
+  assert.equal(timers.counts().setCount, 1);
+  runtime.stop();
+  assert.equal(timers.counts().clearCount, 1);
+  assert.equal(capture.counts().closeCount, 1);
+
+  try {
+    await runtime.start();
+    assert.equal(timers.counts().setCount, 1);
+    assert.notEqual(runtime.tickTimer, null);
+    assert.equal(
+      runtime.forwardMeasurementScheduler.snapshot().state,
+      'STOPPED',
+    );
+    assert.equal(
+      runtime.forwardMeasurementScheduler.snapshot().disposed,
+      true,
+    );
+  } finally {
+    runtime.stop();
+  }
+  assert.equal(capture.counts().closeCount, 1);
 });

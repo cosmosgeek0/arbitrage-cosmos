@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmosgeek.org/schemas/release-package-manifest.v1.json",
+  "title": "Cosmos deterministic release package manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "packageClass",
+    "packageRoot",
+    "inputSha",
+    "sourceTree",
+    "sourceDateEpoch",
+    "archive",
+    "releaseInput",
+    "target",
+    "toolchain",
+    "nativeAddons",
+    "targetModePlan",
+    "targetModePlanSha256",
+    "serviceUnitContract",
+    "members",
+    "installState",
+    "deployAuthority"
+  ],
+  "properties": {
+    "schema": { "const": "cosmos.release-package.v1" },
+    "packageClass": { "enum": ["OFFHOST_FROZEN_SOURCE_BUILD", "SIMULATION_ONLY"] },
+    "packageRoot": { "type": "string", "pattern": "^cosmos-release-[0-9a-f]{40}$" },
+    "inputSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sourceTree": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sourceDateEpoch": { "type": "integer", "minimum": 0 },
+    "archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "sha256", "size", "format"],
+      "properties": {
+        "file": { "type": "string", "pattern": "^cosmos-release-[0-9a-f]{40}\\.tar$" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "size": { "type": "integer", "minimum": 1024 },
+        "format": { "const": "ustar" }
+      }
+    },
+    "releaseInput": { "type": "object" },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "arch"],
+      "properties": {
+        "platform": { "const": "linux" },
+        "arch": { "enum": ["x64", "arm64"] }
+      }
+    },
+    "toolchain": { "type": "object" },
+    "nativeAddons": { "type": "array" },
+    "targetModePlan": { "type": "object" },
+    "targetModePlanSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "serviceUnitContract": { "type": "object" },
+    "members": { "type": "array", "minItems": 1 },
+    "installState": { "const": "NOT_INSTALLED" },
+    "deployAuthority": { "const": "NONE" }
+  }
+}

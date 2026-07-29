@@ -1,0 +1,130 @@
+{
+  "cases": [
+    {
+      "caseId": "account-fee-public-upgrade",
+      "expectedCode": "E_ACCOUNT_FEE_UNKNOWN",
+      "replacements": [
+        {
+          "path": [
+            "accountFee",
+            "state"
+          ],
+          "value": "PUBLIC_SCHEDULE"
+        },
+        {
+          "path": [
+            "accountFee",
+            "amount"
+          ],
+          "value": "4"
+        }
+      ]
+    },
+    {
+      "caseId": "broken-gross-fee-slippage-funding-decomposition",
+      "expectedCode": "E_ECONOMICS_DECOMPOSITION",
+      "replacements": [
+        {
+          "path": [
+            "economics",
+            "declaredScenarioNetPnl",
+            "amount"
+          ],
+          "value": "19"
+        }
+      ]
+    },
+    {
+      "caseId": "executable-capacity-upgrade",
+      "expectedCode": "E_CAPACITY_PROXY_LABEL",
+      "replacements": [
+        {
+          "path": [
+            "capacity",
+            "executableCapacityState"
+          ],
+          "value": "MEASURED"
+        }
+      ]
+    },
+    {
+      "caseId": "gross-notional-substituted-for-capital",
+      "expectedCode": "E_CAPITAL_DENOMINATOR",
+      "replacements": [
+        {
+          "path": [
+            "capital",
+            "capitalDenominator",
+            "kind"
+          ],
+          "value": "GROSS_ENTRY_NOTIONAL"
+        },
+        {
+          "path": [
+            "capital",
+            "capitalDenominator",
+            "amount"
+          ],
+          "value": "2000"
+        }
+      ]
+    },
+    {
+      "caseId": "initial-capital-change-with-stale-normalization",
+      "expectedCode": "E_RETURN_PER_1000",
+      "replacements": [
+        {
+          "path": [
+            "capital",
+            "capitalDenominator",
+            "amount"
+          ],
+          "value": "500"
+        }
+      ]
+    },
+    {
+      "caseId": "public-capacity-relabelled-executable",
+      "expectedCode": "E_CAPACITY_PROXY_LABEL",
+      "replacements": [
+        {
+          "path": [
+            "capacity",
+            "state"
+          ],
+          "value": "EXECUTABLE_CAPACITY"
+        }
+      ]
+    },
+    {
+      "caseId": "usdt-assumed-to-be-usd",
+      "expectedCode": "E_USDT_USD_OVERCLAIM",
+      "replacements": [
+        {
+          "path": [
+            "reporting",
+            "nativeAsset"
+          ],
+          "value": "USD"
+        },
+        {
+          "path": [
+            "reporting",
+            "usdConversion",
+            "state"
+          ],
+          "value": "ASSUMED_PARITY"
+        },
+        {
+          "path": [
+            "reporting",
+            "usdConversion",
+            "rateUsdPerUsdt"
+          ],
+          "value": "1"
+        }
+      ]
+    }
+  ],
+  "schema": "cosmos.dq6.hostile-fixtures.v1"
+}

@@ -1,0 +1,58 @@
+{
+  "archive_base": "https://data.binance.vision",
+  "datasets": [
+    {
+      "id": "spot_kline_1h",
+      "partition": "spot",
+      "template": "data/spot/monthly/klines/{symbol}/1h/{symbol}-1h-{month}.zip"
+    },
+    {
+      "id": "usdm_kline_1h",
+      "partition": "futures/um",
+      "template": "data/futures/um/monthly/klines/{symbol}/1h/{symbol}-1h-{month}.zip"
+    },
+    {
+      "id": "usdm_mark_kline_1h",
+      "partition": "futures/um",
+      "template": "data/futures/um/monthly/markPriceKlines/{symbol}/1h/{symbol}-1h-{month}.zip"
+    },
+    {
+      "id": "usdm_funding_rate",
+      "partition": "futures/um",
+      "template": "data/futures/um/monthly/fundingRate/{symbol}/{symbol}-fundingRate-{month}.zip"
+    }
+  ],
+  "months": [
+    "2025-06",
+    "2025-07",
+    "2025-08",
+    "2025-09",
+    "2025-10",
+    "2025-11",
+    "2025-12",
+    "2026-01",
+    "2026-02",
+    "2026-03",
+    "2026-04",
+    "2026-05",
+    "2026-06"
+  ],
+  "policy": {
+    "archive_member_access_during_acquisition": "FORBIDDEN",
+    "checksum_sidecar_required": true,
+    "holdout_body_acquisition": "ALLOWED_BEFORE_OUTCOMES_BUT_MEMBER_ACCESS_FORBIDDEN",
+    "missing": "FAIL_CLOSED_NO_SUBSTITUTION",
+    "publisher_replacement": "MANIFEST_SHA256_PINS_RETRIEVED_BYTES"
+  },
+  "schema": "cosmos.s2i.source-plan.v1",
+  "symbols": [
+    "ADAUSDT",
+    "BNBUSDT",
+    "BTCUSDT",
+    "DOGEUSDT",
+    "ETHUSDT",
+    "LINKUSDT",
+    "SOLUSDT",
+    "XRPUSDT"
+  ]
+}

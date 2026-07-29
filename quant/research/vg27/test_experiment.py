@@ -156,8 +156,10 @@ def _isolate_packet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
         for name in (
             vg27.FREEZE_V1_NAME,
             vg27.FREEZE_V2_NAME,
+            vg27.FREEZE_V3_NAME,
             vg27.FREEZE_V1_SUPERSESSION_NAME,
             vg27.FREEZE_V2_SUPERSESSION_NAME,
+            vg27.FREEZE_V3_SUPERSESSION_NAME,
         )
     }
     packet = tmp_path / "packet"
@@ -176,30 +178,48 @@ def _synthetic_scenario(
     trial_id: str,
     scenario_name: str,
     *,
+    holdout: bool = False,
     net: str = "1",
 ) -> dict[str, object]:
     net_value = Decimal(net)
     ending = vg27.STARTING_USD + net_value
-    fee = Decimal("0.25")
-    adverse = Decimal("0.25")
+    turnover = Decimal("2000")
+    bps = {
+        "gross": (Decimal(0), Decimal(0)),
+        "base": (Decimal(10), Decimal(5)),
+        "stress": (Decimal(10), Decimal(15)),
+        "severe": (Decimal(20), Decimal(25)),
+    }
+    fee_bps, adverse_bps = bps[scenario_name]
+    fee = turnover * fee_bps / Decimal(10_000)
+    adverse = turnover * adverse_bps / Decimal(10_000)
     gross = net_value + fee + adverse
-    activity = dict.fromkeys(
-        (
-            "2025-07",
-            "2025-08",
-            "2025-09",
-            "2025-10",
-            "2025-11",
-            "2025-12",
-            "2026-01",
-        ),
-        12,
-    )
-    activity["2026-02"] = 16
+    if holdout:
+        activity = {
+            "2026-04": 33,
+            "2026-05": 33,
+            "2026-06": 34,
+        }
+    else:
+        activity = dict.fromkeys(
+            (
+                "2025-07",
+                "2025-08",
+                "2025-09",
+                "2025-10",
+                "2025-11",
+                "2025-12",
+                "2026-01",
+            ),
+            12,
+        )
+        activity["2026-02"] = 16
     return {
-        "activeMonths": 8,
+        "activeMonths": len(activity),
         "activityByMonth": activity,
         "adverseCostUsd": vg27.decimal_text(adverse),
+        "adverseExecutionBpsPerSide": vg27.decimal_text(adverse_bps),
+        "chargeableEntryExitReferenceNotionalUsd": vg27.decimal_text(turnover),
         "costReconciliation": {
             "endingUsd": vg27.decimal_text(ending),
             "matches": True,
@@ -208,6 +228,7 @@ def _synthetic_scenario(
         "endingUsd": vg27.decimal_text(ending),
         "eventCount": 100,
         "executableCapacity": "UNMEASURED",
+        "feeBpsPerSide": vg27.decimal_text(fee_bps),
         "feeCostUsd": vg27.decimal_text(fee),
         "grossTradingPnlUsd": vg27.decimal_text(gross),
         "maxDrawdownFraction": "0.10",
@@ -221,13 +242,16 @@ def _synthetic_scenario(
     }
 
 
-def _synthetic_bootstrap() -> dict[str, object]:
+def _synthetic_bootstrap(
+    *,
+    observations: int = vg27.DEVELOPMENT_OBSERVATIONS,
+) -> dict[str, object]:
     return {
         "blockHours": vg27.BOOTSTRAP_BLOCK_HOURS,
         "lower95UsdPer1k": "1",
         "medianUsdPer1k": "2",
-        "observations": 6552,
-        "oneSidedCenteredP": "0.01",
+        "observations": observations,
+        "oneSidedCenteredP": f"{2 / (vg27.BOOTSTRAP_REPLICATES + 1):.12f}",
         "replicates": vg27.BOOTSTRAP_REPLICATES,
         "upper95UsdPer1k": "3",
     }
@@ -265,22 +289,28 @@ def _synthetic_development(*, authorized: bool) -> dict[str, object]:
         name: {trial_id: _synthetic_bootstrap() for trial_id in trial_ids}
         for name in ("base", "stress")
     }
+    raw_p = {
+        trial_id: float(str(bootstrap["base"][trial_id]["oneSidedCenteredP"]))
+        for trial_id in trial_ids
+    }
     return {
         "authorizedToOpenHoldout": authorized,
         "bootstrap": bootstrap,
         "champion": champion,
-        "championEventConcentrationMaximumMonthFraction": "0.2",
+        "championEventConcentrationMaximumMonthFraction": "0.160000000000",
         "diagnostics": {
             "pboAtMost0.5": True,
             "pboRole": "DIAGNOSTIC_ONLY_NEVER_SELECTION_OR_HOLDOUT_AUTHORIZATION",
         },
         "formalGates": gates,
-        "holmAdjustedP": dict.fromkeys(trial_ids, "0.01"),
+        "holmAdjustedP": {
+            trial_id: f"{value:.12f}" for trial_id, value in vg27.holm_adjust(raw_p).items()
+        },
         "pbo": {
             "blocks": 8,
             "diagnosticOnlyNeverSelectionRescue": True,
             "distinctTrialPaths": 2,
-            "probabilityOverfit": "0.25",
+            "probabilityOverfit": f"{14 / 70:.12f}",
             "splitCount": 70,
             "status": "ESTIMATED",
         },
@@ -289,7 +319,7 @@ def _synthetic_development(*, authorized: bool) -> dict[str, object]:
         "white": {
             "method": "CENTERED_SYNCHRONOUS_WHITE_MAX_STAT",
             "observed": "1",
-            "pValue": "0.01",
+            "pValue": f"{2 / (vg27.BOOTSTRAP_REPLICATES + 1):.12f}",
             "trialCount": len(trial_ids),
         },
     }
@@ -307,14 +337,15 @@ def _synthetic_holdout(champion: str, *, go: bool = True) -> dict[str, object]:
     return {
         "confirmationGates": gates,
         "intervals": {
-            "base": _synthetic_bootstrap(),
-            "stress": _synthetic_bootstrap(),
+            "base": _synthetic_bootstrap(observations=vg27.HOLDOUT_OBSERVATIONS),
+            "stress": _synthetic_bootstrap(observations=vg27.HOLDOUT_OBSERVATIONS),
         },
         "publicVerdict": "GO" if go else "NO_GO",
         "scenarios": {
             scenario.name: _synthetic_scenario(
                 champion,
                 scenario.name,
+                holdout=True,
                 net="-1" if not go and scenario.name == "base" else "1",
             )
             for scenario in vg27.scenarios()
@@ -328,7 +359,11 @@ def _frozen_state(
 ) -> None:
     _isolate_packet(tmp_path, monkeypatch)
     _fake_manifest(tmp_path)
-    for name in (vg27.FREEZE_V1_NAME, vg27.FREEZE_V2_NAME):
+    for name in (
+        vg27.FREEZE_V1_NAME,
+        vg27.FREEZE_V2_NAME,
+        vg27.FREEZE_V3_NAME,
+    ):
         vg27.write_exclusive(
             tmp_path / name,
             vg27.packet_artifact(name).read_bytes(),
@@ -690,6 +725,31 @@ def test_first_packet_marker_create_failure_leaves_retryable_zero_receipts(
     assert vg27.run(tmp_path)["status"] == "NO_GO"
 
 
+def test_run_refuses_preexisting_symlink_packet_inventory_before_consumption(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _frozen_state(tmp_path, monkeypatch)
+    inventory = vg27.packet_artifact(vg27.SHA256SUMS_NAME)
+    inventory.symlink_to(tmp_path / "never-follow-this-inventory")
+    with pytest.raises(vg27.CustodyError, match="inventory exists before run"):
+        vg27.run(tmp_path)
+    assert set(vg27.receipt_states(tmp_path).values()) == {"ABSENT"}
+
+
+def test_verify_and_seal_reject_symlink_custody_terminal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _frozen_state(tmp_path, monkeypatch)
+    terminal = vg27.packet_artifact(vg27.CUSTODY_TERMINAL_NAME)
+    terminal.symlink_to(tmp_path / "never-follow-this-terminal")
+    with pytest.raises(vg27.CustodyError, match="not a regular packet authority"):
+        vg27.verify_semantic_state(tmp_path, check_inventory=False)
+    with pytest.raises(vg27.CustodyError, match="not a regular packet authority"):
+        vg27.seal(tmp_path)
+
+
 def test_truncated_packet_marker_is_bound_custody_unmeasured_and_sealable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -857,6 +917,130 @@ def test_non_2048_bootstrap_receipt_is_rejected() -> None:
         vg27.validate_development_report(development)
 
 
+def test_wrong_partition_observation_count_is_rejected() -> None:
+    development = _synthetic_development(authorized=True)
+    bootstrap = vg27.required_mapping(development["bootstrap"], "bootstrap")
+    base = vg27.required_mapping(bootstrap["base"], "base bootstrap")
+    champion = str(development["champion"])
+    summary = vg27.required_mapping(base[champion], "champion bootstrap")
+    summary["observations"] = vg27.DEVELOPMENT_OBSERVATIONS - 1
+    with pytest.raises(vg27.CustodyError, match="observations invalid"):
+        vg27.validate_development_report(development)
+
+
+def test_activity_outside_frozen_partition_is_rejected() -> None:
+    development = _synthetic_development(authorized=True)
+    trials = vg27.required_mapping(development["trials"], "trials")
+    champion = str(development["champion"])
+    rows = vg27.required_mapping(trials[champion], "champion rows")
+    base = vg27.required_mapping(rows["base"], "base row")
+    activity = vg27.required_mapping(base["activityByMonth"], "activity")
+    activity["2026-04"] = 1
+    with pytest.raises(vg27.CustodyError, match="outside frozen partition"):
+        vg27.validate_development_report(development)
+
+
+def test_off_grid_bootstrap_probability_is_rejected() -> None:
+    development = _synthetic_development(authorized=True)
+    bootstrap = vg27.required_mapping(development["bootstrap"], "bootstrap")
+    base = vg27.required_mapping(bootstrap["base"], "base bootstrap")
+    champion = str(development["champion"])
+    summary = vg27.required_mapping(base[champion], "champion bootstrap")
+    summary["oneSidedCenteredP"] = "0.001000000000"
+    with pytest.raises(vg27.CustodyError, match="outside frozen discrete grid"):
+        vg27.validate_development_report(development)
+
+
+def test_forged_champion_concentration_is_rejected() -> None:
+    development = _synthetic_development(authorized=True)
+    development["championEventConcentrationMaximumMonthFraction"] = "0.010000000000"
+    with pytest.raises(vg27.CustodyError, match="concentration contradicts"):
+        vg27.validate_development_report(development)
+
+
+def test_pbo_distinct_path_count_outside_trial_family_is_rejected() -> None:
+    development = _synthetic_development(authorized=True)
+    pbo = vg27.required_mapping(development["pbo"], "PBO")
+    pbo["distinctTrialPaths"] = 13
+    with pytest.raises(vg27.CustodyError, match="outside frozen family"):
+        vg27.validate_development_report(development)
+
+
+def test_off_grid_estimated_pbo_probability_is_rejected() -> None:
+    development = _synthetic_development(authorized=True)
+    pbo = vg27.required_mapping(development["pbo"], "PBO")
+    pbo["probabilityOverfit"] = "0.200000000001"
+    with pytest.raises(vg27.CustodyError, match="outside frozen discrete grid"):
+        vg27.validate_development_report(development)
+
+
+def test_forged_holm_adjustment_cannot_authorize_raw_p_one() -> None:
+    development = _synthetic_development(authorized=True)
+    champion = str(development["champion"])
+    bootstrap = vg27.required_mapping(development["bootstrap"], "bootstrap")
+    base = vg27.required_mapping(bootstrap["base"], "base bootstrap")
+    summary = vg27.required_mapping(base[champion], "champion bootstrap")
+    summary["oneSidedCenteredP"] = "1.000000000000"
+    holm = vg27.required_mapping(development["holmAdjustedP"], "Holm")
+    holm[champion] = "0.010000000000"
+    with pytest.raises(vg27.CustodyError, match="Holm adjustments contradict"):
+        vg27.validate_development_report(development)
+
+
+def test_zero_cost_base_and_stress_rows_are_rejected() -> None:
+    development = _synthetic_development(authorized=True)
+    trials = vg27.required_mapping(development["trials"], "trials")
+    champion = str(development["champion"])
+    champion_rows = vg27.required_mapping(trials[champion], "champion rows")
+    for scenario_name in ("base", "stress"):
+        row = vg27.required_mapping(
+            champion_rows[scenario_name],
+            f"{scenario_name} row",
+        )
+        row["feeCostUsd"] = "0.000000000000"
+        row["adverseCostUsd"] = "0.000000000000"
+        row["grossTradingPnlUsd"] = row["netUsdPer1k"]
+    with pytest.raises(vg27.CustodyError, match="modeled costs must be positive"):
+        vg27.validate_development_report(development)
+
+
+def test_tiny_correct_ratio_costs_fail_first_entry_notional_floor() -> None:
+    development = _synthetic_development(authorized=True)
+    trials = vg27.required_mapping(development["trials"], "trials")
+    champion = str(development["champion"])
+    champion_rows = vg27.required_mapping(trials[champion], "champion rows")
+    base = vg27.required_mapping(champion_rows["base"], "base row")
+    base["chargeableEntryExitReferenceNotionalUsd"] = "0.000000010000"
+    base["feeCostUsd"] = "0.000000000010"
+    base["adverseCostUsd"] = "0.000000000005"
+    base["grossTradingPnlUsd"] = "1.000000000015"
+    with pytest.raises(vg27.CustodyError, match="first-entry floor"):
+        vg27.validate_development_report(development)
+
+
+def test_display_rounding_tolerance_accepts_valid_cost_identity() -> None:
+    development = _synthetic_development(authorized=True)
+    trials = vg27.required_mapping(development["trials"], "trials")
+    champion = str(development["champion"])
+    champion_rows = vg27.required_mapping(trials[champion], "champion rows")
+    base = vg27.required_mapping(champion_rows["base"], "base row")
+    base["feeCostUsd"] = "2.000000000001"
+    base["grossTradingPnlUsd"] = "4.000000000001"
+    vg27.validate_development_report(development)
+
+
+def test_displayed_net_tie_uses_trial_id_ascending() -> None:
+    trial_ids = tuple(trial.trial_id for trial in vg27.trial_grid())
+    raw_scores = dict.fromkeys(trial_ids, Decimal(0))
+    raw_scores[trial_ids[0]] = Decimal("1.0000000000004")
+    raw_scores[trial_ids[1]] = Decimal("1.00000000000049")
+    displayed = {
+        trial_id: Decimal(vg27.decimal_text(score)) for trial_id, score in raw_scores.items()
+    }
+    assert displayed[trial_ids[0]] == displayed[trial_ids[1]]
+    assert vg27.frozen_champion_id(displayed) == trial_ids[0]
+
+
 def test_forged_holdout_marker_selection_binding_is_rejected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -926,9 +1110,10 @@ def test_verify_hashes_but_never_opens_archives_or_recomputes(
 
 def test_scope_and_authority_are_frozen() -> None:
     protocol = vg27.validate_protocol()
-    assert vg27.FREEZE_NAME == "freeze.v3.json"
+    assert vg27.FREEZE_NAME == "freeze.v4.json"
     assert vg27.sha256_path(vg27.packet_artifact(vg27.FREEZE_V1_NAME)) == (vg27.FREEZE_V1_SHA256)
     assert vg27.sha256_path(vg27.packet_artifact(vg27.FREEZE_V2_NAME)) == (vg27.FREEZE_V2_SHA256)
+    assert vg27.sha256_path(vg27.packet_artifact(vg27.FREEZE_V3_NAME)) == (vg27.FREEZE_V3_SHA256)
     assert protocol["authority"]["capital"] == "NO_GO"
     assert protocol["authority"]["execution"] == "NONE"
     assert protocol["authority"]["moneyEffectUsd"] == "0"

@@ -68,25 +68,34 @@ DEVELOPMENT_END: Final = datetime(2026, 4, 1, tzinfo=UTC)
 FIRST_ELIGIBLE_FORMATION: Final = datetime(2025, 7, 2, tzinfo=UTC)
 HOLDOUT_START: Final = DEVELOPMENT_END
 HOLDOUT_END: Final = datetime(2026, 7, 1, tzinfo=UTC)
+DEVELOPMENT_ACTIVITY_MONTHS: Final = frozenset(MONTHS[6:15])
+HOLDOUT_ACTIVITY_MONTHS: Final = frozenset(HOLDOUT_MONTHS)
 FORMATION_HOURS: Final = frozenset((0, 6, 12, 18))
 HOUR_US: Final = 3_600_000_000
 WEEK: Final = timedelta(days=7)
 STARTING_USD: Final = Decimal("1000")
 CAPACITY_PARTICIPATION: Final = Decimal("0.0001")
+STORED_DECIMAL_TOLERANCE: Final = Decimal("0.000000000005")
 BOOTSTRAP_BLOCK_HOURS: Final = 168
 BOOTSTRAP_REPLICATES: Final = 2048
 BOOTSTRAP_SEED: Final = 270027
+DEVELOPMENT_OBSERVATIONS: Final = 6575
+HOLDOUT_OBSERVATIONS: Final = 2183
 CHECKSUM_RE: Final = re.compile(rb"^([0-9a-f]{64})[ \t]+\*?([^\r\n]+)\r?\n?$")
 SOURCE_MANIFEST_NAME: Final = "source-manifest.v1.json"
 FREEZE_V1_NAME: Final = "freeze.v1.json"
 FREEZE_V2_NAME: Final = "freeze.v2.json"
-FREEZE_NAME: Final = "freeze.v3.json"
-FREEZE_VERSION: Final = "VG27FreezeV3"
+FREEZE_V3_NAME: Final = "freeze.v3.json"
+FREEZE_NAME: Final = "freeze.v4.json"
+FREEZE_VERSION: Final = "VG27FreezeV4"
 FREEZE_V1_SUPERSESSION_NAME: Final = "freeze-v1-supersession.v1.json"
 FREEZE_V2_SUPERSESSION_NAME: Final = "freeze-v2-supersession.v1.json"
+FREEZE_V3_SUPERSESSION_NAME: Final = "freeze-v3-supersession.v1.json"
 FREEZE_V1_SHA256: Final = "d1a984eee016249fc6863d8e4a36733028d5634b368c4c98594c93de9a788ee6"
 FREEZE_V2_SHA256: Final = "f4e21a4d26442f28adea6a80ad237cb18d5c49c7ac7caf6b396d6bcd28ac62b0"
+FREEZE_V3_SHA256: Final = "54fdea8026e99b68653368bef2fbb6b44ceb98b11b14848a525a7dd0bfcef2da"
 REJECTED_V2_AUTHORITY_HEAD: Final = "05668f7a7cefcaaae412a7c9a2cdb6339818eb75"
+REJECTED_V3_AUTHORITY_HEAD: Final = "5b5ff77e4173dff9b4588d9f85f9c79d738a78a8"
 DEVELOPMENT_MARKER_NAME: Final = "development-open.v1.json"
 DEVELOPMENT_SELECTION_NAME: Final = "development-selection.v1.json"
 HOLDOUT_MARKER_NAME: Final = "holdout-open.v1.json"
@@ -112,6 +121,18 @@ PROGRAM_MULTIPLICITY: Final = {
     "status": "NOT_CONVERGED",
     "scope": "V_G1_THROUGH_V_G27_PROGRAM_WIDE_FAMILY",
 }
+PROTOCOL_HOLM_AUTHORITY: Final = (
+    "RECONSTRUCT_EXACT_STORED_12DP_ADJUSTMENTS_FROM_ALL_12_VALIDATED_BASE_BOOTSTRAP_RAW_P_VALUES"
+)
+PROTOCOL_COST_CALCULATION: Final = (
+    "EACH_SERIALIZED_ROW_REPORTS_DIRECTLY_ACCUMULATED_ENTRY_PLUS_EXIT_"
+    "REFERENCE_NOTIONAL_AND_FROZEN_PER_SIDE_RATES; COSTS_EQUAL_NOTIONAL_"
+    "TIMES_RATE_WITHIN_0.000000000005; GROSS_AND_ZERO_EVENT_COSTS_EXACT_ZERO"
+)
+PROTOCOL_FREEZE_CUSTODY: Final = (
+    "FREEZE_V4_BINDS_PRESERVED_V1_V2_V3_STATIC_INPUTS_INTERPRETER_"
+    "DECIMAL_CONTEXT_QUANT_RUNTIME_LOCKS_AND_EXACT_V3_SUPERSESSION"
+)
 DEVELOPMENT_GATE_NAMES: Final = frozenset(
     (
         "activeMonthsAtLeast8",
@@ -203,6 +224,7 @@ class Simulation:
     hourly_returns: tuple[Decimal, ...]
     equity_at_open: tuple[Decimal, ...]
     ending_usd: Decimal
+    chargeable_entry_exit_reference_notional_usd: Decimal
     gross_trading_pnl_usd: Decimal
     fee_cost_usd: Decimal
     adverse_cost_usd: Decimal
@@ -737,6 +759,7 @@ def simulate(
     fee_cost = Decimal(0)
     adverse_cost = Decimal(0)
     gross_pnl = Decimal(0)
+    chargeable_reference_notional = Decimal(0)
     entry_to_screen_ratios: list[Decimal] = []
     times = hour_range(start, end)
     equity: list[Decimal] = []
@@ -744,6 +767,7 @@ def simulate(
         if opened_at in exits:
             prices = prices_required(bars, opened_at, "exit")
             proceeds = sum(units[symbol] * prices[symbol] for symbol in COHORT)
+            chargeable_reference_notional += proceeds
             gross_pnl += proceeds - sum(reference_entry.values())
             fee = proceeds * cost.fee_per_side
             adverse = proceeds * cost.adverse_per_side
@@ -763,6 +787,7 @@ def simulate(
                 entry_to_screen_ratios.append(each_reference / nominal_each_screen)
             reference_entry = dict.fromkeys(COHORT, each_reference)
             entry_reference_total = each_reference * Decimal(len(COHORT))
+            chargeable_reference_notional += entry_reference_total
             fee = entry_reference_total * cost.fee_per_side
             adverse = entry_reference_total * cost.adverse_per_side
             fee_cost += fee
@@ -796,6 +821,7 @@ def simulate(
         hourly_returns=returns,
         equity_at_open=tuple(equity),
         ending_usd=cash,
+        chargeable_entry_exit_reference_notional_usd=chargeable_reference_notional,
         gross_trading_pnl_usd=gross_pnl,
         fee_cost_usd=fee_cost,
         adverse_cost_usd=adverse_cost,
@@ -985,33 +1011,51 @@ def monthly_activity(events: Sequence[Event]) -> dict[str, int]:
     return dict(sorted(output.items()))
 
 
+def frozen_champion_id(displayed_base_net: Mapping[str, Decimal]) -> str:
+    if set(displayed_base_net) != {trial.trial_id for trial in trial_grid()}:
+        raise MeasurementError("champion selection requires the frozen 12-trial family")
+    return min(
+        displayed_base_net,
+        key=lambda trial_id: (-displayed_base_net[trial_id], trial_id),
+    )
+
+
 def simulation_mapping(simulation: Simulation) -> dict[str, object]:
     activity = monthly_activity(simulation.events)
-    reconciliation = (
-        STARTING_USD
-        + simulation.gross_trading_pnl_usd
-        - simulation.fee_cost_usd
-        - simulation.adverse_cost_usd
+    frozen_cost = next(scenario for scenario in scenarios() if scenario.name == simulation.scenario)
+    ending_text = decimal_text(simulation.ending_usd)
+    gross_text = decimal_text(simulation.gross_trading_pnl_usd)
+    fee_text = decimal_text(simulation.fee_cost_usd)
+    adverse_text = decimal_text(simulation.adverse_cost_usd)
+    stored_reconciliation = (
+        STARTING_USD + Decimal(gross_text) - Decimal(fee_text) - Decimal(adverse_text)
+    )
+    screen_text = (
+        decimal_text(simulation.minimum_nominal_initial_1000_screen_usd)
+        if simulation.minimum_nominal_initial_1000_screen_usd is not None
+        else None
     )
     return {
         "activeMonths": len(activity),
         "activityByMonth": activity,
-        "adverseCostUsd": decimal_text(simulation.adverse_cost_usd),
-        "costReconciliation": {
-            "endingUsd": decimal_text(simulation.ending_usd),
-            "matches": reconciliation == simulation.ending_usd,
-            "startingPlusGrossMinusFeeMinusAdverseUsd": decimal_text(reconciliation),
-        },
-        "endingUsd": decimal_text(simulation.ending_usd),
-        "eventCount": len(simulation.events),
-        "feeCostUsd": decimal_text(simulation.fee_cost_usd),
-        "grossTradingPnlUsd": decimal_text(simulation.gross_trading_pnl_usd),
-        "maxDrawdownFraction": decimal_text(simulation.max_drawdown),
-        "minimumNominalInitial1000ScreenUsd": (
-            decimal_text(simulation.minimum_nominal_initial_1000_screen_usd)
-            if simulation.minimum_nominal_initial_1000_screen_usd is not None
-            else None
+        "adverseCostUsd": adverse_text,
+        "adverseExecutionBpsPerSide": decimal_text(frozen_cost.adverse_per_side * Decimal(10_000)),
+        "chargeableEntryExitReferenceNotionalUsd": decimal_text(
+            simulation.chargeable_entry_exit_reference_notional_usd
         ),
+        "costReconciliation": {
+            "endingUsd": ending_text,
+            "matches": abs(Decimal(ending_text) - stored_reconciliation)
+            <= STORED_DECIMAL_TOLERANCE,
+            "startingPlusGrossMinusFeeMinusAdverseUsd": decimal_text(stored_reconciliation),
+        },
+        "endingUsd": ending_text,
+        "eventCount": len(simulation.events),
+        "feeCostUsd": fee_text,
+        "feeBpsPerSide": decimal_text(frozen_cost.fee_per_side * Decimal(10_000)),
+        "grossTradingPnlUsd": gross_text,
+        "maxDrawdownFraction": decimal_text(simulation.max_drawdown),
+        "minimumNominalInitial1000ScreenUsd": screen_text,
         "maximumActualEntryToNominalScreenRatio": (
             decimal_text(simulation.maximum_entry_to_screen_ratio)
             if simulation.maximum_entry_to_screen_ratio is not None
@@ -1019,8 +1063,7 @@ def simulation_mapping(simulation: Simulation) -> dict[str, object]:
         ),
         "netUsdPer1k": decimal_text(simulation.ending_usd - STARTING_USD),
         "nominalInitial1000ScreenPass": (
-            simulation.minimum_nominal_initial_1000_screen_usd is not None
-            and simulation.minimum_nominal_initial_1000_screen_usd >= STARTING_USD
+            screen_text is not None and Decimal(screen_text) >= STARTING_USD
         ),
         "reinvestmentMayExceedNominalScreen": True,
         "executableCapacity": "UNMEASURED",
@@ -1068,7 +1111,9 @@ def development_analysis(
         trial_id: float(required_text(packet["oneSidedCenteredP"], "oneSidedCenteredP"))
         for trial_id, packet in base_bootstrap.items()
     }
-    holm = holm_adjust(raw_p)
+    holm_mapping = {
+        trial_id: f"{value:.12f}" for trial_id, value in sorted(holm_adjust(raw_p).items())
+    }
     white = white_max_stat(
         {trial.trial_id: all_runs[trial.trial_id]["base"].hourly_returns for trial in trials},
         indices,
@@ -1076,47 +1121,85 @@ def development_analysis(
     pbo = cscv_pbo(
         {trial.trial_id: all_runs[trial.trial_id]["base"].hourly_returns for trial in trials}
     )
-    champion = max(
-        trials,
-        key=lambda trial: (
-            all_runs[trial.trial_id]["base"].ending_usd,
-            tuple(-ord(character) for character in trial.trial_id),
-        ),
+    trial_mappings = {
+        trial.trial_id: {
+            scenario_name: simulation_mapping(simulation)
+            for scenario_name, simulation in sorted(all_runs[trial.trial_id].items())
+        }
+        for trial in trials
+    }
+    champion_id = frozen_champion_id(
+        {
+            trial.trial_id: receipt_decimal(
+                trial_mappings[trial.trial_id]["base"]["netUsdPer1k"],
+                f"{trial.trial_id} displayed base net",
+            )
+            for trial in trials
+        }
     )
-    champion_runs = all_runs[champion.trial_id]
-    base = champion_runs["base"]
-    stress = champion_runs["stress"]
-    activity = monthly_activity(base.events)
+    champion = next(trial for trial in trials if trial.trial_id == champion_id)
+    base_row = trial_mappings[champion_id]["base"]
+    stress_row = trial_mappings[champion_id]["stress"]
+    activity = monthly_activity(all_runs[champion_id]["base"].events)
+    event_count = required_int(base_row["eventCount"], "displayed base eventCount")
     event_concentration = (
-        Decimal(max(activity.values())) / Decimal(len(base.events)) if base.events else Decimal(0)
+        Decimal(max(activity.values())) / Decimal(event_count) if event_count else Decimal(0)
     )
     formal_gates = {
-        "activeMonthsAtLeast8": len(activity) >= 8,
+        "activeMonthsAtLeast8": required_int(
+            base_row["activeMonths"],
+            "displayed base activeMonths",
+        )
+        >= 8,
         "baseLcbPositive": Decimal(
             required_text(
-                base_bootstrap[champion.trial_id]["lower95UsdPer1k"],
+                base_bootstrap[champion_id]["lower95UsdPer1k"],
                 "base lower95UsdPer1k",
             )
         )
         > 0,
-        "baseNetPositive": base.ending_usd > STARTING_USD,
-        "drawdownAtMost20Pct": base.max_drawdown <= Decimal("0.20")
-        and stress.max_drawdown <= Decimal("0.20"),
-        "holmAdjustedPBelow0.05": holm[champion.trial_id] < 0.05,
-        "onEventsAtLeast100": len(base.events) >= 100,
-        "nominalInitial1000ScreenAtLeast1000": (
-            base.minimum_nominal_initial_1000_screen_usd is not None
-            and base.minimum_nominal_initial_1000_screen_usd >= STARTING_USD
+        "baseNetPositive": receipt_decimal(
+            base_row["netUsdPer1k"],
+            "displayed base net",
+        )
+        > 0,
+        "drawdownAtMost20Pct": receipt_decimal(
+            base_row["maxDrawdownFraction"],
+            "displayed base drawdown",
+        )
+        <= Decimal("0.20")
+        and receipt_decimal(
+            stress_row["maxDrawdownFraction"],
+            "displayed stress drawdown",
+        )
+        <= Decimal("0.20"),
+        "holmAdjustedPBelow0.05": receipt_decimal(
+            holm_mapping[champion_id],
+            "displayed Holm p",
+        )
+        < Decimal("0.05"),
+        "onEventsAtLeast100": event_count >= 100,
+        "nominalInitial1000ScreenAtLeast1000": required_bool(
+            base_row["nominalInitial1000ScreenPass"],
+            "displayed nominal screen pass",
         ),
         "stressLcbPositive": Decimal(
             required_text(
-                stress_bootstrap[champion.trial_id]["lower95UsdPer1k"],
+                stress_bootstrap[champion_id]["lower95UsdPer1k"],
                 "stress lower95UsdPer1k",
             )
         )
         > 0,
-        "stressNetPositive": stress.ending_usd > STARTING_USD,
-        "whitePBelow0.05": float(required_text(white["pValue"], "white pValue")) < 0.05,
+        "stressNetPositive": receipt_decimal(
+            stress_row["netUsdPer1k"],
+            "displayed stress net",
+        )
+        > 0,
+        "whitePBelow0.05": receipt_decimal(
+            white["pValue"],
+            "displayed White p",
+        )
+        < Decimal("0.05"),
     }
     pbo_probability = pbo["probabilityOverfit"]
     diagnostics = {
@@ -1135,16 +1218,10 @@ def development_analysis(
         "championEventConcentrationMaximumMonthFraction": decimal_text(event_concentration),
         "diagnostics": diagnostics,
         "formalGates": formal_gates,
-        "holmAdjustedP": {trial_id: f"{value:.12f}" for trial_id, value in sorted(holm.items())},
+        "holmAdjustedP": holm_mapping,
         "pbo": pbo,
         "programWideMultiplicity": dict(PROGRAM_MULTIPLICITY),
-        "trials": {
-            trial.trial_id: {
-                scenario_name: simulation_mapping(simulation)
-                for scenario_name, simulation in sorted(all_runs[trial.trial_id].items())
-            }
-            for trial in trials
-        },
+        "trials": trial_mappings,
         "white": white,
     }
 
@@ -1175,6 +1252,11 @@ def holdout_analysis(
     intervals = {
         name: bootstrap_summary(runs[name].hourly_returns, indices) for name in ("base", "stress")
     }
+    scenario_mappings = {
+        name: simulation_mapping(simulation) for name, simulation in sorted(runs.items())
+    }
+    base_row = scenario_mappings["base"]
+    stress_row = scenario_mappings["stress"]
     gates = {
         "baseLcbPositive": Decimal(
             required_text(
@@ -1183,12 +1265,24 @@ def holdout_analysis(
             )
         )
         > 0,
-        "baseNetPositive": runs["base"].ending_usd > STARTING_USD,
-        "drawdownAtMost20Pct": runs["base"].max_drawdown <= Decimal("0.20")
-        and runs["stress"].max_drawdown <= Decimal("0.20"),
-        "nominalInitial1000ScreenAtLeast1000": (
-            runs["base"].minimum_nominal_initial_1000_screen_usd is not None
-            and runs["base"].minimum_nominal_initial_1000_screen_usd >= STARTING_USD
+        "baseNetPositive": receipt_decimal(
+            base_row["netUsdPer1k"],
+            "displayed holdout base net",
+        )
+        > 0,
+        "drawdownAtMost20Pct": receipt_decimal(
+            base_row["maxDrawdownFraction"],
+            "displayed holdout base drawdown",
+        )
+        <= Decimal("0.20")
+        and receipt_decimal(
+            stress_row["maxDrawdownFraction"],
+            "displayed holdout stress drawdown",
+        )
+        <= Decimal("0.20"),
+        "nominalInitial1000ScreenAtLeast1000": required_bool(
+            base_row["nominalInitial1000ScreenPass"],
+            "displayed holdout nominal screen pass",
         ),
         "stressLcbPositive": Decimal(
             required_text(
@@ -1197,15 +1291,17 @@ def holdout_analysis(
             )
         )
         > 0,
-        "stressNetPositive": runs["stress"].ending_usd > STARTING_USD,
+        "stressNetPositive": receipt_decimal(
+            stress_row["netUsdPer1k"],
+            "displayed holdout stress net",
+        )
+        > 0,
     }
     return {
         "confirmationGates": gates,
         "intervals": intervals,
         "publicVerdict": "GO" if all(gates.values()) else "NO_GO",
-        "scenarios": {
-            name: simulation_mapping(simulation) for name, simulation in sorted(runs.items())
-        },
+        "scenarios": scenario_mappings,
     }
 
 
@@ -1217,9 +1313,17 @@ def validate_protocol() -> dict[str, Any]:
     family = protocol.get("trialFamily")
     claim_boundary = protocol.get("claimBoundary")
     inference = protocol.get("inference")
+    costs = protocol.get("costs")
+    custody = protocol.get("custody")
+    gates = protocol.get("gates")
     if not isinstance(data, dict) or data.get("symbols") != list(COHORT):
         raise CustodyError("cohort drift")
-    if not isinstance(family, dict) or family.get("count") != 12:
+    if (
+        not isinstance(family, dict)
+        or family.get("count") != 12
+        or family.get("selection")
+        != "HIGHEST_STORED_12DP_DEVELOPMENT_BASE_NET_USD_PER_1000_THEN_TRIAL_ID_ASCENDING"
+    ):
         raise CustodyError("trial-family drift")
     if (
         not isinstance(claim_boundary, dict)
@@ -1228,9 +1332,44 @@ def validate_protocol() -> dict[str, Any]:
         raise CustodyError("program-wide multiplicity protocol drift")
     if not isinstance(inference, dict):
         raise CustodyError("inference protocol invalid")
+    bootstrap_protocol = inference.get("bootstrap")
     pbo_protocol = inference.get("cscvPbo")
-    if not isinstance(pbo_protocol, dict) or pbo_protocol.get("orientations") != 70:
-        raise CustodyError("PBO orientation protocol drift")
+    if (
+        not isinstance(bootstrap_protocol, dict)
+        or bootstrap_protocol.get("replicates") != BOOTSTRAP_REPLICATES
+        or bootstrap_protocol.get("developmentObservations") != DEVELOPMENT_OBSERVATIONS
+        or bootstrap_protocol.get("holdoutObservations") != HOLDOUT_OBSERVATIONS
+        or bootstrap_protocol.get("pValueGrid") != "K_OVER_2049_K_1_THROUGH_2049_SERIALIZED_12DP"
+        or inference.get("holm") != PROTOCOL_HOLM_AUTHORITY
+    ):
+        raise CustodyError("bootstrap or Holm protocol drift")
+    if (
+        not isinstance(pbo_protocol, dict)
+        or pbo_protocol.get("orientations") != 70
+        or pbo_protocol.get("distinctPathsRange") != "1_THROUGH_12"
+        or pbo_protocol.get("estimatedPValueGrid") != "K_OVER_70_K_0_THROUGH_70_SERIALIZED_12DP"
+    ):
+        raise CustodyError("PBO protocol drift")
+    if (
+        not isinstance(costs, dict)
+        or costs.get("serializedDecimalTolerance") != "0.000000000005"
+        or costs.get("chargeableNotional")
+        != "DIRECT_ACCUMULATION_OF_EACH_EVENT_ENTRY_REFERENCE_NOTIONAL_PLUS_EXIT_REFERENCE_PROCEEDS"
+        or costs.get("activeRowFirstEntryFloor") != "1000_DIVIDED_BY_ONE_PLUS_FEE_PLUS_ADVERSE"
+        or costs.get("calculation") != PROTOCOL_COST_CALCULATION
+        or costs.get("base") != {"adverseExecutionBpsPerSide": "5", "feeBpsPerSide": "10"}
+        or costs.get("stress") != {"adverseExecutionBpsPerSide": "15", "feeBpsPerSide": "10"}
+        or costs.get("severe") != {"adverseExecutionBpsPerSide": "25", "feeBpsPerSide": "20"}
+    ):
+        raise CustodyError("cost protocol drift")
+    if not isinstance(custody, dict) or custody.get("freeze") != PROTOCOL_FREEZE_CUSTODY:
+        raise CustodyError("freeze custody protocol drift")
+    if (
+        not isinstance(gates, dict)
+        or gates.get("serializedAuthority")
+        != "ALL_GATES_AND_VERDICT_DERIVED_FROM_SEALED_CANONICAL_STORED_ROWS"
+    ):
+        raise CustodyError("stored gate authority protocol drift")
     if tuple(trial.trial_id for trial in trial_grid()) != tuple(
         sorted(trial.trial_id for trial in trial_grid())
     ):
@@ -1308,6 +1447,64 @@ def validate_protocol() -> dict[str, Any]:
     ):
         raise CustodyError("freeze v2 supersession MAX reasons incomplete")
     required_text(v2_supersession.get("createdAtUtc"), "freeze v2 supersession createdAtUtc")
+    if sha256_path(packet_artifact(FREEZE_V3_NAME)) != FREEZE_V3_SHA256:
+        raise CustodyError("preserved packet freeze v3 digest invalid")
+    v3_supersession = load_json(
+        packet_artifact(FREEZE_V3_SUPERSESSION_NAME),
+        canonical=True,
+    )
+    require_exact_keys(
+        v3_supersession,
+        {
+            "createdAtUtc",
+            "externalFreezeV3",
+            "maxRejectReasons",
+            "outcomeReceiptsAtSupersession",
+            "packetFreezeV3",
+            "supersededAuthorityHead",
+            "supersededExternalFreezeSha256",
+            "supersededPacketFreezeSha256",
+            "version",
+        },
+        "freeze v3 supersession",
+    )
+    if v3_supersession.get("version") != "VG27FreezeV3SupersessionV1":
+        raise CustodyError("freeze v3 supersession version invalid")
+    if (
+        v3_supersession.get("supersededPacketFreezeSha256") != FREEZE_V3_SHA256
+        or v3_supersession.get("supersededExternalFreezeSha256") != FREEZE_V3_SHA256
+        or v3_supersession.get("supersededAuthorityHead") != REJECTED_V3_AUTHORITY_HEAD
+        or v3_supersession.get("packetFreezeV3") != "READ_ONLY_PRESERVED_NOT_CONSUMED"
+        or v3_supersession.get("externalFreezeV3") != "READ_ONLY_PRESERVED_NOT_CONSUMED"
+    ):
+        raise CustodyError("freeze v3 supersession binding invalid")
+    receipt_counts = v3_supersession.get("outcomeReceiptsAtSupersession")
+    if (
+        not isinstance(receipt_counts, dict)
+        or set(receipt_counts)
+        != {
+            "custodyTerminal",
+            "developmentMarker",
+            "developmentSelection",
+            "holdoutMarker",
+            "packetInventory",
+            "result",
+        }
+        or any(value != 0 for value in receipt_counts.values())
+    ):
+        raise CustodyError("freeze v3 supersession outcome state invalid")
+    reasons = v3_supersession.get("maxRejectReasons")
+    if (
+        not isinstance(reasons, list)
+        or any(not isinstance(reason, str) for reason in reasons)
+        or {
+            "HOLM_ADJUSTMENT_NOT_RECONSTRUCTED",
+            "COST_SCENARIO_SEMANTICS_UNBOUND",
+        }
+        - set(reasons)
+    ):
+        raise CustodyError("freeze v3 supersession MAX reasons incomplete")
+    required_text(v3_supersession.get("createdAtUtc"), "freeze v3 supersession createdAtUtc")
     return protocol
 
 
@@ -1439,8 +1636,10 @@ def static_hashes() -> dict[str, str]:
         packet_artifact(SOURCE_MANIFEST_NAME),
         packet_artifact(FREEZE_V1_NAME),
         packet_artifact(FREEZE_V2_NAME),
+        packet_artifact(FREEZE_V3_NAME),
         packet_artifact(FREEZE_V1_SUPERSESSION_NAME),
         packet_artifact(FREEZE_V2_SUPERSESSION_NAME),
+        packet_artifact(FREEZE_V3_SUPERSESSION_NAME),
     )
     missing = [path.name for path in paths if not path.is_file() or path.is_symlink()]
     if missing:
@@ -1526,6 +1725,7 @@ def freeze(state_root: Path) -> dict[str, object]:
     for prior_name, expected_sha in (
         (FREEZE_V1_NAME, FREEZE_V1_SHA256),
         (FREEZE_V2_NAME, FREEZE_V2_SHA256),
+        (FREEZE_V3_NAME, FREEZE_V3_SHA256),
     ):
         packet_prior = packet_artifact(prior_name)
         external_prior = state_root / prior_name
@@ -1551,10 +1751,10 @@ def freeze(state_root: Path) -> dict[str, object]:
         "runtimeIdentity": runtime_identity(),
         "sourceManifestSha256": sha256_path(external_manifest),
         "staticHashes": static_hashes(),
-        "supersedesFreezeV2AuthorityHead": REJECTED_V2_AUTHORITY_HEAD,
-        "supersedesFreezeV2ExternalSha256": FREEZE_V2_SHA256,
-        "supersedesFreezeV2PacketSha256": FREEZE_V2_SHA256,
-        "supersessionReceiptSha256": sha256_path(packet_artifact(FREEZE_V2_SUPERSESSION_NAME)),
+        "supersedesFreezeV3AuthorityHead": REJECTED_V3_AUTHORITY_HEAD,
+        "supersedesFreezeV3ExternalSha256": FREEZE_V3_SHA256,
+        "supersedesFreezeV3PacketSha256": FREEZE_V3_SHA256,
+        "supersessionReceiptSha256": sha256_path(packet_artifact(FREEZE_V3_SUPERSESSION_NAME)),
         "version": FREEZE_VERSION,
     }
     write_packet_authority_exclusive(packet_artifact(FREEZE_NAME), receipt)
@@ -1576,13 +1776,13 @@ def validate_freeze(state_root: Path) -> dict[str, Any]:
             "runtimeIdentity",
             "sourceManifestSha256",
             "staticHashes",
-            "supersedesFreezeV2AuthorityHead",
-            "supersedesFreezeV2ExternalSha256",
-            "supersedesFreezeV2PacketSha256",
+            "supersedesFreezeV3AuthorityHead",
+            "supersedesFreezeV3ExternalSha256",
+            "supersedesFreezeV3PacketSha256",
             "supersessionReceiptSha256",
             "version",
         },
-        "freeze v3",
+        "freeze v4",
     )
     if (
         external_freeze.is_symlink()
@@ -1591,8 +1791,8 @@ def validate_freeze(state_root: Path) -> dict[str, Any]:
     ):
         raise CustodyError("external and packet freeze receipts differ")
     if freeze_receipt.get("archiveBodiesOpened") != 0:
-        raise CustodyError("freeze v3 archive-open posture invalid")
-    required_text(freeze_receipt.get("createdAtUtc"), "freeze v3 createdAtUtc")
+        raise CustodyError("freeze v4 archive-open posture invalid")
+    required_text(freeze_receipt.get("createdAtUtc"), "freeze v4 createdAtUtc")
     if freeze_receipt.get("canonicalBase") != BASE_COMMIT:
         raise CustodyError("freeze canonical base drift")
     if freeze_receipt.get("version") != FREEZE_VERSION:
@@ -1606,16 +1806,17 @@ def validate_freeze(state_root: Path) -> dict[str, Any]:
     if freeze_receipt.get("runtimeIdentity") != runtime_identity():
         raise CustodyError("runtime identity changed after freeze")
     if (
-        freeze_receipt.get("supersedesFreezeV2AuthorityHead") != REJECTED_V2_AUTHORITY_HEAD
-        or freeze_receipt.get("supersedesFreezeV2PacketSha256") != FREEZE_V2_SHA256
-        or freeze_receipt.get("supersedesFreezeV2ExternalSha256") != FREEZE_V2_SHA256
+        freeze_receipt.get("supersedesFreezeV3AuthorityHead") != REJECTED_V3_AUTHORITY_HEAD
+        or freeze_receipt.get("supersedesFreezeV3PacketSha256") != FREEZE_V3_SHA256
+        or freeze_receipt.get("supersedesFreezeV3ExternalSha256") != FREEZE_V3_SHA256
         or freeze_receipt.get("supersessionReceiptSha256")
-        != sha256_path(packet_artifact(FREEZE_V2_SUPERSESSION_NAME))
+        != sha256_path(packet_artifact(FREEZE_V3_SUPERSESSION_NAME))
     ):
-        raise CustodyError("freeze v3 supersession binding invalid")
+        raise CustodyError("freeze v4 supersession binding invalid")
     for prior_name, expected_sha in (
         (FREEZE_V1_NAME, FREEZE_V1_SHA256),
         (FREEZE_V2_NAME, FREEZE_V2_SHA256),
+        (FREEZE_V3_NAME, FREEZE_V3_SHA256),
     ):
         packet_prior = packet_artifact(prior_name)
         external_prior = state_root / prior_name
@@ -1627,7 +1828,7 @@ def validate_freeze(state_root: Path) -> dict[str, Any]:
             or sha256_path(packet_prior) != expected_sha
             or sha256_path(external_prior) != expected_sha
         ):
-            raise CustodyError(f"preserved {prior_name} changed after freeze v3")
+            raise CustodyError(f"preserved {prior_name} changed after freeze v4")
     manifest_path = state_root / SOURCE_MANIFEST_NAME
     packet_manifest = packet_artifact(SOURCE_MANIFEST_NAME)
     if freeze_receipt.get("sourceManifestSha256") != sha256_path(manifest_path):
@@ -1874,7 +2075,12 @@ def write_normal_result(
 
 def run(state_root: Path) -> dict[str, object]:
     states = receipt_states(state_root)
-    if packet_artifact(CUSTODY_TERMINAL_NAME).exists():
+    if packet_artifact(SHA256SUMS_NAME).exists() or packet_artifact(SHA256SUMS_NAME).is_symlink():
+        raise CustodyError("packet inventory exists before run; run refused")
+    if (
+        packet_artifact(CUSTODY_TERMINAL_NAME).exists()
+        or packet_artifact(CUSTODY_TERMINAL_NAME).is_symlink()
+    ):
         raise CustodyError("custody terminal exists; rerun refused")
     if states[RESULT_NAME] == "MATCHED":
         raise CustodyError("terminal result exists; rerun refused")
@@ -2026,7 +2232,30 @@ def validate_probability(value: object, field: str) -> Decimal:
     return parsed
 
 
-def validate_bootstrap_summary(value: object, field: str) -> dict[str, Any]:
+def validate_discrete_probability(
+    value: object,
+    field: str,
+    *,
+    denominator: int,
+    allow_zero: bool,
+) -> Decimal:
+    text = required_text(value, field)
+    parsed = validate_probability(text, field)
+    numerator = int((parsed * Decimal(denominator)).to_integral_value())
+    minimum = 0 if allow_zero else 1
+    if numerator < minimum or numerator > denominator:
+        raise CustodyError(f"{field} outside frozen discrete grid")
+    if text != f"{numerator / denominator:.12f}":
+        raise CustodyError(f"{field} outside frozen discrete grid")
+    return parsed
+
+
+def validate_bootstrap_summary(
+    value: object,
+    field: str,
+    *,
+    expected_observations: int,
+) -> dict[str, Any]:
     summary = required_mapping(value, field)
     require_exact_keys(
         summary,
@@ -2045,20 +2274,26 @@ def validate_bootstrap_summary(value: object, field: str) -> dict[str, Any]:
         raise CustodyError(f"{field} block length invalid")
     if summary.get("replicates") != BOOTSTRAP_REPLICATES:
         raise CustodyError(f"{field} replicate count invalid")
-    if required_int(summary.get("observations"), f"{field} observations") < 1:
+    if required_int(summary.get("observations"), f"{field} observations") != expected_observations:
         raise CustodyError(f"{field} observations invalid")
     lower = receipt_decimal(summary.get("lower95UsdPer1k"), f"{field} lower95")
     median_value = receipt_decimal(summary.get("medianUsdPer1k"), f"{field} median")
     upper = receipt_decimal(summary.get("upper95UsdPer1k"), f"{field} upper95")
     if not lower <= median_value <= upper:
         raise CustodyError(f"{field} interval ordering invalid")
-    validate_probability(summary.get("oneSidedCenteredP"), f"{field} p")
+    validate_discrete_probability(
+        summary.get("oneSidedCenteredP"),
+        f"{field} p",
+        denominator=BOOTSTRAP_REPLICATES + 1,
+        allow_zero=False,
+    )
     return summary
 
 
 def validate_simulation_mapping(
     value: object,
     *,
+    allowed_activity_months: frozenset[str],
     trial_id: str,
     scenario_name: str,
 ) -> dict[str, Any]:
@@ -2069,10 +2304,13 @@ def validate_simulation_mapping(
             "activeMonths",
             "activityByMonth",
             "adverseCostUsd",
+            "adverseExecutionBpsPerSide",
+            "chargeableEntryExitReferenceNotionalUsd",
             "costReconciliation",
             "endingUsd",
             "eventCount",
             "executableCapacity",
+            "feeBpsPerSide",
             "feeCostUsd",
             "grossTradingPnlUsd",
             "maxDrawdownFraction",
@@ -2092,6 +2330,8 @@ def validate_simulation_mapping(
     for month, count in activity.items():
         if not re.fullmatch(r"\d{4}-\d{2}", month):
             raise CustodyError("activity month key invalid")
+        if month not in allowed_activity_months:
+            raise CustodyError("activity month outside frozen partition")
         if required_int(count, f"activity {month}") < 1:
             raise CustodyError("activity month count invalid")
     active_months = required_int(row.get("activeMonths"), "activeMonths")
@@ -2103,12 +2343,60 @@ def validate_simulation_mapping(
     gross = receipt_decimal(row.get("grossTradingPnlUsd"), "grossTradingPnlUsd")
     fee = receipt_decimal(row.get("feeCostUsd"), "feeCostUsd")
     adverse = receipt_decimal(row.get("adverseCostUsd"), "adverseCostUsd")
-    if ending <= 0 or fee < 0 or adverse < 0:
+    turnover = receipt_decimal(
+        row.get("chargeableEntryExitReferenceNotionalUsd"),
+        "chargeableEntryExitReferenceNotionalUsd",
+    )
+    fee_bps = receipt_decimal(row.get("feeBpsPerSide"), "feeBpsPerSide")
+    adverse_bps = receipt_decimal(
+        row.get("adverseExecutionBpsPerSide"),
+        "adverseExecutionBpsPerSide",
+    )
+    frozen_cost = next(scenario for scenario in scenarios() if scenario.name == scenario_name)
+    expected_fee_bps = frozen_cost.fee_per_side * Decimal(10_000)
+    expected_adverse_bps = frozen_cost.adverse_per_side * Decimal(10_000)
+    if fee_bps != expected_fee_bps or adverse_bps != expected_adverse_bps:
+        raise CustodyError("scenario per-side basis points invalid")
+    if ending <= 0 or turnover < 0 or fee < 0 or adverse < 0:
         raise CustodyError("ending or modeled costs outside domain")
+    if event_count == 0:
+        if any(value != 0 for value in (turnover, fee, adverse, gross, net)):
+            raise CustodyError("zero-event scenario must have zero PnL and costs")
+    elif turnover <= 0:
+        raise CustodyError("event scenario chargeable notional must be positive")
+    elif turnover + STORED_DECIMAL_TOLERANCE < STARTING_USD / (
+        Decimal(1) + frozen_cost.fee_per_side + frozen_cost.adverse_per_side
+    ):
+        raise CustodyError("event scenario chargeable notional below first-entry floor")
+    elif scenario_name == "gross":
+        if fee != 0 or adverse != 0:
+            raise CustodyError("gross scenario modeled costs must be zero")
+    else:
+        if fee <= 0 or adverse <= 0:
+            raise CustodyError("cost scenario modeled costs must be positive")
+        expected_fee = turnover * fee_bps / Decimal(10_000)
+        expected_adverse = turnover * adverse_bps / Decimal(10_000)
+        if (
+            abs(fee - expected_fee) > STORED_DECIMAL_TOLERANCE
+            or abs(adverse - expected_adverse) > STORED_DECIMAL_TOLERANCE
+        ):
+            raise CustodyError("scenario costs contradict chargeable notional")
+        if scenario_name == "base" and abs(fee - Decimal(2) * adverse) > STORED_DECIMAL_TOLERANCE:
+            raise CustodyError("base scenario cost ratio invalid")
+        if (
+            scenario_name == "stress"
+            and abs(Decimal(2) * adverse - Decimal(3) * fee) > STORED_DECIMAL_TOLERANCE
+        ):
+            raise CustodyError("stress scenario cost ratio invalid")
+        if (
+            scenario_name == "severe"
+            and abs(Decimal(4) * adverse - Decimal(5) * fee) > STORED_DECIMAL_TOLERANCE
+        ):
+            raise CustodyError("severe scenario cost ratio invalid")
     if ending != STARTING_USD + net:
         raise CustodyError("ending and net do not reconcile")
     reconciled = STARTING_USD + gross - fee - adverse
-    if ending != reconciled:
+    if abs(ending - reconciled) > STORED_DECIMAL_TOLERANCE:
         raise CustodyError("ending and cost decomposition do not reconcile")
     reconciliation = required_mapping(
         row.get("costReconciliation"),
@@ -2126,11 +2414,14 @@ def validate_simulation_mapping(
     if (
         reconciliation.get("matches") is not True
         or receipt_decimal(reconciliation.get("endingUsd"), "reconciliation ending") != ending
-        or receipt_decimal(
-            reconciliation.get("startingPlusGrossMinusFeeMinusAdverseUsd"),
-            "reconciliation decomposition",
+        or abs(
+            receipt_decimal(
+                reconciliation.get("startingPlusGrossMinusFeeMinusAdverseUsd"),
+                "reconciliation decomposition",
+            )
+            - reconciled
         )
-        != reconciled
+        > STORED_DECIMAL_TOLERANCE
     ):
         raise CustodyError("stored cost reconciliation invalid")
     drawdown = receipt_decimal(row.get("maxDrawdownFraction"), "maxDrawdownFraction")
@@ -2207,6 +2498,8 @@ def validate_pbo(value: object) -> None:
     if pbo.get("diagnosticOnlyNeverSelectionRescue") is not True:
         raise CustodyError("PBO role invalid")
     distinct = required_int(pbo.get("distinctTrialPaths"), "PBO distinctTrialPaths")
+    if distinct < 1 or distinct > len(trial_grid()):
+        raise CustodyError("PBO distinct trial paths outside frozen family")
     status = pbo.get("status")
     probability = pbo.get("probabilityOverfit")
     if distinct < 2:
@@ -2215,7 +2508,12 @@ def validate_pbo(value: object) -> None:
     else:
         if status != "ESTIMATED":
             raise CustodyError("PBO estimated state invalid")
-        validate_probability(probability, "PBO probabilityOverfit")
+        validate_discrete_probability(
+            probability,
+            "PBO probabilityOverfit",
+            denominator=math.comb(8, 4),
+            allow_zero=True,
+        )
 
 
 def validate_development_report(value: object) -> dict[str, Any]:
@@ -2252,6 +2550,7 @@ def validate_development_report(value: object) -> dict[str, Any]:
         validated_rows = {
             scenario_name: validate_simulation_mapping(
                 trial[scenario_name],
+                allowed_activity_months=DEVELOPMENT_ACTIVITY_MONTHS,
                 trial_id=trial_id,
                 scenario_name=scenario_name,
             )
@@ -2262,16 +2561,14 @@ def validate_development_report(value: object) -> dict[str, Any]:
             validated_rows["base"].get("netUsdPer1k"),
             f"{trial_id} base net",
         )
-    reconstructed_champion = min(
-        trial_ids,
-        key=lambda trial_id: (-base_net_by_trial[trial_id], trial_id),
-    )
+    reconstructed_champion = frozen_champion_id(base_net_by_trial)
     if champion != reconstructed_champion:
         raise CustodyError("development champion contradicts frozen selection rule")
     bootstrap = required_mapping(report.get("bootstrap"), "development bootstrap")
     if set(bootstrap) != {"base", "stress"}:
         raise CustodyError("development bootstrap scenarios invalid")
     bootstrap_observations: set[int] = set()
+    base_raw_p: dict[str, float] = {}
     for name in ("base", "stress"):
         rows = required_mapping(bootstrap[name], f"bootstrap {name}")
         if set(rows) != set(trial_ids):
@@ -2280,6 +2577,7 @@ def validate_development_report(value: object) -> dict[str, Any]:
             summary = validate_bootstrap_summary(
                 rows[trial_id],
                 f"bootstrap {name} {trial_id}",
+                expected_observations=DEVELOPMENT_OBSERVATIONS,
             )
             bootstrap_observations.add(
                 required_int(
@@ -2287,13 +2585,25 @@ def validate_development_report(value: object) -> dict[str, Any]:
                     f"bootstrap {name} {trial_id} observations",
                 )
             )
+            if name == "base":
+                base_raw_p[trial_id] = float(
+                    required_text(
+                        summary.get("oneSidedCenteredP"),
+                        f"bootstrap base {trial_id} p",
+                    )
+                )
     if len(bootstrap_observations) != 1:
         raise CustodyError("development bootstrap observation counts differ")
     holm = required_mapping(report.get("holmAdjustedP"), "Holm")
     if set(holm) != set(trial_ids):
         raise CustodyError("Holm trial family incomplete")
-    for trial_id in trial_ids:
-        validate_probability(holm[trial_id], f"Holm {trial_id}")
+    reconstructed_holm = {
+        trial_id: f"{value:.12f}" for trial_id, value in holm_adjust(base_raw_p).items()
+    }
+    if holm != reconstructed_holm:
+        raise CustodyError("Holm adjustments contradict frozen raw p-values")
+    for trial_id, adjusted in reconstructed_holm.items():
+        validate_probability(adjusted, f"Holm {trial_id}")
     white = required_mapping(report.get("white"), "White")
     require_exact_keys(
         white,
@@ -2306,7 +2616,12 @@ def validate_development_report(value: object) -> dict[str, Any]:
     ):
         raise CustodyError("White trial count invalid")
     receipt_decimal(white.get("observed"), "White observed")
-    validate_probability(white.get("pValue"), "White p")
+    validate_discrete_probability(
+        white.get("pValue"),
+        "White p",
+        denominator=BOOTSTRAP_REPLICATES + 1,
+        allow_zero=False,
+    )
     validate_pbo(report.get("pbo"))
     pbo = required_mapping(report.get("pbo"), "PBO")
     diagnostics = required_mapping(report.get("diagnostics"), "development diagnostics")
@@ -2332,14 +2647,28 @@ def validate_development_report(value: object) -> dict[str, Any]:
         raise CustodyError("development gate family invalid")
     if any(not isinstance(value, bool) for value in gates.values()):
         raise CustodyError("development gates must be boolean")
-    concentration = receipt_decimal(
-        report.get("championEventConcentrationMaximumMonthFraction"),
-        "champion concentration",
-    )
-    if concentration < 0 or concentration > 1:
-        raise CustodyError("champion concentration outside unit interval")
     base = scenario_row(report, champion, "base")
     stress = scenario_row(report, champion, "stress")
+    champion_activity = required_mapping(
+        base.get("activityByMonth"),
+        "champion activityByMonth",
+    )
+    champion_events = required_int(base.get("eventCount"), "champion eventCount")
+    expected_concentration = (
+        Decimal(
+            max(
+                required_int(count, "champion activity count")
+                for count in champion_activity.values()
+            )
+        )
+        / Decimal(champion_events)
+        if champion_events
+        else Decimal(0)
+    )
+    if report.get("championEventConcentrationMaximumMonthFraction") != decimal_text(
+        expected_concentration
+    ):
+        raise CustodyError("champion concentration contradicts activity path")
     base_bootstrap = required_mapping(
         required_mapping(bootstrap["base"], "base bootstrap").get(champion),
         "champion base bootstrap",
@@ -2464,6 +2793,7 @@ def validate_holdout_report(value: object, champion: str) -> dict[str, Any]:
     for name in scenario_names:
         validated_rows[name] = validate_simulation_mapping(
             scenarios_value[name],
+            allowed_activity_months=HOLDOUT_ACTIVITY_MONTHS,
             trial_id=champion,
             scenario_name=name,
         )
@@ -2476,6 +2806,7 @@ def validate_holdout_report(value: object, champion: str) -> dict[str, Any]:
         summary = validate_bootstrap_summary(
             intervals[name],
             f"holdout interval {name}",
+            expected_observations=HOLDOUT_OBSERVATIONS,
         )
         interval_observations.add(
             required_int(
@@ -2536,7 +2867,10 @@ def validate_holdout_report(value: object, champion: str) -> dict[str, Any]:
 
 
 def validate_custody_terminal(state_root: Path, freeze_sha: str) -> dict[str, Any]:
-    terminal = load_json(packet_artifact(CUSTODY_TERMINAL_NAME), canonical=True)
+    terminal_path = packet_artifact(CUSTODY_TERMINAL_NAME)
+    if terminal_path.is_symlink() or not terminal_path.is_file():
+        raise CustodyError("custody terminal is not a regular packet authority")
+    terminal = load_json(terminal_path, canonical=True)
     require_exact_keys(
         terminal,
         {
@@ -2588,7 +2922,10 @@ def verify_semantic_state(
     validate_protocol()
     validate_freeze(state_root)
     freeze_sha = sha256_path(packet_artifact(FREEZE_NAME))
-    if packet_artifact(CUSTODY_TERMINAL_NAME).exists():
+    if (
+        packet_artifact(CUSTODY_TERMINAL_NAME).exists()
+        or packet_artifact(CUSTODY_TERMINAL_NAME).is_symlink()
+    ):
         terminal = validate_custody_terminal(state_root, freeze_sha)
         if check_inventory:
             verify_sha256s()
@@ -2771,7 +3108,10 @@ def seal(state_root: Path) -> dict[str, object]:
     inventory_path = packet_artifact(SHA256SUMS_NAME)
     if inventory_path.exists() or inventory_path.is_symlink():
         raise CustodyError("packet inventory already exists")
-    if not packet_artifact(CUSTODY_TERMINAL_NAME).exists() and any(
+    if not (
+        packet_artifact(CUSTODY_TERMINAL_NAME).exists()
+        or packet_artifact(CUSTODY_TERMINAL_NAME).is_symlink()
+    ) and any(
         state in {"PACKET_ONLY", "EXTERNAL_ONLY", "DIVERGED", "INVALID"}
         for state in receipt_states(state_root).values()
     ):
@@ -2784,7 +3124,7 @@ def seal(state_root: Path) -> dict[str, object]:
         "fileCount": len(lines),
         "semanticStatus": semantic["status"],
         "sha256sSha256": sha256_path(inventory_path),
-        "version": "VG27PacketSealV3",
+        "version": "VG27PacketSealV4",
     }
 
 

@@ -71,6 +71,11 @@ interface CorrelationEntry {
   roots: string[];
   observedAtMs: number;
   rootsTruncated: number;
+  heapIndex: number;
+}
+
+function compareCorrelationAge(left: CorrelationEntry, right: CorrelationEntry): number {
+  return left.observedAtMs - right.observedAtMs || codePointCompare(left.id, right.id);
 }
 
 /** Runtime-only sidecar. Frozen intelligence contracts remain untouched. */
@@ -78,6 +83,7 @@ export class BoundedCorrelationIndex {
   readonly #capacity: number;
   readonly #maximumRoots: number;
   readonly #entries = new Map<string, CorrelationEntry>();
+  readonly #evictionHeap: CorrelationEntry[] = [];
   #evicted = 0;
   #truncatedRoots = 0;
 
@@ -110,9 +116,16 @@ export class BoundedCorrelationIndex {
       roots: retained,
       observedAtMs,
       rootsTruncated: (previous?.rootsTruncated ?? 0) + newlyTruncated,
+      heapIndex: previous?.heapIndex ?? -1,
     };
     this.#entries.set(id, entry);
-    if (previous === undefined) this.#enforceCapacity();
+    if (previous === undefined) {
+      this.#pushEvictionEntry(entry);
+      this.#enforceCapacity();
+    } else {
+      this.#evictionHeap[entry.heapIndex] = entry;
+      this.#restoreEvictionHeap(entry.heapIndex);
+    }
     return Object.freeze([...retained]);
   }
 
@@ -152,13 +165,83 @@ export class BoundedCorrelationIndex {
 
   #enforceCapacity(): void {
     while (this.#entries.size > this.#capacity) {
-      const oldest = [...this.#entries.values()].sort((left, right) => (
-        left.observedAtMs - right.observedAtMs || codePointCompare(left.id, right.id)
-      ))[0];
+      const oldest = this.#popOldestEvictionEntry();
       if (!oldest) break;
       this.#entries.delete(oldest.id);
       this.#evicted += 1;
     }
+  }
+
+  #pushEvictionEntry(entry: CorrelationEntry): void {
+    entry.heapIndex = this.#evictionHeap.length;
+    this.#evictionHeap.push(entry);
+    this.#siftEvictionEntryUp(entry.heapIndex);
+  }
+
+  #popOldestEvictionEntry(): CorrelationEntry | undefined {
+    const oldest = this.#evictionHeap[0];
+    const last = this.#evictionHeap.pop();
+    if (!oldest || !last) return oldest;
+    oldest.heapIndex = -1;
+    if (this.#evictionHeap.length > 0) {
+      this.#evictionHeap[0] = last;
+      last.heapIndex = 0;
+      this.#siftEvictionEntryDown(0);
+    }
+    return oldest;
+  }
+
+  #restoreEvictionHeap(index: number): void {
+    const parent = (index - 1) >>> 1;
+    if (index > 0 && compareCorrelationAge(
+      this.#evictionHeap[index] as CorrelationEntry,
+      this.#evictionHeap[parent] as CorrelationEntry,
+    ) < 0) {
+      this.#siftEvictionEntryUp(index);
+      return;
+    }
+    this.#siftEvictionEntryDown(index);
+  }
+
+  #siftEvictionEntryUp(startIndex: number): void {
+    let index = startIndex;
+    while (index > 0) {
+      const parent = (index - 1) >>> 1;
+      if (compareCorrelationAge(
+        this.#evictionHeap[parent] as CorrelationEntry,
+        this.#evictionHeap[index] as CorrelationEntry,
+      ) <= 0) break;
+      this.#swapEvictionEntries(parent, index);
+      index = parent;
+    }
+  }
+
+  #siftEvictionEntryDown(startIndex: number): void {
+    let index = startIndex;
+    while (true) {
+      const left = index * 2 + 1;
+      if (left >= this.#evictionHeap.length) return;
+      const right = left + 1;
+      const oldestChild = right < this.#evictionHeap.length && compareCorrelationAge(
+        this.#evictionHeap[right] as CorrelationEntry,
+        this.#evictionHeap[left] as CorrelationEntry,
+      ) < 0 ? right : left;
+      if (compareCorrelationAge(
+        this.#evictionHeap[index] as CorrelationEntry,
+        this.#evictionHeap[oldestChild] as CorrelationEntry,
+      ) <= 0) return;
+      this.#swapEvictionEntries(index, oldestChild);
+      index = oldestChild;
+    }
+  }
+
+  #swapEvictionEntries(leftIndex: number, rightIndex: number): void {
+    const left = this.#evictionHeap[leftIndex] as CorrelationEntry;
+    const right = this.#evictionHeap[rightIndex] as CorrelationEntry;
+    this.#evictionHeap[leftIndex] = right;
+    this.#evictionHeap[rightIndex] = left;
+    right.heapIndex = leftIndex;
+    left.heapIndex = rightIndex;
   }
 }
 

@@ -378,9 +378,9 @@
     },
     {
       "path": "ARCHITECTURE.md",
-      "sha256": "14af1b917c395fc1d8faec82ed2856a60c31b02b5b003068081f98a82774370c",
-      "anchoredSha256": "14af1b917c395fc1d8faec82ed2856a60c31b02b5b003068081f98a82774370c",
-      "observedSha256": "14af1b917c395fc1d8faec82ed2856a60c31b02b5b003068081f98a82774370c",
+      "sha256": "e164301ce9179349ad7f8068b82dd18c04305e18265eaeb0d44ff15ea2e65c86",
+      "anchoredSha256": "e164301ce9179349ad7f8068b82dd18c04305e18265eaeb0d44ff15ea2e65c86",
+      "observedSha256": "e164301ce9179349ad7f8068b82dd18c04305e18265eaeb0d44ff15ea2e65c86",
       "evidenceMode": "COMMITTED_FILE",
       "passed": true,
       "acceptanceMode": "IMMUTABLE_FINAL_INPUT"
@@ -495,9 +495,9 @@
     },
     {
       "path": "ARCHITECTURE.md",
-      "sha256": "14af1b917c395fc1d8faec82ed2856a60c31b02b5b003068081f98a82774370c",
+      "sha256": "e164301ce9179349ad7f8068b82dd18c04305e18265eaeb0d44ff15ea2e65c86",
       "anchoredSha256": "beb8be8baefe2faa78356e2dc44983735b855535c21cd5f0172a8e1e3fa665db",
-      "observedSha256": "14af1b917c395fc1d8faec82ed2856a60c31b02b5b003068081f98a82774370c",
+      "observedSha256": "e164301ce9179349ad7f8068b82dd18c04305e18265eaeb0d44ff15ea2e65c86",
       "evidenceMode": "COMMITTED_FILE",
       "passed": false
     },
@@ -687,6 +687,84 @@
         "expectedHits": 0,
         "hits": [],
         "passed": true
+      },
+      {
+        "id": "ONE_M0_SOURCE_MOUNT_BOOT_IMPORT",
+        "expectedHits": 1,
+        "hits": [
+          {
+            "file": "server/src/index.ts",
+            "line": 67,
+            "ruleId": "ONE_M0_SOURCE_MOUNT_BOOT_IMPORT"
+          }
+        ],
+        "passed": true
+      },
+      {
+        "id": "NO_SYSTEM_INTEGRATION_ROUTE_EXECUTION_CAPABILITY",
+        "expectedHits": 0,
+        "hits": [],
+        "passed": true
+      },
+      {
+        "id": "ONE_M0_RUNTIME_BOUNDARY_BOOT_IMPORT",
+        "expectedHits": 1,
+        "hits": [
+          {
+            "file": "server/src/index.ts",
+            "line": 70,
+            "ruleId": "ONE_M0_RUNTIME_BOUNDARY_BOOT_IMPORT"
+          }
+        ],
+        "passed": true
+      },
+      {
+        "id": "NO_M0_PRODUCTION_EXECUTOR_BOOT_IMPORT",
+        "expectedHits": 0,
+        "hits": [],
+        "passed": true
+      },
+      {
+        "id": "NO_PRODUCTION_IMPORT_OF_M0_SIGNED_TEST_MAPPER",
+        "expectedHits": 0,
+        "hits": [],
+        "passed": true
+      },
+      {
+        "id": "ONE_M0_TEST_ONLY_SIGNED_KERNEL_IMPORT",
+        "expectedHits": 1,
+        "hits": [
+          {
+            "file": "server/src/binance/m0SpotSignedTransport.ts",
+            "line": 22,
+            "ruleId": "ONE_M0_TEST_ONLY_SIGNED_KERNEL_IMPORT"
+          }
+        ],
+        "passed": true
+      },
+      {
+        "id": "NO_M0_LIVE_OR_QUERY_ENDPOINT",
+        "expectedHits": 0,
+        "hits": [],
+        "passed": true
+      },
+      {
+        "id": "NO_M0_NETWORK_OR_RAW_SIGNED_RESULT",
+        "expectedHits": 0,
+        "hits": [],
+        "passed": true
+      },
+      {
+        "id": "M0_SOURCE_DEFAULT_OFF_LITERAL",
+        "expectedHits": 1,
+        "hits": [
+          {
+            "file": "server/src/foundation/execution/m0SpotSourceMount.ts",
+            "line": 214,
+            "ruleId": "M0_SOURCE_DEFAULT_OFF_LITERAL"
+          }
+        ],
+        "passed": true
       }
     ],
     "conflicts": [
@@ -785,7 +863,7 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 3667,
+        "line": 3730,
         "classification": "LEGACY_APP_DELIVERY"
       },
       {
@@ -1170,17 +1248,17 @@
       },
       {
         "file": "server/src/services/bookStream.ts",
-        "line": 246,
+        "line": 274,
         "classification": "UI_LOCAL_EXCEPTION_REVIEW"
       },
       {
         "file": "server/src/services/volumeRuntime.ts",
-        "line": 538,
+        "line": 695,
         "classification": "ACCEPTED_EXISTING_PHYSICAL_PRODUCER"
       },
       {
         "file": "web/src/store.tsx",
-        "line": 811,
+        "line": 818,
         "classification": "LOCAL_OPERATOR_DELIVERY"
       }
     ],
@@ -1301,6 +1379,12 @@
         "line": 285
       },
       {
+        "concept": "exchange-hand",
+        "declaration": "function intentMatchesTicket",
+        "file": "server/src/binance/m0SpotSignedTransport.ts",
+        "line": 214
+      },
+      {
         "concept": "semantic-source",
         "declaration": "function deterministicOfflinePublicSourcesEnabled",
         "file": "server/src/binance/publicSourceMode.ts",
@@ -1370,7 +1454,7 @@
         "concept": "capital-authority",
         "declaration": "function assertCacheReservations",
         "file": "server/src/bootstrap/environment.ts",
-        "line": 485
+        "line": 488
       },
       {
         "concept": "capital-authority",
@@ -2771,6 +2855,42 @@
         "line": 35
       },
       {
+        "concept": "ledger-authority",
+        "declaration": "interface PublicBasisOpportunityObservationLedgerEventInput",
+        "file": "server/src/engine/basis/publicOpportunityObservationStore.ts",
+        "line": 26
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface PublicBasisOpportunityObservationLedgerEvent",
+        "file": "server/src/engine/basis/publicOpportunityObservationStore.ts",
+        "line": 40
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface PublicBasisOpportunityObservationLedgerPort",
+        "file": "server/src/engine/basis/publicOpportunityObservationStore.ts",
+        "line": 52
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface Rolling24hEdgeLedgerEvent",
+        "file": "server/src/engine/basis/rolling24hEdgeStatistic.ts",
+        "line": 49
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface Rolling24hEdgeLedgerPort",
+        "file": "server/src/engine/basis/rolling24hEdgeStatistic.ts",
+        "line": 58
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function validLedgerIdentity",
+        "file": "server/src/engine/basis/rolling24hEdgeStatistic.ts",
+        "line": 354
+      },
+      {
         "concept": "semantic-source",
         "declaration": "class BasisScanner",
         "file": "server/src/engine/basis/scanner.ts",
@@ -3222,6 +3342,18 @@
       },
       {
         "concept": "exchange-hand",
+        "declaration": "interface BinanceSpotVenueEvidence",
+        "file": "server/src/foundation/exchange/binanceSpot/filters.ts",
+        "line": 266
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "interface ParsedVenuePrices",
+        "file": "server/src/foundation/exchange/binanceSpot/filters.ts",
+        "line": 550
+      },
+      {
+        "concept": "exchange-hand",
         "declaration": "type BinanceUsdMExchangeInfo",
         "file": "server/src/foundation/exchange/binanceUsdM/client.ts",
         "line": 35
@@ -3236,43 +3368,301 @@
         "concept": "exchange-hand",
         "declaration": "function parseExchangeInfo",
         "file": "server/src/foundation/exchange/binanceUsdM/parsers.ts",
-        "line": 179
+        "line": 225
       },
       {
         "concept": "exchange-hand",
         "declaration": "function parseVenueError",
         "file": "server/src/foundation/exchange/binanceUsdM/parsers.ts",
-        "line": 440
+        "line": 493
       },
       {
         "concept": "exchange-hand",
         "declaration": "interface BinanceUsdMExchangeSymbol",
         "file": "server/src/foundation/exchange/binanceUsdM/types.ts",
-        "line": 192
+        "line": 200
       },
       {
         "concept": "exchange-hand",
         "declaration": "interface BinanceUsdMExchangeInfo",
         "file": "server/src/foundation/exchange/binanceUsdM/types.ts",
-        "line": 204
+        "line": 212
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "type SourcedTimestamp",
+        "file": "server/src/foundation/exchange/binanceUsdM/validation.ts",
+        "line": 5
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type SpotExecutionTicket",
+        "file": "server/src/foundation/execution/m0SpotLifecycleCard.ts",
+        "line": 25
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function actionTicketMatches",
+        "file": "server/src/foundation/execution/m0SpotLifecycleCard.ts",
+        "line": 673
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface M0SpotSourceMountOperator",
+        "file": "server/src/foundation/execution/m0SpotSourceMount.ts",
+        "line": 37
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface M0SpotSourceMountInput",
+        "file": "server/src/foundation/execution/m0SpotSourceMount.ts",
+        "line": 43
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface M0SpotSourceMountResult",
+        "file": "server/src/foundation/execution/m0SpotSourceMount.ts",
+        "line": 49
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface M0SpotSourceMountPort",
+        "file": "server/src/foundation/execution/m0SpotSourceMount.ts",
+        "line": 107
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function createM0SpotSourceMount",
+        "file": "server/src/foundation/execution/m0SpotSourceMount.ts",
+        "line": 170
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type SpotExecutionTicket",
+        "file": "server/src/foundation/execution/m0SpotTestOrderAuthority.ts",
+        "line": 20
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function canonicalTicket",
+        "file": "server/src/foundation/execution/m0SpotTestOrderAuthority.ts",
+        "line": 268
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type ExposureProjection",
+        "file": "server/src/foundation/execution/reducer.ts",
+        "line": 40
       },
       {
         "concept": "risk-authority",
         "declaration": "function hasKnownOpenExposure",
         "file": "server/src/foundation/execution/reducer.ts",
-        "line": 160
+        "line": 187
       },
       {
         "concept": "risk-authority",
         "declaration": "function hasNakedExposure",
         "file": "server/src/foundation/execution/reducer.ts",
-        "line": 188
+        "line": 558
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type BinanceSpotVenueEvidence",
+        "file": "server/src/foundation/execution/spotCore.ts",
+        "line": 15
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type SpotRiskPolicy",
+        "file": "server/src/foundation/execution/spotCore.ts",
+        "line": 20
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type SpotRiskVerdict",
+        "file": "server/src/foundation/execution/spotCore.ts",
+        "line": 21
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type SpotExecutionTicket",
+        "file": "server/src/foundation/execution/spotCore.ts",
+        "line": 37
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface SpotRiskReductionEvidence",
+        "file": "server/src/foundation/execution/spotCore.ts",
+        "line": 101
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface SpotRiskEvidence",
+        "file": "server/src/foundation/execution/spotCore.ts",
+        "line": 174
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function correlateSpotTicket",
+        "file": "server/src/foundation/execution/spotCore.ts",
+        "line": 769
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type SpotVenueObservationStatus",
+        "file": "server/src/foundation/execution/spotPort.ts",
+        "line": 10
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type SpotTicketPurpose",
+        "file": "server/src/foundation/execution/spotTicket.ts",
+        "line": 29
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "interface CreateSpotExecutionTicketInput",
+        "file": "server/src/foundation/execution/spotTicket.ts",
+        "line": 31
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "interface SpotExecutionTicket",
+        "file": "server/src/foundation/execution/spotTicket.ts",
+        "line": 54
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function createSpotExecutionTicket",
+        "file": "server/src/foundation/execution/spotTicket.ts",
+        "line": 122
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function reconstructCanonicalSpotExecutionTicket",
+        "file": "server/src/foundation/execution/spotTicket.ts",
+        "line": 262
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type BinanceSpotVenueEvidence",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 16
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type SpotLedgerAppendIntent",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 22
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type SpotLedgerProjectionState",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 23
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type SpotRiskEvidence",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 37
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type SpotExecutionTicket",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 62
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "interface SpotMutationReservationReceipt",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 187
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "interface SpotMutationReservationPort",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 200
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "interface SpotCancelReservationReceipt",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 212
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "interface SpotCancelReservationPort",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 226
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "function exactMutationReservation",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 1072
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "function exactCancelReservation",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 1093
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function exactSourceFills",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 1284
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function reconcileAuthoritativelyAbsentSource",
+        "file": "server/src/foundation/execution/spotTransportCoordinator.ts",
+        "line": 1723
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type SpotRiskVerdict",
+        "file": "server/src/foundation/execution/spotValidateOnly.ts",
+        "line": 20
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type SpotRiskEvidence",
+        "file": "server/src/foundation/execution/spotValidateOnly.ts",
+        "line": 25
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type SpotExecutionTicket",
+        "file": "server/src/foundation/execution/spotValidateOnly.ts",
+        "line": 29
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "interface SpotVenueExecutionEvidence",
+        "file": "server/src/foundation/execution/spotValidateOnly.ts",
+        "line": 137
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "interface VenuePriceStructure",
+        "file": "server/src/foundation/execution/spotValidateOnly.ts",
+        "line": 240
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function canonicalTicket",
+        "file": "server/src/foundation/execution/spotValidateOnly.ts",
+        "line": 441
       },
       {
         "concept": "risk-authority",
         "declaration": "type RiskEffect",
         "file": "server/src/foundation/execution/types.ts",
-        "line": 27
+        "line": 31
       },
       {
         "concept": "semantic-source",
@@ -3413,6 +3803,78 @@
         "line": 282
       },
       {
+        "concept": "ledger-authority",
+        "declaration": "type SpotLedgerEventKind",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 16
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type SpotLedgerProjectionState",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 54
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface SpotLedgerFactInput",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 78
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface SpotLedgerEventData",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 93
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface SpotLedgerAppendIntent",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 118
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface SpotLedgerIntentConflict",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 133
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface CoalescedSpotLedgerIntents",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 139
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function buildSpotLedgerAppendIntent",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 411
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function coalesceSpotLedgerAppendIntents",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 493
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "function classifySpotLedgerDiscrepancy",
+        "file": "server/src/foundation/reconciliation/spotLedgerBridge.ts",
+        "line": 534
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type SpotLedgerAppendIntent",
+        "file": "server/src/foundation/reconciliation/spotRestartRecovery.ts",
+        "line": 6
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "type SpotExchangeQueryState",
+        "file": "server/src/foundation/reconciliation/spotRestartRecovery.ts",
+        "line": 16
+      },
+      {
         "concept": "semantic-source",
         "declaration": "interface EvidenceSourceMetadata",
         "file": "server/src/foundation/reconciliation/types.ts",
@@ -3458,7 +3920,91 @@
         "concept": "risk-authority",
         "declaration": "function evaluateMultiLegRisk",
         "file": "server/src/foundation/risk/evaluator.ts",
-        "line": 209
+        "line": 223
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function deriveRiskVerdictDigest",
+        "file": "server/src/foundation/risk/evaluator.ts",
+        "line": 313
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function evaluateNormalBasisRiskBinding",
+        "file": "server/src/foundation/risk/evaluator.ts",
+        "line": 445
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function validateNormalBasisApprovedRiskBinding",
+        "file": "server/src/foundation/risk/evaluator.ts",
+        "line": 550
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface SpotRiskPolicy",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 20
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface SpotRiskSubject",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 27
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface SpotRiskEvaluationInput",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 61
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type SpotRiskCheckCode",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 84
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "type SpotRiskCheckStatus",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 85
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface SpotRiskCheck",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 87
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface SpotRiskVerdict",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 95
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function createSpotRiskPolicy",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 121
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function evaluateSpotRiskPolicy",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 196
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "class SpotRiskRejectedError",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 635
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "function assertSpotRiskAllowed",
+        "file": "server/src/foundation/risk/spotRiskPolicy.ts",
+        "line": 645
       },
       {
         "concept": "risk-authority",
@@ -3492,15 +4038,39 @@
       },
       {
         "concept": "risk-authority",
+        "declaration": "interface NormalBasisRiskLegBinding",
+        "file": "server/src/foundation/risk/types.ts",
+        "line": 434
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface NormalBasisRiskBaseline",
+        "file": "server/src/foundation/risk/types.ts",
+        "line": 449
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface NormalBasisApprovedRiskBinding",
+        "file": "server/src/foundation/risk/types.ts",
+        "line": 463
+      },
+      {
+        "concept": "risk-authority",
+        "declaration": "interface NormalBasisRiskBindingRequest",
+        "file": "server/src/foundation/risk/types.ts",
+        "line": 488
+      },
+      {
+        "concept": "risk-authority",
         "declaration": "function validateRiskPolicy",
         "file": "server/src/foundation/risk/types.ts",
-        "line": 612
+        "line": 677
       },
       {
         "concept": "risk-authority",
         "declaration": "function validateRiskEvaluationInput",
         "file": "server/src/foundation/risk/types.ts",
-        "line": 701
+        "line": 766
       },
       {
         "concept": "semantic-source",
@@ -3518,85 +4088,97 @@
         "concept": "control-authority",
         "declaration": "type SystemSupervisorReadModel",
         "file": "server/src/index.ts",
-        "line": 82
+        "line": 88
       },
       {
         "concept": "capital-authority",
         "declaration": "type ProductionCapitalSummaryReadPort",
         "file": "server/src/index.ts",
-        "line": 101
+        "line": 107
       },
       {
         "concept": "control-authority",
         "declaration": "type CanonicalSupervisorOpsReadPort",
         "file": "server/src/index.ts",
-        "line": 112
+        "line": 118
       },
       {
         "concept": "semantic-source",
         "declaration": "type SourceIsolationPhysicalPort",
         "file": "server/src/index.ts",
-        "line": 118
+        "line": 124
       },
       {
         "concept": "semantic-source",
         "declaration": "type SourceLogoEntry",
         "file": "server/src/index.ts",
-        "line": 159
+        "line": 166
       },
       {
         "concept": "semantic-source",
         "declaration": "function legacyScannerSnapshot",
         "file": "server/src/index.ts",
-        "line": 210
+        "line": 217
       },
       {
         "concept": "ledger-authority",
         "declaration": "function pruneEphemeralLedgerEvents",
         "file": "server/src/index.ts",
-        "line": 633
+        "line": 645
       },
       {
         "concept": "control-authority",
         "declaration": "function recordSupervisorReadFailure",
         "file": "server/src/index.ts",
-        "line": 852
+        "line": 864
       },
       {
         "concept": "semantic-source",
         "declaration": "function sendLegacyScannerRetired",
         "file": "server/src/index.ts",
-        "line": 902
+        "line": 914
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "type ObservedMarketSourceResult",
+        "file": "server/src/index.ts",
+        "line": 2108
       },
       {
         "concept": "semantic-source",
         "declaration": "type MarketSourceSnapshot",
         "file": "server/src/index.ts",
-        "line": 2094
+        "line": 2112
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function observedMarketSourceResult",
+        "file": "server/src/index.ts",
+        "line": 2121
       },
       {
         "concept": "semantic-source",
         "declaration": "function marketSources",
         "file": "server/src/index.ts",
-        "line": 2103
+        "line": 2128
       },
       {
         "concept": "semantic-source",
         "declaration": "function cachedSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2483
+        "line": 2546
       },
       {
         "concept": "semantic-source",
         "declaration": "function rememberSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2495
+        "line": 2558
       },
       {
         "concept": "semantic-source",
         "declaration": "function loadSourceLogo",
         "file": "server/src/index.ts",
-        "line": 2505
+        "line": 2568
       },
       {
         "concept": "semantic-source",
@@ -4448,133 +5030,133 @@
         "concept": "ledger-authority",
         "declaration": "interface LedgerEvent",
         "file": "server/src/ledger.ts",
-        "line": 190
+        "line": 191
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerEventMetadataInput",
         "file": "server/src/ledger.ts",
-        "line": 206
+        "line": 207
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerEventInput",
         "file": "server/src/ledger.ts",
-        "line": 245
+        "line": 246
       },
       {
         "concept": "ledger-authority",
         "declaration": "type LedgerConfigCompareAndSetResult",
         "file": "server/src/ledger.ts",
-        "line": 251
+        "line": 252
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerProductOperatorEventRecord",
         "file": "server/src/ledger.ts",
-        "line": 262
+        "line": 263
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerProductOperatorEventPage",
         "file": "server/src/ledger.ts",
-        "line": 272
+        "line": 273
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerSchemaCompatibilityRow",
         "file": "server/src/ledger.ts",
-        "line": 281
+        "line": 282
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LegacyJournalCompatibility",
         "file": "server/src/ledger.ts",
-        "line": 287
+        "line": 288
       },
       {
         "concept": "ledger-authority",
         "declaration": "function readLegacyJournalCompatibility",
         "file": "server/src/ledger.ts",
-        "line": 325
+        "line": 327
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface PreparedLedgerEventMetadata",
         "file": "server/src/ledger.ts",
-        "line": 693
+        "line": 700
       },
       {
         "concept": "ledger-authority",
         "declaration": "function prepareLedgerEventText",
         "file": "server/src/ledger.ts",
-        "line": 719
+        "line": 726
       },
       {
         "concept": "ledger-authority",
         "declaration": "function prepareLedgerEventCreatedAt",
         "file": "server/src/ledger.ts",
-        "line": 749
+        "line": 756
       },
       {
         "concept": "ledger-authority",
         "declaration": "function prepareLedgerEventMetadata",
         "file": "server/src/ledger.ts",
-        "line": 760
+        "line": 767
       },
       {
         "concept": "ledger-authority",
         "declaration": "function snapshotLedgerEventMetadata",
         "file": "server/src/ledger.ts",
-        "line": 775
+        "line": 782
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface PreparedLedgerEventData",
         "file": "server/src/ledger.ts",
-        "line": 790
+        "line": 797
       },
       {
         "concept": "ledger-authority",
         "declaration": "function prepareLedgerEventData",
         "file": "server/src/ledger.ts",
-        "line": 795
+        "line": 802
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface StoredLedgerEventMetadata",
         "file": "server/src/ledger.ts",
-        "line": 806
+        "line": 813
       },
       {
         "concept": "ledger-authority",
         "declaration": "function prepareStoredLedgerEventMetadata",
         "file": "server/src/ledger.ts",
-        "line": 817
+        "line": 824
       },
       {
         "concept": "ledger-authority",
         "declaration": "interface LedgerOptions",
         "file": "server/src/ledger.ts",
-        "line": 1621
+        "line": 1628
       },
       {
         "concept": "ledger-authority",
         "declaration": "class Ledger",
         "file": "server/src/ledger.ts",
-        "line": 1626
+        "line": 1633
       },
       {
         "concept": "ledger-authority",
         "declaration": "function plainLedgerRecord",
         "file": "server/src/ledger.ts",
-        "line": 4977
+        "line": 4993
       },
       {
         "concept": "ledger-authority",
         "declaration": "function exactLedgerFields",
         "file": "server/src/ledger.ts",
-        "line": 4983
+        "line": 4999
       },
       {
         "concept": "semantic-source",
@@ -6281,16 +6863,52 @@
         "line": 97
       },
       {
+        "concept": "semantic-source",
+        "declaration": "type ProductRuntimeOwnerTruthMarketSourceState",
+        "file": "server/src/productIntegration/runtime/ownerTruth.ts",
+        "line": 33
+      },
+      {
+        "concept": "control-authority",
+        "declaration": "function canonicalSupervisorCutIdentity",
+        "file": "server/src/productIntegration/runtime/ownerTruth.ts",
+        "line": 82
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function publicSourceLive",
+        "file": "server/src/productIntegration/runtime/ownerTruth.ts",
+        "line": 96
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function normalizedSourceState",
+        "file": "server/src/productIntegration/runtime/ownerTruth.ts",
+        "line": 835
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function retainsStreamFacts",
+        "file": "server/src/productIntegration/runtime/ownerTruth.ts",
+        "line": 956
+      },
+      {
         "concept": "control-authority",
         "declaration": "type ProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/projection.ts",
-        "line": 45
+        "line": 56
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function ownerTruthCanonicalSource",
+        "file": "server/src/productIntegration/runtime/projection.ts",
+        "line": 1127
       },
       {
         "concept": "control-authority",
         "declaration": "function buildProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/projection.ts",
-        "line": 1244
+        "line": 1545
       },
       {
         "concept": "control-authority",
@@ -6308,13 +6926,13 @@
         "concept": "control-authority",
         "declaration": "type ProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/service.ts",
-        "line": 30
+        "line": 32
       },
       {
         "concept": "control-authority",
         "declaration": "function incidentTargetForControl",
         "file": "server/src/productIntegration/runtime/service.ts",
-        "line": 41
+        "line": 43
       },
       {
         "concept": "control-authority",
@@ -6416,37 +7034,37 @@
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeControlPreview",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 171
+        "line": 343
       },
       {
         "concept": "control-authority",
         "declaration": "type ProductRuntimeControlResultStatus",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 197
+        "line": 369
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeControlResult",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 204
+        "line": 376
       },
       {
         "concept": "control-authority",
         "declaration": "type ProductRuntimeControlWiringState",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 412
+        "line": 584
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeControlRegistryEntry",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 415
+        "line": 587
       },
       {
         "concept": "control-authority",
         "declaration": "interface ProductRuntimeSupervisorEnvelope",
         "file": "server/src/productIntegration/runtime/types.ts",
-        "line": 657
+        "line": 829
       },
       {
         "concept": "control-authority",
@@ -6518,13 +7136,13 @@
         "concept": "semantic-source",
         "declaration": "interface BookStreamHubOptions",
         "file": "server/src/services/bookStream.ts",
-        "line": 51
+        "line": 54
       },
       {
         "concept": "semantic-source",
         "declaration": "class BookStreamHub",
         "file": "server/src/services/bookStream.ts",
-        "line": 107
+        "line": 116
       },
       {
         "concept": "risk-authority",
@@ -6615,6 +7233,18 @@
         "declaration": "function createSourceIsolationPersistence",
         "file": "server/src/services/sourceIsolationPersistence.ts",
         "line": 22
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface VolumeStreamHandle",
+        "file": "server/src/services/volumeRuntime.ts",
+        "line": 71
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "type VolumeStreamFactory",
+        "file": "server/src/services/volumeRuntime.ts",
+        "line": 77
       },
       {
         "concept": "capital-authority",
@@ -7205,6 +7835,30 @@
         "line": 53
       },
       {
+        "concept": "exchange-hand",
+        "declaration": "type SpotExecutionTicket",
+        "file": "server/src/systemIntegration/evidence/m0AutomaticReceipt.ts",
+        "line": 26
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type SpotLedgerProjectionState",
+        "file": "server/src/systemIntegration/evidence/m0AutomaticReceipt.ts",
+        "line": 30
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function parseTicket",
+        "file": "server/src/systemIntegration/evidence/m0AutomaticReceipt.ts",
+        "line": 539
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function projectM0SpotSourceReadinessCard",
+        "file": "server/src/systemIntegration/evidence/m0SpotReadinessCard.ts",
+        "line": 474
+      },
+      {
         "concept": "control-authority",
         "declaration": "function isCanonicalSupervisorOpsReadback",
         "file": "server/src/systemIntegration/ops/intakeGate.ts",
@@ -7685,6 +8339,42 @@
         "line": 441
       },
       {
+        "concept": "exchange-hand",
+        "declaration": "type SpotExecutionTicket",
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 43
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type SpotLedgerAppendIntent",
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 64
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "interface M0SpotLifecycleLedgerPort",
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 278
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function validPersistedTicket",
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 803
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function canonicalTicketSnapshot",
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 1216
+      },
+      {
+        "concept": "exchange-hand",
+        "declaration": "function exactNextFlattenTicket",
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 3001
+      },
+      {
         "concept": "capital-authority",
         "declaration": "type PersistedReservationReference",
         "file": "server/src/systemIntegration/persistence/restart.ts",
@@ -7790,73 +8480,103 @@
         "concept": "semantic-source",
         "declaration": "type SourcedTimestamp",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 5
+        "line": 7
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "type SourceSection",
+        "file": "server/src/systemIntegration/production/factory.ts",
+        "line": 13
       },
       {
         "concept": "semantic-source",
         "declaration": "type BinanceSourceFact",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 20
+        "line": 28
       },
       {
         "concept": "semantic-source",
         "declaration": "type UniverseSourceKind",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 27
+        "line": 35
       },
       {
         "concept": "semantic-source",
         "declaration": "type UniverseSourceSlice",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 28
+        "line": 36
       },
       {
         "concept": "semantic-source",
         "declaration": "type UniverseSourceState",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 29
+        "line": 37
       },
       {
         "concept": "semantic-source",
         "declaration": "type PublicSourceKind",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 96
+        "line": 112
       },
       {
         "concept": "semantic-source",
         "declaration": "interface SourceProjectionEvidence",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 113
+        "line": 129
       },
       {
         "concept": "semantic-source",
         "declaration": "interface IntelligenceSourceCut",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 127
+        "line": 143
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "function captureProductionOpportunitySource",
+        "file": "server/src/systemIntegration/production/factory.ts",
+        "line": 734
       },
       {
         "concept": "capital-authority",
         "declaration": "type CapitalSummaryReadResult",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 375
+        "line": 1201
       },
       {
         "concept": "capital-authority",
         "declaration": "interface CapitalReadGuard",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 380
+        "line": 1206
       },
       {
         "concept": "capital-authority",
         "declaration": "function safeCapitalSummary",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 385
+        "line": 1211
       },
       {
         "concept": "capital-authority",
         "declaration": "function unavailableCapitalRestartSummary",
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 492
+        "line": 1318
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "type SpotMutationReservationReceipt",
+        "file": "server/src/systemIntegration/production/m0SpotExecutor.ts",
+        "line": 48
+      },
+      {
+        "concept": "capital-authority",
+        "declaration": "type SpotCancelReservationReceipt",
+        "file": "server/src/systemIntegration/production/m0SpotExecutor.ts",
+        "line": 49
+      },
+      {
+        "concept": "ledger-authority",
+        "declaration": "type M0SpotLifecycleLedgerPort",
+        "file": "server/src/systemIntegration/production/m0SpotExecutor.ts",
+        "line": 75
       },
       {
         "concept": "semantic-source",
@@ -7898,37 +8618,49 @@
         "concept": "semantic-source",
         "declaration": "interface ProductionLiquidationSourceClosedCut",
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 107
+        "line": 123
       },
       {
         "concept": "semantic-source",
         "declaration": "interface ProductionVolumeSourceClosedCut",
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 252
+        "line": 268
       },
       {
         "concept": "capital-authority",
         "declaration": "interface ProductionCapitalRestartSummaryCut",
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 285
+        "line": 301
       },
       {
         "concept": "capital-authority",
         "declaration": "interface ProductionCapitalUnavailableSummaryCut",
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 303
+        "line": 319
       },
       {
         "concept": "capital-authority",
         "declaration": "type ProductionCapitalSummaryCut",
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 309
+        "line": 325
       },
       {
         "concept": "capital-authority",
         "declaration": "interface ProductionCapitalSummaryReadPort",
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 317
+        "line": 333
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface ProductionOpportunitySourceOwnerCut",
+        "file": "server/src/systemIntegration/production/types.ts",
+        "line": 372
+      },
+      {
+        "concept": "semantic-source",
+        "declaration": "interface ProductionOpportunitySourceOwner",
+        "file": "server/src/systemIntegration/production/types.ts",
+        "line": 379
       },
       {
         "concept": "risk-authority",
@@ -8197,9 +8929,39 @@
     ],
     "ownerImportEdges": [
       {
+        "file": "server/src/binance/m0SpotSignedTransport.ts",
+        "line": 32,
+        "target": "../foundation/execution/m0SpotTestOrderAuthority.js"
+      },
+      {
+        "file": "server/src/binance/m0SpotSignedTransport.ts",
+        "line": 33,
+        "target": "../foundation/execution/spotPort.js"
+      },
+      {
+        "file": "server/src/binance/m0SpotSignedTransport.ts",
+        "line": 34,
+        "target": "../foundation/execution/spotTicket.js"
+      },
+      {
         "file": "server/src/config.ts",
         "line": 2,
         "target": "./ledger.js"
+      },
+      {
+        "file": "server/src/engine/basis/lifecycle.ts",
+        "line": 17,
+        "target": "../../capitalFoundation/contracts/decimal.js"
+      },
+      {
+        "file": "server/src/engine/basis/publicOpportunityObservation.ts",
+        "line": 14,
+        "target": "../../capitalFoundation/contracts/decimal.js"
+      },
+      {
+        "file": "server/src/engine/basis/rolling24hEdgeStatistic.ts",
+        "line": 5,
+        "target": "../../capitalFoundation/contracts/decimal.js"
       },
       {
         "file": "server/src/engine/decay/coordinator.ts",
@@ -8238,12 +9000,17 @@
       },
       {
         "file": "server/src/index.ts",
-        "line": 119,
+        "line": 67,
+        "target": "./foundation/execution/m0SpotSourceMount.js"
+      },
+      {
+        "file": "server/src/index.ts",
+        "line": 125,
         "target": "./intelligenceRuntime/lifecycle/index.js"
       },
       {
         "file": "server/src/index.ts",
-        "line": 140,
+        "line": 147,
         "target": "./capitalFoundation/contracts/index.js"
       },
       {
@@ -8265,6 +9032,51 @@
         "file": "server/src/liveEdge/adapters/binancePrivateTruth/exact.ts",
         "line": 6,
         "target": "../../../capitalFoundation/contracts/decimal.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts",
+        "line": 19,
+        "target": "../../../foundation/execution/m0SpotDispatch.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts",
+        "line": 31,
+        "target": "../../../foundation/execution/m0SpotDispatch.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts",
+        "line": 35,
+        "target": "../../../foundation/execution/m0SpotLifecycleCard.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts",
+        "line": 48,
+        "target": "../../../foundation/execution/spotPort.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts",
+        "line": 49,
+        "target": "../../../foundation/execution/spotTicket.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceSpotExecution/productionTransport.ts",
+        "line": 20,
+        "target": "../../../foundation/risk/spotRiskPolicy.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceSpotExecution/productionTransport.ts",
+        "line": 27,
+        "target": "../../../foundation/execution/m0SpotDispatch.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceSpotExecution/productionTransport.ts",
+        "line": 38,
+        "target": "../../../foundation/execution/m0SpotDispatch.js"
+      },
+      {
+        "file": "server/src/liveEdge/adapters/binanceSpotExecution/productionTransport.ts",
+        "line": 41,
+        "target": "../../../foundation/execution/m0SpotLifecycleCard.js"
       },
       {
         "file": "server/src/liveEdge/adapters/durableMutationJournal/exact.ts",
@@ -8318,12 +9130,12 @@
       },
       {
         "file": "server/src/services/basisRuntime.ts",
-        "line": 12,
+        "line": 18,
         "target": "../ledger.js"
       },
       {
         "file": "server/src/services/basisRuntime.ts",
-        "line": 14,
+        "line": 20,
         "target": "../capitalFoundation/contracts/index.js"
       },
       {
@@ -8447,6 +9259,41 @@
         "target": "../../intelligenceRuntime/contracts/index.js"
       },
       {
+        "file": "server/src/systemIntegration/evidence/m0AutomaticReceipt.ts",
+        "line": 23,
+        "target": "../../foundation/execution/spotLifecycle.js"
+      },
+      {
+        "file": "server/src/systemIntegration/evidence/m0AutomaticReceipt.ts",
+        "line": 27,
+        "target": "../../foundation/execution/spotTicket.js"
+      },
+      {
+        "file": "server/src/systemIntegration/evidence/m0AutomaticReceipt.ts",
+        "line": 32,
+        "target": "../../foundation/reconciliation/spotLedgerBridge.js"
+      },
+      {
+        "file": "server/src/systemIntegration/evidence/m0SpotReadinessCard.ts",
+        "line": 18,
+        "target": "../../foundation/execution/spotCore.js"
+      },
+      {
+        "file": "server/src/systemIntegration/evidence/m0SpotReadinessCard.ts",
+        "line": 19,
+        "target": "../../foundation/execution/spotTicket.js"
+      },
+      {
+        "file": "server/src/systemIntegration/evidence/m0SpotReadinessCard.ts",
+        "line": 22,
+        "target": "../../foundation/risk/spotRiskPolicy.js"
+      },
+      {
+        "file": "server/src/systemIntegration/evidence/m0SpotReadinessCard.ts",
+        "line": 27,
+        "target": "../../foundation/execution/m0SpotLifecycleCard.js"
+      },
+      {
         "file": "server/src/systemIntegration/persistence/index.ts",
         "line": 3,
         "target": "./ledgerAdapter.js"
@@ -8467,6 +9314,61 @@
         "target": "../../foundation/execution/index.js"
       },
       {
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 21,
+        "target": "../../capitalFoundation/contracts/decimal.js"
+      },
+      {
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 33,
+        "target": "../../foundation/execution/m0SpotLifecycleCard.js"
+      },
+      {
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 40,
+        "target": "../../foundation/execution/spotPort.js"
+      },
+      {
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 44,
+        "target": "../../foundation/execution/spotTicket.js"
+      },
+      {
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 50,
+        "target": "../../foundation/execution/spotTransportCoordinator.js"
+      },
+      {
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 56,
+        "target": "../../foundation/execution/spotTransportCoordinator.js"
+      },
+      {
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 61,
+        "target": "../../foundation/execution/spotCore.js"
+      },
+      {
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 66,
+        "target": "../../foundation/reconciliation/spotLedgerBridge.js"
+      },
+      {
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 77,
+        "target": "../../foundation/execution/m0SpotDispatch.js"
+      },
+      {
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 84,
+        "target": "../../foundation/execution/m0SpotDispatch.js"
+      },
+      {
+        "file": "server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts",
+        "line": 85,
+        "target": "../../ledger.js"
+      },
+      {
         "file": "server/src/systemIntegration/production/capitalEconomics.ts",
         "line": 5,
         "target": "../../capitalFoundation/contracts/index.js"
@@ -8483,23 +9385,63 @@
       },
       {
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 33,
+        "line": 41,
         "target": "../../intelligenceRuntime/bridge/index.js"
       },
       {
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 37,
+        "line": 45,
         "target": "../../intelligenceRuntime/routing/index.js"
       },
       {
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 41,
+        "line": 49,
         "target": "../../intelligenceRuntime/universe/index.js"
       },
       {
         "file": "server/src/systemIntegration/production/factory.ts",
-        "line": 44,
+        "line": 52,
         "target": "../../foundation/control/index.js"
+      },
+      {
+        "file": "server/src/systemIntegration/production/m0SpotExecutor.ts",
+        "line": 21,
+        "target": "../../foundation/execution/spotCore.js"
+      },
+      {
+        "file": "server/src/systemIntegration/production/m0SpotExecutor.ts",
+        "line": 33,
+        "target": "../../foundation/execution/spotPort.js"
+      },
+      {
+        "file": "server/src/systemIntegration/production/m0SpotExecutor.ts",
+        "line": 38,
+        "target": "../../foundation/execution/m0SpotLifecycleCard.js"
+      },
+      {
+        "file": "server/src/systemIntegration/production/m0SpotExecutor.ts",
+        "line": 41,
+        "target": "../../foundation/execution/spotTicket.js"
+      },
+      {
+        "file": "server/src/systemIntegration/production/m0SpotExecutor.ts",
+        "line": 55,
+        "target": "../../foundation/execution/spotTransportCoordinator.js"
+      },
+      {
+        "file": "server/src/systemIntegration/production/m0SpotExecutor.ts",
+        "line": 58,
+        "target": "../../foundation/reconciliation/spotLedgerBridge.js"
+      },
+      {
+        "file": "server/src/systemIntegration/production/m0SpotRuntimeBoundary.ts",
+        "line": 27,
+        "target": "../../foundation/risk/spotRiskPolicy.js"
+      },
+      {
+        "file": "server/src/systemIntegration/production/m0SpotRuntimeBoundary.ts",
+        "line": 32,
+        "target": "../../foundation/execution/m0SpotLifecycleCard.js"
       },
       {
         "file": "server/src/systemIntegration/production/observedOrderFocus.ts",
@@ -8508,17 +9450,17 @@
       },
       {
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 20,
+        "line": 27,
         "target": "../../intelligenceRuntime/routing/index.js"
       },
       {
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 23,
+        "line": 30,
         "target": "../../intelligenceRuntime/routing/index.js"
       },
       {
         "file": "server/src/systemIntegration/production/types.ts",
-        "line": 24,
+        "line": 31,
         "target": "../../intelligenceRuntime/bridge/index.js"
       },
       {
@@ -8530,6 +9472,11 @@
         "file": "server/src/systemIntegration/production/volumeRisk.ts",
         "line": 17,
         "target": "../../foundation/risk/index.js"
+      },
+      {
+        "file": "server/src/systemIntegration/routes/types.ts",
+        "line": 17,
+        "target": "../../foundation/execution/m0SpotSourceMount.js"
       },
       {
         "file": "server/src/systemIntegration/supervisor/operatingMetrics.ts",
@@ -8654,6 +9601,18 @@
       "method": "POST",
       "route": "/api/system-integration/validate-only",
       "sourceNeedle": "router.post('/validate-only'",
+      "observed": true
+    },
+    {
+      "method": "GET",
+      "route": "/api/system-integration/m0/spot-canary",
+      "sourceNeedle": "router.get('/m0/spot-canary'",
+      "observed": true
+    },
+    {
+      "method": "POST",
+      "route": "/api/system-integration/m0/spot-canary",
+      "sourceNeedle": "router.post('/m0/spot-canary'",
       "observed": true
     },
     {
@@ -10645,9 +11604,9 @@
         "requirement": "Preserve the owner hierarchy from broad universe monitoring to specialist attention guarded execution complete control and no routine CLI dependence",
         "owner": "MISSION.md plus I00 director",
         "code": "canonical domain owners, all 16 accepted donors, the source-built Product runtime, and mounted Product Control application",
-        "runtime": "fifteen authenticated System/Product Integration routes and four exact fail-closed Product controls are source-wired; runtime and browser measurements remain pending",
+        "runtime": "sixteen authenticated System/Product Integration routes and four exact fail-closed Product controls are source-wired; runtime and browser measurements remain pending",
         "persistence": "existing Ledger plus bounded product_operator_events and canonical System Control CAS/idempotency/receipt paths are source-built",
-        "api": "fifteen canonical System/Product Integration routes are source-mounted",
+        "api": "sixteen canonical System/Product Integration routes are source-mounted",
         "cockpit": "Dashboard and Control Room mounted",
         "control": "four exact fail-closed controls are source-wired; every broader or reverse mutation remains disabled",
         "test": "server/test/i00Acceptance/closure-evidence.test.mjs; web/test/productControlRoom/mount.test.mjs; server/test/systemIntegration/persistence/product-operator-events.test.mjs",
@@ -14662,8 +15621,8 @@
       },
       {
         "concept": "signed-exchange-mutation",
-        "owner": "ABSENT_FUTURE_AUDITED_ADAPTER",
-        "path": null
+        "owner": "binanceSpotExecutionAdapter",
+        "path": "server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts"
       }
     ],
     "semanticSources": [
@@ -14752,6 +15711,60 @@
         "scope": "server/src/binance/liquidations.ts",
         "pattern": "new\\s+WebSocket|from\\s+['\"]ws['\"]|wss://|!forceOrder@arr|ForceOrder|ingestFrame|BinanceStream|socketFactory|last-filled quantity|cumulative filled quantity",
         "expectedHits": 0
+      },
+      {
+        "id": "ONE_M0_SOURCE_MOUNT_BOOT_IMPORT",
+        "scope": "server/src/index.ts",
+        "pattern": "from\\s+['\"]\\./foundation/execution/m0SpotSourceMount\\.js['\"]",
+        "expectedHits": 1
+      },
+      {
+        "id": "NO_SYSTEM_INTEGRATION_ROUTE_EXECUTION_CAPABILITY",
+        "scope": "server/src/systemIntegration/routes",
+        "pattern": "m0SpotSignedTransport|binanceSpotExecution|binanceSignedKernel|SpotOwnerSendAuthority|SpotLiveSubmitIntent|runSpotTransportCoordinator|m0SpotExecutor|m0SpotProductionTransport",
+        "expectedHits": 0
+      },
+      {
+        "id": "ONE_M0_RUNTIME_BOUNDARY_BOOT_IMPORT",
+        "scope": "server/src/index.ts",
+        "pattern": "from\\s+['\"]\\./systemIntegration/production/m0SpotRuntimeBoundary\\.js['\"]",
+        "expectedHits": 1
+      },
+      {
+        "id": "NO_M0_PRODUCTION_EXECUTOR_BOOT_IMPORT",
+        "scope": "server/src/index.ts",
+        "pattern": "m0SpotExecutor|m0SpotProductionTransport|createM0SpotProductionExecutor",
+        "expectedHits": 0
+      },
+      {
+        "id": "NO_PRODUCTION_IMPORT_OF_M0_SIGNED_TEST_MAPPER",
+        "scope": "server/src",
+        "pattern": "(?:from\\s+|import\\s*\\()\\s*['\"][^'\"]*m0SpotSignedTransport\\.js['\"]",
+        "expectedHits": 0
+      },
+      {
+        "id": "ONE_M0_TEST_ONLY_SIGNED_KERNEL_IMPORT",
+        "scope": "server/src/binance/m0SpotSignedTransport.ts",
+        "pattern": "from\\s+['\"]\\.\\./liveEdge/adapters/binanceSignedKernel/request\\.js['\"]",
+        "expectedHits": 1
+      },
+      {
+        "id": "NO_M0_LIVE_OR_QUERY_ENDPOINT",
+        "scope": "server/src/binance/m0SpotSignedTransport.ts",
+        "pattern": "['\"]\\/api\\/v3\\/order['\"]|\\/api\\/v3\\/sor\\/order\\/test|\\/api\\/v3\\/myTrades|SPOT_ORDER_POST|SPOT_ORDER_QUERY|SPOT_ORDER_CANCEL|SPOT_MY_TRADES_QUERY",
+        "expectedHits": 0
+      },
+      {
+        "id": "NO_M0_NETWORK_OR_RAW_SIGNED_RESULT",
+        "scope": "server/src/binance/m0SpotSignedTransport.ts",
+        "pattern": "globalThis\\.fetch|node:http|node:https|node:net|node:tls|undici|axios|api\\.binance\\.com|request:\\s*constructed\\.request",
+        "expectedHits": 0
+      },
+      {
+        "id": "M0_SOURCE_DEFAULT_OFF_LITERAL",
+        "scope": "server/src/foundation/execution/m0SpotSourceMount.ts",
+        "pattern": "sourceEnabled:\\s*false\\s+as\\s+const",
+        "expectedHits": 1
       }
     ],
     "knownConflicts": [
@@ -15152,5 +16165,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "142ff5eb3baa2eed47c924c1b2b811dbddbbff7a2c9eb06f86712c91cd8de72d"
+  "evidenceSha256": "023c6fab2279220388e230e41212ac8217dbd2c0851a3969b50d790ea75d6480"
 }

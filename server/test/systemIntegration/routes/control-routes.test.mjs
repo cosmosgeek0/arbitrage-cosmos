@@ -193,7 +193,22 @@ test('system integration routes preserve OperatorAccess, bounds, idempotency, an
     },
   };
   let now = T0 + 1_000;
-  const router = createSystemIntegrationRouter({ read, controls, validateOnly, clock: { nowMs: () => now++ }, opsReadback });
+  const m0SpotCanary = {
+    async inspectSourceMount() { throw new Error('not under test'); },
+  };
+  const m0SpotRuntime = {
+    async readReadinessCard() { throw new Error('not under test'); },
+    async executeApprovedLifecycle() { throw new Error('not under test'); },
+  };
+  const router = createSystemIntegrationRouter({
+    read,
+    controls,
+    validateOnly,
+    m0SpotCanary,
+    m0SpotRuntime,
+    clock: { nowMs: () => now++ },
+    opsReadback,
+  });
   const access = new OperatorAccess();
   const app = express();
   app.disable('x-powered-by');
@@ -454,6 +469,8 @@ test('system integration routes preserve OperatorAccess, bounds, idempotency, an
     read,
     controls,
     validateOnly,
+    m0SpotCanary,
+    m0SpotRuntime,
     clock: { nowMs: () => now++ },
     opsReadback,
   }));

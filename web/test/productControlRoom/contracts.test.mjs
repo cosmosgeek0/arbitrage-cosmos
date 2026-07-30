@@ -699,7 +699,7 @@ test('saved nonzero cursor is honored before the supervisor tail', async () => {
   assert.equal(proof.cursor, '8');
 });
 
-test('first run durably accepts the tail baseline, then proves a cursor page', async () => {
+test('first run durably accepts a caught-up tail baseline without another request', async () => {
   const calls = [];
   const persisted = [];
   const supervisorPage = materialPage({
@@ -717,9 +717,10 @@ test('first run durably accepts the tail baseline, then proves a cursor page', a
     durableCursor: { state: 'ABSENT', cursor: null },
     persistCursor: (cursor) => { persisted.push(cursor); return true; },
   });
-  assert.deepEqual(calls, ['6']);
-  assert.deepEqual(persisted, ['6', '6']);
+  assert.deepEqual(calls, []);
+  assert.deepEqual(persisted, ['6']);
   assert.equal(proof.continuity, 'PROVEN');
+  assert.equal(proof.pagesRead, 0);
 });
 
 test('bounded catch-up stays blocked and persistence failure rejects', async () => {

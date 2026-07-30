@@ -185,6 +185,7 @@ test('HTTP transport issues one exact same-origin no-store result query', async 
       ['controlId', IDENTITY.controlId],
     ]);
     assert.equal(observed.init.cache, 'no-store');
+    assert.equal(observed.init.credentials, 'same-origin');
     assert.equal(observed.init.method, undefined);
 
     const incidentId = 'incident.product.market-streams.episode.41';

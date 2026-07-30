@@ -253,6 +253,47 @@ export function createSpotExecutionTicket(
   });
 }
 
+/**
+ * Reconstruct an untrusted ticket from only its semantic inputs and require
+ * byte-for-byte canonical equality. TypeScript shapes, retained digests, and
+ * client-order IDs are not authority: a clone with any changed or extra field
+ * is rejected.
+ */
+export function reconstructCanonicalSpotExecutionTicket(
+  value: unknown,
+): Readonly<SpotExecutionTicket> | null {
+  if (
+    value === null
+    || typeof value !== 'object'
+    || Array.isArray(value)
+  ) return null;
+  const ticket = value as Readonly<SpotExecutionTicket>;
+  try {
+    const rebuilt = createSpotExecutionTicket({
+      correlationId: ticket.correlationId,
+      planId: ticket.planId,
+      accountId: ticket.accountId,
+      symbol: ticket.symbol,
+      side: ticket.side,
+      type: ticket.type,
+      timeInForce: ticket.timeInForce,
+      quantity: ticket.quantity,
+      price: ticket.price,
+      riskReferencePrice: ticket.riskReferencePrice,
+      estimatedMaxLossQuote: ticket.estimatedMaxLossQuote,
+      purpose: ticket.purpose,
+      attempt: ticket.attempt,
+      createdAtMs: ticket.createdAtMs,
+      expiresAtMs: ticket.expiresAtMs,
+    });
+    return canonicalJson(rebuilt) === canonicalJson(value)
+      ? rebuilt
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export function isSameSpotExecutionIntent(
   left: Pick<SpotExecutionTicket, 'ticketId' | 'termsDigest'>,
   right: Pick<SpotExecutionTicket, 'ticketId' | 'termsDigest'>,

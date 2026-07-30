@@ -5,16 +5,21 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import {
+  INITIAL_REAL_DATA_CLIENT_TUPLE,
   PRIVATE_READ_STALE_AFTER_MS,
   decodeApiPermissionsEnvelope,
+  decodeM0SpotReadinessTruth,
   decodePrivateReadSnapshot,
   exactOrDash,
   hasMarginLiability,
   isZeroDecimal,
+  m0SpotGate2ReadyNow,
   permissionPostureTone,
   permissionViolations,
   privateReadFreshness,
   projectPrivateRead,
+  readPrivateReadStateField,
+  reduceRealDataClientTuple,
   unavailablePrivateRead,
 } from '../../src/lib/privateRead.ts';
 
@@ -239,6 +244,41 @@ function unsafeFixture(violation = { withdrawals: true }) {
     margin: blank.margin,
     usdm: blank.usdm,
     reconciliation: blank.reconciliation,
+  };
+}
+
+function m0SourceReadinessFixture(observedAtMs = 1_720_000_000_000) {
+  return {
+    schema: 'cosmos.system-integration.m0-spot-readiness-card.v1',
+    version: 1,
+    readinessDigest: `sha256:${'a'.repeat(64)}`,
+    lifecycleCardDigest: null,
+    disposition: 'SOURCE_READY_NOT_RUNTIME_VERIFIED',
+    gate2Ready: false,
+    evidenceAuthority: 'SOURCE_ONLY',
+    observedAtMs,
+    observedTimestampIst: '2024-07-04T05:56:40.000+05:30',
+    validUntilMs: null,
+    appExecutionArmed: {
+      state: 'VERIFIED_CURRENT',
+      current: false,
+      proposed: 'REMAIN_DISARMED',
+    },
+    residualCondition: 'SOURCE_READY_NOT_RUNTIME_VERIFIED',
+    exactLimitation: 'Source exists, but no runtime proof or owner action exists.',
+    ownerAction: 'NO',
+    effects: {
+      privateCalls: 0,
+      signatures: 0,
+      transportCalls: 0,
+      authorityConsumptions: 0,
+      ledgerWrites: 0,
+      orders: 0,
+      moneyMutations: 0,
+    },
+    draftEvidenceMayGrowWithoutBecomingBrowserTruth: {
+      state: 'UNKNOWN_NOT_VERIFIED',
+    },
   };
 }
 
@@ -579,6 +619,228 @@ test('available exact-empty arrays stay distinguishable from unavailable unknown
   assert.equal(exactOrDash(null), '—');
 });
 
+test('one ordered client tuple distinguishes missing, invalid, exact-empty, and retained failure', () => {
+  let tuple = INITIAL_REAL_DATA_CLIENT_TUPLE;
+  tuple = reduceRealDataClientTuple(tuple, {
+    kind: 'PRIVATE_STATE_RESULT',
+    requestId: 1,
+    observedAtMs: 10,
+    field: readPrivateReadStateField({ state: 'compatibility-without-private-read' }),
+  });
+  assert.equal(tuple.privateRead.status, 'UNAVAILABLE');
+  assert.equal(tuple.privateRead.transport, 'FALLBACK');
+  assert.equal(tuple.privateRead.source, null);
+  assert.equal(tuple.privateRead.failure.kind, 'MISSING');
+  assert.equal(tuple.privateRead.failure.code, 'PRIVATE_READ_STATE_FIELD_MISSING');
+  const invalidInitial = reduceRealDataClientTuple(INITIAL_REAL_DATA_CLIENT_TUPLE, {
+    kind: 'PRIVATE_STATE_RESULT',
+    requestId: 1,
+    observedAtMs: 10,
+    field: readPrivateReadStateField({ privateRead: null }),
+  });
+  assert.equal(invalidInitial.privateRead.status, 'UNAVAILABLE');
+  assert.equal(invalidInitial.privateRead.failure.kind, 'CONTRACT');
+  assert.equal(invalidInitial.privateRead.failure.code, 'PRIVATE_READ_STATE_CONTRACT_INVALID');
+
+  const fallback = availableFixture();
+  fallback.spot.balances[0].free = '99.00000000';
+  tuple = reduceRealDataClientTuple(tuple, {
+    kind: 'PRIVATE_FALLBACK_RESULT',
+    requestId: 2,
+    observedAtMs: 20,
+    payload: fallback,
+  });
+  assert.equal(tuple.privateRead.status, 'CURRENT');
+  assert.equal(tuple.privateRead.source, 'FALLBACK');
+  assert.equal(tuple.privateRead.snapshot.spot.balances[0].free, '99.00000000');
+
+  const retainedFallback = tuple.privateRead.snapshot;
+  tuple = reduceRealDataClientTuple(tuple, {
+    kind: 'PRIVATE_STATE_RESULT',
+    requestId: 3,
+    observedAtMs: 30,
+    field: readPrivateReadStateField({ privateRead: null }),
+  });
+  assert.equal(tuple.privateRead.status, 'CURRENT');
+  assert.equal(tuple.privateRead.snapshot, retainedFallback);
+  assert.equal(tuple.privateRead.failure, null);
+
+  const exactEmpty = availableFixture();
+  exactEmpty.spot.balances = [];
+  exactEmpty.spot.openOrders = [];
+  exactEmpty.spot.fills = [];
+  exactEmpty.margin.assets = [];
+  exactEmpty.margin.openOrders = [];
+  exactEmpty.margin.fills = [];
+  exactEmpty.usdm.balances = [];
+  exactEmpty.usdm.positions = [];
+  exactEmpty.usdm.openOrders = [];
+  exactEmpty.usdm.fills = [];
+  tuple = reduceRealDataClientTuple(tuple, {
+    kind: 'PRIVATE_STATE_RESULT',
+    requestId: 4,
+    observedAtMs: 40,
+    field: readPrivateReadStateField({ privateRead: exactEmpty }),
+  });
+  assert.equal(tuple.privateRead.status, 'CURRENT');
+  assert.equal(tuple.privateRead.source, 'STATE');
+  assert.equal(tuple.privateRead.transport, 'STATE');
+  assert.deepEqual(tuple.privateRead.snapshot.spot.balances, []);
+  assert.deepEqual(tuple.privateRead.snapshot.usdm.positions, []);
+
+  const retainedExactEmpty = tuple.privateRead.snapshot;
+  tuple = reduceRealDataClientTuple(tuple, {
+    kind: 'PRIVATE_FALLBACK_FAILURE',
+    requestId: 5,
+    observedAtMs: 50,
+    failure: { code: 'HTTP_503', message: 'Fallback unavailable.' },
+  });
+  assert.equal(tuple.privateRead.status, 'RETAINED_FAILURE');
+  assert.equal(tuple.privateRead.snapshot, retainedExactEmpty);
+  assert.equal(tuple.privateRead.source, 'STATE');
+  assert.equal(tuple.privateRead.failure.kind, 'TRANSPORT');
+});
+
+test('display provenance cannot be relabelled by an older state response', () => {
+  let tuple = reduceRealDataClientTuple(INITIAL_REAL_DATA_CLIENT_TUPLE, {
+    kind: 'PRIVATE_STATE_RESULT',
+    requestId: 1,
+    observedAtMs: 10,
+    field: { presence: 'MISSING' },
+  });
+  const fallback = availableFixture();
+  fallback.spot.balances[0].free = '88.00000000';
+  tuple = reduceRealDataClientTuple(tuple, {
+    kind: 'PRIVATE_FALLBACK_RESULT',
+    requestId: 3,
+    observedAtMs: 30,
+    payload: fallback,
+  });
+  tuple = reduceRealDataClientTuple(tuple, {
+    kind: 'PRIVATE_STATE_RESULT',
+    requestId: 2,
+    observedAtMs: 20,
+    field: { presence: 'PRESENT', value: availableFixture() },
+  });
+  assert.equal(tuple.privateRead.transport, 'STATE');
+  assert.equal(tuple.privateRead.source, 'FALLBACK');
+  assert.equal(tuple.privateRead.snapshot.spot.balances[0].free, '88.00000000');
+  assert.equal(tuple.privateRead.appliedRequestId, 3);
+  assert.equal(tuple.privateRead.stateDecisionRequestId, 2);
+});
+
+test('failed state recovery probes cannot suppress or downgrade fallback truth', () => {
+  let tuple = reduceRealDataClientTuple(INITIAL_REAL_DATA_CLIENT_TUPLE, {
+    kind: 'PRIVATE_STATE_RESULT',
+    requestId: 1,
+    observedAtMs: 10,
+    field: { presence: 'MISSING' },
+  });
+  tuple = reduceRealDataClientTuple(tuple, {
+    kind: 'PRIVATE_STATE_RESULT',
+    requestId: 4,
+    observedAtMs: 40,
+    field: { presence: 'PRESENT', value: null },
+  });
+  assert.equal(tuple.privateRead.appliedRequestId, 1);
+  assert.equal(tuple.privateRead.stateDecisionRequestId, 4);
+
+  const afterNewerInvalidProbe = tuple;
+  tuple = reduceRealDataClientTuple(tuple, {
+    kind: 'PRIVATE_STATE_RESULT',
+    requestId: 3,
+    observedAtMs: 30,
+    field: { presence: 'PRESENT', value: availableFixture() },
+  });
+  assert.equal(tuple, afterNewerInvalidProbe);
+
+  const fallback = availableFixture();
+  fallback.spot.balances[0].free = '77.00000000';
+  tuple = reduceRealDataClientTuple(tuple, {
+    kind: 'PRIVATE_FALLBACK_RESULT',
+    requestId: 2,
+    observedAtMs: 20,
+    payload: fallback,
+  });
+  assert.equal(tuple.privateRead.status, 'CURRENT');
+  assert.equal(tuple.privateRead.source, 'FALLBACK');
+  assert.equal(tuple.privateRead.snapshot.spot.balances[0].free, '77.00000000');
+
+  const admittedFallback = tuple.privateRead.snapshot;
+  tuple = reduceRealDataClientTuple(tuple, {
+    kind: 'PRIVATE_STATE_FAILURE',
+    requestId: 5,
+    observedAtMs: 50,
+    failure: { code: 'HTTP_503', message: 'State recovery probe unavailable.' },
+  });
+  assert.equal(tuple.privateRead.status, 'CURRENT');
+  assert.equal(tuple.privateRead.snapshot, admittedFallback);
+  assert.equal(tuple.privateRead.failure, null);
+  assert.equal(tuple.privateRead.appliedRequestId, 2);
+  assert.equal(tuple.privateRead.stateDecisionRequestId, 5);
+});
+
+test('M0 readiness is separately decoded, non-authorizing, and retained on refresh failure', () => {
+  const receivedAtMs = 1_720_000_000_100;
+  const sourceOnly = m0SourceReadinessFixture(receivedAtMs);
+  const decodedSource = decodeM0SpotReadinessTruth(sourceOnly, receivedAtMs);
+  assert.ok(decodedSource);
+  assert.equal(decodedSource.gate2Ready, false);
+  assert.equal(decodedSource.ownerAction, 'NO');
+
+  let tuple = reduceRealDataClientTuple(INITIAL_REAL_DATA_CLIENT_TUPLE, {
+    kind: 'M0_READINESS_RESULT',
+    requestId: 1,
+    observedAtMs: receivedAtMs,
+    payload: sourceOnly,
+  });
+  assert.equal(tuple.m0SpotReadiness.status, 'CURRENT');
+  assert.equal(tuple.m0SpotReadiness.card.disposition, 'SOURCE_READY_NOT_RUNTIME_VERIFIED');
+  assert.equal(m0SpotGate2ReadyNow(tuple.m0SpotReadiness, receivedAtMs), false);
+  const retainedCard = tuple.m0SpotReadiness.card;
+  tuple = reduceRealDataClientTuple(tuple, {
+    kind: 'M0_READINESS_FAILURE',
+    requestId: 2,
+    observedAtMs: receivedAtMs + 10,
+    failure: { code: 'HTTP_503', message: 'Readiness unavailable.' },
+  });
+  assert.equal(tuple.m0SpotReadiness.status, 'RETAINED_FAILURE');
+  assert.equal(tuple.m0SpotReadiness.card, retainedCard);
+  assert.equal(tuple.m0SpotReadiness.failure.kind, 'TRANSPORT');
+
+  const ready = {
+    ...m0SourceReadinessFixture(receivedAtMs - 100),
+    lifecycleCardDigest: `sha256:${'b'.repeat(64)}`,
+    disposition: 'READY_FOR_OWNER_GATE_2',
+    gate2Ready: true,
+    evidenceAuthority: 'RUNTIME_PRIVATE',
+    validUntilMs: receivedAtMs + 1_000,
+    appExecutionArmed: {
+      state: 'VERIFIED_CURRENT',
+      current: false,
+      proposed: 'ARM_EXACT_CARD_AFTER_OWNER_YES',
+    },
+    residualCondition: 'READY_FOR_OWNER_GATE_2',
+    exactLimitation: null,
+    ownerAction: 'YES',
+  };
+  assert.equal(
+    decodeM0SpotReadinessTruth(ready, receivedAtMs),
+    null,
+    'outer READY fields cannot bypass the producer-only full-card validator',
+  );
+  const falseReadyTuple = reduceRealDataClientTuple(tuple, {
+    kind: 'M0_READINESS_RESULT',
+    requestId: 3,
+    observedAtMs: receivedAtMs,
+    payload: ready,
+  });
+  assert.equal(falseReadyTuple.m0SpotReadiness.status, 'RETAINED_FAILURE');
+  assert.equal(falseReadyTuple.m0SpotReadiness.card, retainedCard);
+  assert.equal(falseReadyTuple.m0SpotReadiness.failure.kind, 'CONTRACT');
+  assert.equal(m0SpotGate2ReadyNow(falseReadyTuple.m0SpotReadiness, receivedAtMs), false);
+});
+
 test('partial and not-configured contracts remain non-green and preserve explicit limitations', () => {
   const partial = availableFixture();
   partial.state = 'PARTIAL';
@@ -664,8 +926,8 @@ test('mounted private-read surfaces consume one projection and retain no money-a
   for (const source of [account, dashboard, loans, health, header]) {
     assert.match(source, /projectPrivateRead/);
   }
-  assert.match(store, /decodePrivateReadSnapshot\(snapshot\.privateRead\)/);
-  assert.match(store, /privateReadSource !== 'FALLBACK'/);
+  assert.match(store, /readPrivateReadStateField\(snapshot\)/);
+  assert.match(store, /realDataClient\.privateRead\.transport !== 'FALLBACK'/);
   assert.match(store, /createSettledPoll<unknown>/);
   assert.match(owner, /'Reading'/);
   assert.match(owner, /'Spot \/ Margin Trading'/);
@@ -718,9 +980,13 @@ test('the private-account surfaces present the freshness guard and never invent 
   assert.match(store, /window\.setInterval\(\(\) => privateReadCadenceRef\.current\?\.\(\), intervalMs\)/);
   assert.match(store, /window\.clearInterval\(timer\)/);
   assert.match(store, /if \(trigger === 'DELTA'\) stateRefreshQueued = true/);
-  assert.match(store, /requestId <= privateReadAppliedRef\.current/);
-  assert.match(store, /requestId > privateReadStateDecisionRef\.current/);
-  assert.match(store, /setPrivateReadSource\(decoded \? 'STATE' : 'FALLBACK'\)/);
+  assert.match(store, /reduceRealDataClientTuple\(current, event\)/);
+  assert.match(store, /PRIVATE_STATE_FAILURE/);
+  assert.match(store, /PRIVATE_FALLBACK_FAILURE/);
   assert.match(store, /stateRefreshController\?\.abort\(\)/);
   assert.equal((store.match(/\/api\/private-account/g) ?? []).length, 1);
+  assert.equal((store.match(/\/api\/system-integration\/m0\/spot-canary/g) ?? []).length, 1);
+  assert.match(store, /!await refreshM0Readiness\(\)/);
+  assert.match(store, /M0 readiness refresh failed/);
+  assert.doesNotMatch(store, /\/api\/system-integration\/m0\/spot-canary[\s\S]{0,160}method:\s*'POST'/);
 });

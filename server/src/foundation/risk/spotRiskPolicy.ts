@@ -42,6 +42,16 @@ export interface SpotRiskSubject {
   /** Worst-case quote loss produced by the strategy/risk model. */
   readonly estimatedMaxLossQuote: string;
   readonly expiresAtMs: number;
+  /**
+   * Durable cumulative facts required for an exact recovery SELL. Values are
+   * measured before the candidate FOK order.
+   */
+  readonly recovery?: Readonly<{
+    readonly attributableBaseQuantity: string;
+    readonly cumulativeFilledSellQuantity: string;
+    readonly cumulativeAuthorizedLifecycleTurnoverQuote: string;
+    readonly maximumAuthorizedLifecycleTurnoverQuote: string;
+  }>;
 }
 
 export interface SpotKillSwitchEvidence {
@@ -65,6 +75,8 @@ export const SPOT_RISK_CHECK_CODES = [
   'KILL_SWITCH_CLEAR',
   'ORDER_NOTIONAL_MIN',
   'ORDER_NOTIONAL_MAX',
+  'RECOVERY_SELL_WITHIN_ATTRIBUTABLE_BASE',
+  'RECOVERY_AUTHORIZED_TURNOVER_CAP',
   'ORDER_MAX_LOSS',
   'PROJECTED_DAILY_LOSS',
 ] as const;
@@ -307,6 +319,20 @@ export function evaluateSpotRiskPolicy(
         'Kill-switch state is unavailable.',
       ),
     );
+  } else if (
+    input.killSwitch.engaged
+    && input.subject?.purpose === 'FLATTEN'
+    && input.subject.riskEffect === 'RECONCILED_RISK_REDUCTION'
+  ) {
+    checks.push(
+      freezeCheck(
+        'KILL_SWITCH_CLEAR',
+        'PASS',
+        true,
+        'RECOVERY_ONLY',
+        'Kill switch blocks new risk but preserves exact reconciled flatten recovery until flat.',
+      ),
+    );
   } else if (input.killSwitch.engaged) {
     checks.push(
       freezeCheck(
@@ -369,8 +395,12 @@ export function evaluateSpotRiskPolicy(
       ),
     );
   } else {
+    const recoveryReduction =
+      input.subject?.purpose === 'FLATTEN'
+      && input.subject.riskEffect === 'RECONCILED_RISK_REDUCTION';
     checks.push(
-      compareSpotDecimals(orderNotional, policy.minOrderNotionalQuote) < 0
+      !recoveryReduction
+      && compareSpotDecimals(orderNotional, policy.minOrderNotionalQuote) < 0
         ? freezeCheck(
             'ORDER_NOTIONAL_MIN',
             'FAIL',
@@ -382,8 +412,12 @@ export function evaluateSpotRiskPolicy(
             'ORDER_NOTIONAL_MIN',
             'PASS',
             orderNotional,
-            policy.minOrderNotionalQuote,
-            'Order notional meets the policy minimum.',
+            recoveryReduction
+              ? 'RECOVERY_REDUCTION'
+              : policy.minOrderNotionalQuote,
+            recoveryReduction
+              ? 'Exact recovery reduction is not stranded by an entry minimum.'
+              : 'Order notional meets the policy minimum.',
           ),
       compareSpotDecimals(orderNotional, policy.maxOrderNotionalQuote) > 0
         ? freezeCheck(
@@ -403,6 +437,89 @@ export function evaluateSpotRiskPolicy(
     );
   }
 
+  if (
+    input.subject?.purpose === 'FLATTEN'
+    && input.subject.riskEffect === 'RECONCILED_RISK_REDUCTION'
+  ) {
+    try {
+      if (quantity === null || orderNotional === null) throw new TypeError();
+      const attributable = normalizeSpotDecimal(
+        input.subject.recovery?.attributableBaseQuantity as string,
+        'subject.recovery.attributableBaseQuantity',
+      );
+      const cumulativeSell = normalizeSpotDecimal(
+        input.subject.recovery?.cumulativeFilledSellQuantity as string,
+        'subject.recovery.cumulativeFilledSellQuantity',
+      );
+      const cumulativeAuthorized = normalizeSpotDecimal(
+        input.subject.recovery
+          ?.cumulativeAuthorizedLifecycleTurnoverQuote as string,
+        'subject.recovery.cumulativeAuthorizedLifecycleTurnoverQuote',
+      );
+      const maximumAuthorized = positiveDecimal(
+        input.subject.recovery?.maximumAuthorizedLifecycleTurnoverQuote,
+        'subject.recovery.maximumAuthorizedLifecycleTurnoverQuote',
+      );
+      const projectedSell = addSpotDecimals(cumulativeSell, quantity);
+      const projectedAuthorized = addSpotDecimals(
+        cumulativeAuthorized,
+        orderNotional,
+      );
+      checks.push(
+        compareSpotDecimals(projectedSell, attributable) <= 0
+          ? freezeCheck(
+              'RECOVERY_SELL_WITHIN_ATTRIBUTABLE_BASE',
+              'PASS',
+              projectedSell,
+              attributable,
+              'Candidate cumulative SELL remains within exact canary-attributable base.',
+            )
+          : freezeCheck(
+              'RECOVERY_SELL_WITHIN_ATTRIBUTABLE_BASE',
+              'FAIL',
+              projectedSell,
+              attributable,
+              'Candidate cumulative SELL would consume non-canary base inventory.',
+            ),
+        compareSpotDecimals(
+          projectedAuthorized,
+          maximumAuthorized,
+        ) <= 0
+          ? freezeCheck(
+              'RECOVERY_AUTHORIZED_TURNOVER_CAP',
+              'PASS',
+              projectedAuthorized,
+              maximumAuthorized,
+              'Candidate cumulative authorized turnover remains within the lifecycle cap.',
+            )
+          : freezeCheck(
+              'RECOVERY_AUTHORIZED_TURNOVER_CAP',
+              'FAIL',
+              projectedAuthorized,
+              maximumAuthorized,
+              'Candidate cumulative authorized turnover exceeds the lifecycle cap.',
+            ),
+      );
+    } catch {
+      checks.push(
+        freezeCheck(
+          'RECOVERY_SELL_WITHIN_ATTRIBUTABLE_BASE',
+          'UNKNOWN',
+          null,
+          null,
+          'Exact attributable-base recovery facts are missing or malformed.',
+        ),
+        freezeCheck(
+          'RECOVERY_AUTHORIZED_TURNOVER_CAP',
+          'UNKNOWN',
+          null,
+          null,
+          'Exact authorized-turnover recovery facts are missing or malformed.',
+        ),
+      );
+    }
+  }
+
   if (estimatedMaxLoss === null) {
     checks.push(
       freezeCheck(
@@ -411,6 +528,19 @@ export function evaluateSpotRiskPolicy(
         null,
         policy.maxLossPerOrderQuote,
         'Estimated maximum loss is malformed.',
+      ),
+    );
+  } else if (
+    input.subject?.purpose === 'FLATTEN'
+    && input.subject.riskEffect === 'RECONCILED_RISK_REDUCTION'
+  ) {
+    checks.push(
+      freezeCheck(
+        'ORDER_MAX_LOSS',
+        'PASS',
+        estimatedMaxLoss,
+        'RECOVERY_REDUCTION',
+        'Exact recovery reduction is not blocked by a new-risk loss reservation.',
       ),
     );
   } else if (
@@ -438,6 +568,9 @@ export function evaluateSpotRiskPolicy(
   }
 
   let projectedDailyLoss: string | null = null;
+  const recoveryReduction =
+    input.subject?.purpose === 'FLATTEN'
+    && input.subject.riskEffect === 'RECONCILED_RISK_REDUCTION';
   try {
     if (input.realizedDailyLossQuote === null || estimatedMaxLoss === null) {
       throw new TypeError('daily loss evidence unavailable');
@@ -446,7 +579,9 @@ export function evaluateSpotRiskPolicy(
       input.realizedDailyLossQuote,
       'realizedDailyLossQuote',
     );
-    projectedDailyLoss = addSpotDecimals(realized, estimatedMaxLoss);
+    projectedDailyLoss = recoveryReduction
+      ? realized
+      : addSpotDecimals(realized, estimatedMaxLoss);
   } catch {
     // UNKNOWN below.
   }
@@ -458,6 +593,16 @@ export function evaluateSpotRiskPolicy(
         null,
         policy.maxDailyLossQuote,
         'Daily realized-loss evidence or ticket max loss is unavailable.',
+      ),
+    );
+  } else if (recoveryReduction) {
+    checks.push(
+      freezeCheck(
+        'PROJECTED_DAILY_LOSS',
+        'PASS',
+        projectedDailyLoss,
+        'RECOVERY_REDUCTION',
+        'Exact recovery reduction remains available after a daily-loss stop.',
       ),
     );
   } else if (

@@ -14,7 +14,9 @@ import { TokenIcon } from '../components/TokenIcon';
 import { countdown, fmtBasis, fmtFunding, fmtMoney, fmtPrice, timeAgo } from '../format';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
+import { privateReadFreshness, projectPrivateRead } from '../lib/privateRead';
 import { useStore } from '../store';
+import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import type { BasisRow, BasisSnapshot } from '../lib/basisRuntime';
 import './VolumeScanner.css';
@@ -91,8 +93,147 @@ function decisionTitle(row: BasisRow): string {
   return titleCase(row.decisionKind);
 }
 
+export type BasisRuntimeTruth = Readonly<{
+  current: boolean;
+  state: 'STARTING' | 'LIVE' | 'UNAVAILABLE';
+  label: 'Starting' | 'Live' | 'Unavailable';
+  reason: string | null;
+}>;
+
+export function resolveBasisRuntimeTruth(input: Readonly<{
+  canonicalState: 'LOADING' | 'READY' | 'UNAVAILABLE';
+  canonicalReason: string | null;
+  snapshotStatus: Pick<BasisSnapshot['status'], 'running' | 'bookState' | 'markState' | 'lastError'> | null;
+  requestError: string | null;
+}>): BasisRuntimeTruth {
+  if (input.requestError) {
+    return Object.freeze({ current: false, state: 'UNAVAILABLE', label: 'Unavailable', reason: input.requestError });
+  }
+  if (input.snapshotStatus && !input.snapshotStatus.running) {
+    const canonicalSuffix = input.canonicalReason ? ` · ${input.canonicalReason}` : '';
+    return Object.freeze({
+      current: false,
+      state: 'UNAVAILABLE',
+      label: 'Unavailable',
+      reason: input.snapshotStatus.lastError ?? `BASIS_RUNTIME_STOPPED${canonicalSuffix}`,
+    });
+  }
+  if (input.canonicalState === 'UNAVAILABLE') {
+    return Object.freeze({
+      current: false,
+      state: 'UNAVAILABLE',
+      label: 'Unavailable',
+      reason: input.canonicalReason ?? 'BASIS_ENGINE_CANONICAL_TRUTH_UNAVAILABLE',
+    });
+  }
+  if (!input.snapshotStatus) {
+    return Object.freeze({ current: false, state: 'STARTING', label: 'Starting', reason: null });
+  }
+  if (input.snapshotStatus.lastError) {
+    return Object.freeze({
+      current: false,
+      state: 'UNAVAILABLE',
+      label: 'Unavailable',
+      reason: input.snapshotStatus.lastError,
+    });
+  }
+  if (input.snapshotStatus.bookState !== 'fresh' || input.snapshotStatus.markState !== 'fresh') {
+    return Object.freeze({
+      current: false,
+      state: 'UNAVAILABLE',
+      label: 'Unavailable',
+      reason: `BASIS_SOURCE_NOT_CURRENT: books=${input.snapshotStatus.bookState}; marks=${input.snapshotStatus.markState}`,
+    });
+  }
+  if (input.canonicalState === 'LOADING') {
+    return Object.freeze({ current: false, state: 'STARTING', label: 'Starting', reason: null });
+  }
+  return Object.freeze({ current: true, state: 'LIVE', label: 'Live', reason: null });
+}
+
+export type BasisAccountTruth = Readonly<{
+  spotCurrent: boolean;
+  marginCurrent: boolean;
+  spotAvailableUsdt: string | null;
+  marginLiabilityBtc: string | null;
+  liabilityCount: number | null;
+  sourceLabel: string;
+  spotReason: string | null;
+  marginReason: string | null;
+}>;
+
+export function resolveBasisAccountTruth(input: Readonly<{
+  source: 'PENDING' | 'STATE' | 'FALLBACK';
+  requestError: string | null;
+  freshnessState: 'CURRENT' | 'STALE' | 'UNKNOWN' | 'NOT_CONFIGURED';
+  freshnessReason: string;
+  spotState: 'AVAILABLE' | 'PARTIAL' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
+  spotFreshnessState: 'CURRENT' | 'STALE' | 'UNKNOWN' | 'NOT_CONFIGURED';
+  spotFreshnessReason: string;
+  spotCoverageState: 'COMPLETE_CURRENT' | 'PARTIAL_SYMBOL_SCOPED' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
+  spotBalancesAvailable: boolean;
+  spotAvailableUsdt: string | null;
+  marginState: 'AVAILABLE' | 'PARTIAL' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
+  marginFreshnessState: 'CURRENT' | 'STALE' | 'UNKNOWN' | 'NOT_CONFIGURED';
+  marginFreshnessReason: string;
+  marginCoverageState: 'COMPLETE_CURRENT' | 'PARTIAL_SYMBOL_SCOPED' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
+  marginAssetsAvailable: boolean;
+  liabilityReconciliationState: 'RECONCILED' | 'PARTIAL' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
+  liabilityFreshnessState: 'CURRENT' | 'STALE' | 'UNKNOWN' | 'NOT_CONFIGURED';
+  liabilityFreshnessReason: string;
+  marginLiabilityBtc: string | null;
+  liabilityCount: number | null;
+}>): BasisAccountTruth {
+  const sourceLabel = input.source === 'STATE'
+    ? 'State Account Read'
+    : input.source === 'FALLBACK'
+      ? 'Fallback Account Read'
+      : 'Account Source Pending';
+  const accountReason = input.requestError
+    ?? (input.source === 'PENDING' ? 'Account source pending' : null)
+    ?? (input.freshnessState === 'CURRENT' ? null : input.freshnessReason);
+  const spotReason = accountReason
+    ?? (input.spotState === 'AVAILABLE' ? null : `Spot account ${titleCase(input.spotState)}`)
+    ?? (input.spotFreshnessState === 'CURRENT' ? null : input.spotFreshnessReason)
+    ?? (input.spotCoverageState === 'COMPLETE_CURRENT' ? null : `Spot coverage ${titleCase(input.spotCoverageState)}`)
+    ?? (input.spotBalancesAvailable ? null : 'Spot balance rows unavailable')
+    ?? (input.spotAvailableUsdt !== null ? null : 'USDT free balance unavailable');
+  const marginReason = accountReason
+    ?? (input.marginState === 'AVAILABLE' ? null : `Margin account ${titleCase(input.marginState)}`)
+    ?? (input.marginFreshnessState === 'CURRENT' ? null : input.marginFreshnessReason)
+    ?? (input.marginCoverageState === 'COMPLETE_CURRENT' ? null : `Margin coverage ${titleCase(input.marginCoverageState)}`)
+    ?? (input.liabilityReconciliationState === 'RECONCILED'
+      ? null
+      : `Liability reconciliation ${titleCase(input.liabilityReconciliationState)}`)
+    ?? (input.liabilityFreshnessState === 'CURRENT' ? null : input.liabilityFreshnessReason)
+    ?? (input.marginAssetsAvailable ? null : 'Margin asset rows unavailable')
+    ?? (input.marginLiabilityBtc !== null && input.liabilityCount !== null ? null : 'Margin liability facts unavailable');
+  const spotCurrent = spotReason === null;
+  const marginCurrent = marginReason === null;
+  return Object.freeze({
+    spotCurrent,
+    marginCurrent,
+    spotAvailableUsdt: spotCurrent ? input.spotAvailableUsdt : null,
+    marginLiabilityBtc: marginCurrent ? input.marginLiabilityBtc : null,
+    liabilityCount: marginCurrent ? input.liabilityCount : null,
+    sourceLabel,
+    spotReason,
+    marginReason,
+  });
+}
+
 export function Strategies() {
-  const { state, openDetail, openLedger, setPage, toggleWatch } = useStore();
+  const { binding } = useProductControlRoomContext();
+  const {
+    state,
+    privateRead,
+    privateReadError,
+    privateReadSource,
+    openDetail,
+    openLedger,
+    setPage,
+    toggleWatch,
+  } = useStore();
   const [snapshot, setSnapshot] = useState<BasisSnapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
@@ -113,7 +254,77 @@ export function Strategies() {
     return poll.stop;
   }, []);
 
-  const rows = snapshot?.rows ?? [];
+  const basisComponent = binding.snapshot?.components.find((component) => component.componentId === 'basis-engine');
+  const basisCanonicalReason = binding.continuity !== 'PROVEN'
+    ? binding.error ?? `CANONICAL_CONTINUITY_${binding.continuity}`
+    : basisComponent
+      ? `BASIS_ENGINE_${basisComponent.observedLifecycle}: ${[
+        basisComponent.blockerCode,
+        basisComponent.canonicalPresentation.stateLabel,
+      ].filter(Boolean).join(' · ')}`
+      : 'BASIS_ENGINE_CANONICAL_TRUTH_MISSING';
+  const basisCanonicalReady = Boolean(
+    binding.continuity === 'PROVEN'
+    && basisComponent?.observedLifecycle === 'READY'
+    && basisComponent.canonicalPresentation.status === 'operational',
+  );
+  const basisCanonicalLoading = Boolean(
+    binding.loading && binding.snapshot === null && binding.error === null
+    || binding.continuity === 'PROVEN'
+      && basisComponent
+      && ['START_REQUESTED', 'STARTING', 'WARMING'].includes(basisComponent.observedLifecycle),
+  );
+  const basisTruth = resolveBasisRuntimeTruth({
+    canonicalState: basisCanonicalReady ? 'READY' : basisCanonicalLoading ? 'LOADING' : 'UNAVAILABLE',
+    canonicalReason: basisCanonicalReason,
+    snapshotStatus: snapshot?.status ?? null,
+    requestError: error,
+  });
+  const accountNow = Date.now();
+  const privatePresentation = projectPrivateRead(privateRead, accountNow);
+  const spotFreshness = privateReadFreshness({
+    ...privateRead,
+    state: privateRead.spot.state,
+    observedAt: privateRead.spot.observedAt,
+  }, accountNow);
+  const marginFreshness = privateReadFreshness({
+    ...privateRead,
+    state: privateRead.margin.state,
+    observedAt: privateRead.margin.observedAt,
+  }, accountNow);
+  const liabilityFact = privateRead.reconciliation.liabilities;
+  const liabilityFreshness = privateReadFreshness({
+    ...privateRead,
+    state: liabilityFact.state === 'RECONCILED'
+      ? 'AVAILABLE'
+      : liabilityFact.state === 'NOT_CONFIGURED'
+        ? 'NOT_CONFIGURED'
+        : 'UNAVAILABLE',
+    observedAt: liabilityFact.observedAt,
+  }, accountNow);
+  const accountTruth = resolveBasisAccountTruth({
+    source: privateReadSource,
+    requestError: privateReadError,
+    freshnessState: privatePresentation.freshness.state,
+    freshnessReason: privatePresentation.freshness.reason,
+    spotState: privateRead.spot.state,
+    spotFreshnessState: spotFreshness.state,
+    spotFreshnessReason: spotFreshness.reason,
+    spotCoverageState: privateRead.spot.coverage.state,
+    spotBalancesAvailable: privateRead.spot.balances !== null,
+    spotAvailableUsdt: privatePresentation.spotAvailableUsdt,
+    marginState: privateRead.margin.state,
+    marginFreshnessState: marginFreshness.state,
+    marginFreshnessReason: marginFreshness.reason,
+    marginCoverageState: privateRead.margin.coverage.state,
+    marginAssetsAvailable: privateRead.margin.assets !== null,
+    liabilityReconciliationState: privateRead.reconciliation.liabilities.state,
+    liabilityFreshnessState: liabilityFreshness.state,
+    liabilityFreshnessReason: liabilityFreshness.reason,
+    marginLiabilityBtc: privatePresentation.marginLiabilityBtc,
+    liabilityCount: privatePresentation.counts.liabilities,
+  });
+  const rows = basisTruth.current ? snapshot?.rows ?? [] : [];
   const query = search.trim().toUpperCase();
   const counts = useMemo(() => ({
     all: rows.length,
@@ -138,15 +349,8 @@ export function Strategies() {
     return true;
   }), [filter, query, rows]);
 
-  const liveFeed = Boolean(
-    !error &&
-    snapshot?.status.running &&
-    snapshot.status.bookState === 'fresh' &&
-    snapshot.status.markState === 'fresh' &&
-    !snapshot.status.lastError,
-  );
   const watchlist = state?.config.watchlist ?? [];
-  const queueSize = snapshot ? snapshot.status.watching + snapshot.status.focused : null;
+  const basisUnassertedDetail = basisTruth.reason ?? 'Canonical Basis runtime loading';
 
   return (
     <div className="container page volx-page basx-page">
@@ -155,12 +359,18 @@ export function Strategies() {
           <div className="volx-title basx-title">
             <img className="basx-page-mark" src="/basis-percent.png" alt="" aria-hidden="true" />
             <h1>Basis</h1>
-            <span className={'volx-live ' + (liveFeed ? 'active' : error ? 'degraded' : 'starting')}>
+            <span
+              className={'volx-live ' + (basisTruth.state === 'LIVE' ? 'active' : basisTruth.state === 'UNAVAILABLE' ? 'degraded' : 'starting')}
+              role="status"
+              title={basisTruth.reason ?? undefined}
+            >
               <i aria-hidden="true" />
-              {liveFeed ? 'Live' : error ? 'Unavailable' : 'Starting'}
+              {basisTruth.label}
             </span>
             <span className="volx-updated">
-              {snapshot ? 'Updated ' + timeAgo(snapshot.updatedAt) : 'Connecting'}
+              {basisTruth.current && snapshot
+                ? 'Updated ' + timeAgo(snapshot.updatedAt)
+                : basisUnassertedDetail}
             </span>
           </div>
           <label className="volx-search">
@@ -186,23 +396,31 @@ export function Strategies() {
         <div className="volx-summary" aria-label="Basis Summary">
           <div className="volx-summary-cell">
             <span>Eligible Pairs</span>
-            <strong>{snapshot?.status.universeSize ?? '—'}</strong>
-            <small>Liquid Binance spot + USD-M pairs</small>
+            <strong>{basisTruth.current ? snapshot?.status.universeSize ?? 'UNKNOWN' : 'UNKNOWN'}</strong>
+            <small>{basisTruth.current && snapshot
+              ? `${snapshot.status.watching} watching · ${snapshot.status.focused} focused · ${snapshot.status.openProposals} proposals`
+              : basisUnassertedDetail}</small>
           </div>
           <div className="volx-summary-cell">
-            <span>Decision Queue</span>
-            <strong>{queueSize ?? '—'}</strong>
-            <small>{snapshot ? snapshot.status.watching + ' watching · ' + snapshot.status.focused + ' focused' : 'Waiting for runtime'}</small>
+            <span>Live Markets</span>
+            <strong>{basisTruth.current ? 'CURRENT' : 'UNKNOWN'}</strong>
+            <small>{basisTruth.current && snapshot
+              ? `${snapshot.status.bookSource} · ${snapshot.status.markSource}`
+              : basisUnassertedDetail}</small>
           </div>
           <div className="volx-summary-cell">
-            <span>Open Proposals</span>
-            <strong>{snapshot?.status.openProposals ?? '—'}</strong>
-            <small>{snapshot == null ? 'Runtime truth unavailable' : snapshot.status.openProposals ? 'Passed every executable gate' : 'No setup has cleared every gate'}</small>
+            <span>Available USDT</span>
+            <strong>{accountTruth.spotAvailableUsdt ?? 'UNKNOWN'}</strong>
+            <small>{accountTruth.spotCurrent
+              ? `${accountTruth.sourceLabel} · ${privatePresentation.freshness.label} · spot free balance`
+              : accountTruth.spotReason}</small>
           </div>
           <div className="volx-summary-cell">
-            <span>Borrow Verified</span>
-            <strong>{snapshot?.status.verifiedBorrow ?? '—'} <em>/ {snapshot?.status.universeSize ?? '—'}</em></strong>
-            <small>Unknown borrow is blocked, never inferred</small>
+            <span>Margin Liability BTC</span>
+            <strong>{accountTruth.marginLiabilityBtc ?? 'UNKNOWN'}</strong>
+            <small>{accountTruth.marginCurrent
+              ? `${accountTruth.liabilityCount} liability assets · ${accountTruth.sourceLabel}`
+              : accountTruth.marginReason}</small>
           </div>
         </div>
 
@@ -223,12 +441,14 @@ export function Strategies() {
                 }}
               >
                 {item.label}
-                <span>{counts[item.id]}</span>
+                <span>{basisTruth.current ? counts[item.id] : 'UNKNOWN'}</span>
               </button>
             ))}
           </div>
           <span className="volx-view-note">
-            {snapshot ? 'Crossed books ' + snapshot.status.bookState + ' · marks ' + snapshot.status.markState : 'Runtime starting'}
+            {basisTruth.current && snapshot
+              ? 'Crossed books ' + snapshot.status.bookState + ' · marks ' + snapshot.status.markState
+              : basisUnassertedDetail}
           </span>
         </div>
 
@@ -245,13 +465,13 @@ export function Strategies() {
             <span aria-hidden="true" />
           </div>
 
-          {error && !snapshot ? (
+          {basisTruth.state === 'UNAVAILABLE' ? (
             <div className="volx-empty">
               <Activity size={18} />
               <strong>Basis Runtime Unavailable</strong>
-              <span>{error}</span>
+              <span>{basisTruth.reason}</span>
             </div>
-          ) : !snapshot ? (
+          ) : basisTruth.state === 'STARTING' || !snapshot ? (
             <div className="volx-empty">
               <Radio size={18} />
               <strong>Connecting To Basis Runtime</strong>

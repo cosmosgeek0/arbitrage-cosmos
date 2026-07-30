@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Eye,
   Radar,
@@ -8,14 +8,16 @@ import {
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { projectMarketConsumerTruth } from '../components/Header';
 import { TokenIcon } from '../components/TokenIcon';
-import { fmtBasis, fmtFunding, fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
+import { countdown, fmtBasis, fmtFunding, fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
+import { apiErrorMessage, fetchJson } from '../lib/http';
+import { createSettledPoll } from '../lib/polling';
 import { useStore } from '../store';
 import './Opportunities.css';
 
 type View = 'active' | 'raw';
 
 const VIEWS: { id: View; label: string }[] = [
-  { id: 'active', label: 'Canonical Projection' },
+  { id: 'active', label: 'Engine Proposal Facts' },
   { id: 'raw', label: 'Raw Market Facts' },
 ];
 
@@ -27,9 +29,474 @@ function rawFact(value: number | null | undefined, format: (known: number) => st
   return finite(value) ? format(value) : 'UNKNOWN';
 }
 
+type OpportunitySource = 'BASIS' | 'VOLUME';
+
+export type OpportunitySourceTruthLabel =
+  | 'CURRENT'
+  | 'DEGRADED'
+  | 'STALE LAST-KNOWN'
+  | 'CONFLICT'
+  | 'LOADING'
+  | 'UNAVAILABLE';
+
+export interface PublishedOpportunityFact {
+  readonly source: OpportunitySource;
+  readonly proposalId: string;
+  readonly symbol: string;
+  readonly base: string;
+  readonly lifecycle: string;
+  readonly direction: string;
+  readonly reason: string;
+  readonly invalidation: string | null;
+  readonly reportedNetEdgePct: number | null;
+  readonly grossEdgePct: number | null;
+  readonly feesPct: number | null;
+  readonly slippagePct: number | null;
+  readonly fundingDragPct: number | null;
+  readonly borrowCostPct: number | null;
+  readonly totalCostPct: number | null;
+  readonly fundingRate: number | null;
+  readonly quoteVolume24h: number | null;
+  readonly spotPrice: number | null;
+  readonly perpPrice: number | null;
+  readonly confidence: number | null;
+  readonly observedAtMs: number | null;
+  readonly volume1sMultiple: number | null;
+  readonly volume5sMultiple: number | null;
+  readonly tradeCountMultiple: number | null;
+  readonly topDepthUsd: number | null;
+  readonly spreadBps: number | null;
+  readonly expiresAtMs: number | null;
+}
+
+export interface OpportunitySourceRead {
+  readonly source: OpportunitySource;
+  readonly updatedAt: number;
+  readonly openProposals: number;
+  readonly countConsistent: boolean;
+  readonly current: boolean;
+  readonly evidence: string;
+  readonly facts: readonly PublishedOpportunityFact[];
+}
+
+export interface OpportunitySourceTruth {
+  readonly label: OpportunitySourceTruthLabel;
+  readonly detail: string;
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function finiteOrNull(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isFinite(value));
+}
+
+function optionalFiniteOrNull(value: unknown): value is number | null | undefined {
+  return value === undefined || finiteOrNull(value);
+}
+
+function nonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+function nonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function basisFact(
+  row: Record<string, unknown>,
+  updatedAt: number,
+): PublishedOpportunityFact | null {
+  const proposal = record(row.proposal);
+  const costs = record(row.costs);
+  const borrow = record(row.borrow);
+  if (
+    proposal === null
+    || costs === null
+    || borrow === null
+    || !nonEmptyString(row.symbol)
+    || !nonEmptyString(row.base)
+    || (row.direction !== 'long_spot_short_perp' && row.direction !== 'short_spot_long_perp')
+    || !nonEmptyString(row.reason)
+    || !finiteOrNull(row.spotBid)
+    || !finiteOrNull(row.spotAsk)
+    || !finiteOrNull(row.perpBid)
+    || !finiteOrNull(row.perpAsk)
+    || !finiteOrNull(row.executableGapPct)
+    || !finiteOrNull(row.fundingRate)
+    || !finiteOrNull(row.quoteVolume24h)
+    || !finiteOrNull(row.decisionTs)
+    || !finiteOrNull(costs.feesPct)
+    || !finiteOrNull(costs.slippagePct)
+    || !finiteOrNull(costs.fundingDragPct)
+    || !finiteOrNull(costs.borrowCostPct)
+    || !finiteOrNull(costs.totalPct)
+    || !nonEmptyString(borrow.status)
+    || !nonEmptyString(borrow.human)
+    || !nonEmptyString(proposal.id)
+    || !nonEmptyString(proposal.status)
+    || !finiteOrNull(proposal.netEdgePct)
+    || !finiteOrNull(proposal.confidence)
+    || (proposal.invalidation !== null && !nonEmptyString(proposal.invalidation))
+  ) return null;
+
+  const longSpot = row.direction === 'long_spot_short_perp';
+  return Object.freeze({
+    source: 'BASIS',
+    proposalId: proposal.id,
+    symbol: row.symbol,
+    base: row.base,
+    lifecycle: proposal.status,
+    direction: longSpot ? 'Buy Spot · Sell Perp' : 'Sell Spot · Buy Perp',
+    reason: row.reason,
+    invalidation: proposal.invalidation,
+    reportedNetEdgePct: proposal.netEdgePct,
+    grossEdgePct: row.executableGapPct,
+    feesPct: costs.feesPct,
+    slippagePct: costs.slippagePct,
+    fundingDragPct: costs.fundingDragPct,
+    borrowCostPct: costs.borrowCostPct,
+    totalCostPct: costs.totalPct,
+    fundingRate: row.fundingRate,
+    quoteVolume24h: row.quoteVolume24h,
+    spotPrice: longSpot ? row.spotAsk : row.spotBid,
+    perpPrice: longSpot ? row.perpBid : row.perpAsk,
+    confidence: proposal.confidence,
+    observedAtMs: row.decisionTs ?? updatedAt,
+    volume1sMultiple: null,
+    volume5sMultiple: null,
+    tradeCountMultiple: null,
+    topDepthUsd: null,
+    spreadBps: null,
+    expiresAtMs: null,
+  });
+}
+
+function volumeFact(
+  row: Record<string, unknown>,
+  updatedAt: number,
+): PublishedOpportunityFact | null {
+  const proposal = record(row.proposal);
+  const volumeMultiple = record(row.volumeMultiple);
+  const tradeCountMultiple = record(row.tradeCountMultiple);
+  if (
+    proposal === null
+    || volumeMultiple === null
+    || tradeCountMultiple === null
+    || !nonEmptyString(row.symbol)
+    || !nonEmptyString(row.base)
+    || !nonEmptyString(row.reason)
+    || !finiteOrNull(row.price)
+    || !finiteOrNull(row.decisionTs)
+    || !finiteOrNull(row.topDepthUsd)
+    || !finiteOrNull(row.spreadBps)
+    || !optionalFiniteOrNull(volumeMultiple['1s'])
+    || !optionalFiniteOrNull(volumeMultiple['5s'])
+    || !optionalFiniteOrNull(tradeCountMultiple['5s'])
+    || !nonEmptyString(proposal.id)
+    || !nonEmptyString(proposal.status)
+    || !nonEmptyString(proposal.direction)
+    || !nonEmptyString(proposal.reason)
+    || !finiteOrNull(proposal.confidence)
+    || !optionalFiniteOrNull(proposal.featureObservedAtMs)
+    || !optionalFiniteOrNull(proposal.expiresAtMs)
+  ) return null;
+
+  return Object.freeze({
+    source: 'VOLUME',
+    proposalId: proposal.id,
+    symbol: row.symbol,
+    base: row.base,
+    lifecycle: proposal.status,
+    direction: proposal.direction.replaceAll('_', ' '),
+    reason: proposal.reason,
+    invalidation: null,
+    reportedNetEdgePct: null,
+    grossEdgePct: null,
+    feesPct: null,
+    slippagePct: null,
+    fundingDragPct: null,
+    borrowCostPct: null,
+    totalCostPct: null,
+    fundingRate: null,
+    quoteVolume24h: null,
+    spotPrice: row.price,
+    perpPrice: null,
+    confidence: proposal.confidence,
+    observedAtMs: proposal.featureObservedAtMs ?? row.decisionTs ?? updatedAt,
+    volume1sMultiple: volumeMultiple['1s'] ?? null,
+    volume5sMultiple: volumeMultiple['5s'] ?? null,
+    tradeCountMultiple: tradeCountMultiple['5s'] ?? null,
+    topDepthUsd: row.topDepthUsd,
+    spreadBps: row.spreadBps,
+    expiresAtMs: proposal.expiresAtMs ?? null,
+  });
+}
+
+export function decodeBasisOpportunityRead(value: unknown): OpportunitySourceRead | null {
+  const source = record(value);
+  const status = record(source?.status);
+  if (
+    source === null
+    || status === null
+    || !finiteOrNull(source.updatedAt)
+    || source.updatedAt === null
+    || !Array.isArray(source.rows)
+    || typeof status.running !== 'boolean'
+    || (status.bookState !== 'fresh' && status.bookState !== 'stale')
+    || (status.markState !== 'fresh' && status.markState !== 'stale')
+    || !nonNegativeInteger(status.openProposals)
+    || (status.lastError !== null && typeof status.lastError !== 'string')
+    || !nonEmptyString(status.bookSource)
+    || !nonEmptyString(status.markSource)
+  ) return null;
+
+  const facts: PublishedOpportunityFact[] = [];
+  for (const candidate of source.rows) {
+    const row = record(candidate);
+    if (row === null || !nonEmptyString(row.state)) return null;
+    if (row.state !== 'PROPOSED') continue;
+    const fact = basisFact(row, source.updatedAt);
+    if (fact === null) return null;
+    facts.push(fact);
+  }
+
+  return Object.freeze({
+    source: 'BASIS',
+    updatedAt: source.updatedAt,
+    openProposals: status.openProposals,
+    countConsistent: status.openProposals === facts.length,
+    current: status.running
+      && status.bookState === 'fresh'
+      && status.markState === 'fresh'
+      && status.lastError === null,
+    evidence: `${status.bookSource} · ${status.markSource}`,
+    facts: Object.freeze(facts),
+  });
+}
+
+export function decodeVolumeOpportunityRead(value: unknown): OpportunitySourceRead | null {
+  const source = record(value);
+  const status = record(source?.status);
+  if (
+    source === null
+    || status === null
+    || !finiteOrNull(source.updatedAt)
+    || source.updatedAt === null
+    || !Array.isArray(source.rows)
+    || typeof status.running !== 'boolean'
+    || !['starting', 'connecting', 'open', 'degraded'].includes(String(status.streamState))
+    || (status.bookState !== 'fresh' && status.bookState !== 'stale')
+    || !nonNegativeInteger(status.openProposals)
+    || !nonEmptyString(status.source)
+    || !nonEmptyString(status.bookSource)
+  ) return null;
+
+  const facts: PublishedOpportunityFact[] = [];
+  for (const candidate of source.rows) {
+    const row = record(candidate);
+    if (row === null || !nonEmptyString(row.state)) return null;
+    if (row.state !== 'PROPOSED') continue;
+    const fact = volumeFact(row, source.updatedAt);
+    if (fact === null) return null;
+    facts.push(fact);
+  }
+
+  return Object.freeze({
+    source: 'VOLUME',
+    updatedAt: source.updatedAt,
+    openProposals: status.openProposals,
+    countConsistent: status.openProposals === facts.length,
+    current: status.running && status.streamState === 'open' && status.bookState === 'fresh',
+    evidence: `${status.source} · ${status.bookSource}`,
+    facts: Object.freeze(facts),
+  });
+}
+
+export function projectOpportunitySourceTruth(
+  read: OpportunitySourceRead | null,
+  error: string | null,
+): OpportunitySourceTruth {
+  if (read === null) {
+    return error
+      ? Object.freeze({ label: 'UNAVAILABLE', detail: error })
+      : Object.freeze({ label: 'LOADING', detail: 'Waiting for the existing engine read owner.' });
+  }
+  if (!read.countConsistent) {
+    return Object.freeze({
+      label: 'CONFLICT',
+      detail: `${read.openProposals} reported · ${read.facts.length} published rows`,
+    });
+  }
+  if (error !== null) {
+    return Object.freeze({ label: 'STALE LAST-KNOWN', detail: error });
+  }
+  if (!read.current) {
+    return Object.freeze({ label: 'DEGRADED', detail: read.evidence });
+  }
+  return Object.freeze({ label: 'CURRENT', detail: read.evidence });
+}
+
+export function projectPublishedOpportunityFacts(
+  basis: OpportunitySourceRead | null,
+  volume: OpportunitySourceRead | null,
+): readonly PublishedOpportunityFact[] {
+  // Preserve owner order inside each source and a fixed Basis-then-Volume
+  // section order. Never cross-strategy rank by edge or confidence.
+  return Object.freeze([
+    ...(basis?.facts ?? []),
+    ...(volume?.facts ?? []),
+  ]);
+}
+
+function multipleFact(value: number | null): string {
+  if (!finite(value)) return 'UNKNOWN';
+  return `${value.toFixed(value >= 10 ? 1 : 2)}×`;
+}
+
+function confidenceFact(value: number | null): string {
+  return finite(value) ? `${Math.round(value * 100)}%` : 'UNKNOWN';
+}
+
+function basisSideLabel(value: 'LONG_SPOT_SHORT_PERP' | 'SHORT_SPOT_LONG_PERP' | null | undefined): string {
+  if (value === 'LONG_SPOT_SHORT_PERP') return 'Long Spot · Short Perp';
+  if (value === 'SHORT_SPOT_LONG_PERP') return 'Short Spot · Long Perp';
+  return 'Side UNKNOWN';
+}
+
+function factMatches(fact: PublishedOpportunityFact, query: string): boolean {
+  if (!query) return true;
+  return [
+    fact.source,
+    fact.proposalId,
+    fact.symbol,
+    fact.base,
+    fact.lifecycle,
+    fact.direction,
+    fact.reason,
+    fact.invalidation ?? '',
+  ].some((value) => value.toUpperCase().includes(query));
+}
+
+export function PublishedOpportunityFacts({
+  facts,
+  query,
+  basisTruth,
+  volumeTruth,
+  coverageKnown,
+}: {
+  readonly facts: readonly PublishedOpportunityFact[];
+  readonly query: string;
+  readonly basisTruth: Readonly<OpportunitySourceTruth>;
+  readonly volumeTruth: Readonly<OpportunitySourceTruth>;
+  readonly coverageKnown: boolean;
+}) {
+  const filtered = facts.filter((fact) => factMatches(fact, query));
+  const currentCoverage = basisTruth.label === 'CURRENT' && volumeTruth.label === 'CURRENT';
+  const truthFor = (source: OpportunitySource) => source === 'BASIS' ? basisTruth : volumeTruth;
+
+  return (
+    <div className="opportunityx-table" role="table" aria-label="Published Engine Proposal Facts">
+      <div className="opportunityx-proposal-head" role="row">
+        <span role="columnheader">Source</span>
+        <span role="columnheader">Proposal</span>
+        <span role="columnheader">Reported Net</span>
+        <span role="columnheader">Economics</span>
+        <span role="columnheader">Live Evidence</span>
+        <span role="columnheader">Source Truth</span>
+        <span role="columnheader">Age</span>
+        <span aria-hidden="true" />
+      </div>
+
+      {filtered.length ? filtered.map((fact) => {
+        const sourceTruth = truthFor(fact.source);
+        const basis = fact.source === 'BASIS';
+        return (
+          <div className="opportunityx-proposal-item" role="rowgroup" key={`${fact.source}:${fact.proposalId}`}>
+            <div className="opportunityx-proposal-row" role="row">
+              <span className="opportunityx-age" role="cell">{fact.source}</span>
+              <span className="opportunityx-asset" role="cell">
+                <TokenIcon symbol={fact.symbol} size={28} />
+                <span>
+                  <strong>{fact.base}</strong>
+                  <small title={fact.proposalId}>{fact.direction} · {fact.proposalId}</small>
+                </span>
+              </span>
+              <span className="opportunityx-evidence-cell" role="cell">
+                <strong>{basis ? rawFact(fact.reportedNetEdgePct, (value) => fmtBasis(value, 2)) : 'UNKNOWN'}</strong>
+                <small>{basis ? 'OWNER-REPORTED · NOT A PROFIT VERDICT' : 'NOT PUBLISHED BY VOLUME'}</small>
+              </span>
+              <span className="opportunityx-evidence-cell" role="cell">
+                <strong>{basis ? `Gross ${rawFact(fact.grossEdgePct, (value) => fmtBasis(value, 2))}` : 'UNKNOWN'}</strong>
+                <small>{basis
+                  ? `Total cost ${rawFact(fact.totalCostPct, (value) => fmtBasis(value, 2))}`
+                  : 'Fees · slippage · funding · borrow NOT PUBLISHED'}</small>
+              </span>
+              <span className="opportunityx-quality" role="cell">
+                <strong>{basis
+                  ? `${rawFact(fact.spotPrice, fmtPrice)} / ${rawFact(fact.perpPrice, fmtPrice)}`
+                  : `${multipleFact(fact.volume1sMultiple)} / ${multipleFact(fact.volume5sMultiple)}`}</strong>
+                <small>{basis
+                  ? `Executable legs · funding ${rawFact(fact.fundingRate, fmtFunding)}`
+                  : `1s / 5s volume · depth ${rawFact(fact.topDepthUsd, fmtMoney)}`}</small>
+              </span>
+              <span className="opportunityx-evidence-cell" role="cell">
+                <strong>{sourceTruth.label}</strong>
+                <small title={sourceTruth.detail}>{sourceTruth.detail}</small>
+              </span>
+              <span className="opportunityx-age" role="cell">
+                {finite(fact.observedAtMs) ? timeAgo(fact.observedAtMs) : 'UNKNOWN'}
+              </span>
+              <span aria-hidden="true" />
+            </div>
+            <div className="opportunityx-proposal-detail">
+              <div className="opportunityx-reason">
+                <span>Source Reason</span>
+                <p>{fact.reason}{fact.invalidation ? ` · Invalidation: ${fact.invalidation}` : ''}</p>
+              </div>
+              <dl className="opportunityx-facts">
+                <div><dt>Proposal ID</dt><dd title={fact.proposalId}>{fact.proposalId}</dd></div>
+                <div><dt>Lifecycle</dt><dd>{fact.lifecycle}</dd></div>
+                <div><dt>Confidence</dt><dd>{confidenceFact(fact.confidence)}</dd></div>
+                <div><dt>{basis ? 'Gross Edge' : '1s Volume'}</dt><dd>{basis ? rawFact(fact.grossEdgePct, (value) => fmtBasis(value, 3)) : multipleFact(fact.volume1sMultiple)}</dd></div>
+                <div><dt>{basis ? 'Fees' : '5s Volume'}</dt><dd>{basis ? rawFact(fact.feesPct, (value) => fmtBasis(value, 3)) : multipleFact(fact.volume5sMultiple)}</dd></div>
+                <div><dt>{basis ? 'Slippage' : '5s Trades'}</dt><dd>{basis ? rawFact(fact.slippagePct, (value) => fmtBasis(value, 3)) : multipleFact(fact.tradeCountMultiple)}</dd></div>
+                <div><dt>{basis ? 'Funding Drag' : 'Spread'}</dt><dd>{basis ? rawFact(fact.fundingDragPct, (value) => fmtBasis(value, 3)) : rawFact(fact.spreadBps, (value) => `${value.toFixed(2)} bps`)}</dd></div>
+                <div><dt>{basis ? 'Borrow Cost' : 'Expiry'}</dt><dd>{basis ? rawFact(fact.borrowCostPct, (value) => fmtBasis(value, 3)) : finite(fact.expiresAtMs) ? countdown(fact.expiresAtMs) : 'UNKNOWN'}</dd></div>
+              </dl>
+            </div>
+          </div>
+        );
+      }) : (
+        <div className="opportunityx-empty">
+          <Radar size={18} />
+          <strong>{query
+            ? 'No Published Proposal Matches Search'
+            : coverageKnown
+              ? currentCoverage
+                ? 'No Current Published Engine Proposals'
+                : 'No Retained Published Engine Proposals'
+              : 'Published Proposal Coverage Unavailable'}</strong>
+          <span>{query
+            ? 'No owner-published proposal row matches the query.'
+            : coverageKnown
+              ? currentCoverage
+                ? 'Both engine owners report zero proposal rows.'
+                : 'The retained engine reads contain zero rows; current zero is not asserted.'
+              : 'One or more engine owners has no complete, count-consistent read.'}</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Opportunities() {
   const {
-    state,
     markets,
     marketStatus,
     marketsLastSuccessAtMs,
@@ -38,6 +505,51 @@ export function Opportunities() {
   } = useStore();
   const [view, setView] = useState<View>('active');
   const [search, setSearch] = useState('');
+  const [basisRead, setBasisRead] = useState<OpportunitySourceRead | null>(null);
+  const [volumeRead, setVolumeRead] = useState<OpportunitySourceRead | null>(null);
+  const [basisError, setBasisError] = useState<string | null>(null);
+  const [volumeError, setVolumeError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const basisPoll = createSettledPoll<OpportunitySourceRead>({
+      intervalMs: 2_000,
+      request: async (signal) => {
+        const decoded = decodeBasisOpportunityRead(await fetchJson<unknown>(
+          '/api/engine/basis',
+          { cache: 'no-store', signal },
+        ));
+        if (decoded === null) throw new TypeError('Basis proposal read failed its published contract.');
+        return decoded;
+      },
+      onSuccess: (next) => {
+        setBasisRead(next);
+        setBasisError(null);
+      },
+      onError: (reason) => setBasisError(apiErrorMessage(reason, 'Basis proposal facts unavailable')),
+    });
+    const volumePoll = createSettledPoll<OpportunitySourceRead>({
+      intervalMs: 2_000,
+      request: async (signal) => {
+        const decoded = decodeVolumeOpportunityRead(await fetchJson<unknown>(
+          '/api/engine/volume',
+          { cache: 'no-store', signal },
+        ));
+        if (decoded === null) throw new TypeError('Volume proposal read failed its published contract.');
+        return decoded;
+      },
+      onSuccess: (next) => {
+        setVolumeRead(next);
+        setVolumeError(null);
+      },
+      onError: (reason) => setVolumeError(apiErrorMessage(reason, 'Volume proposal facts unavailable')),
+    });
+    basisPoll.start();
+    volumePoll.start();
+    return () => {
+      basisPoll.stop();
+      volumePoll.stop();
+    };
+  }, []);
 
   const marketTruth = projectMarketConsumerTruth({
     status: marketStatus,
@@ -47,6 +559,21 @@ export function Opportunities() {
   });
 
   const query = search.trim().toUpperCase();
+  const basisTruth = projectOpportunitySourceTruth(basisRead, basisError);
+  const volumeTruth = projectOpportunitySourceTruth(volumeRead, volumeError);
+  const publishedFacts = useMemo(
+    () => projectPublishedOpportunityFacts(basisRead, volumeRead),
+    [basisRead, volumeRead],
+  );
+  const proposalCoverageKnown = basisRead !== null
+    && volumeRead !== null
+    && basisRead.countConsistent
+    && volumeRead.countConsistent;
+  const publishedProposalCount = proposalCoverageKnown ? publishedFacts.length : null;
+  const reportedEconomicsCount = proposalCoverageKnown
+    ? publishedFacts.filter((fact) => finite(fact.reportedNetEdgePct)).length
+    : null;
+  const currentProposalCoverage = basisTruth.label === 'CURRENT' && volumeTruth.label === 'CURRENT';
 
   const rawRows = useMemo(() => {
     if (!query) return markets;
@@ -66,26 +593,6 @@ export function Opportunities() {
         ? 'Market Feed Loading'
         : 'Market Feed Unavailable';
 
-  if (!state) {
-    return (
-      <div className="container page opportunityx-page">
-        <section className="opportunityx-frame">
-          <header className="opportunityx-toolbar">
-            <div className="opportunityx-title">
-              <img className="opportunityx-page-mark" src="/opportunities-bulb.png" alt="" aria-hidden="true" />
-              <h1>Opportunities</h1>
-              <span className="opportunityx-live idle"><i aria-hidden="true" />Connecting</span>
-            </div>
-          </header>
-          <div className="opportunityx-empty">
-            <Radar size={18} />
-            Waiting for canonical opportunity truth.
-          </div>
-        </section>
-      </div>
-    );
-  }
-
   return (
     <div className="container page opportunityx-page">
       <section className="opportunityx-frame">
@@ -97,7 +604,7 @@ export function Opportunities() {
               <i aria-hidden="true" />
               Legacy Scanner Retired
             </span>
-            <span className="opportunityx-updated">{updatedLabel}</span>
+            <span className="opportunityx-updated">Basis {basisTruth.label} · Volume {volumeTruth.label}</span>
           </div>
           <label className="opportunityx-search">
             <Search size={14} aria-hidden="true" />
@@ -118,24 +625,32 @@ export function Opportunities() {
 
         <div className="opportunityx-summary" aria-label="Opportunity Summary">
           <div className="opportunityx-summary-cell">
-            <span>Legacy Scanner</span>
-            <strong>{state.scanner.state}</strong>
-            <small>No runtime construction, ticks, scoring, or proposal intake</small>
+            <span>Published Proposals</span>
+            <strong>{publishedProposalCount ?? 'UNKNOWN'}</strong>
+            <small>{proposalCoverageKnown
+              ? `${basisRead.facts.length} Basis · ${volumeRead.facts.length} Volume${currentProposalCoverage ? '' : ' · retained/degraded'}`
+              : `${publishedFacts.length} known rows · complete source coverage unavailable`}</small>
           </div>
           <div className="opportunityx-summary-cell">
-            <span>Canonical Opportunity Projection</span>
-            <strong>UNKNOWN</strong>
-            <small>No Foundation opportunity projection is consumed by this page</small>
+            <span>Reported Net Economics</span>
+            <strong>{reportedEconomicsCount === null
+              ? 'UNKNOWN'
+              : `${reportedEconomicsCount} / ${publishedFacts.length}`}</strong>
+            <small>Owner-reported model evidence only · unknowns stay unknown</small>
           </div>
           <div className="opportunityx-summary-cell">
-            <span>Strategy Authority</span>
-            <strong>Basis + Volume</strong>
-            <small>Canonical engines own score, lifecycle, and decisions</small>
+            <span>Canonical Projection</span>
+            <strong>NOT MOUNTED</strong>
+            <small>No new legacy proposals or mutations are accepted · Basis and Volume own strategy decisions · action authority NONE</small>
           </div>
           <div className="opportunityx-summary-cell">
             <span>Raw Market Rows</span>
             <strong>{marketTruth.factsAvailable ? markets.length : 'UNKNOWN'} {marketTruth.factsAvailable ? <em>{marketTruth.retained ? 'retained rows' : 'rows'}</em> : null}</strong>
-            <small>{marketTruth.retained ? 'STALE LAST-KNOWN · source order retained after refresh failure' : marketTruth.factsAvailable ? 'Source order · no UI filtering, scoring, or strategy rank' : 'No successful market read is available'}</small>
+            <small>{marketTruth.retained
+              ? `${updatedLabel} · source order retained after refresh failure`
+              : marketTruth.factsAvailable
+                ? `${updatedLabel} · source order · no UI filtering, scoring, or strategy rank`
+                : `${updatedLabel} · no successful market read is available`}</small>
           </div>
         </div>
 
@@ -153,13 +668,17 @@ export function Opportunities() {
                 onClick={() => setView(item.id)}
               >
                 {item.label}
-                <span>{item.id === 'active' ? 'UNKNOWN' : marketTruth.factsAvailable ? rawRows.length : 'UNKNOWN'}</span>
+                <span>{item.id === 'active'
+                  ? publishedProposalCount ?? 'UNKNOWN'
+                  : marketTruth.factsAvailable ? rawRows.length : 'UNKNOWN'}</span>
               </button>
             ))}
           </div>
           <span className="opportunityx-view-note">
             {view === 'active'
-              ? 'Canonical Foundation projection not mounted'
+              ? proposalCoverageKnown
+                ? `${publishedFacts.length} ${currentProposalCoverage ? 'current' : 'retained/degraded'} owner-ordered rows · canonical projection not mounted`
+                : `${publishedFacts.length} known owner-ordered rows · coverage UNKNOWN`
               : marketTruth.factsAvailable
                 ? `${rawRows.length} ${marketTruth.retained ? 'retained' : 'source-order'} rows`
                 : 'Raw market facts unavailable'}
@@ -167,13 +686,13 @@ export function Opportunities() {
         </div>
 
         {view === 'active' ? (
-          <div className="opportunityx-table" role="region" aria-label="Canonical Opportunity Projection State">
-            <div className="opportunityx-empty">
-              <Radar size={18} />
-              <strong>Canonical Opportunity Projection Unknown</strong>
-              <span>No Foundation projection is mounted. No new legacy proposals or mutations are accepted. Basis and Volume own strategy decisions.</span>
-            </div>
-          </div>
+          <PublishedOpportunityFacts
+            facts={publishedFacts}
+            query={query}
+            basisTruth={basisTruth}
+            volumeTruth={volumeTruth}
+            coverageKnown={proposalCoverageKnown}
+          />
         ) : (
           <div className="opportunityx-table" role="table" aria-label="Raw Market Facts">
             <div className="opportunityx-radar-head" role="row">
@@ -205,11 +724,18 @@ export function Opportunities() {
                     <strong>Spot {rawFact(market.spot, fmtPrice)}</strong>
                     <small>Perp mark {rawFact(market.perpMark, fmtPrice)}</small>
                   </span>
-                  <span className="opportunityx-radar-number" role="cell">
-                    {rawFact(market.basisPct, (value) => fmtBasis(value, 2))}
+                  <span className="opportunityx-radar-value" role="cell">
+                    <strong>Executable {rawFact(market.executableBasisBestPct, (value) => fmtBasis(value, 2))}</strong>
+                    <small>{basisSideLabel(market.executableBasisSide)} · reference {rawFact(market.basisPct, (value) => fmtBasis(value, 2))}</small>
                   </span>
-                  <span className="opportunityx-radar-number" role="cell">{rawFact(market.fundingRate, fmtFunding)}</span>
-                  <span className="opportunityx-radar-number" role="cell">{rawFact(market.quoteVolume24h, fmtMoney)}</span>
+                  <span className="opportunityx-radar-value" role="cell">
+                    <strong>{rawFact(market.fundingRate, fmtFunding)}</strong>
+                    <small>Annual {rawFact(market.fundingAnnualPct, (value) => fmtPct(value, 2))}</small>
+                  </span>
+                  <span className="opportunityx-radar-value" role="cell">
+                    <strong>Spot {rawFact(market.quoteVolume24h, fmtMoney)}</strong>
+                    <small>Perp {rawFact(market.perpVolume24h, fmtMoney)}</small>
+                  </span>
                   <span className="opportunityx-radar-value" role="cell">
                     <strong>Spot {rawFact(market.spotSpreadPct, (value) => fmtPct(value, 3, false))}</strong>
                     <small>Perp {rawFact(market.perpSpreadPct, (value) => fmtPct(value, 3, false))}</small>

@@ -25,18 +25,26 @@ export function createHttpProductIntegrationTransport(
   const commandSubmit = sameOriginPath(endpoints.commandSubmit);
   const transport: ProductIntegrationTransport = {
     readSupervisor(signal) {
-      return fetchJson<unknown>(supervisor, { cache: 'no-store', signal });
+      return fetchJson<unknown>(supervisor, { cache: 'no-store', credentials: 'same-origin', signal });
     },
     readMaterialEvents(afterCursor, limit, signal) {
       const url = new URL(materialEvents, window.location.origin);
       url.searchParams.set('afterCursor', afterCursor);
       url.searchParams.set('limit', String(limit));
-      return fetchJson<unknown>(`${url.pathname}${url.search}`, { cache: 'no-store', signal });
+      return fetchJson<unknown>(`${url.pathname}${url.search}`, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        signal,
+      });
     },
     readTrace(correlationId, limit, signal) {
       const url = new URL(sameOriginPath(endpoints.trace(correlationId)), window.location.origin);
       url.searchParams.set('limit', String(limit));
-      return fetchJson<unknown>(`${url.pathname}${url.search}`, { cache: 'no-store', signal });
+      return fetchJson<unknown>(`${url.pathname}${url.search}`, {
+        cache: 'no-store',
+        credentials: 'same-origin',
+        signal,
+      });
     },
     readCommandResult(identity: Readonly<ProductCommandResultIdentity>, signal) {
       const url = new URL(sameOriginPath(endpoints.commandResult(identity.commandId)), window.location.origin);
@@ -44,7 +52,7 @@ export function createHttpProductIntegrationTransport(
       url.searchParams.set('controlId', identity.controlId);
       return fetchJsonResponse<unknown>(
         `${url.pathname}${url.search}`,
-        { cache: 'no-store', signal },
+        { cache: 'no-store', credentials: 'same-origin', signal },
         10_000,
         [503],
       ).then(({ status, body }) => Object.freeze({ httpStatus: status, body }));
@@ -53,6 +61,7 @@ export function createHttpProductIntegrationTransport(
       return fetchJson<unknown>(commandPreview, {
         method: 'POST',
         cache: 'no-store',
+        credentials: 'same-origin',
         signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -66,6 +75,7 @@ export function createHttpProductIntegrationTransport(
       return fetchJson<unknown>(commandSubmit, {
         method: 'POST',
         cache: 'no-store',
+        credentials: 'same-origin',
         signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),

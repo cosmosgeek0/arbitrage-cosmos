@@ -1,9 +1,17 @@
 import { types as utilTypes } from 'node:util';
 import {
+  canonicalJson,
   evaluateFreshness,
   isValidUtcMillis,
+  observeRejectedThenable,
   type SourcedTimestamp,
 } from '../../foundation/contracts/index.js';
+import {
+  inspectOwnDataArray,
+  inspectOwnDataRecord,
+  type CanonicalReadModelView,
+  type SourceSection,
+} from '../../foundation/readModel/index.js';
 import {
   stableId,
   type InstrumentIdentity,
@@ -46,7 +54,14 @@ import {
   createProductionQAdvisoryRuntime,
   projectNotConfiguredQAdvisoryComponent,
 } from '../adapters/qAdvisory.js';
+import {
+  buildCanonicalReadModelFromCaptures,
+  captureEngineSnapshot,
+  type EngineCapturePort,
+  type EngineCaptureProjection,
+} from '../adapters/engineCapture.js';
 import type {
+  DialectLoss,
   SystemComponentSnapshot,
 } from '../contracts/types.js';
 import { validateSystemComponentSnapshot } from '../contracts/validation.js';
@@ -77,6 +92,7 @@ import type {
   ProductionMarketRow,
   ProductionLiquidationEvidenceCut,
   ProductionLiquidationSourceClosedCut,
+  ProductionOpportunitiesReadResult,
   ProductionTokenEvidenceFact,
   ProductionTokenEvidenceState,
   ProductionTokenIntelligenceReadModel,
@@ -290,6 +306,816 @@ function safeStrategySnapshot(runtime: {
   } catch {
     return null;
   }
+}
+
+const PRODUCTION_OPPORTUNITY_OWNER_KEYS = Object.freeze([
+  'readOpportunitySourceCut',
+] as const);
+const PRODUCTION_OPPORTUNITY_CUT_KEYS = Object.freeze([
+  'schemaVersion',
+  'sourceTimeMs',
+  'decisions',
+  'proposals',
+] as const);
+const PRODUCTION_OPPORTUNITY_DECISION_KEYS = Object.freeze([
+  'symbol',
+  'ts',
+  'kind',
+  'rejectCode',
+  'reasonCode',
+  'correlationId',
+  'direction',
+  'netEdgePct',
+  'confidence',
+  'borrowStatus',
+] as const);
+const PRODUCTION_OPPORTUNITY_PROPOSAL_KEYS = Object.freeze([
+  'id',
+  'correlationId',
+  'symbol',
+  'direction',
+  'createdTs',
+  'updatedTs',
+  'status',
+  'reasonCode',
+  'netEdgePct',
+  'confidence',
+  'borrowStatus',
+  'expiresAtMs',
+] as const);
+const PRODUCTION_OPPORTUNITIES_CORRELATION_ID = 'production-opportunities-read';
+const PRODUCTION_OPPORTUNITY_REASON_CODE = 'OWNER_ADVISORY_RECORD';
+const PRODUCTION_OPPORTUNITY_PUBLIC_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,199}$/u;
+const PRODUCTION_OPPORTUNITY_CORRELATION_ID = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
+const PRODUCTION_OPPORTUNITY_DECISION_KINDS = new Set([
+  'ignore',
+  'watch',
+  'focus',
+  'proposal',
+  'reject',
+]);
+const PRODUCTION_OPPORTUNITY_REJECT_CODES = new Set([
+  'data_stale',
+  'spot_missing',
+  'perp_missing',
+  'book_missing',
+  'edge_below_fees',
+  'edge_below_threshold',
+  'spread_too_wide',
+  'depth_too_thin',
+  'gap_not_persistent',
+  'funding_against_trade',
+  'borrow_required',
+  'borrow_unknown',
+  'borrow_unavailable',
+  'borrow_too_small',
+  'borrow_cost_too_high',
+  'symbol_blocked',
+  'risk_blocked',
+  'account_not_connected',
+  'kill_switch_on',
+  'intake_paused',
+  'baseline_missing',
+  'volume_not_abnormal',
+  'one_print_spike',
+  'trade_count_too_low',
+  'price_no_followthrough',
+  'move_already_extended',
+  'taker_imbalance_missing',
+]);
+const PRODUCTION_OPPORTUNITY_DIRECTIONS = new Set([
+  'long_spot_short_perp',
+  'short_spot_long_perp',
+  'long',
+  'short',
+]);
+const PRODUCTION_OPPORTUNITY_PROPOSAL_STATUSES = new Set([
+  'open',
+  'updated',
+  'expired',
+  'rejected',
+  'approved_manual',
+]);
+const PRODUCTION_OPPORTUNITY_BORROW_STATES = new Set([
+  'not_needed',
+  'unknown',
+]);
+
+type ProductionOpportunityFamily = 'BASIS' | 'VOLUME';
+type ProductionOpportunityOwnerReader = (this: void) => unknown;
+type ProductionOpportunityOwnerBinding =
+  | Readonly<{
+      state: 'CONFIGURED';
+      readOpportunitySourceCut: ProductionOpportunityOwnerReader;
+    }>
+  | Readonly<{
+      state: 'UNWIRED' | 'MALFORMED';
+      readOpportunitySourceCut: null;
+    }>;
+
+interface ProductionOpportunityOwnerBindings {
+  readonly basis: ProductionOpportunityOwnerBinding;
+  readonly volume: ProductionOpportunityOwnerBinding;
+}
+
+interface ProductionOpportunityGuardedCut {
+  readonly sourceTimeMs: unknown;
+  readonly decisions: readonly Readonly<Record<string, unknown>>[];
+  readonly proposals: readonly Readonly<Record<string, unknown>>[];
+}
+
+interface ProductionOpportunityOrderedCanonicalIds {
+  readonly basis: Readonly<{
+    readonly decisions: readonly string[];
+    readonly proposals: readonly string[];
+  }>;
+  readonly volume: Readonly<{
+    readonly decisions: readonly string[];
+    readonly proposals: readonly string[];
+  }>;
+}
+
+interface ProductionOpportunityCaptureAttempt {
+  readonly projection: Readonly<EngineCaptureProjection> | null;
+  readonly losses: readonly Readonly<DialectLoss>[];
+  readonly reasonCodes: readonly string[];
+}
+
+function opportunityReasonCodes(
+  ...groups: readonly (readonly string[])[]
+): readonly string[] {
+  return Object.freeze(
+    [...new Set(groups.flat())].sort((left, right) => (
+      left < right ? -1 : left > right ? 1 : 0
+    )),
+  );
+}
+
+function opportunityBinding(
+  state: 'UNWIRED' | 'MALFORMED',
+): ProductionOpportunityOwnerBinding {
+  return Object.freeze({
+    state,
+    readOpportunitySourceCut: null,
+  });
+}
+
+function bindProductionOpportunityOwner(
+  owner: unknown,
+  path: string,
+): ProductionOpportunityOwnerBinding {
+  if (owner === null) return opportunityBinding('UNWIRED');
+  if (owner === undefined) return opportunityBinding('MALFORMED');
+  const inspected = inspectOwnDataRecord(owner, PRODUCTION_OPPORTUNITY_OWNER_KEYS, path);
+  if (inspected.issues.length > 0
+      || !Object.hasOwn(inspected.values, 'readOpportunitySourceCut')) {
+    return opportunityBinding('MALFORMED');
+  }
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(owner as object, 'readOpportunitySourceCut');
+  } catch {
+    return opportunityBinding('MALFORMED');
+  }
+  const readOpportunitySourceCut = inspected.values.readOpportunitySourceCut;
+  if (descriptor === undefined
+      || !descriptor.enumerable
+      || !Object.hasOwn(descriptor, 'value')
+      || typeof readOpportunitySourceCut !== 'function'
+      || utilTypes.isProxy(readOpportunitySourceCut)) {
+    return opportunityBinding('MALFORMED');
+  }
+  return Object.freeze({
+    state: 'CONFIGURED',
+    readOpportunitySourceCut: readOpportunitySourceCut as ProductionOpportunityOwnerReader,
+  });
+}
+
+function bindProductionOpportunityOwnerSlot(
+  owners: unknown,
+  inspected: Readonly<Record<string, unknown>>,
+  slot: 'basis' | 'volume',
+): ProductionOpportunityOwnerBinding {
+  if (!Object.hasOwn(inspected, slot)) return opportunityBinding('MALFORMED');
+  let descriptor: PropertyDescriptor | undefined;
+  try {
+    descriptor = Object.getOwnPropertyDescriptor(owners as object, slot);
+  } catch {
+    return opportunityBinding('MALFORMED');
+  }
+  if (descriptor === undefined
+      || !descriptor.enumerable
+      || !Object.hasOwn(descriptor, 'value')) {
+    return opportunityBinding('MALFORMED');
+  }
+  return bindProductionOpportunityOwner(
+    descriptor.value,
+    `opportunityOwners.${slot}`,
+  );
+}
+
+function bindProductionOpportunityOwners(
+  owners: unknown,
+): Readonly<ProductionOpportunityOwnerBindings> {
+  if (owners === null || owners === undefined) {
+    return Object.freeze({
+      basis: opportunityBinding('UNWIRED'),
+      volume: opportunityBinding('UNWIRED'),
+    });
+  }
+  const inspected = inspectOwnDataRecord(
+    owners,
+    ['basis', 'volume'],
+    'opportunityOwners',
+  );
+  const globalIssue = inspected.issues.some((issue) => (
+    issue.path !== 'opportunityOwners.basis'
+      && issue.path !== 'opportunityOwners.volume'
+  ));
+  if (globalIssue) {
+    return Object.freeze({
+      basis: opportunityBinding('MALFORMED'),
+      volume: opportunityBinding('MALFORMED'),
+    });
+  }
+  return Object.freeze({
+    basis: bindProductionOpportunityOwnerSlot(owners, inspected.values, 'basis'),
+    volume: bindProductionOpportunityOwnerSlot(owners, inspected.values, 'volume'),
+  });
+}
+
+function hasExactEnumerableDataKeys(
+  value: unknown,
+  keys: readonly string[],
+  inspected: Readonly<Record<string, unknown>>,
+): boolean {
+  if (typeof value !== 'object' || value === null) return false;
+  try {
+    return keys.every((key) => {
+      if (!Object.hasOwn(inspected, key)) return false;
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      return descriptor !== undefined
+        && descriptor.enumerable
+        && Object.hasOwn(descriptor, 'value');
+    });
+  } catch {
+    return false;
+  }
+}
+
+function validOpportunityPublicId(value: unknown): value is string {
+  return typeof value === 'string' && PRODUCTION_OPPORTUNITY_PUBLIC_ID.test(value);
+}
+
+function validOpportunityCorrelationId(value: unknown): value is string {
+  return typeof value === 'string' && PRODUCTION_OPPORTUNITY_CORRELATION_ID.test(value);
+}
+
+function validOpportunityNumberOrNull(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isFinite(value));
+}
+
+function preserveCanonicalTimestampRejection(value: number): number {
+  // The canonical UTC guard rejects negative integers but JavaScript comparisons admit -0.
+  return Object.is(value, -0) ? -1 : value;
+}
+
+function guardProductionOpportunityDecision(
+  family: ProductionOpportunityFamily,
+  value: unknown,
+  index: number,
+): Readonly<Record<string, unknown>> | null {
+  const inspected = inspectOwnDataRecord(
+    value,
+    PRODUCTION_OPPORTUNITY_DECISION_KEYS,
+    `${family.toLowerCase()}OpportunityCut.decisions[${index}]`,
+  );
+  const record = inspected.values;
+  if (inspected.issues.length > 0
+      || !hasExactEnumerableDataKeys(value, PRODUCTION_OPPORTUNITY_DECISION_KEYS, record)
+      || typeof record.symbol !== 'string'
+      || !SYMBOL.test(record.symbol)
+      || !PRODUCTION_OPPORTUNITY_DECISION_KINDS.has(record.kind as string)
+      || (record.rejectCode !== null
+        && !PRODUCTION_OPPORTUNITY_REJECT_CODES.has(record.rejectCode as string))
+      || record.reasonCode !== PRODUCTION_OPPORTUNITY_REASON_CODE
+      || !validOpportunityCorrelationId(record.correlationId)
+      || !Number.isSafeInteger(record.ts)
+      || (record.direction !== null
+        && !PRODUCTION_OPPORTUNITY_DIRECTIONS.has(record.direction as string))
+      || !validOpportunityNumberOrNull(record.netEdgePct)
+      || !validOpportunityNumberOrNull(record.confidence)
+      || (record.borrowStatus !== null
+        && !PRODUCTION_OPPORTUNITY_BORROW_STATES.has(record.borrowStatus as string))) {
+    return null;
+  }
+  return Object.freeze({
+    symbol: record.symbol,
+    ts: preserveCanonicalTimestampRejection(record.ts as number),
+    strategy: family === 'BASIS' ? 'basis' : 'volume_spike',
+    kind: record.kind,
+    rejectCode: record.rejectCode,
+    humanReason: PRODUCTION_OPPORTUNITY_REASON_CODE,
+    correlationId: record.correlationId,
+    evidence: Object.freeze({
+      direction: record.direction,
+      netEdgePct: record.netEdgePct,
+      confidence: record.confidence,
+      borrowStatus: record.borrowStatus,
+    }),
+  });
+}
+
+function guardProductionOpportunityProposal(
+  family: ProductionOpportunityFamily,
+  value: unknown,
+  index: number,
+): Readonly<Record<string, unknown>> | null {
+  const inspected = inspectOwnDataRecord(
+    value,
+    PRODUCTION_OPPORTUNITY_PROPOSAL_KEYS,
+    `${family.toLowerCase()}OpportunityCut.proposals[${index}]`,
+  );
+  const record = inspected.values;
+  if (inspected.issues.length > 0
+      || !hasExactEnumerableDataKeys(value, PRODUCTION_OPPORTUNITY_PROPOSAL_KEYS, record)
+      || !validOpportunityPublicId(record.id)
+      || !validOpportunityCorrelationId(record.correlationId)
+      || typeof record.symbol !== 'string'
+      || !SYMBOL.test(record.symbol)
+      || !PRODUCTION_OPPORTUNITY_DIRECTIONS.has(record.direction as string)
+      || !PRODUCTION_OPPORTUNITY_PROPOSAL_STATUSES.has(record.status as string)
+      || record.reasonCode !== PRODUCTION_OPPORTUNITY_REASON_CODE
+      || !Number.isSafeInteger(record.createdTs)
+      || !Number.isSafeInteger(record.updatedTs)
+      || !validOpportunityNumberOrNull(record.netEdgePct)
+      || !validOpportunityNumberOrNull(record.confidence)
+      || !PRODUCTION_OPPORTUNITY_BORROW_STATES.has(record.borrowStatus as string)) {
+    return null;
+  }
+  if (record.expiresAtMs !== null && !Number.isSafeInteger(record.expiresAtMs)) return null;
+  return Object.freeze({
+    id: record.id,
+    correlationId: record.correlationId,
+    strategy: family === 'BASIS' ? 'basis' : 'volume_spike',
+    symbol: record.symbol,
+    direction: record.direction,
+    createdTs: preserveCanonicalTimestampRejection(record.createdTs as number),
+    updatedTs: preserveCanonicalTimestampRejection(record.updatedTs as number),
+    status: record.status,
+    reason: PRODUCTION_OPPORTUNITY_REASON_CODE,
+    netEdgePct: record.netEdgePct,
+    confidence: record.confidence,
+    borrowStatus: record.borrowStatus,
+    invalidationSpec: record.expiresAtMs === null
+      ? null
+      : Object.freeze({
+        expiresTs: preserveCanonicalTimestampRejection(record.expiresAtMs as number),
+      }),
+  });
+}
+
+function guardProductionOpportunityCut(
+  family: ProductionOpportunityFamily,
+  value: unknown,
+): Readonly<ProductionOpportunityGuardedCut> | null {
+  const inspected = inspectOwnDataRecord(
+    value,
+    PRODUCTION_OPPORTUNITY_CUT_KEYS,
+    `${family.toLowerCase()}OpportunityCut`,
+  );
+  const cut = inspected.values;
+  if (inspected.issues.length > 0
+      || !hasExactEnumerableDataKeys(value, PRODUCTION_OPPORTUNITY_CUT_KEYS, cut)
+      || cut.schemaVersion !== 'production-opportunity-owner-cut.v1'
+      || (cut.sourceTimeMs !== null
+        && (!isValidUtcMillis(cut.sourceTimeMs) || Object.is(cut.sourceTimeMs, -0)))) {
+    return null;
+  }
+  const decisions = inspectOwnDataArray(cut.decisions, MAX_STRATEGY_RECORDS);
+  const proposals = inspectOwnDataArray(cut.proposals, MAX_STRATEGY_RECORDS);
+  if (!decisions.isArray
+      || !decisions.shapeValid
+      || decisions.limitExceeded
+      || decisions.invalidElementIndices.length > 0
+      || !proposals.isArray
+      || !proposals.shapeValid
+      || proposals.limitExceeded
+      || proposals.invalidElementIndices.length > 0) {
+    return null;
+  }
+  const guardedDecisions: Readonly<Record<string, unknown>>[] = [];
+  for (let index = 0; index < decisions.values.length; index += 1) {
+    const guarded = guardProductionOpportunityDecision(
+      family,
+      decisions.values[index],
+      index,
+    );
+    if (guarded === null) return null;
+    guardedDecisions.push(guarded);
+  }
+  const guardedProposals: Readonly<Record<string, unknown>>[] = [];
+  for (let index = 0; index < proposals.values.length; index += 1) {
+    const guarded = guardProductionOpportunityProposal(
+      family,
+      proposals.values[index],
+      index,
+    );
+    if (guarded === null) return null;
+    guardedProposals.push(guarded);
+  }
+  return Object.freeze({
+    sourceTimeMs: cut.sourceTimeMs,
+    decisions: Object.freeze(guardedDecisions),
+    proposals: Object.freeze(guardedProposals),
+  });
+}
+
+function captureProductionOpportunitySource(
+  family: ProductionOpportunityFamily,
+  binding: ProductionOpportunityOwnerBinding,
+  evaluatedAtMs: number,
+  maxAgeMs: number,
+): Readonly<ProductionOpportunityCaptureAttempt> {
+  if (binding.state !== 'CONFIGURED') {
+    return Object.freeze({
+      projection: null,
+      losses: Object.freeze([]),
+      reasonCodes: Object.freeze([`${family}_OPPORTUNITY_OWNER_${binding.state}`]),
+    });
+  }
+
+  let rawCut: unknown;
+  try {
+    const readOpportunitySourceCut = binding.readOpportunitySourceCut;
+    rawCut = readOpportunitySourceCut();
+  } catch {
+    return Object.freeze({
+      projection: null,
+      losses: Object.freeze([]),
+      reasonCodes: Object.freeze([`${family}_OPPORTUNITY_OWNER_READ_FAILED`]),
+    });
+  }
+  if (rawCut === null) {
+    return Object.freeze({
+      projection: null,
+      losses: Object.freeze([]),
+      reasonCodes: Object.freeze([`${family}_OPPORTUNITY_OWNER_UNAVAILABLE`]),
+    });
+  }
+  if (utilTypes.isPromise(rawCut)) {
+    observeRejectedThenable(rawCut);
+    return Object.freeze({
+      projection: null,
+      losses: Object.freeze([]),
+      reasonCodes: Object.freeze([`${family}_OPPORTUNITY_OWNER_CUT_MALFORMED`]),
+    });
+  }
+  const cut = guardProductionOpportunityCut(family, rawCut);
+  if (cut === null) {
+    return Object.freeze({
+      projection: null,
+      losses: Object.freeze([]),
+      reasonCodes: Object.freeze([`${family}_OPPORTUNITY_OWNER_CUT_MALFORMED`]),
+    });
+  }
+
+  const port = Object.freeze({
+    readDecisions: () => cut.decisions,
+    readProposals: () => cut.proposals,
+  }) as unknown as Readonly<EngineCapturePort>;
+  const result = captureEngineSnapshot(Object.freeze({
+    nowMs: evaluatedAtMs,
+    correlationId: PRODUCTION_OPPORTUNITIES_CORRELATION_ID,
+    safeCurrentState: 'OPPORTUNITIES_READ_UNAVAILABLE',
+    family,
+    sourceId: family === 'BASIS'
+      ? 'engine.basis.snapshot'
+      : 'engine.volume.snapshot',
+    snapshotTimeMs: cut.sourceTimeMs as number | null,
+    receivedAtMs: evaluatedAtMs,
+    maxAgeMs,
+    authority: 'DERIVED_LIVE',
+    completeness: cut.sourceTimeMs === null ? 'UNAVAILABLE' : 'COMPLETE',
+    configVersion: null,
+    recordLimit: MAX_STRATEGY_RECORDS,
+    port,
+  }));
+  if (!result.ok) {
+    const code = 'structuralFailure' in result
+      ? result.structuralFailure.code
+      : result.failure.code;
+    return Object.freeze({
+      projection: null,
+      losses: Object.freeze([...result.losses]),
+      reasonCodes: Object.freeze([`${family}_${code}`]),
+    });
+  }
+  return Object.freeze({
+    projection: result.value,
+    losses: Object.freeze([...result.losses]),
+    reasonCodes: Object.freeze([]),
+  });
+}
+
+function opportunitySectionReasonCodes(
+  family: ProductionOpportunityFamily,
+  section: Readonly<SourceSection>,
+): readonly string[] {
+  const reasons: string[] = [];
+  if (section.presence !== 'PRESENT') reasons.push(`${family}_SOURCE_${section.presence}`);
+  if (section.failure !== null) reasons.push(`${family}_${section.failure.code}`);
+  if (section.freshness === null) {
+    reasons.push(`${family}_FRESHNESS_UNAVAILABLE`);
+  } else if (section.freshness.state !== 'FRESH') {
+    reasons.push(`${family}_FRESHNESS_${section.freshness.state}`);
+  }
+  if (section.snapshotTimestamp !== null
+      && section.snapshotTimestamp.sourceTimeMs === null) {
+    reasons.push(`${family}_SOURCE_TIME_UNAVAILABLE`);
+  }
+  if (section.rejects.length > 0) reasons.push(`${family}_RECORDS_REJECTED`);
+  if (!section.reconciliation.balanced) reasons.push(`${family}_RECONCILIATION_UNBALANCED`);
+  return opportunityReasonCodes(reasons);
+}
+
+function unavailableOpportunities(
+  reasonCodes: readonly string[],
+  losses: readonly Readonly<DialectLoss>[],
+  evaluatedAtMs: number | null,
+): ProductionOpportunitiesReadResult {
+  return Object.freeze({
+    state: 'UNAVAILABLE' as const,
+    evaluatedAtMs,
+    reasonCodes: opportunityReasonCodes(reasonCodes),
+    view: null,
+    identities: Object.freeze([]) as readonly [],
+    losses: Object.freeze([...losses]),
+    ownerOrderedCanonicalIds: null,
+    maximumActionAuthority: 'ADVISORY' as const,
+    capitalReservationAuthority: 'NONE' as const,
+    executionAuthority: 'NONE' as const,
+  });
+}
+
+function orderedCanonicalIdsForOwnerBucket(
+  canonicalRecords: readonly Readonly<CanonicalReadModelView['ordered'][number]>[],
+  captureRecords: readonly unknown[],
+): readonly string[] | null {
+  const canonicalIdByEvidence = new Map<string, string>();
+  try {
+    for (const record of canonicalRecords) {
+      if (record.evidence === null) return null;
+      const anchor = canonicalJson(record.evidence);
+      if (canonicalIdByEvidence.has(anchor)) return null;
+      canonicalIdByEvidence.set(anchor, record.canonicalId);
+    }
+  } catch {
+    return null;
+  }
+
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const captureRecord of captureRecords) {
+    if (typeof captureRecord !== 'object' || captureRecord === null) continue;
+    let descriptor: PropertyDescriptor | undefined;
+    try {
+      descriptor = Object.getOwnPropertyDescriptor(captureRecord, 'evidence');
+    } catch {
+      return null;
+    }
+    if (descriptor === undefined || !Object.hasOwn(descriptor, 'value')) continue;
+    let anchor: string;
+    try {
+      anchor = canonicalJson(descriptor.value);
+    } catch {
+      continue;
+    }
+    const canonicalId = canonicalIdByEvidence.get(anchor);
+    if (canonicalId !== undefined && !seen.has(canonicalId)) {
+      seen.add(canonicalId);
+      ordered.push(canonicalId);
+    }
+  }
+  return seen.size === canonicalIdByEvidence.size
+    ? Object.freeze(ordered)
+    : null;
+}
+
+function projectOwnerOrderedCanonicalIds(
+  view: Readonly<CanonicalReadModelView>,
+  identities: readonly Readonly<{
+    readonly canonicalProjectionId: string | null;
+  }>[],
+  basis: Readonly<EngineCaptureProjection> | null,
+  volume: Readonly<EngineCaptureProjection> | null,
+): Readonly<ProductionOpportunityOrderedCanonicalIds> | null {
+  const basisDecisions = orderedCanonicalIdsForOwnerBucket(
+    view.basis.decisions,
+    basis?.snapshot.decisions ?? Object.freeze([]),
+  );
+  const basisProposals = orderedCanonicalIdsForOwnerBucket(
+    view.basis.proposals,
+    basis?.snapshot.proposals ?? Object.freeze([]),
+  );
+  const volumeDecisions = orderedCanonicalIdsForOwnerBucket(
+    view.volume.decisions,
+    volume?.snapshot.decisions ?? Object.freeze([]),
+  );
+  const volumeProposals = orderedCanonicalIdsForOwnerBucket(
+    view.volume.proposals,
+    volume?.snapshot.proposals ?? Object.freeze([]),
+  );
+  if (basisDecisions === null
+      || basisProposals === null
+      || volumeDecisions === null
+      || volumeProposals === null) {
+    return null;
+  }
+  const allIds = [
+    ...basisDecisions,
+    ...basisProposals,
+    ...volumeDecisions,
+    ...volumeProposals,
+  ];
+  const projectedIds = new Set(allIds);
+  if (projectedIds.size !== allIds.length
+      || projectedIds.size !== view.ordered.length
+      || view.ordered.some((record) => !projectedIds.has(record.canonicalId))) {
+    return null;
+  }
+  const identityIds = new Set<string>();
+  for (const identity of identities) {
+    const canonicalId = identity.canonicalProjectionId;
+    if (canonicalId === null
+        || identityIds.has(canonicalId)
+        || !projectedIds.has(canonicalId)) {
+      return null;
+    }
+    identityIds.add(canonicalId);
+  }
+  if (identityIds.size !== projectedIds.size) return null;
+
+  return Object.freeze({
+    basis: Object.freeze({
+      decisions: basisDecisions,
+      proposals: basisProposals,
+    }),
+    volume: Object.freeze({
+      decisions: volumeDecisions,
+      proposals: volumeProposals,
+    }),
+  });
+}
+
+function createProductionOpportunitiesReadPort(input: Readonly<{
+  owners: Readonly<ProductionOpportunityOwnerBindings>;
+  maxAgeMs: number;
+}>): Readonly<{
+  readSnapshot(evaluatedAtMs: number): ProductionOpportunitiesReadResult;
+}> {
+  let active = false;
+  let reentered = false;
+  return Object.freeze({
+    readSnapshot(evaluatedAtMs: number): ProductionOpportunitiesReadResult {
+      if (active) {
+        reentered = true;
+        return unavailableOpportunities(
+          ['OPPORTUNITIES_REENTRANT_READ'],
+          Object.freeze([]),
+          null,
+        );
+      }
+      if (!isValidUtcMillis(evaluatedAtMs) || Object.is(evaluatedAtMs, -0)) {
+        return unavailableOpportunities(
+          ['OPPORTUNITIES_EVALUATION_TIME_INVALID'],
+          Object.freeze([]),
+          null,
+        );
+      }
+
+      active = true;
+      reentered = false;
+      try {
+        const basis = captureProductionOpportunitySource(
+          'BASIS',
+          input.owners.basis,
+          evaluatedAtMs,
+          input.maxAgeMs,
+        );
+        if (reentered) {
+          return unavailableOpportunities(
+            opportunityReasonCodes(
+              basis.reasonCodes,
+              ['OPPORTUNITIES_REENTRANT_READ'],
+            ),
+            basis.losses,
+            evaluatedAtMs,
+          );
+        }
+        const volume = captureProductionOpportunitySource(
+          'VOLUME',
+          input.owners.volume,
+          evaluatedAtMs,
+          input.maxAgeMs,
+        );
+        const captureReasons = opportunityReasonCodes(
+          basis.reasonCodes,
+          volume.reasonCodes,
+        );
+        const captureLosses = Object.freeze([
+          ...basis.losses,
+          ...volume.losses,
+        ]);
+        if (reentered) {
+          return unavailableOpportunities(
+            opportunityReasonCodes(
+              captureReasons,
+              ['OPPORTUNITIES_REENTRANT_READ'],
+            ),
+            captureLosses,
+            evaluatedAtMs,
+          );
+        }
+        if (basis.projection === null && volume.projection === null) {
+          return unavailableOpportunities(
+            opportunityReasonCodes(
+              captureReasons,
+              ['OPPORTUNITIES_NO_TRUSTWORTHY_SOURCE'],
+            ),
+            captureLosses,
+            evaluatedAtMs,
+          );
+        }
+
+        const canonical = buildCanonicalReadModelFromCaptures(Object.freeze({
+          nowMs: evaluatedAtMs,
+          correlationId: PRODUCTION_OPPORTUNITIES_CORRELATION_ID,
+          safeCurrentState: 'OPPORTUNITIES_READ_UNAVAILABLE',
+          basis: basis.projection,
+          volume: volume.projection,
+        }));
+        const losses = Object.freeze([
+          ...captureLosses,
+          ...canonical.losses,
+        ]);
+        if (!canonical.ok) {
+          const code = 'structuralFailure' in canonical
+            ? canonical.structuralFailure.code
+            : canonical.failure.code;
+          return unavailableOpportunities(
+            opportunityReasonCodes(
+              captureReasons,
+              [`OPPORTUNITIES_CANONICAL_${code}`],
+            ),
+            losses,
+            evaluatedAtMs,
+          );
+        }
+
+        const view: Readonly<CanonicalReadModelView> = canonical.value.view;
+        const ownerOrderedCanonicalIds = projectOwnerOrderedCanonicalIds(
+          view,
+          canonical.value.identities,
+          basis.projection,
+          volume.projection,
+        );
+        if (ownerOrderedCanonicalIds === null) {
+          return unavailableOpportunities(
+            opportunityReasonCodes(
+              captureReasons,
+              ['OPPORTUNITIES_OWNER_ORDER_BINDING_INVALID'],
+            ),
+            losses,
+            evaluatedAtMs,
+          );
+        }
+        const reasonCodes = opportunityReasonCodes(
+          captureReasons,
+          opportunitySectionReasonCodes('BASIS', view.basis),
+          opportunitySectionReasonCodes('VOLUME', view.volume),
+          view.reconciliation.balanced
+            ? []
+            : ['OPPORTUNITIES_RECONCILIATION_UNBALANCED'],
+        );
+        return Object.freeze({
+          state: reasonCodes.length === 0 ? 'AVAILABLE' as const : 'DEGRADED' as const,
+          evaluatedAtMs,
+          reasonCodes,
+          view,
+          identities: canonical.value.identities,
+          losses,
+          ownerOrderedCanonicalIds,
+          maximumActionAuthority: 'ADVISORY' as const,
+          capitalReservationAuthority: 'NONE' as const,
+          executionAuthority: 'NONE' as const,
+        });
+      } finally {
+        active = false;
+        reentered = false;
+      }
+    },
+  });
 }
 
 function safeStrategyOwnerSummary(
@@ -2158,6 +2984,22 @@ export function createProductionSystemIntegrationPorts(
     },
   });
 
+  let opportunityOwners: unknown;
+  try {
+    const descriptor = Object.getOwnPropertyDescriptor(input, 'opportunityOwners');
+    opportunityOwners = descriptor === undefined
+      ? null
+      : descriptor.enumerable && Object.hasOwn(descriptor, 'value')
+        ? descriptor.value
+        : Object.freeze({ malformed: true });
+  } catch {
+    opportunityOwners = Object.freeze({ malformed: true });
+  }
+  const opportunities = createProductionOpportunitiesReadPort({
+    owners: bindProductionOpportunityOwners(opportunityOwners),
+    maxAgeMs,
+  });
+
   const intelligenceEvidence = Object.freeze({
     readRoutingSnapshot: () => publicIntelligence.readEvidenceRoutingSnapshot(),
     readSymbol: (symbol: string) => publicIntelligence.readSymbol(symbol),
@@ -2232,7 +3074,7 @@ export function createProductionSystemIntegrationPorts(
   });
 
   return Object.freeze({
-    sourceRegistry, runtimes, components, summaries, intelligenceEvidence,
+    sourceRegistry, runtimes, components, summaries, opportunities, intelligenceEvidence,
     strategyIntake, strategySymbolPolicy, sizeCeilings, strategyThresholds, attentionFocus,
     capitalEligibility,
     volumeRisk,

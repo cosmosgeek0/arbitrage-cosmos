@@ -27,6 +27,10 @@ import {
   type ExecutionPlanState,
   type LegOperationRequest,
   type LookupOutcome,
+  type NormalBasisBaselineObservation,
+  type NormalBasisOrderObservation,
+  type NormalBasisProgressState,
+  type NormalBasisStep,
   type PortFailure,
   type ExecutionPortCallContext,
   type SubmissionOutcome,
@@ -139,6 +143,12 @@ function lookupEvidenceIsValid(request: LegOperationRequest, value: unknown): va
 
 function requiresColdRestartRecovery(state: ExecutionPlanState): boolean {
   if (isTerminalPlanLifecycle(state.lifecycle)) return false;
+  const normalBasisDisposition = state.normalBasisProgress?.action.disposition;
+  if (
+    normalBasisDisposition === 'QUERY_REQUIRED' ||
+    normalBasisDisposition === 'CANCEL_ELIGIBLE' ||
+    normalBasisDisposition === 'AWAIT_TERMINAL'
+  ) return true;
   return (['OPEN', 'CLOSE'] as const).some((phase) => {
     const record = phase === 'OPEN' ? state.openingLegs : state.closingLegs;
     return EXECUTION_LEG_KEYS.some((key) => record[key].submittedQuantity > 0);
@@ -158,11 +168,39 @@ function hasWorkingOpeningLeg(state: ExecutionPlanState): boolean {
   });
 }
 
+const NORMAL_BASIS_CLOSE_ORDER = Object.freeze(['PERP', 'SPOT'] as const);
+
+function normalBasisStepFor(
+  phase: ExecutionLegPhase,
+  key: ExecutionLegKey,
+): NormalBasisStep {
+  if (phase === 'OPEN') return key === 'SPOT' ? 'SPOT_OPEN' : 'PERP_OPEN';
+  return key === 'PERP' ? 'PERP_CLOSE' : 'SPOT_CLOSE';
+}
+
+export type NormalBasisProgressRecordInput =
+  | Omit<NormalBasisOrderObservation, 'journalIndex' | 'occurredAtMs'>
+  | Omit<
+      NormalBasisBaselineObservation,
+      | 'journalIndex'
+      | 'occurredAtMs'
+      | 'bindingId'
+      | 'observedStateRevisionId'
+      | 'observedStateRevision'
+    >;
+
+interface NormalBasisAttemptContext {
+  readonly step: NormalBasisStep;
+  readonly attempt: number;
+  readonly request: Readonly<LegOperationRequest>;
+}
+
 export class ExecutionCoordinator {
   private stateValue: ExecutionPlanState;
   private restartRecoveryPending: boolean;
   private restartRecoveryInFlight: Promise<CoordinatorResult> | null = null;
   private openingProgressInFlight: Promise<CoordinatorResult> | null = null;
+  private normalBasisProgressInFlight: Promise<CoordinatorResult> | null = null;
   private readonly openingRefreshInFlight = new Map<ExecutionLegKey, Promise<CoordinatorResult>>();
   private readonly workingRefreshInFlight = new Map<string, Promise<CoordinatorResult>>();
 
@@ -179,7 +217,11 @@ export class ExecutionCoordinator {
     if (typeof this.ports.claimPlanIdentity !== 'function') {
       throw new TypeError('ExecutionCoordinatorPorts.claimPlanIdentity is required to prevent conflicting PlanId terms');
     }
-    const claim = this.ports.claimPlanIdentity(state.plan.planId, state.plan.termsFingerprint);
+    const binding = state.plan.normalBasisBinding;
+    const claimedTerms = binding === undefined
+      ? state.plan.termsFingerprint
+      : `${state.plan.termsFingerprint}|normalBasis:${binding.bindingId}`;
+    const claim = this.ports.claimPlanIdentity(state.plan.planId, claimedTerms);
     if (claim === 'CONFLICT') throw new PlanTermsConflictError(state.plan.planId);
     if (claim !== 'CLAIMED' && claim !== 'EXISTING_SAME') {
       throw new TypeError('claimPlanIdentity returned an invalid result');
@@ -192,6 +234,10 @@ export class ExecutionCoordinator {
 
   checkpoint(): string {
     return serializeExecutionCheckpoint(this.stateValue);
+  }
+
+  normalBasisProgressSnapshot(): NormalBasisProgressState | null {
+    return this.stateValue.normalBasisProgress ?? null;
   }
 
   private now(): number {
@@ -338,8 +384,16 @@ export class ExecutionCoordinator {
 
   private enforceEntryWindow(stage: string, nowMs: number): CoordinatorResult | null {
     const proposal = this.stateValue.plan.proposal;
-    let code: 'PROPOSAL_EXPIRED' | 'PROPOSAL_STALE' | 'APPROVAL_EXPIRED' | 'APPROVAL_REQUIRED' | null = null;
-    if (nowMs >= proposal.expiresAtMs) code = 'PROPOSAL_EXPIRED';
+    const binding = this.stateValue.plan.normalBasisBinding;
+    let code:
+      | 'PROPOSAL_EXPIRED'
+      | 'PROPOSAL_STALE'
+      | 'APPROVAL_EXPIRED'
+      | 'APPROVAL_REQUIRED'
+      | 'ENTRY_AUTHORITY_EXPIRED'
+      | null = null;
+    if (binding !== undefined && nowMs >= binding.entryExpiresAtMs) code = 'ENTRY_AUTHORITY_EXPIRED';
+    else if (nowMs >= proposal.expiresAtMs) code = 'PROPOSAL_EXPIRED';
     else if (nowMs - proposal.observedAtMs > proposal.maxAgeMs) code = 'PROPOSAL_STALE';
     else if (
       this.stateValue.plan.requiresApproval &&
@@ -359,7 +413,9 @@ export class ExecutionCoordinator {
     const failure = this.failure(
       stage,
       code,
-      'The proposal or approval entry window is no longer valid at the submission boundary.',
+      code === 'ENTRY_AUTHORITY_EXPIRED'
+        ? 'The bound normal-Basis risk authority is no longer valid for a risk-increasing entry.'
+        : 'The proposal or approval entry window is no longer valid at the submission boundary.',
       nowMs,
       false,
       'Do not submit new entry risk; reconcile any exposure and create a fresh approved plan.',
@@ -417,6 +473,69 @@ export class ExecutionCoordinator {
     }
     this.stateValue = reduced.state;
     return this.success();
+  }
+
+  /**
+   * Append one explicit normal-Basis observation through the pure reducer.
+   * The coordinator supplies journal/time/revision identity; the caller must
+   * supply owner-observed order or signed baseline quantities. A generic
+   * reconciliation outcome is never promoted to baseline-flat evidence.
+   */
+  recordNormalBasisProgress(input: NormalBasisProgressRecordInput): CoordinatorResult {
+    const binding = this.stateValue.plan.normalBasisBinding;
+    let progress = this.stateValue.normalBasisProgress;
+    let nowMs = this.now();
+    if (binding === undefined || progress === undefined) {
+      return this.failureResult(
+        this.failure(
+          'normal-basis-progress',
+          'NORMAL_BASIS_BINDING_ABSENT',
+          'Normal-Basis progress can only be recorded for an explicitly bound plan.',
+          nowMs,
+          false,
+          'Create an opt-in immutable normal-Basis plan; legacy plans remain unchanged.',
+        ),
+      );
+    }
+    if (
+      input.kind === 'BASELINE' &&
+      progress.action.disposition !== 'OBSERVE_BASELINE'
+    ) {
+      return this.normalBasisProgressFailure(
+        'NORMAL_BASIS_BASELINE_PREMATURE',
+        'Baseline evidence is accepted only after every bound order step is terminal.',
+        false,
+        'Preserve the ordered journal and do not begin reconciliation prematurely.',
+      );
+    }
+    if (input.kind === 'BASELINE' && this.stateValue.lifecycle !== 'RECONCILING') {
+      const started = this.emitAt(nowMs, 'RECONCILIATION_STARTED');
+      if (!started.ok) return started;
+      progress = this.stateValue.normalBasisProgress;
+      nowMs = this.now();
+      if (progress === undefined) {
+        return this.normalBasisProgressFailure(
+          'NORMAL_BASIS_PROGRESS_INVALID',
+          'Normal-Basis progress disappeared while reconciliation was starting.',
+          false,
+          'Treat the aggregate as invalid; do not infer baseline-flat completion.',
+        );
+      }
+    }
+    const common = {
+      journalIndex: progress.journal.length,
+      occurredAtMs: nowMs,
+    } as const;
+    const normalBasisObservation = input.kind === 'ORDER'
+      ? Object.freeze({ ...common, ...input })
+      : Object.freeze({
+          ...common,
+          ...input,
+          bindingId: binding.bindingId,
+          observedStateRevisionId: this.stateValue.stateRevisionId,
+          observedStateRevision: this.stateValue.revision,
+        });
+    return this.emitAt(nowMs, 'NORMAL_BASIS_PROGRESS_OBSERVED', { normalBasisObservation });
   }
 
   requestApproval(windowMs: number): CoordinatorResult {
@@ -567,8 +686,16 @@ export class ExecutionCoordinator {
       correlationId: this.stateValue.plan.correlationId,
     });
     if (!mode.ok) return this.failureResult(mode.failure);
-    const entryWindow = this.enforceEntryWindow('open:entry-window', nowMs);
-    if (entryWindow !== null) return entryWindow;
+    const binding = this.stateValue.plan.normalBasisBinding;
+    const progress = this.stateValue.normalBasisProgress;
+    const initialBoundSpotEntry =
+      binding !== undefined &&
+      progress?.action.disposition === 'SUBMIT_ELIGIBLE' &&
+      progress.action.step === 'SPOT_OPEN';
+    if (binding === undefined || progress === undefined || initialBoundSpotEntry) {
+      const entryWindow = this.enforceEntryWindow('open:entry-window', nowMs);
+      if (entryWindow !== null) return entryWindow;
+    }
     if (
       this.stateValue.lifecycle === 'OPENING' ||
       this.stateValue.lifecycle === 'ONE_LEG_EXPOSED'
@@ -598,10 +725,395 @@ export class ExecutionCoordinator {
     });
   }
 
+  private normalBasisAttemptContext(): Readonly<NormalBasisAttemptContext> | null {
+    const binding = this.stateValue.plan.normalBasisBinding;
+    const progress = this.stateValue.normalBasisProgress;
+    if (binding === undefined || progress === undefined) return null;
+    const { action } = progress;
+    if (
+      action.step === null ||
+      action.attempt === null ||
+      action.clientOrderId === null ||
+      action.quantity === null
+    ) return null;
+    const phase: ExecutionLegPhase = action.step.endsWith('_OPEN') ? 'OPEN' : 'CLOSE';
+    const key: ExecutionLegKey = action.step.startsWith('SPOT') ? 'SPOT' : 'PERP';
+    if (normalBasisStepFor(phase, key) !== action.step) return null;
+    const definition = phase === 'OPEN'
+      ? this.stateValue.plan.openingLegs[key]
+      : this.stateValue.plan.closingLegs[key];
+    const request = Object.freeze({
+      planId: this.stateValue.plan.planId,
+      correlationId: this.stateValue.plan.correlationId,
+      symbol: this.stateValue.plan.symbol,
+      direction: this.stateValue.plan.direction,
+      mode: this.stateValue.plan.mode as 'VALIDATE_ONLY' | 'PAPER',
+      phase,
+      leg: Object.freeze({
+        ...definition,
+        quantity: action.quantity,
+        clientOrderId: action.clientOrderId,
+      }),
+    });
+    return Object.freeze({ step: action.step, attempt: action.attempt, request });
+  }
+
+  private latestNormalBasisAttemptObservation(
+    context: Readonly<NormalBasisAttemptContext>,
+  ): NormalBasisOrderObservation | null {
+    const journal = this.stateValue.normalBasisProgress?.journal ?? [];
+    for (let index = journal.length - 1; index >= 0; index -= 1) {
+      const observation = journal[index];
+      if (
+        observation.kind === 'ORDER' &&
+        observation.step === context.step &&
+        observation.attempt === context.attempt
+      ) return observation;
+    }
+    return null;
+  }
+
+  private recordNormalBasisOrder(
+    context: Readonly<NormalBasisAttemptContext>,
+    state: NormalBasisOrderObservation['state'],
+    cumulativeFilledQuantity: number,
+  ): CoordinatorResult {
+    return this.recordNormalBasisProgress({
+      kind: 'ORDER',
+      step: context.step,
+      attempt: context.attempt,
+      state,
+      clientOrderId: context.request.leg.clientOrderId,
+      submittedQuantity: context.request.leg.quantity,
+      cumulativeFilledQuantity,
+    });
+  }
+
+  private normalBasisProgressFailure(
+    code: string,
+    message: string,
+    retryable: boolean,
+    recommendedOperatorAction: string,
+  ): CoordinatorResult {
+    return this.failureResult(
+      this.failure(
+        'normal-basis-progress',
+        code,
+        message,
+        this.now(),
+        retryable,
+        recommendedOperatorAction,
+      ),
+    );
+  }
+
+  private async applyNormalBasisSubmissionOutcome(
+    context: Readonly<NormalBasisAttemptContext>,
+    outcome: SubmissionOutcome,
+  ): Promise<CoordinatorResult> {
+    if (outcome.kind === 'REJECTED') {
+      const recorded = this.recordNormalBasisOrder(context, 'REJECTED', 0);
+      if (!recorded.ok) return recorded;
+      return this.failureResult(
+        this.fromPortFailure('normal-basis-submit', outcome.failure, this.now()),
+      );
+    }
+    if (outcome.kind === 'AMBIGUOUS') {
+      const recorded = this.recordNormalBasisOrder(context, 'AMBIGUOUS', 0);
+      if (!recorded.ok) return recorded;
+      return this.#queryNormalBasisAttempt(context, outcome.failure);
+    }
+    if (outcome.kind === 'ACKNOWLEDGED') {
+      return this.recordNormalBasisOrder(context, 'WORKING', 0);
+    }
+    const cumulative = outcome.cumulativeFilledQuantity;
+    if (
+      !Number.isFinite(cumulative) ||
+      cumulative < 0 ||
+      cumulative > context.request.leg.quantity + QUANTITY_EPSILON ||
+      (outcome.kind === 'PARTIALLY_FILLED' &&
+        (cumulative <= 0 || cumulative >= context.request.leg.quantity - QUANTITY_EPSILON)) ||
+      (outcome.kind === 'FILLED' &&
+        Math.abs(cumulative - context.request.leg.quantity) > QUANTITY_EPSILON)
+    ) {
+      const recorded = this.recordNormalBasisOrder(context, 'AMBIGUOUS', 0);
+      if (!recorded.ok) return recorded;
+      return this.normalBasisProgressFailure(
+        'NORMAL_BASIS_SUBMISSION_OUTCOME_INVALID',
+        'The injected PAPER port returned an impossible normal-Basis fill quantity.',
+        false,
+        'Query the same bound client-order ID; never resubmit or infer a terminal fill.',
+      );
+    }
+    return this.recordNormalBasisOrder(
+      context,
+      outcome.kind === 'PARTIALLY_FILLED'
+        ? 'WORKING'
+        : outcome.kind === 'FILLED'
+          ? 'FILLED'
+          : 'CANCELLED',
+      cumulative,
+    );
+  }
+
+  async #queryNormalBasisAttempt(
+    context: Readonly<NormalBasisAttemptContext>,
+    originalFailure?: PortFailure,
+  ): Promise<CoordinatorResult> {
+    const progress = this.stateValue.normalBasisProgress;
+    if (progress?.action.disposition !== 'QUERY_REQUIRED') {
+      return this.normalBasisProgressFailure(
+        'NORMAL_BASIS_QUERY_NOT_REQUIRED',
+        'The immutable progress projection does not require a lookup.',
+        false,
+        'Follow the current progress action without issuing a speculative query.',
+      );
+    }
+    const queryStarted = this.recordNormalBasisOrder(
+      context,
+      'QUERY_STARTED',
+      this.latestNormalBasisAttemptObservation(context)?.cumulativeFilledQuantity ?? 0,
+    );
+    if (!queryStarted.ok) return queryStarted;
+    const lookupCall = await this.callPortWithDeadline(
+      (callContext) => this.ports.lookupByClientOrderId(context.request, callContext),
+    );
+    const lookup: unknown = lookupCall.kind === 'COMPLETED'
+      ? lookupCall.value
+      : {
+          kind: 'UNRESOLVED',
+          failure: {
+            code: lookupCall.kind === 'TIMED_OUT'
+              ? 'LOOKUP_PORT_TIMEOUT'
+              : 'NORMAL_BASIS_LOOKUP_FAILED',
+            message: lookupCall.kind === 'TIMED_OUT'
+              ? 'The read-only same-ID lookup exceeded its deterministic deadline.'
+              : 'The injected read-only lookup threw before resolving the bound attempt.',
+            retryable: true,
+            recommendedOperatorAction: 'Retry lookup for the same client-order ID; never blind-resubmit.',
+          },
+        };
+    const priorFill =
+      this.latestNormalBasisAttemptObservation(context)?.cumulativeFilledQuantity ?? 0;
+    if (!lookupEvidenceIsValid(context.request, lookup)) {
+      const ambiguous = this.recordNormalBasisOrder(context, 'AMBIGUOUS', priorFill);
+      if (!ambiguous.ok) return ambiguous;
+      return this.normalBasisProgressFailure(
+        'NORMAL_BASIS_LOOKUP_OUTCOME_INVALID',
+        'Read-only lookup returned a contradictory normal-Basis order observation.',
+        false,
+        'Refresh exact same-ID order evidence and preserve the current attempt.',
+      );
+    }
+    if (lookup.kind === 'UNRESOLVED') {
+      const ambiguous = this.recordNormalBasisOrder(context, 'AMBIGUOUS', priorFill);
+      if (!ambiguous.ok) return ambiguous;
+      return this.failureResult(
+        this.fromPortFailure('normal-basis-lookup', lookup.failure, this.now()),
+      );
+    }
+    if (lookup.kind === 'PROVEN_ABSENT') {
+      const absent = this.recordNormalBasisOrder(context, 'PROVEN_ABSENT', 0);
+      if (!absent.ok) return absent;
+      return this.failureResult(
+        this.fromPortFailure('normal-basis-lookup', lookup.failure, this.now()),
+      );
+    }
+    if (lookup.status === 'REJECTED') {
+      const rejected = this.recordNormalBasisOrder(context, 'REJECTED', 0);
+      if (!rejected.ok) return rejected;
+      const failure = lookup.failure ?? originalFailure ?? {
+        code: 'NORMAL_BASIS_ORDER_REJECTED',
+        message: 'Read-only lookup proved the bound normal-Basis order was rejected.',
+        retryable: false,
+        recommendedOperatorAction: 'Inspect rejection evidence before continuing the immutable plan.',
+      };
+      return this.failureResult(this.fromPortFailure('normal-basis-lookup', failure, this.now()));
+    }
+    return this.recordNormalBasisOrder(
+      context,
+      lookup.status === 'ACKNOWLEDGED' || lookup.status === 'PARTIALLY_FILLED'
+        ? 'WORKING'
+        : lookup.status === 'FILLED'
+          ? 'FILLED'
+          : 'CANCELLED',
+      lookup.cumulativeFilledQuantity,
+    );
+  }
+
+  requestNormalBasisCancel(): CoordinatorResult {
+    const progress = this.stateValue.normalBasisProgress;
+    const context = this.normalBasisAttemptContext();
+    if (progress?.action.disposition !== 'CANCEL_ELIGIBLE' || context === null) {
+      return this.normalBasisProgressFailure(
+        'NORMAL_BASIS_CANCEL_NOT_ELIGIBLE',
+        'The immutable progress projection has no working attempt eligible for cancellation.',
+        false,
+        'Follow the current progress action; no cancel transport exists in this coordinator.',
+      );
+    }
+    return this.recordNormalBasisOrder(
+      context,
+      'CANCEL_REQUESTED',
+      this.latestNormalBasisAttemptObservation(context)?.cumulativeFilledQuantity ?? 0,
+    );
+  }
+
+  async #advanceNormalBasisCurrent(): Promise<CoordinatorResult> {
+    if (this.restartRecoveryPending) return this.recoverAfterRestart();
+    const binding = this.stateValue.plan.normalBasisBinding;
+    const progress = this.stateValue.normalBasisProgress;
+    if (binding === undefined || progress === undefined) {
+      return this.normalBasisProgressFailure(
+        'NORMAL_BASIS_BINDING_ABSENT',
+        'The immutable normal-Basis progress driver is default-off for this plan.',
+        false,
+        'Use the legacy coordinator lifecycle for an unbound plan.',
+      );
+    }
+    if (progress.action.disposition === 'COMPLETE') return this.success();
+    if (progress.action.disposition === 'OBSERVE_BASELINE') {
+      return this.normalBasisProgressFailure(
+        'NORMAL_BASIS_BASELINE_REQUIRED',
+        'Completion requires explicit owner-observed baseline-flat signed positions.',
+        true,
+        'Record an exact baseline observation bound to the current state revision.',
+      );
+    }
+    if (progress.action.disposition === 'ATTEMPT_BUDGET_EXHAUSTED') {
+      return this.normalBasisProgressFailure(
+        'ATTEMPT_BUDGET_EXHAUSTED',
+        'The immutable normal-Basis close-attempt budget is exhausted.',
+        false,
+        'Do not invoke an order port; preserve the journal and escalate exact residual exposure.',
+      );
+    }
+    const context = this.normalBasisAttemptContext();
+    if (context === null) {
+      return this.normalBasisProgressFailure(
+        'NORMAL_BASIS_PROGRESS_INVALID',
+        'The immutable progress action is missing its bound step, attempt, identity, or quantity.',
+        false,
+        'Treat the checkpoint as invalid and do not invoke an order port.',
+      );
+    }
+    if (progress.action.disposition === 'CANCEL_ELIGIBLE') {
+      return this.requestNormalBasisCancel();
+    }
+    if (progress.action.disposition === 'AWAIT_TERMINAL') {
+      const ambiguous = this.recordNormalBasisOrder(
+        context,
+        'AMBIGUOUS',
+        this.latestNormalBasisAttemptObservation(context)?.cumulativeFilledQuantity ?? 0,
+      );
+      if (!ambiguous.ok) return ambiguous;
+      return this.#queryNormalBasisAttempt(context);
+    }
+    if (progress.action.disposition === 'QUERY_REQUIRED') {
+      return this.#queryNormalBasisAttempt(context);
+    }
+    if (progress.action.disposition !== 'SUBMIT_ELIGIBLE') {
+      return this.normalBasisProgressFailure(
+        'NORMAL_BASIS_PROGRESS_BLOCKED',
+        'The immutable progress action does not permit another attempt.',
+        false,
+        'Preserve the journal and reconcile explicit owner evidence.',
+      );
+    }
+    if (this.stateValue.plan.mode !== 'PAPER' || context.request.mode !== 'PAPER') {
+      return this.normalBasisProgressFailure(
+        'NON_PAPER_SUBMISSION_BLOCKED',
+        'The dormant injected submission port is available only to PAPER plans.',
+        false,
+        'No live/manual transport exists in the normal-Basis binding.',
+      );
+    }
+    if (this.stateValue.preflight.status !== 'PASSED') {
+      return this.normalBasisProgressFailure(
+        'NORMAL_BASIS_PREFLIGHT_REQUIRED',
+        'A bound normal-Basis attempt cannot submit before preflight has passed.',
+        false,
+        'Run the existing preflight lifecycle before advancing the immutable plan.',
+      );
+    }
+    if (context.step === 'SPOT_OPEN') {
+      const begun = this.beginOpen();
+      if (!begun.ok) return begun;
+      if (this.stateValue.lifecycle !== 'OPENING') {
+        return this.normalBasisProgressFailure(
+          'NORMAL_BASIS_OPENING_LIFECYCLE_REQUIRED',
+          'SPOT_OPEN requires the READY to OPENING lifecycle transition.',
+          false,
+          'Do not invoke the submission port outside the bound opening lifecycle.',
+        );
+      }
+    } else if (context.step === 'PERP_OPEN') {
+      if (
+        this.stateValue.lifecycle !== 'ONE_LEG_EXPOSED' &&
+        this.stateValue.lifecycle !== 'RECOVERY_REQUIRED'
+      ) {
+        return this.normalBasisProgressFailure(
+          'NORMAL_BASIS_OPENING_LIFECYCLE_REQUIRED',
+          'PERP_OPEN is eligible only while terminal Spot exposure is one-leg exposed or recovery-required.',
+          false,
+          'Preserve the terminal Spot fill and enter only its exact bound risk-reducing hedge.',
+        );
+      }
+    } else if (this.stateValue.lifecycle !== 'CLOSING') {
+      return this.normalBasisProgressFailure(
+        'NORMAL_BASIS_CLOSING_LIFECYCLE_REQUIRED',
+        'A bound close attempt requires CLOSE_REQUESTED followed by CLOSING_STARTED.',
+        false,
+        'Use close() so lifecycle evidence precedes the Perp-first close attempt.',
+      );
+    }
+    if (context.step === 'SPOT_OPEN' || context.step === 'PERP_OPEN') {
+      const deadline = this.enforceNakedDeadline('normal-basis:naked-deadline', this.now());
+      if (deadline !== null) return deadline;
+    }
+    const started = this.recordNormalBasisOrder(context, 'SUBMISSION_STARTED', 0);
+    if (!started.ok) return started;
+    const submissionCall = await this.callPortWithDeadline(
+      (callContext) => this.ports.submitPaper(context.request, callContext),
+    );
+    if (submissionCall.kind !== 'COMPLETED') {
+      const ambiguous = this.recordNormalBasisOrder(context, 'AMBIGUOUS', 0);
+      if (!ambiguous.ok) return ambiguous;
+      const failure: PortFailure = {
+        code: submissionCall.kind === 'TIMED_OUT'
+          ? 'SUBMISSION_PORT_TIMEOUT'
+          : 'SUBMISSION_RESPONSE_LOST',
+        message: submissionCall.kind === 'TIMED_OUT'
+          ? 'The injected PAPER submission timed out; remote acceptance is unknown.'
+          : 'The injected PAPER submission threw; remote acceptance is unknown.',
+        retryable: false,
+        recommendedOperatorAction: 'Query only by the same bound client-order ID; never blind-resubmit.',
+      };
+      return this.#queryNormalBasisAttempt(context, failure);
+    }
+    return this.applyNormalBasisSubmissionOutcome(context, submissionCall.value);
+  }
+
+  async advanceNormalBasis(): Promise<CoordinatorResult> {
+    if (this.normalBasisProgressInFlight !== null) return this.normalBasisProgressInFlight;
+    const run = Promise.resolve().then(() => this.#advanceNormalBasisCurrent());
+    this.normalBasisProgressInFlight = run;
+    try {
+      return await run;
+    } finally {
+      if (this.normalBasisProgressInFlight === run) this.normalBasisProgressInFlight = null;
+    }
+  }
+
   async #submitNextOpeningLegCurrent(): Promise<CoordinatorResult> {
     if (this.restartRecoveryPending) {
       const recovered = await this.recoverAfterRestart();
       if (!recovered.ok) return recovered;
+    }
+    if (this.stateValue.plan.normalBasisBinding !== undefined) {
+      const step = this.stateValue.normalBasisProgress?.action.step;
+      if (step !== 'SPOT_OPEN' && step !== 'PERP_OPEN') return this.success();
+      return this.advanceNormalBasis();
     }
     const gate = this.beginOpen();
     if (!gate.ok) return gate;
@@ -716,8 +1228,10 @@ export class ExecutionCoordinator {
       const recovered = await this.recoverAfterRestart();
       if (!recovered.ok) return recovered;
     }
-    const begun = this.beginOpen();
-    if (!begun.ok) return begun;
+    if (this.stateValue.plan.normalBasisBinding === undefined) {
+      const begun = this.beginOpen();
+      if (!begun.ok) return begun;
+    }
     for (let i = 0; i < 2; i += 1) {
       const before = this.stateValue.revision;
       const result = await this.submitNextOpeningLeg();
@@ -728,6 +1242,14 @@ export class ExecutionCoordinator {
   }
 
   async #submitLeg(request: LegOperationRequest): Promise<CoordinatorResult> {
+    if (this.stateValue.plan.normalBasisBinding !== undefined) {
+      return this.normalBasisProgressFailure(
+        'NORMAL_BASIS_PROGRESS_DRIVER_REQUIRED',
+        'Bound normal-Basis attempts must be recorded through the immutable progress driver.',
+        false,
+        'Use advanceNormalBasis so step, attempt, quantity, and client-order identity stay journal-bound.',
+      );
+    }
     const expected = request.phase === 'OPEN'
       ? this.stateValue.plan.openingLegs[request.leg.key]
       : this.stateValue.plan.closingLegs[request.leg.key];
@@ -1148,6 +1670,45 @@ export class ExecutionCoordinator {
    * is reconciled before any hedge or close progression is permitted.
    */
   async #recoverAfterRestartCurrent(): Promise<CoordinatorResult> {
+    if (this.stateValue.plan.normalBasisBinding !== undefined) {
+      const progress = this.stateValue.normalBasisProgress;
+      const context = this.normalBasisAttemptContext();
+      if (
+        progress !== undefined &&
+        context !== null &&
+        (
+          progress.action.disposition === 'QUERY_REQUIRED' ||
+          progress.action.disposition === 'CANCEL_ELIGIBLE' ||
+          progress.action.disposition === 'AWAIT_TERMINAL'
+        )
+      ) {
+        if (progress.action.disposition !== 'QUERY_REQUIRED') {
+          const ambiguous = this.recordNormalBasisOrder(
+            context,
+            'AMBIGUOUS',
+            this.latestNormalBasisAttemptObservation(context)?.cumulativeFilledQuantity ?? 0,
+          );
+          if (!ambiguous.ok) return ambiguous;
+        }
+        const recovered = await this.#queryNormalBasisAttempt(context);
+        if (!recovered.ok) return recovered;
+        const disposition = this.stateValue.normalBasisProgress?.action.disposition;
+        if (
+          disposition === 'QUERY_REQUIRED' ||
+          disposition === 'CANCEL_ELIGIBLE' ||
+          disposition === 'AWAIT_TERMINAL'
+        ) {
+          return this.normalBasisProgressFailure(
+            'NORMAL_BASIS_RESTART_TERMINAL_EVIDENCE_REQUIRED',
+            'Fresh same-ID lookup did not produce a terminal bound-attempt observation.',
+            true,
+            'Repeat read-only same-ID lookup; never submit another attempt while this one remains active.',
+          );
+        }
+      }
+      this.restartRecoveryPending = false;
+      return this.success();
+    }
     for (const phase of ['OPEN', 'CLOSE'] as const) {
       for (const key of EXECUTION_LEG_KEYS) {
         const recovered = await this.recoverLegAfterRestart(phase, key);
@@ -1377,6 +1938,61 @@ export class ExecutionCoordinator {
     }
     if (this.stateValue.lifecycle === 'CLOSED') return this.success();
     const nowMs = this.now();
+    if (this.stateValue.plan.normalBasisBinding !== undefined) {
+      const next = this.stateValue.normalBasisProgress?.next;
+      if (next === 'BASELINE_RECONCILIATION' || next === 'COMPLETE') return this.success();
+      if (next === 'PERP_CLOSE' || next === 'SPOT_CLOSE') {
+        if (this.stateValue.plan.mode !== 'PAPER') {
+          return this.failureResult(
+            this.failure(
+              'close',
+              'NON_PAPER_SUBMISSION_BLOCKED',
+              'Only PAPER plans can use the dormant normal-Basis submission port.',
+              nowMs,
+              false,
+              'No live/manual transport exists.',
+            ),
+          );
+        }
+        if (
+          ![
+            'HEDGED_OPEN',
+            'ONE_LEG_EXPOSED',
+            'RECOVERY_REQUIRED',
+            'CLOSE_REQUESTED',
+            'CLOSING',
+          ].includes(this.stateValue.lifecycle)
+        ) {
+          return this.failureResult(
+            this.failure(
+              'close',
+              'NORMAL_BASIS_CLOSE_LIFECYCLE_REQUIRED',
+              'The bound plan lifecycle does not permit an ordered close request.',
+              nowMs,
+              false,
+              'Complete the ordered opening lifecycle before requesting PERP_CLOSE.',
+            ),
+          );
+        }
+        if (
+          this.stateValue.lifecycle !== 'CLOSE_REQUESTED' &&
+          this.stateValue.lifecycle !== 'CLOSING'
+        ) {
+          return this.emitAt(nowMs, 'CLOSE_REQUESTED', { emergency });
+        }
+        return this.success();
+      }
+      return this.failureResult(
+        this.failure(
+          'close',
+          'NORMAL_BASIS_CLOSE_OUT_OF_ORDER',
+          'The immutable normal-Basis journal has not completed both ordered opening steps.',
+          nowMs,
+          false,
+          'Complete SPOT_OPEN then PERP_OPEN before progressing PERP_CLOSE.',
+        ),
+      );
+    }
     if (this.stateValue.plan.mode !== 'PAPER') {
       return this.failureResult(
         this.failure('close', 'NON_PAPER_SUBMISSION_BLOCKED', 'Only PAPER plans can use the submission port.', nowMs, false, 'No live/manual transport exists.'),
@@ -1421,7 +2037,10 @@ export class ExecutionCoordinator {
       if (!requested.ok) return requested;
     }
 
-    for (const key of EXECUTION_LEG_KEYS) {
+    const closeOrder = this.stateValue.plan.normalBasisBinding === undefined
+      ? EXECUTION_LEG_KEYS
+      : NORMAL_BASIS_CLOSE_ORDER;
+    for (const key of closeOrder) {
       const quantity = residualQuantity(this.stateValue, key);
       if (quantity <= 1e-12) continue;
       if (this.stateValue.closingLegs[key].lifecycle !== 'PLANNED') continue;
@@ -1460,11 +2079,24 @@ export class ExecutionCoordinator {
   async close(emergency = false): Promise<CoordinatorResult> {
     const requested = await this.requestClose(emergency);
     if (!requested.ok) return requested;
+    if (this.stateValue.plan.normalBasisBinding !== undefined) {
+      if (
+        this.stateValue.lifecycle === 'CLOSE_REQUESTED' ||
+        this.stateValue.eventLog.at(-1)?.type === 'CLOSE_REQUESTED'
+      ) {
+        const started = this.emitAt(this.now(), 'CLOSING_STARTED');
+        if (!started.ok) return started;
+      }
+      return this.advanceNormalBasis();
+    }
     if (this.stateValue.lifecycle === 'CLOSE_REQUESTED') {
       const started = this.emitAt(this.now(), 'CLOSING_STARTED');
       if (!started.ok) return started;
     }
-    for (const key of EXECUTION_LEG_KEYS) {
+    const closeOrder = this.stateValue.plan.normalBasisBinding === undefined
+      ? EXECUTION_LEG_KEYS
+      : NORMAL_BASIS_CLOSE_ORDER;
+    for (const key of closeOrder) {
       const quantity = residualQuantity(this.stateValue, key);
       if (quantity <= 1e-12) continue;
       const lifecycle = this.stateValue.closingLegs[key].lifecycle;
@@ -1534,6 +2166,9 @@ export class ExecutionCoordinator {
   evaluateNakedDuration(): CoordinatorResult {
     if (this.stateValue.lifecycle === 'RECOVERY_REQUIRED') return this.success();
     const nowMs = this.now();
+    if (this.stateValue.plan.normalBasisBinding !== undefined) {
+      return this.enforceNakedDeadline('normal-basis:naked-deadline', nowMs) ?? this.success();
+    }
     if (
       this.stateValue.exposedSinceMs === null ||
       nowMs < this.stateValue.exposedSinceMs + this.stateValue.plan.maxNakedDurationMs

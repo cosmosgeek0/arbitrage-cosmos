@@ -2,7 +2,9 @@
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { verifyGitSourceAuthority } from './git-provenance.mjs';
 import {
+  DEFAULT_REPOSITORY_ROOT,
   OPERATION_KINDS,
   OPERATION_MAPPING_REGISTRY,
   REVIEWED_OPERATION_DISPOSITIONS,
@@ -46,8 +48,8 @@ const NEWS_CONTEXT_SOURCE_SHA256 = '691109a948e0da6dd953326e995a0f889a7be70cf472
 const NEWS_CONTEXT_SITE_ID = 'OPSITE_FD086559819579DF346A';
 
 export const NEWS_CONTEXT_OVERLAY_AUTHORITY = Object.freeze({
-  sourceCommit: '2651710fffa7a453162097f04ba60792151912a4',
-  sourceBlob: 'ab7e5c0301f02b4a2a3fdfcdab041203fc972926',
+  sourceCommit: '45478ebcf439ef00120c9b2d7f0d9e1aad40d021',
+  sourceBlob: '198ed76b472a5749cd9464eafb21d97191909a90',
   sourceDigestAlgorithm: 'sha256',
   sourceSha256: NEWS_CONTEXT_SOURCE_SHA256,
   rulingCommit: 'c57610cb5f7d56efb61e53ae27057fbe92a6a2f6',
@@ -74,6 +76,17 @@ const PROFILE_SITE_IDS = Object.freeze([
 const BINANCE_PRIVATE_READ_PATH = 'server/src/binance/privateReadClient.ts';
 const BINANCE_PRIVATE_READ_SOURCE_SHA256 = '748052ec4943f547739b79c71824bfaf3a6ccac5c7a79608c9105dc587f8cbce';
 const BINANCE_PRIVATE_READ_SITE_ID = 'OPSITE_26D026D9BE4F85360AE7';
+
+const BINANCE_SPOT_SIGNED_TRANSPORT_PATH = 'server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts';
+const BINANCE_SPOT_SIGNED_TRANSPORT_SOURCE_SHA256 = '93dc9c47d5afe725b9b9f7820e9730eb7b4f18349d3530b6629074a7205e323a';
+const BINANCE_SPOT_SIGNED_TRANSPORT_SITE_TUPLES = Object.freeze([
+  Object.freeze({ siteId: 'OPSITE_1721C3628A98270E62D8', line: 533, column: 13 }),
+  Object.freeze({ siteId: 'OPSITE_37C06DA50CA7C947BB30', line: 657, column: 25 }),
+  Object.freeze({ siteId: 'OPSITE_57350AE6E7BCE0EFB0F9', line: 760, column: 25 }),
+]);
+const BINANCE_SPOT_SIGNED_TRANSPORT_SITE_IDS = Object.freeze(
+  BINANCE_SPOT_SIGNED_TRANSPORT_SITE_TUPLES.map(({ siteId }) => siteId).sort(),
+);
 
 const TWIN_RULE = Object.freeze({
   ruleId: 'i00-live-edge-exchange-twin-synthetic-state-v1',
@@ -124,17 +137,37 @@ const BINANCE_PRIVATE_READ_RULE = Object.freeze({
   symbolPattern: '^this\\.fetchFn$',
 });
 
+const BINANCE_SPOT_SIGNED_TRANSPORT_RULE = Object.freeze({
+  ruleId: 'm0-binance-spot-signed-transport-dormant-blocked-v1',
+  operationId: 'OP_BINANCE_SPOT_SIGNED_TRANSPORT_DORMANT_BLOCKED',
+  pathExact: Object.freeze([BINANCE_SPOT_SIGNED_TRANSPORT_PATH]),
+  pathPrefixes: Object.freeze([]),
+  kinds: Object.freeze([OPERATION_KINDS.STREAM_SEND]),
+  symbolPattern: '^ports\\.transport\\.send$',
+});
+
 export const I00_OPERATION_MAPPING_OVERLAY = Object.freeze([
   NEWS_CONTEXT_RULE,
   TWIN_RULE,
   ASSESSMENT_RULE,
   PROFILE_RULE,
   BINANCE_PRIVATE_READ_RULE,
+  BINANCE_SPOT_SIGNED_TRANSPORT_RULE,
 ]);
 
 function exactMembers(actual, expected) {
   return actual.length === expected.length
     && actual.every((value, index) => value === expected[index]);
+}
+
+function sortedUnique(values) {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right, 'en'));
+}
+
+function deepFreeze(value) {
+  if (value === null || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  for (const member of Object.values(value)) deepFreeze(member);
+  return Object.freeze(value);
 }
 
 export function verifyNewsContextOverlayAuthority(candidate) {
@@ -154,6 +187,7 @@ function exactSites(report, {
   symbolSet,
   line = null,
   column = null,
+  siteTuples = null,
   operationId = null,
   mappingRuleId = null,
 }) {
@@ -162,7 +196,16 @@ function exactSites(report, {
     .filter((site) => kindSet.has(site.rawKind))
     .filter((site) => symbolSet.has(site.rawSymbol));
   const observedIds = sites.map((site) => site.siteId).sort();
+  const observedSiteTuples = sites
+    .map((site) => `${site.siteId}:${site.line}:${site.column}`)
+    .sort();
+  const expectedSiteTuples = siteTuples === null
+    ? null
+    : siteTuples
+      .map((site) => `${site.siteId}:${site.line}:${site.column}`)
+      .sort();
   return exactMembers(observedIds, siteIds)
+    && (expectedSiteTuples === null || exactMembers(observedSiteTuples, expectedSiteTuples))
     && sites.every((site) => site.sourceSha256 === sourceSha256)
     && sites.every((site) => line === null || site.line === line)
     && sites.every((site) => column === null || site.column === column)
@@ -178,8 +221,10 @@ function verifyBaseUncovered(report) {
     ...ASSESSMENT_SITE_IDS,
     ...PROFILE_SITE_IDS,
     BINANCE_PRIVATE_READ_SITE_ID,
+    ...BINANCE_SPOT_SIGNED_TRANSPORT_SITE_IDS,
   ].sort();
-  if (!exactMembers(observed, expected)) {
+  const missing = expected.filter((siteId) => !observed.includes(siteId));
+  if (missing.length > 0) {
     throw new Error(`I00_OPERATION_OVERLAY_BASE_SET_DRIFT:${JSON.stringify({ expected, observed })}`);
   }
   if (!exactSites(report, {
@@ -225,6 +270,14 @@ function verifyBaseUncovered(report) {
     line: 248,
     column: 30,
   })) throw new Error('I00_OPERATION_OVERLAY_BINANCE_PRIVATE_READ_SOURCE_DRIFT');
+  if (!exactSites(report, {
+    path: BINANCE_SPOT_SIGNED_TRANSPORT_PATH,
+    sourceSha256: BINANCE_SPOT_SIGNED_TRANSPORT_SOURCE_SHA256,
+    siteIds: BINANCE_SPOT_SIGNED_TRANSPORT_SITE_IDS,
+    kindSet: new Set([OPERATION_KINDS.STREAM_SEND]),
+    symbolSet: new Set(['ports.transport.send']),
+    siteTuples: BINANCE_SPOT_SIGNED_TRANSPORT_SITE_TUPLES,
+  })) throw new Error('I00_OPERATION_OVERLAY_BINANCE_SPOT_SIGNED_TRANSPORT_SOURCE_DRIFT');
 }
 
 function verifyIntegratedMappings(report) {
@@ -281,9 +334,198 @@ function verifyIntegratedMappings(report) {
     operationId: BINANCE_PRIVATE_READ_RULE.operationId,
     mappingRuleId: BINANCE_PRIVATE_READ_RULE.ruleId,
   })) throw new Error('I00_OPERATION_OVERLAY_BINANCE_PRIVATE_READ_MAPPING_DRIFT');
+  if (!exactSites(report, {
+    path: BINANCE_SPOT_SIGNED_TRANSPORT_PATH,
+    sourceSha256: BINANCE_SPOT_SIGNED_TRANSPORT_SOURCE_SHA256,
+    siteIds: BINANCE_SPOT_SIGNED_TRANSPORT_SITE_IDS,
+    kindSet: new Set([OPERATION_KINDS.STREAM_SEND]),
+    symbolSet: new Set(['ports.transport.send']),
+    siteTuples: BINANCE_SPOT_SIGNED_TRANSPORT_SITE_TUPLES,
+    operationId: BINANCE_SPOT_SIGNED_TRANSPORT_RULE.operationId,
+    mappingRuleId: BINANCE_SPOT_SIGNED_TRANSPORT_RULE.ruleId,
+  })) throw new Error('I00_OPERATION_OVERLAY_BINANCE_SPOT_SIGNED_TRANSPORT_MAPPING_DRIFT');
   if (report.uncovered !== 0 || report.uncoveredSites.length !== 0) {
     throw new Error(`I00_OPERATION_OVERLAY_UNCOVERED:${report.uncovered}`);
   }
+}
+
+function integratedPolicy(template, {
+  operationId,
+  canonicalOwnerId,
+  implementationPaths,
+  overrides = {},
+}) {
+  const policy = structuredClone(template);
+  Object.assign(policy, overrides, {
+    operationId,
+    canonicalOwnerId,
+    implementationPaths: sortedUnique(implementationPaths),
+    cancellation: {
+      ...policy.cancellation,
+      ...overrides.cancellation,
+      cancellationEvidenceId: `${operationId}.cancellation`,
+    },
+    costResourceEvidence: {
+      ...policy.costResourceEvidence,
+      ...overrides.costResourceEvidence,
+      budgetOwnerId: overrides.costResourceEvidence?.budgetOwnerId ?? canonicalOwnerId,
+      metricId: overrides.costResourceEvidence?.metricId ?? `${operationId}.resource`,
+    },
+    metricId: `${operationId}.attempts`,
+    traceId: `${operationId}.trace`,
+    materialEventId: `${operationId}.material_event`,
+    incidentId: `${operationId}.incident`,
+  });
+  return deepFreeze(policy);
+}
+
+function exactPolicy(registry, operationId) {
+  const matches = registry.filter((policy) => policy.operationId === operationId);
+  if (matches.length !== 1) {
+    throw new Error(`I00_OPERATION_POLICY_PREDECESSOR_DRIFT:${operationId}:${matches.length}`);
+  }
+  return matches[0];
+}
+
+export function buildIntegratedOperationPolicyRegistry(canonicalRegistry) {
+  if (!Array.isArray(canonicalRegistry)) throw new TypeError('canonical operation policy registry is required');
+  const runtimeQueue = exactPolicy(canonicalRegistry, 'OP_RUNTIME_IN_MEMORY_QUEUE');
+  const publicHttpRead = exactPolicy(canonicalRegistry, 'OP_PUBLIC_HTTP_READ');
+  const legacySignedMoneyPath = exactPolicy(
+    canonicalRegistry,
+    'OP_LEGACY_SIGNED_MONEY_PATH_DORMANT_BLOCKED',
+  );
+  for (const operationId of [
+    'OP_BINANCE_PRIVATE_SIGNED_GET_READ',
+    'OP_BINANCE_SPOT_SIGNED_TRANSPORT_DORMANT_BLOCKED',
+    'OP_L07_EXCHANGE_TWIN_SYNTHETIC_STATE_REDUCTION',
+  ]) {
+    if (canonicalRegistry.some((policy) => policy.operationId === operationId)) {
+      throw new Error(`I00_OPERATION_POLICY_ALREADY_CANONICAL:${operationId}`);
+    }
+  }
+
+  const integratedRuntimeQueue = deepFreeze({
+    ...structuredClone(runtimeQueue),
+    implementationPaths: sortedUnique([
+      ...runtimeQueue.implementationPaths,
+      ASSESSMENT_PATH,
+      PROFILE_PATH,
+    ]),
+  });
+  const privateSignedGet = integratedPolicy(publicHttpRead, {
+    operationId: BINANCE_PRIVATE_READ_RULE.operationId,
+    canonicalOwnerId: 'BINANCE_PRIVATE_READ_CLIENT',
+    implementationPaths: [BINANCE_PRIVATE_READ_PATH],
+    overrides: {
+      wiringState: 'DORMANT_BLOCKED',
+      fallbackEligibility: 'NONE',
+      degradedResult: 'PRIVATE_ACCOUNT_TRUTH_UNAVAILABLE',
+      blockedResult: 'PRIVATE_READ_PERMISSION_UNVERIFIED',
+      automaticRemediationAllowed: false,
+      escalationControlId: 'OWNER_BINANCE_PRIVATE_READ_REVIEW',
+      runbookId: 'RUNBOOK_BINANCE_PRIVATE_READ',
+      cockpitLocation: 'health.sources.binance_private_read',
+      faultTestIds: ['FAULT_BINANCE_PRIVATE_READ_TIMEOUT', 'FAULT_BINANCE_PRIVATE_READ_PERMISSION'],
+    },
+  });
+  const binanceSpotSignedTransport = integratedPolicy(legacySignedMoneyPath, {
+    operationId: BINANCE_SPOT_SIGNED_TRANSPORT_RULE.operationId,
+    canonicalOwnerId: 'BINANCE_SPOT_EXECUTION_ADAPTER',
+    implementationPaths: [BINANCE_SPOT_SIGNED_TRANSPORT_PATH],
+    overrides: {
+      operationClass: 'NON_IDEMPOTENT_MUTATION',
+      wiringState: 'DORMANT_BLOCKED',
+      maximumAttempts: 1,
+      backoff: {
+        baseDelayMs: 0,
+        maximumDelayMs: 0,
+        jitterRatio: 0,
+        totalRetryBudgetMs: 0,
+      },
+      idempotency: {
+        required: true,
+        identityField: 'clientOrderId',
+        lifetimeMs: 86_400_000,
+        durability: 'DURABLE',
+      },
+      authoritativeReconciliationLookup: 'BINANCE_SPOT_QUERY_BY_ORIGINAL_CLIENT_ORDER_ID',
+      fallbackEligibility: 'NONE',
+      degradedResult: 'DORMANT_BLOCKED',
+      blockedResult: 'M0_NEVER_FIREABLE',
+      automaticRemediationAllowed: false,
+      escalationControlId: 'NO_RUNTIME_CONTROL',
+    },
+  });
+  const syntheticTwinReduction = integratedPolicy(runtimeQueue, {
+    operationId: TWIN_RULE.operationId,
+    canonicalOwnerId: 'LIVE_EDGE_EXCHANGE_TWIN',
+    implementationPaths: [TWIN_PATH],
+    overrides: {
+      maximumAttempts: 1,
+      backoff: {
+        baseDelayMs: 0,
+        maximumDelayMs: 0,
+        jitterRatio: 0,
+        totalRetryBudgetMs: 0,
+      },
+      idempotency: {
+        required: true,
+        identityField: 'eventId',
+        lifetimeMs: 300_000,
+        durability: 'PROCESS_LOCAL',
+      },
+      authoritativeReconciliationLookup: 'EXCHANGE_TWIN_STATE_EVENT_LOOKUP',
+      concurrencyLimit: 1,
+      poisonEventQuarantine: false,
+      degradedResult: 'SYNTHETIC_STATE_REDUCTION_REJECTED',
+      blockedResult: 'SYNTHETIC_STATE_INPUT_INVALID',
+      durableRestartCheckpoint: null,
+      automaticRemediationAllowed: false,
+      escalationControlId: 'CONTROL_EXCHANGE_TWIN_SCENARIO_REVIEW',
+      runbookId: 'RUNBOOK_EXCHANGE_TWIN_SCENARIO',
+      cockpitLocation: 'assurance.exchange_twin.synthetic_state',
+      costResourceEvidence: {
+        required: false,
+        missingBehavior: 'NOT_APPLICABLE',
+      },
+      faultTestIds: ['FAULT_EXCHANGE_TWIN_DUPLICATE_EVENT', 'FAULT_EXCHANGE_TWIN_INVALID_STATE'],
+    },
+  });
+
+  return Object.freeze([
+    ...canonicalRegistry.filter((policy) => policy.operationId !== runtimeQueue.operationId),
+    integratedRuntimeQueue,
+    privateSignedGet,
+    binanceSpotSignedTransport,
+    syntheticTwinReduction,
+  ].sort((left, right) => left.operationId.localeCompare(right.operationId, 'en')));
+}
+
+export function scanIntegratedOperationPolicyCoverage({
+  canonicalRegistry,
+  coverageScanner,
+  operationReport,
+}) {
+  if (typeof coverageScanner !== 'function') throw new TypeError('operation coverage scanner is required');
+  const policies = buildIntegratedOperationPolicyRegistry(canonicalRegistry);
+  const coverage = coverageScanner(policies, operationReport.sites);
+  return Object.freeze({
+    ...coverage,
+    policyCount: policies.length,
+    policies,
+  });
+}
+
+function applyReviewedEffectiveSemantics(report) {
+  const sites = report.sites.map((site) => site.siteId === NEWS_CONTEXT_OVERLAY_AUTHORITY.siteId
+    ? Object.freeze({
+      ...site,
+      kind: NEWS_CONTEXT_OVERLAY_AUTHORITY.effectiveKind,
+      symbol: NEWS_CONTEXT_OVERLAY_AUTHORITY.effectiveSymbol,
+    })
+    : site);
+  return Object.freeze({ ...report, sites: Object.freeze(sites) });
 }
 
 /**
@@ -294,22 +536,25 @@ function verifyIntegratedMappings(report) {
  * command, persistence, exchange, or money authority.
  */
 export function scanIntegratedProductionOperations(options = {}) {
-  if (!verifyNewsContextOverlayAuthority(
-    options.newsContextAuthority ?? NEWS_CONTEXT_OVERLAY_AUTHORITY,
-  )) throw new Error('I00_OPERATION_OVERLAY_NEWS_AUTHORITY_DRIFT');
+  const repositoryRoot = resolve(options.repositoryRoot ?? DEFAULT_REPOSITORY_ROOT);
+  const newsContextAuthority = options.newsContextAuthority ?? NEWS_CONTEXT_OVERLAY_AUTHORITY;
+  if (!verifyNewsContextOverlayAuthority(newsContextAuthority)
+    || !verifyGitSourceAuthority({ repositoryRoot, ...newsContextAuthority })) {
+    throw new Error('I00_OPERATION_OVERLAY_NEWS_AUTHORITY_DRIFT');
+  }
   const baseReport = scanProductionOperations({
-    repositoryRoot: options.repositoryRoot,
+    repositoryRoot,
     registry: OPERATION_MAPPING_REGISTRY,
     reviewedDispositions: REVIEWED_OPERATION_DISPOSITIONS,
   });
   verifyBaseUncovered(baseReport);
   const report = scanProductionOperations({
-    repositoryRoot: options.repositoryRoot,
+    repositoryRoot,
     registry: Object.freeze([...OPERATION_MAPPING_REGISTRY, ...I00_OPERATION_MAPPING_OVERLAY]),
     reviewedDispositions: REVIEWED_OPERATION_DISPOSITIONS,
   });
   verifyIntegratedMappings(report);
-  return report;
+  return applyReviewedEffectiveSemantics(report);
 }
 
 function printHumanReport(report) {

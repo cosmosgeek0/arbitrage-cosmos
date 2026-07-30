@@ -11,7 +11,7 @@ const T0 = 1_800_000_000_000;
 // backs it. A read-model failure on any of them must stay opaque on the wire
 // (READ_MODEL_UNAVAILABLE) while recording the true cause on stderr — the bare
 // `catch {}` form of these handlers hid a total control-plane outage from the
-// logs. Parameterised over all eight so a future bare catch cannot reappear
+// logs. Parameterised over all nine so a future bare catch cannot reappear
 // silently on any one of them.
 const READ_ROUTES = [
   { path: '/supervisor', port: 'supervisor' },
@@ -22,6 +22,7 @@ const READ_ROUTES = [
   { path: '/controls', port: 'controls' },
   { path: '/attention/focus/BTCUSDT', port: 'focusPin' },
   { path: '/traces/cor_present', port: 'trace' },
+  { path: '/m0/spot-canary', port: 'm0SpotRuntime' },
 ];
 
 function sentinel(route) {
@@ -41,6 +42,10 @@ function throwingPorts() {
     opsReadback: {
       read() { throw sentinel('/ops'); },
     },
+    m0SpotRuntime: {
+      readReadinessCard() { throw sentinel('/m0/spot-canary'); },
+      executeApprovedLifecycle() { throw new Error('not under test'); },
+    },
   };
 }
 
@@ -58,16 +63,17 @@ async function close(server) {
   await new Promise((resolve) => server.close(resolve));
 }
 
-test('a failed read is opaque on the wire but records its cause on stderr for all eight read routes', { concurrency: false }, async () => {
-  const { read, opsReadback } = throwingPorts();
+test('a failed read is opaque on the wire but records its cause on stderr for all nine read routes', { concurrency: false }, async () => {
+  const { read, opsReadback, m0SpotRuntime } = throwingPorts();
   const controls = {
     mutate() { throw new Error('not under test'); },
     auditRejectedRequest() { throw new Error('not under test'); },
     snapshot() { throw new Error('not under test'); },
   };
   const validateOnly = { async executeValidateOnly() { throw new Error('not under test'); } };
+  const m0SpotCanary = { async inspectSourceMount() { throw new Error('not under test'); } };
   const router = createSystemIntegrationRouter({
-    read, controls, validateOnly, clock: { nowMs: () => T0 }, opsReadback,
+    read, controls, validateOnly, m0SpotCanary, m0SpotRuntime, clock: { nowMs: () => T0 }, opsReadback,
   });
   const app = express();
   app.disable('x-powered-by');

@@ -60,7 +60,7 @@ function ticket(overrides = {}) {
     symbol: TEST_SYMBOL,
     side: 'BUY',
     type: 'LIMIT',
-    timeInForce: 'GTC',
+    timeInForce: 'FOK',
     quantity: '0.1',
     price: '100',
     riskReferencePrice: '100',

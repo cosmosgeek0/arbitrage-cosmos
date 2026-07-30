@@ -47,7 +47,7 @@ function ticket(overrides = {}) {
     symbol: 'BTCUSDT',
     side: 'BUY',
     type: 'LIMIT',
-    timeInForce: 'GTC',
+    timeInForce: 'FOK',
     quantity: '0.05',
     price: '100',
     riskReferencePrice: '100',
@@ -353,7 +353,12 @@ test('flatten remains unproven until exact reconciled SELL position evidence cov
           positionSnapshotRevision: 'position-revision-1',
           reconciliationStatus: 'EXACT',
           side: 'SELL',
+          quantityStepSize: '0.001',
           availableBaseQuantity: '0.05',
+          attributableBaseQuantity: '0.05',
+          cumulativeFilledSellQuantity: '0',
+          cumulativeAuthorizedLifecycleTurnoverQuote: '5',
+          maximumAuthorizedLifecycleTurnoverQuote: '10',
         },
       }),
     }),
@@ -368,7 +373,11 @@ test('live-send decision stays inert and requires both readiness gates, accepted
       nowMs: 4_000,
       riskEvidence: riskEvidence(value),
     }),
-    readiness: { backupReady: true, privateReadReady: true },
+    readiness: {
+      backupReady: true,
+      privateReadReady: true,
+      totalFeeReserveQuote: '0.02',
+    },
     signedTestEvidence: signedTestEvidence(value),
     ownerAuthority: ownerAuthority(value),
   };
@@ -382,7 +391,11 @@ test('live-send decision stays inert and requires both readiness gates, accepted
 
   const notReady = decideSpotLiveSend({
     ...base,
-    readiness: { backupReady: true, privateReadReady: false },
+    readiness: {
+      backupReady: true,
+      privateReadReady: false,
+      totalFeeReserveQuote: '0.02',
+    },
   });
   assert.equal(notReady.allowed, false);
   assert.equal(notReady.intent, null);
@@ -407,7 +420,11 @@ test('kill switch blocks again at the final send seam', () => {
       nowMs: 4_000,
       riskEvidence: riskEvidence(value, { killSwitchEngaged: true }),
     }),
-    readiness: { backupReady: true, privateReadReady: true },
+    readiness: {
+      backupReady: true,
+      privateReadReady: true,
+      totalFeeReserveQuote: '0.02',
+    },
     signedTestEvidence: signedTestEvidence(value),
     ownerAuthority: ownerAuthority(value),
   });

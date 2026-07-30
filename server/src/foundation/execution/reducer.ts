@@ -13,19 +13,32 @@ import {
   type PlanLifecycle,
   type StructuredFailure,
 } from '../contracts/index.js';
-import { createExecutionPlanDefinition } from './plan.js';
+import {
+  createExecutionPlanDefinition,
+  validateNormalBasisPlanBinding,
+} from './plan.js';
 import {
   EXECUTION_EVENT_TYPES,
   EXECUTION_LEG_KEYS,
+  NORMAL_BASIS_MAX_JOURNAL_ENTRIES,
+  NORMAL_BASIS_STEP_ORDER,
   type ExecutionEvent,
   type ExecutionLegKey,
   type ExecutionLegPhase,
   type ExecutionLegState,
   type ExecutionPlanState,
   type ExecutionReducerResult,
+  type NormalBasisOrderObservation,
+  type NormalBasisPlanBinding,
+  type NormalBasisProgressAction,
+  type NormalBasisProgressObservation,
+  type NormalBasisProgressState,
+  type NormalBasisStep,
 } from './types.js';
 
 const EPSILON = 1e-12;
+type ExposureProjection = Pick<ExecutionPlanState, 'openingLegs' | 'closingLegs'> &
+  Partial<Pick<ExecutionPlanState, 'normalBasisProgress' | 'plan'>>;
 const AMBIGUITY_RESOLUTIONS = new Set([
   'ACKNOWLEDGED',
   'PARTIALLY_FILLED',
@@ -64,6 +77,7 @@ const EVENT_DETAIL_KEYS: Readonly<Record<ExecutionEvent['type'], readonly string
   RECONCILIATION_RESOLVED: ['reconciliationOutcome', 'failure'],
   RESTART_RECOVERY_BLOCKED: ['phase', 'legKey', 'failure'],
   NAKED_DURATION_EXPIRED: [],
+  NORMAL_BASIS_PROGRESS_OBSERVED: ['normalBasisObservation'],
   PLAN_CANCELLED: [],
   PLAN_FAILED: ['failure'],
 });
@@ -85,10 +99,16 @@ const PAPER_ONLY_EVENT_TYPES = new Set<ExecutionEvent['type']>([
   'RECONCILIATION_RESOLVED',
   'RESTART_RECOVERY_BLOCKED',
   'NAKED_DURATION_EXPIRED',
+  'NORMAL_BASIS_PROGRESS_OBSERVED',
 ]);
 
 function freezeEvent(event: ExecutionEvent): Readonly<ExecutionEvent> {
-  return Object.freeze({ ...event });
+  return Object.freeze({
+    ...event,
+    ...(event.normalBasisObservation === undefined
+      ? {}
+      : { normalBasisObservation: Object.freeze({ ...event.normalBasisObservation }) }),
+  });
 }
 
 function initialLeg(definition: ExecutionLegState['definition']): Readonly<ExecutionLegState> {
@@ -151,17 +171,32 @@ function knownResidual(state: Pick<ExecutionPlanState, 'openingLegs' | 'closingL
   );
 }
 
-function hasOverClose(state: Pick<ExecutionPlanState, 'openingLegs' | 'closingLegs'>): boolean {
+function hasOverClose(state: ExposureProjection): boolean {
+  if (state.normalBasisProgress !== undefined) {
+    const fills = state.normalBasisProgress.terminalNetFilledQuantityByStep;
+    if (
+      (fills.SPOT_CLOSE ?? 0) > (fills.SPOT_OPEN ?? 0) + EPSILON ||
+      (fills.PERP_CLOSE ?? 0) > (fills.PERP_OPEN ?? 0) + EPSILON
+    ) return true;
+  }
   return EXECUTION_LEG_KEYS.some(
     (key) => state.closingLegs[key].cumulativeFilledQuantity > state.openingLegs[key].cumulativeFilledQuantity + EPSILON,
   );
 }
 
-export function hasKnownOpenExposure(state: Pick<ExecutionPlanState, 'openingLegs' | 'closingLegs'>): boolean {
+export function hasKnownOpenExposure(state: ExposureProjection): boolean {
+  if (state.normalBasisProgress !== undefined) {
+    const fills = state.normalBasisProgress.terminalNetFilledQuantityByStep;
+    if (
+      (fills.SPOT_OPEN ?? 0) - (fills.SPOT_CLOSE ?? 0) > EPSILON ||
+      (fills.PERP_OPEN ?? 0) - (fills.PERP_CLOSE ?? 0) > EPSILON
+    ) return true;
+  }
   return EXECUTION_LEG_KEYS.some((key) => knownResidual(state, key) > EPSILON);
 }
 
-export function hasAmbiguousLeg(state: Pick<ExecutionPlanState, 'openingLegs' | 'closingLegs'>): boolean {
+export function hasAmbiguousLeg(state: ExposureProjection): boolean {
+  if (state.normalBasisProgress?.action.disposition === 'QUERY_REQUIRED') return true;
   return EXECUTION_LEG_KEYS.some(
     (key) => state.openingLegs[key].lifecycle === 'AMBIGUOUS' || state.closingLegs[key].lifecycle === 'AMBIGUOUS',
   );
@@ -175,9 +210,344 @@ const ACTIVE_ORDER_LIFECYCLES: ReadonlySet<LegLifecycle> = new Set([
   'AMBIGUOUS',
 ]);
 
-export function hasActiveWorkingLeg(state: Pick<ExecutionPlanState, 'openingLegs' | 'closingLegs'>): boolean {
+export function hasActiveWorkingLeg(state: ExposureProjection): boolean {
+  if (
+    state.normalBasisProgress !== undefined &&
+    (
+      state.normalBasisProgress.action.disposition === 'QUERY_REQUIRED' ||
+      state.normalBasisProgress.action.disposition === 'CANCEL_ELIGIBLE' ||
+      state.normalBasisProgress.action.disposition === 'AWAIT_TERMINAL'
+    )
+  ) return true;
   return EXECUTION_LEG_KEYS.some(
     (key) => ACTIVE_ORDER_LIFECYCLES.has(state.openingLegs[key].lifecycle) || ACTIVE_ORDER_LIFECYCLES.has(state.closingLegs[key].lifecycle),
+  );
+}
+
+const NORMAL_BASIS_TERMINAL_STATES = new Set([
+  'FILLED',
+  'CANCELLED',
+  'REJECTED',
+  'PROVEN_ABSENT',
+]);
+
+function sameQuantity(left: number, right: number): boolean {
+  return Math.abs(left - right) <= EPSILON;
+}
+
+function normalBasisIdentity(
+  binding: NormalBasisPlanBinding,
+  step: NormalBasisStep,
+  attempt: number,
+): string {
+  if (step === 'SPOT_OPEN' || step === 'PERP_OPEN') {
+    if (attempt !== 0) throw new TypeError('normal-Basis open steps permit only attempt zero');
+    return binding.steps[step].clientOrderId;
+  }
+  const identity = binding.closeAttempts.find(
+    (candidate) => candidate.step === step && candidate.attempt === attempt,
+  );
+  if (identity === undefined) throw new TypeError('normal-Basis close attempt is outside the bound budget');
+  return identity.clientOrderId;
+}
+
+function freezeNormalBasisAction(action: NormalBasisProgressAction): Readonly<NormalBasisProgressAction> {
+  return Object.freeze(action);
+}
+
+function projectNormalBasisProgress(
+  binding: NormalBasisPlanBinding,
+  journal: readonly Readonly<NormalBasisProgressObservation>[],
+): Readonly<NormalBasisProgressState> {
+  const latest = new Map<string, NormalBasisOrderObservation>();
+  const terminalAttemptCount = new Map<NormalBasisStep, number>();
+  for (const observation of journal) {
+    if (observation.kind !== 'ORDER') continue;
+    latest.set(`${observation.step}:${observation.attempt}`, observation);
+  }
+
+  const active = [...latest.values()].filter(
+    (observation) => !NORMAL_BASIS_TERMINAL_STATES.has(observation.state),
+  );
+  if (active.length > 1) throw new TypeError('normal-Basis journal has more than one active order');
+
+  const terminalFor = (step: NormalBasisStep): readonly NormalBasisOrderObservation[] =>
+    [...latest.values()]
+      .filter(
+        (observation) =>
+          observation.step === step && NORMAL_BASIS_TERMINAL_STATES.has(observation.state),
+      )
+      .sort((left, right) => left.attempt - right.attempt);
+  const terminalFill = (step: NormalBasisStep): number | null => {
+    const terminal = terminalFor(step);
+    if (terminal.length === 0) return null;
+    terminalAttemptCount.set(step, terminal.length);
+    return terminal.reduce((sum, observation) => sum + observation.cumulativeFilledQuantity, 0);
+  };
+
+  const spotOpen = terminalFill('SPOT_OPEN');
+  const perpOpen = terminalFill('PERP_OPEN');
+  const perpClose = terminalFill('PERP_CLOSE');
+  const spotClose = terminalFill('SPOT_CLOSE');
+  const terminalNetFilledQuantityByStep = Object.freeze({
+    SPOT_OPEN: spotOpen,
+    PERP_OPEN: perpOpen,
+    PERP_CLOSE: perpClose,
+    SPOT_CLOSE: spotClose,
+  });
+
+  const activeObservation = active[0];
+  let next: NormalBasisProgressState['next'];
+  let nextAttempt: number | null = null;
+  let expectedQuantity: number | null = null;
+
+  if (activeObservation !== undefined) {
+    next = activeObservation.step;
+    nextAttempt = activeObservation.attempt;
+    expectedQuantity = activeObservation.submittedQuantity;
+  } else if (spotOpen === null) {
+    next = 'SPOT_OPEN';
+    nextAttempt = 0;
+    expectedQuantity = binding.risk.spot.intendedQty;
+  } else if (spotOpen <= EPSILON) {
+    next = 'BASELINE_RECONCILIATION';
+  } else if (perpOpen === null) {
+    next = 'PERP_OPEN';
+    nextAttempt = 0;
+    expectedQuantity =
+      binding.risk.perp.intendedQty * (spotOpen / binding.risk.spot.intendedQty);
+  } else {
+    const perpResidual = Math.max(0, perpOpen - (perpClose ?? 0));
+    const spotResidual = Math.max(0, spotOpen - (spotClose ?? 0));
+    if (perpResidual > EPSILON) {
+      next = 'PERP_CLOSE';
+      nextAttempt = terminalAttemptCount.get('PERP_CLOSE') ?? 0;
+      expectedQuantity = perpResidual;
+    } else if (spotResidual > EPSILON) {
+      next = 'SPOT_CLOSE';
+      nextAttempt = terminalAttemptCount.get('SPOT_CLOSE') ?? 0;
+      expectedQuantity = spotResidual;
+    } else {
+      next = 'BASELINE_RECONCILIATION';
+    }
+  }
+
+  const baselineObservations = journal.filter(
+    (observation): observation is Extract<NormalBasisProgressObservation, { kind: 'BASELINE' }> =>
+      observation.kind === 'BASELINE',
+  );
+  const latestBaseline = baselineObservations.at(-1);
+  const baselineFlat =
+    latestBaseline !== undefined &&
+    sameQuantity(latestBaseline.spotSignedBaseQty, binding.risk.baseline.spotSignedBaseQty) &&
+    sameQuantity(latestBaseline.perpSignedBaseQty, binding.risk.baseline.perpSignedBaseQty);
+  if (next === 'BASELINE_RECONCILIATION' && baselineFlat) next = 'COMPLETE';
+
+  let action: NormalBasisProgressAction;
+  if (next === 'COMPLETE') {
+    action = {
+      disposition: 'COMPLETE',
+      step: null,
+      attempt: null,
+      clientOrderId: null,
+      quantity: null,
+      sendEligible: false,
+    };
+  } else if (next === 'BASELINE_RECONCILIATION') {
+    action = {
+      disposition: 'OBSERVE_BASELINE',
+      step: null,
+      attempt: null,
+      clientOrderId: null,
+      quantity: null,
+      sendEligible: false,
+    };
+  } else if (activeObservation === undefined) {
+    if (
+      nextAttempt === null ||
+      expectedQuantity === null ||
+      expectedQuantity <= EPSILON
+    ) {
+      throw new TypeError('normal-Basis journal has no positive actionable residual');
+    }
+    if (
+      (next === 'PERP_CLOSE' || next === 'SPOT_CLOSE') &&
+      nextAttempt >= binding.maxCloseAttempts
+    ) {
+      nextAttempt = null;
+      action = {
+        disposition: 'ATTEMPT_BUDGET_EXHAUSTED',
+        step: next,
+        attempt: null,
+        clientOrderId: null,
+        quantity: expectedQuantity,
+        sendEligible: false,
+      };
+    } else {
+      action = {
+        disposition: 'SUBMIT_ELIGIBLE',
+        step: next,
+        attempt: nextAttempt,
+        clientOrderId: normalBasisIdentity(binding, next, nextAttempt),
+        quantity: expectedQuantity,
+        sendEligible: false,
+      };
+    }
+  } else {
+    action = {
+      disposition:
+        activeObservation.state === 'AMBIGUOUS'
+          ? 'QUERY_REQUIRED'
+          : activeObservation.state === 'WORKING'
+            ? 'CANCEL_ELIGIBLE'
+            : 'AWAIT_TERMINAL',
+      step: next,
+      attempt: nextAttempt,
+      clientOrderId: activeObservation.clientOrderId,
+      quantity: expectedQuantity,
+      sendEligible: false,
+    };
+  }
+
+  return Object.freeze({
+    bindingId: binding.bindingId,
+    journal: Object.freeze([...journal]),
+    next,
+    nextAttempt,
+    expectedQuantity,
+    terminalNetFilledQuantityByStep,
+    workingOrAmbiguousClientOrderId:
+      activeObservation?.state === 'WORKING' || activeObservation?.state === 'AMBIGUOUS'
+        ? activeObservation.clientOrderId
+        : null,
+    baselineFlat,
+    complete: next === 'COMPLETE',
+    action: freezeNormalBasisAction(action),
+    deliveryGuarantee: 'PROCESS_LOCAL_REPLAY_ONLY_REQUIRES_LEDGER_CAS',
+  });
+}
+
+/** Initial pure, record-only projection for an immutable normal-Basis binding. */
+export function createNormalBasisProgress(
+  binding: NormalBasisPlanBinding,
+): Readonly<NormalBasisProgressState> {
+  return projectNormalBasisProgress(binding, Object.freeze([]));
+}
+
+const NORMAL_BASIS_TRANSITIONS: Readonly<Record<string, ReadonlySet<string>>> = Object.freeze({
+  SUBMISSION_STARTED: new Set(['WORKING', 'AMBIGUOUS', 'FILLED', 'CANCELLED', 'REJECTED']),
+  WORKING: new Set(['WORKING', 'AMBIGUOUS', 'CANCEL_REQUESTED', 'FILLED', 'CANCELLED', 'REJECTED']),
+  AMBIGUOUS: new Set(['QUERY_STARTED']),
+  QUERY_STARTED: new Set(['WORKING', 'AMBIGUOUS', 'CANCEL_REQUESTED', 'FILLED', 'CANCELLED', 'REJECTED', 'PROVEN_ABSENT']),
+  CANCEL_REQUESTED: new Set(['AMBIGUOUS', 'FILLED', 'CANCELLED']),
+});
+
+/**
+ * Validate and append one immutable observation. Invalid/out-of-order evidence
+ * throws without mutating the prior projection.
+ */
+export function appendNormalBasisProgress(
+  binding: NormalBasisPlanBinding,
+  progress: NormalBasisProgressState,
+  observation: NormalBasisProgressObservation,
+  expectedAggregateRevision?: Readonly<
+    Pick<ExecutionPlanState, 'revision' | 'stateRevisionId'>
+  >,
+): Readonly<NormalBasisProgressState> {
+  if (progress.bindingId !== binding.bindingId || progress.complete) {
+    throw new TypeError('normal-Basis progress is complete or belongs to another binding');
+  }
+  if (
+    progress.journal.length >= NORMAL_BASIS_MAX_JOURNAL_ENTRIES ||
+    observation.journalIndex !== progress.journal.length ||
+    !isValidUtcMillis(observation.occurredAtMs) ||
+    (progress.journal.at(-1)?.occurredAtMs ?? 0) > observation.occurredAtMs
+  ) {
+    throw new TypeError('normal-Basis observation violates the bounded append-only journal');
+  }
+  if (observation.kind === 'BASELINE') {
+    if (
+      progress.action.disposition !== 'OBSERVE_BASELINE' ||
+      expectedAggregateRevision === undefined ||
+      observation.bindingId !== binding.bindingId ||
+      !Number.isSafeInteger(observation.observedStateRevision) ||
+      observation.observedStateRevision <= 0 ||
+      observation.observedStateRevision !== expectedAggregateRevision.revision ||
+      observation.observedStateRevisionId !== expectedAggregateRevision.stateRevisionId ||
+      expectedAggregateRevision.stateRevisionId !== deriveStateRevisionId({
+        scope: `execution:${binding.planId}`,
+        revision: expectedAggregateRevision.revision,
+      }) ||
+      observation.observedStateRevisionId !== deriveStateRevisionId({
+        scope: `execution:${binding.planId}`,
+        revision: observation.observedStateRevision,
+      }) ||
+      !Number.isFinite(observation.spotSignedBaseQty) ||
+      !Number.isFinite(observation.perpSignedBaseQty)
+    ) {
+      throw new TypeError('normal-Basis baseline observation is invalid or premature');
+    }
+  } else {
+    const action = progress.action;
+    if (
+      action.step === null ||
+      action.attempt === null ||
+      action.clientOrderId === null ||
+      action.quantity === null ||
+      observation.step !== action.step ||
+      observation.attempt !== action.attempt ||
+      observation.clientOrderId !== action.clientOrderId ||
+      !Number.isFinite(observation.submittedQuantity) ||
+      observation.submittedQuantity <= 0 ||
+      !sameQuantity(observation.submittedQuantity, action.quantity) ||
+      !Number.isFinite(observation.cumulativeFilledQuantity) ||
+      observation.cumulativeFilledQuantity < 0 ||
+      observation.cumulativeFilledQuantity > observation.submittedQuantity + EPSILON
+    ) {
+      throw new TypeError('normal-Basis order observation does not match the actionable projection');
+    }
+    const prior = [...progress.journal].reverse().find(
+      (candidate): candidate is NormalBasisOrderObservation =>
+        candidate.kind === 'ORDER' &&
+        candidate.step === observation.step &&
+        candidate.attempt === observation.attempt,
+    );
+    if (prior === undefined) {
+      if (
+        action.disposition !== 'SUBMIT_ELIGIBLE' ||
+        observation.state !== 'SUBMISSION_STARTED' ||
+        observation.cumulativeFilledQuantity !== 0
+      ) {
+        throw new TypeError('normal-Basis attempt must begin with SUBMISSION_STARTED');
+      }
+      if (
+        observation.step === 'SPOT_OPEN' &&
+        observation.occurredAtMs >= binding.entryExpiresAtMs
+      ) {
+        throw new TypeError('normal-Basis entry authority expired before submission');
+      }
+    } else {
+      if (
+        !sameQuantity(prior.submittedQuantity, observation.submittedQuantity) ||
+        observation.cumulativeFilledQuantity + EPSILON < prior.cumulativeFilledQuantity ||
+        !NORMAL_BASIS_TRANSITIONS[prior.state]?.has(observation.state)
+      ) {
+        throw new TypeError('normal-Basis attempt transition or terminal net fill is invalid');
+      }
+      if (observation.state === 'FILLED' && !sameQuantity(
+        observation.cumulativeFilledQuantity,
+        observation.submittedQuantity,
+      )) {
+        throw new TypeError('normal-Basis FILLED evidence must prove the submitted net fill');
+      }
+      if (observation.state === 'PROVEN_ABSENT' && observation.cumulativeFilledQuantity !== 0) {
+        throw new TypeError('normal-Basis PROVEN_ABSENT evidence cannot carry a fill');
+      }
+    }
+  }
+  return projectNormalBasisProgress(
+    binding,
+    Object.freeze([...progress.journal, Object.freeze({ ...observation })]),
   );
 }
 
@@ -185,12 +555,25 @@ function normalizedResidual(state: Pick<ExecutionPlanState, 'openingLegs' | 'clo
   return knownResidual(state, key) / state.openingLegs[key].definition.quantity;
 }
 
-export function hasNakedExposure(state: Pick<ExecutionPlanState, 'openingLegs' | 'closingLegs'>): boolean {
+export function hasNakedExposure(state: ExposureProjection): boolean {
   if (hasAmbiguousLeg(state)) return true;
   // A submitting/working order can create exposure before its response is
   // observed, so the bounded naked timer starts at submission, not receipt.
   if (hasActiveWorkingLeg(state)) return true;
-  return Math.abs(normalizedResidual(state, 'SPOT') - normalizedResidual(state, 'PERP')) > EPSILON;
+  const legacyNaked =
+    Math.abs(normalizedResidual(state, 'SPOT') - normalizedResidual(state, 'PERP')) > EPSILON;
+  if (state.normalBasisProgress !== undefined && state.plan?.normalBasisBinding !== undefined) {
+    const fills = state.normalBasisProgress.terminalNetFilledQuantityByStep;
+    const risk = state.plan.normalBasisBinding.risk;
+    const spotResidual =
+      ((fills.SPOT_OPEN ?? 0) - (fills.SPOT_CLOSE ?? 0)) / risk.spot.intendedQty;
+    const perpResidual =
+      ((fills.PERP_OPEN ?? 0) - (fills.PERP_CLOSE ?? 0)) / risk.perp.intendedQty;
+    // The projections are independent evidence streams. Either divergence is
+    // sufficient; the journal must never mask a conflicting legacy leg fact.
+    return Math.abs(spotResidual - perpResidual) > EPSILON || legacyNaked;
+  }
+  return legacyNaked;
 }
 
 function validateFillQuantity(
@@ -220,8 +603,11 @@ function validCancellationCumulative(leg: ExecutionLegState, value: unknown, max
   );
 }
 
-function isSafelyHedged(state: Pick<ExecutionPlanState, 'openingLegs' | 'closingLegs'>): boolean {
+function isSafelyHedged(state: ExposureProjection): boolean {
   if (!hasKnownOpenExposure(state) || hasAmbiguousLeg(state) || hasOverClose(state)) return false;
+  if (state.normalBasisProgress !== undefined) {
+    return !hasActiveWorkingLeg(state) && !hasNakedExposure(state);
+  }
   const hasPendingOpeningOrder = EXECUTION_LEG_KEYS.some((key) => ACTIVE_ORDER_LIFECYCLES.has(state.openingLegs[key].lifecycle));
   return !hasPendingOpeningOrder && Math.abs(normalizedResidual(state, 'SPOT') - normalizedResidual(state, 'PERP')) <= EPSILON;
 }
@@ -233,7 +619,7 @@ function makeInitialState(event: ExecutionEvent): ExecutionReducerResult {
   let plan: ExecutionPlanState['plan'];
   try {
     const supplied = event.plan;
-    const reconstructed = createExecutionPlanDefinition({
+    const reconstructedBase = createExecutionPlanDefinition({
       strategy: supplied.strategy,
       direction: supplied.direction,
       symbol: supplied.symbol,
@@ -246,6 +632,15 @@ function makeInitialState(event: ExecutionEvent): ExecutionReducerResult {
       perpQuantity: supplied.openingLegs.PERP.quantity,
       openingOrder: supplied.openingOrder,
     });
+    const reconstructed = supplied.normalBasisBinding === undefined
+      ? reconstructedBase
+      : Object.freeze({
+          ...reconstructedBase,
+          normalBasisBinding: validateNormalBasisPlanBinding(
+            reconstructedBase,
+            supplied.normalBasisBinding,
+          ),
+        });
     if (canonicalJson(reconstructed) !== canonicalJson(supplied)) {
       return Object.freeze({ applied: false as const, state: null, reason: 'INVALID_EVENT' as const });
     }
@@ -287,6 +682,9 @@ function makeInitialState(event: ExecutionEvent): ExecutionReducerResult {
     processedEventIds: Object.freeze([event.eventId]),
     eventLog: Object.freeze([frozenEvent]),
     failures: Object.freeze([]),
+    ...(plan.normalBasisBinding === undefined
+      ? {}
+      : { normalBasisProgress: createNormalBasisProgress(plan.normalBasisBinding) }),
   });
   return Object.freeze({ applied: true as const, state });
 }
@@ -339,6 +737,7 @@ export function reduceExecutionEvent(
     PERP: state.closingLegs.PERP,
   };
   let failures = [...state.failures];
+  let normalBasisProgress = state.normalBasisProgress;
 
   const setLifecycle = (to: PlanLifecycle): boolean => {
     if (lifecycle === to) return true;
@@ -675,6 +1074,14 @@ export function reduceExecutionEvent(
       if (lifecycle !== 'RECONCILING' || event.reconciliationOutcome === undefined) return reject('INVALID_EVENT');
       if (event.reconciliationOutcome === 'CLOSED') {
         const projected = { ...state, openingLegs, closingLegs };
+        if (
+          state.plan.normalBasisBinding !== undefined &&
+          (
+            state.normalBasisProgress === undefined ||
+            !state.normalBasisProgress.complete ||
+            !state.normalBasisProgress.baselineFlat
+          )
+        ) return reject('UNRESOLVED_EXPOSURE');
         if (hasKnownOpenExposure(projected) || hasAmbiguousLeg(projected)) return reject('UNRESOLVED_EXPOSURE');
       }
       if (event.reconciliationOutcome === 'HEDGED_OPEN') {
@@ -709,6 +1116,98 @@ export function reduceExecutionEvent(
       ) return reject('INVALID_EVENT');
       break;
     }
+    case 'NORMAL_BASIS_PROGRESS_OBSERVED': {
+      const binding = state.plan.normalBasisBinding;
+      const observation = event.normalBasisObservation;
+      if (
+        binding === undefined ||
+        normalBasisProgress === undefined ||
+        observation === undefined ||
+        observation.occurredAtMs !== event.occurredAtMs
+      ) return reject('INVALID_EVENT');
+      if (
+        observation.kind === 'ORDER' &&
+        observation.state === 'SUBMISSION_STARTED' &&
+        (
+          (observation.step === 'SPOT_OPEN' && lifecycle !== 'OPENING') ||
+          (
+            observation.step === 'PERP_OPEN' &&
+            lifecycle !== 'ONE_LEG_EXPOSED' &&
+            !(
+              lifecycle === 'RECOVERY_REQUIRED' &&
+              normalBasisProgress.action.disposition === 'SUBMIT_ELIGIBLE' &&
+              normalBasisProgress.action.step === 'PERP_OPEN' &&
+              normalBasisProgress.next === 'PERP_OPEN' &&
+              (normalBasisProgress.terminalNetFilledQuantityByStep.SPOT_OPEN ?? 0) > EPSILON
+            )
+          ) ||
+          (
+            (observation.step === 'PERP_CLOSE' || observation.step === 'SPOT_CLOSE') &&
+            lifecycle !== 'CLOSING'
+          )
+        )
+      ) return reject('INVALID_PLAN_TRANSITION');
+      if (
+        observation.kind === 'BASELINE' &&
+        lifecycle !== 'RECONCILING' &&
+        lifecycle !== 'CLOSING'
+      ) return reject('INVALID_PLAN_TRANSITION');
+      if (
+        observation.kind === 'BASELINE' &&
+        (
+          observation.bindingId !== binding.bindingId ||
+          observation.observedStateRevision !== state.revision ||
+          observation.observedStateRevisionId !== state.stateRevisionId
+        )
+      ) return reject('INVALID_EVENT');
+      try {
+        normalBasisProgress = appendNormalBasisProgress(
+          binding,
+          normalBasisProgress,
+          observation,
+          {
+            revision: state.revision,
+            stateRevisionId: state.stateRevisionId,
+          },
+        );
+      } catch {
+        return reject('INVARIANT_VIOLATION');
+      }
+      const progressProjection = {
+        ...state,
+        openingLegs,
+        closingLegs,
+        normalBasisProgress,
+      };
+      if (observation.kind === 'ORDER' && NORMAL_BASIS_TERMINAL_STATES.has(observation.state)) {
+        if (
+          observation.step === 'SPOT_OPEN' &&
+          (normalBasisProgress.terminalNetFilledQuantityByStep.SPOT_OPEN ?? 0) > EPSILON &&
+          lifecycle === 'OPENING' &&
+          !setLifecycle('ONE_LEG_EXPOSED')
+        ) return reject('INVALID_PLAN_TRANSITION');
+        if (
+          observation.step === 'PERP_OPEN' &&
+          lifecycle === 'ONE_LEG_EXPOSED' &&
+          isSafelyHedged(progressProjection) &&
+          !setLifecycle('HEDGED_OPEN')
+        ) return reject('INVALID_PLAN_TRANSITION');
+      }
+      if (
+        normalBasisProgress.action.disposition === 'ATTEMPT_BUDGET_EXHAUSTED' &&
+        !setLifecycle('RECOVERY_REQUIRED')
+      ) return reject('INVALID_PLAN_TRANSITION');
+      if (observation.kind === 'BASELINE' && normalBasisProgress.complete) {
+        if (
+          hasKnownOpenExposure(progressProjection) ||
+          hasAmbiguousLeg(progressProjection) ||
+          hasActiveWorkingLeg(progressProjection) ||
+          hasOverClose(progressProjection) ||
+          !setLifecycle('CLOSED')
+        ) return reject('UNRESOLVED_EXPOSURE');
+      }
+      break;
+    }
     case 'PLAN_CANCELLED': {
       const projected = { ...state, openingLegs, closingLegs };
       if (hasKnownOpenExposure(projected) || hasAmbiguousLeg(projected) || hasActiveWorkingLeg(projected)) {
@@ -724,7 +1223,12 @@ export function reduceExecutionEvent(
     }
   }
 
-  const projected = { ...state, openingLegs, closingLegs };
+  const projected = {
+    ...state,
+    openingLegs,
+    closingLegs,
+    ...(normalBasisProgress === undefined ? {} : { normalBasisProgress }),
+  };
   if (hasOverClose(projected)) return reject('INVARIANT_VIOLATION');
 
   // Derive global exposure state only from leg facts, never from optimism.
@@ -780,6 +1284,7 @@ export function reduceExecutionEvent(
     processedEventIds: Object.freeze([...state.processedEventIds, event.eventId]),
     eventLog: Object.freeze([...state.eventLog, frozenEvent]),
     failures: Object.freeze(failures),
+    ...(normalBasisProgress === undefined ? {} : { normalBasisProgress }),
   });
   return Object.freeze({ applied: true as const, state: nextState });
 }

@@ -63,6 +63,12 @@ import { BookStreamHub } from './services/bookStream.js';
 import { BasisRuntime } from './services/basisRuntime.js';
 import { VolumeRuntime } from './services/volumeRuntime.js';
 import {
+  createM0SpotSourceMount,
+} from './foundation/execution/m0SpotSourceMount.js';
+import {
+  createM0SpotRuntimeBoundary,
+} from './systemIntegration/production/m0SpotRuntimeBoundary.js';
+import {
   StrategyDecayCoordinator,
   StrategyDecayLedgerAdapter,
   UnavailableStrategyDecayPerformanceMeasurementPort,
@@ -232,6 +238,10 @@ const volumeRuntime = new VolumeRuntime(ledger, () => config, () => engine.allRo
 let shuttingDown = false;
 const ordinaryShutdownAdmission = new OrdinaryShutdownAdmission();
 const systemIntegrationClock = createSystemUtcClock();
+const m0SpotSourceMount = createM0SpotSourceMount();
+const m0SpotRuntimeBoundary = createM0SpotRuntimeBoundary({
+  clock: systemIntegrationClock,
+});
 const bootReleasePersistence = createSystemBootReleasePersistenceAdapter({
   ledger,
   clock: systemIntegrationClock,
@@ -1028,6 +1038,8 @@ app.use('/api/system-integration', createSystemIntegrationRouter({
   validateOnly: {
     executeValidateOnly: (input) => systemIntegration.executeValidateOnly(input),
   },
+  m0SpotCanary: m0SpotSourceMount,
+  m0SpotRuntime: m0SpotRuntimeBoundary,
   clock: systemIntegrationClock,
   opsReadback: canonicalOpsReadPort,
 }));

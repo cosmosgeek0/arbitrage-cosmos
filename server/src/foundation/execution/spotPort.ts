@@ -13,7 +13,8 @@ export type SpotVenueObservationStatus =
   | 'FILLED'
   | 'CANCELED'
   | 'REJECTED'
-  | 'EXPIRED';
+  | 'EXPIRED'
+  | 'EXPIRED_IN_MATCH';
 
 export interface SpotSignedTestOrderIntent {
   readonly kind: 'SIGNED_TEST_ORDER';
@@ -121,6 +122,8 @@ export interface SpotFillObservation {
   readonly venueOrderId: string;
   readonly price: string;
   readonly quantity: string;
+  /** Exact venue `quoteQty`; never reconstructed at a persistence boundary. */
+  readonly quoteQuantity: string;
   readonly commission: string;
   readonly commissionAsset: string;
   readonly occurredAtMs: number;

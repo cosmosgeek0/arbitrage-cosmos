@@ -309,7 +309,8 @@ test('legacy liveness and PnL surfaces cannot imply semantic readiness or valida
   assert.match(account, /const openOrders = \[/);
   assert.match(account, /privateRead\.spot\.openOrders/);
   assert.doesNotMatch(account, /fetchJson<FillRow\[\]>\('\/api\/fills'/);
-  assert.match(dashboard, /pnlTruthState === 'UNKNOWN' \? 'Strategy Performance Unavailable'/);
+  assert.match(dashboard, /pnlTruthState === 'UNKNOWN' \? 'Account PnL Context Unavailable'/);
+  assert.doesNotMatch(dashboard, /Strategy Performance/);
   assert.match(dashboard, /unavailable private\/account truth is not converted into validated zero PnL/);
   assert.match(pnl, /setData\(null\)/);
   assert.match(pnl, /data !== null && data\.integrity\.state !== 'UNKNOWN'/);

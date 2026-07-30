@@ -1,0 +1,16 @@
+# Dedicated staging logging overlay for cosmos-app.service.
+#
+# Node console output is physical-line priority-prefixed in production:
+# material log=<5>, routine info=<6>, routine debug=<7>, warning=<4>,
+# error=<3>. console.log and the protected audit/money/security API bypass
+# the application limiter.
+#
+# The accepted base unit's per-unit journal bucket is deliberately disabled
+# here: systemd drops later messages after a unit exhausts that bucket, which
+# could hide protected evidence. Application code bounds routine output before
+# journald; systemd keeps every warning, error, and protected record.
+[Service]
+SyslogLevelPrefix=yes
+LogLevelMax=info
+LogRateLimitIntervalSec=0
+LogRateLimitBurst=0

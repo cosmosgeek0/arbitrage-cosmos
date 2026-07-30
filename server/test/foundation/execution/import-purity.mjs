@@ -2,6 +2,10 @@
 /** Import-time purity and compiled-I/O proof for Lane C. */
 import { installFoundationFetchDenial } from '../import-purity-network-denial.mjs';
 
+// Preload declared Node built-ins before project-code tripwires so loader-owned
+// environment probes are not attributed to the direct-import Foundation leaves.
+await Promise.all([import('node:crypto'), import('node:util')]);
+
 const results = [];
 function check(name, pass, detail = '') {
   results.push({ name, pass });
@@ -48,6 +52,40 @@ check('no process.env reads during import', moduleEnvReads.length === 0, moduleE
 const newGlobals = Object.getOwnPropertyNames(globalThis).filter((key) => !globalsBefore.has(key));
 check('no globals created during import', newGlobals.length === 0, newGlobals.join(','));
 
+section('1b. direct-only Spot transport coordinator imports inertly');
+const coordinatorEnvReadStart = envReads.length;
+const coordinatorMod = await import(
+  '../../../dist/foundation/execution/spotTransportCoordinator.js'
+);
+const coordinatorEnvReads = envReads
+  .slice(coordinatorEnvReadStart)
+  .filter((key) => !toleratedLoaderEnv.has(key));
+check('coordinator import has no Date.now', dateNowCalls === 0, `${dateNowCalls} calls`);
+check('coordinator import has no fetch', fetchDenial.attempts() === 0, `${fetchDenial.attempts()} calls`);
+check('coordinator import has no setTimeout', timeoutCalls === 0, `${timeoutCalls} calls`);
+check('coordinator import has no setInterval', intervalCalls === 0, `${intervalCalls} calls`);
+check('coordinator import has no Math.random', randomCalls === 0, `${randomCalls} calls`);
+check('coordinator import has no process.env reads', coordinatorEnvReads.length === 0, coordinatorEnvReads.join(','));
+const coordinatorGlobals = Object.getOwnPropertyNames(globalThis).filter((key) => !globalsBefore.has(key));
+check('coordinator import creates no globals', coordinatorGlobals.length === 0, coordinatorGlobals.join(','));
+
+section('1c. direct-only M0 dispatch contract imports inertly');
+const dispatchEnvReadStart = envReads.length;
+const dispatchMod = await import(
+  '../../../dist/foundation/execution/m0SpotDispatch.js'
+);
+const dispatchEnvReads = envReads
+  .slice(dispatchEnvReadStart)
+  .filter((key) => !toleratedLoaderEnv.has(key));
+check('dispatch contract import has no Date.now', dateNowCalls === 0, `${dateNowCalls} calls`);
+check('dispatch contract import has no fetch', fetchDenial.attempts() === 0, `${fetchDenial.attempts()} calls`);
+check('dispatch contract import has no setTimeout', timeoutCalls === 0, `${timeoutCalls} calls`);
+check('dispatch contract import has no setInterval', intervalCalls === 0, `${intervalCalls} calls`);
+check('dispatch contract import has no Math.random', randomCalls === 0, `${randomCalls} calls`);
+check('dispatch contract import has no process.env reads', dispatchEnvReads.length === 0, dispatchEnvReads.join(','));
+const dispatchGlobals = Object.getOwnPropertyNames(globalThis).filter((key) => !globalsBefore.has(key));
+check('dispatch contract import creates no globals', dispatchGlobals.length === 0, dispatchGlobals.join(','));
+
 Date.now = realDateNow;
 fetchDenial.restore();
 globalThis.setTimeout = realTimeout;
@@ -71,6 +109,22 @@ for (const name of [
 ]) {
   check(`exports ${name}()`, typeof mod[name] === 'function');
 }
+check(
+  'execution barrel does not export direct-only Spot execution leaves',
+  mod.runSpotTransportCoordinator === undefined
+    && mod.SPOT_TRANSPORT_COORDINATOR_SCHEMA === undefined
+    && mod.SPOT_TRANSPORT_COORDINATOR_POSTURE === undefined
+    && mod.calculateBinanceSpotDispatchRequestDigest === undefined
+    && mod.BINANCE_SPOT_DISPATCH_PERMIT_SCHEMA === undefined,
+);
+check(
+  'Spot transport coordinator remains direct-import-only',
+  typeof coordinatorMod.runSpotTransportCoordinator === 'function',
+);
+check(
+  'M0 dispatch contract remains direct-import-only',
+  typeof dispatchMod.calculateBinanceSpotDispatchRequestDigest === 'function',
+);
 
 section('3. compiled Lane C modules contain no implicit I/O');
 {
@@ -78,8 +132,33 @@ section('3. compiled Lane C modules contain no implicit I/O');
   const { join, dirname } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
   const distDir = join(dirname(fileURLToPath(import.meta.url)), '../../../dist/foundation/execution');
-  const files = readdirSync(distDir).filter((file) => file.endsWith('.js'));
-  check('all fourteen compiled execution modules present', files.length === 14, files.join(','));
+  const files = readdirSync(distDir).filter((file) => file.endsWith('.js')).sort();
+  const expectedFiles = [
+    'checkpoint.js',
+    'coordinator.js',
+    'events.js',
+    'index.js',
+    'm0SpotDispatch.js',
+    'm0SpotLifecycleCard.js',
+    'm0SpotSourceMount.js',
+    'm0SpotTestOrderAuthority.js',
+    'plan.js',
+    'recovery.js',
+    'reducer.js',
+    'spotAttemptPolicy.js',
+    'spotCore.js',
+    'spotLifecycle.js',
+    'spotPort.js',
+    'spotTicket.js',
+    'spotTransportCoordinator.js',
+    'spotValidateOnly.js',
+    'types.js',
+  ];
+  check(
+    'exact compiled execution module set present',
+    JSON.stringify(files) === JSON.stringify(expectedFiles),
+    files.join(','),
+  );
   const forbidden = [
     ['process.env', /process\.env/],
     ['Date.now', /Date\.now/],
@@ -98,11 +177,48 @@ section('3. compiled Lane C modules contain no implicit I/O');
     check(`no ${label}`, offenders.length === 0, offenders.join(','));
   }
   const existingCode = files
-    .filter((file) => file !== 'spotValidateOnly.js')
+    .filter((file) => (
+      file !== 'spotValidateOnly.js'
+      && file !== 'spotTransportCoordinator.js'
+      && file !== 'm0SpotDispatch.js'
+      && file !== 'm0SpotLifecycleCard.js'
+      && file !== 'm0SpotSourceMount.js'
+      && file !== 'm0SpotTestOrderAuthority.js'
+    ))
     .map((file) => codeOnly(readFileSync(join(distDir, file), 'utf8')))
     .join('\n');
   check('no concrete live-order method', !/placeOrder|submitLive|liveOrder|newOrder\s*\(/i.test(existingCode));
   check('no capital-movement method', !/withdraw|repay|transferOut|changeLeverage|changeMarginMode/i.test(existingCode));
+
+  const lifecycleCardCode = codeOnly(
+    readFileSync(join(distDir, 'm0SpotLifecycleCard.js'), 'utf8'),
+  );
+  check(
+    'M0 lifecycle card defines no capital-movement call',
+    !/(withdraw\w*|repay\w*|borrow\w*|transfer\w*|changeLeverage|changeMarginMode)\s*\(/i
+      .test(lifecycleCardCode),
+  );
+
+  const m0Code = [
+    'm0SpotSourceMount.js',
+    'm0SpotTestOrderAuthority.js',
+  ].map((file) => codeOnly(readFileSync(join(distDir, file), 'utf8')))
+    .join('\n');
+  const m0ExecutableCode = m0Code
+    .replaceAll("withdrawalPolicy: 'DISABLED'", '')
+    .replaceAll("transferPolicy: 'DISABLED'", '')
+    .replaceAll('withdrawals: 0', '')
+    .replaceAll('transfers: 0', '');
+  check(
+    'M0 source mount has no capital-movement capability',
+    !/withdraw|repay|transferOut|changeLeverage|changeMarginMode/i
+      .test(m0ExecutableCode),
+  );
+  check(
+    'M0 source mount has no live submit, query, cancel, or flatten capability',
+    !/placeOrder|submitLive|liveOrder|newOrder\s*\(|queryOrder|cancelOrder|flatten/i
+      .test(m0ExecutableCode),
+  );
 
   const validateOnlyCode = codeOnly(
     readFileSync(join(distDir, 'spotValidateOnly.js'), 'utf8'),
@@ -126,6 +242,61 @@ section('3. compiled Lane C modules contain no implicit I/O');
       new RegExp(`${capability}:\\s*false`).test(validateOnlyCode),
     );
   }
+
+  const indexCode = codeOnly(readFileSync(join(distDir, 'index.js'), 'utf8'));
+  const coordinatorCode = codeOnly(
+    readFileSync(join(distDir, 'spotTransportCoordinator.js'), 'utf8'),
+  );
+  check(
+    'compiled execution barrel omits direct-only Spot execution modules',
+    !/spotTransportCoordinator|m0SpotDispatch|m0SpotLifecycleCard/.test(indexCode),
+  );
+  for (const [label, pattern] of [
+    ['ambient environment', /process\.env|\b(?:Bun|Deno)\.env\b/],
+    ['ambient clock', /Date\.now|new Date\s*\(|performance\.now/],
+    ['ambient randomness', /Math\.random/],
+    ['network capability', /\bfetch\s*\(|node:(?:dgram|dns|http2?|https|net|tls)|from ['"](?:axios|undici|ws)['"]/],
+    ['filesystem capability', /node:fs|from ['"]fs(?:\/promises)?['"]/],
+    ['signer or credential capability', /credential|signer|apiKey|apiSecret|secretKey/i],
+  ]) {
+    check(
+      `Spot transport coordinator has no ${label}`,
+      !pattern.test(coordinatorCode),
+    );
+  }
+  check(
+    'Spot transport coordinator imports no concrete execution adapter',
+    !/liveEdge|binanceSpotExecution|createBinanceSpotExecutionAdapter/.test(coordinatorCode),
+  );
+  const injectedPortMethods = [...coordinatorCode.matchAll(
+    /ports\.executionPort\.([A-Za-z][A-Za-z0-9]*)\s*\(/g,
+  )].map((match) => match[1]).sort();
+  check(
+    'Spot venue capabilities use only the injected execution port',
+    JSON.stringify([...new Set(injectedPortMethods)]) === JSON.stringify([
+      'cancel',
+      'flatten',
+      'queryByOriginalClientOrderId',
+      'queryFills',
+      'signedTestOrder',
+      'submitLiveOrder',
+    ]),
+    [...new Set(injectedPortMethods)].join(','),
+  );
+  check(
+    'Spot transport coordinator posture remains direct-only',
+    JSON.stringify(coordinatorMod.SPOT_TRANSPORT_COORDINATOR_POSTURE) === JSON.stringify({
+      liveMounted: false,
+      liveExportReachable: false,
+      sharedBarrelExported: false,
+      automaticMutationRetry: false,
+    }),
+  );
+  check(
+    'Spot transport coordinator never enables automatic mutation retry',
+    !/automatic(?:Mutation)?Retry:\s*true/.test(coordinatorCode)
+      && coordinatorMod.SPOT_TRANSPORT_COORDINATOR_POSTURE.automaticMutationRetry === false,
+  );
 }
 
 const passed = results.filter((result) => result.pass).length;

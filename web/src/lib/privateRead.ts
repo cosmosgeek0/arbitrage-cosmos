@@ -793,6 +793,608 @@ export function unavailablePrivateRead(reason = 'PRIVATE_READ_UNAVAILABLE'): Pri
   };
 }
 
+export type RealDataClientStatus =
+  | 'PENDING'
+  | 'CURRENT'
+  | 'RETAINED_FAILURE'
+  | 'UNAVAILABLE';
+export type RealDataFailureKind = 'MISSING' | 'CONTRACT' | 'TRANSPORT';
+export type PrivateReadTransport = 'STATE' | 'FALLBACK';
+export type PrivateReadSource = 'STATE' | 'FALLBACK';
+export type RealDataFailureSource =
+  | 'PRIVATE_STATE'
+  | 'PRIVATE_FALLBACK'
+  | 'M0_READINESS';
+
+export interface RealDataClientFailure {
+  readonly source: RealDataFailureSource;
+  readonly kind: RealDataFailureKind;
+  readonly code: string;
+  readonly message: string;
+  readonly observedAtMs: number;
+}
+
+export interface PrivateReadClientTruth {
+  readonly status: RealDataClientStatus;
+  /** Last admitted snapshot, including exact-empty arrays. */
+  readonly snapshot: PrivateReadSnapshot;
+  /** Provenance of the displayed snapshot, never the transport being retried. */
+  readonly source: PrivateReadSource | null;
+  /** Sole transport currently responsible for the next private-read request. */
+  readonly transport: PrivateReadTransport;
+  readonly failure: RealDataClientFailure | null;
+  readonly lastSuccessAtMs: number | null;
+  readonly appliedRequestId: number;
+  readonly stateDecisionRequestId: number;
+}
+
+export type M0SpotReadinessDisposition =
+  | 'SOURCE_READY_NOT_RUNTIME_VERIFIED'
+  | 'M0_BLOCKED_PERMISSION'
+  | 'READY_FOR_OWNER_GATE_2';
+export type M0SpotEvidenceAuthority = 'SOURCE_ONLY' | 'RUNTIME_PRIVATE';
+export type M0SpotProofState =
+  | 'VERIFIED_CURRENT'
+  | 'SOURCE_IMPLEMENTED_NOT_RUNTIME_VERIFIED'
+  | 'UNKNOWN_NOT_VERIFIED'
+  | 'NOT_APPLICABLE';
+export type M0SpotReadinessDigest = `sha256:${string}`;
+
+/**
+ * Stable browser projection of the M0 readiness envelope. Draft-only nested
+ * execution details remain server-owned; the client admits only values it
+ * validates and never derives readiness from the private-account snapshot.
+ */
+export interface M0SpotReadinessTruth {
+  readonly schema: 'cosmos.system-integration.m0-spot-readiness-card.v1';
+  readonly version: 1;
+  readonly readinessDigest: M0SpotReadinessDigest;
+  readonly lifecycleCardDigest: M0SpotReadinessDigest | null;
+  readonly disposition: Exclude<
+    M0SpotReadinessDisposition,
+    'READY_FOR_OWNER_GATE_2'
+  >;
+  readonly gate2Ready: false;
+  readonly evidenceAuthority: M0SpotEvidenceAuthority;
+  readonly observedAtMs: number;
+  readonly validUntilMs: number | null;
+  readonly appExecutionArmed: Readonly<{
+    state: M0SpotProofState;
+    current: false;
+    proposed: 'REMAIN_DISARMED';
+  }>;
+  readonly residualCondition: string;
+  readonly exactLimitation: string;
+  readonly ownerAction: 'NO';
+  readonly effects: Readonly<{
+    privateCalls: number;
+    signatures: number;
+    transportCalls: number;
+    authorityConsumptions: number;
+    ledgerWrites: number;
+    orders: number;
+    moneyMutations: number;
+  }>;
+}
+
+export interface M0SpotReadinessClientTruth {
+  readonly status: RealDataClientStatus;
+  readonly card: M0SpotReadinessTruth | null;
+  readonly failure: RealDataClientFailure | null;
+  readonly lastSuccessAtMs: number | null;
+  readonly appliedRequestId: number;
+}
+
+export interface RealDataClientTuple {
+  readonly privateRead: PrivateReadClientTruth;
+  readonly m0SpotReadiness: M0SpotReadinessClientTruth;
+}
+
+export type PrivateReadStateField =
+  | Readonly<{ presence: 'MISSING' }>
+  | Readonly<{ presence: 'PRESENT'; value: unknown }>;
+
+export type RealDataClientEvent =
+  | Readonly<{
+      kind: 'PRIVATE_STATE_RESULT';
+      requestId: number;
+      observedAtMs: number;
+      field: PrivateReadStateField;
+    }>
+  | Readonly<{
+      kind: 'PRIVATE_STATE_FAILURE';
+      requestId: number;
+      observedAtMs: number;
+      failure: Readonly<{ code: string; message: string }>;
+    }>
+  | Readonly<{
+      kind: 'PRIVATE_FALLBACK_RESULT';
+      requestId: number;
+      observedAtMs: number;
+      payload: unknown;
+    }>
+  | Readonly<{
+      kind: 'PRIVATE_FALLBACK_FAILURE';
+      requestId: number;
+      observedAtMs: number;
+      failure: Readonly<{ code: string; message: string }>;
+    }>
+  | Readonly<{
+      kind: 'M0_READINESS_RESULT';
+      requestId: number;
+      observedAtMs: number;
+      payload: unknown;
+    }>
+  | Readonly<{
+      kind: 'M0_READINESS_FAILURE';
+      requestId: number;
+      observedAtMs: number;
+      failure: Readonly<{ code: string; message: string }>;
+    }>;
+
+const M0_SPOT_READINESS_SCHEMA =
+  'cosmos.system-integration.m0-spot-readiness-card.v1' as const;
+const M0_DISPOSITIONS = new Set<M0SpotReadinessDisposition>([
+  'SOURCE_READY_NOT_RUNTIME_VERIFIED',
+  'M0_BLOCKED_PERMISSION',
+  'READY_FOR_OWNER_GATE_2',
+]);
+const M0_EVIDENCE_AUTHORITIES = new Set<M0SpotEvidenceAuthority>([
+  'SOURCE_ONLY',
+  'RUNTIME_PRIVATE',
+]);
+const M0_PROOF_STATES = new Set<M0SpotProofState>([
+  'VERIFIED_CURRENT',
+  'SOURCE_IMPLEMENTED_NOT_RUNTIME_VERIFIED',
+  'UNKNOWN_NOT_VERIFIED',
+  'NOT_APPLICABLE',
+]);
+const M0_DIGEST = /^sha256:[0-9a-f]{64}$/;
+const CLIENT_FAILURE_CODE = /^[A-Z0-9][A-Z0-9_.:-]{0,95}$/;
+const EFFECT_KEYS = [
+  'privateCalls',
+  'signatures',
+  'transportCalls',
+  'authorityConsumptions',
+  'ledgerWrites',
+  'orders',
+  'moneyMutations',
+] as const;
+
+function hasRequiredKeys(
+  value: unknown,
+  keys: readonly string[],
+): value is Record<string, unknown> {
+  return isRecord(value) && keys.every((key) => Object.hasOwn(value, key));
+}
+
+function isNonNegativeCount(value: unknown): value is number {
+  return typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && value >= 0;
+}
+
+/**
+ * Distinguishes an absent compatibility field from an explicitly published
+ * `null`, object, or malformed value. The latter must pass the strict decoder;
+ * missing and invalid are separate client failures.
+ */
+export function readPrivateReadStateField(value: unknown): PrivateReadStateField {
+  if (!isRecord(value) || !Object.hasOwn(value, 'privateRead')) {
+    return Object.freeze({ presence: 'MISSING' });
+  }
+  return Object.freeze({ presence: 'PRESENT', value: value.privateRead });
+}
+
+/**
+ * Admit only the stable, non-authorizing M0 readiness envelope. The server may
+ * add draft nested evidence without breaking this projection. READY requires
+ * the producer's complete digest and cross-field lifecycle validator, which is
+ * intentionally not duplicated in this narrow browser spine; every READY
+ * claim therefore fails closed instead of being inferred from outer fields.
+ */
+export function decodeM0SpotReadinessTruth(
+  value: unknown,
+  _receivedAtMs?: number,
+): M0SpotReadinessTruth | null {
+  if (!hasRequiredKeys(value, [
+    'schema',
+    'version',
+    'readinessDigest',
+    'lifecycleCardDigest',
+    'disposition',
+    'gate2Ready',
+    'evidenceAuthority',
+    'observedAtMs',
+    'validUntilMs',
+    'appExecutionArmed',
+    'residualCondition',
+    'exactLimitation',
+    'ownerAction',
+    'effects',
+  ])
+      || value.schema !== M0_SPOT_READINESS_SCHEMA
+      || value.version !== 1
+      || typeof value.readinessDigest !== 'string'
+      || !M0_DIGEST.test(value.readinessDigest)
+      || !(value.lifecycleCardDigest === null
+        || (typeof value.lifecycleCardDigest === 'string'
+          && M0_DIGEST.test(value.lifecycleCardDigest)))
+      || !M0_DISPOSITIONS.has(value.disposition as M0SpotReadinessDisposition)
+      || typeof value.gate2Ready !== 'boolean'
+      || !M0_EVIDENCE_AUTHORITIES.has(value.evidenceAuthority as M0SpotEvidenceAuthority)
+      || !isTimestamp(value.observedAtMs)
+      || !isTimestampOrNull(value.validUntilMs)
+      || !isSafeText(value.residualCondition, 512)
+      || !isSafeTextOrNull(value.exactLimitation, 8_000)
+      || (value.ownerAction !== 'YES' && value.ownerAction !== 'NO')
+      || !hasExactKeys(value.appExecutionArmed, ['state', 'current', 'proposed'])
+      || !M0_PROOF_STATES.has(value.appExecutionArmed.state as M0SpotProofState)
+      || value.appExecutionArmed.current !== false
+      || (value.appExecutionArmed.proposed !== 'REMAIN_DISARMED'
+        && value.appExecutionArmed.proposed !== 'ARM_EXACT_CARD_AFTER_OWNER_YES')
+      || !hasExactKeys(value.effects, EFFECT_KEYS)
+      || !isNonNegativeCount(value.effects.privateCalls)
+      || !isNonNegativeCount(value.effects.signatures)
+      || !isNonNegativeCount(value.effects.transportCalls)
+      || !isNonNegativeCount(value.effects.authorityConsumptions)
+      || !isNonNegativeCount(value.effects.ledgerWrites)
+      || !isNonNegativeCount(value.effects.orders)
+      || !isNonNegativeCount(value.effects.moneyMutations)) return null;
+
+  const effects: M0SpotReadinessTruth['effects'] = Object.freeze({
+    privateCalls: value.effects.privateCalls as number,
+    signatures: value.effects.signatures as number,
+    transportCalls: value.effects.transportCalls as number,
+    authorityConsumptions: value.effects.authorityConsumptions as number,
+    ledgerWrites: value.effects.ledgerWrites as number,
+    orders: value.effects.orders as number,
+    moneyMutations: value.effects.moneyMutations as number,
+  });
+  const disposition = value.disposition as M0SpotReadinessDisposition;
+  const evidenceAuthority = value.evidenceAuthority as M0SpotEvidenceAuthority;
+  if (
+    disposition === 'READY_FOR_OWNER_GATE_2'
+    || value.gate2Ready !== false
+    || value.ownerAction !== 'NO'
+    || value.appExecutionArmed.proposed !== 'REMAIN_DISARMED'
+    || value.exactLimitation === null
+    || value.effects.orders !== 0
+    || value.effects.moneyMutations !== 0
+  ) {
+    return null;
+  }
+
+  if (disposition === 'SOURCE_READY_NOT_RUNTIME_VERIFIED' && (
+    evidenceAuthority !== 'SOURCE_ONLY'
+    || value.lifecycleCardDigest !== null
+    || value.validUntilMs !== null
+    || EFFECT_KEYS.some((key) => effects[key] !== 0)
+  )) return null;
+  if (disposition === 'M0_BLOCKED_PERMISSION'
+      && evidenceAuthority !== 'RUNTIME_PRIVATE') return null;
+
+  return Object.freeze({
+    schema: M0_SPOT_READINESS_SCHEMA,
+    version: 1,
+    readinessDigest: value.readinessDigest as M0SpotReadinessDigest,
+    lifecycleCardDigest: value.lifecycleCardDigest as M0SpotReadinessDigest | null,
+    disposition: disposition as M0SpotReadinessTruth['disposition'],
+    gate2Ready: false,
+    evidenceAuthority,
+    observedAtMs: value.observedAtMs,
+    validUntilMs: value.validUntilMs,
+    appExecutionArmed: Object.freeze({
+      state: value.appExecutionArmed.state as M0SpotProofState,
+      current: false,
+      proposed: 'REMAIN_DISARMED',
+    }),
+    residualCondition: value.residualCondition,
+    exactLimitation: value.exactLimitation,
+    ownerAction: 'NO',
+    effects,
+  });
+}
+
+/**
+ * This spine cannot authorize Gate 2. Consumers receive the whole client
+ * record rather than a raw card so a later complete validator must also bind
+ * current transport status and lease time before returning true.
+ */
+export function m0SpotGate2ReadyNow(
+  _client: Readonly<M0SpotReadinessClientTruth>,
+  _nowMs?: number,
+): boolean {
+  return false;
+}
+
+function normalizeClientObservedAt(value: number): number {
+  return isTimestamp(value) ? value : 0;
+}
+
+function validClientRequestId(value: number): boolean {
+  return Number.isSafeInteger(value) && value > 0;
+}
+
+function clientFailure(
+  source: RealDataFailureSource,
+  kind: RealDataFailureKind,
+  code: string,
+  message: string,
+  observedAtMs: number,
+): RealDataClientFailure {
+  const fallbackCode = kind === 'TRANSPORT'
+    ? 'REAL_DATA_TRANSPORT_FAILURE'
+    : kind === 'MISSING'
+      ? 'REAL_DATA_FIELD_MISSING'
+      : 'REAL_DATA_CONTRACT_INVALID';
+  return Object.freeze({
+    source,
+    kind,
+    code: CLIENT_FAILURE_CODE.test(code) ? code : fallbackCode,
+    message: isSafeText(message, 320) ? message : fallbackCode,
+    observedAtMs: normalizeClientObservedAt(observedAtMs),
+  });
+}
+
+function statusAfterFailure(lastSuccessAtMs: number | null): RealDataClientStatus {
+  return lastSuccessAtMs === null ? 'UNAVAILABLE' : 'RETAINED_FAILURE';
+}
+
+export const INITIAL_REAL_DATA_CLIENT_TUPLE: RealDataClientTuple = Object.freeze({
+  privateRead: Object.freeze({
+    status: 'PENDING',
+    snapshot: unavailablePrivateRead('PRIVATE_READ_PENDING'),
+    source: null,
+    transport: 'STATE',
+    failure: null,
+    lastSuccessAtMs: null,
+    appliedRequestId: 0,
+    stateDecisionRequestId: 0,
+  }),
+  m0SpotReadiness: Object.freeze({
+    status: 'PENDING',
+    card: null,
+    failure: null,
+    lastSuccessAtMs: null,
+    appliedRequestId: 0,
+  }),
+});
+
+function replacePrivateReadClient(
+  current: Readonly<RealDataClientTuple>,
+  privateRead: PrivateReadClientTruth,
+): RealDataClientTuple {
+  return Object.freeze({
+    privateRead: Object.freeze(privateRead),
+    m0SpotReadiness: current.m0SpotReadiness,
+  });
+}
+
+function replaceM0ReadinessClient(
+  current: Readonly<RealDataClientTuple>,
+  m0SpotReadiness: M0SpotReadinessClientTruth,
+): RealDataClientTuple {
+  return Object.freeze({
+    privateRead: current.privateRead,
+    m0SpotReadiness: Object.freeze(m0SpotReadiness),
+  });
+}
+
+/**
+ * One reducer owns private-read provenance, fallback transport, M0 readiness,
+ * request ordering, and failure retention. A failed refresh changes status and
+ * failure evidence, never the last admitted value.
+ */
+export function reduceRealDataClientTuple(
+  current: Readonly<RealDataClientTuple>,
+  event: Readonly<RealDataClientEvent>,
+): RealDataClientTuple {
+  if (!validClientRequestId(event.requestId)) return current;
+  const observedAtMs = normalizeClientObservedAt(event.observedAtMs);
+
+  if (event.kind === 'PRIVATE_STATE_RESULT') {
+    const decoded = event.field.presence === 'PRESENT'
+      ? decodePrivateReadSnapshot(event.field.value)
+      : null;
+    // State decisions have their own ordering clock. Once a newer state probe
+    // has settled, an older valid response cannot become displayed state truth
+    // even when fallback display admission has a lower request id.
+    if (
+      decoded
+      && event.requestId < current.privateRead.stateDecisionRequestId
+    ) return current;
+    const decisionIsNewer =
+      event.requestId > current.privateRead.stateDecisionRequestId;
+    const transport = decisionIsNewer
+      ? decoded ? 'STATE' : 'FALLBACK'
+      : current.privateRead.transport;
+    const stateDecisionRequestId = decisionIsNewer
+      ? event.requestId
+      : current.privateRead.stateDecisionRequestId;
+    // Once fallback owns transport, an invalid state result is only a recovery
+    // probe. It may advance the state-decision clock, but it must not outrank
+    // an already-running fallback request or downgrade admitted fallback rows.
+    if (!decoded && current.privateRead.transport === 'FALLBACK') {
+      if (!decisionIsNewer) return current;
+      return replacePrivateReadClient(current, {
+        ...current.privateRead,
+        transport,
+        stateDecisionRequestId,
+      });
+    }
+    if (event.requestId <= current.privateRead.appliedRequestId) {
+      if (!decisionIsNewer) return current;
+      return replacePrivateReadClient(current, {
+        ...current.privateRead,
+        transport,
+        stateDecisionRequestId,
+      });
+    }
+    if (decoded) {
+      return replacePrivateReadClient(current, {
+        status: 'CURRENT',
+        snapshot: decoded,
+        source: 'STATE',
+        transport,
+        failure: null,
+        lastSuccessAtMs: observedAtMs,
+        appliedRequestId: event.requestId,
+        stateDecisionRequestId,
+      });
+    }
+    const missing = event.field.presence === 'MISSING';
+    return replacePrivateReadClient(current, {
+      ...current.privateRead,
+      status: statusAfterFailure(current.privateRead.lastSuccessAtMs),
+      transport,
+      failure: clientFailure(
+        'PRIVATE_STATE',
+        missing ? 'MISSING' : 'CONTRACT',
+        missing
+          ? 'PRIVATE_READ_STATE_FIELD_MISSING'
+          : 'PRIVATE_READ_STATE_CONTRACT_INVALID',
+        missing
+          ? 'Compatibility state did not publish privateRead.'
+          : 'Compatibility state published an invalid privateRead contract.',
+        observedAtMs,
+      ),
+      appliedRequestId: event.requestId,
+      stateDecisionRequestId,
+    });
+  }
+
+  if (event.kind === 'PRIVATE_STATE_FAILURE') {
+    const decisionIsNewer =
+      event.requestId > current.privateRead.stateDecisionRequestId;
+    const transport = decisionIsNewer
+      ? current.privateRead.source === 'STATE' ? 'STATE' : 'FALLBACK'
+      : current.privateRead.transport;
+    const stateDecisionRequestId = decisionIsNewer
+      ? event.requestId
+      : current.privateRead.stateDecisionRequestId;
+    // A state transport failure while fallback owns the rows is recovery-probe
+    // evidence, not a failure of the displayed fallback snapshot.
+    if (current.privateRead.transport === 'FALLBACK') {
+      if (!decisionIsNewer) return current;
+      return replacePrivateReadClient(current, {
+        ...current.privateRead,
+        transport,
+        stateDecisionRequestId,
+      });
+    }
+    if (event.requestId <= current.privateRead.appliedRequestId) {
+      if (!decisionIsNewer) return current;
+      return replacePrivateReadClient(current, {
+        ...current.privateRead,
+        transport,
+        stateDecisionRequestId,
+      });
+    }
+    return replacePrivateReadClient(current, {
+      ...current.privateRead,
+      status: statusAfterFailure(current.privateRead.lastSuccessAtMs),
+      transport,
+      failure: clientFailure(
+        'PRIVATE_STATE',
+        'TRANSPORT',
+        event.failure.code,
+        event.failure.message,
+        observedAtMs,
+      ),
+      appliedRequestId: event.requestId,
+      stateDecisionRequestId,
+    });
+  }
+
+  if (event.kind === 'PRIVATE_FALLBACK_RESULT') {
+    if (event.requestId <= current.privateRead.appliedRequestId) return current;
+    const decoded = decodePrivateReadSnapshot(event.payload);
+    if (decoded) {
+      return replacePrivateReadClient(current, {
+        ...current.privateRead,
+        status: 'CURRENT',
+        snapshot: decoded,
+        source: 'FALLBACK',
+        failure: null,
+        lastSuccessAtMs: observedAtMs,
+        appliedRequestId: event.requestId,
+      });
+    }
+    return replacePrivateReadClient(current, {
+      ...current.privateRead,
+      status: statusAfterFailure(current.privateRead.lastSuccessAtMs),
+      failure: clientFailure(
+        'PRIVATE_FALLBACK',
+        'CONTRACT',
+        'PRIVATE_READ_FALLBACK_CONTRACT_INVALID',
+        'Private-read fallback published an invalid contract.',
+        observedAtMs,
+      ),
+      appliedRequestId: event.requestId,
+    });
+  }
+
+  if (event.kind === 'PRIVATE_FALLBACK_FAILURE') {
+    if (event.requestId <= current.privateRead.appliedRequestId) return current;
+    return replacePrivateReadClient(current, {
+      ...current.privateRead,
+      status: statusAfterFailure(current.privateRead.lastSuccessAtMs),
+      failure: clientFailure(
+        'PRIVATE_FALLBACK',
+        'TRANSPORT',
+        event.failure.code,
+        event.failure.message,
+        observedAtMs,
+      ),
+      appliedRequestId: event.requestId,
+    });
+  }
+
+  if (event.requestId <= current.m0SpotReadiness.appliedRequestId) {
+    return current;
+  }
+  if (event.kind === 'M0_READINESS_RESULT') {
+    const decoded = decodeM0SpotReadinessTruth(
+      event.payload,
+      observedAtMs,
+    );
+    if (decoded) {
+      return replaceM0ReadinessClient(current, {
+        status: 'CURRENT',
+        card: decoded,
+        failure: null,
+        lastSuccessAtMs: observedAtMs,
+        appliedRequestId: event.requestId,
+      });
+    }
+    return replaceM0ReadinessClient(current, {
+      ...current.m0SpotReadiness,
+      status: statusAfterFailure(current.m0SpotReadiness.lastSuccessAtMs),
+      failure: clientFailure(
+        'M0_READINESS',
+        'CONTRACT',
+        'M0_READINESS_CONTRACT_INVALID',
+        'M0 readiness endpoint published an invalid or contradictory contract.',
+        observedAtMs,
+      ),
+      appliedRequestId: event.requestId,
+    });
+  }
+  return replaceM0ReadinessClient(current, {
+    ...current.m0SpotReadiness,
+    status: statusAfterFailure(current.m0SpotReadiness.lastSuccessAtMs),
+    failure: clientFailure(
+      'M0_READINESS',
+      'TRANSPORT',
+      event.failure.code,
+      event.failure.message,
+      observedAtMs,
+    ),
+    appliedRequestId: event.requestId,
+  });
+}
+
 function titleState(value: string): string {
   return value.toLowerCase().replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 }

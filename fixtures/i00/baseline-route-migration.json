@@ -234,6 +234,10 @@
           "occurrences": 1
         },
         {
+          "path": "web/src/pages/Opportunities.tsx",
+          "occurrences": 1
+        },
+        {
           "path": "web/src/pages/Strategies.tsx",
           "occurrences": 1
         },
@@ -270,6 +274,10 @@
         }
       ],
       "productionConsumers": [
+        {
+          "path": "web/src/pages/Opportunities.tsx",
+          "occurrences": 1
+        },
         {
           "path": "web/src/pages/VolumeScanner.tsx",
           "occurrences": 1

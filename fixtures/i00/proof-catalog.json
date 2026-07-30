@@ -43,7 +43,7 @@
     { "path": "packages/edge-protocol/fixtures/fixtures-v1.json", "sha256": "c42a4257ea5f46abb38ec9ab4e56983e7049cdf5b448150a4d4647a6234d99a4" },
     { "path": "packages/edge-protocol-tests/protocol.test.mjs", "sha256": "b9745ad52d92c50fcfa48b9772024b86fcf4fa738e8c35c817fa77021ad970b9" },
     { "path": "EDGE_PROTOCOL_V1.md", "sha256": "951fdbb5f347f900c61e60055f90cf2e1e1e743b75b7dc733652acb8d43353a1" },
-    { "path": "ARCHITECTURE.md", "sha256": "14af1b917c395fc1d8faec82ed2856a60c31b02b5b003068081f98a82774370c" },
+    { "path": "ARCHITECTURE.md", "sha256": "e164301ce9179349ad7f8068b82dd18c04305e18265eaeb0d44ff15ea2e65c86" },
     { "path": "docs/DASHBOARD_TRUTH.md", "sha256": "9f44e9d9c6111ffcc176fe30ea27d02dced83006d8df9ceb218c2c1af8df07c7" },
     { "path": "docs/archive/SYSTEM_CONVERGENCE_RECEIPT.md", "sha256": "460df340fea80e38d7cdb56345a4c5f212187c7ffe6c5dd7d7a604cd27ae1162" }
   ],
@@ -61,7 +61,7 @@
     { "concept": "durable-history", "owner": "Ledger", "path": "server/src/ledger.ts" },
     { "concept": "product-notification-incidents", "owner": "productIntegration/incidents", "path": "server/src/productIntegration/incidents" },
     { "concept": "whole-machine-projection", "owner": "systemIntegration-supervisor", "path": "server/src/systemIntegration/supervisor" },
-    { "concept": "signed-exchange-mutation", "owner": "ABSENT_FUTURE_AUDITED_ADAPTER", "path": null }
+    { "concept": "signed-exchange-mutation", "owner": "binanceSpotExecutionAdapter", "path": "server/src/liveEdge/adapters/binanceSpotExecution/adapter.ts" }
   ],
   "semanticSources": [
     { "dataset": "spot-mini-ticker-universe", "physicalProducer": "server/src/engine/marketData.ts", "semanticOwner": "server/src/intelligenceRuntime", "consumerClass": "broad" },
@@ -79,7 +79,16 @@
     { "id": "NO_BROWSER_TOKEN_EXCHANGE_SOCKET", "scope": "web/src/pages/TokenDetail.tsx", "pattern": "new\\s+WebSocket|wss://", "expectedHits": 0 },
     { "id": "NO_BROWSER_TOKEN_FALLBACK_CDN", "scope": "web/src/components/TokenIcon.tsx", "pattern": "cdn\\.jsdelivr\\.net|assets\\.coincap\\.io", "expectedHits": 0 },
     { "id": "ONE_PHYSICAL_USDM_LIQUIDATION_TRANSPORT_URL", "scope": "server/src", "pattern": "wss://fstream\\.binance\\.com/market/ws/!forceOrder@arr", "expectedHits": 1 },
-    { "id": "NO_LIQUIDATION_PROJECTION_TRANSPORT_OR_RAW_FRAME", "scope": "server/src/binance/liquidations.ts", "pattern": "new\\s+WebSocket|from\\s+['\"]ws['\"]|wss://|!forceOrder@arr|ForceOrder|ingestFrame|BinanceStream|socketFactory|last-filled quantity|cumulative filled quantity", "expectedHits": 0 }
+    { "id": "NO_LIQUIDATION_PROJECTION_TRANSPORT_OR_RAW_FRAME", "scope": "server/src/binance/liquidations.ts", "pattern": "new\\s+WebSocket|from\\s+['\"]ws['\"]|wss://|!forceOrder@arr|ForceOrder|ingestFrame|BinanceStream|socketFactory|last-filled quantity|cumulative filled quantity", "expectedHits": 0 },
+    { "id": "ONE_M0_SOURCE_MOUNT_BOOT_IMPORT", "scope": "server/src/index.ts", "pattern": "from\\s+['\"]\\./foundation/execution/m0SpotSourceMount\\.js['\"]", "expectedHits": 1 },
+    { "id": "NO_SYSTEM_INTEGRATION_ROUTE_EXECUTION_CAPABILITY", "scope": "server/src/systemIntegration/routes", "pattern": "m0SpotSignedTransport|binanceSpotExecution|binanceSignedKernel|SpotOwnerSendAuthority|SpotLiveSubmitIntent|runSpotTransportCoordinator|m0SpotExecutor|m0SpotProductionTransport", "expectedHits": 0 },
+    { "id": "ONE_M0_RUNTIME_BOUNDARY_BOOT_IMPORT", "scope": "server/src/index.ts", "pattern": "from\\s+['\"]\\./systemIntegration/production/m0SpotRuntimeBoundary\\.js['\"]", "expectedHits": 1 },
+    { "id": "NO_M0_PRODUCTION_EXECUTOR_BOOT_IMPORT", "scope": "server/src/index.ts", "pattern": "m0SpotExecutor|m0SpotProductionTransport|createM0SpotProductionExecutor", "expectedHits": 0 },
+    { "id": "NO_PRODUCTION_IMPORT_OF_M0_SIGNED_TEST_MAPPER", "scope": "server/src", "pattern": "(?:from\\s+|import\\s*\\()\\s*['\"][^'\"]*m0SpotSignedTransport\\.js['\"]", "expectedHits": 0 },
+    { "id": "ONE_M0_TEST_ONLY_SIGNED_KERNEL_IMPORT", "scope": "server/src/binance/m0SpotSignedTransport.ts", "pattern": "from\\s+['\"]\\.\\./liveEdge/adapters/binanceSignedKernel/request\\.js['\"]", "expectedHits": 1 },
+    { "id": "NO_M0_LIVE_OR_QUERY_ENDPOINT", "scope": "server/src/binance/m0SpotSignedTransport.ts", "pattern": "['\"]\\/api\\/v3\\/order['\"]|\\/api\\/v3\\/sor\\/order\\/test|\\/api\\/v3\\/myTrades|SPOT_ORDER_POST|SPOT_ORDER_QUERY|SPOT_ORDER_CANCEL|SPOT_MY_TRADES_QUERY", "expectedHits": 0 },
+    { "id": "NO_M0_NETWORK_OR_RAW_SIGNED_RESULT", "scope": "server/src/binance/m0SpotSignedTransport.ts", "pattern": "globalThis\\.fetch|node:http|node:https|node:net|node:tls|undici|axios|api\\.binance\\.com|request:\\s*constructed\\.request", "expectedHits": 0 },
+    { "id": "M0_SOURCE_DEFAULT_OFF_LITERAL", "scope": "server/src/foundation/execution/m0SpotSourceMount.ts", "pattern": "sourceEnabled:\\s*false\\s+as\\s+const", "expectedHits": 1 }
   ],
   "knownConflicts": [
     { "id": "LEGACY_LIVE_ROUTE", "path": "server/src/index.ts", "needle": "app.post('/api/live'", "classification": "RESOLVED_RETIRED_TOMBSTONE", "resolutionState": "RESOLVED", "evidence": "fixtures/i00/baseline-route-migration.json", "impact": "registered only as a fail-closed LIVE_EXECUTION_NOT_IMPLEMENTED tombstone with zero production consumers" },
@@ -96,6 +105,8 @@
     { "method": "GET", "route": "/api/system-integration/controls", "sourceNeedle": "router.get('/controls'" },
     { "method": "GET", "route": "/api/system-integration/traces/:correlationId", "sourceNeedle": "router.get('/traces/:correlationId'" },
     { "method": "POST", "route": "/api/system-integration/validate-only", "sourceNeedle": "router.post('/validate-only'" },
+    { "method": "GET", "route": "/api/system-integration/m0/spot-canary", "sourceNeedle": "router.get('/m0/spot-canary'" },
+    { "method": "POST", "route": "/api/system-integration/m0/spot-canary", "sourceNeedle": "router.post('/m0/spot-canary'" },
     { "method": "POST", "route": "/api/system-integration/controls", "sourceNeedle": "router.post('/controls'" },
     { "method": "GET", "route": "/api/product-integration/v1/supervisor", "sourceNeedle": "router.get('/v1/supervisor'" },
     { "method": "GET", "route": "/api/product-integration/v1/material-events", "sourceNeedle": "router.get('/v1/material-events'" },

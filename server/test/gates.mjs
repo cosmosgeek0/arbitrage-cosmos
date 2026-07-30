@@ -105,10 +105,10 @@ async function browserGet(p, deviceId = 'gate-primary-device-2026') {
   return { status: res.status, headers: res.headers, body: await res.json().catch(() => null) };
 }
 
-async function post(p, body) {
+async function post(p, body, headers = {}) {
   const res = await request(p, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body: JSON.stringify(body),
   });
   return { status: res.status, body: await res.json().catch(() => null) };
@@ -213,6 +213,18 @@ const dataDirLeaseSource = readFileSync(
   'server/src/systemIntegration/persistence/dataDirLease.ts',
   'utf8',
 );
+const m0SpotSourceMountSource = readFileSync(
+  'server/src/foundation/execution/m0SpotSourceMount.ts',
+  'utf8',
+);
+const m0SpotSignedTransportSource = readFileSync(
+  'server/src/binance/m0SpotSignedTransport.ts',
+  'utf8',
+);
+const m0SpotRuntimeBoundarySource = readFileSync(
+  'server/src/systemIntegration/production/m0SpotRuntimeBoundary.ts',
+  'utf8',
+);
 check(
   'Token current OI comes only from the canonical owner read model',
   /\/api\/intelligence\/token\?symbol=/.test(tokenDetailSource) &&
@@ -256,6 +268,27 @@ check(
   'legacy signed services receive only a mechanically unavailable client',
   /function\s+unavailablePrivateBinanceClient\(\):\s*BinanceClient\s*\|\s*null\s*\{\s*return\s+null;\s*\}/s.test(serverIndex) &&
     /const\s+client\s*=\s*unavailablePrivateBinanceClient\(\);/.test(serverIndex)
+);
+check(
+  'M0 Spot production mounts source inspection plus the default-disarmed runtime boundary without an executor',
+  /import\s+\{\s*createM0SpotSourceMount\s*,?\s*\}\s+from\s+['"]\.\/foundation\/execution\/m0SpotSourceMount\.js['"]/.test(serverIndex) &&
+    /import\s+\{\s*createM0SpotRuntimeBoundary\s*,?\s*\}\s+from\s+['"]\.\/systemIntegration\/production\/m0SpotRuntimeBoundary\.js['"]/.test(serverIndex) &&
+    /const\s+m0SpotSourceMount\s*=\s*createM0SpotSourceMount\(\);/.test(serverIndex) &&
+    /const\s+m0SpotRuntimeBoundary\s*=\s*createM0SpotRuntimeBoundary\(\{\s*clock:\s*systemIntegrationClock,\s*\}\);/.test(serverIndex) &&
+    /m0SpotCanary:\s*m0SpotSourceMount/.test(serverIndex) &&
+    /m0SpotRuntime:\s*m0SpotRuntimeBoundary/.test(serverIndex) &&
+    /createSpotValidateOnlySeam/.test(m0SpotSourceMountSource) &&
+    /sourceEnabled:\s*false\s+as\s+const/.test(m0SpotSourceMountSource) &&
+    /killSwitchEngaged:\s*true\s+as\s+const/.test(m0SpotSourceMountSource) &&
+    /authorityCardinality:\s*['"]ONE_USE['"]/.test(m0SpotSourceMountSource) &&
+    /submitAuthority:\s*['"]NONE['"]/.test(m0SpotSourceMountSource) &&
+    !/m0SpotSignedTransport|binanceSpotExecution|binanceSignedKernel/.test(m0SpotSourceMountSource) &&
+    !/\bfetch\s*\(|\bhttps?:\/\//.test(m0SpotSignedTransportSource) &&
+    !/['"]\/api\/v3\/order['"]|\/api\/v3\/sor\/order\/test|\/api\/v3\/myTrades/.test(m0SpotSignedTransportSource) &&
+    /code:\s*['"]M0_RUNTIME_NOT_CONFIGURED['"]/.test(m0SpotRuntimeBoundarySource) &&
+    /state:\s*['"]DISARMED['"]/.test(m0SpotRuntimeBoundarySource) &&
+    /executionAuthorityReturned:\s*['"]NONE['"]/.test(m0SpotRuntimeBoundarySource) &&
+    !/\bfetch\s*\(|process\.env/.test(m0SpotRuntimeBoundarySource)
 );
 check(
   'calendar and fx GET responses declare their own freshness state and TTL',
@@ -779,6 +812,115 @@ const testOrder = await post('/api/trade/test', { symbol: 'BTCUSDT', side: 'BUY'
 check(
   'signed test-order route is retired',
   testOrder.status === 410 && testOrder.body?.code === 'LIVE_EXECUTION_NOT_IMPLEMENTED'
+);
+const m0SpotReadiness = await get(
+  '/api/system-integration/m0/spot-canary',
+);
+check(
+  'M0 Spot GET exposes source-only readiness while the default runtime boundary stays disarmed',
+  m0SpotReadiness.status === 200 &&
+    /private/i.test(m0SpotReadiness.headers.get('cache-control') ?? '') &&
+    /no-store/i.test(m0SpotReadiness.headers.get('cache-control') ?? '') &&
+    m0SpotReadiness.body?.schema === 'cosmos.system-integration.m0-spot-readiness-card.v1' &&
+    m0SpotReadiness.body?.version === 1 &&
+    /^sha256:[0-9a-f]{64}$/.test(m0SpotReadiness.body?.readinessDigest ?? '') &&
+    m0SpotReadiness.body?.lifecycleCardDigest === null &&
+    m0SpotReadiness.body?.disposition === 'SOURCE_READY_NOT_RUNTIME_VERIFIED' &&
+    m0SpotReadiness.body?.gate2Ready === false &&
+    m0SpotReadiness.body?.evidenceAuthority === 'SOURCE_ONLY' &&
+    m0SpotReadiness.body?.validUntilMs === null &&
+    m0SpotReadiness.body?.appExecutionArmed?.current === false &&
+    m0SpotReadiness.body?.appExecutionArmed?.proposed === 'REMAIN_DISARMED' &&
+    m0SpotReadiness.body?.apiKeyPermissions?.withdrawalsEnabled === null &&
+    m0SpotReadiness.body?.apiKeyPermissions?.internalTransfersEnabled === null &&
+    m0SpotReadiness.body?.apiKeyPermissions?.universalTransfersEnabled === null &&
+    m0SpotReadiness.body?.namedExecutor?.authority === 'NONE' &&
+    m0SpotReadiness.body?.excludedCapabilities?.futuresRoute?.access === 'INACCESSIBLE_TO_M0' &&
+    m0SpotReadiness.body?.excludedCapabilities?.marginBorrow?.access === 'INACCESSIBLE_TO_M0' &&
+    m0SpotReadiness.body?.excludedCapabilities?.marginBorrow?.borrowAuthority === 'NONE' &&
+    m0SpotReadiness.body?.excludedCapabilities?.leverage?.availability === 'UNAVAILABLE' &&
+    m0SpotReadiness.body?.order?.symbol === null &&
+    Array.isArray(m0SpotReadiness.body?.order?.allowlist) &&
+    m0SpotReadiness.body.order.allowlist.length === 0 &&
+    m0SpotReadiness.body?.liquidity?.state === 'UNKNOWN_NOT_VERIFIED' &&
+    m0SpotReadiness.body?.liquidity?.classification === null &&
+    m0SpotReadiness.body?.limits?.maximumOrderNotionalQuote === '10' &&
+    m0SpotReadiness.body?.validation?.signedTestPassed === null &&
+    m0SpotReadiness.body?.ownerAction === 'NO' &&
+    Object.values(m0SpotReadiness.body?.effects ?? {})
+      .every((value) => value === 0)
+);
+const m0SpotSourceMount = await post(
+  '/api/system-integration/m0/spot-canary',
+  { ownerConfirmation: 'YES' },
+  { 'Idempotency-Key': 'm0.gates.source-mount.0001' },
+);
+check(
+  'plain owner YES remains an inert $10 validate/test-order M0 source response',
+  m0SpotSourceMount.status === 409 &&
+    m0SpotSourceMount.body?.schema === 'cosmos.foundation.m0-spot-validate-test-source.v1' &&
+    m0SpotSourceMount.body?.code === 'M0_SOURCE_MOUNT_BLOCKED' &&
+    m0SpotSourceMount.body?.state === 'VALIDATE_TEST_ORDER_SOURCE_MOUNTED_NOT_ACTIVATED' &&
+    m0SpotSourceMount.body?.sourceMounted === true &&
+    m0SpotSourceMount.body?.runtimeActivated === false &&
+    m0SpotSourceMount.body?.liveExecutionPermitted === false &&
+    m0SpotSourceMount.body?.maximumOrderNotionalQuote === '10' &&
+    m0SpotSourceMount.body?.maximumOrderNotionalAsset === 'USDT' &&
+    m0SpotSourceMount.body?.ownerConfirmation === 'ACKNOWLEDGED_NOT_AUTHORITY' &&
+    m0SpotSourceMount.body?.admission?.sourceEnabled === false &&
+    m0SpotSourceMount.body?.admission?.killSwitchEngaged === true &&
+    Array.isArray(m0SpotSourceMount.body?.admission?.allowedSymbols) &&
+    m0SpotSourceMount.body.admission.allowedSymbols.length === 0 &&
+    m0SpotSourceMount.body?.validation?.signedTestPerformed === false &&
+    m0SpotSourceMount.body?.testOrder?.orderType === 'LIMIT' &&
+    m0SpotSourceMount.body?.testOrder?.notionalBasis === 'SIGNED_LIMIT_PRICE_TIMES_QUANTITY' &&
+    m0SpotSourceMount.body?.testOrder?.authorityCardinality === 'ONE_USE' &&
+    m0SpotSourceMount.body?.testOrder?.authorityState === 'NOT_PRESENT' &&
+    m0SpotSourceMount.body?.testOrder?.authorityConsumption === 'NOT_ATTEMPTED' &&
+    m0SpotSourceMount.body?.testOrder?.transport === 'NOT_CONFIGURED' &&
+    m0SpotSourceMount.body?.testOrder?.calls === 0 &&
+    m0SpotSourceMount.body?.submitAuthority === 'NONE' &&
+    m0SpotSourceMount.body?.withdrawalPolicy === 'DISABLED' &&
+    m0SpotSourceMount.body?.transferPolicy === 'DISABLED' &&
+    m0SpotSourceMount.body?.flat === 'NOT_PROVED' &&
+    m0SpotSourceMount.body?.reconciliation === 'NOT_PROVED' &&
+    m0SpotSourceMount.body?.disarm === 'NOT_PROVED' &&
+    Object.values(m0SpotSourceMount.body?.effects ?? {})
+      .every((value) => value === 0)
+);
+const m0SpotIncompleteExecution = await post(
+  '/api/system-integration/m0/spot-canary',
+  {
+    ownerConfirmation: 'YES',
+    action: 'EXECUTE_APPROVED_LIFECYCLE',
+  },
+  { 'Idempotency-Key': 'm0.gates.runtime.incomplete.0001' },
+);
+const m0SpotRuntime = await post(
+  '/api/system-integration/m0/spot-canary',
+  {
+    ownerConfirmation: 'YES',
+    action: 'EXECUTE_APPROVED_LIFECYCLE',
+    cardDigest: m0SpotReadiness.body?.readinessDigest,
+  },
+  { 'Idempotency-Key': 'm0.gates.runtime.exact.0001' },
+);
+check(
+  'executable M0 POST requires the exact structured owner request and remains zero-effect NOT_CONFIGURED',
+  m0SpotIncompleteExecution.status === 400 &&
+    m0SpotIncompleteExecution.body?.code === 'OWNER_YES_REQUIRED' &&
+    m0SpotRuntime.status === 409 &&
+    m0SpotRuntime.body?.schema === 'cosmos.system-integration.m0-spot-runtime-boundary.v1' &&
+    m0SpotRuntime.body?.ok === false &&
+    m0SpotRuntime.body?.code === 'M0_RUNTIME_NOT_CONFIGURED' &&
+    m0SpotRuntime.body?.state === 'DISARMED' &&
+    m0SpotRuntime.body?.cardDigest === m0SpotReadiness.body?.readinessDigest &&
+    m0SpotRuntime.body?.ownerConfirmation === 'EXACT_CARD_ACKNOWLEDGED' &&
+    m0SpotRuntime.body?.queryBeforeRetry === true &&
+    m0SpotRuntime.body?.blindResend === false &&
+    m0SpotRuntime.body?.executionAuthorityReturned === 'NONE' &&
+    Object.values(m0SpotRuntime.body?.effects ?? {})
+      .every((value) => value === 0)
 );
 
 // Legacy config is display-only. Operational policy belongs to canonical

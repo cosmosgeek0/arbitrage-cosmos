@@ -31,6 +31,9 @@ import {
   createSpotRiskPolicy,
   evaluateSpotRiskPolicy,
 } from '../../../dist/foundation/risk/spotRiskPolicy.js';
+import {
+  deriveFlattenLeg,
+} from '../../../dist/foundation/execution/spotCore.js';
 
 let assertions = 0;
 function check(name, test) {
@@ -1071,6 +1074,12 @@ check('FLATTEN stays unproven and receives no purpose-based relaxation', () => {
       subject: {
         ...flatten,
         riskEffect: 'RECONCILED_RISK_REDUCTION',
+        recovery: {
+          attributableBaseQuantity: flatten.quantity,
+          cumulativeFilledSellQuantity: '0',
+          cumulativeAuthorizedLifecycleTurnoverQuote: '0',
+          maximumAuthorizedLifecycleTurnoverQuote: '10',
+        },
       },
     }),
   );
@@ -1224,6 +1233,210 @@ check('invalid policy fails closed and assertion helper carries verdict', () => 
     () => assertSpotRiskAllowed(riskInput({ killSwitch: { engaged: true } })),
     SpotRiskRejectedError,
   );
+});
+
+console.log('\nFOK recovery derivation');
+check('derives a fresh LIMIT FOK leg from exact fills and base commissions', () => {
+  const sourceTicket = createSpotExecutionTicket(ticketInput({
+    side: 'BUY',
+    type: 'LIMIT',
+    timeInForce: 'FOK',
+    quantity: '0.05',
+    price: '100',
+    riskReferencePrice: '100',
+    purpose: 'ENTRY',
+    estimatedMaxLossQuote: '5',
+  }));
+  const sourceFills = [Object.freeze({
+    fillId: 'source-fill-fok-1',
+    venueOrderId: 'source-order-fok-1',
+    price: '100',
+    quantity: '0.05',
+    quoteQuantity: '5',
+    commission: '0.0005',
+    commissionAsset: 'BTC',
+    occurredAtMs: NOW + 1,
+  })];
+  const derive = (overrides = {}) => deriveFlattenLeg({
+    sourceTicket,
+    sourceVenueOrderId: 'source-order-fok-1',
+    sourceFills,
+    previousFlattenAttempts: [],
+    baseAsset: 'BTC',
+    exchangeBaseTolerance: '0.0006',
+    maximumResidualDustNotionalQuote: '0.05',
+    maximumGrossLifecycleTurnoverQuote: '10',
+    totalFeeReserveQuote: '0.02',
+    quantityStepSize: '0.001',
+    attempt: 1,
+    price: '100',
+    riskReferencePrice: '100',
+    estimatedMaxLossQuote: '5',
+    createdAtMs: NOW + 1,
+    expiresAtMs: NOW + 4_000,
+    ...overrides,
+  });
+  const first = derive();
+  assert.equal(first.attributableBaseQuantity, '0.0495');
+  assert.equal(first.sellQuantity, '0.049');
+  assert.equal(first.roundingRemainderBaseQuantity, '0.0005');
+  assert.equal(first.residualDustNotionalQuote, '0.05');
+  assert.equal(first.ticket?.type, 'LIMIT');
+  assert.equal(first.ticket?.timeInForce, 'FOK');
+  assert.equal(first.ticket?.attempt, 1);
+
+  const priorTicket = first.ticket;
+  assert.ok(priorTicket);
+  const second = derive({
+    previousFlattenAttempts: [{
+      ticket: priorTicket,
+      venueOrderId: 'flatten-order-fok-1',
+      authoritativelyAbsent: false,
+      fills: [{
+        fillId: 'flatten-fill-fok-1',
+        venueOrderId: 'flatten-order-fok-1',
+        price: '100',
+        quantity: '0.02',
+        quoteQuantity: '2',
+        commission: '0.0001',
+        commissionAsset: 'BTC',
+        occurredAtMs: NOW + 2,
+      }],
+    }],
+    attempt: 2,
+  });
+  assert.equal(second.cumulativeFilledSellQuantity, '0.02');
+  assert.equal(second.flattenBaseCommissionQuantity, '0.0001');
+  assert.equal(second.remainingAttributableBaseQuantity, '0.0294');
+  assert.equal(second.sellQuantity, '0.029');
+  assert.equal(second.ticket?.attempt, 2);
+  assert.notEqual(second.ticket?.clientOrderId, priorTicket.clientOrderId);
+
+  assert.throws(
+    () => derive({ exchangeBaseTolerance: '0.001' }),
+    /unsafe/u,
+  );
+  assert.throws(
+    () => derive({ maximumResidualDustNotionalQuote: '0.051' }),
+    /unsafe/u,
+  );
+  assert.throws(
+    () => derive({ estimatedMaxLossQuote: '6' }),
+    /loss authority/u,
+  );
+  assert.throws(
+    () => derive({ attempt: 4 }),
+    /attempt binding/u,
+  );
+  assert.throws(
+    () => derive({ maximumGrossLifecycleTurnoverQuote: '4.99' }),
+    /turnover exceeds/u,
+  );
+  assert.throws(
+    () => derive({
+      previousFlattenAttempts: [{
+        ticket: priorTicket,
+        venueOrderId: 'flatten-order-over-sell',
+        authoritativelyAbsent: false,
+        fills: [{
+          fillId: 'flatten-fill-over-sell',
+          venueOrderId: 'flatten-order-over-sell',
+          price: '100',
+          quantity: '0.05',
+          quoteQuantity: '5',
+          commission: '0',
+          commissionAsset: 'USDT',
+          occurredAtMs: NOW + 2,
+        }],
+      }],
+      attempt: 2,
+    }),
+    /ticket quantity|canary-attributable/u,
+  );
+});
+
+check('fee reserve is inside the loss ceiling and favorable execution never spends authorized turnover', () => {
+  const sourceTicket = createSpotExecutionTicket(ticketInput({
+    side: 'BUY',
+    type: 'LIMIT',
+    timeInForce: 'FOK',
+    quantity: '0.05',
+    price: '100',
+    riskReferencePrice: '100',
+    purpose: 'ENTRY',
+    estimatedMaxLossQuote: '0.52',
+  }));
+  const sourceFills = [Object.freeze({
+    fillId: 'source-fill-accounting-1',
+    venueOrderId: 'source-order-accounting-1',
+    price: '100',
+    quantity: '0.05',
+    quoteQuantity: '5',
+    commission: '0',
+    commissionAsset: 'USDT',
+    occurredAtMs: NOW + 1,
+  })];
+  const derive = (overrides = {}) => deriveFlattenLeg({
+    sourceTicket,
+    sourceVenueOrderId: 'source-order-accounting-1',
+    sourceFills,
+    previousFlattenAttempts: [],
+    baseAsset: 'BTC',
+    exchangeBaseTolerance: '0.0001',
+    maximumResidualDustNotionalQuote: '0.01',
+    maximumGrossLifecycleTurnoverQuote: '10',
+    totalFeeReserveQuote: '0.02',
+    quantityStepSize: '0.001',
+    attempt: 1,
+    price: '90',
+    riskReferencePrice: '100',
+    estimatedMaxLossQuote: '0.52',
+    createdAtMs: NOW + 1,
+    expiresAtMs: NOW + 4_000,
+    ...overrides,
+  });
+
+  const adverse = derive();
+  assert.equal(adverse.projectedLifecycleQuoteShortfall, '0.5');
+  assert.equal(adverse.totalFeeReserveQuote, '0.02');
+  assert.equal(adverse.projectedLifecycleLossWithFeeReserveQuote, '0.52');
+  assert.throws(
+    () => derive({ totalFeeReserveQuote: '0.03' }),
+    /loss ceiling/u,
+  );
+
+  const first = derive({
+    price: '100',
+    riskReferencePrice: '100',
+  });
+  assert.ok(first.ticket);
+  const favorable = derive({
+    previousFlattenAttempts: [Object.freeze({
+      ticket: first.ticket,
+      venueOrderId: 'flatten-order-accounting-1',
+      authoritativelyAbsent: false,
+      fills: [Object.freeze({
+        fillId: 'flatten-fill-accounting-1',
+        venueOrderId: 'flatten-order-accounting-1',
+        price: '110',
+        quantity: '0.02',
+        quoteQuantity: '2.2',
+        commission: '0',
+        commissionAsset: 'USDT',
+        occurredAtMs: NOW + 2,
+      })],
+    })],
+    attempt: 2,
+    price: '100',
+    riskReferencePrice: '100',
+  });
+  assert.equal(favorable.flattenGrossTurnoverQuote, '2.2');
+  assert.equal(favorable.observedGrossLifecycleTurnoverQuote, '7.2');
+  assert.equal(favorable.authorizedFlattenTurnoverQuote, '2');
+  assert.equal(favorable.authorizedFilledLifecycleTurnoverQuote, '7');
+  assert.equal(favorable.projectedAuthorizedLifecycleTurnoverQuote, '10');
+  assert.equal(favorable.favorableSellPriceImprovementQuote, '0.2');
+  assert.equal(favorable.ticket?.quantity, '0.03');
 });
 
 console.log(`\nPASS ${assertions} focused Slice-A checks`);

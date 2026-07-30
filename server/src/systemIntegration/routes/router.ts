@@ -2,9 +2,13 @@ import { createHash } from 'node:crypto';
 import express, { type NextFunction, type Request, type Response } from 'express';
 import type { OperatorIdentity } from '../../security/access.js';
 import type { SystemControlActor } from '../controls/types.js';
+import { IDEMPOTENCY_KEY_PATTERN } from '../controls/validation.js';
 import type { SystemControlMutationRequest } from '../contracts/types.js';
 import { evaluateCanonicalOpsIntakeGate } from '../ops/intakeGate.js';
 import type { ValidateOnlyOrchestratorInput, ValidateOnlyRunResult } from '../verticalSlice/types.js';
+import {
+  snapshotM0SpotRuntimeExecutionResult,
+} from '../production/m0SpotRuntimeBoundary.js';
 import { parseControlBody, parseEventQuery, TRACE_ID_PATTERN } from './validation.js';
 import type { SystemIntegrationRouterOptions } from './types.js';
 
@@ -27,6 +31,33 @@ function operator(value: unknown): Readonly<SystemControlActor> | null {
 function correlationId(idempotencyKey: string): string {
   const digest = createHash('sha256').update(idempotencyKey).digest('hex').slice(0, 32);
   return `cor_control_${digest}`;
+}
+
+function m0RequestId(
+  actor: Readonly<SystemControlActor>,
+  idempotencyKey: string,
+): `m0_req_${string}` {
+  const digest = createHash('sha256')
+    .update(actor.id)
+    .update('\u0000')
+    .update(idempotencyKey)
+    .digest('hex')
+    .slice(0, 32);
+  return `m0_req_${digest}`;
+}
+
+function m0IdempotencyDigest(
+  actor: Readonly<SystemControlActor>,
+  idempotencyKey: string,
+): `sha256:${string}` {
+  const digest = createHash('sha256')
+    .update('m0-spot-idempotency')
+    .update('\u0000')
+    .update(actor.id)
+    .update('\u0000')
+    .update(idempotencyKey)
+    .digest('hex');
+  return `sha256:${digest}`;
 }
 
 // A read-model failure must stay opaque on the wire (the body below is part of
@@ -117,9 +148,12 @@ export function createSystemIntegrationRouter(options: SystemIntegrationRouterOp
     || typeof options.controls?.auditRejectedRequest !== 'function'
     || typeof options.controls?.snapshot !== 'function'
     || typeof options.validateOnly?.executeValidateOnly !== 'function'
+    || typeof options.m0SpotCanary?.inspectSourceMount !== 'function'
+    || typeof options.m0SpotRuntime?.readReadinessCard !== 'function'
+    || typeof options.m0SpotRuntime?.executeApprovedLifecycle !== 'function'
     || typeof options.clock?.nowMs !== 'function'
     || typeof options.opsReadback?.read !== 'function'
-  ) throw new TypeError('createSystemIntegrationRouter requires injected read, control, validate-only, clock, and ops readback ports.');
+  ) throw new TypeError('createSystemIntegrationRouter requires injected read, control, validate-only, M0 Spot source-mount/runtime, clock, and ops readback ports.');
 
   const router = express.Router();
   router.use((_req, res, next) => {
@@ -248,6 +282,151 @@ export function createSystemIntegrationRouter(options: SystemIntegrationRouterOp
         ok: false,
         code: 'VALIDATE_ONLY_UNAVAILABLE',
         error: 'Validate-only orchestration is unavailable.',
+      });
+    }
+  }));
+
+  router.get('/m0/spot-canary', asyncRoute(async (req, res) => {
+    if (rejectReadQuery(req, res)) return;
+    res.set('Cache-Control', 'private, no-store');
+    try {
+      res.json(await options.m0SpotRuntime.readReadinessCard());
+    } catch (error) {
+      readError(res, error, '/m0/spot-canary');
+    }
+  }));
+
+  router.post('/m0/spot-canary', asyncRoute(async (req, res) => {
+    res.set('Cache-Control', 'private, no-store');
+    if (Object.keys(req.query).length !== 0) {
+      res.status(400).json({
+        ok: false,
+        code: 'INVALID_M0_SPOT_CANARY_QUERY',
+        error: 'M0 Spot source mount accepts no query fields.',
+      });
+      return;
+    }
+    if (!req.is('application/json')) {
+      res.status(415).json({
+        ok: false,
+        code: 'UNSUPPORTED_MEDIA_TYPE',
+        error: 'Content-Type must be application/json.',
+      });
+      return;
+    }
+    const idempotencyKey = req.get('Idempotency-Key') ?? '';
+    if (!idempotencyKey) {
+      res.status(400).json({
+        ok: false,
+        code: 'IDEMPOTENCY_KEY_REQUIRED',
+        error: 'Idempotency-Key is required.',
+      });
+      return;
+    }
+    if (!IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey)) {
+      res.status(400).json({
+        ok: false,
+        code: 'IDEMPOTENCY_KEY_INVALID',
+        error: 'Idempotency-Key is invalid.',
+      });
+      return;
+    }
+    const body = plainRecord(req.body) ? req.body : null;
+    const keys = body === null ? [] : Object.keys(body);
+    const sourceInspection = body !== null
+      && keys.length === 1
+      && keys[0] === 'ownerConfirmation'
+      && body.ownerConfirmation === 'YES';
+    const approvedLifecycle = body !== null
+      && keys.length === 3
+      && keys.includes('ownerConfirmation')
+      && keys.includes('action')
+      && keys.includes('cardDigest')
+      && body.ownerConfirmation === 'YES'
+      && body.action === 'EXECUTE_APPROVED_LIFECYCLE'
+      && typeof body.cardDigest === 'string'
+      && /^sha256:[0-9a-f]{64}$/u.test(body.cardDigest);
+    if (!sourceInspection && !approvedLifecycle) {
+      res.status(400).json({
+        ok: false,
+        code: 'OWNER_YES_REQUIRED',
+        error: 'M0 Spot accepts only exact source inspection or approved-lifecycle acknowledgement fields.',
+      });
+      return;
+    }
+
+    const actor = res.locals
+      .systemIntegrationOperator as Readonly<SystemControlActor>;
+    const ownerSource = actor.source;
+    if (
+      ownerSource !== 'loopback'
+      && ownerSource !== 'cloudflare-access'
+    ) {
+      res.status(403).json({
+        ok: false,
+        code: 'OWNER_IDENTITY_REQUIRED',
+        error: 'A verified owner identity is required.',
+      });
+      return;
+    }
+    if (sourceInspection) {
+      try {
+        const result = await options.m0SpotCanary.inspectSourceMount(
+          Object.freeze({
+            requestId: m0RequestId(actor, idempotencyKey),
+            ownerConfirmation: 'YES' as const,
+            operator: Object.freeze({
+              id: actor.id,
+              email: actor.email,
+              source: ownerSource,
+            }),
+          }),
+        );
+        res.status(409).json(result);
+      } catch {
+        res.status(503).json({
+          ok: false,
+          code: 'M0_SPOT_SOURCE_UNAVAILABLE',
+          error:
+            'M0 Spot source inspection is unavailable and remains inert.',
+        });
+      }
+      return;
+    }
+    try {
+      const result = await options.m0SpotRuntime.executeApprovedLifecycle(
+        Object.freeze({
+          requestId: m0RequestId(actor, idempotencyKey),
+          idempotencyKeyDigest:
+            m0IdempotencyDigest(actor, idempotencyKey),
+          operatorId: actor.id,
+          cardDigest: body!.cardDigest as `sha256:${string}`,
+          ownerConfirmation: 'YES' as const,
+          action: 'EXECUTE_APPROVED_LIFECYCLE' as const,
+        }),
+      );
+      const verifiedResult = snapshotM0SpotRuntimeExecutionResult(
+        result,
+        body!.cardDigest as `sha256:${string}`,
+      );
+      if (verifiedResult === null) {
+        throw new TypeError(
+          'M0 runtime result violated the closed HTTP contract',
+        );
+      }
+      const status = verifiedResult.code === 'M0_LIFECYCLE_RECONCILED'
+        ? 200
+        : verifiedResult.code === 'M0_LIFECYCLE_ACCEPTED'
+          || verifiedResult.code === 'M0_LIFECYCLE_RECOVERY_REQUIRED'
+          ? 202
+          : 409;
+      res.status(status).json(verifiedResult);
+    } catch {
+      res.status(503).json({
+        ok: false,
+        code: 'M0_SPOT_RUNTIME_UNAVAILABLE',
+        error:
+          'M0 Spot runtime execution is unavailable and remains closed.',
       });
     }
   }));

@@ -33,9 +33,16 @@ import {
   planReconnectBackoff,
 } from './lib/reconnectBackoff';
 import {
+  INITIAL_REAL_DATA_CLIENT_TUPLE,
+  decodeM0SpotReadinessTruth,
   decodePrivateReadSnapshot,
-  unavailablePrivateRead,
+  readPrivateReadStateField,
+  reduceRealDataClientTuple,
+  type M0SpotReadinessClientTruth,
+  type PrivateReadClientTruth,
   type PrivateReadSnapshot,
+  type RealDataClientEvent,
+  type RealDataClientTuple,
 } from './lib/privateRead';
 import type {
   AppConfig,
@@ -179,6 +186,9 @@ interface Store {
   privateRead: PrivateReadSnapshot;
   privateReadSource: 'PENDING' | 'STATE' | 'FALLBACK';
   privateReadError: string | null;
+  privateReadClient: PrivateReadClientTruth;
+  m0SpotReadiness: M0SpotReadinessClientTruth;
+  realDataClient: RealDataClientTuple;
   markets: MarketRow[];
   marketStatus: CompatibilityStateStatus;
   marketsLastSuccessAtMs: number | null;
@@ -568,11 +578,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [stateTruth, setStateTruth] = useState<CompatibilityStateTruth>(
     INITIAL_COMPATIBILITY_STATE_TRUTH,
   );
-  const [privateRead, setPrivateRead] = useState<PrivateReadSnapshot>(
-    () => unavailablePrivateRead('PRIVATE_READ_PENDING'),
+  const [realDataClient, setRealDataClient] = useState<RealDataClientTuple>(
+    INITIAL_REAL_DATA_CLIENT_TUPLE,
   );
-  const [privateReadSource, setPrivateReadSource] = useState<'PENDING' | 'STATE' | 'FALLBACK'>('PENDING');
-  const [privateReadError, setPrivateReadError] = useState<string | null>(null);
   const [markets, setMarkets] = useState<MarketRow[]>([]);
   const [marketTruth, setMarketTruth] = useState<MarketStateTruth>(INITIAL_MARKET_STATE_TRUTH);
   const [marketsUpdatedAt, setMarketsUpdatedAt] = useState<number | null>(null);
@@ -601,6 +609,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [webSocketCloseDiagnostic, setWebSocketCloseDiagnostic] = useState<WebSocketCloseDiagnostic | null>(null);
   const [, bumpFx] = useState(0);
   const fxPollRef = useRef<ReturnType<typeof createSettledPoll> | null>(null);
+  const m0ReadinessPollRef = useRef<ReturnType<typeof createSettledPoll> | null>(null);
+  const m0ReadinessRefreshRef = useRef<(() => Promise<boolean>) | null>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<(() => void) | null>(null);
   const privateReadCadenceRef = useRef<(() => void) | null>(null);
@@ -610,40 +620,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // the browser, so a slow earlier answer can never overwrite newer account
   // truth no matter which caller (socket delta, cadence, manual refresh) won.
   const privateReadRequestRef = useRef(0);
-  const privateReadAppliedRef = useRef(0);
-  const privateReadStateDecisionRef = useRef(0);
+  const m0ReadinessRequestRef = useRef(0);
   const nextPrivateReadRequestId = useCallback(() => {
     privateReadRequestRef.current += 1;
     return privateReadRequestRef.current;
   }, []);
+  const nextM0ReadinessRequestId = useCallback(() => {
+    m0ReadinessRequestRef.current += 1;
+    return m0ReadinessRequestRef.current;
+  }, []);
 
-  const applyPrivateReadUpdate = useCallback((requestId: number, apply: () => void) => {
-    if (requestId <= privateReadAppliedRef.current) return;
-    privateReadAppliedRef.current = requestId;
-    apply();
+  const dispatchRealDataClient = useCallback((event: RealDataClientEvent) => {
+    setRealDataClient((current) => reduceRealDataClientTuple(current, event));
   }, []);
 
   const acceptPrivateReadFromState = useCallback((snapshot: ServerState, requestId: number) => {
-    const decoded = decodePrivateReadSnapshot(snapshot.privateRead);
-    // Transport recovery is ordered only against other state responses. A
-    // newer fallback row may outrank this row for display while this valid
-    // state contract must still resume the bounded state cadence.
-    if (requestId > privateReadStateDecisionRef.current) {
-      privateReadStateDecisionRef.current = requestId;
-      setPrivateReadSource(decoded ? 'STATE' : 'FALLBACK');
-    }
-    applyPrivateReadUpdate(requestId, () => {
-      if (decoded) {
-        setPrivateRead(decoded);
-        setPrivateReadError(null);
-        return;
-      }
-      if (Object.prototype.hasOwnProperty.call(snapshot, 'privateRead')) {
-        setPrivateRead(unavailablePrivateRead('PRIVATE_READ_STATE_CONTRACT_INVALID'));
-        setPrivateReadError('PRIVATE_READ_STATE_CONTRACT_INVALID');
-      }
+    const field = readPrivateReadStateField(snapshot);
+    dispatchRealDataClient({
+      kind: 'PRIVATE_STATE_RESULT',
+      requestId,
+      observedAtMs: Date.now(),
+      field,
     });
-  }, [applyPrivateReadUpdate]);
+    return field.presence === 'PRESENT'
+      && decodePrivateReadSnapshot(field.value) !== null;
+  }, [dispatchRealDataClient]);
 
   // One FX owner feeds both global formatters and the operator sheet. Cached
   // rates remain diagnostic evidence after failure, but never current truth.
@@ -752,11 +753,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
         .catch((cause) => {
           if (!closed && !controller.signal.aborted) {
-            setPrivateReadSource((current) => current === 'STATE' ? current : 'FALLBACK');
+            const failure = mutationFailure(cause);
+            dispatchRealDataClient({
+              kind: 'PRIVATE_STATE_FAILURE',
+              requestId,
+              observedAtMs: Date.now(),
+              failure: { code: failure.code, message: failure.message },
+            });
             setStateTruth((current) => reduceCompatibilityStateTruth(current, {
               kind: 'FAILURE',
               observedAtMs: Date.now(),
-              error: mutationFailure(cause).message,
+              error: failure.message,
             }));
           }
         })
@@ -900,25 +907,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       closeCurrent();
       setConnected(false);
     };
-  }, [acceptPrivateReadFromState, nextPrivateReadRequestId]);
+  }, [acceptPrivateReadFromState, dispatchRealDataClient, nextPrivateReadRequestId]);
 
   // The canonical socket only speaks when supervisor truth changes, so a
   // signed-in account would otherwise age silently behind a delta-free cockpit.
-  // This cadence advances the same single-flight state read the socket uses:
-  // no second private transport, no overlapping request, and no work at all
-  // while the bounded fallback poll owns the source.
+  // State uses the same single-flight owner as socket deltas. While fallback
+  // serves rows, a slower bounded probe lets a recovered state contract reclaim
+  // ownership without waiting for a socket delta or owner click.
   useEffect(() => {
-    if (privateReadSource === 'FALLBACK') return;
-    const intervalMs = Math.max(5, prefs.dataCadence?.account ?? 10) * 1_000;
+    const accountCadenceSec = Math.max(5, prefs.dataCadence?.account ?? 10);
+    const intervalMs = (
+      realDataClient.privateRead.transport === 'FALLBACK'
+        ? Math.max(30, accountCadenceSec * 3)
+        : accountCadenceSec
+    ) * 1_000;
     const timer = window.setInterval(() => privateReadCadenceRef.current?.(), intervalMs);
     return () => window.clearInterval(timer);
-  }, [prefs.dataCadence?.account, privateReadSource]);
+  }, [prefs.dataCadence?.account, realDataClient.privateRead.transport]);
 
   // The compatibility state is the preferred and normally sole private-read
   // transport. Older/malformed state envelopes activate one bounded fallback
   // poll; accepting state.privateRead stops and aborts that poll immediately.
   useEffect(() => {
-    if (privateReadSource !== 'FALLBACK') return;
+    if (realDataClient.privateRead.transport !== 'FALLBACK') return;
     let fallbackRequestId = 0;
     const poll = createSettledPoll<unknown>({
       intervalMs: Math.max(5, prefs.dataCadence?.account ?? 10) * 1_000,
@@ -927,27 +938,95 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return fetchJson<unknown>('/api/private-account', { cache: 'no-store', signal });
       },
       onSuccess: (payload) => {
-        const decoded = decodePrivateReadSnapshot(payload);
-        if (!decoded) throw new Error('PRIVATE_READ_FALLBACK_CONTRACT_INVALID');
-        applyPrivateReadUpdate(fallbackRequestId, () => {
-          setPrivateRead(decoded);
-          setPrivateReadError(null);
+        dispatchRealDataClient({
+          kind: 'PRIVATE_FALLBACK_RESULT',
+          requestId: fallbackRequestId,
+          observedAtMs: Date.now(),
+          payload,
         });
       },
       onError: (cause) => {
-        const contractInvalid = cause instanceof Error && cause.message === 'PRIVATE_READ_FALLBACK_CONTRACT_INVALID';
-        const reason = contractInvalid
-          ? 'PRIVATE_READ_FALLBACK_CONTRACT_INVALID'
-          : 'PRIVATE_READ_FALLBACK_UNAVAILABLE';
-        applyPrivateReadUpdate(fallbackRequestId, () => {
-          setPrivateRead(unavailablePrivateRead(reason));
-          setPrivateReadError(reason);
+        const failure = mutationFailure(cause);
+        dispatchRealDataClient({
+          kind: 'PRIVATE_FALLBACK_FAILURE',
+          requestId: fallbackRequestId,
+          observedAtMs: Date.now(),
+          failure: { code: failure.code, message: failure.message },
         });
       },
     });
     poll.start();
     return poll.stop;
-  }, [applyPrivateReadUpdate, nextPrivateReadRequestId, prefs.dataCadence?.account, privateReadSource]);
+  }, [
+    dispatchRealDataClient,
+    nextPrivateReadRequestId,
+    prefs.dataCadence?.account,
+    realDataClient.privateRead.transport,
+  ]);
+
+  // M0 readiness is a separate, read-only local contract. It is never inferred
+  // from private-account rows and this client never calls the POST execution
+  // boundary. Its sole settled poll preserves the last admitted non-authorizing
+  // card, and manual refresh waits for that same owner instead of racing it.
+  useEffect(() => {
+    let m0RequestId = 0;
+    const manualWaiters = new Set<(accepted: boolean) => void>();
+    const settleManualWaiters = (accepted: boolean) => {
+      for (const resolve of manualWaiters) resolve(accepted);
+      manualWaiters.clear();
+    };
+    const accountCadenceMs = Math.max(1, prefs.dataCadence?.account ?? 10) * 1_000;
+    const poll = createSettledPoll<unknown>({
+      intervalMs: Math.min(4_000, accountCadenceMs),
+      request: (signal) => {
+        m0RequestId = nextM0ReadinessRequestId();
+        return fetchJson<unknown>(
+          '/api/system-integration/m0/spot-canary',
+          { cache: 'no-store', signal },
+        );
+      },
+      onSuccess: (payload) => {
+        const observedAtMs = Date.now();
+        const accepted = decodeM0SpotReadinessTruth(payload, observedAtMs) !== null;
+        dispatchRealDataClient({
+          kind: 'M0_READINESS_RESULT',
+          requestId: m0RequestId,
+          observedAtMs,
+          payload,
+        });
+        settleManualWaiters(accepted);
+      },
+      onError: (cause) => {
+        const failure = mutationFailure(cause);
+        dispatchRealDataClient({
+          kind: 'M0_READINESS_FAILURE',
+          requestId: m0RequestId,
+          observedAtMs: Date.now(),
+          failure: { code: failure.code, message: failure.message },
+        });
+        settleManualWaiters(false);
+      },
+    });
+    m0ReadinessPollRef.current = poll;
+    const manualRefresh = () => new Promise<boolean>((resolve) => {
+      manualWaiters.add(resolve);
+      poll.refresh();
+    });
+    m0ReadinessRefreshRef.current = manualRefresh;
+    poll.start();
+    return () => {
+      if (m0ReadinessPollRef.current === poll) m0ReadinessPollRef.current = null;
+      if (m0ReadinessRefreshRef.current === manualRefresh) {
+        m0ReadinessRefreshRef.current = null;
+      }
+      settleManualWaiters(false);
+      poll.stop();
+    };
+  }, [
+    dispatchRealDataClient,
+    nextM0ReadinessRequestId,
+    prefs.dataCadence?.account,
+  ]);
 
   // markets poll at the preferred source cadence. `refreshSec` is retained as
   // the legacy market value; `dataCadence.market` is the new source map.
@@ -1037,19 +1116,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const issues: string[] = [];
     const requestId = nextPrivateReadRequestId();
     try {
-      const s = await fetchJson<ServerState>('/api/state');
+      const s = await fetchJson<ServerState>('/api/state', { cache: 'no-store' });
       setState(failClosedState(s));
-      acceptPrivateReadFromState(s, requestId);
+      if (!acceptPrivateReadFromState(s, requestId)) {
+        issues.push('Private-read snapshot unavailable');
+      }
       setStateTruth((current) => reduceCompatibilityStateTruth(current, {
         kind: 'SUCCESS',
         observedAtMs: Date.now(),
       }));
     } catch (cause) {
+      const failure = mutationFailure(cause);
       issues.push('State snapshot failed');
+      dispatchRealDataClient({
+        kind: 'PRIVATE_STATE_FAILURE',
+        requestId,
+        observedAtMs: Date.now(),
+        failure: { code: failure.code, message: failure.message },
+      });
       setStateTruth((current) => reduceCompatibilityStateTruth(current, {
         kind: 'FAILURE',
         observedAtMs: Date.now(),
-        error: mutationFailure(cause).message,
+        error: failure.message,
       }));
     }
     try {
@@ -1072,6 +1160,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         error,
       }));
     }
+    const refreshM0Readiness = m0ReadinessRefreshRef.current;
+    if (!refreshM0Readiness || !await refreshM0Readiness()) {
+      issues.push('M0 readiness refresh failed');
+    }
     // Rebuild only the browser's cockpit socket, then re-attach any active
     // token-book subscription. No server runtime is restarted here.
     reconnectRef.current?.();
@@ -1082,16 +1174,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       issues,
       ts: Date.now(),
     };
-  }, [acceptPrivateReadFromState, nextPrivateReadRequestId]);
+  }, [
+    acceptPrivateReadFromState,
+    dispatchRealDataClient,
+    nextPrivateReadRequestId,
+  ]);
 
+  const privateReadClient = realDataClient.privateRead;
+  const privateReadSource = privateReadClient.source
+    ?? (privateReadClient.status === 'PENDING'
+      ? 'PENDING'
+      : privateReadClient.transport);
   const store: Store = {
     state,
     stateStatus: stateTruth.status,
     stateLastSuccessAtMs: stateTruth.lastSuccessAtMs,
     stateError: stateTruth.error,
-    privateRead,
+    privateRead: privateReadClient.snapshot,
     privateReadSource,
-    privateReadError,
+    privateReadError: privateReadClient.failure?.code ?? null,
+    privateReadClient,
+    m0SpotReadiness: realDataClient.m0SpotReadiness,
+    realDataClient,
     markets,
     marketStatus: marketTruth.status,
     marketsLastSuccessAtMs: marketTruth.lastSuccessAtMs,

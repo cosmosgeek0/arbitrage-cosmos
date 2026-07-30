@@ -790,8 +790,11 @@ test('BookStreamHub bounds feeds, validates payloads, deduplicates trades, and e
   assert.equal(handles.length, 2, 'messages cannot reopen feeds after hub stop');
 });
 
-test('BookStreamHub publishes bounded lifecycle truth and requires resubscription after exhaustion', () => {
+test('BookStreamHub generation-fences automatic recovery without duplicating a viewed producer', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
   const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
   const streamFactory = (name, url, onMessage, onStatus) => {
     const handle = {
       name,
@@ -800,15 +803,33 @@ test('BookStreamHub publishes bounded lifecycle truth and requires resubscriptio
       onStatus,
       starts: 0,
       stops: 0,
-      start() { this.starts += 1; },
-      stop() { this.stops += 1; },
+      active: false,
+      start() {
+        assert.equal(this.active, false, 'a Book producer must stop before the same handle restarts');
+        this.active = true;
+        this.starts += 1;
+        activeProducers += 1;
+        peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+      },
+      stop() {
+        this.stops += 1;
+        if (!this.active) return;
+        this.active = false;
+        activeProducers -= 1;
+      },
     };
     handles.push(handle);
     return handle;
   };
   const hub = new BookStreamHub(
     (symbol) => symbol === 'BTCUSDT',
-    { maxFeeds: 1, maxSubscriptions: 1, streamFactory },
+    {
+      maxFeeds: 1,
+      maxSubscriptions: 1,
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory,
+    },
   );
   const viewer = new FakeSocket();
   viewer.open();
@@ -848,16 +869,300 @@ test('BookStreamHub publishes bounded lifecycle truth and requires resubscriptio
   );
   assert.ok(JSON.stringify(closed).length < 256, 'lifecycle frames have a fixed bounded shape');
 
-  handles[0].onStatus(handles[0].name, 'exhausted');
+  const producer = handles[0];
+  producer.onStatus(producer.name, 'exhausted');
+  producer.onStatus(producer.name, 'exhausted');
   const exhausted = JSON.parse(viewer.sent.at(-1));
   assert.equal(exhausted.status, 'exhausted');
   assert.equal(exhausted.lastMessageAtMs, closed.lastMessageAtMs);
-  assert.equal(handles[0].stops, 1, 'an exhausted feed is disposed after its terminal truth is published');
 
+  // More than the former five-recycle ceiling proves that retry-budget
+  // exhaustion never permanently abandons a still-viewed public feed.
+  for (let campaign = 0; campaign < 7; campaign += 1) {
+    t.mock.timers.tick(1_000);
+    assert.equal(
+      producer.starts,
+      campaign + 2,
+      `retry-budget exhaustion ${campaign + 1} rearms the same viewed producer`,
+    );
+    assert.equal(producer.stops, campaign + 1);
+    assert.equal(handles.length, 1, 'recovery never constructs a duplicate physical producer');
+    assert.equal(activeProducers, 1, 'one viewed Book feed retains exactly one active producer');
+    assert.equal(peakActiveProducers, 1, 'recovery never overlaps Book producers');
+    producer.onStatus(producer.name, 'closed');
+    producer.onStatus(producer.name, 'exhausted');
+    producer.onStatus(producer.name, 'exhausted');
+  }
+
+  producer.onStatus(producer.name, 'open');
+  const startsAfterOpen = producer.starts;
+  producer.onStatus(producer.name, 'closed');
+  producer.onStatus(producer.name, 'exhausted');
+  t.mock.timers.tick(1);
+  assert.equal(
+    producer.starts,
+    startsAfterOpen + 1,
+    'open resets recovery backoff to the injected base delay',
+  );
+
+  producer.onStatus(producer.name, 'open');
+  const startsBeforeOpenCancellation = producer.starts;
+  producer.onStatus(producer.name, 'closed');
+  producer.onStatus(producer.name, 'exhausted');
+  producer.onStatus(producer.name, 'open');
+  t.mock.timers.tick(60_000);
+  assert.equal(
+    producer.starts,
+    startsBeforeOpenCancellation,
+    'a late recovery callback cannot replace a feed that reopened first',
+  );
+
+  hub.drop(viewer);
+  t.mock.timers.tick(30_000);
   hub.handleMessage(viewer, { type: 'sub-book', symbol: 'BTCUSDT' });
-  assert.equal(handles.length, 2, 'the viewer must explicitly subscribe into a fresh feed generation');
-  assert.equal(handles[1].starts, 1);
+  assert.equal(handles.length, 2, 'an explicit subscription after idle disposal creates one new generation');
+  const replacement = handles[1];
+  const oldStartsAfterReplacement = producer.starts;
+  producer.onStatus(producer.name, 'exhausted');
+  t.mock.timers.tick(60_000);
+  assert.equal(
+    producer.starts,
+    oldStartsAfterReplacement,
+    'a stale feed-generation callback cannot rearm its disposed producer',
+  );
+  assert.equal(replacement.starts, 1, 'stale recovery cannot disturb the current feed generation');
+  const sentBeforeStaleFrames = viewer.sent.length;
+  producer.onMessage({
+    stream: 'btcusdt@depth20@100ms',
+    data: { lastUpdateId: 43, bids: [['102', '2']], asks: [['103', '3']] },
+  });
+  producer.onMessage({
+    stream: 'btcusdt@aggTrade',
+    data: {
+      e: 'aggTrade',
+      s: 'BTCUSDT',
+      a: 43,
+      p: '102',
+      q: '1',
+      T: Date.now(),
+      m: false,
+    },
+  });
+  t.mock.timers.tick(250);
+  assert.equal(
+    viewer.sent.length,
+    sentBeforeStaleFrames,
+    'disposed-generation frames cannot publish through the replacement feed',
+  );
+
+  replacement.onStatus(replacement.name, 'exhausted');
+  const startsAtStop = replacement.starts;
   hub.stop();
+  t.mock.timers.tick(60_000);
+  assert.equal(replacement.starts, startsAtStop, 'hub stop cancels every pending recovery callback');
+  replacement.onStatus(replacement.name, 'exhausted');
+  t.mock.timers.tick(60_000);
+  assert.equal(replacement.starts, startsAtStop, 'late terminal status cannot resurrect a stopped hub');
+  assert.equal(activeProducers, 0, 'hub stop owns the final active Book producer');
+  assert.equal(peakActiveProducers, 1, 'the complete Book lifecycle never duplicates a producer');
+});
+
+test('BookStreamHub retains one bounded recovery after a synchronous restart failure', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let randomHook = () => {};
+  const hub = new BookStreamHub(
+    (symbol) => symbol === 'BTCUSDT',
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => {
+        randomHook();
+        return 0.5;
+      },
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          starts: 0,
+          stops: 0,
+          start() {
+            assert.equal(this.active, false, 'a failed Book restart must still follow a stop');
+            this.active = true;
+            this.starts += 1;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, 'connecting');
+            if (this.starts === 2) throw new Error('synthetic synchronous Book restart failure');
+            if (this.starts === 3) onStatus(name, 'open');
+          },
+          stop() {
+            this.stops += 1;
+            if (this.active) {
+              this.active = false;
+              activeProducers -= 1;
+            }
+            onStatus(name, 'closed');
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  const viewer = new FakeSocket();
+  viewer.open();
+  hub.handleMessage(viewer, { type: 'sub-book', symbol: 'BTCUSDT' });
+  const producer = handles[0];
+  producer.onStatus(producer.name, 'open');
+  producer.onStatus(producer.name, 'exhausted');
+
+  t.mock.timers.tick(1);
+  const feed = hub.feeds.get('BTCUSDT');
+  assert.equal(producer.starts, 2);
+  assert.equal(producer.stops, 1);
+  assert.equal(feed.status, 'exhausted', 'the current owner restores terminal truth after start throws');
+  assert.equal(
+    JSON.parse(viewer.sent.at(-1)).status,
+    'exhausted',
+    'the restored terminal truth is published to the current viewer',
+  );
+  assert.equal(feed.recoveryAttempt, 2, 'the failed restart retains one next bounded attempt');
+  assert.notEqual(feed.recoveryTimer, null, 'the failed restart retains exactly one next timer');
+  assert.equal(handles.length, 1, 'the failed restart reuses its existing handle');
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1, 'a throwing restart never overlaps Book producers');
+
+  t.mock.timers.tick(2);
+  assert.equal(producer.starts, 3);
+  assert.equal(producer.stops, 2);
+  assert.equal(feed.status, 'open');
+  assert.equal(feed.recoveryAttempt, 0, 'open resets the failed-restart backoff');
+  assert.equal(feed.recoveryTimer, null, 'open cancels the retained next timer');
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  const originalSend = viewer.send.bind(viewer);
+  let reopenDuringPublication = true;
+  viewer.send = (value, callback) => {
+    originalSend(value, callback);
+    if (
+      reopenDuringPublication
+      && JSON.parse(String(value)).status === 'exhausted'
+    ) {
+      reopenDuringPublication = false;
+      producer.onStatus(producer.name, 'open');
+    }
+  };
+  producer.onStatus(producer.name, 'closed');
+  producer.onStatus(producer.name, 'exhausted');
+  assert.equal(feed.recoveryAttempt, 0, 'a publication-hook reopen cannot consume an attempt');
+  assert.equal(feed.recoveryTimer, null, 'ownership is rechecked after status publication');
+  viewer.send = originalSend;
+
+  let reopenDuringRandom = true;
+  randomHook = () => {
+    if (!reopenDuringRandom) return;
+    reopenDuringRandom = false;
+    producer.onStatus(producer.name, 'open');
+  };
+  producer.onStatus(producer.name, 'closed');
+  producer.onStatus(producer.name, 'exhausted');
+  assert.equal(feed.recoveryAttempt, 0, 'a random-hook reopen cannot consume an attempt');
+  assert.equal(feed.recoveryTimer, null, 'ownership is rechecked after injected random');
+
+  randomHook = () => {};
+  producer.onStatus(producer.name, 'closed');
+  producer.onStatus(producer.name, 'exhausted');
+  const startsAtStop = producer.starts;
+  hub.stop();
+  t.mock.timers.tick(60_000);
+  assert.equal(producer.starts, startsAtStop, 'hub stop cancels a retained failed-restart timer');
+  assert.equal(activeProducers, 0);
+  assert.equal(peakActiveProducers, 1);
+});
+
+test('BookStreamHub preserves a newer exhausted status emitted during open publication', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  const hub = new BookStreamHub(
+    (symbol) => symbol === 'BTCUSDT',
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          starts: 0,
+          stops: 0,
+          start() {
+            assert.equal(this.active, false, 'reverse-reentrant Book recovery must stop first');
+            this.active = true;
+            this.starts += 1;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, 'connecting');
+            if (this.starts > 1) onStatus(name, 'open');
+          },
+          stop() {
+            this.stops += 1;
+            if (this.active) {
+              this.active = false;
+              activeProducers -= 1;
+            }
+            onStatus(name, 'closed');
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  const viewer = new FakeSocket();
+  viewer.open();
+  hub.handleMessage(viewer, { type: 'sub-book', symbol: 'BTCUSDT' });
+  const producer = handles[0];
+  const originalSend = viewer.send.bind(viewer);
+  let exhaustDuringOpenPublication = true;
+  viewer.send = (value, callback) => {
+    originalSend(value, callback);
+    if (
+      exhaustDuringOpenPublication
+      && JSON.parse(String(value)).status === 'open'
+    ) {
+      exhaustDuringOpenPublication = false;
+      producer.onStatus(producer.name, 'exhausted');
+    }
+  };
+
+  producer.onStatus(producer.name, 'open');
+  const feed = hub.feeds.get('BTCUSDT');
+  assert.equal(feed.status, 'exhausted', 'the newer current Book status wins over the outer open');
+  assert.equal(feed.recoveryAttempt, 1);
+  assert.notEqual(feed.recoveryTimer, null, 'the newer exhausted status owns exactly one timer');
+
+  t.mock.timers.tick(1);
+  assert.equal(producer.starts, 2);
+  assert.equal(producer.stops, 1);
+  assert.equal(handles.length, 1);
+  assert.equal(feed.status, 'open', 'a later genuine open becomes current');
+  assert.equal(feed.recoveryAttempt, 0);
+  assert.equal(feed.recoveryTimer, null, 'the later genuine open clears timer and attempt state');
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1, 'reverse reentrancy never overlaps Book producers');
+
+  hub.stop();
+  assert.equal(activeProducers, 0);
 });
 
 test('passive liquidation projection is restart-safe, bounded, and rejects malformed canonical prints', async () => {
@@ -1414,35 +1719,3291 @@ test('MarketEngine clears source-wide OI on one-symbol outage and requeues inval
   h.engine.stop();
 });
 
-test('VolumeRuntime recycles an exhausted aggTrade stream within a bounded budget', () => {
-  const runtime = new VolumeRuntime({ logEvent() {} }, () => ({}), () => []);
+test('VolumeRuntime generation-fences continuous recovery after retry-budget exhaustion', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  let streamFactoryCalls = 0;
+  const runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: () => {
+        streamFactoryCalls += 1;
+        throw new Error('recovery must reuse the existing physical producer');
+      },
+    },
+  );
   runtime.running = true;
   const generation = runtime.generation;
   const epoch = runtime.streamEpoch;
+  let activeProducers = 1;
+  let peakActiveProducers = 1;
   const fake = {
     name: 'volume-aggtrade-1',
     stopCalls: 0,
     startCalls: 0,
-    stop() { this.stopCalls += 1; },
-    start() { this.startCalls += 1; },
+    active: true,
+    stop() {
+      this.stopCalls += 1;
+      if (!this.active) return;
+      this.active = false;
+      activeProducers -= 1;
+    },
+    start() {
+      assert.equal(this.active, false, 'a Volume producer must stop before the same handle restarts');
+      this.active = true;
+      this.startCalls += 1;
+      activeProducers += 1;
+      peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+    },
   };
   runtime.streams = [fake];
 
-  runtime.onStreamStatus('volume-aggtrade-1', 'exhausted', generation, epoch);
-  assert.equal(fake.stopCalls, 1, 'an exhausted stream is stopped for recycle');
-  assert.equal(fake.startCalls, 1, 'an exhausted stream is restarted so a later recovery is observed');
-
-  for (let index = 0; index < 10; index += 1) {
+  // More than the former five-recycle ceiling proves a recovered network can
+  // always be observed after an arbitrarily long but bounded retry campaign.
+  for (let campaign = 0; campaign < 7; campaign += 1) {
     runtime.onStreamStatus('volume-aggtrade-1', 'closed', generation, epoch);
     runtime.onStreamStatus('volume-aggtrade-1', 'exhausted', generation, epoch);
+    runtime.onStreamStatus('volume-aggtrade-1', 'exhausted', generation, epoch);
+    t.mock.timers.tick(1_000);
+    assert.equal(
+      fake.startCalls,
+      campaign + 1,
+      `retry-budget exhaustion ${campaign + 1} rearms the existing producer`,
+    );
+    assert.equal(fake.stopCalls, campaign + 1);
+    assert.equal(runtime.streams.length, 1, 'recovery never constructs a duplicate producer');
+    assert.equal(runtime.streams[0], fake);
+    assert.equal(streamFactoryCalls, 0);
+    assert.equal(activeProducers, 1);
+    assert.equal(peakActiveProducers, 1, 'Volume recovery never overlaps physical producers');
   }
-  assert.equal(fake.startCalls, 5, 'the recycle budget bounds a genuinely dead endpoint');
 
   runtime.onStreamStatus('volume-aggtrade-1', 'open', generation, epoch);
+  const startsAfterOpen = fake.startCalls;
+  runtime.onStreamStatus('volume-aggtrade-1', 'closed', generation, epoch);
   runtime.onStreamStatus('volume-aggtrade-1', 'exhausted', generation, epoch);
-  assert.equal(fake.startCalls, 6, 'a proven recovery re-arms the recycle budget');
+  t.mock.timers.tick(1);
+  assert.equal(
+    fake.startCalls,
+    startsAfterOpen + 1,
+    'open resets recovery backoff to the injected base delay',
+  );
+
+  runtime.onStreamStatus('volume-aggtrade-1', 'open', generation, epoch);
+  const startsBeforeOpenCancellation = fake.startCalls;
+  runtime.onStreamStatus('volume-aggtrade-1', 'closed', generation, epoch);
+  runtime.onStreamStatus('volume-aggtrade-1', 'exhausted', generation, epoch);
+  runtime.onStreamStatus('volume-aggtrade-1', 'open', generation, epoch);
+  t.mock.timers.tick(60_000);
+  assert.equal(
+    fake.startCalls,
+    startsBeforeOpenCancellation,
+    'a late recovery callback cannot replace a stream that reopened first',
+  );
 
   runtime.onStreamStatus('volume-aggtrade-1', 'closed', generation, epoch);
-  runtime.onStreamStatus('volume-aggtrade-1', 'exhausted', generation, epoch + 1);
-  assert.equal(fake.startCalls, 6, 'a stale stream epoch cannot trigger a recycle');
+  runtime.onStreamStatus('volume-aggtrade-1', 'exhausted', generation, epoch);
+  const startsAtStop = fake.startCalls;
+  runtime.stop();
+  t.mock.timers.tick(60_000);
+  assert.equal(fake.startCalls, startsAtStop, 'runtime stop cancels every pending recovery callback');
+  runtime.onStreamStatus('volume-aggtrade-1', 'exhausted', generation, epoch);
+  t.mock.timers.tick(60_000);
+  assert.equal(fake.startCalls, startsAtStop, 'late terminal status cannot resurrect a stopped runtime');
+  assert.equal(activeProducers, 0);
+  assert.equal(peakActiveProducers, 1, 'the complete Volume lifecycle never duplicates a producer');
+});
+
+test('VolumeRuntime registers synchronous terminal status before start returns and fences its timer epoch', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  const runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            assert.equal(this.active, false, 'synchronous start cannot overlap its prior producer');
+            this.active = true;
+            this.startCalls += 1;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, 'connecting');
+            onStatus(name, 'exhausted');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (this.active) {
+              this.active = false;
+              activeProducers -= 1;
+            }
+            onStatus(name, 'closed');
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  const generation = runtime.generation;
+  runtime.restartTradeStreams(['BTCUSDT'], generation);
+  const epoch = runtime.streamEpoch;
+  const producer = handles[0];
+
+  assert.equal(handles.length, 1);
+  assert.equal(runtime.streams[0], producer, 'the handle is registered before start emits status');
+  assert.equal(runtime.streamRecoveryTimers.size, 1, 'synchronous exhaustion owns one recovery timer');
+  producer.onStatus(producer.name, 'exhausted');
+  assert.equal(runtime.streamRecoveryTimers.size, 1, 'duplicate terminal status cannot stack timers');
+
+  t.mock.timers.tick(1);
+  assert.equal(producer.stopCalls, 1);
+  assert.equal(producer.startCalls, 2);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1, 'stop precedes every synchronous recovery start');
+  assert.equal(handles.length, 1, 'supervisory recovery reuses the registered producer');
+  assert.equal(runtime.streamRecoveryTimers.size, 1, 'the next terminal campaign owns one timer');
+
+  const startsBeforeEpochChange = producer.startCalls;
+  runtime.streamEpoch += 1;
+  t.mock.timers.tick(60_000);
+  assert.equal(
+    producer.startCalls,
+    startsBeforeEpochChange,
+    'a captured recovery timer cannot cross its monotonically advanced stream epoch',
+  );
+  runtime.stop();
+  assert.equal(activeProducers, 0);
+});
+
+test('VolumeRuntime retains one bounded recovery after a synchronous restart failure', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let randomHook = () => {};
+  let logHook = () => {};
+  let runtime;
+  runtime = new VolumeRuntime(
+    { logEvent: (kind) => logHook(kind) },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => {
+        randomHook();
+        return 0.5;
+      },
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            assert.equal(this.active, false, 'a failed Volume restart must still follow a stop');
+            this.active = true;
+            this.startCalls += 1;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, 'connecting');
+            if (this.startCalls === 2) throw new Error('synthetic synchronous Volume restart failure');
+            if (this.startCalls === 3) onStatus(name, 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (this.active) {
+              this.active = false;
+              activeProducers -= 1;
+            }
+            onStatus(name, 'closed');
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  const generation = runtime.generation;
+  runtime.restartTradeStreams(['BTCUSDT'], generation);
+  const epoch = runtime.streamEpoch;
+  const producer = handles[0];
+  producer.onStatus(producer.name, 'open');
+  producer.onStatus(producer.name, 'exhausted');
+
+  t.mock.timers.tick(1);
+  assert.equal(producer.startCalls, 2);
+  assert.equal(producer.stopCalls, 1);
+  assert.equal(runtime.streamStatus.get(producer.name), 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(producer.name), 2);
+  assert.equal(runtime.streamRecoveryTimers.size, 1, 'the failed restart retains exactly one next timer');
+  assert.equal(runtime.streams[0], producer, 'the failed restart retains its exact handle');
+  assert.equal(handles.length, 1);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1, 'a throwing restart never overlaps Volume producers');
+
+  t.mock.timers.tick(2);
+  assert.equal(producer.startCalls, 3);
+  assert.equal(producer.stopCalls, 2);
+  assert.equal(runtime.streamStatus.get(producer.name), 'open');
+  assert.equal(runtime.streamRecoveryAttempts.has(producer.name), false, 'open resets failed-restart backoff');
+  assert.equal(runtime.streamRecoveryTimers.size, 0, 'open cancels the retained next timer');
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  let reopenDuringLog = true;
+  logHook = (kind) => {
+    if (kind !== 'ws.exhausted' || !reopenDuringLog) return;
+    reopenDuringLog = false;
+    producer.onStatus(producer.name, 'open');
+  };
+  producer.onStatus(producer.name, 'closed');
+  producer.onStatus(producer.name, 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.has(producer.name), false);
+  assert.equal(runtime.streamRecoveryTimers.size, 0, 'ownership is rechecked after lifecycle logging');
+  logHook = () => {};
+
+  let reopenDuringRandom = true;
+  randomHook = () => {
+    if (!reopenDuringRandom) return;
+    reopenDuringRandom = false;
+    producer.onStatus(producer.name, 'open');
+  };
+  producer.onStatus(producer.name, 'closed');
+  producer.onStatus(producer.name, 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.has(producer.name), false);
+  assert.equal(runtime.streamRecoveryTimers.size, 0, 'ownership is rechecked after injected random');
+
+  randomHook = () => {};
+  producer.onStatus(producer.name, 'closed');
+  producer.onStatus(producer.name, 'exhausted');
+  const startsAtStop = producer.startCalls;
+  runtime.stop();
+  t.mock.timers.tick(60_000);
+  assert.equal(producer.startCalls, startsAtStop, 'runtime stop cancels a retained failed-restart timer');
+  assert.equal(activeProducers, 0);
+  assert.equal(peakActiveProducers, 1);
+});
+
+test('VolumeRuntime preserves a newer exhausted status emitted during open logging', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let logHook = () => {};
+  const runtime = new VolumeRuntime(
+    { logEvent: (kind) => logHook(kind) },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            assert.equal(this.active, false, 'reverse-reentrant Volume recovery must stop first');
+            this.active = true;
+            this.startCalls += 1;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, 'connecting');
+            if (this.startCalls > 1) onStatus(name, 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (this.active) {
+              this.active = false;
+              activeProducers -= 1;
+            }
+            onStatus(name, 'closed');
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  const generation = runtime.generation;
+  runtime.restartTradeStreams(['BTCUSDT'], generation);
+  const epoch = runtime.streamEpoch;
+  const producer = handles[0];
+  let exhaustDuringOpenLog = true;
+  logHook = (kind) => {
+    if (kind !== 'ws.open' || !exhaustDuringOpenLog) return;
+    exhaustDuringOpenLog = false;
+    producer.onStatus(producer.name, 'exhausted');
+  };
+
+  producer.onStatus(producer.name, 'open');
+  assert.equal(
+    runtime.streamStatus.get(producer.name),
+    'exhausted',
+    'the newer current Volume status wins over the outer open',
+  );
+  assert.equal(runtime.streamRecoveryAttempts.get(producer.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1, 'the newer exhausted status owns one timer');
+
+  t.mock.timers.tick(1);
+  assert.equal(producer.startCalls, 2);
+  assert.equal(producer.stopCalls, 1);
+  assert.equal(handles.length, 1);
+  assert.equal(runtime.streamStatus.get(producer.name), 'open');
+  assert.equal(runtime.streamRecoveryAttempts.has(producer.name), false);
+  assert.equal(runtime.streamRecoveryTimers.size, 0, 'the later genuine open clears recovery state');
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1, 'reverse reentrancy never overlaps Volume producers');
+
+  runtime.stop();
+  assert.equal(activeProducers, 0);
+});
+
+test('VolumeRuntime stops rearm when logging reports the current producer open', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let logHook = () => {};
+  const runtime = new VolumeRuntime(
+    { logEvent: (kind) => logHook(kind) },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            assert.equal(this.active, false, 'rearm cannot overlap a current Volume producer');
+            this.active = true;
+            this.startCalls += 1;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, 'connecting');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (this.active) {
+              this.active = false;
+              activeProducers -= 1;
+            }
+            onStatus(name, 'closed');
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  const generation = runtime.generation;
+  runtime.restartTradeStreams(['BTCUSDT'], generation);
+  const producer = handles[0];
+  producer.onStatus(producer.name, 'open');
+  producer.onStatus(producer.name, 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(producer.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1);
+
+  let reopenDuringRearmLog = true;
+  logHook = (kind) => {
+    if (kind !== 'ws.rearm' || !reopenDuringRearmLog) return;
+    reopenDuringRearmLog = false;
+    producer.onStatus(producer.name, 'open');
+  };
+  const startsBeforeRecovery = producer.startCalls;
+  const stopsBeforeRecovery = producer.stopCalls;
+
+  t.mock.timers.tick(1);
+  assert.equal(producer.startCalls, startsBeforeRecovery, 'a newer open prevents the stale rearm start');
+  assert.equal(producer.stopCalls, stopsBeforeRecovery, 'a newer open prevents the stale rearm stop');
+  assert.equal(runtime.streamStatus.get(producer.name), 'open');
+  assert.equal(runtime.streamRecoveryAttempts.has(producer.name), false, 'open clears the rearm attempt');
+  assert.equal(runtime.streamRecoveryTimers.size, 0, 'open leaves no recovery timer');
+  assert.equal(runtime.streams[0], producer, 'the current handle remains registered');
+  assert.equal(handles.length, 1, 'rearm does not create a duplicate producer');
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  runtime.stop();
+  assert.equal(producer.stopCalls, stopsBeforeRecovery + 1, 'runtime stop still owns final cleanup');
+  assert.equal(activeProducers, 0);
+});
+
+function runBookPostStopReentrancy(t, nestedStatus) {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let duplicateStarts = 0;
+  let nestedStart = false;
+  const hub = new BookStreamHub(
+    (symbol) => symbol === 'BTCUSDT',
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          starts: 0,
+          stops: 0,
+          start() {
+            this.starts += 1;
+            if (this.active) {
+              duplicateStarts += 1;
+              return;
+            }
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, 'connecting');
+            if (nestedStart) onStatus(name, nestedStatus);
+          },
+          stop() {
+            this.stops += 1;
+            if (this.active) {
+              this.active = false;
+              activeProducers -= 1;
+            }
+            onStatus(name, 'closed');
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  const viewer = new FakeSocket();
+  viewer.open();
+  hub.handleMessage(viewer, { type: 'sub-book', symbol: 'BTCUSDT' });
+  const producer = handles[0];
+  const feed = hub.feeds.get('BTCUSDT');
+  const originalSend = viewer.send.bind(viewer);
+  let reenterOnClosed = true;
+  viewer.send = (value, callback) => {
+    originalSend(value, callback);
+    if (
+      !reenterOnClosed
+      || JSON.parse(String(value)).status !== 'closed'
+    ) return;
+    reenterOnClosed = false;
+    nestedStart = true;
+    producer.start();
+  };
+
+  producer.onStatus(producer.name, 'open');
+  producer.onStatus(producer.name, 'exhausted');
+  assert.equal(feed.recoveryAttempt, 1);
+  assert.notEqual(feed.recoveryTimer, null);
+
+  t.mock.timers.tick(1);
+  assert.equal(producer.starts, 2, 'only the closed-publication hook may restart the producer');
+  assert.equal(producer.stops, 1);
+  assert.equal(duplicateStarts, 0, 'the outer Book recovery cannot duplicate a nested start');
+  assert.equal(hub.feeds.get('BTCUSDT'), feed);
+  assert.equal(feed.stream, producer);
+  assert.equal(handles.length, 1);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  if (nestedStatus === 'open') {
+    assert.equal(feed.status, 'open');
+    assert.equal(feed.recoveryAttempt, 0);
+    assert.equal(feed.recoveryTimer, null, 'nested open clears all recovery ownership');
+  } else {
+    assert.equal(feed.status, 'exhausted');
+    assert.equal(feed.recoveryAttempt, 2, 'nested exhaustion owns the next bounded attempt');
+    assert.notEqual(feed.recoveryTimer, null, 'nested exhaustion retains exactly one next timer');
+  }
+
+  hub.stop();
+  assert.equal(producer.stops, 2);
+  assert.equal(activeProducers, 0);
+  assert.equal(peakActiveProducers, 1);
+}
+
+test('BookStreamHub post-stop reentrancy defers to a nested open producer', (t) => {
+  runBookPostStopReentrancy(t, 'open');
+});
+
+test('BookStreamHub post-stop reentrancy defers to a nested exhausted timer owner', (t) => {
+  runBookPostStopReentrancy(t, 'exhausted');
+});
+
+function runVolumePostStopReentrancy(t, nestedStatus) {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let duplicateStarts = 0;
+  let nestedStart = false;
+  let reenterOnClosed = true;
+  let producer;
+  const runtime = new VolumeRuntime(
+    {
+      logEvent(kind) {
+        if (kind !== 'ws.closed' || !reenterOnClosed) return;
+        reenterOnClosed = false;
+        nestedStart = true;
+        producer.start();
+      },
+    },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            if (this.active) {
+              duplicateStarts += 1;
+              return;
+            }
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, 'connecting');
+            if (nestedStart) onStatus(name, nestedStatus);
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (this.active) {
+              this.active = false;
+              activeProducers -= 1;
+            }
+            onStatus(name, 'closed');
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  const generation = runtime.generation;
+  runtime.restartTradeStreams(['BTCUSDT'], generation);
+  const epoch = runtime.streamEpoch;
+  producer = handles[0];
+  producer.onStatus(producer.name, 'open');
+  producer.onStatus(producer.name, 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(producer.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1);
+
+  t.mock.timers.tick(1);
+  assert.equal(producer.startCalls, 2, 'only the ws.closed log hook may restart the producer');
+  assert.equal(producer.stopCalls, 1);
+  assert.equal(duplicateStarts, 0, 'the outer Volume recovery cannot duplicate a nested start');
+  assert.equal(runtime.streams[0], producer);
+  assert.equal(handles.length, 1);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  if (nestedStatus === 'open') {
+    assert.equal(runtime.streamStatus.get(producer.name), 'open');
+    assert.equal(runtime.streamRecoveryAttempts.has(producer.name), false);
+    assert.equal(runtime.streamRecoveryTimers.size, 0, 'nested open clears all recovery ownership');
+  } else {
+    assert.equal(runtime.streamStatus.get(producer.name), 'exhausted');
+    assert.equal(
+      runtime.streamRecoveryAttempts.get(producer.name),
+      2,
+      'nested exhaustion owns the next bounded attempt',
+    );
+    assert.equal(runtime.streamRecoveryTimers.size, 1, 'nested exhaustion retains exactly one next timer');
+  }
+
+  runtime.stop();
+  assert.equal(producer.stopCalls, 2);
+  assert.equal(activeProducers, 0);
+  assert.equal(peakActiveProducers, 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+  assert.equal(runtime.streamRecoveryAttempts.size, 0);
+}
+
+test('VolumeRuntime post-stop reentrancy defers to a nested open producer', (t) => {
+  runVolumePostStopReentrancy(t, 'open');
+});
+
+test('VolumeRuntime post-stop reentrancy defers to a nested exhausted timer owner', (t) => {
+  runVolumePostStopReentrancy(t, 'exhausted');
+});
+
+test('VolumeRuntime duplicate exhausted reacquires recovery during a silent reentrant stop', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let duplicateStarts = 0;
+  let reenterOnStop = false;
+  let nextStartStatus = null;
+  const runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            if (this.active) {
+              duplicateStarts += 1;
+              return;
+            }
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            const status = nextStartStatus;
+            nextStartStatus = null;
+            if (status) onStatus(name, status);
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (this.active) {
+              this.active = false;
+              activeProducers -= 1;
+            }
+            if (!reenterOnStop) return;
+            reenterOnStop = false;
+            nextStartStatus = 'exhausted';
+            this.start();
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  const generation = runtime.generation;
+  runtime.restartTradeStreams(['BTCUSDT'], generation);
+  const producer = handles[0];
+  producer.onStatus(producer.name, 'open');
+  producer.onStatus(producer.name, 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(producer.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1);
+
+  reenterOnStop = true;
+  t.mock.timers.tick(1);
+  assert.equal(producer.stopCalls, 1);
+  assert.equal(producer.startCalls, 2, 'only the stop hook performs the immediate terminal start');
+  assert.equal(duplicateStarts, 0, 'the outer recovery defers to duplicate exhausted timer ownership');
+  assert.equal(runtime.streamStatus.get(producer.name), 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(producer.name), 2);
+  assert.equal(runtime.streamRecoveryTimers.size, 1, 'duplicate exhausted reacquires exactly one timer');
+  assert.equal(runtime.streams[0], producer);
+  assert.equal(handles.length, 1);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  nextStartStatus = 'open';
+  t.mock.timers.tick(2);
+  assert.equal(producer.stopCalls, 2, 'the next bounded turn performs one silent stop');
+  assert.equal(producer.startCalls, 3, 'silent stop with no status preserves direct outer restart');
+  assert.equal(duplicateStarts, 0);
+  assert.equal(runtime.streamStatus.get(producer.name), 'open');
+  assert.equal(runtime.streamRecoveryAttempts.has(producer.name), false);
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+  assert.equal(runtime.streams[0], producer);
+  assert.equal(handles.length, 1);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  runtime.stop();
+  assert.equal(producer.stopCalls, 3);
+  assert.equal(activeProducers, 0);
+  assert.equal(peakActiveProducers, 1);
+});
+
+test('VolumeRuntime rolls back every registered multi-chunk stream after a later start failure', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const symbols = Array.from(
+    { length: 141 },
+    (_, index) => `S${String(index).padStart(3, '0')}USDT`,
+  );
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  const runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            if (handles.indexOf(this) === 1) {
+              throw new Error('synthetic second chunk start failure');
+            }
+            assert.equal(this.active, false);
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, 'exhausted');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  runtime.eligibleSymbolSet.add(symbols[0]);
+  runtime.engine.onTrade = () => true;
+  const generation = runtime.generation;
+  const epochBeforeRestart = runtime.streamEpoch;
+
+  assert.throws(
+    () => runtime.restartTradeStreams(symbols, generation),
+    /synthetic second chunk start failure/,
+  );
+  assert.equal(handles.length, 2, '141 symbols create the 140-plus-1 stream chunks');
+  assert.equal(handles[0].name, 'volume-aggtrade-1');
+  assert.equal(handles[1].name, 'volume-aggtrade-2');
+  assert.equal(handles[0].url.split('@aggTrade').length - 1, 140);
+  assert.equal(handles[1].url.split('@aggTrade').length - 1, 1);
+  assert.deepEqual(handles.map((handle) => handle.startCalls), [1, 1]);
+  assert.deepEqual(handles.map((handle) => handle.stopCalls), [1, 1]);
+  assert.equal(activeProducers, 0, 'rollback stops the first active registered producer');
+  assert.equal(peakActiveProducers, 1);
+  assert.equal(
+    runtime.streamEpoch,
+    epochBeforeRestart + 2,
+    'entry and rollback each advance the callback ownership epoch',
+  );
+  assert.deepEqual(runtime.streams, [], 'rollback removes every registered handle');
+  assert.equal(runtime.streamStatus.size, 0);
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+  assert.equal(runtime.streamRecoveryAttempts.size, 0);
+
+  const first = handles[0];
+  first.onStatus(first.name, 'exhausted');
+  first.onMessage({
+    e: 'aggTrade',
+    E: 1_000,
+    s: symbols[0],
+    a: 1,
+    p: '1',
+    q: '1',
+    f: 1,
+    l: 1,
+    T: 1_000,
+    m: false,
+  });
+  t.mock.timers.tick(60_000);
+
+  assert.deepEqual(handles.map((handle) => handle.startCalls), [1, 1]);
+  assert.deepEqual(handles.map((handle) => handle.stopCalls), [1, 1]);
+  assert.equal(activeProducers, 0);
+  assert.equal(peakActiveProducers, 1);
+  assert.deepEqual(runtime.streams, []);
+  assert.equal(runtime.streamStatus.size, 0, 'stale terminal status cannot repopulate rollback state');
+  assert.equal(runtime.streamRecoveryTimers.size, 0, 'rollback leaves no delayed resurrection');
+  assert.equal(runtime.streamRecoveryAttempts.size, 0);
+  assert.equal(runtime.tradeMessages, 0, 'stale messages cannot mutate trade state after rollback');
+  assert.equal(runtime.lastAggTradeId.size, 0);
+  assert.equal(runtime.lastRawTradeId.size, 0);
+});
+
+test('VolumeRuntime multi-handle reentrancy stops the start loop when runtime stop wins', () => {
+  const symbols = Array.from(
+    { length: 141 },
+    (_, index) => `T${String(index).padStart(3, '0')}USDT`,
+  );
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let stopDuringFirstOpen = true;
+  let runtime;
+  runtime = new VolumeRuntime(
+    {
+      logEvent(kind) {
+        if (kind !== 'ws.open' || !stopDuringFirstOpen) return;
+        stopDuringFirstOpen = false;
+        runtime.stop();
+      },
+    },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const creationIndex = handles.length;
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            assert.equal(this.active, false);
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            if (creationIndex === 0) onStatus(name, 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  const generation = runtime.generation;
+  const epochBeforeRestart = runtime.streamEpoch;
+
+  runtime.restartTradeStreams(symbols, generation);
+  assert.equal(handles.length, 1, 'B is never constructed after stop wins the incremental turn');
+  assert.deepEqual(handles.map((handle) => handle.startCalls), [1]);
+  assert.deepEqual(handles.map((handle) => handle.stopCalls), [2]);
+  assert.equal(activeProducers, 0);
+  assert.equal(peakActiveProducers, 1);
+  assert.equal(runtime.running, false);
+  assert.equal(runtime.streamEpoch, epochBeforeRestart + 2);
+  assert.deepEqual(runtime.streams, []);
+  assert.equal(runtime.streamStatus.size, 0);
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+  assert.equal(runtime.streamRecoveryAttempts.size, 0);
+});
+
+test('VolumeRuntime multi-handle reentrancy preserves a replacement when the stale turn throws', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const outerSymbols = Array.from(
+    { length: 141 },
+    (_, index) => `U${String(index).padStart(3, '0')}USDT`,
+  );
+  const replacementSymbols = ['REPLUSDT'];
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let installReplacement = true;
+  let runtime;
+  let generation;
+  runtime = new VolumeRuntime(
+    {
+      logEvent(kind, _symbol, payload) {
+        if (
+          kind !== 'ws.open'
+          || payload.feed !== 'volume-aggtrade-2'
+          || !installReplacement
+        ) return;
+        installReplacement = false;
+        runtime.restartTradeStreams(replacementSymbols, generation);
+      },
+    },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const creationIndex = handles.length;
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            if (creationIndex === 1) {
+              onStatus(name, 'open');
+              throw new Error('synthetic stale B start failure');
+            }
+            assert.equal(this.active, false);
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, creationIndex === 2 ? 'exhausted' : 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  generation = runtime.generation;
+  runtime.eligibleSymbolSet.add(outerSymbols[0]);
+  runtime.eligibleSymbolSet.add(outerSymbols[140]);
+  runtime.engine.onTrade = () => true;
+  const epochBeforeRestart = runtime.streamEpoch;
+
+  assert.doesNotThrow(
+    () => runtime.restartTradeStreams(outerSymbols, generation),
+    'a turn displaced by replacement C retires its stale B failure',
+  );
+  assert.equal(handles.length, 3, 'outer A/B and the reentrant replacement C are registered');
+  const [first, second, replacement] = handles;
+  assert.deepEqual(handles.map((handle) => handle.startCalls), [1, 1, 1]);
+  assert.deepEqual(
+    handles.map((handle) => handle.stopCalls),
+    [2, 2, 0],
+    'replacement install and stale catch each stop only old A/B',
+  );
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+  assert.equal(
+    runtime.streamEpoch,
+    epochBeforeRestart + 2,
+    'the stale catch cannot advance the replacement epoch',
+  );
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], replacement);
+  assert.equal(runtime.streamStatus.size, 1);
+  assert.equal(runtime.streamStatus.get(replacement.name), 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(replacement.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1);
+
+  first.onStatus(first.name, 'open');
+  second.onStatus(second.name, 'exhausted');
+  first.onMessage({
+    e: 'aggTrade',
+    E: 1_000,
+    s: outerSymbols[0],
+    a: 1,
+    p: '1',
+    q: '1',
+    f: 1,
+    l: 1,
+    T: 1_000,
+    m: false,
+  });
+  second.onMessage({
+    e: 'aggTrade',
+    E: 1_000,
+    s: outerSymbols[140],
+    a: 2,
+    p: '1',
+    q: '1',
+    f: 2,
+    l: 2,
+    T: 1_000,
+    m: false,
+  });
+  assert.equal(runtime.streams[0], replacement);
+  assert.equal(runtime.streamStatus.get(replacement.name), 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(replacement.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1);
+  assert.equal(runtime.tradeMessages, 0, 'stale A/B messages cannot mutate replacement state');
+  assert.equal(runtime.lastAggTradeId.size, 0);
+  assert.equal(runtime.lastRawTradeId.size, 0);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  runtime.stop();
+  assert.deepEqual(handles.map((handle) => handle.stopCalls), [2, 2, 1]);
+  assert.equal(activeProducers, 0);
+  assert.equal(peakActiveProducers, 1);
+  assert.deepEqual(runtime.streams, []);
+  assert.equal(runtime.streamStatus.size, 0);
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+  assert.equal(runtime.streamRecoveryAttempts.size, 0);
+});
+
+test('VolumeRuntime public start retires a stale multi-handle failure after replacement wins', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const outerSymbols = Array.from(
+    { length: 141 },
+    (_, index) => `V${String(index).padStart(3, '0')}USDT`,
+  );
+  const universe = outerSymbols.map((symbol) => ({
+    symbol,
+    base: symbol.slice(0, -4),
+    hasSpot: true,
+    hasPerp: true,
+    quoteVolume24h: 100,
+  }));
+  const replacementSymbols = ['REPLUSDT'];
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let installReplacement = true;
+  let runtime;
+  runtime = new VolumeRuntime(
+    {
+      logEvent(kind, _symbol, payload) {
+        if (
+          kind !== 'ws.open'
+          || payload.feed !== 'volume-aggtrade-2'
+          || !installReplacement
+        ) return;
+        installReplacement = false;
+        runtime.restartTradeStreams(replacementSymbols, runtime.generation);
+      },
+    },
+    () => ({
+      killSwitch: true,
+      maxOrderNotionalUsd: 10,
+      minQuoteVolume24h: 1,
+      allowedSymbols: [],
+      blockedSymbols: [],
+    }),
+    () => universe,
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const creationIndex = handles.length;
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            if (creationIndex === 1) {
+              onStatus(name, 'open');
+              throw new Error('synthetic stale public B start failure');
+            }
+            assert.equal(this.active, false);
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, creationIndex === 2 ? 'exhausted' : 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.refreshBooks = async () => {};
+  runtime.warmBaselines = async () => {};
+  runtime.engine.onTrade = () => true;
+
+  await runtime.start();
+  assert.equal(runtime.running, true, 'stale B failure cannot stop the public runtime owner');
+  assert.equal(runtime.startPromise, null);
+  assert.equal(handles.length, 3);
+  const [first, second, replacement] = handles;
+  assert.deepEqual(handles.map((handle) => handle.startCalls), [1, 1, 1]);
+  assert.deepEqual(handles.map((handle) => handle.stopCalls), [2, 2, 0]);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+  assert.equal(runtime.streamEpoch, 2, 'public owner retains replacement C epoch');
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], replacement);
+  assert.equal(runtime.streamStatus.size, 1);
+  assert.equal(runtime.streamStatus.get(replacement.name), 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(replacement.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1);
+  assert.equal(runtime.streamRetryTimer, null, 'retired stale errors cannot schedule universe retry');
+  assert.equal(runtime.streamRetryMs, 1_000);
+
+  first.onStatus(first.name, 'open');
+  second.onStatus(second.name, 'exhausted');
+  first.onMessage({
+    e: 'aggTrade',
+    E: 1_000,
+    s: outerSymbols[0],
+    a: 1,
+    p: '1',
+    q: '1',
+    f: 1,
+    l: 1,
+    T: 1_000,
+    m: false,
+  });
+  second.onMessage({
+    e: 'aggTrade',
+    E: 1_000,
+    s: outerSymbols[140],
+    a: 2,
+    p: '1',
+    q: '1',
+    f: 2,
+    l: 2,
+    T: 1_000,
+    m: false,
+  });
+  assert.equal(runtime.running, true);
+  assert.equal(runtime.streams[0], replacement);
+  assert.equal(runtime.streamStatus.get(replacement.name), 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(replacement.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1);
+  assert.equal(runtime.streamRetryTimer, null);
+  assert.equal(runtime.tradeMessages, 0);
+  assert.equal(runtime.lastAggTradeId.size, 0);
+  assert.equal(runtime.lastRawTradeId.size, 0);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  runtime.stop();
+  assert.deepEqual(handles.map((handle) => handle.stopCalls), [2, 2, 1]);
+  assert.equal(activeProducers, 0);
+  assert.equal(peakActiveProducers, 1);
+  assert.equal(runtime.running, false);
+  assert.deepEqual(runtime.streams, []);
+  assert.equal(runtime.streamStatus.size, 0);
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+  assert.equal(runtime.streamRecoveryAttempts.size, 0);
+  assert.equal(runtime.streamRetryTimer, null);
+});
+
+test('VolumeRuntime ownership follow-through leaves no stale key and rebuilds after reentrant stop', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const symbols = Array.from(
+    { length: 141 },
+    (_, index) => `W${String(index).padStart(3, '0')}USDT`,
+  );
+  const universe = symbols.map((symbol) => ({
+    symbol,
+    base: symbol.slice(0, -4),
+    hasSpot: true,
+    hasPerp: true,
+    quoteVolume24h: 100,
+  }));
+  const handles = [];
+  let activeProducers = 0;
+  let stopDuringFirstOpen = true;
+  let runtime;
+  runtime = new VolumeRuntime(
+    {
+      logEvent(kind, _symbol, payload) {
+        if (
+          kind !== 'ws.open'
+          || payload.feed !== 'volume-aggtrade-1'
+          || !stopDuringFirstOpen
+        ) return;
+        stopDuringFirstOpen = false;
+        runtime.stop();
+      },
+    },
+    () => ({
+      killSwitch: true,
+      maxOrderNotionalUsd: 10,
+      minQuoteVolume24h: 1,
+      allowedSymbols: [],
+      blockedSymbols: [],
+    }),
+    () => universe,
+    null,
+    () => 1_000,
+    {
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            assert.equal(this.active, false);
+            this.active = true;
+            activeProducers += 1;
+            onStatus(name, 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.refreshBooks = async () => {};
+  runtime.warmBaselines = async () => {};
+
+  await runtime.start();
+  assert.equal(runtime.running, false);
+  assert.equal(runtime.symbolSetKey, '', 'the stopped restart cannot commit its outer universe key');
+  assert.equal(runtime.streamRetryTimer, null);
+  assert.equal(handles.length, 1, 'stopped first turn never constructs its second chunk');
+  assert.deepEqual(handles.map((handle) => handle.startCalls), [1]);
+  assert.deepEqual(handles.map((handle) => handle.stopCalls), [2]);
+  assert.equal(activeProducers, 0);
+  assert.deepEqual(runtime.streams, []);
+  assert.equal(runtime.streamStatus.size, 0);
+
+  await runtime.start();
+  assert.equal(runtime.running, true);
+  assert.equal(handles.length, 3, 'a second public start rebuilds both physical chunks');
+  assert.deepEqual(handles.map((handle) => handle.startCalls), [1, 1, 1]);
+  assert.deepEqual(handles.map((handle) => handle.stopCalls), [2, 0, 0]);
+  assert.equal(runtime.streams.length, 2);
+  assert.equal(runtime.streams[0], handles[1]);
+  assert.equal(runtime.streams[1], handles[2]);
+  assert.equal(runtime.streamStatus.get(handles[1].name), 'open');
+  assert.equal(runtime.streamStatus.get(handles[2].name), 'open');
+  assert.equal(runtime.symbolSetKey, symbols.join(','));
+  assert.equal(runtime.streamRetryTimer, null);
+  assert.equal(activeProducers, 2);
+
+  runtime.stop();
+  assert.deepEqual(handles.map((handle) => handle.stopCalls), [2, 1, 1]);
+  assert.equal(activeProducers, 0);
+  assert.deepEqual(runtime.streams, []);
+});
+
+test('VolumeRuntime ownership follow-through preserves a replacement that reuses old handle A', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const symbols = Array.from(
+    { length: 141 },
+    (_, index) => `X${String(index).padStart(3, '0')}USDT`,
+  );
+  const universe = symbols.map((symbol) => ({
+    symbol,
+    base: symbol.slice(0, -4),
+    hasSpot: true,
+    hasPerp: true,
+    quoteVolume24h: 100,
+  }));
+  const handles = [];
+  let factoryCalls = 0;
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let installReplacement = true;
+  let runtime;
+  runtime = new VolumeRuntime(
+    {
+      logEvent(kind, _symbol, payload) {
+        if (
+          kind !== 'ws.open'
+          || payload.feed !== 'volume-aggtrade-2'
+          || !installReplacement
+        ) return;
+        installReplacement = false;
+        runtime.restartTradeStreams(['REPLUSDT'], runtime.generation);
+      },
+    },
+    () => ({
+      killSwitch: true,
+      maxOrderNotionalUsd: 10,
+      minQuoteVolume24h: 1,
+      allowedSymbols: [],
+      blockedSymbols: [],
+    }),
+    () => universe,
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const creationIndex = factoryCalls;
+        factoryCalls += 1;
+        if (creationIndex === 2) {
+          const reused = handles[0];
+          reused.name = name;
+          reused.url = url;
+          reused.onMessage = onMessage;
+          reused.onStatus = onStatus;
+          reused.replacement = true;
+          return reused;
+        }
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          replacement: false,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            if (creationIndex === 1) {
+              this.onStatus(this.name, 'open');
+              throw new Error('synthetic stale reused-handle B failure');
+            }
+            assert.equal(this.active, false);
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            this.onStatus(this.name, this.replacement ? 'exhausted' : 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.refreshBooks = async () => {};
+  runtime.warmBaselines = async () => {};
+
+  await runtime.start();
+  const [reused, second] = handles;
+  assert.equal(factoryCalls, 3);
+  assert.equal(runtime.running, true);
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], reused);
+  assert.equal(reused.active, true);
+  assert.equal(reused.startCalls, 2);
+  assert.equal(reused.stopCalls, 1, 'stale catch skips A because replacement C reuses its identity');
+  assert.equal(second.startCalls, 1);
+  assert.equal(second.stopCalls, 2);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+  assert.equal(runtime.streamStatus.get(reused.name), 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(reused.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1);
+  assert.equal(runtime.symbolSetKey, '');
+  assert.equal(runtime.streamRetryTimer, null);
+
+  runtime.stop();
+  assert.equal(reused.stopCalls, 2, 'runtime stop owns the reused replacement final cleanup');
+  assert.equal(second.stopCalls, 2);
+  assert.equal(activeProducers, 0);
+  assert.equal(peakActiveProducers, 1);
+  assert.deepEqual(runtime.streams, []);
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+  assert.equal(runtime.streamRecoveryAttempts.size, 0);
+});
+
+test('VolumeRuntime ownership follow-through contains stale cleanup throws around fresh C', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const symbols = Array.from(
+    { length: 141 },
+    (_, index) => `Y${String(index).padStart(3, '0')}USDT`,
+  );
+  const universe = symbols.map((symbol) => ({
+    symbol,
+    base: symbol.slice(0, -4),
+    hasSpot: true,
+    hasPerp: true,
+    quoteVolume24h: 100,
+  }));
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let installReplacement = true;
+  let runtime;
+  runtime = new VolumeRuntime(
+    {
+      logEvent(kind, _symbol, payload) {
+        if (
+          kind !== 'ws.open'
+          || payload.feed !== 'volume-aggtrade-2'
+          || !installReplacement
+        ) return;
+        installReplacement = false;
+        runtime.restartTradeStreams(['REPLUSDT'], runtime.generation);
+      },
+    },
+    () => ({
+      killSwitch: true,
+      maxOrderNotionalUsd: 10,
+      minQuoteVolume24h: 1,
+      allowedSymbols: [],
+      blockedSymbols: [],
+    }),
+    () => universe,
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const creationIndex = handles.length;
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            if (creationIndex === 1) {
+              onStatus(name, 'open');
+              throw new Error('synthetic stale cleanup B failure');
+            }
+            assert.equal(this.active, false);
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, creationIndex === 2 ? 'exhausted' : 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (creationIndex === 0 && this.stopCalls === 2) {
+              throw new Error('synthetic stale A cleanup failure');
+            }
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.refreshBooks = async () => {};
+  runtime.warmBaselines = async () => {};
+
+  await runtime.start();
+  const [first, second, replacement] = handles;
+  assert.equal(runtime.running, true);
+  assert.deepEqual(handles.map((handle) => handle.startCalls), [1, 1, 1]);
+  assert.deepEqual(
+    handles.map((handle) => handle.stopCalls),
+    [2, 2, 0],
+    'cleanup continues through B after stale A stop throws',
+  );
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], replacement);
+  assert.equal(runtime.streamStatus.get(replacement.name), 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(replacement.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1);
+  assert.equal(runtime.symbolSetKey, '');
+  assert.equal(runtime.streamRetryTimer, null);
+  assert.equal(first.active, false);
+  assert.equal(second.active, false);
+  assert.equal(replacement.active, true);
+
+  runtime.stop();
+  assert.deepEqual(
+    handles.map((handle) => handle.stopCalls),
+    [3, 2, 1],
+    'runtime stop retries quarantined A alongside replacement C',
+  );
+  assert.equal(activeProducers, 0);
+  assert.equal(peakActiveProducers, 1);
+  assert.deepEqual(runtime.streams, []);
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+  assert.equal(runtime.streamRecoveryAttempts.size, 0);
+});
+
+test('VolumeRuntime retry ownership follow-through does not commit a superseded retry key', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const intendedSymbols = ['Z000USDT'];
+  const intendedKey = intendedSymbols.join(',');
+  const universe = [{
+    symbol: intendedSymbols[0],
+    base: 'Z000',
+    hasSpot: true,
+    hasPerp: true,
+    quoteVolume24h: 100,
+  }];
+  const handles = [];
+  let activeProducers = 0;
+  let installReplacement = true;
+  let runtime;
+  runtime = new VolumeRuntime(
+    {
+      logEvent(kind) {
+        if (kind !== 'ws.open' || !installReplacement) return;
+        installReplacement = false;
+        runtime.restartTradeStreams(['REPLUSDT'], runtime.generation);
+      },
+    },
+    () => ({
+      killSwitch: true,
+      maxOrderNotionalUsd: 10,
+      minQuoteVolume24h: 1,
+      allowedSymbols: [],
+      blockedSymbols: [],
+    }),
+    () => universe,
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const creationIndex = handles.length;
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            assert.equal(this.active, false);
+            this.active = true;
+            activeProducers += 1;
+            onStatus(name, creationIndex === 1 ? 'exhausted' : 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  runtime.eligibleSymbols = intendedSymbols;
+  runtime.eligibleSymbolSet = new Set(intendedSymbols);
+  runtime.refreshBooks = async () => {};
+  runtime.warmBaselines = async () => {};
+  const generation = runtime.generation;
+
+  runtime.scheduleStreamRetry(intendedSymbols, intendedKey, generation);
+  t.mock.timers.tick(1_000);
+  assert.equal(handles.length, 2);
+  const replacement = handles[1];
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], replacement);
+  assert.equal(runtime.streamStatus.get(replacement.name), 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(replacement.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1);
+  assert.equal(runtime.symbolSetKey, '', 'superseded retry cannot commit its outer key');
+  assert.equal(runtime.streamRetryTimer, null);
+  assert.equal(runtime.streamRetryMs, 2_000, 'false retry disposition is not cleared as a success');
+  assert.equal(activeProducers, 1);
+
+  await runtime.refreshUniverse(generation);
+  assert.equal(handles.length, 3, 'uncommitted key allows the next intended refresh to rebuild');
+  const intended = handles[2];
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], intended);
+  assert.equal(runtime.streamStatus.get(intended.name), 'open');
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+  assert.equal(runtime.streamRecoveryAttempts.size, 0);
+  assert.equal(runtime.symbolSetKey, intendedKey);
+  assert.equal(runtime.streamRetryTimer, null);
+  assert.equal(runtime.streamRetryMs, 1_000);
+  assert.equal(activeProducers, 1);
+
+  runtime.stop();
+  assert.equal(activeProducers, 0);
+  assert.deepEqual(runtime.streams, []);
+});
+
+test('VolumeRuntime dynamic stale cleanup preserves later owner D that reuses old B', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const symbols = Array.from(
+    { length: 141 },
+    (_, index) => `Q${String(index).padStart(3, '0')}USDT`,
+  );
+  const universe = symbols.map((symbol) => ({
+    symbol,
+    base: symbol.slice(0, -4),
+    hasSpot: true,
+    hasPerp: true,
+    quoteVolume24h: 100,
+  }));
+  const handles = [];
+  let factoryCalls = 0;
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let installC = true;
+  let installD = true;
+  let runtime;
+  runtime = new VolumeRuntime(
+    {
+      logEvent(kind, _symbol, payload) {
+        if (
+          kind !== 'ws.open'
+          || payload.feed !== 'volume-aggtrade-2'
+          || !installC
+        ) return;
+        installC = false;
+        runtime.restartTradeStreams(['CPLUSDT'], runtime.generation);
+      },
+    },
+    () => ({
+      killSwitch: true,
+      maxOrderNotionalUsd: 10,
+      minQuoteVolume24h: 1,
+      allowedSymbols: [],
+      blockedSymbols: [],
+    }),
+    () => universe,
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const creationIndex = factoryCalls;
+        factoryCalls += 1;
+        if (creationIndex === 3) {
+          const reused = handles[1];
+          reused.name = name;
+          reused.url = url;
+          reused.onMessage = onMessage;
+          reused.onStatus = onStatus;
+          reused.role = 'D';
+          return reused;
+        }
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          role: creationIndex === 0 ? 'A' : creationIndex === 1 ? 'B' : 'C',
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            if (this.role === 'B') {
+              this.onStatus(this.name, 'open');
+              throw new Error('synthetic stale dynamic B failure');
+            }
+            assert.equal(this.active, false);
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            this.onStatus(this.name, this.role === 'A' ? 'open' : 'exhausted');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (this.active) {
+              this.active = false;
+              activeProducers -= 1;
+            }
+            if (this.role !== 'A' || this.stopCalls !== 2 || !installD) return;
+            installD = false;
+            runtime.restartTradeStreams(['DPLUSDT'], runtime.generation);
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.refreshBooks = async () => {};
+  runtime.warmBaselines = async () => {};
+
+  await runtime.start();
+  assert.equal(factoryCalls, 4);
+  assert.equal(handles.length, 3);
+  const [first, reused, third] = handles;
+  assert.equal(runtime.running, true);
+  assert.equal(first.stopCalls, 2);
+  assert.equal(third.stopCalls, 1, 'installing D stops superseded C');
+  assert.equal(reused.role, 'D');
+  assert.equal(reused.startCalls, 2);
+  assert.equal(reused.stopCalls, 1, 'dynamic cleanup check skips B after it becomes current D');
+  assert.equal(reused.active, true);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], reused);
+  assert.equal(runtime.streamStatus.get(reused.name), 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(reused.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1);
+  assert.equal(runtime.symbolSetKey, '');
+  assert.equal(runtime.streamRetryTimer, null);
+
+  runtime.stop();
+  assert.equal(reused.stopCalls, 2, 'runtime stop owns D final cleanup');
+  assert.equal(activeProducers, 0);
+  assert.equal(peakActiveProducers, 1);
+  assert.deepEqual(runtime.streams, []);
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+  assert.equal(runtime.streamRecoveryAttempts.size, 0);
+});
+
+test('VolumeRuntime transactional restart entry preserves D installed by old A stop', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  let factoryCalls = 0;
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let installD = false;
+  let runtime;
+  let generation;
+  let reused;
+  runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const call = factoryCalls;
+        factoryCalls += 1;
+        if (call === 1) {
+          reused.name = name;
+          reused.url = url;
+          reused.onMessage = onMessage;
+          reused.onStatus = onStatus;
+          reused.role = 'D';
+          return reused;
+        }
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          role: 'A',
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            assert.equal(this.active, false);
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            this.onStatus(this.name, this.role === 'D' ? 'exhausted' : 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (this.active) {
+              this.active = false;
+              activeProducers -= 1;
+            }
+            if (!installD) return;
+            installD = false;
+            runtime.restartTradeStreams(['DPLUSDT'], generation);
+          },
+        };
+        reused = handle;
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  generation = runtime.generation;
+  assert.equal(runtime.restartTradeStreams(['APLUSDT'], generation), true);
+  assert.equal(factoryCalls, 1);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  installD = true;
+  assert.equal(
+    runtime.restartTradeStreams(['OUTERUSDT'], generation),
+    false,
+    'the entry turn retires after predecessor A stop installs D',
+  );
+  assert.equal(factoryCalls, 2, 'superseded outer turn never reaches its factory');
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], reused);
+  assert.equal(runtime.streamOwnershipKey, 'DPLUSDT');
+  assert.equal(reused.role, 'D');
+  assert.equal(reused.active, true);
+  assert.equal(reused.startCalls, 2);
+  assert.equal(reused.stopCalls, 1);
+  assert.equal(runtime.streamStatus.get(reused.name), 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(reused.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  runtime.stop();
+  assert.equal(reused.stopCalls, 2);
+  assert.equal(activeProducers, 0);
+  assert.equal(peakActiveProducers, 1);
+  assert.deepEqual(runtime.streams, []);
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+  assert.equal(runtime.streamRecoveryAttempts.size, 0);
+});
+
+test('VolumeRuntime transactional restart rollback preserves D installed by A cleanup', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const symbols = Array.from(
+    { length: 141 },
+    (_, index) => `R${String(index).padStart(3, '0')}USDT`,
+  );
+  const universe = symbols.map((symbol) => ({
+    symbol,
+    base: symbol.slice(0, -4),
+    hasSpot: true,
+    hasPerp: true,
+    quoteVolume24h: 100,
+  }));
+  const handles = [];
+  let factoryCalls = 0;
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let installD = true;
+  let runtime;
+  runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => ({
+      killSwitch: true,
+      maxOrderNotionalUsd: 10,
+      minQuoteVolume24h: 1,
+      allowedSymbols: [],
+      blockedSymbols: [],
+    }),
+    () => universe,
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const creationIndex = factoryCalls;
+        factoryCalls += 1;
+        if (creationIndex === 2) {
+          const reused = handles[1];
+          reused.name = name;
+          reused.url = url;
+          reused.onMessage = onMessage;
+          reused.onStatus = onStatus;
+          reused.role = 'D';
+          return reused;
+        }
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          role: creationIndex === 0 ? 'A' : 'B',
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            if (this.role === 'B') {
+              throw new Error('synthetic authoritative B failure');
+            }
+            assert.equal(this.active, false);
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            this.onStatus(this.name, this.role === 'D' ? 'exhausted' : 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (this.active) {
+              this.active = false;
+              activeProducers -= 1;
+            }
+            if (this.role !== 'A' || !installD) return;
+            installD = false;
+            runtime.restartTradeStreams(['DPLUSDT'], runtime.generation);
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.refreshBooks = async () => {};
+  runtime.warmBaselines = async () => {};
+
+  await runtime.start();
+  assert.equal(factoryCalls, 3);
+  assert.equal(handles.length, 2);
+  const [first, reused] = handles;
+  assert.equal(runtime.running, true, 'rollback supersession retires the original B error');
+  assert.equal(first.stopCalls, 1);
+  assert.equal(reused.role, 'D');
+  assert.equal(reused.startCalls, 2);
+  assert.equal(reused.stopCalls, 0, 'dynamic rollback cleanup skips B after it becomes current D');
+  assert.equal(reused.active, true);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], reused);
+  assert.equal(runtime.streamOwnershipKey, 'DPLUSDT');
+  assert.equal(runtime.streamStatus.get(reused.name), 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(reused.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1);
+  assert.equal(runtime.symbolSetKey, '');
+  assert.equal(runtime.streamRetryTimer, null);
+
+  runtime.stop();
+  assert.equal(reused.stopCalls, 1);
+  assert.equal(activeProducers, 0);
+  assert.equal(peakActiveProducers, 1);
+  assert.deepEqual(runtime.streams, []);
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+  assert.equal(runtime.streamRecoveryAttempts.size, 0);
+});
+
+test('VolumeRuntime final ownership boundary contains a stale factory return after replacement', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const handles = [];
+  let factoryCalls = 0;
+  let activeProducers = 0;
+  let nestedInstalled = false;
+  let runtime;
+  runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const creationIndex = factoryCalls;
+        factoryCalls += 1;
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            assert.equal(this.active, false);
+            this.active = true;
+            activeProducers += 1;
+            onStatus(name, creationIndex === 1 ? 'exhausted' : 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        handles.push(handle);
+        if (creationIndex === 0) {
+          runtime.stop();
+          runtime.running = true;
+          nestedInstalled = runtime.restartTradeStreams(['DPLUSDT'], runtime.generation);
+          runtime.symbolSetKey = 'DPLUSDT';
+        }
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  const outerGeneration = runtime.generation;
+
+  assert.equal(runtime.restartTradeStreams(['OUTERUSDT'], outerGeneration), false);
+  assert.equal(nestedInstalled, true);
+  assert.equal(handles.length, 2);
+  const [stale, replacement] = handles;
+  assert.equal(stale.startCalls, 0, 'stale factory return is never started');
+  assert.equal(stale.stopCalls, 1, 'stale factory return is best-effort cleaned');
+  assert.equal(replacement.startCalls, 1);
+  assert.equal(replacement.stopCalls, 0);
+  assert.equal(replacement.active, true);
+  assert.equal(activeProducers, 1);
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], replacement);
+  assert.equal(runtime.symbolSetKey, 'DPLUSDT');
+  assert.equal(runtime.streamStatus.get(replacement.name), 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(replacement.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1);
+
+  runtime.stop();
+  assert.equal(replacement.stopCalls, 1);
+  assert.equal(activeProducers, 0);
+  assert.deepEqual(runtime.streams, []);
+});
+
+test('VolumeRuntime final ownership boundary retains a predecessor whose stop throws', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  let factoryCalls = 0;
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let producer;
+  const runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      streamFactory: (name, url, onMessage, onStatus) => {
+        factoryCalls += 1;
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (this.stopCalls === 1) throw new Error('synthetic predecessor stop failure');
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        producer = handle;
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  const generation = runtime.generation;
+  assert.equal(runtime.restartTradeStreams(['APLUSDT'], generation), true);
+
+  assert.throws(
+    () => runtime.restartTradeStreams(['BPLUSDT'], generation),
+    /synthetic predecessor stop failure/,
+  );
+  assert.equal(factoryCalls, 1, 'predecessor failure aborts before replacement construction');
+  assert.equal(producer.startCalls, 1);
+  assert.equal(producer.stopCalls, 1);
+  assert.equal(producer.active, true);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], producer, 'failed live predecessor remains registered');
+  assert.equal(runtime.streamStatus.size, 0);
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+  assert.equal(runtime.streamRecoveryAttempts.size, 0);
+
+  producer.onStatus(producer.name, 'exhausted');
+  t.mock.timers.tick(60_000);
+  assert.equal(producer.startCalls, 1, 'failed predecessor callbacks remain epoch-fenced');
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+
+  runtime.stop();
+  assert.equal(producer.stopCalls, 2, 'public stop retries the retained predecessor');
+  assert.equal(activeProducers, 0);
+  assert.deepEqual(runtime.streams, []);
+});
+
+test('VolumeRuntime final ownership boundary retains an owned start whose rollback stop throws', () => {
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let producer;
+  const runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            throw new Error('synthetic authoritative start failure');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (this.stopCalls === 1) throw new Error('synthetic rollback stop failure');
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        producer = handle;
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  const generation = runtime.generation;
+
+  assert.throws(
+    () => runtime.restartTradeStreams(['APLUSDT'], generation),
+    /synthetic authoritative start failure/,
+    'owned rollback rethrows the original start error',
+  );
+  assert.equal(producer.startCalls, 1);
+  assert.equal(producer.stopCalls, 1);
+  assert.equal(producer.active, true);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], producer, 'rollback stop failure remains registered');
+  assert.equal(runtime.streamStatus.size, 0);
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+  assert.equal(runtime.streamRecoveryAttempts.size, 0);
+  assert.equal(runtime.streamRetryTimer, null);
+
+  runtime.stop();
+  assert.equal(producer.stopCalls, 2);
+  assert.equal(activeProducers, 0);
+  assert.deepEqual(runtime.streams, []);
+});
+
+test('VolumeRuntime final ownership boundary preserves D installed by start error logging until empty teardown', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  let universe = [{
+    symbol: 'APLUSDT',
+    base: 'APL',
+    hasSpot: true,
+    hasPerp: true,
+    quoteVolume24h: 100,
+  }];
+  const handles = [];
+  let activeProducers = 0;
+  let installD = true;
+  let runtime;
+  runtime = new VolumeRuntime(
+    {
+      logEvent(kind, _symbol, payload) {
+        if (
+          kind !== 'error_event'
+          || payload.source !== 'volume-runtime.start'
+          || !installD
+        ) return;
+        installD = false;
+        runtime.restartTradeStreams(['DPLUSDT'], runtime.generation);
+      },
+    },
+    () => ({
+      killSwitch: true,
+      maxOrderNotionalUsd: 10,
+      minQuoteVolume24h: 1,
+      allowedSymbols: [],
+      blockedSymbols: [],
+    }),
+    () => universe,
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const creationIndex = handles.length;
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            if (creationIndex === 0) throw new Error('synthetic public owned start failure');
+            this.active = true;
+            activeProducers += 1;
+            onStatus(name, 'exhausted');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.refreshBooks = async () => {};
+  runtime.warmBaselines = async () => {};
+
+  await runtime.start();
+  assert.equal(handles.length, 2);
+  const replacement = handles[1];
+  assert.equal(runtime.running, true);
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], replacement);
+  assert.equal(replacement.active, true);
+  assert.equal(activeProducers, 1);
+  assert.equal(runtime.streamStatus.get(replacement.name), 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(replacement.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1);
+  assert.equal(runtime.streamRetryTimer, null, 'unchanged stale universe retry is cancelled');
+  assert.equal(runtime.streamRetryMs, 1_000, 'stale universe retry cancellation resets backoff');
+  assert.equal(runtime.symbolSetKey, '');
+
+  universe = [];
+  await runtime.refreshUniverse(runtime.generation);
+  assert.equal(replacement.stopCalls, 1);
+  assert.equal(activeProducers, 0);
+  assert.deepEqual(runtime.streams, []);
+  assert.equal(runtime.streamStopQuarantine.size, 0);
+  assert.equal(runtime.symbolSetKey, '');
+  assert.equal(runtime.streamRetryTimer, null);
+
+  runtime.stop();
+  assert.equal(replacement.stopCalls, 1, 'inactive stop does not repeat completed ghost teardown');
+});
+
+test('VolumeRuntime final ownership boundary does not reschedule after retry error logging replaces owner', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const handles = [];
+  let activeProducers = 0;
+  let installReplacement = true;
+  let runtime;
+  runtime = new VolumeRuntime(
+    {
+      logEvent(kind, _symbol, payload) {
+        if (
+          kind !== 'error_event'
+          || payload.source !== 'volume-runtime.stream-retry'
+          || !installReplacement
+        ) return;
+        installReplacement = false;
+        runtime.restartTradeStreams(['CPLUSDT'], runtime.generation);
+      },
+    },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const creationIndex = handles.length;
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            if (creationIndex === 0) throw new Error('synthetic retry start failure');
+            this.active = true;
+            activeProducers += 1;
+            onStatus(name, 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  runtime.eligibleSymbols = ['APLUSDT'];
+  runtime.eligibleSymbolSet = new Set(['APLUSDT']);
+  const generation = runtime.generation;
+
+  runtime.scheduleStreamRetry(['APLUSDT'], 'APLUSDT', generation);
+  t.mock.timers.tick(1_000);
+  assert.equal(handles.length, 2);
+  const replacement = handles[1];
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], replacement);
+  assert.equal(replacement.active, true);
+  assert.equal(activeProducers, 1);
+  assert.equal(runtime.streamStatus.get(replacement.name), 'open');
+  assert.equal(runtime.streamRetryTimer, null, 'stale retry error cannot schedule another retry');
+  assert.equal(runtime.symbolSetKey, '');
+
+  t.mock.timers.tick(60_000);
+  assert.equal(handles.length, 2);
+  assert.equal(replacement.startCalls, 1);
+  assert.equal(activeProducers, 1);
+
+  runtime.stop();
+  assert.equal(replacement.stopCalls, 1);
+  assert.equal(activeProducers, 0);
+  assert.deepEqual(runtime.streams, []);
+});
+
+test('VolumeRuntime quarantine boundary retries an inactive retained handle until stop succeeds', () => {
+  let activeProducers = 0;
+  let producer;
+  const runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            this.active = true;
+            activeProducers += 1;
+            onStatus(name, 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (this.stopCalls === 1) throw new Error('synthetic first public stop failure');
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        producer = handle;
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  assert.equal(runtime.restartTradeStreams(['APLUSDT'], runtime.generation), true);
+
+  runtime.stop();
+  assert.equal(runtime.running, false);
+  assert.equal(producer.stopCalls, 1);
+  assert.equal(producer.active, true);
+  assert.equal(activeProducers, 1);
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], producer);
+  assert.equal(runtime.streamStopQuarantine.has(producer), true);
+
+  runtime.stop();
+  assert.equal(runtime.running, false);
+  assert.equal(producer.stopCalls, 2);
+  assert.equal(producer.active, false);
+  assert.equal(activeProducers, 0);
+  assert.deepEqual(runtime.streams, []);
+  assert.equal(runtime.streamStopQuarantine.size, 0);
+});
+
+test('VolumeRuntime quarantine boundary blocks nested D until earlier P1 stop clears', () => {
+  let activeProducers = 1;
+  let peakActiveProducers = 1;
+  let p1Fails = true;
+  let nestedAttempted = false;
+  let nestedError = null;
+  let factoryCalls = 0;
+  let replacement;
+  let runtime;
+  const p1 = {
+    name: 'prior-1',
+    active: true,
+    stopCalls: 0,
+    start() {},
+    stop() {
+      this.stopCalls += 1;
+      if (p1Fails) throw new Error('synthetic quarantined P1 stop failure');
+      if (!this.active) return;
+      this.active = false;
+      activeProducers -= 1;
+    },
+  };
+  const p2 = {
+    name: 'prior-2',
+    active: false,
+    stopCalls: 0,
+    start() {},
+    stop() {
+      this.stopCalls += 1;
+      if (nestedAttempted) return;
+      nestedAttempted = true;
+      try {
+        runtime.restartTradeStreams(['DPLUSDT'], runtime.generation);
+      } catch (error) {
+        nestedError = error;
+      }
+    },
+  };
+  runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      streamFactory: (name, url, onMessage, onStatus) => {
+        factoryCalls += 1;
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        replacement = handle;
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  runtime.streams = [p1, p2];
+
+  assert.equal(runtime.restartTradeStreams(['OUTERUSDT'], runtime.generation), false);
+  assert.equal(nestedAttempted, true);
+  assert.match(String(nestedError), /synthetic quarantined P1 stop failure/);
+  assert.equal(factoryCalls, 0, 'quarantine aborts nested D before construction');
+  assert.equal(p1.stopCalls, 2, 'outer and nested turns both attempt quarantined P1');
+  assert.equal(p1.active, true);
+  assert.equal(p2.stopCalls, 1);
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], p1);
+  assert.equal(runtime.streamStopQuarantine.has(p1), true);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  p1Fails = false;
+  runtime.stop();
+  assert.equal(p1.stopCalls, 3);
+  assert.equal(activeProducers, 0);
+  assert.equal(runtime.streamStopQuarantine.size, 0);
+  assert.deepEqual(runtime.streams, []);
+
+  runtime.running = true;
+  assert.equal(runtime.restartTradeStreams(['DPLUSDT'], runtime.generation), true);
+  assert.equal(factoryCalls, 1);
+  assert.equal(runtime.streams[0], replacement);
+  assert.equal(replacement.active, true);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  runtime.stop();
+  assert.equal(replacement.stopCalls, 1);
+  assert.equal(activeProducers, 0);
+  assert.equal(runtime.streamStopQuarantine.size, 0);
+});
+
+test('VolumeRuntime quarantine boundary preserves D and cancels stale retry after background logging', async () => {
+  const handles = [];
+  let activeProducers = 0;
+  let installD = true;
+  let runtime;
+  runtime = new VolumeRuntime(
+    {
+      logEvent(kind, _symbol, payload) {
+        if (
+          kind !== 'error_event'
+          || payload.source !== 'volume-runtime.background'
+          || !installD
+        ) return;
+        installD = false;
+        runtime.restartTradeStreams(['DPLUSDT'], runtime.generation);
+      },
+    },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      sourceRecoveryBaseMs: 1,
+      random: () => 0.5,
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            this.active = true;
+            activeProducers += 1;
+            onStatus(name, 'exhausted');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  runtime.eligibleSymbols = ['APLUSDT'];
+  runtime.scheduleStreamRetry(['APLUSDT'], 'APLUSDT', runtime.generation);
+  const staleRetryTimer = runtime.streamRetryTimer;
+  assert.notEqual(staleRetryTimer, null);
+
+  runtime.launch(
+    'synthetic background refresh',
+    runtime.generation,
+    async () => { throw new Error('synthetic background refresh failure'); },
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(handles.length, 1);
+  const replacement = handles[0];
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], replacement);
+  assert.equal(replacement.active, true);
+  assert.equal(activeProducers, 1);
+  assert.equal(runtime.streamStatus.get(replacement.name), 'exhausted');
+  assert.equal(runtime.streamRecoveryAttempts.get(replacement.name), 1);
+  assert.equal(runtime.streamRecoveryTimers.size, 1);
+  assert.equal(runtime.streamRetryTimer, null, 'background catch cancels only unchanged stale retry');
+  assert.equal(runtime.streamRetryMs, 1_000, 'background stale retry cancellation resets backoff');
+
+  runtime.stop();
+  assert.equal(replacement.stopCalls, 1);
+  assert.equal(activeProducers, 0);
+});
+
+test('VolumeRuntime quarantine boundary preserves a nested retry timer without ownership change', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  let nestedTimer = null;
+  let installNestedRetry = true;
+  let producer;
+  let runtime;
+  runtime = new VolumeRuntime(
+    {
+      logEvent(kind, _symbol, payload) {
+        if (
+          kind !== 'error_event'
+          || payload.source !== 'volume-runtime.stream-retry'
+          || !installNestedRetry
+        ) return;
+        installNestedRetry = false;
+        runtime.scheduleStreamRetry(['APLUSDT'], 'APLUSDT', runtime.generation);
+        nestedTimer = runtime.streamRetryTimer;
+      },
+    },
+    () => ({}),
+    () => [],
+    null,
+    () => 1_000,
+    {
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            throw new Error('synthetic retry timer identity failure');
+          },
+          stop() {
+            this.stopCalls += 1;
+          },
+        };
+        producer = handle;
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  runtime.eligibleSymbols = ['APLUSDT'];
+  runtime.scheduleStreamRetry(['APLUSDT'], 'APLUSDT', runtime.generation);
+
+  t.mock.timers.tick(1_000);
+  assert.notEqual(nestedTimer, null);
+  assert.equal(runtime.streamRetryTimer, nestedTimer, 'outer catch preserves nested retry timer identity');
+  assert.equal(runtime.streamRetryMs, 4_000, 'outer catch does not schedule over nested retry');
+  assert.equal(producer.startCalls, 1);
+  assert.equal(producer.stopCalls, 1);
+  assert.equal(runtime.streams.length, 0);
+  assert.equal(runtime.streamStopQuarantine.size, 0);
+
+  runtime.stop();
+  assert.equal(runtime.streamRetryTimer, null);
+});
+
+test('VolumeRuntime same-key refresh repairs a quarantined quiesced producer after retry-key mismatch', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'setInterval'] });
+  const row = (symbol) => ({
+    symbol,
+    base: symbol.slice(0, -4),
+    hasSpot: true,
+    hasPerp: true,
+    quoteVolume24h: 100,
+  });
+  let universe = [row('AUSDT')];
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let staleBRetryTimer = null;
+  let runtime;
+  runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => ({
+      killSwitch: true,
+      maxOrderNotionalUsd: 10,
+      minQuoteVolume24h: 1,
+      allowedSymbols: [],
+      blockedSymbols: [],
+    }),
+    () => universe,
+    null,
+    () => 1_000,
+    {
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const creationIndex = handles.length;
+        if (creationIndex === 1) {
+          assert.deepEqual(runtime.eligibleSymbols, ['AUSDT']);
+          assert.equal(
+            runtime.streamRetryTimer,
+            staleBRetryTimer,
+            'same-key repair begins while the stale B retry mismatches eligible A',
+          );
+        }
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            assert.equal(this.active, false);
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (creationIndex === 0 && this.stopCalls === 1) {
+              if (this.active) {
+                this.active = false;
+                activeProducers -= 1;
+              }
+              throw new Error('synthetic A quiesced before stop failure');
+            }
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  runtime.warmBaselines = async () => {};
+  const generation = runtime.generation;
+
+  await runtime.refreshUniverse(generation);
+  const originalA = handles[0];
+  assert.equal(runtime.symbolSetKey, 'AUSDT');
+  assert.equal(originalA.active, true);
+  assert.equal(activeProducers, 1);
+
+  universe = [row('BUSDT')];
+  await assert.rejects(
+    runtime.refreshUniverse(generation),
+    /synthetic A quiesced before stop failure/,
+  );
+  staleBRetryTimer = runtime.streamRetryTimer;
+  assert.notEqual(staleBRetryTimer, null);
+  assert.deepEqual(runtime.eligibleSymbols, ['BUSDT']);
+  assert.equal(runtime.symbolSetKey, 'AUSDT', 'failed B transition cannot commit its key');
+  assert.equal(originalA.active, false, 'throwing stop already quiesced the A producer');
+  assert.equal(runtime.streams[0], originalA);
+  assert.equal(runtime.streamStopQuarantine.has(originalA), true);
+  assert.equal(activeProducers, 0);
+
+  universe = [row('AUSDT')];
+  await runtime.refreshUniverse(generation);
+  const replacementA = handles[1];
+  assert.equal(handles.length, 2);
+  assert.equal(originalA.stopCalls, 2, 'same-key repair drains the quarantined identity');
+  assert.equal(runtime.streamStopQuarantine.size, 0);
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], replacementA);
+  assert.equal(replacementA.active, true);
+  assert.equal(runtime.symbolSetKey, 'AUSDT');
+  assert.equal(runtime.streamRetryTimer, null, 'successful A repair cancels the stale B retry');
+  assert.equal(runtime.streamRetryMs, 1_000, 'successful A repair resets retry backoff');
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  t.mock.timers.tick(60_000);
+  assert.equal(handles.length, 2, 'the cancelled mismatched B retry cannot create a producer');
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  runtime.scheduleStreamRetry(['AUSDT'], 'AUSDT', generation);
+  const completeEpoch = runtime.streamEpoch;
+  await runtime.refreshUniverse(generation);
+  assert.equal(runtime.streamEpoch, completeEpoch, 'healthy same-key ownership does not transact');
+  assert.equal(runtime.streamRetryTimer, null, 'healthy same-key refresh clears stale retry ownership');
+  assert.equal(runtime.streamRetryMs, 1_000);
+  assert.equal(handles.length, 2);
+
+  universe = [];
+  await runtime.refreshUniverse(generation);
+  const emptyEpoch = runtime.streamEpoch;
+  assert.equal(activeProducers, 0);
+  assert.deepEqual(runtime.streams, []);
+  assert.equal(runtime.symbolSetKey, '');
+  await runtime.refreshUniverse(generation);
+  assert.equal(runtime.streamEpoch, emptyEpoch, 'a healthy empty universe does not transact repeatedly');
+  assert.equal(handles.length, 2);
+
+  runtime.stop();
+  assert.equal(activeProducers, 0);
+  assert.equal(runtime.streamStopQuarantine.size, 0);
+});
+
+test('VolumeRuntime same-key completeness independently repairs length or unique ownership and rejects duplicate factory identity', async () => {
+  const symbols = Array.from(
+    { length: 141 },
+    (_, index) => `C${String(index).padStart(3, '0')}USDT`,
+  );
+  const universe = symbols.map((symbol) => ({
+    symbol,
+    base: symbol.slice(0, -4),
+    hasSpot: true,
+    hasPerp: true,
+    quoteVolume24h: 100,
+  }));
+
+  for (const variant of ['unique', 'length']) {
+    const replacements = [];
+    const makePrior = (name) => ({
+      name,
+      active: true,
+      stopCalls: 0,
+      start() {},
+      stop() {
+        this.stopCalls += 1;
+        if (!this.active) return;
+        this.active = false;
+        activeProducers -= 1;
+      },
+    });
+    const firstPrior = makePrior('prior-1');
+    const secondPrior = variant === 'length' ? makePrior('prior-2') : null;
+    const priors = secondPrior === null ? [firstPrior] : [firstPrior, secondPrior];
+    let activeProducers = priors.length;
+    let peakActiveProducers = priors.length;
+    const runtime = new VolumeRuntime(
+      { logEvent() {} },
+      () => ({
+        killSwitch: true,
+        maxOrderNotionalUsd: 10,
+        minQuoteVolume24h: 1,
+        allowedSymbols: [],
+        blockedSymbols: [],
+      }),
+      () => universe,
+      null,
+      () => 1_000,
+      {
+        streamFactory: (name, url, onMessage, onStatus) => {
+          const handle = {
+            name,
+            url,
+            onMessage,
+            onStatus,
+            active: false,
+            startCalls: 0,
+            stopCalls: 0,
+            start() {
+              this.startCalls += 1;
+              assert.equal(this.active, false);
+              assert.ok(activeProducers < 2, `${variant} repair starts no third producer`);
+              this.active = true;
+              activeProducers += 1;
+              peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+              onStatus(name, 'open');
+            },
+            stop() {
+              this.stopCalls += 1;
+              if (!this.active) return;
+              this.active = false;
+              activeProducers -= 1;
+            },
+          };
+          replacements.push(handle);
+          return handle;
+        },
+      },
+    );
+    runtime.running = true;
+    runtime.symbolSetKey = symbols.join(',');
+    runtime.streamOwnershipKey = symbols.join(',');
+    runtime.streams = variant === 'unique'
+      ? [firstPrior, firstPrior]
+      : [firstPrior, secondPrior, secondPrior];
+    runtime.warmBaselines = async () => {};
+
+    assert.equal(
+      runtime.streams.length,
+      variant === 'unique' ? 2 : 3,
+      `${variant} fixture pins only its intended shape clause`,
+    );
+    assert.equal(
+      new Set(runtime.streams).size,
+      variant === 'unique' ? 1 : 2,
+      `${variant} fixture pins only its intended shape clause`,
+    );
+    await runtime.refreshUniverse(runtime.generation);
+    for (const prior of priors) {
+      assert.equal(prior.stopCalls, 1, `${variant} predecessor cleanup is identity-deduped`);
+      assert.equal(prior.active, false);
+    }
+    assert.equal(replacements.length, 2);
+    assert.equal(runtime.streams.length, 2);
+    assert.equal(new Set(runtime.streams).size, 2);
+    assert.equal(runtime.streams[0], replacements[0]);
+    assert.equal(runtime.streams[1], replacements[1]);
+    assert.equal(activeProducers, 2);
+    assert.equal(peakActiveProducers, 2);
+    assert.equal(runtime.symbolSetKey, symbols.join(','));
+
+    runtime.stop();
+    assert.equal(activeProducers, 0);
+    assert.deepEqual(runtime.streams, []);
+  }
+
+  let duplicateFactoryCalls = 0;
+  let duplicateActiveProducers = 0;
+  const duplicateHandle = {
+    name: 'duplicate-factory-handle',
+    active: false,
+    startCalls: 0,
+    stopCalls: 0,
+    start() {
+      this.startCalls += 1;
+      assert.equal(this.active, false);
+      this.active = true;
+      duplicateActiveProducers += 1;
+    },
+    stop() {
+      this.stopCalls += 1;
+      if (!this.active) return;
+      this.active = false;
+      duplicateActiveProducers -= 1;
+    },
+  };
+  const duplicateRuntime = new VolumeRuntime(
+    { logEvent() {} },
+    () => ({
+      killSwitch: true,
+      maxOrderNotionalUsd: 10,
+      minQuoteVolume24h: 1,
+      allowedSymbols: [],
+      blockedSymbols: [],
+    }),
+    () => universe,
+    null,
+    () => 1_000,
+    {
+      streamFactory: () => {
+        duplicateFactoryCalls += 1;
+        return duplicateHandle;
+      },
+    },
+  );
+  duplicateRuntime.running = true;
+  duplicateRuntime.warmBaselines = async () => {};
+
+  await assert.rejects(
+    duplicateRuntime.refreshUniverse(duplicateRuntime.generation),
+    /volume stream factory returned a duplicate handle/,
+  );
+  assert.equal(duplicateFactoryCalls, 2);
+  assert.equal(duplicateHandle.startCalls, 1, 'duplicate identity is rejected before a second start');
+  assert.equal(duplicateHandle.stopCalls, 1, 'authoritative rollback stops the first registration');
+  assert.equal(duplicateActiveProducers, 0);
+  assert.deepEqual(duplicateRuntime.streams, []);
+  assert.equal(duplicateRuntime.streamStopQuarantine.size, 0);
+  assert.equal(duplicateRuntime.symbolSetKey, '');
+  assert.notEqual(duplicateRuntime.streamRetryTimer, null);
+
+  duplicateRuntime.stop();
+  assert.equal(duplicateRuntime.streamRetryTimer, null);
+});
+
+test('VolumeRuntime ownership provenance rebuilds committed A after a nested same-cardinality B wins', async () => {
+  const rows = [{
+    symbol: 'AUSDT',
+    base: 'A',
+    hasSpot: true,
+    hasPerp: true,
+    quoteVolume24h: 100,
+  }];
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let installB = true;
+  let nestedBDisposition = null;
+  let runtime;
+  runtime = new VolumeRuntime(
+    {
+      logEvent(kind, _symbol, payload) {
+        if (
+          kind !== 'ws.exhausted'
+          || payload.feed !== 'volume-aggtrade-1'
+          || !installB
+        ) return;
+        installB = false;
+        nestedBDisposition = runtime.restartTradeStreams(['BUSDT'], runtime.generation);
+      },
+    },
+    () => ({
+      killSwitch: true,
+      maxOrderNotionalUsd: 10,
+      minQuoteVolume24h: 1,
+      allowedSymbols: [],
+      blockedSymbols: [],
+    }),
+    () => rows,
+    null,
+    () => 1_000,
+    {
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const creationIndex = handles.length;
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            assert.equal(this.active, false);
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (!this.active) return;
+            this.active = false;
+            activeProducers -= 1;
+          },
+          creationIndex,
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.running = true;
+  runtime.warmBaselines = async () => {};
+  runtime.engine.onTrade = () => true;
+  const generation = runtime.generation;
+
+  await runtime.refreshUniverse(generation);
+  const originalA = handles[0];
+  assert.equal(runtime.symbolSetKey, 'AUSDT');
+  assert.equal(runtime.streamOwnershipKey, 'AUSDT');
+  assert.equal(originalA.active, true);
+
+  originalA.onStatus(originalA.name, 'exhausted');
+  const nestedB = handles[1];
+  assert.equal(nestedBDisposition, true);
+  assert.equal(runtime.symbolSetKey, 'AUSDT', 'nested seam cannot commit the universe caller key');
+  assert.equal(runtime.streamOwnershipKey, 'BUSDT', 'exact nested turn publishes physical B ownership');
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], nestedB);
+  assert.equal(originalA.active, false);
+  assert.equal(nestedB.active, true);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  await runtime.refreshUniverse(generation);
+  const rebuiltA = handles[2];
+  assert.equal(handles.length, 3, 'same-cardinality provenance mismatch rebuilds committed A');
+  assert.equal(nestedB.stopCalls, 1);
+  assert.equal(nestedB.active, false);
+  assert.equal(rebuiltA.active, true);
+  assert.equal(runtime.streams.length, 1);
+  assert.equal(runtime.streams[0], rebuiltA);
+  assert.equal(runtime.symbolSetKey, 'AUSDT');
+  assert.equal(runtime.streamOwnershipKey, 'AUSDT');
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  originalA.onStatus(originalA.name, 'open');
+  nestedB.onStatus(nestedB.name, 'exhausted');
+  originalA.onMessage({
+    e: 'aggTrade',
+    E: 1_000,
+    s: 'AUSDT',
+    a: 1,
+    p: '1',
+    q: '1',
+    f: 1,
+    l: 1,
+    T: 1_000,
+    m: false,
+  });
+  assert.equal(runtime.streams[0], rebuiltA);
+  assert.equal(runtime.streamStatus.get(rebuiltA.name), 'open');
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+  assert.equal(runtime.tradeMessages, 0, 'stale A/B callbacks remain epoch-fenced');
+  assert.equal(activeProducers, 1);
+
+  runtime.stop();
+  assert.equal(rebuiltA.stopCalls, 1);
+  assert.equal(runtime.streamOwnershipKey, null);
+  assert.equal(activeProducers, 0);
+  assert.deepEqual(runtime.streams, []);
+});
+
+test('VolumeRuntime public stop blocks a quiescent handle from reentering public start', async () => {
+  const universe = [{
+    symbol: 'AUSDT',
+    base: 'A',
+    hasSpot: true,
+    hasPerp: true,
+    quoteVolume24h: 100,
+  }];
+  const handles = [];
+  let activeProducers = 0;
+  let peakActiveProducers = 0;
+  let nestedStartPromise = null;
+  let runtime;
+  runtime = new VolumeRuntime(
+    { logEvent() {} },
+    () => ({
+      killSwitch: true,
+      maxOrderNotionalUsd: 10,
+      minQuoteVolume24h: 1,
+      allowedSymbols: [],
+      blockedSymbols: [],
+    }),
+    () => universe,
+    null,
+    () => 1_000,
+    {
+      streamFactory: (name, url, onMessage, onStatus) => {
+        const creationIndex = handles.length;
+        const handle = {
+          name,
+          url,
+          onMessage,
+          onStatus,
+          active: false,
+          startCalls: 0,
+          stopCalls: 0,
+          start() {
+            this.startCalls += 1;
+            assert.equal(this.active, false);
+            this.active = true;
+            activeProducers += 1;
+            peakActiveProducers = Math.max(peakActiveProducers, activeProducers);
+            onStatus(name, 'open');
+          },
+          stop() {
+            this.stopCalls += 1;
+            if (this.active) {
+              this.active = false;
+              activeProducers -= 1;
+            }
+            if (creationIndex !== 0 || nestedStartPromise !== null) return;
+            assert.equal(runtime.stopping, true);
+            assert.equal(runtime.symbolSetKey, '');
+            assert.equal(runtime.streamOwnershipKey, null);
+            nestedStartPromise = runtime.start();
+            runtime.stop();
+          },
+        };
+        handles.push(handle);
+        return handle;
+      },
+    },
+  );
+  runtime.refreshBooks = async () => {};
+  runtime.warmBaselines = async () => {};
+
+  await runtime.start();
+  const original = handles[0];
+  assert.equal(runtime.running, true);
+  assert.equal(runtime.engine.isRunning(), true);
+  assert.equal(runtime.symbolSetKey, 'AUSDT');
+  assert.equal(runtime.streamOwnershipKey, 'AUSDT');
+  assert.equal(activeProducers, 1);
+
+  runtime.stop();
+  await nestedStartPromise;
+  assert.equal(runtime.stopping, false);
+  assert.equal(runtime.running, false);
+  assert.equal(runtime.engine.isRunning(), false);
+  assert.equal(runtime.tickTimer, null);
+  assert.equal(runtime.bookTimer, null);
+  assert.equal(runtime.universeTimer, null);
+  assert.equal(runtime.streamRetryTimer, null);
+  assert.equal(runtime.streamRecoveryTimers.size, 0);
+  assert.deepEqual(runtime.streams, []);
+  assert.equal(runtime.symbolSetKey, '');
+  assert.equal(runtime.streamOwnershipKey, null);
+  assert.equal(handles.length, 1, 'nested public start cannot reach the stream factory');
+  assert.equal(original.stopCalls, 1);
+  assert.equal(activeProducers, 0);
+  assert.equal(peakActiveProducers, 1);
+
+  await runtime.start();
+  const replacement = handles[1];
+  assert.equal(handles.length, 2, 'a later explicit public start remains available');
+  assert.equal(runtime.running, true);
+  assert.equal(runtime.engine.isRunning(), true);
+  assert.equal(runtime.streams[0], replacement);
+  assert.equal(runtime.symbolSetKey, 'AUSDT');
+  assert.equal(runtime.streamOwnershipKey, 'AUSDT');
+  assert.equal(replacement.active, true);
+  assert.equal(activeProducers, 1);
+  assert.equal(peakActiveProducers, 1);
+
+  runtime.stop();
+  assert.equal(replacement.stopCalls, 1);
+  assert.equal(runtime.running, false);
+  assert.equal(runtime.engine.isRunning(), false);
+  assert.equal(activeProducers, 0);
+  assert.deepEqual(runtime.streams, []);
 });

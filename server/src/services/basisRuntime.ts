@@ -2,6 +2,12 @@ import { fetchAllBookTickers } from '../binance/rest.js';
 import type { BasisConfig } from '../engine/basis/config.js';
 import { deriveBasisConfigVersion } from '../engine/basis/config.js';
 import { BasisEngine } from '../engine/basis/engine.js';
+import { BasisHandoffLifecycle } from '../engine/basis/lifecycle.js';
+import type {
+  BasisHandoffFeedback,
+  BasisHandoffResult,
+  BasisHandoffSnapshot,
+} from '../engine/basis/lifecycle.js';
 import type { BasisBookObservation, BasisProposal } from '../engine/basis/types.js';
 import type {
   StrategyDecayCoordinatorRequest,
@@ -77,6 +83,13 @@ function usableBook(book: { bidPrice: number; askPrice: number; bidQty: number; 
  */
 export class BasisRuntime {
   private readonly engine: BasisEngine;
+  /**
+   * M1-P1 handoff seam, constructed OFF. It holds no timer, socket, provider,
+   * ledger, or route; while disabled every intake and feedback call refuses
+   * without touching the proposal store. Enabling it is a later owner-gated
+   * phase, not a runtime toggle — nothing here can switch it on.
+   */
+  private readonly basisHandoff: BasisHandoffLifecycle;
   private readonly fetchBookTickers: typeof fetchAllBookTickers;
   private eligibleSymbols: string[] = [];
   private running = false;
@@ -142,6 +155,7 @@ export class BasisRuntime {
       spotTakerFeePct: config.feesPct / 3,
       perpTakerFeePct: config.feesPct / 6,
     });
+    this.basisHandoff = new BasisHandoffLifecycle(systemClock, this.engine.proposals);
   }
 
   async start(): Promise<void> {
@@ -264,6 +278,28 @@ export class BasisRuntime {
     const ownerChanged = this.operatorMinNetBasisPct !== numeric;
     this.operatorMinNetBasisPct = numeric;
     return this.engine.updateConfig({ minNetBasisPct: numeric }) || ownerChanged;
+  }
+
+  /** Read seam: handoff truth, including the fact that it is disabled. */
+  basisHandoffSnapshot(): BasisHandoffSnapshot {
+    return this.basisHandoff.snapshot();
+  }
+
+  /**
+   * Intake seam: claim one proposal an owner already accepted, named by id.
+   * It never selects a symbol or a proposal, and while disabled it refuses
+   * before the proposal store is touched.
+   */
+  consumeAcceptedBasisProposal(proposalId: string): BasisHandoffResult {
+    return this.basisHandoff.consumeAccepted(proposalId);
+  }
+
+  /**
+   * Feedback seam: fold one observation about the bound handoff. It reports
+   * truth only — nothing here places, cancels, hedges, retries, or unwinds.
+   */
+  applyBasisHandoffFeedback(feedback: BasisHandoffFeedback): BasisHandoffResult {
+    return this.basisHandoff.applyFeedback(feedback);
   }
 
   setIntakePaused(paused: boolean): boolean {

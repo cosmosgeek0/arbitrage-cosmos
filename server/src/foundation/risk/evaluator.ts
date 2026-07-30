@@ -47,8 +47,11 @@
  */
 import type { RiskCheck, RiskVerdict, SourcedTimestamp } from '../contracts/index.js';
 import {
+  canonicalJson,
   deriveRiskVerdict,
   isValidUtcMillis,
+  riskMaximumExactDecimal,
+  stableHash128Hex,
   validateSourcedTimestamp,
 } from '../contracts/index.js';
 import {
@@ -76,8 +79,19 @@ import {
   checkSpotInventory,
   checkSymbolFilters,
 } from './checks.js';
-import type { PlanIntent, RiskEvaluationInput } from './types.js';
-import { validateRiskEvaluationInput } from './types.js';
+import type {
+  NormalBasisApprovedRiskBinding,
+  NormalBasisRiskBaseline,
+  NormalBasisRiskLegBinding,
+  PlanIntent,
+  RiskEvaluationInput,
+} from './types.js';
+import {
+  deriveRiskIntentDigest,
+  NORMAL_BASIS_RISK_BINDING_SCHEMA,
+  NORMAL_BASIS_RISK_BINDING_VERSION,
+  validateRiskEvaluationInput,
+} from './types.js';
 
 function effectiveVerdictHorizon(
   input: RiskEvaluationInput,
@@ -289,4 +303,337 @@ export function evaluateMultiLegRisk(input: RiskEvaluationInput): Readonly<RiskV
   // exact evidence boundary the safe hard horizon is evaluatedAt itself;
   // retain the shared fail-closed derivation and clamp only the expiry field.
   return Object.freeze({ ...verdict, expiresAt: horizon.expiresAt });
+}
+
+// ---------------------------------------------------------------------------
+// Normal-Basis approved-entry projection (pure, additive, default off)
+// ---------------------------------------------------------------------------
+
+/** Existing riskv_ law already used by the canonical engine attachment path. */
+export function deriveRiskVerdictDigest(verdict: Readonly<RiskVerdict>): string {
+  return `riskv_${stableHash128Hex(`foundationRiskVerdict|${canonicalJson(verdict)}`)}`;
+}
+
+function freshCompleteBasisMs(value: unknown, nowMs: number, label: string): number {
+  const issues = validateSourcedTimestamp(value);
+  if (issues.length > 0) throw new TypeError(`${label} must be a valid sourced timestamp`);
+  const stamp = value as SourcedTimestamp;
+  if (stamp.completeness !== 'COMPLETE') {
+    throw new TypeError(`${label} must be COMPLETE`);
+  }
+  const basis = stamp.sourceTimeMs ?? stamp.receivedAtMs;
+  if (basis > nowMs || nowMs - basis > stamp.maxAgeMs) {
+    throw new TypeError(`${label} must be fresh at the risk evaluation time`);
+  }
+  return basis;
+}
+
+function normalBasisLegs(intent: PlanIntent): {
+  spot: PlanIntent['legs'][number];
+  perp: PlanIntent['legs'][number];
+} {
+  if (intent.riskClass !== 'RISK_INCREASING') {
+    throw new TypeError('normal-Basis binding requires a risk-increasing entry intent');
+  }
+  if (intent.requiredBorrowUsd !== 0) {
+    throw new TypeError('normal-Basis binding does not support borrow or reverse Basis');
+  }
+  if (intent.legs.length !== 2) {
+    throw new TypeError('normal-Basis binding requires exactly two entry legs');
+  }
+  const spot = intent.legs.find(
+    (leg) =>
+      leg.venue === 'BINANCE_SPOT' &&
+      leg.positionBucket === 'SPOT_CASH' &&
+      leg.requiredPermission === 'SPOT' &&
+      leg.side === 'BUY',
+  );
+  const perp = intent.legs.find(
+    (leg) =>
+      leg.venue === 'BINANCE_USDM' &&
+      leg.positionBucket === 'USDM_ONE_WAY' &&
+      leg.requiredPermission === 'FUTURES' &&
+      leg.side === 'SELL',
+  );
+  if (spot === undefined || perp === undefined || spot.symbol !== perp.symbol) {
+    throw new TypeError(
+      'normal-Basis binding requires one cash Spot BUY and one same-symbol one-way USD-M SELL',
+    );
+  }
+  if (
+    intent.proposalRef === null ||
+    intent.declaredMaxNakedDurationMs === null
+  ) {
+    throw new TypeError('normal-Basis binding requires proposal and naked-duration intent terms');
+  }
+  return { spot, perp };
+}
+
+function legProjection(leg: PlanIntent['legs'][number]): Readonly<NormalBasisRiskLegBinding> {
+  return Object.freeze({
+    legKey: leg.legKey,
+    venue: leg.venue as 'BINANCE_SPOT' | 'BINANCE_USDM',
+    positionBucket: leg.positionBucket as 'SPOT_CASH' | 'USDM_ONE_WAY',
+    side: leg.side,
+    symbol: leg.symbol,
+    intendedPrice: leg.intendedPrice,
+    intendedQty: leg.intendedQty,
+  });
+}
+
+function deriveNormalBasisBaseline(
+  input: RiskEvaluationInput,
+  symbol: string,
+): Readonly<NormalBasisRiskBaseline> {
+  const snapshot = input.account?.exposures;
+  if (
+    snapshot === null ||
+    snapshot === undefined ||
+    snapshot.accountId !== input.intent.accountId ||
+    snapshot.positionMode !== 'ONE_WAY' ||
+    !Array.isArray(snapshot.positions)
+  ) {
+    throw new TypeError(
+      'normal-Basis binding requires a complete account-bound one-way exposure baseline',
+    );
+  }
+  const observedAtMs = freshCompleteBasisMs(
+    snapshot.observedAt,
+    input.nowMs,
+    'normal-Basis exposure baseline',
+  );
+  const quantity = (
+    venue: 'BINANCE_SPOT' | 'BINANCE_USDM',
+    positionBucket: 'SPOT_CASH' | 'USDM_ONE_WAY',
+  ): number => {
+    const matches = snapshot.positions.filter(
+      (row) =>
+        typeof row === 'object' &&
+        row !== null &&
+        row.venue === venue &&
+        row.symbol === symbol &&
+        row.positionBucket === positionBucket,
+    );
+    if (matches.length > 1) {
+      throw new TypeError(`normal-Basis exposure baseline duplicates ${venue}/${positionBucket}`);
+    }
+    if (matches.length === 0) return 0;
+    const row = matches[0];
+    if (typeof row.signedBaseQty !== 'number' || !Number.isFinite(row.signedBaseQty)) {
+      throw new TypeError(`normal-Basis exposure baseline has invalid ${venue} quantity`);
+    }
+    freshCompleteBasisMs(row.observedAt, input.nowMs, `normal-Basis ${venue} baseline row`);
+    return Object.is(row.signedBaseQty, -0) ? 0 : row.signedBaseQty;
+  };
+  return Object.freeze({
+    accountId: input.intent.accountId,
+    symbol,
+    positionMode: 'ONE_WAY' as const,
+    observedAtMs,
+    spotSignedBaseQty: quantity('BINANCE_SPOT', 'SPOT_CASH'),
+    perpSignedBaseQty: quantity('BINANCE_USDM', 'USDM_ONE_WAY'),
+  });
+}
+
+/**
+ * Evaluate and bind the sole supported normal-Basis entry.
+ *
+ * The caller supplies the real RiskEvaluationInput, never verdict claims.
+ * Generic evaluateMultiLegRisk and deriveRiskIntentDigest remain unchanged;
+ * this projection consumes their exact outputs and the existing riskv_ law.
+ */
+export function evaluateNormalBasisRiskBinding(
+  input: RiskEvaluationInput,
+): Readonly<NormalBasisApprovedRiskBinding> {
+  const verdict = evaluateMultiLegRisk(input);
+  const { spot, perp } = normalBasisLegs(input.intent);
+  if (
+    verdict.correlationId !== input.correlationId ||
+    verdict.decision !== 'APPROVED' ||
+    verdict.allowed !== true ||
+    verdict.requiredConfirmation !== false ||
+    verdict.maxAllowedSize === null ||
+    !Number.isFinite(verdict.maxAllowedSize) ||
+    verdict.maxAllowedSize <= 0
+  ) {
+    throw new TypeError('normal-Basis binding requires the real allowing generic risk verdict');
+  }
+  if (
+    input.proposal === null ||
+    input.approval === null ||
+    input.intent.proposalRef === null ||
+    input.proposal.proposalId !== input.intent.proposalRef ||
+    input.proposal.entryIntentDigest !== deriveRiskIntentDigest(input.intent) ||
+    input.approval.intentDigest !== deriveRiskIntentDigest(input.intent)
+  ) {
+    throw new TypeError('normal-Basis binding requires proposal and approval bound to the real intent');
+  }
+  const entryExpiresAtMs = Math.min(
+    verdict.expiresAt,
+    input.proposal.expiresAtMs ?? verdict.expiresAt,
+    input.approval.expiresAtMs,
+  );
+  if (!isValidUtcMillis(entryExpiresAtMs) || entryExpiresAtMs <= input.nowMs) {
+    throw new TypeError('normal-Basis entry authority must have a future earliest expiry');
+  }
+  const grossEntryNotional =
+    spot.intendedPrice * spot.intendedQty + perp.intendedPrice * perp.intendedQty;
+  if (
+    !Number.isFinite(grossEntryNotional) ||
+    grossEntryNotional <= 0 ||
+    grossEntryNotional > verdict.maxAllowedSize
+  ) {
+    throw new TypeError('normal-Basis entry exceeds the exact approved gross-USD cap');
+  }
+  const baseline = deriveNormalBasisBaseline(input, spot.symbol);
+  const riskIntentDigest = deriveRiskIntentDigest(input.intent);
+  const riskVerdictDigest = deriveRiskVerdictDigest(verdict);
+  const approvedEntryGrossNotionalExact = riskMaximumExactDecimal(verdict.maxAllowedSize);
+  if (approvedEntryGrossNotionalExact === null) {
+    throw new TypeError('normal-Basis approved entry cap must be known');
+  }
+  const semantic = {
+    schema: NORMAL_BASIS_RISK_BINDING_SCHEMA,
+    version: NORMAL_BASIS_RISK_BINDING_VERSION,
+    planId: input.intent.planId,
+    correlationId: input.correlationId,
+    accountId: input.intent.accountId,
+    proposalRef: input.intent.proposalRef,
+    riskClass: 'RISK_INCREASING' as const,
+    riskIntentDigest,
+    riskVerdictDigest,
+    verdictDecision: 'APPROVED' as const,
+    verdictEvaluatedAtMs: verdict.evaluatedAt,
+    entryExpiresAtMs,
+    approvedEntryGrossNotionalExact,
+    declaredMaxNakedDurationMs: input.intent.declaredMaxNakedDurationMs as number,
+    requiredBorrowUsd: 0 as const,
+    spot: legProjection(spot),
+    perp: legProjection(perp),
+    baseline,
+  };
+  return Object.freeze({
+    ...semantic,
+    bindingId: `nbrisk_${stableHash128Hex(
+      `normalBasisApprovedRisk|${canonicalJson(semantic)}`,
+    )}`,
+  });
+}
+
+const NORMAL_BASIS_RISK_BINDING_KEYS = Object.freeze([
+  'schema',
+  'version',
+  'bindingId',
+  'planId',
+  'correlationId',
+  'accountId',
+  'proposalRef',
+  'riskClass',
+  'riskIntentDigest',
+  'riskVerdictDigest',
+  'verdictDecision',
+  'verdictEvaluatedAtMs',
+  'entryExpiresAtMs',
+  'approvedEntryGrossNotionalExact',
+  'declaredMaxNakedDurationMs',
+  'requiredBorrowUsd',
+  'spot',
+  'perp',
+  'baseline',
+] as const);
+
+/**
+ * Validate a serialized compact projection without pretending to re-evaluate
+ * historical evidence. New bindings can only be created by the real evaluator
+ * above; replay verifies the exact closed shape and its content identity.
+ */
+export function validateNormalBasisApprovedRiskBinding(
+  candidate: unknown,
+): Readonly<NormalBasisApprovedRiskBinding> {
+  if (typeof candidate !== 'object' || candidate === null || Array.isArray(candidate)) {
+    throw new TypeError('normal-Basis risk binding must be an object');
+  }
+  const risk = candidate as NormalBasisApprovedRiskBinding;
+  if (
+    Object.keys(candidate).sort().join('|') !== [...NORMAL_BASIS_RISK_BINDING_KEYS].sort().join('|') ||
+    risk.schema !== NORMAL_BASIS_RISK_BINDING_SCHEMA ||
+    risk.version !== NORMAL_BASIS_RISK_BINDING_VERSION ||
+    typeof risk.bindingId !== 'string' ||
+    !/^nbrisk_[0-9a-f]{32}$/.test(risk.bindingId) ||
+    typeof risk.planId !== 'string' ||
+    typeof risk.correlationId !== 'string' ||
+    typeof risk.accountId !== 'string' ||
+    typeof risk.proposalRef !== 'string' ||
+    risk.riskClass !== 'RISK_INCREASING' ||
+    !/^riskint_[0-9a-f]{32}$/.test(risk.riskIntentDigest) ||
+    !/^riskv_[0-9a-f]{32}$/.test(risk.riskVerdictDigest) ||
+    risk.verdictDecision !== 'APPROVED' ||
+    !isValidUtcMillis(risk.verdictEvaluatedAtMs) ||
+    !isValidUtcMillis(risk.entryExpiresAtMs) ||
+    risk.entryExpiresAtMs <= risk.verdictEvaluatedAtMs ||
+    typeof risk.approvedEntryGrossNotionalExact !== 'string' ||
+    !/^(?:0|[1-9]\d*)(?:\.\d+)?$/.test(risk.approvedEntryGrossNotionalExact) ||
+    /^0(?:\.0*)?$/.test(risk.approvedEntryGrossNotionalExact) ||
+    !Number.isSafeInteger(risk.declaredMaxNakedDurationMs) ||
+    risk.declaredMaxNakedDurationMs <= 0 ||
+    risk.requiredBorrowUsd !== 0
+  ) {
+    throw new TypeError('normal-Basis risk binding has invalid authority terms');
+  }
+  const validLeg = (
+    leg: NormalBasisRiskLegBinding,
+    venue: 'BINANCE_SPOT' | 'BINANCE_USDM',
+    positionBucket: 'SPOT_CASH' | 'USDM_ONE_WAY',
+    side: 'BUY' | 'SELL',
+  ): boolean =>
+    typeof leg === 'object' &&
+    leg !== null &&
+    Object.keys(leg).sort().join('|') ===
+      ['legKey', 'venue', 'positionBucket', 'side', 'symbol', 'intendedPrice', 'intendedQty'].sort().join('|') &&
+    leg.venue === venue &&
+    leg.positionBucket === positionBucket &&
+    leg.side === side &&
+    typeof leg.legKey === 'string' &&
+    typeof leg.symbol === 'string' &&
+    typeof leg.intendedPrice === 'number' &&
+    Number.isFinite(leg.intendedPrice) &&
+    leg.intendedPrice > 0 &&
+    typeof leg.intendedQty === 'number' &&
+    Number.isFinite(leg.intendedQty) &&
+    leg.intendedQty > 0;
+  const baseline = risk.baseline;
+  if (
+    !validLeg(risk.spot, 'BINANCE_SPOT', 'SPOT_CASH', 'BUY') ||
+    !validLeg(risk.perp, 'BINANCE_USDM', 'USDM_ONE_WAY', 'SELL') ||
+    risk.spot.symbol !== risk.perp.symbol ||
+    typeof baseline !== 'object' ||
+    baseline === null ||
+    Object.keys(baseline).sort().join('|') !==
+      ['accountId', 'symbol', 'positionMode', 'observedAtMs', 'spotSignedBaseQty', 'perpSignedBaseQty'].sort().join('|') ||
+    baseline.accountId !== risk.accountId ||
+    baseline.symbol !== risk.spot.symbol ||
+    baseline.positionMode !== 'ONE_WAY' ||
+    !isValidUtcMillis(baseline.observedAtMs) ||
+    !Number.isFinite(baseline.spotSignedBaseQty) ||
+    !Number.isFinite(baseline.perpSignedBaseQty)
+  ) {
+    throw new TypeError('normal-Basis risk binding has invalid legs or baseline');
+  }
+  const {
+    bindingId: _bindingId,
+    ...semantic
+  } = risk;
+  const expectedBindingId = `nbrisk_${stableHash128Hex(
+    `normalBasisApprovedRisk|${canonicalJson(semantic)}`,
+  )}`;
+  if (risk.bindingId !== expectedBindingId) {
+    throw new TypeError('normal-Basis risk binding content identity mismatch');
+  }
+  return Object.freeze({
+    ...semantic,
+    spot: Object.freeze({ ...semantic.spot }),
+    perp: Object.freeze({ ...semantic.perp }),
+    baseline: Object.freeze({ ...semantic.baseline }),
+    bindingId: expectedBindingId,
+  });
 }

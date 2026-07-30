@@ -9,6 +9,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { BinanceApiError } from '../dist/binance/client.js';
+import { MAX_UTC_MS } from '../dist/foundation/contracts/time.js';
 import { Ledger } from '../dist/ledger.js';
 import { AccountService } from '../dist/services/account.js';
 import { OrderService } from '../dist/services/orders.js';
@@ -694,7 +695,8 @@ console.log('\nFinancial safety regressions:');
 {
   let release;
   const gate = new Promise((resolve) => { release = resolve; });
-  const now = Date.now();
+  const t0 = Date.UTC(2026, 6, 10, 11);
+  let now = t0;
   const client = {
     account: async () => {
       await gate;
@@ -702,20 +704,892 @@ console.log('\nFinancial safety regressions:');
         balances: [{ asset: 'USDT', free: '1', locked: '0' }],
         canTrade: true,
         canWithdraw: false,
-        updateTime: now,
+        updateTime: t0,
       };
     },
     apiRestrictions: async () => ({ ...safeRestrictions }),
   };
-  const account = new AccountService(client, new FakeLedger(), () => 1);
+  const account = new AccountService(client, new FakeLedger(), () => 1, () => now);
   const syncing = account.sync();
   await new Promise((resolve) => setImmediate(resolve));
-  account.applyStreamBalances([{ a: 'USDT', f: '2', l: '0' }], now + 2);
+  now = t0 + 2;
+  account.applyStreamBalances([{ a: 'USDT', f: '2', l: '0' }], now);
   release();
   await syncing;
   check('newer stream balance survives an older in-flight REST snapshot', account.equity().availableUsdt === 2);
-account.applyStreamBalances([{ a: 'USDT', f: '0.5', l: '0' }], now + 1);
+  account.applyStreamBalances([{ a: 'USDT', f: '0.5', l: '0' }], t0 + 1);
   check('out-of-order stream balance update is ignored', account.equity().availableUsdt === 2);
+}
+
+// A partial stream update races a full REST snapshot. Stream-owned assets win,
+// while untouched REST assets still advance and the merged state is snapshotted.
+{
+  const t0 = Date.UTC(2026, 6, 10, 11, 30);
+  const refreshAt = t0 + 15 * 60_000;
+  let now = t0;
+  let accountCalls = 0;
+  let releaseRefresh;
+  const refreshGate = new Promise((resolve) => { releaseRefresh = resolve; });
+  const ledger = new FakeLedger();
+  const account = new AccountService({
+    account: async () => {
+      accountCalls += 1;
+      if (accountCalls === 1) {
+        return {
+          balances: [
+            { asset: 'USDT', free: '1', locked: '0' },
+            { asset: 'BTC', free: '1', locked: '0' },
+          ],
+          canTrade: true,
+          canWithdraw: false,
+          updateTime: t0,
+        };
+      }
+      return refreshGate;
+    },
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+  }, ledger, (symbol) => (symbol === 'BTCUSDT' ? 100 : null), () => now);
+  await account.sync();
+
+  now = refreshAt;
+  const refreshing = account.sync();
+  await new Promise((resolve) => setImmediate(resolve));
+  now = refreshAt + 2;
+  account.applyStreamBalances(
+    [{ a: 'USDT', f: '2', l: '0' }],
+    now,
+  );
+  releaseRefresh({
+    balances: [
+      { asset: 'USDT', free: '10', locked: '0' },
+      { asset: 'BTC', free: '2', locked: '0' },
+    ],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: refreshAt,
+  });
+  await refreshing;
+  const merged = account.equity();
+  const mergedSnapshot = ledger.lastEvent('account_snapshot');
+
+  now = refreshAt + 3;
+  account.applyStreamBalances([{ a: 'BTC', f: '0', l: '0' }], now);
+  const afterDelete = account.equity();
+  check(
+    'partial stream race merges untouched REST assets and preserves stream deletion',
+    merged.availableUsdt === 2
+      && merged.entries.some((entry) => entry.asset === 'BTC' && entry.free === 2)
+      && merged.totalUsdt === 202
+      && merged.sourceFresh
+      && merged.complete
+      && account.connected
+      && mergedSnapshot?.data?.availableUsdt === 2
+      && mergedSnapshot?.data?.totalUsdt === 202
+      && mergedSnapshot?.data?.assets === 2
+      && mergedSnapshot?.data?.complete === true
+      && afterDelete.availableUsdt === 2
+      && !afterDelete.entries.some((entry) => entry.asset === 'BTC')
+      && afterDelete.totalUsdt === 2
+      && afterDelete.sourceFresh
+      && afterDelete.complete,
+  );
+}
+
+// A partial stream event older than an in-flight REST snapshot may be visible
+// temporarily, but the newer REST value must win for that asset.
+{
+  const t0 = Date.UTC(2026, 6, 10, 12);
+  const restTs = t0 + 15 * 60_000 + 100;
+  const streamTs = restTs - 10;
+  let now = t0;
+  let accountCalls = 0;
+  let releaseRefresh;
+  const refreshGate = new Promise((resolve) => { releaseRefresh = resolve; });
+  const ledger = new FakeLedger();
+  const account = new AccountService({
+    account: async () => {
+      accountCalls += 1;
+      if (accountCalls === 1) {
+        return {
+          balances: [
+            { asset: 'USDT', free: '1', locked: '0' },
+            { asset: 'BTC', free: '1', locked: '0' },
+          ],
+          canTrade: true,
+          canWithdraw: false,
+          updateTime: t0,
+        };
+      }
+      return refreshGate;
+    },
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+  }, ledger, (symbol) => (symbol === 'BTCUSDT' ? 100 : null), () => now);
+  await account.sync();
+
+  now = restTs;
+  const refreshing = account.sync();
+  await new Promise((resolve) => setImmediate(resolve));
+  account.applyStreamBalances([{ a: 'USDT', f: '9', l: '0' }], streamTs);
+  const duringRace = account.equity();
+  releaseRefresh({
+    balances: [
+      { asset: 'USDT', free: '5', locked: '0' },
+      { asset: 'BTC', free: '2', locked: '0' },
+    ],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: restTs,
+  });
+  await refreshing;
+  const merged = account.equity();
+  const mergedSnapshot = ledger.lastEvent('account_snapshot');
+  check(
+    'newer REST asset value wins over an older partial stream race',
+    duringRace.availableUsdt === 9
+      && merged.availableUsdt === 5
+      && merged.entries.some((entry) => entry.asset === 'BTC' && entry.free === 2)
+      && merged.totalUsdt === 205
+      && account.connected
+      && merged.sourceFresh
+      && merged.complete
+      && mergedSnapshot?.data?.availableUsdt === 5
+      && mergedSnapshot?.data?.totalUsdt === 205
+      && mergedSnapshot?.data?.assets === 2
+      && mergedSnapshot?.data?.complete === true,
+  );
+}
+
+// On cold start, a partial stream can precede the first full REST snapshot.
+// Its newer asset value overlays REST while untouched REST assets still load.
+{
+  const t0 = Date.UTC(2026, 6, 10, 13);
+  let now = t0 + 100;
+  const ledger = new FakeLedger();
+  const account = new AccountService({
+    account: async () => ({
+      balances: [
+        { asset: 'USDT', free: '10', locked: '0' },
+        { asset: 'BTC', free: '2', locked: '0' },
+      ],
+      canTrade: true,
+      canWithdraw: false,
+      updateTime: t0 + 99,
+    }),
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+  }, ledger, (symbol) => (symbol === 'BTCUSDT' ? 100 : null), () => now);
+  account.applyStreamBalances([{ a: 'USDT', f: '2', l: '0' }], t0 + 100);
+  const partial = account.equity();
+  await account.sync();
+  const merged = account.equity();
+  const mergedSnapshot = ledger.lastEvent('account_snapshot');
+  check(
+    'cold-start partial stream overlays older REST while untouched assets load',
+    partial.availableUsdt === 2
+      && !partial.sourceFresh
+      && merged.availableUsdt === 2
+      && merged.entries.some((entry) => entry.asset === 'BTC' && entry.free === 2)
+      && merged.totalUsdt === 202
+      && account.connected
+      && merged.sourceFresh
+      && merged.complete
+      && mergedSnapshot?.data?.availableUsdt === 2
+      && mergedSnapshot?.data?.totalUsdt === 202
+      && mergedSnapshot?.data?.assets === 2
+      && mergedSnapshot?.data?.complete === true,
+  );
+}
+
+// A full REST snapshot older than the committed full-source watermark cannot
+// mutate balances, refresh availability, or emit a complete snapshot. A newer
+// source timestamp must still recover normally afterward.
+{
+  const base = Date.UTC(2026, 6, 10, 14);
+  const t90 = base + 90;
+  const t100 = base + 100;
+  const t101 = base + 101;
+  let now = t100;
+  let snapshot = {
+    balances: [{ asset: 'USDT', free: '1', locked: '0' }],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: t100,
+  };
+  const ledger = new FakeLedger();
+  const account = new AccountService({
+    account: async () => snapshot,
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+  }, ledger, () => 1, () => now);
+  await account.sync();
+  const baseline = account.equity();
+  const baselineSyncTs = account.lastSyncTs;
+  const baselineSnapshotCount =
+    ledger.events.filter((event) => event.kind === 'account_snapshot').length;
+
+  now = t100 + 15 * 60_000 + 1;
+  snapshot = {
+    balances: [{ asset: 'USDT', free: '9', locked: '0' }],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: t90,
+  };
+  await account.sync();
+  const afterStale = account.equity();
+  const staleSyncTs = account.lastSyncTs;
+  const staleSnapshotCount =
+    ledger.events.filter((event) => event.kind === 'account_snapshot').length;
+
+  now += 1;
+  snapshot = {
+    balances: [{ asset: 'USDT', free: '2', locked: '0' }],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: t101,
+  };
+  await account.sync();
+  const recovered = account.equity();
+  const recoveredSnapshot = ledger.lastEvent('account_snapshot');
+  check(
+    'stale full REST cannot mutate, refresh, or snapshot before newer recovery',
+    baseline.availableUsdt === 1
+      && baseline.sourceFresh
+      && baseline.complete
+      && baselineSnapshotCount === 1
+      && afterStale.availableUsdt === 1
+      && !afterStale.sourceFresh
+      && !afterStale.complete
+      && staleSyncTs === baselineSyncTs
+      && staleSnapshotCount === baselineSnapshotCount
+      && recovered.availableUsdt === 2
+      && recovered.sourceFresh
+      && recovered.complete
+      && account.connected
+      && recoveredSnapshot?.data?.availableUsdt === 2
+      && recoveredSnapshot?.data?.totalUsdt === 2
+      && recoveredSnapshot?.data?.complete === true,
+  );
+}
+
+// Equal source timestamps use request causality as the tie-breaker: REST may
+// repair state that existed before its request, while an equal stream event
+// observed during the request owns its touched asset.
+{
+  const t0 = Date.UTC(2026, 6, 10, 15);
+  const sourceTs = t0 + 100;
+
+  const preRequestLedger = new FakeLedger();
+  const preRequestAccount = new AccountService({
+    account: async () => ({
+      balances: [
+        { asset: 'USDT', free: '10', locked: '0' },
+        { asset: 'BTC', free: '2', locked: '0' },
+      ],
+      canTrade: true,
+      canWithdraw: false,
+      updateTime: sourceTs,
+    }),
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+  }, preRequestLedger, (symbol) => (symbol === 'BTCUSDT' ? 100 : null), () => sourceTs);
+  preRequestAccount.applyStreamBalances(
+    [{ a: 'USDT', f: '2', l: '0' }],
+    sourceTs,
+  );
+  const preRequestPartial = preRequestAccount.equity();
+  await preRequestAccount.sync();
+  const repaired = preRequestAccount.equity();
+  const repairedSnapshot = preRequestLedger.lastEvent('account_snapshot');
+
+  let releaseEqualRest;
+  const equalRestGate = new Promise((resolve) => { releaseEqualRest = resolve; });
+  const duringRequestLedger = new FakeLedger();
+  const duringRequestAccount = new AccountService({
+    account: async () => equalRestGate,
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+  }, duringRequestLedger, (symbol) => {
+    if (symbol === 'BTCUSDT') return 100;
+    if (symbol === 'ETHUSDT') return 50;
+    return null;
+  }, () => sourceTs);
+  const syncing = duringRequestAccount.sync();
+  await new Promise((resolve) => setImmediate(resolve));
+  duringRequestAccount.applyStreamBalances(
+    [
+      { a: 'USDT', f: '2', l: '0' },
+      { a: 'BTC', f: '0', l: '0' },
+    ],
+    sourceTs,
+  );
+  const duringRequestPartial = duringRequestAccount.equity();
+  releaseEqualRest({
+    balances: [
+      { asset: 'USDT', free: '10', locked: '0' },
+      { asset: 'BTC', free: '2', locked: '0' },
+      { asset: 'ETH', free: '3', locked: '0' },
+    ],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: sourceTs,
+  });
+  await syncing;
+  const streamWon = duringRequestAccount.equity();
+  const streamWonSnapshot = duringRequestLedger.lastEvent('account_snapshot');
+  check(
+    'equal source times use pre-request REST repair and in-flight stream ownership',
+    preRequestPartial.availableUsdt === 2
+      && !preRequestPartial.sourceFresh
+      && repaired.availableUsdt === 10
+      && repaired.entries.some((entry) => entry.asset === 'BTC' && entry.free === 2)
+      && repaired.totalUsdt === 210
+      && repaired.sourceFresh
+      && repaired.complete
+      && repairedSnapshot?.data?.totalUsdt === 210
+      && repairedSnapshot?.data?.complete === true
+      && duringRequestPartial.availableUsdt === 2
+      && !duringRequestPartial.sourceFresh
+      && streamWon.availableUsdt === 2
+      && !streamWon.entries.some((entry) => entry.asset === 'BTC')
+      && streamWon.entries.some((entry) => entry.asset === 'ETH' && entry.free === 3)
+      && streamWon.totalUsdt === 152
+      && streamWon.sourceFresh
+      && streamWon.complete
+      && streamWonSnapshot?.data?.totalUsdt === 152
+      && streamWonSnapshot?.data?.assets === 2
+      && streamWonSnapshot?.data?.complete === true,
+  );
+}
+
+// A source-less full REST snapshot may refresh a clean, previously sourced
+// full state. Once a newer partial stream exists before the request, that same
+// unknown ordering cannot restamp or snapshot the partial state.
+{
+  const t0 = Date.UTC(2026, 6, 10, 16);
+  let now = t0 + 100;
+  let snapshot = {
+    balances: [
+      { asset: 'USDT', free: '1', locked: '0' },
+      { asset: 'BTC', free: '1', locked: '0' },
+    ],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: t0 + 100,
+  };
+  const ledger = new FakeLedger();
+  const account = new AccountService({
+    account: async () => snapshot,
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+  }, ledger, (symbol) => (symbol === 'BTCUSDT' ? 100 : null), () => now);
+  await account.sync();
+
+  now += 15 * 60_000 + 1;
+  const cleanSourceLessNow = now;
+  snapshot = {
+    balances: [
+      { asset: 'USDT', free: '2', locked: '0' },
+      { asset: 'BTC', free: '2', locked: '0' },
+    ],
+    canTrade: true,
+    canWithdraw: false,
+  };
+  await account.sync();
+  const cleanSourceLess = account.equity();
+  const cleanSourceLessSyncTs = account.lastSyncTs;
+  const cleanSourceLessSnapshot = ledger.lastEvent('account_snapshot');
+  const snapshotCountBeforeStream =
+    ledger.events.filter((event) => event.kind === 'account_snapshot').length;
+
+  now += 1;
+  account.applyStreamBalances([{ a: 'USDT', f: '3', l: '0' }], now);
+  const partialStream = account.equity();
+  const partialStreamSyncTs = account.lastSyncTs;
+  now += 15 * 60_000 + 1;
+  snapshot = {
+    balances: [
+      { asset: 'USDT', free: '9', locked: '0' },
+      { asset: 'BTC', free: '9', locked: '0' },
+    ],
+    canTrade: true,
+    canWithdraw: false,
+  };
+  await account.sync();
+  const afterUnsafeSourceLess = account.equity();
+  const unsafeSnapshotCount =
+    ledger.events.filter((event) => event.kind === 'account_snapshot').length;
+  check(
+    'source-less REST refreshes clean full state but not newer partial stream state',
+    cleanSourceLess.availableUsdt === 2
+      && cleanSourceLess.entries.some((entry) => entry.asset === 'BTC' && entry.free === 2)
+      && cleanSourceLess.totalUsdt === 202
+      && cleanSourceLess.sourceFresh
+      && cleanSourceLess.complete
+      && cleanSourceLessSyncTs === cleanSourceLessNow
+      && cleanSourceLessSnapshot?.data?.totalUsdt === 202
+      && cleanSourceLessSnapshot?.data?.complete === true
+      && snapshotCountBeforeStream === 2
+      && partialStream.availableUsdt === 3
+      && partialStream.entries.some((entry) => entry.asset === 'BTC' && entry.free === 2)
+      && partialStream.totalUsdt === 203
+      && partialStream.sourceFresh
+      && partialStream.complete
+      && afterUnsafeSourceLess.availableUsdt === 3
+      && !afterUnsafeSourceLess.sourceFresh
+      && !afterUnsafeSourceLess.complete
+      && account.lastSyncTs === partialStreamSyncTs
+      && unsafeSnapshotCount === snapshotCountBeforeStream,
+  );
+}
+
+// A valid-time malformed partial creates a continuity floor even though no
+// balance mutates. Source-less or pre-floor REST cannot certify across that
+// gap; a full source reaching the floor may recover while preserving newer
+// per-asset stream ownership.
+{
+  const base = Date.UTC(2026, 6, 10, 17);
+  const t100 = base + 100;
+  const t150 = base + 150;
+  const t200 = base + 200;
+  const t300 = base + 300;
+  let now = t100;
+  let fullSnapshot = {
+    balances: [
+      { asset: 'USDT', free: '1', locked: '0' },
+      { asset: 'BTC', free: '1', locked: '0' },
+    ],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: t100,
+  };
+  const ledger = new FakeLedger();
+  const account = new AccountService({
+    account: async () => fullSnapshot,
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+  }, ledger, (symbol) => (symbol === 'BTCUSDT' ? 100 : null), () => now);
+  await account.sync();
+  const baseline = account.equity();
+  const baselineSyncTs = account.lastSyncTs;
+  const baselineSnapshotCount =
+    ledger.events.filter((event) => event.kind === 'account_snapshot').length;
+
+  now = t100 + 15 * 60_000 + 1;
+  account.applyStreamBalances(
+    [{ a: 'BTC', f: 'not-a-number', l: '0' }],
+    t200,
+  );
+  const afterInvalid = account.equity();
+  const invalidSyncTs = account.lastSyncTs;
+
+  fullSnapshot = {
+    balances: [
+      { asset: 'USDT', free: '9', locked: '0' },
+      { asset: 'BTC', free: '9', locked: '0' },
+    ],
+    canTrade: true,
+    canWithdraw: false,
+  };
+  await account.sync();
+  const afterSourceLess = account.equity();
+  const sourceLessSyncTs = account.lastSyncTs;
+  const sourceLessSnapshotCount =
+    ledger.events.filter((event) => event.kind === 'account_snapshot').length;
+
+  account.applyStreamBalances([{ a: 'USDT', f: '0', l: '0' }], t300);
+  const afterCurrentTombstone = account.equity();
+  const tombstoneSyncTs = account.lastSyncTs;
+
+  fullSnapshot = {
+    balances: [
+      { asset: 'USDT', free: '9', locked: '0' },
+      { asset: 'BTC', free: '9', locked: '0' },
+    ],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: t150,
+  };
+  await account.sync();
+  const afterPreFloor = account.equity();
+  const preFloorSyncTs = account.lastSyncTs;
+  const preFloorSnapshotCount =
+    ledger.events.filter((event) => event.kind === 'account_snapshot').length;
+
+  fullSnapshot = {
+    balances: [
+      { asset: 'USDT', free: '9', locked: '0' },
+      { asset: 'BTC', free: '2', locked: '0' },
+    ],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: t200,
+  };
+  await account.sync();
+  const recovered = account.equity();
+  const recoveredSnapshot = ledger.lastEvent('account_snapshot');
+  const recoveredSnapshotCount =
+    ledger.events.filter((event) => event.kind === 'account_snapshot').length;
+  check(
+    'continuity gap recovers only at its full-source floor with newer tombstones intact',
+    baseline.availableUsdt === 1
+      && baseline.entries.some((entry) => entry.asset === 'BTC' && entry.free === 1)
+      && baseline.totalUsdt === 101
+      && baseline.sourceFresh
+      && baseline.complete
+      && baselineSyncTs === t100
+      && baselineSnapshotCount === 1
+      && afterInvalid.availableUsdt === 1
+      && afterInvalid.entries.some((entry) => entry.asset === 'BTC' && entry.free === 1)
+      && !afterInvalid.sourceFresh
+      && !afterInvalid.complete
+      && invalidSyncTs === null
+      && ledger.events.some(
+        (event) => (
+          event.kind === 'error_event'
+          && event.data?.source === 'account.stream'
+          && /invalid balance update amount/.test(event.data?.message ?? '')
+        ),
+      )
+      && afterSourceLess.availableUsdt === 1
+      && afterSourceLess.entries.some((entry) => entry.asset === 'BTC' && entry.free === 1)
+      && afterSourceLess.totalUsdt === 101
+      && !afterSourceLess.sourceFresh
+      && !afterSourceLess.complete
+      && sourceLessSyncTs === invalidSyncTs
+      && sourceLessSnapshotCount === baselineSnapshotCount
+      && afterCurrentTombstone.availableUsdt === 0
+      && !afterCurrentTombstone.entries.some((entry) => entry.asset === 'USDT')
+      && afterCurrentTombstone.entries.some((entry) => entry.asset === 'BTC' && entry.free === 1)
+      && afterCurrentTombstone.totalUsdt === 100
+      && !afterCurrentTombstone.sourceFresh
+      && !afterCurrentTombstone.complete
+      && afterPreFloor.availableUsdt === 0
+      && !afterPreFloor.entries.some((entry) => entry.asset === 'USDT')
+      && afterPreFloor.entries.some((entry) => entry.asset === 'BTC' && entry.free === 1)
+      && afterPreFloor.totalUsdt === 100
+      && !afterPreFloor.sourceFresh
+      && !afterPreFloor.complete
+      && preFloorSyncTs === tombstoneSyncTs
+      && preFloorSnapshotCount === baselineSnapshotCount
+      && recovered.availableUsdt === 0
+      && !recovered.entries.some((entry) => entry.asset === 'USDT')
+      && recovered.entries.some((entry) => entry.asset === 'BTC' && entry.free === 2)
+      && recovered.totalUsdt === 200
+      && account.connected
+      && recovered.sourceFresh
+      && recovered.complete
+      && recoveredSnapshotCount === baselineSnapshotCount + 1
+      && recoveredSnapshot?.data?.availableUsdt === 0
+      && recoveredSnapshot?.data?.totalUsdt === 200
+      && recoveredSnapshot?.data?.assets === 1
+      && recoveredSnapshot?.data?.complete === true,
+  );
+}
+
+// A future REST source timestamp cannot mutate balances, keep the prior
+// snapshot fresh, or poison ordering against the next valid current snapshot.
+{
+  const t0 = Date.UTC(2026, 6, 10, 12);
+  let now = t0;
+  let snapshot = {
+    balances: [{ asset: 'USDT', free: '1', locked: '0' }],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: t0,
+  };
+  const account = new AccountService({
+    account: async () => snapshot,
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+  }, new FakeLedger(), () => 1, () => now);
+  await account.sync();
+  const baseline = account.equity();
+
+  snapshot = {
+    balances: [{ asset: 'USDT', free: '9', locked: '0' }],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: t0 + 10_000,
+  };
+  await account.sync();
+  const afterFuture = account.equity();
+  const futureError = account.lastError;
+
+  now = t0 + 1;
+  snapshot = {
+    balances: [{ asset: 'USDT', free: '2', locked: '0' }],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: now,
+  };
+  await account.sync();
+  const afterCurrent = account.equity();
+  check(
+    'future REST balance time cannot mutate, poison ordering, or preserve stale freshness',
+    baseline.availableUsdt === 1
+      && baseline.sourceFresh
+      && afterFuture.availableUsdt === 1
+      && !afterFuture.sourceFresh
+      && !account.lastError
+      && /future|timestamp/.test(futureError ?? '')
+      && afterCurrent.availableUsdt === 2
+      && afterCurrent.sourceFresh,
+  );
+}
+
+// Rejecting a future partial stream breaks full-account continuity. A later
+// current partial may update its asset, but only a coherent full REST snapshot
+// can restore freshness, completeness, and complete-snapshot eligibility.
+{
+  const t0 = Date.UTC(2026, 6, 10, 13);
+  let now = t0;
+  const ledger = new FakeLedger();
+  let fullSnapshot = {
+    balances: [
+      { asset: 'USDT', free: '1', locked: '0' },
+      { asset: 'BTC', free: '1', locked: '0' },
+    ],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: t0,
+  };
+  const account = new AccountService({
+    account: async () => fullSnapshot,
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+  }, ledger, (symbol) => (symbol === 'BTCUSDT' ? 100 : null), () => now);
+  await account.sync();
+  const baseline = account.equity();
+  const baselineSnapshotCount =
+    ledger.events.filter((event) => event.kind === 'account_snapshot').length;
+
+  account.applyStreamBalances(
+    [{ a: 'BTC', f: '0', l: '0' }],
+    t0 + 10_000,
+  );
+  const afterFuture = account.equity();
+
+  now = t0 + 15 * 60_000 + 1;
+  account.applyStreamBalances(
+    [{ a: 'USDT', f: '2', l: '0' }],
+    now,
+  );
+  const afterCurrentPartial = account.equity();
+  const partialSnapshotCount =
+    ledger.events.filter((event) => event.kind === 'account_snapshot').length;
+
+  fullSnapshot = {
+    balances: [
+      { asset: 'USDT', free: '2', locked: '0' },
+      { asset: 'BTC', free: '1', locked: '0' },
+    ],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: now,
+  };
+  await account.sync();
+  const recovered = account.equity();
+  const recoveredSnapshot = ledger.lastEvent('account_snapshot');
+  const recoveredSnapshotCount =
+    ledger.events.filter((event) => event.kind === 'account_snapshot').length;
+  check(
+    'future stream rejection requires coherent full REST before continuity re-greens',
+    baseline.availableUsdt === 1
+      && baseline.entries.some((entry) => entry.asset === 'BTC' && entry.free === 1)
+      && baseline.totalUsdt === 101
+      && baseline.sourceFresh
+      && baseline.complete
+      && baselineSnapshotCount === 1
+      && afterFuture.availableUsdt === 1
+      && afterFuture.entries.some((entry) => entry.asset === 'BTC' && entry.free === 1)
+      && !afterFuture.sourceFresh
+      && ledger.events.some(
+        (event) => (
+          event.kind === 'error_event'
+          && event.data?.source === 'account.stream'
+          && /future|timestamp/.test(event.data?.message ?? '')
+        ),
+      )
+      && afterCurrentPartial.availableUsdt === 2
+      && afterCurrentPartial.entries.some((entry) => entry.asset === 'BTC' && entry.free === 1)
+      && afterCurrentPartial.totalUsdt === 102
+      && !afterCurrentPartial.sourceFresh
+      && !afterCurrentPartial.complete
+      && partialSnapshotCount === baselineSnapshotCount
+      && recovered.availableUsdt === 2
+      && recovered.entries.some((entry) => entry.asset === 'BTC' && entry.free === 1)
+      && recovered.totalUsdt === 102
+      && account.connected
+      && recovered.sourceFresh
+      && recovered.complete
+      && recoveredSnapshotCount === baselineSnapshotCount + 1
+      && recoveredSnapshot?.data?.availableUsdt === 2
+      && recoveredSnapshot?.data?.totalUsdt === 102
+      && recoveredSnapshot?.data?.assets === 2
+      && recoveredSnapshot?.data?.complete === true,
+  );
+}
+
+// A stream rejected under an untrustworthy clock creates the same continuity
+// break as a future timestamp. Later valid partial data can update values, but
+// cannot certify the full account before a coherent REST refresh.
+{
+  const t0 = Date.UTC(2026, 6, 10, 13, 30);
+  const highWater = t0 + 15 * 60_000 + 1;
+  let now = t0;
+  const ledger = new FakeLedger();
+  let fullSnapshot = {
+    balances: [
+      { asset: 'USDT', free: '1', locked: '0' },
+      { asset: 'BTC', free: '1', locked: '0' },
+    ],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: t0,
+  };
+  const account = new AccountService({
+    account: async () => fullSnapshot,
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+  }, ledger, (symbol) => (symbol === 'BTCUSDT' ? 100 : null), () => now);
+  await account.sync();
+  const baseline = account.equity();
+  const baselineSnapshotCount =
+    ledger.events.filter((event) => event.kind === 'account_snapshot').length;
+
+  now = highWater;
+  account.equity();
+  now = highWater - 1;
+  account.applyStreamBalances([{ a: 'BTC', f: '0', l: '0' }], now);
+  const duringFault = account.equity();
+
+  now = highWater + 1;
+  account.applyStreamBalances([{ a: 'USDT', f: '2', l: '0' }], now);
+  const afterCurrentPartial = account.equity();
+  const partialSnapshotCount =
+    ledger.events.filter((event) => event.kind === 'account_snapshot').length;
+
+  fullSnapshot = {
+    balances: [
+      { asset: 'USDT', free: '2', locked: '0' },
+      { asset: 'BTC', free: '1', locked: '0' },
+    ],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: now,
+  };
+  await account.sync();
+  const recovered = account.equity();
+  const recoveredSnapshot = ledger.lastEvent('account_snapshot');
+  const recoveredSnapshotCount =
+    ledger.events.filter((event) => event.kind === 'account_snapshot').length;
+  check(
+    'clock-rejected stream requires coherent full REST before continuity re-greens',
+    baseline.totalUsdt === 101
+      && baseline.sourceFresh
+      && baseline.complete
+      && baselineSnapshotCount === 1
+      && duringFault.availableUsdt === 1
+      && duringFault.entries.some((entry) => entry.asset === 'BTC' && entry.free === 1)
+      && !duringFault.sourceFresh
+      && !duringFault.complete
+      && ledger.events.some(
+        (event) => (
+          event.kind === 'error_event'
+          && event.data?.source === 'account.stream'
+          && /clock regressed/.test(event.data?.message ?? '')
+        ),
+      )
+      && afterCurrentPartial.availableUsdt === 2
+      && afterCurrentPartial.entries.some((entry) => entry.asset === 'BTC' && entry.free === 1)
+      && afterCurrentPartial.totalUsdt === 102
+      && !afterCurrentPartial.sourceFresh
+      && !afterCurrentPartial.complete
+      && partialSnapshotCount === baselineSnapshotCount
+      && recovered.availableUsdt === 2
+      && recovered.entries.some((entry) => entry.asset === 'BTC' && entry.free === 1)
+      && recovered.totalUsdt === 102
+      && account.connected
+      && recovered.sourceFresh
+      && recovered.complete
+      && recoveredSnapshotCount === baselineSnapshotCount + 1
+      && recoveredSnapshot?.data?.totalUsdt === 102
+      && recoveredSnapshot?.data?.assets === 2
+      && recoveredSnapshot?.data?.complete === true,
+  );
+}
+
+// A rejected future stream event still invalidates the REST request that was
+// already in flight. The request cannot publish balances or freshness against
+// a source race it did not observe, and the rejected time cannot poison later
+// current REST or stream ordering.
+{
+  const t0 = Date.UTC(2026, 6, 10, 14);
+  let now = t0;
+  let accountCalls = 0;
+  let releaseRacedRest;
+  const racedRest = new Promise((resolve) => { releaseRacedRest = resolve; });
+  const ledger = new FakeLedger();
+  const account = new AccountService({
+    account: async () => {
+      accountCalls += 1;
+      if (accountCalls === 1) {
+        return {
+          balances: [{ asset: 'USDT', free: '1', locked: '0' }],
+          canTrade: true,
+          canWithdraw: false,
+          updateTime: t0,
+        };
+      }
+      if (accountCalls === 2) return racedRest;
+      return {
+        balances: [{ asset: 'USDT', free: '2', locked: '0' }],
+        canTrade: true,
+        canWithdraw: false,
+        updateTime: now,
+      };
+    },
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+  }, ledger, () => 1, () => now);
+  await account.sync();
+  const seeded = account.equity();
+
+  const syncing = account.sync();
+  await new Promise((resolve) => setImmediate(resolve));
+  account.applyStreamBalances(
+    [{ a: 'USDT', f: '9', l: '0' }],
+    t0 + 10_000,
+  );
+  const afterFutureDuringRequest = account.equity();
+  releaseRacedRest({
+    balances: [{ asset: 'USDT', free: '3', locked: '0' }],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: t0,
+  });
+  await syncing;
+  const afterRacedRest = account.equity();
+
+  now = t0 + 1;
+  await account.sync();
+  const afterCurrentRest = account.equity();
+  now = t0 + 2;
+  account.applyStreamBalances(
+    [{ a: 'USDT', f: '4', l: '0' }],
+    now,
+  );
+  const afterCurrentStream = account.equity();
+  check(
+    'future stream rejection invalidates in-flight REST without poisoning recovery order',
+    seeded.availableUsdt === 1
+      && seeded.sourceFresh
+      && afterFutureDuringRequest.availableUsdt === 1
+      && !afterFutureDuringRequest.sourceFresh
+      && afterRacedRest.availableUsdt === 1
+      && !afterRacedRest.sourceFresh
+      && ledger.events.some(
+        (event) => (
+          event.kind === 'error_event'
+          && event.data?.source === 'account.stream'
+          && /future|timestamp/.test(event.data?.message ?? '')
+        ),
+      )
+      && afterCurrentRest.availableUsdt === 2
+      && afterCurrentRest.sourceFresh
+      && afterCurrentStream.availableUsdt === 4
+      && afterCurrentStream.sourceFresh,
+  );
 }
 
 // Binance trade history is symbol-scoped. The service may certify its durable
@@ -763,6 +1637,373 @@ account.applyStreamBalances([{ a: 'USDT', f: '0.5', l: '0' }], now + 1);
   );
 }
 
+// Account freshness and UTC-day policy share one injected wall-clock seam.
+// Once that clock regresses, no negative age may re-green signed truth.
+{
+  const ledger = new FakeLedger();
+  const t0 = Date.UTC(2026, 6, 11, 12);
+  let now = t0;
+  const client = {
+    account: async () => ({
+      balances: [{ asset: 'USDT', free: '10', locked: '0' }],
+      canTrade: true,
+      canWithdraw: false,
+      updateTime: t0,
+    }),
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+    myTrades: async () => [],
+  };
+  const account = new AccountService(client, ledger, () => 1, () => now);
+  account.setRequiredFillSymbols(['BTCUSDT']);
+  await account.sync();
+  await account.reconcileFills();
+
+  check(
+    'account and fill truth are fresh at the injected-clock forward origin',
+    account.equity().sourceFresh && account.fillReconciliationStatus().fresh,
+  );
+  now = t0 + 60_000;
+  check('account freshness includes its exact forward boundary', account.equity().sourceFresh);
+  now = t0 + 60_001;
+  check('account freshness expires immediately beyond its forward boundary', !account.equity().sourceFresh);
+  now = t0 + 90_000;
+  check('fill freshness includes its exact forward boundary', account.fillReconciliationStatus().fresh);
+  now = t0 + 90_001;
+  check('fill freshness expires immediately beyond its forward boundary', !account.fillReconciliationStatus().fresh);
+
+  now = t0 + 500;
+  const backwardEquity = account.equity();
+  const backwardFill = account.fillReconciliationStatus();
+  const backwardPolicy = account.dailyLossPolicy();
+  check(
+    'backward clock steps cannot re-green stale account or fill truth',
+    !backwardEquity.sourceFresh
+      && !backwardFill.fresh
+      && /clock regressed/.test(backwardFill.error ?? ''),
+  );
+  check(
+    'last-known balances remain visible but unavailable during a clock fault',
+    backwardEquity.availableUsdt === 10
+      && backwardEquity.totalUsdt === 10
+      && backwardEquity.entries.some((entry) => entry.asset === 'USDT' && entry.free === 10)
+      && !backwardEquity.complete,
+  );
+  check(
+    'backward clock steps make current-day policy and day-open truth unavailable',
+    !backwardPolicy.complete
+      && backwardPolicy.reasons.some((reason) => /clock regressed/.test(reason))
+      && account.dayOpenEquity() === null
+      && Number.isNaN(account.realizedTodayUsd()),
+  );
+  const faultFill = {
+    symbol: 'BTCUSDT', tradeId: 91, orderId: 92, side: 'BUY',
+    price: '100', qty: '0.1', quoteQty: '10', commission: '0',
+    commissionAsset: 'USDT', ts: t0 + 500, source: 'order_response',
+  };
+  const recordedDuringFault = account.recordFill(faultFill);
+  const coverageDuringFault = account.fillReconciliationStatus();
+  check(
+    'accepted fill truth remains durable while clock-based freshness is fenced',
+    recordedDuringFault
+      && ledger.fills.some((fill) => fill.symbol === faultFill.symbol && fill.tradeId === faultFill.tradeId)
+      && !coverageDuringFault.fresh
+      && /clock regressed/.test(coverageDuringFault.error ?? '')
+      && !account.dailyLossPolicy().complete,
+  );
+
+  now = t0 + 90_000;
+  await account.sync();
+  await account.reconcileFills();
+  check(
+    'clock recovery stays fenced below the prior high-water mark',
+    !account.equity().sourceFresh && !account.fillReconciliationStatus().fresh,
+  );
+  now = t0 + 90_001;
+  await account.sync();
+  await account.reconcileFills();
+  check(
+    'clock recovery resumes only at the prior high-water mark',
+    account.equity().sourceFresh && account.fillReconciliationStatus().fresh,
+  );
+
+  now = Number.NaN;
+  check(
+    'invalid injected clock fails current-day policy and day-open truth closed',
+    !account.dailyLossPolicy().complete && account.dayOpenEquity() === null,
+  );
+}
+
+// Recovering trust at the exact high-water mark does not refresh the account
+// or fill observations that were current before the clock fault.
+{
+  const t0 = Date.UTC(2026, 6, 12, 10);
+  let now = t0;
+  const account = new AccountService({
+    account: async () => ({
+      balances: [{ asset: 'USDT', free: '10', locked: '0' }],
+      canTrade: true,
+      canWithdraw: false,
+      updateTime: t0,
+    }),
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+    myTrades: async () => [],
+  }, new FakeLedger(), () => 1, () => now);
+  account.setRequiredFillSymbols(['BTCUSDT']);
+  await account.sync();
+  await account.reconcileFills();
+
+  now = t0 + 500;
+  const freshBeforeFault =
+    account.equity().sourceFresh && account.fillReconciliationStatus().fresh;
+  now = t0 + 499;
+  const unavailableDuringFault =
+    !account.equity().sourceFresh && !account.fillReconciliationStatus().fresh;
+  now = t0 + 500;
+  check(
+    'equal-floor recovery cannot re-green pre-fault truth without refresh',
+    freshBeforeFault
+      && unavailableDuringFault
+      && !account.equity().sourceFresh
+      && !account.fillReconciliationStatus().fresh,
+  );
+}
+
+// One policy evaluation owns one clock cut. A clock source that would regress
+// on a second read must not split daily PnL from its reconciliation posture.
+{
+  const highWater = Date.UTC(2026, 6, 12, 12);
+  let sequence = null;
+  let reads = 0;
+  const account = new AccountService(
+    null,
+    new FakeLedger(),
+    () => 1,
+    () => {
+      if (sequence === null) return highWater;
+      const value = sequence[Math.min(reads, sequence.length - 1)];
+      reads += 1;
+      return value;
+    },
+  );
+  sequence = [highWater, highWater - 1, highWater];
+  const policy = account.dailyLossPolicy();
+  check(
+    'daily-loss policy uses one H/H-1/H clock cut',
+    reads === 1
+      && policy.complete
+      && !policy.reasons.some((reason) => /clock regressed/.test(reason)),
+  );
+}
+
+// Canonical UTC range violations must not mutate the durable day registry.
+{
+  const ledger = new FakeLedger();
+  const t0 = Date.UTC(2026, 6, 13, 12);
+  let now = t0;
+  const account = new AccountService({ myTrades: async () => [] }, ledger, () => 1, () => now);
+  account.setRequiredFillSymbols(['BTCUSDT']);
+  const durableBefore = JSON.stringify([...ledger.config]);
+
+  now = MAX_UTC_MS + 1;
+  account.setRequiredFillSymbols(['SOLUSDT']);
+  const overRange = account.fillReconciliationStatus();
+  const durableAfterRange = JSON.stringify([...ledger.config]);
+  now = Number.MAX_SAFE_INTEGER;
+  account.setRequiredFillSymbols(['ETHUSDT']);
+  const unsafeRange = account.fillReconciliationStatus();
+  check(
+    'out-of-range injected clocks fail closed without changing durable day state',
+    !overRange.fresh
+      && !unsafeRange.fresh
+      && /clock did not return safe epoch milliseconds/.test(overRange.error ?? '')
+      && /clock did not return safe epoch milliseconds/.test(unsafeRange.error ?? '')
+      && durableAfterRange === durableBefore
+      && JSON.stringify([...ledger.config]) === durableBefore,
+  );
+}
+
+// Both canonical UTC endpoints are valid account clock cuts; the first value
+// immediately below the lower endpoint is unavailable.
+{
+  const zeroLedger = new FakeLedger();
+  const zero = new AccountService(
+    { myTrades: async () => [] },
+    zeroLedger,
+    () => 1,
+    () => 0,
+  );
+  zero.setRequiredFillSymbols(['BTCUSDT']);
+  const atZero = await zero.reconcileFills();
+  const zeroPolicy = new AccountService(null, new FakeLedger(), () => 1, () => 0);
+
+  const maxLedger = new FakeLedger();
+  const maximum = new AccountService(
+    { myTrades: async () => [] },
+    maxLedger,
+    () => 1,
+    () => MAX_UTC_MS,
+  );
+  maximum.setRequiredFillSymbols(['BTCUSDT']);
+  const atMaximum = await maximum.reconcileFills();
+
+  const belowLedger = new FakeLedger();
+  const below = new AccountService(
+    { myTrades: async () => [] },
+    belowLedger,
+    () => 1,
+    () => -1,
+  );
+  const belowMinimum = below.fillReconciliationStatus();
+  check(
+    'account clock accepts exact UTC 0 and MAX and rejects exact -1',
+    atZero.fresh
+      && atZero.dayStart === 0
+      && atZero.reconciledAt === 0
+      && zeroPolicy.realizedTodayUsd() === 0
+      && zeroPolicy.dailyLossPolicy().complete
+      && atMaximum.fresh
+      && atMaximum.dayStart === MAX_UTC_MS
+      && atMaximum.reconciledAt === MAX_UTC_MS
+      && !belowMinimum.fresh
+      && /clock did not return safe epoch milliseconds/.test(belowMinimum.error ?? '')
+      && belowLedger.config.size === 0,
+  );
+}
+
+// Exchange/account timestamps share the canonical UTC range rail. An
+// over-range source value cannot poison later stream ordering or enter fills.
+{
+  const ledger = new FakeLedger();
+  const account = new AccountService({
+    account: async () => ({
+      balances: [{ asset: 'USDT', free: '2', locked: '0' }],
+      canTrade: true,
+      canWithdraw: false,
+      updateTime: MAX_UTC_MS + 1,
+    }),
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+  }, ledger, () => 1, () => MAX_UTC_MS);
+  await account.sync();
+  account.applyStreamBalances([{ a: 'USDT', f: '3', l: '0' }], MAX_UTC_MS);
+  account.applyStreamBalances([{ a: 'USDT', f: '4', l: '0' }], MAX_UTC_MS + 1);
+  const overRangeFill = account.recordFill({
+    symbol: 'BTCUSDT',
+    tradeId: 301,
+    orderId: 401,
+    side: 'BUY',
+    price: '100',
+    qty: '0.1',
+    quoteQty: '10',
+    commission: '0',
+    commissionAsset: 'USDT',
+    ts: MAX_UTC_MS + 1,
+    source: 'test',
+  });
+  check(
+    'over-range account timestamps cannot poison canonical stream or fill truth',
+    account.equity().availableUsdt === 3
+      && !overRangeFill
+      && !ledger.fills.some((fill) => fill.tradeId === 301),
+  );
+}
+
+// A completion clock can be above the constructor value and still be a
+// rollback when a newer read has already raised the service high-water mark.
+{
+  const ledger = new FakeLedger();
+  const constructorFloor = Date.UTC(2026, 6, 14, 12);
+  let now = constructorFloor;
+  let releaseAccount;
+  const accountGate = new Promise((resolve) => { releaseAccount = resolve; });
+  const account = new AccountService({
+    account: async () => accountGate,
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+  }, ledger, () => 1, () => now);
+
+  now = constructorFloor + 10_000;
+  const syncing = account.sync();
+  await new Promise((resolve) => setImmediate(resolve));
+  now = constructorFloor + 9_999;
+  releaseAccount({
+    balances: [{ asset: 'USDT', free: '20', locked: '0' }],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: constructorFloor + 9_999,
+  });
+  await syncing;
+  const unavailable = account.equity();
+  check(
+    'sync completion rolls back against the latest floor, not only the constructor floor',
+    !account.connected
+      && account.lastSyncTs === null
+      && /clock regressed/.test(account.lastError ?? '')
+      && !unavailable.sourceFresh
+      && !unavailable.complete
+      && unavailable.availableUsdt === 0
+      && !ledger.events.some((event) => event.kind === 'binance.connected' || event.kind === 'account_snapshot'),
+  );
+}
+
+// A clock fault that appears while a signed refresh is in flight cannot
+// publish a connection success, freshness timestamp, or account snapshot.
+{
+  const ledger = new FakeLedger();
+  const t0 = Date.UTC(2026, 6, 14, 12);
+  let now = t0;
+  let releaseAccount;
+  const accountGate = new Promise((resolve) => { releaseAccount = resolve; });
+  const account = new AccountService({
+    account: async () => accountGate,
+    apiRestrictions: async () => ({ ...safeRestrictions }),
+  }, ledger, () => 1, () => now);
+  const syncing = account.sync();
+  await new Promise((resolve) => setImmediate(resolve));
+  now = t0 - 1;
+  releaseAccount({
+    balances: [{ asset: 'USDT', free: '10', locked: '0' }],
+    canTrade: true,
+    canWithdraw: false,
+    updateTime: t0,
+  });
+  await syncing;
+  const unavailable = account.equity();
+  check(
+    'in-flight account refresh fails closed when its completion clock regresses',
+    !account.connected
+      && account.lastSyncTs === null
+      && /clock regressed/.test(account.lastError ?? '')
+      && !unavailable.sourceFresh
+      && unavailable.availableUsdt === 0
+      && !ledger.events.some((event) => event.kind === 'binance.connected' || event.kind === 'account_snapshot'),
+  );
+}
+
+// A fill pass that crosses UTC midnight after its request starts cannot stamp
+// a cursor or claim completion for either day.
+{
+  const ledger = new FakeLedger();
+  const dayTwo = Date.UTC(2026, 6, 16);
+  let now = dayTwo - 1;
+  let releaseTrades;
+  const tradesGate = new Promise((resolve) => { releaseTrades = resolve; });
+  const account = new AccountService({
+    myTrades: async () => tradesGate,
+  }, ledger, () => 1, () => now);
+  account.setRequiredFillSymbols(['BTCUSDT']);
+  const reconciling = account.reconcileFills();
+  await new Promise((resolve) => setImmediate(resolve));
+  now = dayTwo;
+  releaseTrades([]);
+  const status = await reconciling;
+  check(
+    'in-flight fill reconciliation cannot commit across the UTC-day boundary',
+    !status.fresh
+      && account.lastFillReconcileTs === null
+      && ledger.getConfigValue('fill_reconcile:BTCUSDT') === null
+      && !ledger.events.some((event) => event.kind === 'fill_reconciliation'),
+  );
+}
+
 // A requested symbol must survive process restart even after it disappears
 // from the current allowlist/watchlist/open-order/holding snapshot. Otherwise
 // a same-day round trip can vanish from the next reconciliation pass.
@@ -796,45 +2037,431 @@ account.applyStreamBalances([{ a: 'USDT', f: '0.5', l: '0' }], now + 1);
   );
 }
 
+// A same-day restart at the exact persisted throughTs floor must resume from
+// the durable trade ID rather than replaying the day's start-time window.
+{
+  const ledger = new FakeLedger();
+  const cursorFloor = Date.UTC(2026, 6, 17, 12);
+  let firstCall = true;
+  const first = new AccountService({
+    myTrades: async () => {
+      if (!firstCall) return [];
+      firstCall = false;
+      return [{
+        symbol: 'BTCUSDT',
+        id: 41,
+        orderId: 51,
+        price: '100',
+        qty: '0.1',
+        quoteQty: '10',
+        commission: '0',
+        commissionAsset: 'USDT',
+        time: cursorFloor,
+        isBuyer: true,
+      }];
+    },
+  }, ledger, () => 1, () => cursorFloor);
+  first.setRequiredFillSymbols(['BTCUSDT']);
+  await first.reconcileFills();
+  const cursor = JSON.parse(ledger.getConfigValue('fill_reconcile:BTCUSDT'));
+  ledger.config.delete('fill_reconcile:symbol_universe:v1');
+
+  const optionsSeen = [];
+  let restartNow = cursorFloor - 1;
+  const restarted = new AccountService({
+    myTrades: async (_symbol, _limit, options) => {
+      optionsSeen.push(options);
+      return [];
+    },
+  }, ledger, () => 1, () => restartNow);
+  const cursorBeforeRecovery = ledger.getConfigValue('fill_reconcile:BTCUSDT');
+  const regressed = restarted.fillReconciliationStatus();
+  const cursorWhileRegressed = ledger.getConfigValue('fill_reconcile:BTCUSDT');
+  restartNow = cursorFloor;
+  const resumed = await restarted.reconcileFills();
+  check(
+    'same-day restart resumes at the exact durable cursor floor',
+    cursor.dayStart === Date.UTC(2026, 6, 17)
+      && cursor.throughTs === cursorFloor
+      && cursor.lastId === 41
+      && !regressed.fresh
+      && /clock regressed/.test(regressed.error ?? '')
+      && regressed.symbols.includes('BTCUSDT')
+      && cursorBeforeRecovery !== null
+      && cursorWhileRegressed === cursorBeforeRecovery
+      && optionsSeen.length === 1
+      && optionsSeen[0]?.fromId === 42
+      && optionsSeen[0]?.startTime === undefined
+      && resumed.fresh,
+  );
+}
+
 // The durable registry protects the current UTC-day risk boundary, not an
 // ever-growing account history. Day rollover must retire yesterday-only
 // symbols so long-lived accounts do not permanently exceed the active cap.
 {
-  const realNow = Date.now;
-  const dayOne = Date.UTC(2026, 6, 11);
-  const dayTwo = dayOne + 24 * 60 * 60 * 1_000;
-  try {
-    let now = dayOne + 12 * 60 * 60 * 1_000;
-    Date.now = () => now;
-    const ledger = new FakeLedger();
-    const calls = [];
-    const account = new AccountService({
-      myTrades: async (symbol) => {
-        calls.push(symbol);
-        return [];
-      },
-    }, ledger, () => 1);
-    account.setRequiredFillSymbols(['BTCUSDT']);
-    await account.reconcileFills(['SOLUSDT']);
+  const dayTwo = Date.UTC(2026, 6, 12);
+  let now = dayTwo - 1;
+  const ledger = new FakeLedger();
+  const calls = [];
+  const account = new AccountService({
+    myTrades: async (symbol) => {
+      calls.push(symbol);
+      return [];
+    },
+  }, ledger, () => 1, () => now);
+  account.setRequiredFillSymbols(['BTCUSDT']);
+  await account.reconcileFills(['SOLUSDT']);
 
-    calls.length = 0;
-    now = dayTwo + 12 * 60 * 60 * 1_000;
-    account.setRequiredFillSymbols(['BTCUSDT']);
-    const status = await account.reconcileFills();
-    const persisted = JSON.parse(ledger.config.get('fill_reconcile:symbol_universe:v1'));
-    check(
-      'UTC-day rollover retires yesterday-only reconciliation symbols',
-      status.dayStart === dayTwo
-        && status.scopeComplete
-        && !status.symbols.includes('SOLUSDT')
-        && calls.length === 1
-        && calls[0] === 'BTCUSDT'
-        && persisted.dayStart === dayTwo
-        && !persisted.symbols.includes('SOLUSDT'),
-    );
-  } finally {
-    Date.now = realNow;
-  }
+  calls.length = 0;
+  now = dayTwo;
+  account.setRequiredFillSymbols(['BTCUSDT']);
+  const status = await account.reconcileFills();
+  const persisted = JSON.parse(ledger.config.get('fill_reconcile:symbol_universe:v1'));
+  check(
+    'injected-clock UTC-day rollover retires prior-day-only reconciliation symbols at the boundary',
+    status.dayStart === dayTwo
+      && status.scopeComplete
+      && !status.symbols.includes('SOLUSDT')
+      && calls.length === 1
+      && calls[0] === 'BTCUSDT'
+      && persisted.dayStart === dayTwo
+      && !persisted.symbols.includes('SOLUSDT'),
+  );
+}
+
+// A persisted later-day registry is a durable clock floor across restart. A
+// restarted process on an earlier day must not rewrite it as a new rollover.
+{
+  const ledger = new FakeLedger();
+  const dayTwo = Date.UTC(2026, 6, 18);
+  let now = dayTwo + 12 * 60 * 60_000;
+  const first = new AccountService({ myTrades: async () => [] }, ledger, () => 1, () => now);
+  first.setRequiredFillSymbols(['BTCUSDT']);
+  await first.reconcileFills(['SOLUSDT']);
+  const durableDayTwo = ledger.getConfigValue('fill_reconcile:symbol_universe:v1');
+
+  now = dayTwo - 1;
+  const calls = [];
+  const restarted = new AccountService({
+    myTrades: async (symbol) => {
+      calls.push(symbol);
+      return [];
+    },
+  }, ledger, () => 1, () => now);
+  const regressed = restarted.fillReconciliationStatus();
+  now = dayTwo - 1;
+  const stillRegressed = restarted.fillReconciliationStatus();
+  check(
+    'restart on an earlier UTC day preserves the durable registry and stays fenced',
+    !regressed.fresh
+      && !stillRegressed.fresh
+      && /clock regressed/.test(regressed.error ?? '')
+      && regressed.symbols.includes('SOLUSDT')
+      && ledger.getConfigValue('fill_reconcile:symbol_universe:v1') === durableDayTwo,
+  );
+
+  now = dayTwo + 12 * 60 * 60_000;
+  const recovered = await restarted.reconcileFills();
+  check(
+    'restart clock recovers only at the exact persisted cursor floor',
+    recovered.fresh
+      && recovered.dayStart === dayTwo
+      && calls.includes('BTCUSDT')
+      && calls.includes('SOLUSDT'),
+  );
+}
+
+// Invalid startup time cannot erase a durable later-day registry. Once a valid
+// earlier observation arrives, that registry becomes the recovery floor.
+{
+  const ledger = new FakeLedger();
+  const durableDay = Date.UTC(2026, 6, 19);
+  const durableRegistry = JSON.stringify({
+    version: 1,
+    dayStart: durableDay,
+    symbols: ['SOLUSDT'],
+  });
+  ledger.config.set('fill_reconcile:symbol_universe:v1', durableRegistry);
+  let now = Number.NaN;
+  const calls = [];
+  const account = new AccountService({
+    myTrades: async (symbol) => {
+      calls.push(symbol);
+      return [];
+    },
+  }, ledger, () => 1, () => now);
+  const invalidStartup = account.fillReconciliationStatus();
+
+  now = durableDay - 1;
+  account.fillReconciliationStatus();
+  const belowDurableFloor = account.fillReconciliationStatus();
+  check(
+    'invalid startup preserves and adopts the durable UTC-day floor',
+    !invalidStartup.fresh
+      && /clock did not return safe epoch milliseconds/.test(invalidStartup.error ?? '')
+      && !belowDurableFloor.fresh
+      && /clock regressed/.test(belowDurableFloor.error ?? '')
+      && belowDurableFloor.symbols.includes('SOLUSDT')
+      && ledger.getConfigValue('fill_reconcile:symbol_universe:v1') === durableRegistry
+      && JSON.parse(
+        ledger.getConfigValue('account:clock_high_water:v1'),
+      ).clockHighWaterMs === durableDay,
+  );
+
+  now = durableDay;
+  const recovered = await account.reconcileFills();
+  check(
+    'invalid-startup clock recovers only at the durable floor',
+    recovered.fresh
+      && recovered.dayStart === durableDay
+      && calls.length === 1
+      && calls[0] === 'SOLUSDT',
+  );
+}
+
+// Either independent witness may lose its one fault-time write. The surviving
+// copy must still fence H-1 after restart, and startup repairs the divergence.
+for (const failedKey of [
+  'account:clock_high_water:v1',
+  'fill_reconcile:symbol_universe:v1',
+]) {
+  const ledger = new FakeLedger();
+  const persistedFloor = Date.UTC(2026, 6, 20, 12);
+  const highWater = persistedFloor + 10_000;
+  let now = persistedFloor;
+  const account = new AccountService(
+    { myTrades: async () => [] },
+    ledger,
+    () => 1,
+    () => now,
+  );
+  account.setRequiredFillSymbols(['BTCUSDT']);
+  const globalBeforeHighWater = JSON.parse(
+    ledger.getConfigValue('account:clock_high_water:v1'),
+  );
+  const registryBeforeHighWater = JSON.parse(
+    ledger.getConfigValue('fill_reconcile:symbol_universe:v1'),
+  );
+
+  now = highWater;
+  account.equity();
+  const setConfigValue = ledger.setConfigValue.bind(ledger);
+  let injectedFailures = 0;
+  let faultWriteAttempts = 0;
+  ledger.setConfigValue = (key, value) => {
+    if (
+      key === 'account:clock_high_water:v1'
+      || key === 'fill_reconcile:symbol_universe:v1'
+    ) {
+      faultWriteAttempts += 1;
+      if (key === failedKey && injectedFailures === 0) {
+        injectedFailures += 1;
+        throw new Error(`injected one-shot ${failedKey} write failure`);
+      }
+    }
+    setConfigValue(key, value);
+  };
+
+  now = highWater - 1;
+  account.equity();
+  const globalAfterFault = JSON.parse(
+    ledger.getConfigValue('account:clock_high_water:v1'),
+  );
+  const registryAfterFault = JSON.parse(
+    ledger.getConfigValue('fill_reconcile:symbol_universe:v1'),
+  );
+  const survivingHighWater =
+    failedKey === 'account:clock_high_water:v1'
+      ? registryAfterFault.clockHighWaterMs
+      : globalAfterFault.clockHighWaterMs;
+  const failedCopyHighWater =
+    failedKey === 'account:clock_high_water:v1'
+      ? globalAfterFault.clockHighWaterMs
+      : registryAfterFault.clockHighWaterMs;
+  const writesBeforeRestart = faultWriteAttempts;
+  let restartProviderCalls = 0;
+  const restarted = new AccountService({
+    myTrades: async () => {
+      restartProviderCalls += 1;
+      return [];
+    },
+  }, ledger, () => 1, () => now);
+  const restartStatus = await restarted.reconcileFills();
+  const globalAfterRepair = JSON.parse(
+    ledger.getConfigValue('account:clock_high_water:v1'),
+  );
+  const registryAfterRepair = JSON.parse(
+    ledger.getConfigValue('fill_reconcile:symbol_universe:v1'),
+  );
+  const failedCopyName =
+    failedKey === 'account:clock_high_water:v1' ? 'global witness' : 'registry witness';
+  check(
+    `one-shot ${failedCopyName} failure still fences restart`,
+    globalBeforeHighWater.clockHighWaterMs === persistedFloor
+      && registryBeforeHighWater.clockHighWaterMs === persistedFloor
+      && injectedFailures === 1
+      && writesBeforeRestart === 2
+      && survivingHighWater === highWater
+      && failedCopyHighWater === persistedFloor
+      && !restartStatus.fresh
+      && /clock regressed/.test(restartStatus.error ?? '')
+      && restartProviderCalls === 0
+      && globalAfterRepair.clockHighWaterMs === highWater
+      && registryAfterRepair.clockHighWaterMs === highWater,
+  );
+}
+
+// Repairing a one-shot witness failure restores the durable clock floor, but a
+// no-client restart cannot manufacture new policy evidence at that floor.
+{
+  const ledger = new FakeLedger();
+  const persistedFloor = Date.UTC(2026, 6, 20, 18);
+  const highWater = persistedFloor + 10_000;
+  let now = persistedFloor;
+  const account = new AccountService(null, ledger, () => 1, () => now);
+  const initiallyComplete = account.dailyLossPolicy().complete;
+
+  now = highWater;
+  account.equity();
+  const setConfigValue = ledger.setConfigValue.bind(ledger);
+  let injectedFailures = 0;
+  ledger.setConfigValue = (key, value) => {
+    if (key === 'account:clock_high_water:v1' && injectedFailures === 0) {
+      injectedFailures += 1;
+      throw new Error('injected one-shot no-client clock-witness write failure');
+    }
+    setConfigValue(key, value);
+  };
+
+  now = highWater - 1;
+  account.equity();
+  const registryAfterFault = JSON.parse(
+    ledger.getConfigValue('fill_reconcile:symbol_universe:v1'),
+  );
+  const restarted = new AccountService(null, ledger, () => 1, () => now);
+  const belowFloor = restarted.dailyLossPolicy();
+  const globalAfterRepair = JSON.parse(
+    ledger.getConfigValue('account:clock_high_water:v1'),
+  );
+  const registryAfterRepair = JSON.parse(
+    ledger.getConfigValue('fill_reconcile:symbol_universe:v1'),
+  );
+  now = highWater;
+  const restartedAtFloor = new AccountService(null, ledger, () => 1, () => now);
+  const atFloorWithoutEvidence = restartedAtFloor.dailyLossPolicy();
+  now = highWater + 1;
+  const beyondFloorPolicy = restartedAtFloor.dailyLossPolicy();
+  const ordinaryNoClientStatus = restartedAtFloor.fillReconciliationStatus();
+  check(
+    'no-client restart cannot re-green daily-loss policy without post-fault evidence',
+    initiallyComplete
+      && injectedFailures === 1
+      && registryAfterFault.clockHighWaterMs === highWater
+      && globalAfterRepair.clockHighWaterMs === highWater
+      && registryAfterRepair.clockHighWaterMs === highWater
+      && !belowFloor.complete
+      && belowFloor.reasons.some((reason) => /clock regressed/.test(reason))
+      && !atFloorWithoutEvidence.complete
+      && atFloorWithoutEvidence.reasons.some(
+        (reason) => /must advance beyond its durable high-water/.test(reason),
+      )
+      && !atFloorWithoutEvidence.reasons.some((reason) => /clock regressed/.test(reason))
+      && beyondFloorPolicy.complete
+      && ordinaryNoClientStatus.complete
+      && ordinaryNoClientStatus.scopeComplete
+      && ordinaryNoClientStatus.fresh
+      && ordinaryNoClientStatus.coverageScope === 'not_applicable'
+      && ordinaryNoClientStatus.accountWide === null
+      && ordinaryNoClientStatus.error === null,
+  );
+}
+
+// A detected rollback durably fences the exact volatile high-water. A
+// just-after-midnight fill then survives a crash and joins the next-day scope.
+{
+  const ledger = new FakeLedger();
+  const persistedFloor = Date.UTC(2026, 6, 20, 23, 59);
+  const highWater = Date.UTC(2026, 6, 20, 23, 59, 59, 999);
+  const restartClock = Date.UTC(2026, 6, 20, 23, 59, 30);
+  const futureFillTs = Date.UTC(2026, 6, 21, 0, 0, 1);
+  let now = persistedFloor;
+  const calls = [];
+  const account = new AccountService({
+    myTrades: async (symbol) => {
+      calls.push(symbol);
+      return [];
+    },
+  }, ledger, () => 1, () => now);
+  account.setRequiredFillSymbols(['BTCUSDT']);
+  await account.reconcileFills();
+
+  now = highWater;
+  account.equity();
+  const futureRegistryBeforeFault = JSON.parse(
+    ledger.getConfigValue('fill_reconcile:symbol_universe:v1'),
+  );
+  now = restartClock;
+  const faultFill = {
+    symbol: 'SOLUSDT',
+    tradeId: 61,
+    orderId: 71,
+    side: 'BUY',
+    price: '100',
+    qty: '0.1',
+    quoteQty: '10',
+    commission: '0',
+    commissionAsset: 'USDT',
+    ts: futureFillTs,
+    source: 'user_stream',
+  };
+  const accepted = account.recordFill(faultFill);
+  const durableDuringFault = JSON.parse(
+    ledger.getConfigValue('fill_reconcile:symbol_universe:v1'),
+  );
+  check(
+    'future-day clock fault retains the accepted fill symbol without premature persistence',
+    accepted
+      && ledger.fills.some((fill) => fill.symbol === 'SOLUSDT' && fill.tradeId === 61)
+      && futureRegistryBeforeFault.clockHighWaterMs === persistedFloor
+      && durableDuringFault.clockHighWaterMs === highWater
+      && !futureRegistryBeforeFault.symbols.includes('SOLUSDT')
+      && !durableDuringFault.symbols.includes('SOLUSDT'),
+  );
+
+  const restartCalls = [];
+  const restarted = new AccountService({
+    myTrades: async (symbol) => {
+      restartCalls.push(symbol);
+      return [];
+    },
+  }, ledger, () => 1, () => now);
+  restarted.setRequiredFillSymbols(['BTCUSDT']);
+  const restartRegressed = restarted.fillReconciliationStatus();
+  const registryWhileRestartFenced = JSON.parse(
+    ledger.getConfigValue('fill_reconcile:symbol_universe:v1'),
+  );
+  now = highWater;
+  const recoveredAtFloor = restarted.fillReconciliationStatus();
+  now = futureFillTs;
+  const recovered = await restarted.reconcileFills();
+  const durableAfterRecovery = JSON.parse(
+    ledger.getConfigValue('fill_reconcile:symbol_universe:v1'),
+  );
+  check(
+    'future-day fault fill symbol survives restart into durable scope',
+    !restartRegressed.fresh
+      && /clock regressed/.test(restartRegressed.error ?? '')
+      && !recoveredAtFloor.fresh
+      && registryWhileRestartFenced.clockHighWaterMs === highWater
+      && !registryWhileRestartFenced.symbols.includes('SOLUSDT')
+      && recovered.fresh
+      && recovered.symbols.includes('SOLUSDT')
+      && restartCalls.includes('SOLUSDT')
+      && durableAfterRecovery.dayStart === Date.UTC(2026, 6, 21)
+      && durableAfterRecovery.clockHighWaterMs === futureFillTs
+      && durableAfterRecovery.symbols.includes('SOLUSDT'),
+  );
 }
 
 // Ledger-observed/user-stream fills are a second durable recovery source. A
@@ -856,6 +2483,29 @@ account.applyStreamBalances([{ a: 'USDT', f: '0.5', l: '0' }], now + 1);
   check(
     'invalid persisted fill-symbol scope fails closed explicitly',
     !status.scopeComplete && /persisted fill-symbol universe/.test(status.error ?? ''),
+  );
+
+  const clockWitnessLedger = new FakeLedger();
+  const clockWitnessNow = Date.UTC(2026, 6, 22, 12);
+  new AccountService(null, clockWitnessLedger, () => 1, () => clockWitnessNow);
+  const malformedClockWitness = JSON.stringify({
+    version: 1,
+    clockHighWaterMs: clockWitnessNow,
+    unsupported: true,
+  });
+  clockWitnessLedger.config.set('account:clock_high_water:v1', malformedClockWitness);
+  const corruptedClockWitness = new AccountService(
+    null,
+    clockWitnessLedger,
+    () => 1,
+    () => clockWitnessNow,
+  );
+  const corruptedClockStatus = corruptedClockWitness.fillReconciliationStatus();
+  check(
+    'invalid persisted clock witness fails closed without overwrite',
+    !corruptedClockStatus.fresh
+      && /persisted account clock high-water witness/.test(corruptedClockStatus.error ?? '')
+      && clockWitnessLedger.getConfigValue('account:clock_high_water:v1') === malformedClockWitness,
   );
 
   const capped = new AccountService({ myTrades: async () => [] }, new FakeLedger(), () => 1);

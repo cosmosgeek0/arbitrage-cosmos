@@ -15,6 +15,7 @@ import {
 } from '../capitalFoundation/contracts/decimal.js';
 import type { Ledger, FillInput, FillRow } from '../ledger.js';
 import type { BalanceEntry, PositionEntry } from '../types.js';
+import { isValidUtcMillis } from '../foundation/contracts/time.js';
 
 const SNAPSHOT_INTERVAL_MS = 15 * 60 * 1000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1_000;
@@ -24,9 +25,16 @@ const FILL_RECONCILE_MAX_PAGES = 10;
 const FILL_RECONCILE_MAX_SYMBOLS = 50;
 const FILL_SYMBOL_UNIVERSE_MAX = 500;
 const FILL_SYMBOL_UNIVERSE_KEY = 'fill_reconcile:symbol_universe:v1';
+const ACCOUNT_CLOCK_HIGH_WATER_KEY = 'account:clock_high_water:v1';
 const USDT_SYMBOL_RE = /^[A-Z0-9]{1,16}USDT$/;
 const SCOPED_FILL_LIMITATION =
   'Binance trade history is symbol-scoped; current-day configured and observed symbols do not prove account-wide fill coverage';
+const ACCOUNT_CLOCK_INVALID = 'account clock did not return safe epoch milliseconds';
+const ACCOUNT_CLOCK_REGRESSED = 'account clock regressed below its prior high-water mark';
+const ACCOUNT_CLOCK_PERSISTENCE_DIVERGED =
+  'account clock high-water witnesses diverge; repair required';
+const ACCOUNT_CLOCK_ADVANCE_REQUIRED =
+  'account clock must advance beyond its durable high-water before no-client policy can recover';
 
 function finite(value: number): boolean {
   return Number.isFinite(value);
@@ -41,7 +49,7 @@ function errorMessage(error: unknown): string {
 }
 
 function fillDay(ts: number): string | null {
-  if (!finite(ts) || ts <= 0) return null;
+  if (!finite(ts) || ts < 0) return null;
   try {
     return new Date(ts).toISOString().slice(0, 10);
   } catch {
@@ -68,7 +76,7 @@ function exactNonNegative(value: unknown): value is NonNegativeDecimal {
   }
 }
 
-function validateFill(fill: FillInput | FillRow): string | null {
+function validateFill(fill: FillInput | FillRow, nowMs: number | null): string | null {
   // PnL and equity in this service are explicitly denominated in USDT. A
   // non-USDT fill cannot safely share the same cost-basis calculation.
   if (!/^[A-Z0-9]{1,16}USDT$/.test(fill.symbol)) return 'invalid USDT symbol';
@@ -80,7 +88,13 @@ function validateFill(fill: FillInput | FillRow): string | null {
   if (!exactPositive(fill.quoteQty)) return 'invalid quote quantity';
   if (!exactNonNegative(fill.commission)) return 'invalid commission';
   if (fill.commissionAsset !== null && !boundedBinanceIdentifier(fill.commissionAsset, 20, 80)) return 'invalid commission asset';
-  if (!Number.isInteger(fill.ts) || fill.ts <= 0 || fillDay(fill.ts) === null || fill.ts > Date.now() + 5 * 60_000) {
+  if (
+    !isValidUtcMillis(fill.ts)
+    || fill.ts <= 0
+    || fillDay(fill.ts) === null
+    || nowMs === null
+    || fill.ts > nowMs + 5 * 60_000
+  ) {
     return 'invalid timestamp';
   }
   if (typeof fill.source !== 'string' || fill.source.length === 0 || fill.source.length > 64) return 'invalid source';
@@ -151,9 +165,24 @@ function fillEconomicDeltas(fill: Readonly<FillRow>, base: string): FillEconomic
   });
 }
 
-function utcDayStart(ts = Date.now()): number {
+function utcDayStart(ts: number): number {
   const d = new Date(ts);
   return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+interface AccountClockReading {
+  readonly nowMs: number | null;
+  readonly trustworthy: boolean;
+  readonly reason: string | null;
+}
+
+interface AccountPnl {
+  realizedByDay: Map<string, number>;
+  realizedBySymbol: Map<string, number>;
+  feesByAsset: Map<string, number>;
+  avgCost: Map<string, { qty: number; avgCost: number }>;
+  feeUsdByDay: Map<string, number>;
+  incompleteByDay: Map<string, string[]>;
 }
 
 export interface FillReconciliationStatus {
@@ -171,17 +200,53 @@ export interface FillReconciliationStatus {
   error: string | null;
 }
 
-function parseFillSymbolUniverse(raw: string): { dayStart: number; symbols: string[] } {
-  const value = JSON.parse(raw) as { version?: unknown; dayStart?: unknown; symbols?: unknown } | null;
+function parseAccountClockHighWater(raw: string): number {
+  const value = JSON.parse(raw) as {
+    version?: unknown;
+    clockHighWaterMs?: unknown;
+  } | null;
+  if (
+    value === null
+    || Array.isArray(value)
+    || Object.getPrototypeOf(value) !== Object.prototype
+    || Object.keys(value).sort().join(',') !== 'clockHighWaterMs,version'
+    || value.version !== 1
+    || !isValidUtcMillis(value.clockHighWaterMs)
+  ) {
+    throw new Error('persisted account clock high-water witness has an invalid format');
+  }
+  return value.clockHighWaterMs;
+}
+
+function parseFillSymbolUniverse(raw: string): {
+  dayStart: number;
+  clockHighWaterMs: number;
+  symbols: string[];
+} {
+  const value = JSON.parse(raw) as {
+    version?: unknown;
+    dayStart?: unknown;
+    clockHighWaterMs?: unknown;
+    symbols?: unknown;
+  } | null;
   if (!value || value.version !== 1 || !Array.isArray(value.symbols)) {
     throw new Error('persisted fill-symbol universe has an invalid format');
   }
   if (
-    !Number.isSafeInteger(value.dayStart)
-    || (value.dayStart as number) < 0
+    !isValidUtcMillis(value.dayStart)
     || (value.dayStart as number) % ONE_DAY_MS !== 0
   ) {
     throw new Error('persisted fill-symbol universe has an invalid UTC day');
+  }
+  const clockHighWaterMs =
+    value.clockHighWaterMs === undefined
+      ? value.dayStart
+      : value.clockHighWaterMs;
+  if (
+    !isValidUtcMillis(clockHighWaterMs)
+    || clockHighWaterMs < value.dayStart
+  ) {
+    throw new Error('persisted fill-symbol universe has an invalid clock high-water mark');
   }
   if (value.symbols.length > FILL_SYMBOL_UNIVERSE_MAX) {
     throw new Error(`persisted fill-symbol universe exceeds ${FILL_SYMBOL_UNIVERSE_MAX} symbols`);
@@ -196,7 +261,11 @@ function parseFillSymbolUniverse(raw: string): { dayStart: number; symbols: stri
   if (symbols.size !== value.symbols.length) {
     throw new Error('persisted fill-symbol universe contains duplicate symbols');
   }
-  return { dayStart: value.dayStart as number, symbols: [...symbols].sort() };
+  return {
+    dayStart: value.dayStart as number,
+    clockHighWaterMs,
+    symbols: [...symbols].sort(),
+  };
 }
 
 function parseFillCursor(
@@ -208,11 +277,37 @@ function parseFillCursor(
   try {
     const value = JSON.parse(raw) as Record<string, unknown>;
     if (value.dayStart !== expectedDayStart) return null;
-    const throughTs = Number(value.throughTs);
+    const throughTs = value.throughTs;
     const lastId = value.lastId === null ? null : Number(value.lastId);
-    if (!Number.isSafeInteger(throughTs) || throughTs < expectedDayStart || throughTs > now + 5 * 60_000) return null;
+    if (
+      !isValidUtcMillis(throughTs)
+      || throughTs < expectedDayStart
+      || throughTs - expectedDayStart >= ONE_DAY_MS
+      || throughTs > now + 5 * 60_000
+    ) return null;
     if (lastId !== null && (!Number.isSafeInteger(lastId) || lastId < 0)) return null;
     return { lastId, throughTs };
+  } catch {
+    return null;
+  }
+}
+
+function parseFillCursorFloor(
+  raw: string | null,
+  expectedDayStart: number,
+): number | null {
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw) as Record<string, unknown>;
+    if (value.dayStart !== expectedDayStart) return null;
+    const lastId = value.lastId === null ? null : Number(value.lastId);
+    if (
+      !isValidUtcMillis(value.throughTs)
+      || value.throughTs < expectedDayStart
+      || value.throughTs - expectedDayStart >= ONE_DAY_MS
+    ) return null;
+    if (lastId !== null && (!Number.isSafeInteger(lastId) || lastId < 0)) return null;
+    return value.throughTs;
   } catch {
     return null;
   }
@@ -230,10 +325,34 @@ export class AccountService {
   private syncInFlight: Promise<void> | null = null;
   private balanceSourceTs = 0;
   private balanceMutationVersion = 0;
+  private balanceAssetStreamTombstones = new Map<string, {
+    version: number;
+    sourceTs: number;
+  }>();
+  private balanceFullSnapshotComplete = false;
+  private balanceFullSnapshotSourceTs = 0;
+  private balanceInvalidationGeneration = 0;
+  private balanceStreamContinuityBroken = false;
+  private balanceStreamContinuitySourceFloor: number | null = null;
   private lastSnapshotTs = 0;
+  private clockHighWaterMs: number | null = null;
+  private clockFailureReason: string | null = null;
+  private clockRevision = 0;
+  private requiredDurableClockHighWaterMs: number | null = null;
+  private persistedGlobalClockHighWaterMs: number | null = null;
+  private persistedRegistryClockHighWaterMs: number | null = null;
+  private clockHighWaterLoadError: string | null = null;
+  private clockHighWaterWriteError: string | null = null;
+  private clockHighWaterRepairRequired = false;
+  private faultPersistenceAttemptedFloor: number | null = null;
+  private nullClientClockAdvanceFloorMs: number | null = null;
+  private lastSyncClockRevision = -1;
+  private lastFillReconcileClockRevision = -1;
   private configuredFillSymbols = new Set<string>();
   private durableFillSymbols = new Set<string>();
-  private fillUniverseDayStart = utcDayStart();
+  private pendingFillSymbols = new Set<string>();
+  private fillUniverseDayStart: number | null = null;
+  private fillUniversePersistRequired = false;
   private configuredFillScopeError: string | null = null;
   private fillUniverseLoadError: string | null = null;
   private fillUniverseWriteError: string | null = null;
@@ -245,14 +364,7 @@ export class AccountService {
   private pnlCacheDirty = true;
   private pnlCostBasisIncomplete = new Set<string>();
   private pnlDailyPolicyExact = new Map<string, ExactDecimal>();
-  private pnlCache: {
-    realizedByDay: Map<string, number>;
-    realizedBySymbol: Map<string, number>;
-    feesByAsset: Map<string, number>;
-    avgCost: Map<string, { qty: number; avgCost: number }>;
-    feeUsdByDay: Map<string, number>;
-    incompleteByDay: Map<string, string[]>;
-  } = {
+  private pnlCache: AccountPnl = {
     realizedByDay: new Map(),
     realizedBySymbol: new Map(),
     feesByAsset: new Map(),
@@ -264,7 +376,8 @@ export class AccountService {
   constructor(
     private readonly client: BinanceClient | null,
     private readonly ledger: Ledger,
-    private readonly priceOf: (symbol: string) => number | null
+    private readonly priceOf: (symbol: string) => number | null,
+    private readonly nowSource: () => number = Date.now,
   ) {
     this.restoreFillSymbolUniverse();
     // Keep the cache coherent for both service-boundary fill events and legacy
@@ -281,16 +394,87 @@ export class AccountService {
     return this.client !== null;
   }
 
-  private restoreFillSymbolUniverse(): void {
-    const today = utcDayStart();
-    this.fillUniverseDayStart = today;
+  /**
+   * The single account-service wall-clock seam. The high-water mark preserves
+   * the last truthful UTC boundary, while an invalid or backward observation
+   * is surfaced as unavailable instead of turning a negative age into fresh
+   * account truth.
+   */
+  private readClock(): AccountClockReading {
+    let observed: number;
+    try {
+      observed = this.nowSource();
+    } catch {
+      this.clockFailureReason = ACCOUNT_CLOCK_INVALID;
+      this.persistClockHighWaterOnFault();
+      return {
+        nowMs: this.clockHighWaterMs,
+        trustworthy: false,
+        reason: this.clockFailureReason,
+      };
+    }
+    if (!isValidUtcMillis(observed)) {
+      this.clockFailureReason = ACCOUNT_CLOCK_INVALID;
+      this.persistClockHighWaterOnFault();
+      return {
+        nowMs: this.clockHighWaterMs,
+        trustworthy: false,
+        reason: this.clockFailureReason,
+      };
+    }
+    if (this.clockHighWaterMs !== null && observed < this.clockHighWaterMs) {
+      this.clockFailureReason = ACCOUNT_CLOCK_REGRESSED;
+      this.persistClockHighWaterOnFault();
+      return {
+        nowMs: this.clockHighWaterMs,
+        trustworthy: false,
+        reason: this.clockFailureReason,
+      };
+    }
+    if (
+      this.nullClientClockAdvanceFloorMs !== null
+      && observed > this.nullClientClockAdvanceFloorMs
+    ) {
+      this.nullClientClockAdvanceFloorMs = null;
+    }
+    const recovered = this.clockFailureReason !== null;
+    this.clockHighWaterMs = observed;
+    this.clockFailureReason = null;
+    if (recovered) {
+      this.clockRevision += 1;
+      this.pnlCacheDirty = true;
+      if (this.clockHighWaterRepairRequired && this.fillUniverseDayStart !== null) {
+        this.persistClockHighWaterCopies();
+      }
+    }
+    return { nowMs: observed, trustworthy: true, reason: null };
+  }
+
+  private restoreFillSymbolUniverse(clock = this.readClock()): void {
+    const persistedClockHighWater = this.ledger.getConfigValue(ACCOUNT_CLOCK_HIGH_WATER_KEY);
+    if (persistedClockHighWater !== null) {
+      try {
+        this.persistedGlobalClockHighWaterMs = parseAccountClockHighWater(persistedClockHighWater);
+      } catch (error) {
+        this.clockHighWaterLoadError = errorMessage(error);
+      }
+    }
     const persisted = this.ledger.getConfigValue(FILL_SYMBOL_UNIVERSE_KEY);
     const restored = new Set<string>();
     let persistRequired = persisted === null;
+    let persistedUniverse: ReturnType<typeof parseFillSymbolUniverse> | null = null;
+    const observedDayStart =
+      clock.trustworthy && clock.nowMs !== null
+        ? utcDayStart(clock.nowMs)
+        : null;
+    let universeDayStart = observedDayStart;
     if (persisted !== null) {
       try {
         const parsed = parseFillSymbolUniverse(persisted);
-        if (parsed.dayStart === today) {
+        persistedUniverse = parsed;
+        this.persistedRegistryClockHighWaterMs = parsed.clockHighWaterMs;
+        if (observedDayStart === null || parsed.dayStart >= observedDayStart) {
+          universeDayStart = parsed.dayStart;
           for (const symbol of parsed.symbols) restored.add(symbol);
         } else {
           // Yesterday's discovery scope cannot affect today's daily-loss
@@ -302,23 +486,17 @@ export class AccountService {
         this.fillUniverseLoadError = errorMessage(error);
       }
     }
+    if (universeDayStart === null) {
+      this.fillUniversePersistRequired ||= persistRequired;
+      return;
+    }
+    this.fillUniverseDayStart = universeDayStart;
 
     // The fills table is also durable evidence. The indexed, bounded distinct
     // query repairs an older/interrupted registry without materializing the
     // lifetime fill ledger during service startup.
-    const observedToday = this.ledger.distinctFillSymbolsBetween(
-      today,
-      today + ONE_DAY_MS,
-      FILL_SYMBOL_UNIVERSE_MAX + 1,
-    );
-    if (observedToday.length > FILL_SYMBOL_UNIVERSE_MAX) {
-      this.fillUniverseCapacityError = `fill-symbol universe exceeds ${FILL_SYMBOL_UNIVERSE_MAX} symbols`;
-    }
-    for (const symbol of observedToday.slice(0, FILL_SYMBOL_UNIVERSE_MAX)) {
-      if (!USDT_SYMBOL_RE.test(symbol)) {
-        this.fillUniverseLoadError ??= `ledger contains unsupported fill-reconciliation symbol: ${symbol}`;
-        continue;
-      }
+    if (this.mergeObservedFillSymbols(universeDayStart, restored)) persistRequired = true;
+    for (const symbol of [...this.configuredFillSymbols, ...this.pendingFillSymbols]) {
       if (!restored.has(symbol) && restored.size >= FILL_SYMBOL_UNIVERSE_MAX) {
         this.fillUniverseCapacityError = `fill-symbol universe exceeds ${FILL_SYMBOL_UNIVERSE_MAX} symbols`;
         continue;
@@ -327,44 +505,302 @@ export class AccountService {
       restored.add(symbol);
     }
     this.durableFillSymbols = restored;
+    this.pendingFillSymbols.clear();
+    this.fillUniversePersistRequired ||= persistRequired;
+    const registryFloor =
+      Math.max(
+        universeDayStart,
+        this.persistedGlobalClockHighWaterMs ?? universeDayStart,
+        persistedUniverse?.clockHighWaterMs ?? universeDayStart,
+      );
+    const clockUsable = this.adoptDurableClockFloor(
+      universeDayStart,
+      restored,
+      registryFloor,
+      clock,
+    );
+    const durableFloor = this.requiredDurableClockHighWaterMs;
+    const hadDurableClockEvidence =
+      persistedClockHighWater !== null
+      || persisted !== null
+      || (durableFloor !== null && durableFloor > universeDayStart);
+    if (
+      this.client === null
+      && hadDurableClockEvidence
+      && durableFloor !== null
+      && (clock.nowMs === null || clock.nowMs <= durableFloor)
+    ) {
+      this.nullClientClockAdvanceFloorMs = Math.max(
+        this.nullClientClockAdvanceFloorMs ?? 0,
+        durableFloor,
+      );
+    }
 
-    if (this.fillUniverseLoadError === null && persistRequired) this.persistFillSymbolUniverse();
+    this.updateClockHighWaterRepairState();
+    if (
+      this.clockHighWaterLoadError === null
+      && this.fillUniverseLoadError === null
+      && (
+        this.fillUniversePersistRequired
+        || this.clockHighWaterRepairRequired
+        || (clockUsable && this.clockFailureReason === null && persistedClockHighWater === null)
+      )
+    ) this.persistClockHighWaterCopies();
   }
 
-  private ensureCurrentFillUniverse(): void {
-    const today = utcDayStart();
-    if (today === this.fillUniverseDayStart) return;
+  private mergeObservedFillSymbols(dayStart: number, target: Set<string>): boolean {
+    let changed = false;
+    const observed = this.ledger.distinctFillSymbolsBetween(
+      dayStart,
+      dayStart + ONE_DAY_MS,
+      FILL_SYMBOL_UNIVERSE_MAX + 1,
+    );
+    if (observed.length > FILL_SYMBOL_UNIVERSE_MAX) {
+      this.fillUniverseCapacityError = `fill-symbol universe exceeds ${FILL_SYMBOL_UNIVERSE_MAX} symbols`;
+    }
+    for (const symbol of observed.slice(0, FILL_SYMBOL_UNIVERSE_MAX)) {
+      if (!USDT_SYMBOL_RE.test(symbol)) {
+        this.fillUniverseLoadError ??= `ledger contains unsupported fill-reconciliation symbol: ${symbol}`;
+        continue;
+      }
+      if (!target.has(symbol) && target.size >= FILL_SYMBOL_UNIVERSE_MAX) {
+        this.fillUniverseCapacityError = `fill-symbol universe exceeds ${FILL_SYMBOL_UNIVERSE_MAX} symbols`;
+        continue;
+      }
+      if (!target.has(symbol)) {
+        target.add(symbol);
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  private adoptDurableClockFloor(
+    dayStart: number,
+    symbols: Iterable<string>,
+    initialFloor: number,
+    clock: AccountClockReading,
+  ): boolean {
+    let durableClockFloor = initialFloor;
+    for (const symbol of symbols) {
+      const cursorFloor = parseFillCursorFloor(
+        this.ledger.getConfigValue(`fill_reconcile:${symbol}`),
+        dayStart,
+      );
+      if (cursorFloor !== null) durableClockFloor = Math.max(durableClockFloor, cursorFloor);
+    }
+    this.clockHighWaterMs = Math.max(this.clockHighWaterMs ?? 0, durableClockFloor);
+    this.requiredDurableClockHighWaterMs = Math.max(
+      this.requiredDurableClockHighWaterMs ?? 0,
+      durableClockFloor,
+    );
+    this.updateClockHighWaterRepairState();
+    if (!clock.trustworthy || clock.nowMs === null || clock.nowMs < durableClockFloor) {
+      // Durable local evidence is stronger than an invalid or regressed
+      // process clock. Keep current-day claims fenced until that exact floor.
+      if (clock.trustworthy) this.clockFailureReason = ACCOUNT_CLOCK_REGRESSED;
+      return false;
+    }
+    return true;
+  }
+
+  private ensureCurrentFillUniverse(clock = this.readClock()): boolean {
+    if (!clock.trustworthy || clock.nowMs === null) return false;
+    if (this.fillUniverseDayStart === null) {
+      this.restoreFillSymbolUniverse(clock);
+      return this.fillUniverseDayStart !== null && this.clockFailureReason === null;
+    }
+    const today = utcDayStart(clock.nowMs);
+    if (today < this.fillUniverseDayStart) {
+      this.clockHighWaterMs = Math.max(this.clockHighWaterMs ?? 0, this.fillUniverseDayStart);
+      this.clockFailureReason = ACCOUNT_CLOCK_REGRESSED;
+      return false;
+    }
+    if (today === this.fillUniverseDayStart) {
+      if (this.fillUniversePersistRequired || this.clockHighWaterRepairRequired) {
+        this.persistClockHighWaterCopies();
+      }
+      return true;
+    }
     this.fillUniverseDayStart = today;
-    this.durableFillSymbols = new Set([...this.configuredFillSymbols].slice(0, FILL_SYMBOL_UNIVERSE_MAX));
+    this.durableFillSymbols = new Set(
+      [...this.configuredFillSymbols, ...this.pendingFillSymbols].slice(0, FILL_SYMBOL_UNIVERSE_MAX),
+    );
+    this.pendingFillSymbols.clear();
     this.fillUniverseLoadError = null;
     this.fillUniverseWriteError = null;
     this.fillUniverseCapacityError = this.configuredFillSymbols.size > FILL_SYMBOL_UNIVERSE_MAX
       ? `fill-symbol universe exceeds ${FILL_SYMBOL_UNIVERSE_MAX} symbols`
       : null;
+    this.mergeObservedFillSymbols(today, this.durableFillSymbols);
     this.lastFillReconcileScope = '';
     this.lastFillReconcileTs = null;
+    this.lastFillReconcileClockRevision = -1;
     this.lastFillReconcileError = null;
-    this.persistFillSymbolUniverse();
+    this.fillUniversePersistRequired = true;
+    if (!this.adoptDurableClockFloor(today, this.durableFillSymbols, today, clock)) {
+      return false;
+    }
+    this.persistClockHighWaterCopies();
+    return true;
   }
 
   private persistFillSymbolUniverse(): void {
-    if (this.fillUniverseLoadError !== null || this.fillUniverseCapacityError !== null) return;
+    if (
+      this.fillUniverseDayStart === null
+      || this.fillUniverseLoadError !== null
+      || this.fillUniverseCapacityError !== null
+    ) return;
     try {
+      const clockHighWaterMs =
+        this.clockHighWaterMs !== null
+          ? Math.max(this.fillUniverseDayStart, this.clockHighWaterMs)
+          : this.fillUniverseDayStart;
       this.ledger.setConfigValue(FILL_SYMBOL_UNIVERSE_KEY, JSON.stringify({
         version: 1,
         dayStart: this.fillUniverseDayStart,
+        clockHighWaterMs,
         symbols: [...this.durableFillSymbols].sort(),
       }));
+      this.persistedRegistryClockHighWaterMs = clockHighWaterMs;
+      this.fillUniversePersistRequired = false;
       this.fillUniverseWriteError = null;
     } catch (error) {
+      this.fillUniversePersistRequired = true;
       this.fillUniverseWriteError = `fill-symbol universe could not be persisted: ${errorMessage(error)}`;
     }
   }
 
+  private persistAccountClockHighWater(): void {
+    if (
+      this.clockHighWaterMs === null
+      || this.clockHighWaterLoadError !== null
+    ) return;
+    try {
+      const clockHighWaterMs = Math.max(
+        this.requiredDurableClockHighWaterMs ?? 0,
+        this.clockHighWaterMs,
+      );
+      this.ledger.setConfigValue(ACCOUNT_CLOCK_HIGH_WATER_KEY, JSON.stringify({
+        version: 1,
+        clockHighWaterMs,
+      }));
+      this.persistedGlobalClockHighWaterMs = clockHighWaterMs;
+      this.clockHighWaterWriteError = null;
+    } catch (error) {
+      this.clockHighWaterWriteError =
+        `account clock high-water witness could not be persisted: ${errorMessage(error)}`;
+    }
+  }
+
+  private updateClockHighWaterRepairState(): void {
+    const required = this.requiredDurableClockHighWaterMs;
+    const global = this.persistedGlobalClockHighWaterMs;
+    const registry = this.persistedRegistryClockHighWaterMs;
+    this.clockHighWaterRepairRequired =
+      required !== null
+      && (
+        global === null
+        || registry === null
+        || global < required
+        || registry < required
+        || global !== registry
+      );
+  }
+
+  private persistClockHighWaterCopies(): void {
+    if (
+      this.clockHighWaterLoadError !== null
+      || this.fillUniverseLoadError !== null
+      || this.clockHighWaterMs === null
+      || this.fillUniverseDayStart === null
+    ) {
+      this.updateClockHighWaterRepairState();
+      return;
+    }
+    const target = Math.max(
+      this.requiredDurableClockHighWaterMs ?? 0,
+      this.clockHighWaterMs,
+      this.fillUniverseDayStart,
+    );
+    if (
+      this.persistedGlobalClockHighWaterMs === null
+      || this.persistedGlobalClockHighWaterMs < target
+    ) {
+      this.persistAccountClockHighWater();
+    }
+    if (
+      this.fillUniversePersistRequired
+      || this.persistedRegistryClockHighWaterMs === null
+      || this.persistedRegistryClockHighWaterMs < target
+    ) {
+      this.persistFillSymbolUniverse();
+    }
+    this.updateClockHighWaterRepairState();
+  }
+
+  private clockHighWaterStatusError(): string | null {
+    return (
+      this.clockHighWaterLoadError
+      ?? this.fillUniverseLoadError
+      ?? this.clockHighWaterWriteError
+      ?? this.fillUniverseWriteError
+      ?? (this.clockHighWaterRepairRequired ? ACCOUNT_CLOCK_PERSISTENCE_DIVERGED : null)
+    );
+  }
+
+  private persistClockHighWaterOnFault(): void {
+    if (this.client === null && this.clockHighWaterMs !== null) {
+      this.nullClientClockAdvanceFloorMs = Math.max(
+        this.nullClientClockAdvanceFloorMs ?? 0,
+        this.clockHighWaterMs,
+      );
+    }
+    if (
+      this.fillUniverseDayStart === null
+      || this.clockHighWaterMs === null
+    ) return;
+    this.requiredDurableClockHighWaterMs = Math.max(
+      this.requiredDurableClockHighWaterMs ?? 0,
+      this.clockHighWaterMs,
+    );
+    this.updateClockHighWaterRepairState();
+    if (
+      !this.clockHighWaterRepairRequired
+      || (
+        this.faultPersistenceAttemptedFloor !== null
+        && this.faultPersistenceAttemptedFloor >= this.clockHighWaterMs
+      )
+    ) return;
+    this.faultPersistenceAttemptedFloor = this.clockHighWaterMs;
+    // Independent writes are deliberate: either durable copy is sufficient
+    // for restart to adopt the exact maximum, while divergence stays non-green
+    // until the missing copy is repaired.
+    this.persistClockHighWaterCopies();
+  }
+
   private rememberFillSymbols(symbols: Iterable<string>): void {
-    this.ensureCurrentFillUniverse();
+    const candidates = new Set(symbols);
+    const clock = this.readClock();
+    if (!this.ensureCurrentFillUniverse(clock)) {
+      for (const symbol of candidates) this.pendingFillSymbols.add(symbol);
+      return;
+    }
+    const symbolsToRemember = [...this.pendingFillSymbols, ...candidates];
+    if (
+      this.fillUniverseDayStart === null
+      || !this.adoptDurableClockFloor(
+        this.fillUniverseDayStart,
+        symbolsToRemember,
+        this.fillUniverseDayStart,
+        clock,
+      )
+    ) {
+      for (const symbol of symbolsToRemember) this.pendingFillSymbols.add(symbol);
+      return;
+    }
     let changed = false;
-    for (const symbol of symbols) {
+    for (const symbol of symbolsToRemember) {
       if (this.durableFillSymbols.has(symbol)) continue;
       if (this.durableFillSymbols.size >= FILL_SYMBOL_UNIVERSE_MAX) {
         this.fillUniverseCapacityError = `fill-symbol universe exceeds ${FILL_SYMBOL_UNIVERSE_MAX} symbols`;
@@ -373,15 +809,25 @@ export class AccountService {
       this.durableFillSymbols.add(symbol);
       changed = true;
     }
-    if (changed || this.fillUniverseWriteError !== null) this.persistFillSymbolUniverse();
+    this.pendingFillSymbols.clear();
+    if (changed) this.fillUniversePersistRequired = true;
+    if (this.fillUniversePersistRequired || this.fillUniverseWriteError !== null) {
+      this.persistClockHighWaterCopies();
+    }
   }
 
-  private fillSymbols(): string[] {
-    this.ensureCurrentFillUniverse();
-    return [...new Set([...this.configuredFillSymbols, ...this.durableFillSymbols])].sort();
+  private fillSymbols(clock = this.readClock()): string[] {
+    this.ensureCurrentFillUniverse(clock);
+    return [...new Set([
+      ...this.configuredFillSymbols,
+      ...this.durableFillSymbols,
+      ...this.pendingFillSymbols,
+    ])].sort();
   }
 
-  private fillScopeError(symbols = this.fillSymbols()): string | null {
+  private fillScopeError(symbols: string[]): string | null {
+    const clockHighWaterError = this.clockHighWaterStatusError();
+    if (clockHighWaterError) return clockHighWaterError;
     if (this.configuredFillScopeError) return this.configuredFillScopeError;
     if (this.fillUniverseLoadError) return this.fillUniverseLoadError;
     if (this.fillUniverseWriteError) return this.fillUniverseWriteError;
@@ -430,7 +876,32 @@ export class AccountService {
   }
 
   fillReconciliationStatus(): FillReconciliationStatus {
+    return this.fillReconciliationStatusAt(this.readClock());
+  }
+
+  private fillReconciliationStatusAt(clock: AccountClockReading): FillReconciliationStatus {
     if (!this.client) {
+      const clockStatusError =
+        this.clockHighWaterStatusError()
+        ?? (
+          this.nullClientClockAdvanceFloorMs !== null
+            ? ACCOUNT_CLOCK_ADVANCE_REQUIRED
+            : null
+        );
+      if (!clock.trustworthy || clockStatusError !== null) {
+        return {
+          complete: false,
+          scopeComplete: false,
+          fresh: false,
+          reconciledAt: null,
+          dayStart: null,
+          symbols: [],
+          coverageScope: 'not_applicable',
+          accountWide: null,
+          limitation: null,
+          error: clock.reason ?? clockStatusError ?? ACCOUNT_CLOCK_INVALID,
+        };
+      }
       return {
         complete: true,
         scopeComplete: true,
@@ -444,16 +915,23 @@ export class AccountService {
         error: null,
       };
     }
-    const symbols = this.fillSymbols();
+    const symbols = this.fillSymbols(clock);
     const scope = symbols.join(',');
-    const age = this.lastFillReconcileTs === null ? Number.POSITIVE_INFINITY : Date.now() - this.lastFillReconcileTs;
+    const age =
+      !clock.trustworthy || clock.nowMs === null || this.lastFillReconcileTs === null
+        ? Number.POSITIVE_INFINITY
+        : clock.nowMs - this.lastFillReconcileTs;
     const scopeError = this.fillScopeError(symbols);
+    const clockReason = clock.reason ?? this.clockFailureReason;
     const scopeComplete =
+      clock.trustworthy &&
+      this.clockFailureReason === null &&
       scopeError === null &&
       this.lastFillReconcileError === null &&
       this.lastFillReconcileScope === scope &&
+      this.lastFillReconcileClockRevision === this.clockRevision &&
       Number.isFinite(age) &&
-      age >= -1_000 &&
+      age >= 0 &&
       age <= FILL_RECONCILE_FRESH_MS;
     return {
       // Binance's account trade-list endpoint requires a symbol. Even a
@@ -468,7 +946,11 @@ export class AccountService {
       coverageScope: 'configured_and_observed_symbols',
       accountWide: false,
       limitation: SCOPED_FILL_LIMITATION,
-      error: scopeError ?? this.lastFillReconcileError ?? (scopeComplete ? null : 'fill reconciliation is stale or has not completed'),
+      error:
+        clockReason
+        ?? scopeError
+        ?? this.lastFillReconcileError
+        ?? (scopeComplete ? null : 'fill reconciliation is stale or has not completed'),
     };
   }
 
@@ -487,9 +969,15 @@ export class AccountService {
 
   private async reconcileFillsOnce(): Promise<FillReconciliationStatus> {
     if (!this.client) return this.fillReconciliationStatus();
-    const symbols = this.fillSymbols();
+    const startedClock = this.readClock();
+    const symbols = this.fillSymbols(startedClock);
     const scope = symbols.join(',');
-    const startedAt = Date.now();
+    if (!startedClock.trustworthy || startedClock.nowMs === null) {
+      this.lastFillReconcileError = startedClock.reason ?? ACCOUNT_CLOCK_INVALID;
+      return this.fillReconciliationStatus();
+    }
+    const startedAt = startedClock.nowMs;
+    const startedClockRevision = this.clockRevision;
     const dayStart = utcDayStart(startedAt);
     const scopeError = this.fillScopeError(symbols);
     if (scopeError) {
@@ -497,6 +985,7 @@ export class AccountService {
       return this.fillReconciliationStatus();
     }
     let imported = 0;
+    const cursorUpdates = new Map<string, { lastId: number | null }>();
     try {
       for (const symbol of symbols) {
         const key = `fill_reconcile:${symbol}`;
@@ -537,9 +1026,9 @@ export class AccountService {
               ts: trade.time,
               source: 'rest_reconciliation',
             };
-            const invalid = validateFill(fill);
+            const invalid = validateFill(fill, startedAt);
             if (invalid) throw new Error(`Binance returned invalid trade history for ${symbol}: ${invalid}`);
-            if (this.recordFill(fill)) imported += 1;
+            if (this.recordValidatedFill(fill)) imported += 1;
             pageMaxId = pageMaxId === null ? trade.id : Math.max(pageMaxId, trade.id);
           }
           if (trades.length < FILL_RECONCILE_PAGE_SIZE) {
@@ -554,10 +1043,29 @@ export class AccountService {
           options = { fromId: lastId + 1 };
         }
         if (!completed) throw new Error(`Trade reconciliation exceeded ${FILL_RECONCILE_MAX_PAGES * FILL_RECONCILE_PAGE_SIZE} rows for ${symbol}`);
-        this.ledger.setConfigValue(key, JSON.stringify({ dayStart, lastId, throughTs: startedAt }));
+        cursorUpdates.set(key, { lastId });
+      }
+      const completedClock = this.readClock();
+      if (!completedClock.trustworthy || completedClock.nowMs === null) {
+        throw new Error(completedClock.reason ?? ACCOUNT_CLOCK_INVALID);
+      }
+      const completedScopeError = this.fillScopeError(symbols);
+      if (completedScopeError !== null) throw new Error(completedScopeError);
+      if (this.clockRevision !== startedClockRevision) {
+        throw new Error('account clock recovered during fill reconciliation; a new pass is required');
+      }
+      if (utcDayStart(completedClock.nowMs) !== dayStart) {
+        throw new Error('account clock crossed the UTC-day boundary during fill reconciliation');
+      }
+      for (const [key, cursor] of cursorUpdates) {
+        this.ledger.setConfigValue(
+          key,
+          JSON.stringify({ dayStart, lastId: cursor.lastId, throughTs: startedAt }),
+        );
       }
       this.lastFillReconcileScope = scope;
       this.lastFillReconcileTs = startedAt;
+      this.lastFillReconcileClockRevision = this.clockRevision;
       this.lastFillReconcileError = null;
       if (imported > 0) this.safeLog('fill_reconciliation', null, { imported, symbols: symbols.length, reconciledAt: startedAt });
     } catch (error) {
@@ -581,8 +1089,17 @@ export class AccountService {
 
   private async syncOnce(): Promise<void> {
     if (!this.client) return;
-    const balanceVersionAtRequest = this.balanceMutationVersion;
     try {
+      const startedClock = this.readClock();
+      if (!startedClock.trustworthy || startedClock.nowMs === null) {
+        throw new Error(startedClock.reason ?? ACCOUNT_CLOCK_INVALID);
+      }
+      const startedClockStatusError = this.clockHighWaterStatusError();
+      if (startedClockStatusError !== null) throw new Error(startedClockStatusError);
+      const startedClockRevision = this.clockRevision;
+      const balanceVersionAtRequest = this.balanceMutationVersion;
+      const balanceSourceTsAtRequest = this.balanceSourceTs;
+      const balanceInvalidationAtRequest = this.balanceInvalidationGeneration;
       const acct = await this.client.account();
       if (!acct || !Array.isArray(acct.balances)) throw new Error('Binance account payload is invalid');
       const nextBalances = new Map<string, { free: number; locked: number }>();
@@ -596,35 +1113,94 @@ export class AccountService {
         if (free > 0 || locked > 0) nextBalances.set(b.asset, { free, locked });
       }
       // /api/v3/account.canTrade/canWithdraw are ACCOUNT-level and stay true for a
-      // read-only key. Prefer the KEY-level flags from apiRestrictions so the UI
-      // reflects the real key scope, not the account. Fetched best-effort — a
-      // failure here must not break the balance sync.
+      // read-only key. Stage the KEY-level flags from apiRestrictions so neither
+      // posture nor balances can publish before the completion clock cut.
+      let nextKeyRestrictions: ApiRestrictions | null = null;
       try {
-        this.keyRestrictions = await this.client.apiRestrictions();
-        this.lastRestrictionsTs = Date.now();
-        this.canWithdraw = this.keyRestrictions.enableWithdrawals;
-        this.canTrade = this.keyRestrictions.enableSpotAndMarginTrading;
+        nextKeyRestrictions = await this.client.apiRestrictions();
       } catch {
-        this.keyRestrictions = null;
-        this.lastRestrictionsTs = null;
         // Account-level flags describe the Binance account, not this API key.
         // Treat a failed per-key posture lookup as unknown rather than
         // claiming that withdrawals or trading are either enabled or disabled.
-        this.canWithdraw = null;
-        this.canTrade = null;
       }
       const sourceTs = Number((acct as { updateTime?: unknown }).updateTime);
-      const hasSourceTs = Number.isSafeInteger(sourceTs) && sourceTs > 0;
-      const streamArrivedDuringRequest = this.balanceMutationVersion !== balanceVersionAtRequest;
-      const olderThanStreamState = this.balanceSourceTs > 0 && (!hasSourceTs || sourceTs < this.balanceSourceTs);
-      if (!streamArrivedDuringRequest && !olderThanStreamState) {
-        this.balances = nextBalances;
-        if (hasSourceTs) this.balanceSourceTs = sourceTs;
-        this.balanceMutationVersion += 1;
+      const hasSourceTs = isValidUtcMillis(sourceTs) && sourceTs > 0;
+      const completedClock = this.readClock();
+      if (!completedClock.trustworthy || completedClock.nowMs === null) {
+        throw new Error(completedClock.reason ?? ACCOUNT_CLOCK_INVALID);
       }
+      const completedClockStatusError = this.clockHighWaterStatusError();
+      if (completedClockStatusError !== null) throw new Error(completedClockStatusError);
+      if (this.clockRevision !== startedClockRevision) {
+        throw new Error('account clock recovered during account sync; a new sync is required');
+      }
+      if (this.balanceInvalidationGeneration !== balanceInvalidationAtRequest) {
+        this.safeLog('error_event', null, {
+          source: 'account.sync',
+          message: 'account balance observation was invalidated during account sync',
+        });
+        return;
+      }
+      if (sourceTs > completedClock.nowMs) {
+        throw new Error('Binance account payload has a future update timestamp');
+      }
+      const belowStreamContinuityFloor =
+        this.balanceStreamContinuitySourceFloor !== null
+        && (!hasSourceTs || sourceTs < this.balanceStreamContinuitySourceFloor);
+      if (belowStreamContinuityFloor) return;
+      const olderThanFullSnapshot =
+        hasSourceTs && sourceTs < this.balanceFullSnapshotSourceTs;
+      const missingSourceAfterNewerStream =
+        !hasSourceTs
+        && balanceSourceTsAtRequest > this.balanceFullSnapshotSourceTs;
+      if (olderThanFullSnapshot || missingSourceAfterNewerStream) return;
+      // outboundAccountPosition is partial. A full REST snapshot may repair
+      // every asset except those with newer stream evidence, or equal stream
+      // evidence observed during this request.
+      const assets = new Set([...this.balances.keys(), ...nextBalances.keys()]);
+      for (const asset of assets) {
+        const streamTombstone = this.balanceAssetStreamTombstones.get(asset);
+        const streamWins =
+          streamTombstone !== undefined
+          && (
+            hasSourceTs
+              ? (
+                streamTombstone.sourceTs > sourceTs
+                || (
+                  streamTombstone.sourceTs === sourceTs
+                  && streamTombstone.version > balanceVersionAtRequest
+                )
+              )
+              : streamTombstone.version > balanceVersionAtRequest
+          );
+        if (streamWins) continue;
+        const balance = nextBalances.get(asset);
+        if (balance) this.balances.set(asset, balance);
+        else this.balances.delete(asset);
+      }
+      const streamArrivedDuringRequest =
+        this.balanceMutationVersion !== balanceVersionAtRequest;
+      if (hasSourceTs || !streamArrivedDuringRequest) {
+        this.balanceFullSnapshotComplete = true;
+        this.balanceStreamContinuityBroken = false;
+        this.balanceStreamContinuitySourceFloor = null;
+      }
+      if (hasSourceTs) {
+        this.balanceSourceTs = Math.max(this.balanceSourceTs, sourceTs);
+      }
+      this.balanceMutationVersion += 1;
+      if (hasSourceTs) this.balanceFullSnapshotSourceTs = sourceTs;
+      this.keyRestrictions = nextKeyRestrictions;
+      this.canWithdraw = nextKeyRestrictions?.enableWithdrawals ?? null;
+      this.canTrade = nextKeyRestrictions?.enableSpotAndMarginTrading ?? null;
       const wasConnected = this.connected;
       this.connected = true;
-      this.lastSyncTs = Date.now();
+      this.lastSyncTs = completedClock.nowMs;
+      this.lastSyncClockRevision = this.clockRevision;
+      this.lastRestrictionsTs =
+        nextKeyRestrictions !== null
+          ? completedClock.nowMs
+          : null;
       this.lastError = null;
       if (!wasConnected) {
         this.safeLog('binance.connected', null, {
@@ -640,7 +1216,7 @@ export class AccountService {
           });
         }
       }
-      this.maybeSnapshot();
+      this.maybeSnapshot(completedClock);
     } catch (err) {
       const msg = errorMessage(err);
       if (this.connected || this.lastError !== msg) {
@@ -655,42 +1231,97 @@ export class AccountService {
     }
   }
 
+  private invalidateBalanceStreamContinuity(sourceFloor: number | null = null): void {
+    this.balanceInvalidationGeneration += 1;
+    this.balanceStreamContinuityBroken = true;
+    if (sourceFloor !== null) {
+      this.balanceStreamContinuitySourceFloor =
+        this.balanceStreamContinuitySourceFloor === null
+          ? sourceFloor
+          : Math.max(this.balanceStreamContinuitySourceFloor, sourceFloor);
+    }
+    this.balanceFullSnapshotComplete = false;
+    this.lastSyncTs = null;
+    this.lastSyncClockRevision = -1;
+  }
+
   /** Balance updates pushed by the user data stream. */
   applyStreamBalances(list: { a: string; f: string; l: string }[], updateTime: number): void {
-    if (!Array.isArray(list)) {
-      this.safeLog('error_event', null, { source: 'account.stream', message: 'invalid balance update payload' });
-      return;
-    }
-    if (!Number.isSafeInteger(updateTime) || updateTime <= 0) {
+    if (!isValidUtcMillis(updateTime) || updateTime <= 0) {
+      this.invalidateBalanceStreamContinuity();
       this.safeLog('error_event', null, { source: 'account.stream', message: 'invalid balance update timestamp' });
       return;
     }
     if (updateTime < this.balanceSourceTs) return;
+    const receivedClock = this.readClock();
+    if (!receivedClock.trustworthy || receivedClock.nowMs === null) {
+      const sourceFloor =
+        receivedClock.nowMs !== null && updateTime <= receivedClock.nowMs
+          ? updateTime
+          : null;
+      this.invalidateBalanceStreamContinuity(sourceFloor);
+      this.safeLog('error_event', null, {
+        source: 'account.stream',
+        message: receivedClock.reason ?? ACCOUNT_CLOCK_INVALID,
+      });
+      return;
+    }
+    if (updateTime > receivedClock.nowMs) {
+      this.invalidateBalanceStreamContinuity();
+      this.safeLog('error_event', null, {
+        source: 'account.stream',
+        message: 'balance update timestamp is in the future',
+      });
+      return;
+    }
+    if (!Array.isArray(list)) {
+      this.invalidateBalanceStreamContinuity(updateTime);
+      this.safeLog('error_event', null, { source: 'account.stream', message: 'invalid balance update payload' });
+      return;
+    }
     const updates: { asset: string; free: number; locked: number }[] = [];
     for (const b of list) {
       if (!b || !boundedBinanceIdentifier(b.a, 20, 80)) {
+        this.invalidateBalanceStreamContinuity(updateTime);
         this.safeLog('error_event', null, { source: 'account.stream', message: 'invalid balance update asset' });
         return;
       }
       const free = Number(b.f);
       const locked = Number(b.l);
       if (!finiteNonNegative(free) || !finiteNonNegative(locked)) {
+        this.invalidateBalanceStreamContinuity(updateTime);
         this.safeLog('error_event', b.a, { source: 'account.stream', message: 'invalid balance update amount' });
         return;
       }
       updates.push({ asset: b.a, free, locked });
     }
+    if (
+      this.balanceStreamContinuityBroken
+      && this.balanceStreamContinuitySourceFloor === null
+    ) {
+      this.balanceStreamContinuitySourceFloor = updateTime;
+    }
+    const streamMutationVersion = this.balanceMutationVersion + 1;
     for (const b of updates) {
       if (b.free > 0 || b.locked > 0) this.balances.set(b.asset, { free: b.free, locked: b.locked });
       else this.balances.delete(b.asset);
+      this.balanceAssetStreamTombstones.set(b.asset, {
+        version: streamMutationVersion,
+        sourceTs: updateTime,
+      });
     }
     this.balanceSourceTs = updateTime;
-    this.balanceMutationVersion += 1;
-    this.lastSyncTs = Date.now();
+    this.balanceMutationVersion = streamMutationVersion;
+    this.lastSyncTs = receivedClock.nowMs;
+    this.lastSyncClockRevision = this.clockRevision;
   }
 
   recordFill(fill: FillInput): boolean {
-    const invalid = validateFill(fill);
+    const clock = this.readClock();
+    const invalid =
+      clock.nowMs === null
+        ? clock.reason ?? ACCOUNT_CLOCK_INVALID
+        : validateFill(fill, clock.nowMs);
     if (invalid) {
       this.safeLog('error_event', /^[A-Z0-9]{4,20}$/.test(fill.symbol) ? fill.symbol : null, {
         source: 'account.fill',
@@ -698,6 +1329,10 @@ export class AccountService {
       });
       return false;
     }
+    return this.recordValidatedFill(fill);
+  }
+
+  private recordValidatedFill(fill: FillInput): boolean {
     // User-stream, order-response, manual-import, and REST-reconciled fills
     // all become durable discovery evidence before future scope is evaluated.
     this.rememberFillSymbols([fill.symbol]);
@@ -726,6 +1361,18 @@ export class AccountService {
     pricedAssets: string[];
     unpricedAssets: string[];
   } {
+    return this.equityAt(this.readClock());
+  }
+
+  private equityAt(clock: AccountClockReading): {
+    totalUsdt: number;
+    availableUsdt: number;
+    entries: BalanceEntry[];
+    complete: boolean;
+    sourceFresh: boolean;
+    pricedAssets: string[];
+    unpricedAssets: string[];
+  } {
     const entries: BalanceEntry[] = [];
     const pricedAssets: string[] = [];
     const unpricedAssets: string[] = [];
@@ -743,8 +1390,19 @@ export class AccountService {
     entries.sort((a, b) => b.valueUsdt - a.valueUsdt);
     pricedAssets.sort();
     unpricedAssets.sort();
-    const sourceAge = this.lastSyncTs === null ? Number.POSITIVE_INFINITY : Date.now() - this.lastSyncTs;
-    const sourceFresh = this.connected && Number.isFinite(sourceAge) && sourceAge >= -1_000 && sourceAge <= 60_000;
+    const sourceAge =
+      !clock.trustworthy || clock.nowMs === null || this.lastSyncTs === null
+        ? Number.POSITIVE_INFINITY
+        : clock.nowMs - this.lastSyncTs;
+    const sourceFresh =
+      clock.trustworthy
+      && this.clockHighWaterStatusError() === null
+      && this.balanceFullSnapshotComplete
+      && this.connected
+      && this.lastSyncClockRevision === this.clockRevision
+      && Number.isFinite(sourceAge)
+      && sourceAge >= 0
+      && sourceAge <= 60_000;
     return {
       totalUsdt: total,
       availableUsdt: this.balances.get('USDT')?.free ?? 0,
@@ -781,15 +1439,14 @@ export class AccountService {
   }
 
   /** Realized PnL per UTC day / per symbol + fees + avg cost, from ledgered fills. */
-  pnl(): {
-    realizedByDay: Map<string, number>;
-    realizedBySymbol: Map<string, number>;
-    feesByAsset: Map<string, number>;
-    avgCost: Map<string, { qty: number; avgCost: number }>;
-    feeUsdByDay: Map<string, number>;
-    incompleteByDay: Map<string, string[]>;
-  } {
+  pnl(): AccountPnl {
+    return this.pnlAt(this.readClock());
+  }
+
+  private pnlAt(clock: AccountClockReading): AccountPnl {
     if (!this.pnlCacheDirty) return this.pnlCache;
+    const validationNowMs = clock.nowMs;
+    const fallbackDay = validationNowMs === null ? 'unknown' : fillDay(validationNowMs) ?? 'unknown';
     const fills = this.ledger.allFillsAsc();
     const realizedByDayExact = new Map<string, ExactDecimal>();
     const realizedBySymbolExact = new Map<string, ExactDecimal>();
@@ -807,8 +1464,8 @@ export class AccountService {
       incompleteByDay.set(day, reasons);
     };
     for (const f of fills) {
-      const day = fillDay(f.ts) ?? new Date().toISOString().slice(0, 10);
-      const invalid = validateFill(f);
+      const day = fillDay(f.ts) ?? fallbackDay;
+      const invalid = validateFill(f, validationNowMs);
       if (invalid) {
         markIncomplete(day, `invalid fill: ${invalid}`);
         continue;
@@ -912,8 +1569,10 @@ export class AccountService {
   }
 
   realizedTodayUsd(): number {
-    const day = new Date().toISOString().slice(0, 10);
-    return this.pnl().realizedByDay.get(day) ?? 0;
+    const clock = this.readClock();
+    const day = clock.nowMs === null ? null : fillDay(clock.nowMs);
+    if (!clock.trustworthy || day === null) return Number.NaN;
+    return this.pnlAt(clock).realizedByDay.get(day) ?? 0;
   }
 
   /**
@@ -923,31 +1582,37 @@ export class AccountService {
    * valuation is unavailable.
    */
   dailyLossPolicy(): { valueUsd: number; complete: boolean; reasons: string[] } {
-    const day = new Date().toISOString().slice(0, 10);
-    this.pnl();
-    const pnl = this.pnlCache;
-    const valueUsd = exactNumber(this.pnlDailyPolicyExact.get(day) ?? EXACT_ZERO);
-    const reasons = [...(pnl.incompleteByDay.get(day) ?? [])];
-    const coverage = this.fillReconciliationStatus();
+    const clock = this.readClock();
+    const day = clock.nowMs === null ? null : fillDay(clock.nowMs);
+    const pnl = this.pnlAt(clock);
+    const valueUsd = exactNumber(day === null ? EXACT_ZERO : this.pnlDailyPolicyExact.get(day) ?? EXACT_ZERO);
+    const reasons = day === null ? [] : [...(pnl.incompleteByDay.get(day) ?? [])];
+    if (!clock.trustworthy) reasons.push(clock.reason ?? ACCOUNT_CLOCK_INVALID);
+    const coverage = this.fillReconciliationStatusAt(clock);
     if (!coverage.scopeComplete) {
-      reasons.push(coverage.error ?? 'configured and observed fill reconciliation is incomplete');
+      const reason = coverage.error ?? 'configured and observed fill reconciliation is incomplete';
+      if (!reasons.includes(reason)) reasons.push(reason);
     } else if (coverage.accountWide === false) {
-      reasons.push(coverage.limitation ?? SCOPED_FILL_LIMITATION);
+      const reason = coverage.limitation ?? SCOPED_FILL_LIMITATION;
+      if (!reasons.includes(reason)) reasons.push(reason);
     }
     return { valueUsd, complete: reasons.length === 0 && finite(valueUsd), reasons };
   }
 
   /** Equity at the first snapshot of the current UTC day (for the day-change card). */
   dayOpenEquity(): number | null {
-    const ev = this.firstCompleteSnapshotSince(utcDayStart());
+    const clock = this.readClock();
+    if (!clock.trustworthy || clock.nowMs === null) return null;
+    const ev = this.firstCompleteSnapshotSince(utcDayStart(clock.nowMs));
     const data = ev?.data as { totalUsdt?: number } | null;
     return finite(data?.totalUsdt ?? Number.NaN) ? data!.totalUsdt! : null;
   }
 
-  private maybeSnapshot(): void {
-    const now = Date.now();
-    const eq = this.equity();
-    const hasDailyComplete = this.firstCompleteSnapshotSince(utcDayStart()) !== null;
+  private maybeSnapshot(clock: AccountClockReading): void {
+    if (!clock.trustworthy || clock.nowMs === null) return;
+    const now = clock.nowMs;
+    const eq = this.equityAt(clock);
+    const hasDailyComplete = this.firstCompleteSnapshotSince(utcDayStart(now)) !== null;
     // Retry immediately when pricing becomes complete so the first truthful
     // daily baseline is not delayed by a prior incomplete snapshot.
     if (now - this.lastSnapshotTs < SNAPSHOT_INTERVAL_MS && (hasDailyComplete || !eq.complete)) return;

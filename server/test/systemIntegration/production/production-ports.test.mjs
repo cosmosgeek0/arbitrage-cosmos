@@ -67,6 +67,62 @@ function proposal(strategy, ts, suffix) {
   };
 }
 
+function opportunityDecision(kind, ts, suffix, overrides = {}) {
+  return {
+    symbol: 'BTCUSDT',
+    ts,
+    kind,
+    rejectCode: kind === 'reject' ? 'data_stale' : null,
+    reasonCode: 'OWNER_ADVISORY_RECORD',
+    correlationId: `corr-${suffix}`,
+    direction: null,
+    netEdgePct: null,
+    confidence: null,
+    borrowStatus: null,
+    ...overrides,
+  };
+}
+
+function opportunityProposal(ts, suffix, overrides = {}) {
+  return {
+    id: `proposal-${suffix}`,
+    correlationId: `corr-${suffix}`,
+    symbol: 'BTCUSDT',
+    direction: 'long_spot_short_perp',
+    createdTs: ts,
+    updatedTs: ts,
+    status: 'open',
+    reasonCode: 'OWNER_ADVISORY_RECORD',
+    netEdgePct: 0.5,
+    confidence: 0.8,
+    borrowStatus: 'not_needed',
+    expiresAtMs: null,
+    ...overrides,
+  };
+}
+
+function opportunityCut(sourceTimeMs, { decisions = [], proposals = [] } = {}) {
+  return {
+    schemaVersion: 'production-opportunity-owner-cut.v1',
+    sourceTimeMs,
+    decisions,
+    proposals,
+  };
+}
+
+function assertDeepFrozen(value, path = 'value', seen = new Set()) {
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return;
+  if (seen.has(value)) return;
+  seen.add(value);
+  assert.equal(Object.isFrozen(value), true, `${path} must be frozen`);
+  const descriptors = Object.getOwnPropertyDescriptors(value);
+  for (const [key, descriptor] of Object.entries(descriptors)) {
+    if (Object.hasOwn(descriptor, 'value')) {
+      assertDeepFrozen(descriptor.value, `${path}.${key}`, seen);
+    }
+  }
+}
+
 function capitalSummaryCut(projection) {
   return Object.freeze({
     availability: 'AVAILABLE',
@@ -85,7 +141,11 @@ function capitalSummaryCut(projection) {
   });
 }
 
-function createWorld({ capitalSummary, intelligenceEvidenceMaximumBytes } = {}) {
+function createWorld({
+  capitalSummary,
+  intelligenceEvidenceMaximumBytes,
+  opportunityOwners,
+} = {}) {
   const clock = new ManualClock();
   const calls = {
     marketInit: 0,
@@ -95,6 +155,10 @@ function createWorld({ capitalSummary, intelligenceEvidenceMaximumBytes } = {}) 
     basisStop: 0,
     volumeStart: 0,
     volumeStop: 0,
+  };
+  const legacyRuntimeSnapshotCalls = {
+    basis: 0,
+    volume: 0,
   };
   const spot = new Map();
   const usdm = new Map();
@@ -130,7 +194,10 @@ function createWorld({ capitalSummary, intelligenceEvidenceMaximumBytes } = {}) 
     async start() { calls.basisStart += 1; basisStatus.running = true; },
     stop() { calls.basisStop += 1; basisStatus.running = false; },
     connectionStatus() { return { ...basisStatus }; },
-    integrationSnapshot() { return structuredClone(basisSnapshot); },
+    integrationSnapshot() {
+      legacyRuntimeSnapshotCalls.basis += 1;
+      return structuredClone(basisSnapshot);
+    },
   };
   const volumeStatus = {
     running: false,
@@ -152,7 +219,10 @@ function createWorld({ capitalSummary, intelligenceEvidenceMaximumBytes } = {}) 
     async start() { calls.volumeStart += 1; volumeStatus.running = true; },
     stop() { calls.volumeStop += 1; volumeStatus.running = false; },
     connectionStatus() { return { ...volumeStatus }; },
-    integrationSnapshot() { return structuredClone(volumeSnapshot); },
+    integrationSnapshot() {
+      legacyRuntimeSnapshotCalls.volume += 1;
+      return structuredClone(volumeSnapshot);
+    },
     setEvidenceObserver(observer) { volumeEvidenceObserver = observer; },
   };
   const ports = createProductionSystemIntegrationPorts({
@@ -162,6 +232,7 @@ function createWorld({ capitalSummary, intelligenceEvidenceMaximumBytes } = {}) 
     volume,
     capitalSummary,
     sourceMaxAgeMs: 10_000,
+    ...(opportunityOwners === undefined ? {} : { opportunityOwners }),
     ...(intelligenceEvidenceMaximumBytes === undefined
       ? {}
       : { intelligenceEvidenceMaximumBytes }),
@@ -176,6 +247,7 @@ function createWorld({ capitalSummary, intelligenceEvidenceMaximumBytes } = {}) 
   return {
     clock,
     calls,
+    legacyRuntimeSnapshotCalls,
     spot,
     usdm,
     liquidation,
@@ -186,6 +258,7 @@ function createWorld({ capitalSummary, intelligenceEvidenceMaximumBytes } = {}) 
     volume,
     volumeStatus,
     volumeSnapshot,
+    opportunityOwners,
     emitVolumeEvidence(cut) {
       assert.equal(typeof volumeEvidenceObserver, 'function');
       volumeEvidenceObserver(structuredClone(cut));
@@ -1450,4 +1523,549 @@ test('active exposure and recovery counts are owner facts, never validate-only s
     [null, null],
   );
   assert.ok(validateOnlyWithoutCapitalOwner.capital.blockerCodes.includes('CAPITAL_EXPOSURE_OWNER_UNAVAILABLE'));
+});
+
+test('production Opportunities reads each passive owner once, never reads legacy runtimes, retains owner order, and deep-freezes output', () => {
+  const basisDecisions = [
+    opportunityDecision('watch', START - 160, 'basis-decision-first'),
+    opportunityDecision('focus', START - 150, 'basis-decision-second'),
+  ];
+  const basisProposals = [
+    opportunityProposal(START - 140, 'basis-owner-first', { netEdgePct: 0.1, confidence: 0.1 }),
+    opportunityProposal(START - 130, 'basis-owner-second', { netEdgePct: 99, confidence: 1 }),
+  ];
+  const volumeDecisions = [
+    opportunityDecision('watch', START - 130, 'volume-decision-first', { direction: 'long' }),
+    opportunityDecision('focus', START - 125, 'volume-decision-second', { direction: 'short' }),
+  ];
+  const volumeProposals = [
+    opportunityProposal(START - 120, 'volume-owner-first', {
+      direction: 'long',
+      netEdgePct: 0.2,
+      confidence: 0.2,
+    }),
+    opportunityProposal(START - 110, 'volume-owner-second', {
+      direction: 'short',
+      netEdgePct: 98,
+      confidence: 0.99,
+    }),
+  ];
+  const basisCut = opportunityCut(START - 100, {
+    decisions: basisDecisions,
+    proposals: basisProposals,
+  });
+  const volumeCut = opportunityCut(START - 90, {
+    decisions: volumeDecisions,
+    proposals: volumeProposals,
+  });
+  const beforeBasis = structuredClone(basisCut);
+  const beforeVolume = structuredClone(volumeCut);
+  let basisReads = 0;
+  let volumeReads = 0;
+  const world = createWorld({
+    opportunityOwners: {
+      basis: {
+        readOpportunitySourceCut(...args) {
+          assert.equal(args.length, 0);
+          basisReads += 1;
+          return basisCut;
+        },
+      },
+      volume: {
+        readOpportunitySourceCut(...args) {
+          assert.equal(args.length, 0);
+          volumeReads += 1;
+          return volumeCut;
+        },
+      },
+    },
+  });
+  world.basisSnapshot.proposals.push(proposal('basis', START - 10, 'legacy-only-basis'));
+  world.volumeSnapshot.proposals.push(proposal('volume_spike', START - 10, 'legacy-only-volume'));
+
+  const result = world.ports.opportunities.readSnapshot(START);
+  assert.equal(result.state, 'AVAILABLE', JSON.stringify(result.reasonCodes));
+  assert.equal(result.evaluatedAtMs, START);
+  assert.deepEqual(result.reasonCodes, []);
+  assert.deepEqual([basisReads, volumeReads], [1, 1]);
+  assert.deepEqual(world.legacyRuntimeSnapshotCalls, { basis: 0, volume: 0 });
+  assert.deepEqual(Object.keys(world.ports.opportunities), ['readSnapshot']);
+  assert.equal(result.view.evaluatedAtMs, START);
+  assert.deepEqual(
+    [result.view.basis.presence, result.view.volume.presence],
+    ['PRESENT', 'PRESENT'],
+  );
+  assert.deepEqual(
+    [result.view.basis.freshness.state, result.view.volume.freshness.state],
+    ['FRESH', 'FRESH'],
+  );
+  assert.deepEqual(
+    result.view.ordered.map((entry) => entry.source),
+    ['BASIS', 'BASIS', 'BASIS', 'BASIS', 'VOLUME', 'VOLUME', 'VOLUME', 'VOLUME'],
+  );
+  const canonicalIdByOwnerId = new Map(
+    result.identities.map((entry) => [entry.ownerId, entry.canonicalProjectionId]),
+  );
+  assert.deepEqual(
+    result.ownerOrderedCanonicalIds.basis.decisions,
+    basisDecisions.map((entry) => canonicalIdByOwnerId.get(
+      `${entry.correlationId}|${entry.symbol}|${entry.ts}|${entry.kind}`,
+    )),
+  );
+  assert.deepEqual(
+    result.ownerOrderedCanonicalIds.basis.proposals,
+    basisProposals.map((entry) => canonicalIdByOwnerId.get(entry.id)),
+  );
+  assert.deepEqual(
+    result.ownerOrderedCanonicalIds.volume.decisions,
+    volumeDecisions.map((entry) => canonicalIdByOwnerId.get(
+      `${entry.correlationId}|${entry.symbol}|${entry.ts}|${entry.kind}`,
+    )),
+  );
+  assert.deepEqual(
+    result.ownerOrderedCanonicalIds.volume.proposals,
+    volumeProposals.map((entry) => canonicalIdByOwnerId.get(entry.id)),
+  );
+  assert.deepEqual(
+    [...result.identities.map((entry) => entry.canonicalProjectionId)].sort(),
+    [...result.view.ordered.map((entry) => entry.canonicalId)].sort(),
+  );
+  assert.deepEqual(
+    [
+      result.maximumActionAuthority,
+      result.capitalReservationAuthority,
+      result.executionAuthority,
+    ],
+    ['ADVISORY', 'NONE', 'NONE'],
+  );
+  assert.equal(result.view.reconciliation.balanced, true);
+  assert.equal(JSON.stringify(result).includes('legacy-only'), false);
+  assert.deepEqual(basisCut, beforeBasis);
+  assert.deepEqual(volumeCut, beforeVolume);
+  assert.notEqual(result.view.basis.proposals[0], basisProposals[0]);
+  assertDeepFrozen(result, 'opportunities');
+});
+
+test('production Opportunities is named UNAVAILABLE when passive owner seams are absent and never falls back to legacy runtimes', () => {
+  const world = createWorld();
+  world.basisSnapshot.lastTickTs = START - 10;
+  world.volumeSnapshot.lastTickTs = START - 10;
+  world.basisSnapshot.proposals.push(proposal('basis', START - 10, 'legacy-only-basis'));
+  world.volumeSnapshot.proposals.push(proposal('volume_spike', START - 10, 'legacy-only-volume'));
+
+  const result = world.ports.opportunities.readSnapshot(START);
+  assert.equal(result.state, 'UNAVAILABLE');
+  assert.equal(result.evaluatedAtMs, START);
+  assert.equal(result.view, null);
+  assert.equal(result.ownerOrderedCanonicalIds, null);
+  assert.deepEqual(result.identities, []);
+  assert.deepEqual(result.losses, []);
+  assert.deepEqual(result.reasonCodes, [
+    'BASIS_OPPORTUNITY_OWNER_UNWIRED',
+    'OPPORTUNITIES_NO_TRUSTWORTHY_SOURCE',
+    'VOLUME_OPPORTUNITY_OWNER_UNWIRED',
+  ]);
+  assert.deepEqual(world.legacyRuntimeSnapshotCalls, { basis: 0, volume: 0 });
+  assert.equal(JSON.stringify(result).includes('legacy-only'), false);
+  assertDeepFrozen(result, 'opportunitiesUnavailable');
+});
+
+test('production Opportunities retains one healthy passive sibling as DEGRADED when the other owner seam is absent', () => {
+  const basisProposal = opportunityProposal(START - 120, 'basis-survives');
+  let basisReads = 0;
+  const world = createWorld({
+    opportunityOwners: {
+      basis: {
+        readOpportunitySourceCut() {
+          basisReads += 1;
+          return opportunityCut(START - 100, { proposals: [basisProposal] });
+        },
+      },
+      volume: null,
+    },
+  });
+  world.volumeSnapshot.proposals.push(proposal('volume_spike', START - 10, 'legacy-only-volume'));
+
+  const result = world.ports.opportunities.readSnapshot(START);
+  assert.equal(result.state, 'DEGRADED');
+  assert.equal(basisReads, 1);
+  assert.deepEqual(world.legacyRuntimeSnapshotCalls, { basis: 0, volume: 0 });
+  assert.equal(result.view.basis.presence, 'PRESENT');
+  assert.equal(result.view.volume.presence, 'ABSENT');
+  assert.deepEqual(result.view.ordered.map((entry) => entry.sourceId), [basisProposal.id]);
+  assert.ok(result.reasonCodes.includes('VOLUME_OPPORTUNITY_OWNER_UNWIRED'));
+  assert.ok(result.reasonCodes.includes('VOLUME_SOURCE_ABSENT'));
+  assert.equal(result.ownerOrderedCanonicalIds.basis.decisions.length, 0);
+  assert.equal(result.ownerOrderedCanonicalIds.basis.proposals.length, 1);
+  assert.deepEqual(result.ownerOrderedCanonicalIds.volume, { decisions: [], proposals: [] });
+  assert.equal(JSON.stringify(result).includes('legacy-only'), false);
+  assertDeepFrozen(result, 'opportunitiesDegraded');
+});
+
+test('production Opportunities rejects malformed passive owner bindings without invoking accessors', () => {
+  let ownerGetterReads = 0;
+  const malformedBasisOwner = {};
+  Object.defineProperty(malformedBasisOwner, 'readOpportunitySourceCut', {
+    enumerable: true,
+    get() {
+      ownerGetterReads += 1;
+      throw new Error('must not invoke opportunity owner accessor');
+    },
+  });
+  const world = createWorld({
+    opportunityOwners: {
+      basis: malformedBasisOwner,
+      volume: null,
+    },
+  });
+
+  const result = world.ports.opportunities.readSnapshot(START);
+  assert.equal(ownerGetterReads, 0);
+  assert.equal(result.state, 'UNAVAILABLE');
+  assert.equal(result.view, null);
+  assert.equal(result.ownerOrderedCanonicalIds, null);
+  assert.ok(result.reasonCodes.includes('BASIS_OPPORTUNITY_OWNER_MALFORMED'));
+  assert.ok(result.reasonCodes.includes('VOLUME_OPPORTUNITY_OWNER_UNWIRED'));
+  assert.ok(result.reasonCodes.includes('OPPORTUNITIES_NO_TRUSTWORTHY_SOURCE'));
+  assert.deepEqual(world.legacyRuntimeSnapshotCalls, { basis: 0, volume: 0 });
+  assertDeepFrozen(result, 'opportunitiesMalformedOwner');
+});
+
+test('production Opportunities classifies undefined, non-enumerable, and invalid-time owner cuts as malformed', () => {
+  const nonEnumerableOwners = { volume: null };
+  Object.defineProperty(nonEnumerableOwners, 'basis', {
+    enumerable: false,
+    value: null,
+  });
+  for (const [name, opportunityOwners] of [
+    ['undefinedSlot', { basis: undefined, volume: null }],
+    ['nonEnumerableSlot', nonEnumerableOwners],
+  ]) {
+    const world = createWorld({ opportunityOwners });
+    const result = world.ports.opportunities.readSnapshot(START);
+    assert.equal(result.state, 'UNAVAILABLE');
+    assert.equal(result.evaluatedAtMs, START);
+    assert.ok(result.reasonCodes.includes('BASIS_OPPORTUNITY_OWNER_MALFORMED'));
+    assert.ok(result.reasonCodes.includes('VOLUME_OPPORTUNITY_OWNER_UNWIRED'));
+    assert.ok(result.reasonCodes.includes('OPPORTUNITIES_NO_TRUSTWORTHY_SOURCE'));
+    assert.deepEqual(world.legacyRuntimeSnapshotCalls, { basis: 0, volume: 0 });
+    assertDeepFrozen(result, `opportunitiesMalformedOwner.${name}`);
+  }
+
+  for (const [name, sourceTimeMs] of [
+    ['negative', -1],
+    ['negativeZero', -0],
+  ]) {
+    let basisReads = 0;
+    const invalidSourceTimeWorld = createWorld({
+      opportunityOwners: {
+        basis: {
+          readOpportunitySourceCut() {
+            basisReads += 1;
+            return opportunityCut(sourceTimeMs);
+          },
+        },
+        volume: null,
+      },
+    });
+    const invalidSourceTime = invalidSourceTimeWorld.ports.opportunities.readSnapshot(START);
+    assert.equal(basisReads, 1);
+    assert.equal(invalidSourceTime.state, 'UNAVAILABLE');
+    assert.ok(invalidSourceTime.reasonCodes.includes('BASIS_OPPORTUNITY_OWNER_CUT_MALFORMED'));
+    assert.equal(invalidSourceTime.reasonCodes.includes('BASIS_ENGINE_CAPTURE_INPUT_INVALID'), false);
+    assertDeepFrozen(invalidSourceTime, `opportunitiesMalformedOwner.sourceTime.${name}`);
+  }
+});
+
+test('production Opportunities rejects forbidden private and money fields without disclosure or healthy-sibling loss', () => {
+  const privateSentinel = 'DO_NOT_LEAK_PRIVATE_7f2d';
+  const moneySentinel = 987_654_321.12345;
+  const forbiddenBasisProposal = {
+    ...opportunityProposal(START - 120, 'basis-forbidden'),
+    riskResult: privateSentinel,
+    availableMarginUsd: moneySentinel,
+    accountId: privateSentinel,
+    suggestedNotionalUsd: moneySentinel,
+  };
+  const volumeProposal = opportunityProposal(START - 110, 'volume-safe', { direction: 'long' });
+  let basisReads = 0;
+  let volumeReads = 0;
+  const world = createWorld({
+    opportunityOwners: {
+      basis: {
+        readOpportunitySourceCut() {
+          basisReads += 1;
+          return opportunityCut(START - 100, { proposals: [forbiddenBasisProposal] });
+        },
+      },
+      volume: {
+        readOpportunitySourceCut() {
+          volumeReads += 1;
+          return opportunityCut(START - 90, { proposals: [volumeProposal] });
+        },
+      },
+    },
+  });
+
+  const result = world.ports.opportunities.readSnapshot(START);
+  assert.equal(result.state, 'DEGRADED');
+  assert.deepEqual([basisReads, volumeReads], [1, 1]);
+  assert.deepEqual(world.legacyRuntimeSnapshotCalls, { basis: 0, volume: 0 });
+  assert.ok(result.reasonCodes.includes('BASIS_OPPORTUNITY_OWNER_CUT_MALFORMED'));
+  assert.equal(result.view.basis.presence, 'ABSENT');
+  assert.equal(result.view.volume.presence, 'PRESENT');
+  assert.deepEqual(result.view.ordered.map((entry) => entry.sourceId), [volumeProposal.id]);
+  assert.deepEqual(result.ownerOrderedCanonicalIds.basis, { decisions: [], proposals: [] });
+  assert.equal(result.ownerOrderedCanonicalIds.volume.proposals.length, 1);
+  const serialized = JSON.stringify(result);
+  for (const forbidden of [
+    privateSentinel,
+    String(moneySentinel),
+    'riskResult',
+    'availableMarginUsd',
+    'accountId',
+    'suggestedNotionalUsd',
+  ]) {
+    assert.equal(serialized.includes(forbidden), false, forbidden);
+  }
+  assertDeepFrozen(result, 'opportunitiesForbidden');
+});
+
+test('production Opportunities rejects invalid evaluation time before every owner or legacy runtime read', () => {
+  let basisReads = 0;
+  let volumeReads = 0;
+  const world = createWorld({
+    opportunityOwners: {
+      basis: {
+        readOpportunitySourceCut() {
+          basisReads += 1;
+          return opportunityCut(START);
+        },
+      },
+      volume: {
+        readOpportunitySourceCut() {
+          volumeReads += 1;
+          return opportunityCut(START);
+        },
+      },
+    },
+  });
+
+  const result = world.ports.opportunities.readSnapshot(-1);
+  assert.equal(result.state, 'UNAVAILABLE');
+  assert.equal(result.evaluatedAtMs, null);
+  assert.deepEqual(result.reasonCodes, ['OPPORTUNITIES_EVALUATION_TIME_INVALID']);
+  assert.equal(result.view, null);
+  assert.equal(result.ownerOrderedCanonicalIds, null);
+  assert.deepEqual([basisReads, volumeReads], [0, 0]);
+  assert.deepEqual(world.legacyRuntimeSnapshotCalls, { basis: 0, volume: 0 });
+  assertDeepFrozen(result, 'opportunitiesInvalidTime');
+});
+
+test('production Opportunities rejects reentrant owner reads without repeating either source', () => {
+  let basisReads = 0;
+  let volumeReads = 0;
+  let nestedResult = null;
+  let world;
+  world = createWorld({
+    opportunityOwners: {
+      basis: {
+        readOpportunitySourceCut() {
+          basisReads += 1;
+          nestedResult = world.ports.opportunities.readSnapshot(START);
+          return opportunityCut(START - 100);
+        },
+      },
+      volume: {
+        readOpportunitySourceCut() {
+          volumeReads += 1;
+          return opportunityCut(START - 90);
+        },
+      },
+    },
+  });
+
+  const result = world.ports.opportunities.readSnapshot(START);
+  assert.equal(result.state, 'UNAVAILABLE');
+  assert.equal(result.evaluatedAtMs, START);
+  assert.deepEqual(result.reasonCodes, ['OPPORTUNITIES_REENTRANT_READ']);
+  assert.equal(result.view, null);
+  assert.deepEqual([basisReads, volumeReads], [1, 0]);
+  assert.deepEqual(world.legacyRuntimeSnapshotCalls, { basis: 0, volume: 0 });
+  assert.equal(nestedResult.state, 'UNAVAILABLE');
+  assert.equal(nestedResult.evaluatedAtMs, null);
+  assert.deepEqual(nestedResult.reasonCodes, ['OPPORTUNITIES_REENTRANT_READ']);
+  assertDeepFrozen(nestedResult, 'opportunitiesNestedReentrant');
+  assertDeepFrozen(result, 'opportunitiesReentrant');
+});
+
+test('production Opportunities owner order follows surviving record occurrences, not an earlier invalid alias', () => {
+  const invalidA = opportunityProposal(-1, 'owner-order-a');
+  const validB = opportunityProposal(START - 120, 'owner-order-b');
+  const validA = opportunityProposal(START - 110, 'owner-order-a');
+  let basisReads = 0;
+  let volumeReads = 0;
+  const world = createWorld({
+    opportunityOwners: {
+      basis: {
+        readOpportunitySourceCut() {
+          basisReads += 1;
+          return opportunityCut(START - 100, {
+            proposals: [invalidA, validB, validA],
+          });
+        },
+      },
+      volume: {
+        readOpportunitySourceCut() {
+          volumeReads += 1;
+          return opportunityCut(START - 90);
+        },
+      },
+    },
+  });
+
+  const result = world.ports.opportunities.readSnapshot(START);
+  assert.equal(result.state, 'DEGRADED');
+  assert.deepEqual([basisReads, volumeReads], [1, 1]);
+  assert.deepEqual(world.legacyRuntimeSnapshotCalls, { basis: 0, volume: 0 });
+  assert.ok(result.reasonCodes.includes('BASIS_RECORDS_REJECTED'));
+  assert.equal(result.view.basis.rejects.length, 1);
+  assert.equal(result.view.basis.rejects[0].code, 'MALFORMED_TIMESTAMP');
+  assert.deepEqual(
+    [
+      result.view.basis.reconciliation.inputProposals,
+      result.view.basis.reconciliation.canonicalProposals,
+      result.view.basis.reconciliation.duplicateProposals,
+      result.view.basis.reconciliation.rejectedProposals,
+    ],
+    [3, 2, 0, 1],
+  );
+  assert.equal(result.view.basis.reconciliation.balanced, true);
+  const canonicalIdByOwnerId = new Map(
+    result.identities.map((entry) => [entry.ownerId, entry.canonicalProjectionId]),
+  );
+  assert.deepEqual(
+    result.ownerOrderedCanonicalIds.basis.proposals,
+    [
+      canonicalIdByOwnerId.get(validB.id),
+      canonicalIdByOwnerId.get(validA.id),
+    ],
+  );
+  assert.deepEqual(result.ownerOrderedCanonicalIds.basis.decisions, []);
+  assert.deepEqual(result.ownerOrderedCanonicalIds.volume, { decisions: [], proposals: [] });
+  assertDeepFrozen(result, 'opportunitiesSurvivingOwnerOrder');
+});
+
+test('production Opportunities preserves negative-zero record timestamps as canonical rejects', () => {
+  const validProposal = opportunityProposal(START - 100, 'negative-zero-valid');
+  const invalidDecision = opportunityDecision('watch', -0, 'negative-zero-decision');
+  const invalidCreated = opportunityProposal(START - 120, 'negative-zero-created', {
+    createdTs: -0,
+  });
+  const invalidUpdated = opportunityProposal(START - 120, 'negative-zero-updated', {
+    updatedTs: -0,
+  });
+  const invalidExpires = opportunityProposal(START - 120, 'negative-zero-expires', {
+    expiresAtMs: -0,
+  });
+  let basisReads = 0;
+  const world = createWorld({
+    opportunityOwners: {
+      basis: {
+        readOpportunitySourceCut() {
+          basisReads += 1;
+          return opportunityCut(START - 90, {
+            decisions: [invalidDecision],
+            proposals: [
+              invalidCreated,
+              validProposal,
+              invalidUpdated,
+              invalidExpires,
+            ],
+          });
+        },
+      },
+      volume: null,
+    },
+  });
+
+  const result = world.ports.opportunities.readSnapshot(START);
+  assert.equal(result.state, 'DEGRADED');
+  assert.equal(basisReads, 1);
+  assert.deepEqual(world.legacyRuntimeSnapshotCalls, { basis: 0, volume: 0 });
+  assert.ok(result.reasonCodes.includes('BASIS_RECORDS_REJECTED'));
+  assert.deepEqual(
+    result.view.basis.rejects.map((entry) => entry.code),
+    [
+      'MALFORMED_TIMESTAMP',
+      'MALFORMED_TIMESTAMP',
+      'MALFORMED_TIMESTAMP',
+      'MALFORMED_TIMESTAMP',
+    ],
+  );
+  assert.deepEqual(result.view.ordered.map((entry) => entry.sourceId), [validProposal.id]);
+  assert.equal(result.ownerOrderedCanonicalIds.basis.decisions.length, 0);
+  assert.equal(result.ownerOrderedCanonicalIds.basis.proposals.length, 1);
+  assert.equal(result.identities.length, 1);
+  assertDeepFrozen(result, 'opportunitiesNegativeZeroRecordTimes');
+});
+
+test('production Opportunities keeps unavailable and stale freshness plus canonical rejects explicitly DEGRADED', () => {
+  const basisDecision = opportunityDecision('focus', START - 110, 'basis-valid');
+  const malformedVolumeDecision = opportunityDecision('watch', -1, 'volume-malformed-time', {
+    direction: 'long',
+  });
+  const volumeProposal = opportunityProposal(START - 20_100, 'volume-stale-valid', {
+    direction: 'long',
+  });
+  let basisReads = 0;
+  let volumeReads = 0;
+  const world = createWorld({
+    opportunityOwners: {
+      basis: {
+        readOpportunitySourceCut() {
+          basisReads += 1;
+          return opportunityCut(null, { decisions: [basisDecision] });
+        },
+      },
+      volume: {
+        readOpportunitySourceCut() {
+          volumeReads += 1;
+          return opportunityCut(START - 20_000, {
+            decisions: [malformedVolumeDecision],
+            proposals: [volumeProposal],
+          });
+        },
+      },
+    },
+  });
+
+  const result = world.ports.opportunities.readSnapshot(START);
+  assert.equal(result.state, 'DEGRADED');
+  assert.deepEqual([basisReads, volumeReads], [1, 1]);
+  assert.deepEqual(world.legacyRuntimeSnapshotCalls, { basis: 0, volume: 0 });
+  assert.equal(result.view.basis.presence, 'PRESENT');
+  assert.equal(result.view.basis.freshness.state, 'UNAVAILABLE');
+  assert.equal(result.view.basis.snapshotTimestamp.completeness, 'UNAVAILABLE');
+  assert.ok(result.reasonCodes.includes('BASIS_FRESHNESS_UNAVAILABLE'));
+  assert.ok(result.reasonCodes.includes('BASIS_SOURCE_TIME_UNAVAILABLE'));
+  assert.equal(result.view.volume.presence, 'PRESENT');
+  assert.equal(result.view.volume.freshness.state, 'STALE');
+  assert.ok(result.reasonCodes.includes('VOLUME_FRESHNESS_STALE'));
+  assert.ok(result.reasonCodes.includes('VOLUME_RECORDS_REJECTED'));
+  assert.equal(result.view.volume.rejects.length, 1);
+  assert.equal(result.view.volume.rejects[0].code, 'MALFORMED_TIMESTAMP');
+  assert.equal(result.view.volume.reconciliation.rejectedDecisions, 1);
+  assert.equal(result.view.volume.reconciliation.balanced, true);
+  assert.deepEqual(
+    result.view.ordered.map((entry) => entry.sourceId),
+    [
+      basisDecision.correlationId + `|${basisDecision.symbol}|${basisDecision.ts}|${basisDecision.kind}`,
+      volumeProposal.id,
+    ],
+  );
+  assert.equal(result.ownerOrderedCanonicalIds.basis.decisions.length, 1);
+  assert.equal(result.ownerOrderedCanonicalIds.volume.decisions.length, 0);
+  assert.equal(result.ownerOrderedCanonicalIds.volume.proposals.length, 1);
+  assertDeepFrozen(result, 'opportunitiesFreshnessAndRejects');
 });

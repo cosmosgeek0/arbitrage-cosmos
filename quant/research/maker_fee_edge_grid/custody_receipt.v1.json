@@ -1,0 +1,77 @@
+{
+  "schema": "MakerFeeGridCustodyReceiptV1",
+  "version": 1,
+  "assessedAtUtc": "2026-07-30T00:36:30Z",
+  "protocolSha256": "afb271bfe9f1110029b02f56b36f41d31baa73e574c9131a2c7208a0f1450a02",
+  "custodyState": "ACCEPTED_RECEIPT_ONLY",
+  "requiredBodyAvailability": "ABSENT",
+  "blocker": "ACCEPTED_E1_BODY_BYTES_UNAVAILABLE",
+  "acceptedRegistryBinding": {
+    "path": "quant/registry/smeta1_profitability_evidence_registry.v1.json",
+    "producerCommit": "1fb305a7a57724a6904d624894d8e620db19b636",
+    "producerTree": "e1c6c1c4a7cff468229cdd8a54020e456b6c3718",
+    "rawSha256": "d51fd2d7f91a4f8087afdcf8131b735e682d42d525d8967a8d556ed15f5b32c4",
+    "e1AcceptanceRowSha256": "fc8330109e6d3aa77b7436be1504194677efee3af65cadeedae7e2f6614c62bf"
+  },
+  "durableBridgeBinding": {
+    "path": "quant/research/n3i1/smeta1_n3_bridge.v1.json",
+    "rawSha256": "5304990b92578750bfb861049e30307146432a83c6c9d0fe7625a5bff1918aad",
+    "e1ReasonCode": "RESULT_PACKET_GIT_BLOB_UNAVAILABLE"
+  },
+  "requiredArtifacts": [
+    {
+      "kind": "MEASUREMENT_PACKET",
+      "byteLength": 63443,
+      "rawSha256": "9dbcfc8db6b420b9187330278459d597b70d9cdf938d4be566a3a6279bc68f7c",
+      "acceptedStorageState": "TEMP_PACKET_ABSENT",
+      "currentBodyAvailable": false,
+      "originalPath": "/private/tmp/e1-basis-edge.bvvN8Y/e1_measurement.json"
+    },
+    {
+      "kind": "SOURCE_MANIFEST",
+      "byteLength": 486732,
+      "rawSha256": "79e2544a0620e03ee09644e21a9ab563ec7eca1b699f9ea823eecef0b6a305ea",
+      "acceptedStorageState": "TEMP_PACKET_ABSENT",
+      "currentBodyAvailable": false,
+      "originalPath": "/private/tmp/e1-basis-edge.bvvN8Y/source_manifest.json"
+    },
+    {
+      "kind": "DERIVED_TRADE_LEDGER",
+      "byteLength": null,
+      "rawSha256": "a2e4ef2ad8ff63f5a2cb325dec2355c1c3ab8c4ccf1025e28fc2d0810df8102f",
+      "acceptedStorageState": "ACCEPTED_DIGEST_ONLY",
+      "currentBodyAvailable": false,
+      "originalPath": "/private/tmp/e1-method-audit.i9nPGf/trades_derived.json"
+    },
+    {
+      "kind": "AUDIT_PLAN",
+      "byteLength": null,
+      "rawSha256": "e7e60e1e648de1583bc925d93bfcf8c94d0e73e165a4a5fce3f7b81b9e197fca",
+      "acceptedStorageState": "ACCEPTED_DIGEST_ONLY",
+      "currentBodyAvailable": false,
+      "originalPath": "/private/tmp/e1-method-audit.i9nPGf/AUDIT_PLAN.md"
+    }
+  ],
+  "boundedReadOnlySearch": {
+    "roots": [
+      "/Users/cosmosgeek/Desktop",
+      "/Users/cosmosgeek/.codex/worktrees",
+      "/Users/cosmosgeek/.codex/sessions",
+      "/private/tmp",
+      "shared Git object stores including unreachable objects"
+    ],
+    "standaloneExactHashBodyMatches": 0,
+    "sessionState": "RECEIPTS_EXCERPTS_AND_PATCH_HISTORY_ONLY",
+    "gitObjectState": "NO_BLOB_AT_REQUIRED_BYTE_LENGTH_OR_HASH",
+    "networkUsed": false,
+    "reacquisitionPerformed": false,
+    "reconstructionPerformed": false
+  },
+  "recoveryRequirement": {
+    "required": "EXISTING_BYTE_IDENTICAL_ACCEPTED_BODIES_WITH_ALL_FOUR_SHA256_MATCHES",
+    "newDownloadQualifies": false,
+    "summaryAlgebraQualifies": false,
+    "sessionExcerptQualifies": false,
+    "holdoutMayOpen": false
+  }
+}

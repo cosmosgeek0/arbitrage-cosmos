@@ -172,6 +172,7 @@ export function buildMachineEvidence() {
     historicalPacket: catalog.historicalPacket,
     report: closure.report,
     donorEquality: closure.donorEquality,
+    catalogDenominatorRuling: closure.catalogDenominatorRuling,
     measurements: closure.measurements,
     knownLimitations: closure.currentLimitations ?? closure.knownLimitations,
     historicalCandidateLimitations: closure.knownLimitations,

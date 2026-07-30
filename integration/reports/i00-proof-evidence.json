@@ -64,6 +64,18 @@
     "integrated": 16,
     "status": "PROVED"
   },
+  "catalogDenominatorRuling": {
+    "scope": "CURRENT_SOURCE_CATALOG",
+    "routeSelector": "proof-catalog.canonicalRoutes",
+    "canonicalRouteCount": 17,
+    "controlSelector": "proof-catalog.controls[wiringState=WIRED_SOURCE]",
+    "wiredControlCount": 5,
+    "fixedSystemControlCount": 4,
+    "targetScopedControlCount": 1,
+    "targetScopedControlIds": [
+      "CTRL-ACK"
+    ]
+  },
   "measurements": {
     "runtime": {
       "status": "PENDING_MEASUREMENT",
@@ -161,8 +173,8 @@
     },
     {
       "id": "INCIDENT_ACK_COMMAND",
-      "status": "NOT_CONFIGURED",
-      "reason": "INCIDENT_ACK_COMMAND_OWNER_ABSENT"
+      "status": "UNKNOWN",
+      "reason": "CANONICAL_OWNER_AND_DURABLE_RECEIPT_BUILT; RUNTIME_BROWSER_MEASUREMENT_PENDING; EXTERNAL_PAGING_NOT_CONFIGURED"
     },
     {
       "id": "SOURCE_ISOLATE_COMMAND",
@@ -11604,11 +11616,11 @@
         "requirement": "Preserve the owner hierarchy from broad universe monitoring to specialist attention guarded execution complete control and no routine CLI dependence",
         "owner": "MISSION.md plus I00 director",
         "code": "canonical domain owners, all 16 accepted donors, the source-built Product runtime, and mounted Product Control application",
-        "runtime": "sixteen authenticated System/Product Integration routes and four exact fail-closed Product controls are source-wired; runtime and browser measurements remain pending",
+        "runtime": "seventeen authenticated System/Product Integration routes and five current Product controls are source-wired; the controls are four fixed System Control directions plus one target-scoped incident acknowledgement; runtime and browser measurements remain pending",
         "persistence": "existing Ledger plus bounded product_operator_events and canonical System Control CAS/idempotency/receipt paths are source-built",
-        "api": "sixteen canonical System/Product Integration routes are source-mounted",
+        "api": "seventeen canonical System/Product Integration routes are source-mounted",
         "cockpit": "Dashboard and Control Room mounted",
-        "control": "four exact fail-closed controls are source-wired; every broader or reverse mutation remains disabled",
+        "control": "five current Product controls are source-wired: four fixed System Control directions plus one target-scoped incident acknowledgement; every broader or reverse mutation remains disabled",
         "test": "server/test/i00Acceptance/closure-evidence.test.mjs; web/test/productControlRoom/mount.test.mjs; server/test/systemIntegration/persistence/product-operator-events.test.mjs",
         "scenario": "I00-01 through I00-22",
         "sha": null,
@@ -11644,7 +11656,7 @@
         "persistence": "the existing Ledger is the sole owner; L06 journal/audit append is atomic; L14 has no active persistence instance without canonical numeric configuration, checkpoint, and reservation owners",
         "api": "canonical supervisor traces expose HALTED, UNKNOWN, OWNER_GATED dispositions without a second API truth",
         "cockpit": "Account, Execution, Risk",
-        "control": "four bounded Product controls are source-wired; all 18 L13 actions remain unavailable and L14 commandDispatchAvailable=false",
+        "control": "five current Product controls are source-wired: four fixed System Control directions plus one target-scoped incident acknowledgement; all 18 L13 actions remain unavailable and L14 commandDispatchAvailable=false",
         "test": "L06 79/79; L12 21/21; L13 37/37; L14 38/38; canonical owner evidence 7/7",
         "scenario": "I00-05,I00-06,I00-12 through I00-17",
         "sha": "df6b472993ca9659ce09cf5f72004981c6835f0d",
@@ -12053,36 +12065,36 @@
         "source": "L blob 53fea2b7#21-22; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Durable commands and machine graph expose exact state revision idempotency before/after and owner truth",
         "owner": "foundation-control and systemIntegration",
-        "code": "four exact fail-closed Product controls use canonical System Control CAS/idempotency/receipts; L13 exact 27-role mapping is composed through the existing supervisor",
-        "runtime": "READ_ONLY, kill engage=true, intake paused=true, engine-supervisor restart, and durable command-result readback are source-built and focused-proved through the canonical owner; complete runtime/browser acceptance remains PENDING_MEASUREMENT; accepted L13 projector remains NOT_INVOKED_NO_VALIDATED_L12_BINDING",
-        "persistence": "canonical System Control persistence owns the four Product controls and durable result readback; L14 persistence implementation is structurally integrated but no active instance exists without three canonical owners",
+        "code": "five current Product controls are source-wired: four fixed System Control directions use canonical CAS/idempotency/receipts and one target-scoped incident acknowledgement uses its canonical owner and durable receipt; L13 exact 27-role mapping is composed through the existing supervisor",
+        "runtime": "READ_ONLY, kill engage=true, intake paused=true, engine-supervisor restart, target-scoped incident acknowledgement, and durable result readback are source-built and focused-proved through canonical owners; complete runtime/browser acceptance remains PENDING_MEASUREMENT; accepted L13 projector remains NOT_INVOKED_NO_VALIDATED_L12_BINDING",
+        "persistence": "canonical System Control persistence owns the four fixed Product directions and durable result readback; the incident owner owns target-scoped acknowledgement receipts; L14 persistence implementation is structurally integrated but no active instance exists without three canonical owners",
         "api": "preview, submit, command-result, material-events, trace, and canonical supervisor routes are source-mounted",
         "cockpit": "Dashboard and Control Room package mounted",
-        "control": "four Product directions configured; 18 accepted L13 actions unavailable; L14 commandDispatchAvailable=false",
-        "test": "server/test/productIntegration/runtime/routes.test.mjs; server/test/productIntegration/runtime/system-control-command-owner.test.mjs; Product command, System Control, L13 37/37, L14 38/38, and canonical owner evidence tests",
+        "control": "five current Product controls configured: four fixed System Control directions plus one target-scoped incident acknowledgement; 18 accepted L13 actions unavailable; L14 commandDispatchAvailable=false",
+        "test": "server/test/productIntegration/runtime/routes.test.mjs; server/test/productIntegration/runtime/system-control-command-owner.test.mjs; Product command, System Control, incident acknowledgement, L13 37/37, L14 38/38, and canonical owner evidence tests",
         "scenario": "I00-18,I00-19",
         "sha": "df6b472993ca9659ce09cf5f72004981c6835f0d",
         "status": "BUILT",
         "blocker": "RUNTIME_CONTROL_MEASUREMENT_PENDING; RUNTIME_BROWSER_MEASUREMENT_PENDING; L12_CANONICAL_SUBJECT_NOT_CONFIGURED; L14_CANONICAL_OWNERS_NOT_BOUND",
-        "replacement": "measure only the four configured Product directions and owner-backed result readback; activate no L14 control without canonical numeric configuration, checkpoint, and reservation owners"
+        "replacement": "measure only the five current Product controls and owner-backed result readback; activate no L14 control without canonical numeric configuration, checkpoint, and reservation owners"
       },
       {
         "id": "L-OBSERVABILITY",
         "source": "L blob 53fea2b7#23; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e; IP_OPS_RECEIPT.md@6bfd543afb693ea18f4baf08e962e6d698f140fb",
         "requirement": "Metrics logs ledger and incidents preserve material events root cause redaction and bounded attention",
         "owner": "systemIntegration plus IP-OPS",
-        "code": "bounded durable cursor, canonical supervisor trace composition, and ops readback validators are built",
-        "runtime": "authenticated Product routes and exact L13 role dispositions are source-built; metrics, windows, resets, and alarms remain nullable Foundation Observability owner evidence",
-        "persistence": "Ledger product_operator_events is bounded at 25,000 rows with floor, high-water, gap, and truncation semantics; incident persistence remains pending",
-        "api": "material-events, trace, ops readback, and intake-gate routes are source-mounted",
+        "code": "bounded durable cursor, canonical supervisor trace composition, target-scoped incident acknowledgement, and ops readback validators are built",
+        "runtime": "authenticated Product routes, exact L13 role dispositions, and the target-scoped incident acknowledgement owner are source-built; metrics, windows, resets, and alarms remain nullable Foundation Observability owner evidence",
+        "persistence": "Ledger product_operator_events is bounded at 25,000 rows with floor, high-water, gap, and truncation semantics; target-scoped acknowledgement receipts are durable; broader incident persistence remains pending",
+        "api": "material-events, trace, ops readback, intake-gate, and target-scoped acknowledgement routes are source-mounted",
         "cockpit": "Health, Logs, and Notifications adapters mounted",
-        "control": "incident acknowledgement backend absent",
-        "test": "Product event cursor, canonical owner evidence, Product Control, and ops readback suites",
+        "control": "target-scoped incident acknowledgement is source-wired; broader incident controls remain disabled",
+        "test": "Product event cursor, canonical owner evidence, Product Control, incident acknowledgement, and ops readback suites",
         "scenario": "I00-20",
         "sha": "df6b472993ca9659ce09cf5f72004981c6835f0d",
         "status": "BUILT",
-        "blocker": "CANONICAL_INCIDENT_ACK_COMMAND_ABSENT; RUNTIME_MEASUREMENT_PENDING",
-        "replacement": "measure source-built readback; keep absent Foundation Observability and incident acknowledgement truth UNKNOWN/NOT_CONFIGURED"
+        "blocker": "RUNTIME_MEASUREMENT_PENDING; RUNTIME_BROWSER_MEASUREMENT_PENDING; EXTERNAL_PAGING_NOT_CONFIGURED",
+        "replacement": "measure source-built readback and owner-backed target-scoped acknowledgement; keep absent Foundation Observability and external paging truth UNKNOWN/NOT_CONFIGURED"
       },
       {
         "id": "L-OPS",
@@ -12251,12 +12263,12 @@
         "source": "I00#14; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Required control families and superseded 172-item seed are classified without decorative controls",
         "owner": "IP-CONTROL director",
-        "code": "14 classified controls: four exact source-wired fail-closed controls and ten explicitly disabled or owner-gated controls; the superseded 172-item seed is absent",
-        "runtime": "registry renderer, exact four-command owner, and owner-backed durable result readback are source-built and focused-proved; complete runtime/browser measurement is pending",
-        "persistence": "canonical System Control CAS, idempotency, durable receipts, and restart-stable result readback are source-built for the supported subset",
-        "api": "control registry contract plus authenticated preview, submit, and command-result routes are source-built",
+        "code": "14 classified controls: five WIRED_SOURCE controls, eight NOT_CONFIGURED controls, and one OWNER_GATED control; the five are four fixed System Control directions plus one target-scoped incident acknowledgement; the superseded 172-item seed is absent",
+        "runtime": "registry renderer, exact five-command owner set, and owner-backed durable result readback are source-built and focused-proved; complete runtime/browser measurement is pending",
+        "persistence": "canonical System Control CAS, idempotency, durable receipts, and restart-stable result readback are source-built for the four fixed directions; the incident owner durably receipts target-scoped acknowledgement",
+        "api": "control registry contract plus authenticated preview, submit, command-result, and target-scoped acknowledgement routes are source-built",
         "cockpit": "Control Room registry mounted",
-        "control": "four WIRED_SOURCE; ten NOT_CONFIGURED or OWNER_GATED",
+        "control": "five WIRED_SOURCE; eight NOT_CONFIGURED; one OWNER_GATED",
         "test": "server/test/i00Acceptance/closure-evidence.test.mjs; server/test/productIntegration/runtime/routes.test.mjs; server/test/productIntegration/runtime/system-control-command-owner.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-18,I00-19",
         "sha": "56c47dad398c485b6653036c8b90c53f11061b1e",
@@ -12754,19 +12766,19 @@
         "id": "CTRL-01",
         "source": "MISSION.md#control-must-be-designed-into-engine; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Controls are authenticated bounded revisioned idempotent durable and never decorative",
-        "owner": "foundation-control",
-        "code": "canonical System Control service plus the Product command-owner adapter and mounted command renderer",
-        "runtime": "authenticated preview, submit, and command-result routes are source-built and focused-proved; complete runtime/browser acceptance remains PENDING_MEASUREMENT",
-        "persistence": "canonical System Control ledger receipts own idempotency, compare-and-set, and restart-stable result readback",
-        "api": "/api/product-integration/v1/commands/preview, /api/product-integration/v1/commands, and /api/product-integration/v1/commands/:commandId/result are source-mounted",
+        "owner": "foundation-control plus productIntegration/incidents",
+        "code": "canonical System Control service plus the Product command-owner adapter, target-scoped incident acknowledgement owner, and mounted command renderer",
+        "runtime": "authenticated preview, submit, command-result, and target-scoped acknowledgement routes are source-built and focused-proved; complete runtime/browser acceptance remains PENDING_MEASUREMENT",
+        "persistence": "canonical System Control ledger receipts own idempotency, compare-and-set, and restart-stable result readback for four fixed directions; the incident owner durably receipts target-scoped acknowledgement",
+        "api": "/api/product-integration/v1/commands/preview, /api/product-integration/v1/commands, /api/product-integration/v1/commands/:commandId/result, and the target-scoped acknowledgement route are source-mounted",
         "cockpit": "Control Room package mounted with unavailable reasons",
-        "control": "four exact fail-closed directions configured; unsupported reverse and broader controls remain disabled or owner-gated",
+        "control": "five current Product controls are configured: four fixed System Control directions plus one target-scoped incident acknowledgement; unsupported reverse and broader controls remain disabled or owner-gated",
         "test": "server/test/systemIntegration/routes/control-routes.test.mjs; server/test/productIntegration/runtime/routes.test.mjs; server/test/productIntegration/runtime/system-control-command-owner.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-18,I00-19",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
         "blocker": "RUNTIME_CONTROL_MEASUREMENT_PENDING; RUNTIME_BROWSER_MEASUREMENT_PENDING",
-        "replacement": "measure the exact canonical owner-backed command and result lifecycle; keep unsupported controls disabled"
+        "replacement": "measure the exact canonical owner-backed command, acknowledgement, and result lifecycles; keep unsupported controls disabled"
       },
       {
         "id": "OPS-01",
@@ -12952,19 +12964,19 @@
         "id": "DASH-08",
         "source": "docs/DASHBOARD_TRUTH.md#8; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Attention queue ranks exposed capital first and names resolving control",
-        "owner": "systemIntegration supervisor",
-        "code": "server/src/systemIntegration/supervisor plus mounted canonical attention renderer",
-        "runtime": "application renderer and supervisor route are source-wired; real graph readback remains pending",
-        "persistence": "incident/control refs; final incident persistence pending",
-        "api": "attention queue projection is source-mounted through the supervisor route",
+        "owner": "systemIntegration supervisor plus productIntegration/incidents",
+        "code": "server/src/systemIntegration/supervisor plus mounted canonical attention renderer and target-scoped incident acknowledgement owner",
+        "runtime": "application renderer, supervisor route, and target-scoped incident acknowledgement are source-wired; real graph and browser readback remain pending",
+        "persistence": "incident/control refs and durable target-scoped acknowledgement receipts; broader incident persistence remains pending",
+        "api": "attention queue projection and target-scoped acknowledgement are source-mounted",
         "cockpit": "Dashboard adapter mounted",
-        "control": "fixture catalog",
+        "control": "target-scoped incident acknowledgement is source-wired; broader incident controls remain disabled",
         "test": "server/test/i00Acceptance/combined-fixture-chain.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-13,I00-20",
         "sha": "b58e64e27fb76ed7ba5ae4a6f8cfab08e520f95c",
         "status": "BUILT",
-        "blocker": "CANONICAL_INCIDENT_ACK_COMMAND_ABSENT; RUNTIME_MEASUREMENT_PENDING",
-        "replacement": "bind canonical incident persistence/acknowledgement and perform real readback"
+        "blocker": "RUNTIME_MEASUREMENT_PENDING; RUNTIME_BROWSER_MEASUREMENT_PENDING; EXTERNAL_PAGING_NOT_CONFIGURED",
+        "replacement": "measure canonical incident readback and owner-backed target-scoped acknowledgement; retain broader incident and external paging limitations"
       },
       {
         "id": "DASH-09",
@@ -12988,19 +13000,19 @@
         "id": "DASH-10",
         "source": "docs/DASHBOARD_TRUTH.md#10; IP_RUNTIME_RECEIPT.md@8058ab8febb639839333d4e2c604068a0c7390ea; IP_CONTROL_RECEIPT.md@56c47dad398c485b6653036c8b90c53f11061b1e",
         "requirement": "Each control maps to one tested backend mutation with before/after ledger evidence",
-        "owner": "foundation-control",
-        "code": "canonical System Control service plus Product command owner and cockpit renderer",
-        "runtime": "four exact fail-closed controls and durable result readback are source-built and focused-proved; complete runtime/browser behavior remains PENDING_MEASUREMENT",
-        "persistence": "canonical compare-and-set, idempotency, durable receipt, and restart-stable result readback paths are source-built",
-        "api": "Product Integration preview, submit, and command-result routes are source-mounted",
+        "owner": "foundation-control plus productIntegration/incidents",
+        "code": "canonical System Control service plus Product command owner, target-scoped incident acknowledgement owner, and cockpit renderer",
+        "runtime": "five current Product controls and durable result readback are source-built and focused-proved; the controls are four fixed System Control directions plus one target-scoped incident acknowledgement; complete runtime/browser behavior remains PENDING_MEASUREMENT",
+        "persistence": "canonical compare-and-set, idempotency, durable receipt, and restart-stable result readback paths are source-built for four fixed directions; target-scoped acknowledgement receipts are durable",
+        "api": "Product Integration preview, submit, command-result, and target-scoped acknowledgement routes are source-mounted",
         "cockpit": "Dashboard and Control Room adapters mounted with unavailable reasons",
-        "control": "READ_ONLY; kill engage=true; intake pause=true; engine-supervisor restart",
+        "control": "READ_ONLY; kill engage=true; intake pause=true; engine-supervisor restart; target-scoped incident acknowledgement",
         "test": "server/test/systemIntegration/controls/mutations.test.mjs; server/test/productIntegration/runtime/routes.test.mjs; server/test/productIntegration/runtime/system-control-command-owner.test.mjs; web/test/productControlRoom/contracts.test.mjs",
         "scenario": "I00-18,I00-19",
         "sha": null,
         "status": "BUILT",
         "blocker": "RUNTIME_CONTROL_MEASUREMENT_PENDING; RUNTIME_BROWSER_MEASUREMENT_PENDING",
-        "replacement": "measure the exact four source-wired controls and owner-backed result readback; keep unsupported controls disabled"
+        "replacement": "measure the exact five source-wired controls and owner-backed result readback; keep unsupported controls disabled"
       },
       {
         "id": "DASH-LAW-01",
@@ -13231,8 +13243,8 @@
       },
       {
         "layer": "operator-control",
-        "authority": "foundation-control",
-        "limit": "four exact fail-closed Product controls only; broader or reverse mutations disabled",
+        "authority": "foundation-control plus productIntegration/incidents",
+        "limit": "five current Product controls only: four fixed System Control directions plus one target-scoped incident acknowledgement; broader or reverse mutations disabled",
         "failurePosture": "REJECTED",
         "ownerOverride": "authenticated command",
         "status": "BUILT",
@@ -13376,10 +13388,10 @@
       },
       {
         "operation": "INCIDENT_ACK",
-        "classification": "DEFECT",
-        "mechanism": "renderer mounted; canonical incident command absent",
-        "command": null,
-        "blocker": "CANONICAL_INCIDENT_ACK_COMMAND_ABSENT"
+        "classification": "MOVED_TO_AUTHENTICATED_CONTROL",
+        "mechanism": "target-scoped canonical incident acknowledgement with durable receipt",
+        "command": "incident.ack.<incident-sha256> / ACK_INCIDENT",
+        "blocker": "RUNTIME_BROWSER_MEASUREMENT_PENDING; EXTERNAL_PAGING_NOT_CONFIGURED"
       },
       {
         "operation": "MODE_CHANGE",
@@ -16075,9 +16087,9 @@
       "question": "Can the owner operate it without routine terminal work?",
       "evidenceRowCompleteness": "COMPLETE",
       "productVerdict": "PARTIAL",
-      "answer": "Four exact fail-closed Product controls are source-wired with canonical CAS, idempotency, and durable receipts; runtime/browser behavior remains PENDING_MEASUREMENT and all broader controls stay disabled.",
+      "answer": "Five current Product controls are source-wired: four fixed System Control directions with canonical CAS/idempotency/receipts plus one target-scoped incident acknowledgement with its canonical owner and durable receipt; runtime/browser behavior remains PENDING_MEASUREMENT and all broader controls stay disabled.",
       "primaryBlocker": "RUNTIME_CONTROL_MEASUREMENT_PENDING; RUNTIME_BROWSER_MEASUREMENT_PENDING",
-      "safeNextAction": "measure only the exact four supported controls in the authenticated browser flow"
+      "safeNextAction": "measure only the exact five supported controls in the authenticated browser flow"
     },
     {
       "id": "NS-07",
@@ -16165,5 +16177,5 @@
       "evidence": "ops/i00; ops/templates/i00"
     }
   ],
-  "evidenceSha256": "023c6fab2279220388e230e41212ac8217dbd2c0851a3969b50d790ea75d6480"
+  "evidenceSha256": "114b8fb2f398fffbdc1021b7f2e012640ec8893f77b85b295ed845b516905371"
 }

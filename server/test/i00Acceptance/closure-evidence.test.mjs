@@ -223,6 +223,29 @@ test('page capability and control matrices separate historical fixtures from cur
       || control.wiringState.startsWith('NOT_CONFIGURED:'));
   }
   const wired = catalog.controls.filter((row) => row.wiringState === 'WIRED_SOURCE');
+  const notConfigured = catalog.controls.filter((row) => row.wiringState.startsWith('NOT_CONFIGURED:'));
+  const ownerGated = catalog.controls.filter((row) => row.wiringState.startsWith('OWNER_GATED:'));
+  assert.deepEqual(closure.catalogDenominatorRuling, {
+    scope: 'CURRENT_SOURCE_CATALOG',
+    routeSelector: 'proof-catalog.canonicalRoutes',
+    canonicalRouteCount: 17,
+    controlSelector: 'proof-catalog.controls[wiringState=WIRED_SOURCE]',
+    wiredControlCount: 5,
+    fixedSystemControlCount: 4,
+    targetScopedControlCount: 1,
+    targetScopedControlIds: ['CTRL-ACK'],
+  });
+  assert.equal(closure.catalogDenominatorRuling.canonicalRouteCount, catalog.canonicalRoutes.length);
+  assert.equal(closure.catalogDenominatorRuling.wiredControlCount, wired.length);
+  assert.equal(closure.catalogDenominatorRuling.fixedSystemControlCount, wired.filter((row) => row.id !== 'CTRL-ACK').length);
+  assert.deepEqual(
+    closure.catalogDenominatorRuling.targetScopedControlIds,
+    wired.filter((row) => row.id === 'CTRL-ACK').map((row) => row.id),
+  );
+  assert.deepEqual(
+    { wiredSource: wired.length, notConfigured: notConfigured.length, ownerGated: ownerGated.length },
+    { wiredSource: 5, notConfigured: 8, ownerGated: 1 },
+  );
   assert.deepEqual(wired.map((row) => row.id).sort(), ['CTRL-ACK', 'CTRL-INTAKE', 'CTRL-KILL', 'CTRL-MODE', 'CTRL-RESTART']);
   assert.deepEqual(wired.map((row) => row.runtimeControlId).sort(), [
     'component.engine-supervisor.restart', 'global.intake.pause', 'global.kill-switch.engage', 'global.safe-mode.read-only', 'incident.ack.<incident-sha256>',
@@ -324,6 +347,7 @@ test('current machine evidence is input-driven for both legal candidate phases a
   assert.equal(current.targetState, 'CANDIDATE_SOURCE_FROZEN');
   assert.equal(current.productVerdict, phase.productVerdict);
   assert.equal(current.candidateState, closure.candidateState);
+  assert.deepEqual(current.catalogDenominatorRuling, closure.catalogDenominatorRuling);
   assert.equal(current.counts.phase2Donors, closure.acceptedEvidence.filter((row) => row.phase2Donor).length);
   assert.equal(current.counts.provenanceItems, readJson('fixtures/i00/receipt-provenance.json').items.length);
   assert(current.frozenInputs.every((input) => input.passed), JSON.stringify(current.frozenInputs.filter((input) => !input.passed)));

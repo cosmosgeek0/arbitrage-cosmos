@@ -5,6 +5,7 @@
 REPO_ROOT="$(cd "$TESTS_DIR/../.." && pwd -P)"
 BASE="$REPO_ROOT/ops/live/systemd/cosmos-app.service"
 I00="$REPO_ROOT/ops/templates/i00/systemd/cosmos-app-i00.conf.template"
+RUNTIME="$REPO_ROOT/ops/templates/i00/systemd/cosmos-app-runtime.conf.template"
 LOGGING="$REPO_ROOT/ops/templates/logging/systemd/95-cosmos-app-logging.conf.template"
 ENVIRONMENT="$REPO_ROOT/server/src/bootstrap/environment.ts"
 
@@ -44,20 +45,20 @@ assert_not_grep '^ExecStart=' "$LOGGING" "logging overlay does not own process e
 assert_not_grep '^Environment(File)?=' "$LOGGING" "logging overlay carries no environment values"
 assert_not_grep '(TOKEN|SECRET|PASSWORD|API_KEY)=' "$LOGGING" "logging overlay carries no secret assignment"
 
-note "base + I00 + logging compose without changing the accepted entrypoint"
-COMPOSED_EXEC_START="$(service_values ExecStart "$BASE" "$I00" "$LOGGING")"
+note "base + preserved runtime + provider-only I00 + logging retain split ownership"
+COMPOSED_EXEC_START="$(service_values ExecStart "$BASE" "$RUNTIME" "$I00" "$LOGGING")"
 assert_eq "$(printf '%s\n' "$COMPOSED_EXEC_START" | grep -c .)" 1 "one effective ExecStart"
 assert_eq "$COMPOSED_EXEC_START" \
   "/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node /usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs" \
-  "accepted I00 entrypoint remains exact"
+  "runtime owns execution while provider and logging preserve it"
 
-assert_eq "$(service_last_value SyslogLevelPrefix "$BASE" "$I00" "$LOGGING")" yes \
+assert_eq "$(service_last_value SyslogLevelPrefix "$BASE" "$RUNTIME" "$I00" "$LOGGING")" yes \
   "priority prefixes enabled"
-assert_eq "$(service_last_value LogLevelMax "$BASE" "$I00" "$LOGGING")" info \
+assert_eq "$(service_last_value LogLevelMax "$BASE" "$RUNTIME" "$I00" "$LOGGING")" info \
   "info and higher priorities retained"
-assert_eq "$(service_last_value LogRateLimitIntervalSec "$BASE" "$I00" "$LOGGING")" 0 \
+assert_eq "$(service_last_value LogRateLimitIntervalSec "$BASE" "$RUNTIME" "$I00" "$LOGGING")" 0 \
   "unit-wide journal interval disabled"
-assert_eq "$(service_last_value LogRateLimitBurst "$BASE" "$I00" "$LOGGING")" 0 \
+assert_eq "$(service_last_value LogRateLimitBurst "$BASE" "$RUNTIME" "$I00" "$LOGGING")" 0 \
   "unit-wide journal burst disabled"
 
 note "production bootstrap installs the selective application policy"

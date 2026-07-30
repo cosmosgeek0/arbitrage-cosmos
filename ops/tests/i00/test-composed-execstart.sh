@@ -1,27 +1,35 @@
 #!/usr/bin/env bash
-# The gap this test closes: the base unit and the I00 drop-in were each pinned
-# individually, but nothing ever asserted the COMPOSED unit systemd actually
-# runs. The drop-in's ExecStart= reset silently discarded the /usr/bin/env
-# prefix that was the sole carrier of DATA_DIR_LOGICAL_LEASE_ROOT — mandatory
-# under NODE_ENV=production (bootstrap/environment.ts throws at module load) —
-# so the service as shipped could not boot.
+# The provider binding is intentionally separate from the preserved execution
+# and environment overlays. It must never reset or replace either contract.
 set -euo pipefail
 source "$(dirname "$0")/helpers.sh"
 
-note "composed base-unit + I00 drop-in ExecStart still boots"
+note "provider-only drop-in does not own ExecStart or EnvironmentFile"
 BASE="$REPO_ROOT/ops/live/systemd/cosmos-app.service"
-DROPIN="$REPO_ROOT/ops/templates/i00/systemd/cosmos-app-i00.conf.template"
+PROVIDER_DROPIN="$REPO_ROOT/ops/templates/i00/systemd/cosmos-app-i00.conf.template"
+RUNTIME_DROPIN="$REPO_ROOT/ops/templates/i00/systemd/cosmos-app-runtime.conf.template"
 assert_file "$BASE"
-assert_file "$DROPIN"
+assert_file "$PROVIDER_DROPIN"
+assert_file "$RUNTIME_DROPIN"
 
-# systemd semantics: an empty ExecStart= resets the list; the effective
-# command is whatever non-empty ExecStart= lines follow the last reset.
-EFFECTIVE="$(printf '%s\n%s\n' "$(grep '^ExecStart=' "$BASE")" "$(grep '^ExecStart=' "$DROPIN")" \
+if grep -E '^(ExecStart|EnvironmentFile)=' "$PROVIDER_DROPIN" >/dev/null; then
+  fail_test "provider-only drop-in changes execution or environment ownership"
+fi
+pass_assertion
+
+# The packaged recovery source for the preserved runtime overlay remains the
+# sole overlay that replaces the base command; the provider overlay is inert.
+EFFECTIVE="$(printf '%s\n%s\n%s\n' \
+  "$(grep '^ExecStart=' "$BASE")" \
+  "$(grep '^ExecStart=' "$RUNTIME_DROPIN")" \
+  "$(grep '^ExecStart=' "$PROVIDER_DROPIN")" \
   | awk '/^ExecStart=$/{last=""; next} /^ExecStart=/{last=$0} END{print last}')"
 
 assert_contains "$EFFECTIVE" 'DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases'
-assert_contains "$EFFECTIVE" 'app-entrypoint.mjs'
+assert_contains "$EFFECTIVE" '/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs'
 assert_contains "$EFFECTIVE" '/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT='
+assert_contains "$(grep '^EnvironmentFile=' "$RUNTIME_DROPIN")" \
+  '/etc/cosmos/cosmos-i00.env'
 
 # The value must be non-empty and absolute: an empty assignment throws
 # DATA_DIR_LOGICAL_LEASE_NAMESPACE_INVALID instead of satisfying the gate.

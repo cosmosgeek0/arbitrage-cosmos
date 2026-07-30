@@ -718,7 +718,16 @@ if [ "$SIMULATION" != 1 ]; then
       || value.systemdAnalyzePath!==null
       || value.systemdAnalyzeSha256!==null
       || value.systemdAnalyzeEndpointIdentity!==null
-      || value.dropInState!=="NONE"
+      || value.dropInState!=="EXACT_PROVIDER_BOUND"
+      || !Array.isArray(value.dropInPaths)
+      || value.dropInPaths.length!==3
+      || value.environmentFiles?.length!==2
+      || value.environmentFiles?.[0]?.path!=="/etc/cosmos/cosmos-app.env"
+      || value.environmentFiles?.[0]?.optional!==false
+      || value.environmentFiles?.[1]?.path!=="/etc/cosmos/cosmos-i00.env"
+      || value.environmentFiles?.[1]?.optional!==false
+      || value.environmentAuthorityState!=="EXACT_PROVIDER_CREDENTIAL"
+      || value.execStart?.argv?.[3]!=="/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs"
       || value.proofDropInPath!==null
       || value.proofDropInSha256!==null
       || value.proofDropInEndpointIdentity!==null
@@ -1243,6 +1252,13 @@ if [ "$PREPARE_FIRST_HOST_EVIDENCE" != 1 ]; then
   AUTHORIZATION_IDENTITY="$(capture_evidence_identity "$AUTHORIZATION" authorization)"
   DEPLOYMENT_RISK_IDENTITY="$(capture_evidence_identity "$DEPLOYMENT_RISK" deployment-risk)"
   ACTION_PREVIEW_IDENTITY="$(capture_evidence_identity "$ACTION_PREVIEW" action-preview)"
+  if [ "$SIMULATION" != 1 ]; then
+    printf '%s\n' "$APP_UNIT_INITIAL" \
+      | "$NODE_PATH" "$SCRIPT_DIR/verify-app-unit-action-binding.mjs" \
+        --deployment-risk "$DEPLOYMENT_RISK" \
+        --action-preview "$ACTION_PREVIEW" >/dev/null \
+      || blocked "action preview application unit binding differs from live inspection"
+  fi
   AUTH_BASE=(--input "$AUTHORIZATION" --class SERVICE_RELEASE_SWITCH --command release-switch --expected-operator "$OPERATOR" --expected-deployed-sha "$CANDIDATE_SHA" --expected-config-version "$CONFIG_VERSION" --deployment-risk "$DEPLOYMENT_RISK" --action-preview "$ACTION_PREVIEW" --consumption-root "$AUTHORIZATION_CONSUMPTION_ROOT" --expected-host "$TARGET_HOST" --expected-environment "$TARGET_ENVIRONMENT" --expected-scope cosmos-production-release-switch --expected-account "$ACCOUNT" --expected-product "Cosmos I00 immutable release" --expected-credential-type ROOT_LOCAL_OPERATOR_SESSION --expected-permission systemd:RestartExactCosmosAppUnit --expected-result-receipt "$RESULT_RECEIPT" --expected-reconciliation-receipt "$RECONCILIATION_RECEIPT" --expected-maximum-capital ZERO --expected-maximum-notional ZERO --expected-maximum-effect "install one exact immutable release and restart one exact application unit")
   AUTH_BASE+=("${AUTHORIZATION_CLOCK_ARGS[@]}")
   AUTH_ENDPOINTS=()

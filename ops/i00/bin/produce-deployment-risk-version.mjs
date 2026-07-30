@@ -11,6 +11,7 @@ import {
 import { fileURLToPath } from 'node:url';
 
 import {
+  assertPendingProviderDocumentSeparation,
   buildDeploymentRiskVersionForCanonicalProducer,
   executingI00EnforcementProvenance,
   inspectPrivateDirectoryEvidence,
@@ -893,6 +894,11 @@ function appUnitBinding(commands, unit, runtime, environment, simulationRoot, do
     'fragmentSha256', 'fragmentIdentity', 'fragmentEndpointIdentity',
     'fragmentSourcePath', 'fragmentSourceSha256', 'fragmentSourceIdentity',
     'fragmentSourceEndpointIdentity', 'dropInPaths', 'dropInState',
+    'dropInBindings', 'dropInSetEndpoint', 'dropInSetSha256',
+    'environmentFilesSha256', 'providerBindingSha256', 'providerUnit',
+    'providerFragmentPath', 'providerFragmentSha256',
+    'providerFragmentEndpointIdentity', 'providerState',
+    'providerDeploymentRiskPath', 'providerActionPreviewPath',
     'proofDropInPath', 'proofDropInSha256', 'proofDropInIdentity',
     'proofDropInEndpointIdentity', 'proofDropInOwner',
     'proofDropInRuntimeLinkPath', 'proofDropInRuntimeLinkIdentity',
@@ -908,7 +914,7 @@ function appUnitBinding(commands, unit, runtime, environment, simulationRoot, do
   exactKeys(inspected.execStart, ['path', 'argv', 'flags'], 'app unit inspection.execStart');
   const staging = location.stagingRoot !== null;
   const offline = location.offlineUnitRoot !== null;
-  assert(inspected.schemaVersion === 3
+  assert(inspected.schemaVersion === 4
     && inspected.status === 'APP_UNIT_BINDING_VERIFIED'
     && inspected.inspectionMode
       === (offline ? 'PRIVATE_OFFLINE_UNIT_ROOT' : 'LIVE_SYSTEM_MANAGER')
@@ -927,19 +933,59 @@ function appUnitBinding(commands, unit, runtime, environment, simulationRoot, do
     && DIGEST.test(inspected.bindingSha256)
     && inspected.fragmentPath.startsWith('/')
     && inspected.fragmentEndpointIdentity.length > 0
-    && inspected.dropInState === (staging ? 'EXACT_STAGING_PROOF' : 'NONE')
+    && inspected.dropInState
+      === (staging ? 'EXACT_STAGING_PROOF' : 'EXACT_PROVIDER_BOUND')
     && inspected.proofDropInPath === location.proofDropIn
     && inspected.proofDropInRuntimeLinkPath === location.proofDropInRuntimeLink
     && inspected.proofAbsentSentinel === location.proofAbsentSentinel
     && Array.isArray(inspected.dropInPaths)
-    && inspected.dropInPaths.length === (staging ? 1 : 0)
+    && (staging
+      ? inspected.dropInPaths.length === 1
+      : inspected.dropInPaths.length === 3)
+    && (staging
+      ? inspected.dropInBindings === null
+        && inspected.dropInSetEndpoint === null
+        && inspected.dropInSetSha256 === null
+        && inspected.environmentFilesSha256 === null
+        && inspected.providerBindingSha256 === null
+        && inspected.providerUnit === null
+        && inspected.providerFragmentPath === null
+        && inspected.providerFragmentSha256 === null
+        && inspected.providerFragmentEndpointIdentity === null
+        && inspected.providerState === null
+        && inspected.providerDeploymentRiskPath === null
+        && inspected.providerActionPreviewPath === null
+      : Array.isArray(inspected.dropInBindings)
+        && inspected.dropInBindings.length === 3
+        && typeof inspected.dropInSetEndpoint === 'string'
+        && inspected.dropInSetEndpoint.length > 0
+        && DIGEST.test(inspected.dropInSetSha256)
+        && DIGEST.test(inspected.environmentFilesSha256)
+        && DIGEST.test(inspected.providerBindingSha256)
+        && inspected.providerUnit === 'cosmos-secrets-provider.service'
+        && inspected.providerFragmentPath
+          === '/etc/systemd/system/cosmos-secrets-provider.service'
+        && DIGEST.test(inspected.providerFragmentSha256)
+        && typeof inspected.providerFragmentEndpointIdentity === 'string'
+        && inspected.providerFragmentEndpointIdentity.length > 0
+        && inspected.providerState === 'ACTIVE_EXITED_SUCCESS'
+        && typeof inspected.providerDeploymentRiskPath === 'string'
+        && inspected.providerDeploymentRiskPath.startsWith(
+          '/var/lib/cosmos-deployment-authorization/',
+        )
+        && typeof inspected.providerActionPreviewPath === 'string'
+        && inspected.providerActionPreviewPath.startsWith(
+          '/var/lib/cosmos-deployment-authorization/',
+        )
+        && inspected.providerDeploymentRiskPath !== inspected.providerActionPreviewPath)
     && inspected.needDaemonReload === (offline ? 'not-applicable-offline' : 'no')
     && inspected.user === 'cosmos'
     && inspected.group === 'cosmos'
     && inspected.workingDirectory === '/opt/cosmos/current'
     && inspected.namespaceRemapState === 'NONE'
     && inspected.executionAuthorityState === 'CLOSED'
-    && inspected.environmentAuthorityState === 'CLOSED'
+    && inspected.environmentAuthorityState
+      === (staging ? 'CLOSED' : 'EXACT_PROVIDER_CREDENTIAL')
     && inspected.identityAuthorityState === 'CLOSED'
     && DIGEST.test(inspected.authorityClosureSha256)
     && DIGEST.test(inspected.unsetEnvironmentSha256)
@@ -947,12 +993,18 @@ function appUnitBinding(commands, unit, runtime, environment, simulationRoot, do
     && inspected.runtimeEnvSha256 === runtime.sha256
     && inspected.runtimeEnvEndpointIdentity === runtime.endpointIdentity
     && Array.isArray(inspected.environmentFiles)
-    && inspected.environmentFiles.length === 1
+    && inspected.environmentFiles.length === (staging ? 1 : 2)
     && inspected.environmentFiles[0]?.path === runtime.absolute
     && inspected.environmentFiles[0]?.optional === false
+    && (staging
+      || (inspected.environmentFiles[1]?.path === '/etc/cosmos/cosmos-i00.env'
+        && inspected.environmentFiles[1]?.optional === false))
     && inspected.execStart.path === commands.env.path
     && Array.isArray(inspected.execStart.argv)
     && inspected.execStart.argv[2] === commands.node.path
+    && inspected.execStart.argv[3] === (staging
+      ? 'server/dist/index.js'
+      : '/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs')
     && Array.isArray(inspected.execStart.flags)
     && inspected.execStart.flags.length === 0
     && typeof inspected.effectReachability === 'string'
@@ -998,6 +1050,18 @@ function appUnitBinding(commands, unit, runtime, environment, simulationRoot, do
       `app-unit-unset-environment-sha256:${inspected.unsetEnvironmentSha256}`,
       `app-unit-user:${inspected.user}`,
       `app-unit-working-directory:${inspected.workingDirectory}`,
+      ...(!staging ? [
+        `app-unit-drop-in-set:${inspected.dropInSetEndpoint}`,
+        `app-unit-environment-files-sha256:${inspected.environmentFilesSha256}`,
+        `app-unit-provider-action-preview-path:${inspected.providerActionPreviewPath}`,
+        `app-unit-provider-binding-sha256:${inspected.providerBindingSha256}`,
+        `app-unit-provider-deployment-risk-path:${inspected.providerDeploymentRiskPath}`,
+        `app-unit-provider-fragment-identity:${inspected.providerFragmentEndpointIdentity}`,
+        `app-unit-provider-fragment-path:${inspected.providerFragmentPath}`,
+        `app-unit-provider-fragment-sha256:${inspected.providerFragmentSha256}`,
+        `app-unit-provider-state:${inspected.providerState}`,
+        `app-unit-provider-unit:${inspected.providerUnit}`,
+      ] : []),
       `systemd-analyze-identity:${inspected.systemdAnalyzeEndpointIdentity ?? 'NONE'}`,
       `systemd-analyze-path:${inspected.systemdAnalyzePath ?? 'NONE'}`,
       `systemd-analyze-sha256:${inspected.systemdAnalyzeSha256 ?? 'NONE'}`,
@@ -2417,6 +2481,9 @@ try {
   'risk derivation reference time must be exact UTC seconds');
   evidenceReferenceUtc = derivationReferenceUtc;
   const evidence = derive(request.document, simulationRoot);
+  if (['SERVICE_RELEASE_SWITCH', 'SERVICE_ROLLBACK'].includes(args.class)) {
+    assertPendingProviderDocumentSeparation(evidence, [args.output]);
+  }
   if (artifactPolicy.rootMode === 'STAGING') {
     const suffix = basename(artifactPolicy.proofRoot).slice('cosmos-df32-proof-'.length);
     assert(evidence.host === `cosmos-df32-proof-${suffix}.internal`

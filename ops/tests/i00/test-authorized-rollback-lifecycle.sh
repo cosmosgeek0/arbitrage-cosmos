@@ -1714,7 +1714,17 @@ for app_unit_endpoint in \
   'app-unit-unset-environment-sha256:$APP_UNIT_UNSET_ENVIRONMENT_SHA256' \
   'app-unit-namespace-remap-state:$APP_UNIT_NAMESPACE_REMAP_STATE' \
   'app-unit-staging-root:NONE' \
-  'app-unit-drop-in-state:NONE' \
+  'app-unit-drop-in-state:EXACT_PROVIDER_BOUND' \
+  'app-unit-drop-in-set:$APP_UNIT_DROP_IN_SET' \
+  'app-unit-environment-files-sha256:$APP_UNIT_ENVIRONMENT_FILES_SHA256' \
+  'app-unit-provider-binding-sha256:$APP_UNIT_PROVIDER_BINDING_SHA256' \
+  'app-unit-provider-unit:$APP_UNIT_PROVIDER_UNIT' \
+  'app-unit-provider-fragment-path:$APP_UNIT_PROVIDER_FRAGMENT_PATH' \
+  'app-unit-provider-fragment-sha256:$APP_UNIT_PROVIDER_FRAGMENT_SHA256' \
+  'app-unit-provider-fragment-identity:$APP_UNIT_PROVIDER_FRAGMENT_IDENTITY' \
+  'app-unit-provider-state:$APP_UNIT_PROVIDER_STATE' \
+  'app-unit-provider-deployment-risk-path:$APP_UNIT_PROVIDER_DEPLOYMENT_RISK_PATH' \
+  'app-unit-provider-action-preview-path:$APP_UNIT_PROVIDER_ACTION_PREVIEW_PATH' \
   'app-unit-need-daemon-reload:no' \
   'app-unit-exec-start-env-path:$APP_UNIT_EXEC_ENV_PATH' \
   'app-unit-exec-start-node-path:$APP_UNIT_EXEC_NODE_PATH' \
@@ -1724,6 +1734,9 @@ for app_unit_endpoint in \
 done
 assert_contains "$ROLLBACK_WRAPPER_SOURCE" 'inspect-app-unit.mjs'
 assert_contains "$ROLLBACK_WRAPPER_SOURCE" '--expected-binding-sha256'
+assert_contains "$ROLLBACK_WRAPPER_SOURCE" 'verify-app-unit-action-binding.mjs'
+assert_contains "$ROLLBACK_WRAPPER_SOURCE" '--deployment-risk "$DEPLOYMENT_RISK"'
+assert_contains "$ROLLBACK_WRAPPER_SOURCE" '--action-preview "$ACTION_PREVIEW"'
 assert_contains "$ROLLBACK_WRAPPER_SOURCE" \
   'inspect-executable.mjs" --path "$ENV_PATH")" = "$ENV_INITIAL"'
 assert_contains "$ROLLBACK_WRAPPER_SOURCE" \

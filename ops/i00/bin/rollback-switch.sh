@@ -499,13 +499,42 @@ else
     || blocked "application unit ExecStart digest is invalid"
   APP_UNIT_BINDING_SHA256="$(app_unit_value bindingSha256)" \
     || blocked "application unit binding digest is invalid"
+  APP_UNIT_DROP_IN_SET="$(app_unit_value dropInSetEndpoint)" \
+    || blocked "application unit drop-in set is invalid"
+  APP_UNIT_ENVIRONMENT_FILES_SHA256="$(app_unit_value environmentFilesSha256)" \
+    || blocked "application unit environment-file set digest is invalid"
+  APP_UNIT_PROVIDER_BINDING_SHA256="$(app_unit_value providerBindingSha256)" \
+    || blocked "application unit provider binding digest is invalid"
+  APP_UNIT_PROVIDER_UNIT="$(app_unit_value providerUnit)" \
+    || blocked "application unit provider name is invalid"
+  APP_UNIT_PROVIDER_FRAGMENT_PATH="$(app_unit_value providerFragmentPath)" \
+    || blocked "application unit provider fragment path is invalid"
+  APP_UNIT_PROVIDER_FRAGMENT_SHA256="$(app_unit_value providerFragmentSha256)" \
+    || blocked "application unit provider fragment digest is invalid"
+  APP_UNIT_PROVIDER_FRAGMENT_IDENTITY="$(app_unit_value providerFragmentEndpointIdentity)" \
+    || blocked "application unit provider fragment identity is invalid"
+  APP_UNIT_PROVIDER_STATE="$(app_unit_value providerState)" \
+    || blocked "application unit provider state is invalid"
+  APP_UNIT_PROVIDER_DEPLOYMENT_RISK_PATH="$(app_unit_value providerDeploymentRiskPath)" \
+    || blocked "application unit provider deployment-risk path is invalid"
+  APP_UNIT_PROVIDER_ACTION_PREVIEW_PATH="$(app_unit_value providerActionPreviewPath)" \
+    || blocked "application unit provider action-preview path is invalid"
   "$NODE_PATH" -e '
     const value=JSON.parse(process.argv[1]);
     if(value.offlineUnitRoot!==null
       || value.systemdAnalyzePath!==null
       || value.systemdAnalyzeSha256!==null
       || value.systemdAnalyzeEndpointIdentity!==null
-      || value.dropInState!=="NONE"
+      || value.dropInState!=="EXACT_PROVIDER_BOUND"
+      || !Array.isArray(value.dropInPaths)
+      || value.dropInPaths.length!==3
+      || value.environmentFiles?.length!==2
+      || value.environmentFiles?.[0]?.path!=="/etc/cosmos/cosmos-app.env"
+      || value.environmentFiles?.[0]?.optional!==false
+      || value.environmentFiles?.[1]?.path!=="/etc/cosmos/cosmos-i00.env"
+      || value.environmentFiles?.[1]?.optional!==false
+      || value.environmentAuthorityState!=="EXACT_PROVIDER_CREDENTIAL"
+      || value.execStart?.argv?.[3]!=="/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs"
       || value.proofDropInPath!==null
       || value.proofDropInSha256!==null
       || value.proofDropInEndpointIdentity!==null
@@ -611,7 +640,17 @@ else
       --expected-endpoint "app-unit-unset-environment-sha256:$APP_UNIT_UNSET_ENVIRONMENT_SHA256"
       --expected-endpoint "app-unit-namespace-remap-state:$APP_UNIT_NAMESPACE_REMAP_STATE"
       --expected-endpoint "app-unit-staging-root:NONE"
-      --expected-endpoint "app-unit-drop-in-state:NONE"
+      --expected-endpoint "app-unit-drop-in-state:EXACT_PROVIDER_BOUND"
+      --expected-endpoint "app-unit-drop-in-set:$APP_UNIT_DROP_IN_SET"
+      --expected-endpoint "app-unit-environment-files-sha256:$APP_UNIT_ENVIRONMENT_FILES_SHA256"
+      --expected-endpoint "app-unit-provider-binding-sha256:$APP_UNIT_PROVIDER_BINDING_SHA256"
+      --expected-endpoint "app-unit-provider-unit:$APP_UNIT_PROVIDER_UNIT"
+      --expected-endpoint "app-unit-provider-fragment-path:$APP_UNIT_PROVIDER_FRAGMENT_PATH"
+      --expected-endpoint "app-unit-provider-fragment-sha256:$APP_UNIT_PROVIDER_FRAGMENT_SHA256"
+      --expected-endpoint "app-unit-provider-fragment-identity:$APP_UNIT_PROVIDER_FRAGMENT_IDENTITY"
+      --expected-endpoint "app-unit-provider-state:$APP_UNIT_PROVIDER_STATE"
+      --expected-endpoint "app-unit-provider-deployment-risk-path:$APP_UNIT_PROVIDER_DEPLOYMENT_RISK_PATH"
+      --expected-endpoint "app-unit-provider-action-preview-path:$APP_UNIT_PROVIDER_ACTION_PREVIEW_PATH"
       --expected-endpoint "app-unit-proof-drop-in-path:NONE"
       --expected-endpoint "app-unit-proof-drop-in-sha256:NONE"
       --expected-endpoint "app-unit-proof-drop-in-identity:NONE"
@@ -701,6 +740,13 @@ fi
 TARGET_HOST="$(node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(v.targetHost)' "$HOST")"
 TARGET_ENVIRONMENT="$(node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(v.environment)' "$HOST")"
 TARGET_ACCOUNT="$(node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(v.account)' "$HOST")"
+if [ "$SIMULATION" != 1 ]; then
+  printf '%s\n' "$APP_UNIT_INITIAL" \
+    | "$NODE_PATH" "$SCRIPT_DIR/verify-app-unit-action-binding.mjs" \
+      --deployment-risk "$DEPLOYMENT_RISK" \
+      --action-preview "$ACTION_PREVIEW" >/dev/null \
+    || blocked "action preview application unit binding differs from live inspection"
+fi
 AUTH_BASE=(--input "$AUTHORIZATION" --class SERVICE_ROLLBACK --command rollback-switch --expected-operator "$OPERATOR" --expected-deployed-sha "$CANDIDATE_SHA" --expected-config-version "$CONFIG_VERSION" --deployment-risk "$DEPLOYMENT_RISK" --action-preview "$ACTION_PREVIEW" --consumption-root "$AUTHORIZATION_CONSUMPTION_ROOT" --expected-host "$TARGET_HOST" --expected-environment "$TARGET_ENVIRONMENT" --expected-scope cosmos-production-rollback --expected-account "$TARGET_ACCOUNT" --expected-product "Cosmos I00 immutable release" --expected-credential-type ROOT_LOCAL_OPERATOR_SESSION --expected-permission systemd:RestartExactCosmosAppUnit --expected-result-receipt "$RESULT_RECEIPT" --expected-reconciliation-receipt "$RECONCILIATION_RECEIPT" --expected-maximum-capital ZERO --expected-maximum-notional ZERO --expected-maximum-effect "switch to one exact schema-compatible immutable rollback release and restart one exact application unit")
 
 AUTH_ENDPOINTS=()

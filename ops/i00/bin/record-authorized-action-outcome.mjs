@@ -1891,6 +1891,7 @@ function requireRecorderNodeBinding(risk, action) {
 
 function requireBoundAppUnit(action, env, systemctlPath, risk) {
   if (risk.provenanceMode === 'TEST_FIXTURE_INJECTED') return;
+  const systemProviderBound = risk.artifactPolicy.rootMode === 'SYSTEM';
   const nodePath = endpoint(action, 'node-path');
   const envPath = endpoint(action, 'env-path');
   const bindingSha256 = endpoint(action, 'app-unit-binding-sha256');
@@ -1965,6 +1966,11 @@ function requireBoundAppUnit(action, env, systemctlPath, risk) {
     'fragmentSha256', 'fragmentIdentity', 'fragmentEndpointIdentity',
     'fragmentSourcePath', 'fragmentSourceSha256', 'fragmentSourceIdentity',
     'fragmentSourceEndpointIdentity', 'dropInPaths', 'dropInState',
+    'dropInBindings', 'dropInSetEndpoint', 'dropInSetSha256',
+    'environmentFilesSha256', 'providerBindingSha256', 'providerUnit',
+    'providerFragmentPath', 'providerFragmentSha256',
+    'providerFragmentEndpointIdentity', 'providerState',
+    'providerDeploymentRiskPath', 'providerActionPreviewPath',
     'proofDropInPath', 'proofDropInSha256', 'proofDropInIdentity',
     'proofDropInEndpointIdentity', 'proofDropInOwner',
     'proofDropInRuntimeLinkPath', 'proofDropInRuntimeLinkIdentity',
@@ -1977,7 +1983,7 @@ function requireBoundAppUnit(action, env, systemctlPath, risk) {
     'runtimeEnvIdentity', 'runtimeEnvEndpointIdentity', 'execStart',
     'execStartSha256', 'bindingSha256',
   ], 'bound application unit inspection');
-  assert(inspected.schemaVersion === 3
+  assert(inspected.schemaVersion === 4
     && inspected.status === 'APP_UNIT_BINDING_VERIFIED'
     && inspected.inspectionMode === endpoint(action, 'app-unit-inspection-mode')
     && (inspected.offlineUnitRoot ?? 'NONE') === offlineUnitRoot
@@ -2001,6 +2007,60 @@ function requireBoundAppUnit(action, env, systemctlPath, risk) {
       === endpoint(action, 'app-unit-fragment-source-identity')
     && Array.isArray(inspected.dropInPaths)
     && inspected.dropInState === endpoint(action, 'app-unit-drop-in-state')
+    && (systemProviderBound
+      ? inspected.dropInPaths.length === 3
+        && Array.isArray(inspected.dropInBindings)
+        && inspected.dropInBindings.length === 3
+        && inspected.dropInSetEndpoint === endpoint(
+          action,
+          'app-unit-drop-in-set',
+        )
+        && inspected.environmentFilesSha256 === endpoint(
+          action,
+          'app-unit-environment-files-sha256',
+        )
+        && inspected.providerBindingSha256 === endpoint(
+          action,
+          'app-unit-provider-binding-sha256',
+        )
+        && inspected.providerUnit === endpoint(action, 'app-unit-provider-unit')
+        && inspected.providerFragmentPath === endpoint(
+          action,
+          'app-unit-provider-fragment-path',
+        )
+        && inspected.providerFragmentSha256 === endpoint(
+          action,
+          'app-unit-provider-fragment-sha256',
+        )
+        && inspected.providerFragmentEndpointIdentity === endpoint(
+          action,
+          'app-unit-provider-fragment-identity',
+        )
+        && inspected.providerState === endpoint(
+          action,
+          'app-unit-provider-state',
+        )
+        && inspected.providerDeploymentRiskPath === endpoint(
+          action,
+          'app-unit-provider-deployment-risk-path',
+        )
+        && inspected.providerActionPreviewPath === endpoint(
+          action,
+          'app-unit-provider-action-preview-path',
+        )
+      : inspected.dropInPaths.length === 1
+        && inspected.dropInBindings === null
+        && inspected.dropInSetEndpoint === null
+        && inspected.dropInSetSha256 === null
+        && inspected.environmentFilesSha256 === null
+        && inspected.providerBindingSha256 === null
+        && inspected.providerUnit === null
+        && inspected.providerFragmentPath === null
+        && inspected.providerFragmentSha256 === null
+        && inspected.providerFragmentEndpointIdentity === null
+        && inspected.providerState === null
+        && inspected.providerDeploymentRiskPath === null
+        && inspected.providerActionPreviewPath === null)
     && (inspected.proofDropInPath ?? 'NONE') === proofDropIn
     && (inspected.proofDropInSha256 ?? 'NONE')
       === endpoint(action, 'app-unit-proof-drop-in-sha256')
@@ -2026,9 +2086,12 @@ function requireBoundAppUnit(action, env, systemctlPath, risk) {
       'app-unit-environment-file-identity',
     )
     && endpoint(action, 'app-unit-environment-file-optional') === 'no'
-    && inspected.environmentFiles?.length === 1
+    && inspected.environmentFiles?.length === (systemProviderBound ? 2 : 1)
     && inspected.environmentFiles?.[0]?.path === inspected.runtimeEnvPath
     && inspected.environmentFiles?.[0]?.optional === false
+    && (!systemProviderBound
+      || (inspected.environmentFiles?.[1]?.path === '/etc/cosmos/cosmos-i00.env'
+        && inspected.environmentFiles?.[1]?.optional === false))
     && inspected.user === 'cosmos'
     && inspected.user === endpoint(action, 'app-unit-user')
     && inspected.group === 'cosmos'
@@ -2044,7 +2107,9 @@ function requireBoundAppUnit(action, env, systemctlPath, risk) {
       'app-unit-namespace-remap-state',
     )
     && inspected.executionAuthorityState === 'CLOSED'
-    && inspected.environmentAuthorityState === 'CLOSED'
+    && inspected.environmentAuthorityState === (systemProviderBound
+      ? 'EXACT_PROVIDER_CREDENTIAL'
+      : 'CLOSED')
     && inspected.identityAuthorityState === 'CLOSED'
     && inspected.effectReachability
       === endpoint(action, 'app-unit-effect-reachability')
@@ -2066,6 +2131,9 @@ function requireBoundAppUnit(action, env, systemctlPath, risk) {
     && inspected.execStart?.argv?.[2]
       === endpoint(action, 'app-unit-exec-start-node-path')
     && inspected.execStart?.argv?.[2] === nodePath
+    && inspected.execStart?.argv?.[3] === (systemProviderBound
+      ? '/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs'
+      : 'server/dist/index.js')
     && inspected.execStartSha256
       === endpoint(action, 'app-unit-exec-start-sha256')
     && inspected.bindingSha256 === bindingSha256,

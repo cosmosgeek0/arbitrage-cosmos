@@ -81,6 +81,23 @@ export function systemEffectEvidenceRoot(actionClass) {
     : `${DEPLOYMENT_SYSTEM_ROOTS.receipts}/effects`;
 }
 
+export function providerMaterializationWriteRoots(artifactPolicy) {
+  const validated = validateDeploymentArtifactPolicy(
+    artifactPolicy,
+    'SECRET_MATERIALIZATION',
+  );
+  const roots = [
+    '/run/cosmos-secret-source',
+    validated.consumptionRoot,
+    validated.receiptRoot,
+    validated.effectEvidenceRoot,
+  ];
+  const deduplicated = [...new Set(roots)];
+  assert(deduplicated.length === 4,
+    'SECRET_MATERIALIZATION write roots are not one exact deduplicated closure');
+  return Object.freeze(deduplicated);
+}
+
 const COMMON_EFFECT_ENDPOINT_PREFIXES = Object.freeze([
   'completion-reserve-seconds',
   'effect-common-identity',
@@ -113,6 +130,18 @@ const EFFECT_IDENTITY_ENDPOINT_PREFIXES = Object.freeze([
   'setpriv-identity',
   'setpriv-path',
   'setpriv-sha256',
+]);
+const PROVIDER_APP_UNIT_ENDPOINT_PREFIXES = Object.freeze([
+  'app-unit-drop-in-set',
+  'app-unit-environment-files-sha256',
+  'app-unit-provider-action-preview-path',
+  'app-unit-provider-binding-sha256',
+  'app-unit-provider-deployment-risk-path',
+  'app-unit-provider-fragment-identity',
+  'app-unit-provider-fragment-path',
+  'app-unit-provider-fragment-sha256',
+  'app-unit-provider-state',
+  'app-unit-provider-unit',
 ]);
 
 const ACTION_CLASSES = Object.freeze({
@@ -294,6 +323,7 @@ const ACTION_CLASSES = Object.freeze({
       'trusted-builder-public-key-sha256',
     ]),
     optionalEndpointGroups: Object.freeze([
+      PROVIDER_APP_UNIT_ENDPOINT_PREFIXES,
       Object.freeze([
         'first-host-account',
         'first-host-environment',
@@ -442,6 +472,9 @@ const ACTION_CLASSES = Object.freeze({
       'systemd-analyze-sha256',
       'l15-amendment-contract-sha256',
       'trusted-builder-public-key-sha256',
+    ]),
+    optionalEndpointGroups: Object.freeze([
+      PROVIDER_APP_UNIT_ENDPOINT_PREFIXES,
     ]),
   }),
   BACKUP_CREATE: Object.freeze({
@@ -671,6 +704,41 @@ const CANONICAL_ABSOLUTE = (value) => (
 );
 const directChild = (root, value) => dirname(value) === root && value !== root;
 
+export function providerProvenanceDocumentPaths(action) {
+  assert(isPlainRecord(action) && Array.isArray(action.allowedEndpoints),
+    'provider provenance requires one action endpoint set');
+  const values = (prefix) => action.allowedEndpoints
+    .filter((endpoint) => typeof endpoint === 'string'
+      && endpoint.startsWith(`${prefix}:`))
+    .map((endpoint) => endpoint.slice(prefix.length + 1));
+  const deploymentRisk = values('app-unit-provider-deployment-risk-path');
+  const actionPreview = values('app-unit-provider-action-preview-path');
+  if (deploymentRisk.length === 0 && actionPreview.length === 0) return null;
+  assert(deploymentRisk.length === 1 && actionPreview.length === 1
+    && CANONICAL_ABSOLUTE(deploymentRisk[0])
+    && CANONICAL_ABSOLUTE(actionPreview[0])
+    && deploymentRisk[0] !== actionPreview[0],
+  'provider provenance document endpoints are incomplete or invalid');
+  return Object.freeze({
+    deploymentRisk: deploymentRisk[0],
+    actionPreview: actionPreview[0],
+  });
+}
+
+export function assertPendingProviderDocumentSeparation(action, pendingDocuments) {
+  assert(Array.isArray(pendingDocuments) && pendingDocuments.length > 0,
+    'pending provider document separation requires one or more paths');
+  const prior = providerProvenanceDocumentPaths(action);
+  if (prior === null) return null;
+  for (const [index, path] of pendingDocuments.entries()) {
+    assert(CANONICAL_ABSOLUTE(path),
+      `pending provider document[${index}] path is invalid`);
+    assert(path !== prior.deploymentRisk && path !== prior.actionPreview,
+      'pending release/rollback document reuses prior provider provenance');
+  }
+  return prior;
+}
+
 export function validateDeploymentArtifactPolicy(value, actionClass) {
   exactObjectKeys(value, [
     'rootMode',
@@ -738,6 +806,9 @@ function endpointValueValid(prefix, value) {
   }
   if (['artifact-manifest-sha256', 'backup-database-sha256', 'backup-manifest-sha256',
     'app-unit-authority-closure-sha256', 'app-unit-binding-sha256',
+    'app-unit-environment-files-sha256',
+    'app-unit-provider-binding-sha256',
+    'app-unit-provider-fragment-sha256',
     'app-unit-environment-file-sha256',
     'app-unit-exec-start-sha256',
     'app-unit-fragment-sha256',
@@ -786,7 +857,34 @@ function endpointValueValid(prefix, value) {
   if (prefix === 'recovery-target') return value === 'NO_PRIOR_RELEASE_FIRST_HOST';
   if (prefix === 'app-unit-name') return /^[A-Za-z0-9][A-Za-z0-9_.@-]{0,254}\.service$/u.test(value);
   if (prefix === 'app-unit-drop-in-state') {
-    return value === 'NONE' || value === 'EXACT_STAGING_PROOF';
+    return value === 'EXACT_PROVIDER_BOUND' || value === 'EXACT_STAGING_PROOF';
+  }
+  if (prefix === 'app-unit-drop-in-set') {
+    try {
+      const bindings = JSON.parse(value);
+      return Array.isArray(bindings)
+        && bindings.length === 3
+        && new Set(bindings.map((binding) => binding.role)).size === 3
+        && [
+          'PRESERVED_RUNTIME', 'PROVIDER_BINDING', 'PRESERVED_LOGGING',
+        ].every((role) => bindings.some((binding) => binding.role === role))
+        && bindings.every((binding) => (
+          binding !== null
+          && typeof binding === 'object'
+          && Object.keys(binding).sort().join('\0') === 'identity\0path\0role\0sha256'
+          && typeof binding.path === 'string'
+          && binding.path.startsWith('/')
+          && resolve(binding.path) === binding.path
+          && /^[0-9a-f]{64}$/u.test(binding.sha256)
+          && /^device=[0-9]+,inode=[0-9]+,mode=[0-7]+,size=[0-9]+,mtimeNs=-?[0-9]+,ctimeNs=-?[0-9]+$/u.test(binding.identity)
+        ));
+    } catch {
+      return false;
+    }
+  }
+  if (prefix === 'app-unit-provider-state') return value === 'ACTIVE_EXITED_SUCCESS';
+  if (prefix === 'app-unit-provider-unit') {
+    return value === 'cosmos-secrets-provider.service';
   }
   if (prefix === 'app-unit-proof-drop-in-owner') {
     return ['NONE', 'ROOT', 'INVOKING_TEST_OWNER'].includes(value);
@@ -846,6 +944,7 @@ function endpointValueValid(prefix, value) {
   if (['app-unit-environment-file-identity', 'app-unit-fragment-identity',
     'app-unit-fragment-source-identity', 'app-unit-proof-drop-in-identity',
     'app-unit-proof-drop-in-runtime-link-identity',
+    'app-unit-provider-fragment-identity',
     'authorization-wrapper-identity',
     'aws-cli-identity', 'backup-identity', 'bash-identity',
     'chmod-identity', 'cp-identity',
@@ -882,6 +981,9 @@ function endpointValueValid(prefix, value) {
     'effect-unit-path', 'getent-path', 'gzip-path', 'hash-path', 'id-path', 'mkdir-path', 'mv-path',
     'current-release-path', 'effective-donor-root', 'isolated-target', 'node-path',
     'provider-config-path', 'credential-output-path', 'credential-output-parent-path',
+    'app-unit-provider-action-preview-path',
+    'app-unit-provider-deployment-risk-path',
+    'app-unit-provider-fragment-path',
     'destination-parent-path', 'cosmos-root-path', 'releases-dir-path',
     'current-link-parent-path', 'previous-link-parent-path', 'ops-state-dir-path',
     'isolated-target-parent-path', 'data-dir-path',
@@ -902,8 +1004,8 @@ function endpointValueValid(prefix, value) {
 
 function validateEndpoints(actionClass, endpoints) {
   const contract = ACTION_CLASSES[actionClass];
-  assert(Array.isArray(endpoints) && endpoints.length > 0 && endpoints.length <= 128,
-    'allowedEndpoints must contain 1 to 128 exact values');
+  assert(Array.isArray(endpoints) && endpoints.length > 0 && endpoints.length <= 160,
+    'allowedEndpoints must contain 1 to 160 exact values');
   const values = endpoints.map((entry, index) => exactText(entry, `allowedEndpoints[${index}]`));
   assert(new Set(values).size === values.length, 'allowedEndpoints contains a duplicate');
   assert(values.every((value, index) => value === [...values].sort()[index]),
@@ -1119,7 +1221,7 @@ function validateEndpoints(actionClass, endpoints) {
     const proofSha256 = endpointValue('app-unit-proof-drop-in-sha256');
     const unit = endpointValue('app-unit-name');
     const unitStem = unit.slice(0, -'.service'.length);
-    if (proofState === 'NONE') {
+    if (proofState === 'EXACT_PROVIDER_BOUND') {
       assert(inspectionMode === 'LIVE_SYSTEM_MANAGER'
         && stagingRoot === 'NONE'
         && [
@@ -1131,7 +1233,7 @@ function validateEndpoints(actionClass, endpoints) {
           proofRuntimeLinkPath,
           proofSha256,
         ].every((value) => value === 'NONE'),
-      'live absent app unit proof group is internally inconsistent');
+      'live provider-bound app unit proof group is internally inconsistent');
     } else {
       const proofLeaf = `90-${unitStem}.conf`;
       assert(stagingRoot !== 'NONE'

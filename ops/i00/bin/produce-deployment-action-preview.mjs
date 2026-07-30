@@ -7,6 +7,7 @@ import {
 import { fileURLToPath } from 'node:url';
 
 import {
+  assertPendingProviderDocumentSeparation,
   buildDeploymentActionPreviewForCanonicalProducer,
   inspectPrivateDirectoryEvidence,
   privateDirectoryIdentityEndpoint,
@@ -147,7 +148,7 @@ function appUnitEvidence(risk) {
   } catch {
     throw new Error('risk action app unit inspection returned invalid JSON');
   }
-  if (inspected.schemaVersion !== 3
+  if (inspected.schemaVersion !== 4
       || inspected.status !== 'APP_UNIT_BINDING_VERIFIED'
       || inspected.inspectionMode !== actionEndpoint(
         action,
@@ -184,6 +185,50 @@ function appUnitEvidence(risk) {
         'app-unit-fragment-source-identity',
       )
       || !Array.isArray(inspected.dropInPaths)
+      || (stagingRoot === 'NONE'
+        && (inspected.dropInPaths.length !== 3
+          || !Array.isArray(inspected.dropInBindings)
+          || inspected.dropInBindings.length !== 3
+          || inspected.dropInSetEndpoint !== actionEndpoint(
+            action,
+            'app-unit-drop-in-set',
+          )
+          || inspected.environmentFilesSha256 !== actionEndpoint(
+            action,
+            'app-unit-environment-files-sha256',
+          )
+          || inspected.providerBindingSha256 !== actionEndpoint(
+            action,
+            'app-unit-provider-binding-sha256',
+          )
+          || inspected.providerUnit !== actionEndpoint(
+            action,
+            'app-unit-provider-unit',
+          )
+          || inspected.providerFragmentPath !== actionEndpoint(
+            action,
+            'app-unit-provider-fragment-path',
+          )
+          || inspected.providerFragmentSha256 !== actionEndpoint(
+            action,
+            'app-unit-provider-fragment-sha256',
+          )
+          || inspected.providerFragmentEndpointIdentity !== actionEndpoint(
+            action,
+            'app-unit-provider-fragment-identity',
+          )
+          || inspected.providerState !== actionEndpoint(
+            action,
+            'app-unit-provider-state',
+          )
+          || inspected.providerDeploymentRiskPath !== actionEndpoint(
+            action,
+            'app-unit-provider-deployment-risk-path',
+          )
+          || inspected.providerActionPreviewPath !== actionEndpoint(
+            action,
+            'app-unit-provider-action-preview-path',
+          )))
       || inspected.dropInState !== actionEndpoint(action, 'app-unit-drop-in-state')
       || (inspected.proofDropInPath ?? 'NONE') !== proofDropIn
       || (inspected.proofDropInSha256 ?? 'NONE') !== actionEndpoint(
@@ -216,9 +261,12 @@ function appUnitEvidence(risk) {
         'app-unit-environment-file-identity',
       )
       || actionEndpoint(action, 'app-unit-environment-file-optional') !== 'no'
-      || inspected.environmentFiles?.length !== 1
+      || inspected.environmentFiles?.length !== (stagingRoot === 'NONE' ? 2 : 1)
       || inspected.environmentFiles?.[0]?.path !== inspected.runtimeEnvPath
       || inspected.environmentFiles?.[0]?.optional !== false
+      || (stagingRoot === 'NONE'
+        && (inspected.environmentFiles?.[1]?.path !== '/etc/cosmos/cosmos-i00.env'
+          || inspected.environmentFiles?.[1]?.optional !== false))
       || inspected.user !== actionEndpoint(action, 'app-unit-user')
       || inspected.user !== 'cosmos'
       || inspected.group !== actionEndpoint(action, 'app-unit-group')
@@ -234,7 +282,9 @@ function appUnitEvidence(risk) {
       )
       || inspected.namespaceRemapState !== 'NONE'
       || inspected.executionAuthorityState !== 'CLOSED'
-      || inspected.environmentAuthorityState !== 'CLOSED'
+      || inspected.environmentAuthorityState !== (stagingRoot === 'NONE'
+        ? 'EXACT_PROVIDER_CREDENTIAL'
+        : 'CLOSED')
       || inspected.identityAuthorityState !== 'CLOSED'
       || inspected.effectReachability !== actionEndpoint(
         action,
@@ -260,6 +310,9 @@ function appUnitEvidence(risk) {
         action,
         'app-unit-exec-start-node-path',
       )
+      || inspected.execStart?.argv?.[3] !== (stagingRoot === 'NONE'
+        ? '/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs'
+        : 'server/dist/index.js')
       || inspected.execStartSha256 !== actionEndpoint(
         action,
         'app-unit-exec-start-sha256',
@@ -305,6 +358,14 @@ try {
       || dirname(args.output) !== authorizationRoot.absolute
       || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}\.json$/u.test(basename(args.output))) {
     throw new Error('preview output must be one raw canonical direct-child JSON leaf of the authorization root');
+  }
+  if (['SERVICE_RELEASE_SWITCH', 'SERVICE_ROLLBACK'].includes(
+    risk.document.binding.actionClass,
+  )) {
+    assertPendingProviderDocumentSeparation(
+      risk.document.action,
+      [risk.absolute, args.output],
+    );
   }
   const nodeBefore = nodeEvidence(risk.document.action);
   const appUnitBefore = appUnitEvidence(risk.document);

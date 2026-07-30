@@ -1,0 +1,12 @@
+# Preserved execution/environment overlay for the accepted cosmos-app.service.
+# This is packaged as the recovery/source contract for the existing runtime
+# overlay. The provider-only overlay must not reset or replace these directives.
+[Service]
+ExecStart=
+# F-021: the replacement ExecStart must re-carry DATA_DIR_LOGICAL_LEASE_ROOT.
+# The base unit's EnvironmentFile still supplies NODE_ENV=production, so
+# dropping the env prefix arms DATA_DIR_LOGICAL_LEASE_ROOT_REQUIRED at boot.
+# Never move this key into cosmos-i00.env: EnvironmentFile overriding
+# Environment is the exact hazard test-systemd-units.sh:46 exists to prevent.
+ExecStart=/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node /usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs
+EnvironmentFile=/etc/cosmos/cosmos-i00.env

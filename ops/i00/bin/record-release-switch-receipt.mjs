@@ -815,6 +815,11 @@ function requireBoundAppUnit(action, {
     'fragmentSourceEndpointIdentity',
     'dropInPaths', 'needDaemonReload', 'user', 'group', 'workingDirectory',
     'dropInState', 'proofDropInPath', 'proofDropInSha256',
+    'dropInBindings', 'dropInSetEndpoint', 'dropInSetSha256',
+    'environmentFilesSha256', 'providerBindingSha256', 'providerUnit',
+    'providerFragmentPath', 'providerFragmentSha256',
+    'providerFragmentEndpointIdentity', 'providerState',
+    'providerDeploymentRiskPath', 'providerActionPreviewPath',
     'proofDropInIdentity', 'proofDropInEndpointIdentity', 'proofDropInOwner',
     'proofDropInRuntimeLinkPath', 'proofDropInRuntimeLinkIdentity',
     'proofDropInRuntimeLinkEndpointIdentity', 'proofAbsentSentinel',
@@ -825,7 +830,7 @@ function requireBoundAppUnit(action, {
     'runtimeEnvIdentity', 'runtimeEnvEndpointIdentity', 'execStart',
     'execStartSha256', 'bindingSha256',
   ], 'Gate-5 bound application unit inspection');
-  if (inspected.schemaVersion !== 3
+  if (inspected.schemaVersion !== 4
       || inspected.status !== 'APP_UNIT_BINDING_VERIFIED'
       || inspected.inspectionMode !== 'LIVE_SYSTEM_MANAGER'
       || inspected.inspectionMode !== actionEndpoint(action, 'app-unit-inspection-mode')
@@ -859,9 +864,49 @@ function requireBoundAppUnit(action, {
         action,
         'app-unit-fragment-source-identity',
       )
-      || !sameJson(inspected.dropInPaths, [])
-      || actionEndpoint(action, 'app-unit-drop-in-state') !== 'NONE'
-      || inspected.dropInState !== 'NONE'
+      || !Array.isArray(inspected.dropInPaths)
+      || inspected.dropInPaths.length !== 3
+      || !Array.isArray(inspected.dropInBindings)
+      || inspected.dropInBindings.length !== 3
+      || inspected.dropInSetEndpoint !== actionEndpoint(
+        action,
+        'app-unit-drop-in-set',
+      )
+      || inspected.environmentFilesSha256 !== actionEndpoint(
+        action,
+        'app-unit-environment-files-sha256',
+      )
+      || inspected.providerBindingSha256 !== actionEndpoint(
+        action,
+        'app-unit-provider-binding-sha256',
+      )
+      || inspected.providerUnit !== actionEndpoint(action, 'app-unit-provider-unit')
+      || inspected.providerFragmentPath !== actionEndpoint(
+        action,
+        'app-unit-provider-fragment-path',
+      )
+      || inspected.providerFragmentSha256 !== actionEndpoint(
+        action,
+        'app-unit-provider-fragment-sha256',
+      )
+      || inspected.providerFragmentEndpointIdentity !== actionEndpoint(
+        action,
+        'app-unit-provider-fragment-identity',
+      )
+      || inspected.providerState !== actionEndpoint(
+        action,
+        'app-unit-provider-state',
+      )
+      || inspected.providerDeploymentRiskPath !== actionEndpoint(
+        action,
+        'app-unit-provider-deployment-risk-path',
+      )
+      || inspected.providerActionPreviewPath !== actionEndpoint(
+        action,
+        'app-unit-provider-action-preview-path',
+      )
+      || actionEndpoint(action, 'app-unit-drop-in-state') !== 'EXACT_PROVIDER_BOUND'
+      || inspected.dropInState !== 'EXACT_PROVIDER_BOUND'
       || inspected.proofDropInPath !== null
       || inspected.proofDropInSha256 !== null
       || inspected.proofDropInIdentity !== null
@@ -891,9 +936,11 @@ function requireBoundAppUnit(action, {
         'app-unit-environment-file-identity',
       )
       || actionEndpoint(action, 'app-unit-environment-file-optional') !== 'no'
-      || inspected.environmentFiles?.length !== 1
+      || inspected.environmentFiles?.length !== 2
       || inspected.environmentFiles?.[0]?.path !== inspected.runtimeEnvPath
       || inspected.environmentFiles?.[0]?.optional !== false
+      || inspected.environmentFiles?.[1]?.path !== '/etc/cosmos/cosmos-i00.env'
+      || inspected.environmentFiles?.[1]?.optional !== false
       || inspected.user !== 'cosmos'
       || inspected.user !== actionEndpoint(action, 'app-unit-user')
       || inspected.group !== 'cosmos'
@@ -909,7 +956,7 @@ function requireBoundAppUnit(action, {
         'app-unit-namespace-remap-state',
       )
       || inspected.executionAuthorityState !== 'CLOSED'
-      || inspected.environmentAuthorityState !== 'CLOSED'
+      || inspected.environmentAuthorityState !== 'EXACT_PROVIDER_CREDENTIAL'
       || inspected.identityAuthorityState !== 'CLOSED'
       || inspected.authorityClosureSha256 !== actionEndpoint(
         action,
@@ -938,6 +985,8 @@ function requireBoundAppUnit(action, {
         action,
         'app-unit-exec-start-node-path',
       )
+      || inspected.execStart?.argv?.[3]
+        !== '/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs'
       || inspected.execStartSha256 !== actionEndpoint(
         action,
         'app-unit-exec-start-sha256',

@@ -6,10 +6,19 @@ import {
   readdirSync, realpathSync,
 } from 'node:fs';
 import {
-  dirname, isAbsolute, relative, resolve, sep,
+  basename, dirname, isAbsolute, relative, resolve, sep,
 } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  inspectPrivateDirectoryEvidence,
+  privateDirectoryIdentityEndpoint,
+  providerMaterializationWriteRoots,
+  readCanonicalDeploymentDocument,
+  validateAuthorizationConsumption,
+  validateDeploymentActionPreview,
+  validateDeploymentRiskVersion,
+} from '../deployment-authorization-contract.mjs';
 import { fail, parseArgs, requireExactKeys } from '../lib.mjs';
 import { validateSimulationRoot } from '../simulation-safety.mjs';
 
@@ -128,14 +137,74 @@ const SHOW_PROPERTIES = Object.freeze([
   'ExecStop',
   'ExecStopPost',
 ]);
+const PROVIDER_SHOW_PROPERTIES = Object.freeze([
+  ...SHOW_PROPERTIES,
+  'RemainAfterExit',
+  'Restart',
+  'SyslogIdentifier',
+  'ProtectSystem',
+  'ProtectHome',
+  'PrivateTmp',
+  'PrivateDevices',
+  'ProtectKernelTunables',
+  'ProtectKernelModules',
+  'ProtectControlGroups',
+  'RestrictSUIDSGID',
+  'RestrictAddressFamilies',
+  'UMask',
+  'ActiveState',
+  'SubState',
+  'Result',
+  'ExecMainCode',
+  'ExecMainStatus',
+]);
 const EXPECTED_LEASE = 'DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases';
-const EXPECTED_ENTRYPOINT = 'server/dist/index.js';
+const EXPECTED_OFFLINE_ENTRYPOINT = 'server/dist/index.js';
+const EXPECTED_SYSTEM_ENTRYPOINT = '/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs';
 const EXPECTED_USER = 'cosmos';
 const EXPECTED_GROUP = 'cosmos';
 const EXPECTED_WORKING_DIRECTORY = '/opt/cosmos/current';
 const PRODUCTION_UNIT = 'cosmos-app.service';
 const PRODUCTION_FRAGMENT = '/etc/systemd/system/cosmos-app.service';
 const PRODUCTION_RUNTIME_ENV = '/etc/cosmos/cosmos-app.env';
+const PRODUCTION_I00_ENV = '/etc/cosmos/cosmos-i00.env';
+const PRODUCTION_DROP_IN_ROOT = '/etc/systemd/system/cosmos-app.service.d';
+const PROVIDER_UNIT = 'cosmos-secrets-provider.service';
+const PROVIDER_FRAGMENT = '/etc/systemd/system/cosmos-secrets-provider.service';
+const PROVIDER_CREDENTIAL = 'app-secrets:/run/cosmos-secret-source/app-secrets.json';
+const PROVIDER_DROP_IN_BYTES = Buffer.from([
+  '# Provider-only drop-in for the accepted cosmos-app.service.',
+  '# The absolute LoadCredential source is fatal when missing; no silent fallback.',
+  '# Execution and EnvironmentFile directives belong to the preserved application',
+  '# overlays and must not be replaced by this provider-binding contract.',
+  '[Unit]',
+  `Requires=${PROVIDER_UNIT}`,
+  `After=${PROVIDER_UNIT}`,
+  '',
+  '[Service]',
+  `LoadCredential=${PROVIDER_CREDENTIAL}`,
+  '',
+].join('\n'));
+const LOGGING_DROP_IN_BYTES = Buffer.from([
+  '# Dedicated staging logging overlay for cosmos-app.service.',
+  '#',
+  '# Node console output is physical-line priority-prefixed in production:',
+  '# material log=<5>, routine info=<6>, routine debug=<7>, warning=<4>,',
+  '# error=<3>. console.log and the protected audit/money/security API bypass',
+  '# the application limiter.',
+  '#',
+  '# The accepted base unit\'s per-unit journal bucket is deliberately disabled',
+  '# here: systemd drops later messages after a unit exhausts that bucket, which',
+  '# could hide protected evidence. Application code bounds routine output before',
+  '# journald; systemd keeps every warning, error, and protected record.',
+  '[Service]',
+  'SyslogLevelPrefix=yes',
+  'LogLevelMax=info',
+  'LogRateLimitIntervalSec=0',
+  'LogRateLimitBurst=0',
+  '',
+].join('\n'));
+const PROVIDER_BOUND_DROP_IN_COUNT = 3;
 const EXPECTED_UNSET_ENVIRONMENT = Object.freeze([
   'NODE_OPTIONS',
   'NODE_PATH',
@@ -185,13 +254,31 @@ function canonicalJson(value) {
   return JSON.stringify(value);
 }
 
+function runtimeDropInBytes() {
+  return Buffer.from([
+    '# Preserved execution/environment overlay for the accepted cosmos-app.service.',
+    '# This is packaged as the recovery/source contract for the existing runtime',
+    '# overlay. The provider-only overlay must not reset or replace these directives.',
+    '[Service]',
+    'ExecStart=',
+    '# F-021: the replacement ExecStart must re-carry DATA_DIR_LOGICAL_LEASE_ROOT.',
+    '# The base unit\'s EnvironmentFile still supplies NODE_ENV=production, so',
+    '# dropping the env prefix arms DATA_DIR_LOGICAL_LEASE_ROOT_REQUIRED at boot.',
+    '# Never move this key into cosmos-i00.env: EnvironmentFile overriding',
+    '# Environment is the exact hazard test-systemd-units.sh:46 exists to prevent.',
+    `ExecStart=${args.env} ${EXPECTED_LEASE} ${args.node} ${EXPECTED_SYSTEM_ENTRYPOINT}`,
+    `EnvironmentFile=${boundSystemPath(PRODUCTION_I00_ENV)}`,
+    '',
+  ].join('\n'));
+}
+
 const args = parseArgs(process.argv.slice(2));
 const allowedArguments = new Set([
   'systemctl', 'unit', 'node', 'env', 'runtime-env',
   'provenance-mode', 'systemd-analyze', 'offline-unit-root',
   'expected-fragment-path', 'expected-fragment-source', 'staging-root',
   'proof-drop-in', 'proof-drop-in-runtime-link', 'proof-absent-sentinel',
-  'expected-binding-sha256',
+  'expected-binding-sha256', 'test-provider-bound-root',
 ]);
 for (const name of Object.keys(args)) {
   if (!allowedArguments.has(name)) fail(`unsupported argument --${name}`);
@@ -270,7 +357,47 @@ let proofDropInRuntimeLink = null;
 let proofAbsentSentinel = null;
 let offlineUnitRoot = null;
 let strictProofOwnership = false;
-if (args['staging-root'] !== undefined) {
+let providerBoundMode = false;
+let providerFilesystemRoot = null;
+if (args['test-provider-bound-root'] !== undefined) {
+  if (args['provenance-mode'] !== 'TEST'
+      || args['staging-root'] !== undefined
+      || args['proof-drop-in'] !== undefined
+      || args['proof-drop-in-runtime-link'] !== undefined
+      || args['proof-absent-sentinel'] !== undefined
+      || args['systemd-analyze'] !== undefined
+      || args['offline-unit-root'] !== undefined) {
+    fail('test provider-bound inspection accepts only one marked simulation root and no staging proof inputs');
+  }
+  providerFilesystemRoot = exactDirectory(
+    args['test-provider-bound-root'],
+    '--test-provider-bound-root',
+  );
+  try {
+    if (validateSimulationRoot(providerFilesystemRoot) !== providerFilesystemRoot) {
+      fail('test provider-bound root differs from the marked simulation root');
+    }
+  } catch {
+    fail('test provider-bound inspection requires one exact marked simulation root');
+  }
+  stagingRoot = providerFilesystemRoot;
+  const expectedFragment = resolve(
+    providerFilesystemRoot,
+    PRODUCTION_FRAGMENT.slice(1),
+  );
+  const expectedRuntimeEnv = resolve(
+    providerFilesystemRoot,
+    PRODUCTION_RUNTIME_ENV.slice(1),
+  );
+  if (args.unit !== PRODUCTION_UNIT
+      || args['expected-fragment-path'] !== expectedFragment
+      || args['runtime-env'] !== expectedRuntimeEnv
+      || !isWithin(providerFilesystemRoot, args.systemctl)
+      || !isWithin(providerFilesystemRoot, args['expected-fragment-source'])) {
+    fail('test provider-bound unit, manager, fragment, source, or runtime environment is outside the exact simulation layout');
+  }
+  providerBoundMode = true;
+} else if (args['staging-root'] !== undefined) {
   if (args['provenance-mode'] === 'SYSTEM') {
     fail('SYSTEM app-unit inspection forbids --staging-root');
   }
@@ -376,6 +503,14 @@ if (args['staging-root'] !== undefined) {
     || args['systemd-analyze'] !== undefined
     || args['offline-unit-root'] !== undefined) {
   fail('production app-unit inspection forbids staging proof inputs');
+} else {
+  providerBoundMode = true;
+}
+
+function boundSystemPath(path) {
+  return providerFilesystemRoot === null
+    ? path
+    : resolve(providerFilesystemRoot, path.slice(1));
 }
 
 function inspectExecutable(path, label) {
@@ -600,14 +735,21 @@ function parseShowOutput(stdout) {
     fail('systemctl show did not identify the exact loaded app unit');
   }
   const dropInPaths = properties.DropInPaths.split(' ').filter(Boolean);
-  const expectedDropInPaths = stagingRoot === null
-    ? []
-    : [proofDropInRuntimeLink];
-  if (dropInPaths.length !== expectedDropInPaths.length
-      || dropInPaths.some((entry, index) => entry !== expectedDropInPaths[index])) {
-    fail(stagingRoot === null
-      ? 'app unit DropInPaths must be empty for keyless deployment'
-      : 'app unit must load only the exact isolated staging proof drop-in');
+  if (providerBoundMode) {
+    const dropInRoot = boundSystemPath(PRODUCTION_DROP_IN_ROOT);
+    if (dropInPaths.length !== PROVIDER_BOUND_DROP_IN_COUNT
+        || new Set(dropInPaths).size !== dropInPaths.length) {
+      fail('provider-bound app unit must expose exactly three unique preserved and provider drop-ins');
+    }
+    for (const path of dropInPaths) {
+      if (dirname(path) !== dropInRoot
+          || !/^[A-Za-z0-9][A-Za-z0-9_.@-]{0,254}\.conf$/u.test(path.slice(dropInRoot.length + 1))) {
+        fail('provider-bound app unit has a drop-in outside the exact production drop-in directory');
+      }
+    }
+  } else if (dropInPaths.length !== 1
+      || dropInPaths[0] !== proofDropInRuntimeLink) {
+    fail('app unit must load only the exact isolated staging proof drop-in');
   }
   if (properties.NeedDaemonReload !== 'no') {
     fail('app unit NeedDaemonReload must be exactly no');
@@ -630,10 +772,34 @@ function parseShowOutput(stdout) {
   }
   for (const name of [
     'Environment', 'PassEnvironment', 'SetCredential', 'SetCredentialEncrypted',
-    'LoadCredential', 'LoadCredentialEncrypted', 'ImportCredential',
+    'LoadCredentialEncrypted', 'ImportCredential',
   ]) {
     if (properties[name] !== '') {
       fail(`app unit ${name} must be empty`);
+    }
+  }
+  if (properties.LoadCredential !== (providerBoundMode ? PROVIDER_CREDENTIAL : '')) {
+    fail(providerBoundMode
+      ? 'provider-bound app unit LoadCredential differs from the exact absolute source'
+      : 'isolated app unit LoadCredential must be empty');
+  }
+  if (providerBoundMode) {
+    const providerEdges = Object.fromEntries(
+      [
+        'Requires', 'Wants', 'Requisite', 'BindsTo', 'PartOf', 'After', 'Before',
+        'Conflicts', 'OnFailure', 'OnSuccess', 'PropagatesStopTo',
+        'StopPropagatedFrom', 'PropagatesReloadTo', 'ReloadPropagatedFrom',
+        'Upholds', 'JoinsNamespaceOf',
+      ].map((name) => [
+        name,
+        properties[name].split(' ').filter((entry) => entry === PROVIDER_UNIT),
+      ]),
+    );
+    if (providerEdges.Requires.length !== 1 || providerEdges.After.length !== 1
+        || Object.entries(providerEdges).some(([name, values]) => (
+          !['Requires', 'After'].includes(name) && values.length !== 0
+        ))) {
+      fail('provider-bound app unit dependency and ordering edges are not exact');
     }
   }
   if (properties.SupplementaryGroups !== '' || properties.DynamicUser !== 'no'
@@ -646,9 +812,16 @@ function parseShowOutput(stdout) {
     fail('app unit FragmentPath differs from the exact expected fragment');
   }
   const environmentFiles = propertyLines.EnvironmentFiles;
-  if (environmentFiles.length !== 1
-      || environmentFiles[0] !== `${args['runtime-env']} (ignore_errors=no)`) {
-    fail('app unit must use the sole exact non-optional runtime EnvironmentFile');
+  const expectedEnvironmentFiles = providerBoundMode
+    ? [
+      `${args['runtime-env']} (ignore_errors=no)`,
+      `${boundSystemPath(PRODUCTION_I00_ENV)} (ignore_errors=no)`,
+    ]
+    : [`${args['runtime-env']} (ignore_errors=no)`];
+  if (canonicalJson(environmentFiles) !== canonicalJson(expectedEnvironmentFiles)) {
+    fail(providerBoundMode
+      ? 'provider-bound app unit must preserve both exact ordered non-optional EnvironmentFiles'
+      : 'isolated app unit must use the sole exact non-optional runtime EnvironmentFile');
   }
   const unsetEnvironment = properties.UnsetEnvironment.split(' ').filter(Boolean);
   if (unsetEnvironment.length !== EXPECTED_UNSET_ENVIRONMENT.length
@@ -700,7 +873,7 @@ function parseShowOutput(stdout) {
     args.env,
     EXPECTED_LEASE,
     args.node,
-    EXPECTED_ENTRYPOINT,
+    providerBoundMode ? EXPECTED_SYSTEM_ENTRYPOINT : EXPECTED_OFFLINE_ENTRYPOINT,
   ];
   if (expectedArgv.some((entry) => /[\s;{}]/u.test(entry))) {
     fail('app unit expected ExecStart tokens are not unambiguous');
@@ -809,17 +982,21 @@ function parseShowOutput(stdout) {
     user: properties.User,
     group: properties.Group,
     workingDirectory: properties.WorkingDirectory,
-    environmentFiles: Object.freeze([Object.freeze({
-      path: args['runtime-env'],
-      optional: false,
-    })]),
+    environmentFiles: Object.freeze(
+      (providerBoundMode
+        ? [args['runtime-env'], boundSystemPath(PRODUCTION_I00_ENV)]
+        : [args['runtime-env']])
+        .map((path) => Object.freeze({ path, optional: false })),
+    ),
     unsetEnvironment: Object.freeze([...EXPECTED_UNSET_ENVIRONMENT].sort()),
     unsetEnvironmentSha256: createHash('sha256')
       .update(canonicalJson([...EXPECTED_UNSET_ENVIRONMENT].sort()))
       .digest('hex'),
     namespaceRemapState: 'NONE',
     executionAuthorityState: 'CLOSED',
-    environmentAuthorityState: 'CLOSED',
+    environmentAuthorityState: providerBoundMode
+      ? 'EXACT_PROVIDER_CREDENTIAL'
+      : 'CLOSED',
     identityAuthorityState: 'CLOSED',
     authorityClosureSha256: createHash('sha256')
       .update(canonicalJson(authorityClosure))
@@ -982,7 +1159,7 @@ function offlineManager(fragment, proof, systemdAnalyze) {
     args.env,
     EXPECTED_LEASE,
     args.node,
-    EXPECTED_ENTRYPOINT,
+    EXPECTED_OFFLINE_ENTRYPOINT,
   ].join(' ');
   if (execStartRaw !== expectedExecStart) {
     fail('offline app unit ExecStart differs from the exact preview-bound env and Node');
@@ -1068,7 +1245,7 @@ function offlineManager(fragment, proof, systemdAnalyze) {
       args.env,
       EXPECTED_LEASE,
       args.node,
-      EXPECTED_ENTRYPOINT,
+      EXPECTED_OFFLINE_ENTRYPOINT,
     ]),
     flags: Object.freeze([]),
   });
@@ -1114,6 +1291,658 @@ function offlineManager(fragment, proof, systemdAnalyze) {
   });
 }
 
+function parseManagerPropertyOutput(stdout, expectedProperties, label) {
+  if (typeof stdout !== 'string' || stdout.length === 0 || stdout.length > 128 * 1024
+      || stdout.includes('\0') || !stdout.endsWith('\n')) {
+    fail(`${label} systemctl show returned malformed output`);
+  }
+  const propertyLines = expectedProperties.includes('EnvironmentFiles')
+    ? { EnvironmentFiles: [] }
+    : {};
+  for (const line of stdout.slice(0, -1).split('\n')) {
+    const split = line.indexOf('=');
+    if (split <= 0) fail(`${label} systemctl show returned one malformed property`);
+    const key = line.slice(0, split);
+    if (!expectedProperties.includes(key)) {
+      fail(`${label} systemctl show returned an unexpected property`);
+    }
+    if (!Object.hasOwn(propertyLines, key)) propertyLines[key] = [];
+    propertyLines[key].push(line.slice(split + 1));
+  }
+  requireExactKeys(propertyLines, expectedProperties, `${label} systemctl show properties`);
+  for (const [key, values] of Object.entries(propertyLines)) {
+    if (key !== 'EnvironmentFiles' && values.length !== 1) {
+      fail(`${label} systemctl show returned duplicate ${key} properties`);
+    }
+  }
+  return Object.freeze({
+    propertyLines: Object.freeze(propertyLines),
+    properties: Object.freeze(Object.fromEntries(
+      Object.entries(propertyLines).map(([key, values]) => [key, values[0]]),
+    )),
+  });
+}
+
+function parseManagerExec(raw, label) {
+  const match = /^\{ path=([^ ;{}]+) ; argv\[\]=([^;{}]+) ; ignore_errors=no ; start_time=\[([^\]\r\n]*)\] ; stop_time=\[([^\]\r\n]*)\] ; pid=([0-9]+) ; code=([^ ;{}]+) ; status=([^ ;{}]+) \}$/u
+    .exec(raw);
+  if (match === null || raw.indexOf('{ path=') !== 0 || raw.indexOf('{ path=', 1) !== -1) {
+    fail(`${label} ExecStart is not one exact closed command`);
+  }
+  return Object.freeze({
+    path: exactLexicalAbsolute(match[1], `${label} ExecStart path`),
+    argv: Object.freeze(match[2].split(' ')),
+  });
+}
+
+function parseManagerExecEx(raw, label) {
+  const match = /^\{ path=([^ ;{}]+) ; argv\[\]=([^;{}]+) ; flags=([^;{}]*) ; start_time=\[([^\]\r\n]*)\] ; stop_time=\[([^\]\r\n]*)\] ; pid=([0-9]+) ; code=([^ ;{}]+) ; status=([^ ;{}]+) \}$/u
+    .exec(raw);
+  if (match === null || match[3] !== ''
+      || raw.indexOf('{ path=') !== 0 || raw.indexOf('{ path=', 1) !== -1) {
+    fail(`${label} ExecStartEx is not one exact closed command`);
+  }
+  return Object.freeze({
+    path: exactLexicalAbsolute(match[1], `${label} ExecStartEx path`),
+    argv: Object.freeze(match[2].split(' ')),
+  });
+}
+
+function exactDirectiveObject(directives, section, expectedKeys, label) {
+  const value = directives[section];
+  if (value === undefined || value === null || typeof value !== 'object') {
+    fail(`${label} is missing [${section}]`);
+  }
+  requireExactKeys(value, expectedKeys, `${label} [${section}]`);
+  return value;
+}
+
+function exactDirectiveValues(section, name, expected, label) {
+  const actual = section[name];
+  if (canonicalJson(actual) !== canonicalJson(expected)) {
+    fail(`${label} ${name} differs from the exact provider contract`);
+  }
+}
+
+function exactProviderDocument(raw, label) {
+  const path = exactLexicalAbsolute(raw, label);
+  if (dirname(path) !== '/var/lib/cosmos-deployment-authorization'
+      || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,255}\.json$/u.test(path.slice(
+        '/var/lib/cosmos-deployment-authorization/'.length,
+      ))) {
+    fail(`${label} must be one exact deployment-authorization document`);
+  }
+  return path;
+}
+
+function exactProviderWritePath(raw, label) {
+  const path = exactLexicalAbsolute(raw, label);
+  if ([
+    '/', '/etc', '/opt', '/run', '/usr', '/var', '/var/lib',
+    '/var/lib/cosmos', '/var/backups', '/var/backups/cosmos',
+  ].includes(path)) {
+    fail(`${label} must not grant one broad production write root`);
+  }
+  return path;
+}
+
+function providerEvidencePath(logical, kind) {
+  if (providerFilesystemRoot === null) return logical;
+  if (kind === 'authorization-document'
+      && dirname(logical) === '/var/lib/cosmos-deployment-authorization') {
+    return resolve(providerFilesystemRoot, 'authorization', basename(logical));
+  }
+  if (kind === 'consumption-root'
+      && logical === '/var/lib/cosmos-authorization-consumption') {
+    return resolve(providerFilesystemRoot, 'consumption');
+  }
+  fail(`provider ${kind} path cannot be mapped into the marked simulation root`);
+}
+
+function inspectProviderMaterializationChain(contract) {
+  const risk = readCanonicalDeploymentDocument(
+    providerEvidencePath(contract.deploymentRisk, 'authorization-document'),
+    'provider deployment risk',
+    validateDeploymentRiskVersion,
+  );
+  const preview = readCanonicalDeploymentDocument(
+    providerEvidencePath(contract.actionPreview, 'authorization-document'),
+    'provider action preview',
+    (document) => validateDeploymentActionPreview(
+      document,
+      risk.document,
+      risk.sha256,
+    ),
+  );
+  const testMode = providerFilesystemRoot !== null;
+  if (risk.document.binding.actionClass !== 'SECRET_MATERIALIZATION'
+      || preview.document.binding.actionClass !== 'SECRET_MATERIALIZATION'
+      || preview.document.action.command !== 'secrets-provider'
+      || preview.document.action.scope
+        !== 'cosmos-production-secret-materialization'
+      || risk.document.artifactPolicy.rootMode !== (testMode ? 'TEST' : 'SYSTEM')
+      || risk.document.provenanceMode !== (testMode
+        ? 'TEST_FIXTURE_INJECTED'
+        : 'SYSTEM_CLOCK_CRYPTOGRAPHIC_NONCE')
+      || (testMode
+        ? risk.document.artifactPolicy.proofRoot !== providerFilesystemRoot
+        : risk.document.artifactPolicy.proofRoot !== 'NONE')) {
+    fail('provider documents do not describe the exact materialization action');
+  }
+  const expectedAuthorizationRoot = testMode
+    ? resolve(providerFilesystemRoot, 'authorization')
+    : '/var/lib/cosmos-deployment-authorization';
+  const expectedConsumptionRoot = providerEvidencePath(
+    contract.authorizationConsumptionRoot,
+    'consumption-root',
+  );
+  if (dirname(risk.absolute) !== expectedAuthorizationRoot
+      || dirname(preview.absolute) !== expectedAuthorizationRoot
+      || risk.document.artifactPolicy.authorizationRoot
+        !== expectedAuthorizationRoot
+      || preview.document.artifactPolicy.authorizationRoot
+        !== expectedAuthorizationRoot
+      || risk.document.artifactPolicy.consumptionRoot
+        !== expectedConsumptionRoot
+      || preview.document.singleUse.consumptionRoot
+        !== expectedConsumptionRoot
+      || risk.document.artifactPolicy.consumptionRootIdentity
+        !== preview.document.singleUse.consumptionRootIdentity) {
+    fail('provider documents differ from their exact artifact roots');
+  }
+  const consumptionRoot = inspectPrivateDirectoryEvidence(
+    expectedConsumptionRoot,
+    'provider authorization consumption root',
+  );
+  const consumptionRootIdentity = privateDirectoryIdentityEndpoint(consumptionRoot);
+  if (consumptionRootIdentity
+      !== preview.document.singleUse.consumptionRootIdentity) {
+    fail('provider authorization consumption root identity changed');
+  }
+  const consumption = readCanonicalDeploymentDocument(
+    resolve(
+      consumptionRoot.absolute,
+      `${preview.document.singleUse.claimKey}.json`,
+    ),
+    'provider authorization consumption',
+    validateAuthorizationConsumption,
+  );
+  const exactConsumption = Object.freeze({
+    claimKey: preview.document.singleUse.claimKey,
+    authorizationId: risk.document.binding.authorizationId,
+    actionClass: 'SECRET_MATERIALIZATION',
+    nonce: risk.document.binding.nonce,
+    riskVersion: risk.document.riskVersion,
+    serverPreviewDigest: preview.document.serverPreviewDigest,
+    rootMode: risk.document.artifactPolicy.rootMode,
+    consumptionRoot: consumptionRoot.absolute,
+    consumptionRootIdentity,
+    evidenceValidUntilUtc: risk.document.evidenceValidUntilUtc,
+    riskDocumentSha256: risk.sha256,
+    previewDocumentSha256: preview.sha256,
+  });
+  for (const [name, value] of Object.entries(exactConsumption)) {
+    if (consumption.document[name] !== value) {
+      fail(`provider authorization consumption ${name} differs from the chain`);
+    }
+  }
+  const consumedAt = Date.parse(consumption.document.consumedAtUtc);
+  if (!DIGEST.test(consumption.document.authorizationSha256)
+      || consumedAt < Date.parse(risk.document.authorizationWindow.startsAtUtc)
+      || consumedAt >= Date.parse(risk.document.authorizationWindow.expiresAtUtc)) {
+    fail('provider authorization consumption is not one in-window claim');
+  }
+  const descriptorBinding = Object.freeze({
+    deploymentRisk: Object.freeze({
+      logicalPath: contract.deploymentRisk,
+      resolvedPath: risk.absolute,
+      sha256: risk.sha256,
+      identity: risk.identity,
+    }),
+    actionPreview: Object.freeze({
+      logicalPath: contract.actionPreview,
+      resolvedPath: preview.absolute,
+      sha256: preview.sha256,
+      identity: preview.identity,
+    }),
+    authorizationConsumption: Object.freeze({
+      resolvedPath: consumption.absolute,
+      sha256: consumption.sha256,
+      identity: consumption.identity,
+      claimKey: consumption.document.claimKey,
+      consumedAtUtc: consumption.document.consumedAtUtc,
+      authorizationSha256: consumption.document.authorizationSha256,
+    }),
+    consumptionRoot: Object.freeze({
+      logicalPath: contract.authorizationConsumptionRoot,
+      resolvedPath: consumptionRoot.absolute,
+      identity: consumptionRootIdentity,
+    }),
+    writeRoots: providerMaterializationWriteRoots(
+      risk.document.artifactPolicy,
+    ),
+  });
+  return Object.freeze({
+    ...descriptorBinding,
+    chainSha256: createHash('sha256')
+      .update(canonicalJson(descriptorBinding))
+      .digest('hex'),
+  });
+}
+
+function validateProviderFragment(fragment) {
+  const directives = parseOfflineUnit(fragment.bytes);
+  requireExactKeys(directives, ['Unit', 'Service', 'Install'], 'provider unit fragment');
+  const unit = exactDirectiveObject(
+    directives,
+    'Unit',
+    ['Description', 'Wants', 'After', 'Before'],
+    'provider unit fragment',
+  );
+  exactDirectiveValues(
+    unit,
+    'Description',
+    ['Cosmos exact-ARN Secrets Manager credential materialization'],
+    'provider unit fragment',
+  );
+  exactDirectiveValues(unit, 'Wants', ['network-online.target'], 'provider unit fragment');
+  exactDirectiveValues(unit, 'After', ['network-online.target'], 'provider unit fragment');
+  exactDirectiveValues(unit, 'Before', [PRODUCTION_UNIT], 'provider unit fragment');
+
+  const service = exactDirectiveObject(
+    directives,
+    'Service',
+    [
+      'Type', 'User', 'Group', 'RuntimeDirectory', 'RuntimeDirectoryMode',
+      'RuntimeDirectoryPreserve', 'UnsetEnvironment', 'ExecStart', 'RemainAfterExit',
+      'Restart', 'StandardOutput', 'StandardError', 'SyslogIdentifier',
+      'NoNewPrivileges', 'ProtectSystem', 'ProtectHome', 'PrivateTmp',
+      'PrivateDevices', 'ProtectKernelTunables', 'ProtectKernelModules',
+      'ProtectControlGroups', 'RestrictSUIDSGID', 'RestrictAddressFamilies',
+      'ReadWritePaths', 'ReadOnlyPaths', 'UMask',
+    ],
+    'provider unit fragment',
+  );
+  const exactSingles = Object.freeze({
+    Type: 'oneshot',
+    User: 'root',
+    Group: 'root',
+    RuntimeDirectory: 'cosmos-secret-source',
+    RuntimeDirectoryMode: '0700',
+    RuntimeDirectoryPreserve: 'restart',
+    RemainAfterExit: 'yes',
+    Restart: 'no',
+    StandardOutput: 'journal',
+    StandardError: 'journal',
+    SyslogIdentifier: 'cosmos-secrets-provider',
+    NoNewPrivileges: 'yes',
+    ProtectSystem: 'strict',
+    ProtectHome: 'yes',
+    PrivateTmp: 'yes',
+    PrivateDevices: 'yes',
+    ProtectKernelTunables: 'yes',
+    ProtectKernelModules: 'yes',
+    ProtectControlGroups: 'yes',
+    RestrictSUIDSGID: 'yes',
+    RestrictAddressFamilies: 'AF_UNIX AF_INET AF_INET6',
+    UMask: '0077',
+  });
+  for (const [name, value] of Object.entries(exactSingles)) {
+    exactDirectiveValues(service, name, [value], 'provider unit fragment');
+  }
+  const unsetEnvironment = service.UnsetEnvironment
+    .flatMap((value) => value.split(' ').filter(Boolean));
+  if (unsetEnvironment.length !== EXPECTED_UNSET_ENVIRONMENT.length
+      || new Set(unsetEnvironment).size !== unsetEnvironment.length
+      || [...unsetEnvironment].sort().join('\0')
+        !== [...EXPECTED_UNSET_ENVIRONMENT].sort().join('\0')) {
+    fail('provider unit fragment UnsetEnvironment differs from the complete closure');
+  }
+  if (service.ExecStart.length !== 1 || /[\r\n\0]/u.test(service.ExecStart[0])) {
+    fail('provider unit fragment ExecStart is not one canonical command');
+  }
+  const argv = service.ExecStart[0].split(' ');
+  if (argv.length !== 10
+      || argv[0] !== '/usr/bin/node'
+      || argv[1] !== '/usr/local/lib/cosmos-ops/i00/bin/secret-materialization.mjs'
+      || argv[2] !== '--authorization'
+      || argv[3] !== '/etc/cosmos/external-authorization.json'
+      || argv[4] !== '--deployment-risk'
+      || argv[6] !== '--action-preview'
+      || argv[8] !== '--authorization-consumption-root'
+      || argv[9] !== '/var/lib/cosmos-authorization-consumption') {
+    fail('provider unit fragment ExecStart differs from the exact bound materializer shape');
+  }
+  // These paths bind the already-completed SECRET_MATERIALIZATION invocation
+  // represented by the active/exited provider. They deliberately remain
+  // distinct from a pending release/rollback risk and preview document.
+  const deploymentRisk = exactProviderDocument(
+    argv[5],
+    'provider deployment-risk document',
+  );
+  const actionPreview = exactProviderDocument(
+    argv[7],
+    'provider action-preview document',
+  );
+  if (deploymentRisk === actionPreview) {
+    fail('provider deployment-risk and action-preview documents must be distinct');
+  }
+  const materializationChain = inspectProviderMaterializationChain({
+    deploymentRisk,
+    actionPreview,
+    authorizationConsumptionRoot: argv[9],
+  });
+  const readWritePaths = service.ReadWritePaths.map(
+    (path, index) => exactProviderWritePath(path, `provider ReadWritePaths[${index}]`),
+  );
+  if (canonicalJson(readWritePaths)
+      !== canonicalJson(materializationChain.writeRoots)) {
+    fail('provider unit fragment write authority is not the exact document-derived four-path closure');
+  }
+  exactDirectiveValues(
+    service,
+    'ReadOnlyPaths',
+    [
+      '/var/lib/cosmos-deployment-authorization',
+      '/etc/cosmos /usr/local/lib/cosmos-ops',
+    ],
+    'provider unit fragment',
+  );
+  const install = exactDirectiveObject(
+    directives,
+    'Install',
+    ['WantedBy'],
+    'provider unit fragment',
+  );
+  exactDirectiveValues(install, 'WantedBy', ['multi-user.target'], 'provider unit fragment');
+  return Object.freeze({
+    directives,
+    execStart: Object.freeze({
+      path: argv[0],
+      argv: Object.freeze(argv),
+    }),
+    deploymentRisk,
+    actionPreview,
+    authorizationConsumptionRoot: argv[9],
+    materializationChain,
+    readWritePaths: Object.freeze(readWritePaths),
+  });
+}
+
+function inspectProviderManager(systemctl) {
+  const result = spawnSync(systemctl.path, [
+    'show',
+    PROVIDER_UNIT,
+    '--no-pager',
+    '--all',
+    ...PROVIDER_SHOW_PROPERTIES.map((property) => `--property=${property}`),
+  ], {
+    encoding: 'utf8',
+    env: CLOSED_ENV,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 5_000,
+    maxBuffer: 128 * 1024,
+    windowsHide: true,
+  });
+  if (result.error || result.signal || result.status !== 0 || result.stderr !== '') {
+    fail(`bound systemctl provider unit inspection failed at exit ${String(result.status)}`);
+  }
+  const parsed = parseManagerPropertyOutput(
+    result.stdout,
+    PROVIDER_SHOW_PROPERTIES,
+    'provider unit',
+  );
+  const { properties, propertyLines } = parsed;
+  if (properties.Id !== PROVIDER_UNIT
+      || properties.Names !== PROVIDER_UNIT
+      || properties.Following !== ''
+      || properties.LoadState !== 'loaded'
+      || properties.FragmentPath !== boundSystemPath(PROVIDER_FRAGMENT)
+      || properties.DropInPaths !== ''
+      || properties.NeedDaemonReload !== 'no') {
+    fail('provider unit manager identity, fragment, drop-in, or reload state is not exact');
+  }
+  if (properties.User !== 'root' || properties.Group !== 'root'
+      || properties.Type !== 'oneshot' || properties.RemainAfterExit !== 'yes'
+      || properties.Restart !== 'no') {
+    fail('provider unit process identity or oneshot lifecycle is not exact');
+  }
+  if (properties.ActiveState !== 'active'
+      || properties.SubState !== 'exited'
+      || properties.Result !== 'success'
+      || properties.ExecMainCode !== '1'
+      || properties.ExecMainStatus !== '0') {
+    fail('provider unit must already be one successful active/exited oneshot');
+  }
+  for (const name of [
+    'Environment', 'PassEnvironment', 'SetCredential', 'SetCredentialEncrypted',
+    'LoadCredential', 'LoadCredentialEncrypted', 'ImportCredential',
+  ]) {
+    if (properties[name] !== '') {
+      fail(`provider unit ${name} must be empty`);
+    }
+  }
+  if (propertyLines.EnvironmentFiles.length !== 0) {
+    fail('provider unit EnvironmentFiles must be empty');
+  }
+  const beforeEdges = properties.Before.split(' ').filter((entry) => entry === PRODUCTION_UNIT);
+  if (beforeEdges.length !== 1) {
+    fail('provider unit must order before the exact application unit once');
+  }
+  for (const name of [
+    'Requires', 'Requisite', 'BindsTo', 'PartOf', 'Conflicts', 'OnFailure',
+    'OnSuccess', 'PropagatesStopTo', 'StopPropagatedFrom', 'PropagatesReloadTo',
+    'ReloadPropagatedFrom', 'Upholds', 'JoinsNamespaceOf',
+  ]) {
+    if (properties[name].split(' ').filter((entry) => entry === PRODUCTION_UNIT).length !== 0) {
+      fail(`provider unit ${name} must not target the application unit`);
+    }
+  }
+  const execStart = parseManagerExec(properties.ExecStart, 'provider unit');
+  const execStartEx = parseManagerExecEx(properties.ExecStartEx, 'provider unit');
+  if (canonicalJson(execStartEx) !== canonicalJson(execStart)) {
+    fail('provider unit ExecStart and ExecStartEx differ');
+  }
+  return Object.freeze({
+    unit: properties.Id,
+    fragmentPath: properties.FragmentPath,
+    dropInPaths: Object.freeze([]),
+    needDaemonReload: properties.NeedDaemonReload,
+    execStart,
+    properties: Object.freeze(Object.fromEntries(
+      Object.entries(properties).map(([name, value]) => [
+        name,
+        [
+          'Names', 'Requires', 'Wants', 'Requisite', 'BindsTo', 'PartOf',
+          'After', 'Before', 'Conflicts', 'OnFailure', 'OnSuccess',
+          'PropagatesStopTo', 'StopPropagatedFrom', 'PropagatesReloadTo',
+          'ReloadPropagatedFrom', 'Upholds', 'JoinsNamespaceOf',
+          'RequiresMountsFor', 'WantsMountsFor', 'Sockets',
+        ].includes(name)
+          ? Object.freeze(value.split(' ').filter(Boolean).sort())
+          : name === 'EnvironmentFiles'
+            ? Object.freeze([...propertyLines.EnvironmentFiles])
+            : value,
+      ]),
+    )),
+  });
+}
+
+function bindProviderManager(manager, fragment, contract) {
+  if (manager.fragmentPath !== fragment.path
+      || manager.execStart.path !== contract.execStart.path
+      || canonicalJson(manager.execStart.argv) !== canonicalJson(contract.execStart.argv)
+      || canonicalJson(manager.properties.ReadWritePaths
+        .split(' ').filter(Boolean)) !== canonicalJson(contract.readWritePaths)
+      || canonicalJson(manager.properties.ReadOnlyPaths
+        .split(' ').filter(Boolean)) !== canonicalJson([
+          '/var/lib/cosmos-deployment-authorization',
+          '/etc/cosmos',
+          '/usr/local/lib/cosmos-ops',
+        ])) {
+    fail('provider unit manager state differs from the exact rendered fragment');
+  }
+  const exactManagerProperties = Object.freeze({
+    RuntimeDirectory: 'cosmos-secret-source',
+    RuntimeDirectoryMode: '700',
+    RuntimeDirectoryPreserve: 'restart',
+    StandardInput: 'null',
+    StandardOutput: 'journal',
+    StandardError: 'journal',
+    NotifyAccess: 'none',
+    FileDescriptorStoreMax: '0',
+    FileDescriptorStorePreserve: 'no',
+    SyslogIdentifier: 'cosmos-secrets-provider',
+    NoNewPrivileges: 'yes',
+    ProtectSystem: 'strict',
+    ProtectHome: 'yes',
+    PrivateTmp: 'yes',
+    PrivateDevices: 'yes',
+    ProtectKernelTunables: 'yes',
+    ProtectKernelModules: 'yes',
+    ProtectControlGroups: 'yes',
+    RestrictSUIDSGID: 'yes',
+    UMask: '0077',
+  });
+  for (const [name, value] of Object.entries(exactManagerProperties)) {
+    if (manager.properties[name] !== value) {
+      fail(`provider unit manager ${name} differs from the rendered fragment`);
+    }
+  }
+  if (canonicalJson(manager.properties.RestrictAddressFamilies
+    .split(' ').filter(Boolean).sort())
+      !== canonicalJson(['AF_INET', 'AF_INET6', 'AF_UNIX'])) {
+    fail('provider unit manager RestrictAddressFamilies differs from the rendered fragment');
+  }
+  const unsetEnvironment = manager.properties.UnsetEnvironment
+    .split(' ').filter(Boolean).sort();
+  if (canonicalJson(unsetEnvironment)
+      !== canonicalJson([...EXPECTED_UNSET_ENVIRONMENT].sort())) {
+    fail('provider unit manager UnsetEnvironment differs from the rendered fragment');
+  }
+  const binding = Object.freeze({
+    unit: manager.unit,
+    fragmentPath: fragment.path,
+    fragmentSha256: fragment.sha256,
+    fragmentIdentity: fragment.endpointIdentity,
+    dropInPaths: manager.dropInPaths,
+    needDaemonReload: manager.needDaemonReload,
+    execStart: manager.execStart,
+    deploymentRisk: contract.deploymentRisk,
+    actionPreview: contract.actionPreview,
+    authorizationConsumptionRoot: contract.authorizationConsumptionRoot,
+    materializationChain: contract.materializationChain,
+    readWritePaths: contract.readWritePaths,
+    state: 'ACTIVE_EXITED_SUCCESS',
+    managerProperties: manager.properties,
+  });
+  return Object.freeze({
+    ...binding,
+    bindingSha256: createHash('sha256').update(canonicalJson(binding)).digest('hex'),
+  });
+}
+
+function inspectSystemDropInSet(paths) {
+  const expectedOwner = providerFilesystemRoot === null
+    ? '0'
+    : String(typeof process.getuid === 'function' ? process.getuid() : 0);
+  const inspected = paths.map((path, index) => {
+    const file = inspectBoundFile(path, `provider-bound app drop-in[${index}]`, 64 * 1024);
+    if (file.identity.uid !== expectedOwner) {
+      fail('provider-bound app drop-ins must remain root owned');
+    }
+    return file;
+  });
+  const provider = inspected.filter((file) => file.bytes.equals(PROVIDER_DROP_IN_BYTES));
+  if (provider.length !== 1) {
+    fail('provider-bound app unit must load exactly one exact provider-only drop-in');
+  }
+  const logging = inspected.filter((file) => file.bytes.equals(LOGGING_DROP_IN_BYTES));
+  if (logging.length !== 1) {
+    fail('provider-bound app unit must preserve exactly one exact logging drop-in');
+  }
+  const runtime = inspected.filter((file) => file.bytes.equals(runtimeDropInBytes()));
+  if (runtime.length !== 1) {
+    fail('provider-bound app unit must preserve exactly one exact runtime drop-in');
+  }
+  if (new Set([provider[0], logging[0], runtime[0]]).size !== 3) {
+    fail('provider-bound app drop-in roles must resolve to three distinct files');
+  }
+  const bindings = Object.freeze(inspected.map((file) => Object.freeze({
+    role: file === provider[0]
+      ? 'PROVIDER_BINDING'
+      : file === logging[0] ? 'PRESERVED_LOGGING' : 'PRESERVED_RUNTIME',
+    path: file.path,
+    sha256: file.sha256,
+    identity: file.endpointIdentity,
+  })));
+  const endpoint = canonicalJson(bindings);
+  if (endpoint.length > 2_048) {
+    fail('provider-bound app drop-in set exceeds the owner-visible authorization bound');
+  }
+  return Object.freeze({
+    bindings,
+    endpoint,
+    providerPath: provider[0].path,
+    sha256: createHash('sha256').update(canonicalJson(bindings)).digest('hex'),
+  });
+}
+
+function combineSystemManager(
+  appManager,
+  dropInSet,
+  i00Environment,
+  providerManager,
+) {
+  const environmentBindings = Object.freeze([
+    Object.freeze({
+      path: appManager.environmentFiles[0].path,
+      optional: false,
+    }),
+    Object.freeze({
+      path: i00Environment.path,
+      optional: false,
+      sha256: i00Environment.sha256,
+      identity: i00Environment.endpointIdentity,
+    }),
+  ]);
+  const authorityClosure = Object.freeze({
+    appAuthorityClosureSha256: appManager.authorityClosureSha256,
+    dropInSetSha256: dropInSet.sha256,
+    dropIns: dropInSet.bindings,
+    providerDropInPath: dropInSet.providerPath,
+    environmentBindings,
+    providerBindingSha256: providerManager.bindingSha256,
+    providerUnit: providerManager.unit,
+  });
+  return Object.freeze({
+    ...appManager,
+    authorityClosureSha256: createHash('sha256')
+      .update(canonicalJson(authorityClosure))
+      .digest('hex'),
+    effectReachability: [
+      appManager.effectReachability,
+      `ProviderUnit=${providerManager.unit}`,
+      `ProviderBindingSha256=${providerManager.bindingSha256}`,
+      `DropInSetSha256=${dropInSet.sha256}`,
+    ].join(';'),
+    dropInSetSha256: dropInSet.sha256,
+    dropInBindings: dropInSet.bindings,
+    dropInSetEndpoint: dropInSet.endpoint,
+    environmentFilesSha256: createHash('sha256')
+      .update(canonicalJson(environmentBindings))
+      .digest('hex'),
+    providerBindingSha256: providerManager.bindingSha256,
+    providerUnit: providerManager.unit,
+    providerFragmentPath: providerManager.fragmentPath,
+    providerFragmentSha256: providerManager.fragmentSha256,
+    providerFragmentIdentity: providerManager.fragmentIdentity,
+    providerState: providerManager.state,
+    providerDeploymentRiskPath: providerManager.deploymentRisk,
+    providerActionPreviewPath: providerManager.actionPreview,
+  });
+}
+
 const systemctlBefore = inspectExecutable(args.systemctl, '--systemctl');
 if (strictProofOwnership) {
   const stagingSystemctl = lstatSync(systemctlBefore.path, { bigint: true });
@@ -1141,6 +1970,48 @@ const runtimeEnvBefore = inspectBoundFile(
   'app unit runtime environment',
   1024 * 1024,
 );
+const systemDropInSetBefore = providerBoundMode
+  ? inspectSystemDropInSet(liveManagerBefore.dropInPaths)
+  : null;
+const i00EnvironmentBefore = providerBoundMode
+  ? inspectBoundFile(
+    boundSystemPath(PRODUCTION_I00_ENV),
+    'provider-bound app I00 environment',
+    1024 * 1024,
+  )
+  : null;
+if (i00EnvironmentBefore !== null
+    && i00EnvironmentBefore.identity.uid !== (providerFilesystemRoot === null
+      ? '0'
+      : String(typeof process.getuid === 'function' ? process.getuid() : 0))) {
+  fail('provider-bound app I00 environment must remain root owned');
+}
+const providerManagerRawBefore = providerBoundMode
+  ? inspectProviderManager(systemctlBefore)
+  : null;
+const providerFragmentBefore = providerBoundMode
+  ? inspectBoundFile(
+    providerManagerRawBefore.fragmentPath,
+    'provider unit fragment',
+    1024 * 1024,
+  )
+  : null;
+if (providerFragmentBefore !== null
+    && providerFragmentBefore.identity.uid !== (providerFilesystemRoot === null
+      ? '0'
+      : String(typeof process.getuid === 'function' ? process.getuid() : 0))) {
+  fail('provider unit fragment must remain root owned');
+}
+const providerContractBefore = providerFragmentBefore === null
+  ? null
+  : validateProviderFragment(providerFragmentBefore);
+const providerManagerBefore = providerFragmentBefore === null
+  ? null
+  : bindProviderManager(
+    providerManagerRawBefore,
+    providerFragmentBefore,
+    providerContractBefore,
+  );
 const proofDropInBefore = proofDropIn === null
   ? null
   : inspectBoundFile(proofDropIn, 'isolated staging proof drop-in', 64 * 1024);
@@ -1170,7 +2041,14 @@ const systemdAnalyzeBefore = strictProofOwnership
   : null;
 const managerBefore = strictProofOwnership
   ? offlineManager(fragmentBefore, proofDropInBefore, systemdAnalyzeBefore)
-  : liveManagerBefore;
+  : providerBoundMode
+    ? combineSystemManager(
+      liveManagerBefore,
+      systemDropInSetBefore,
+      i00EnvironmentBefore,
+      providerManagerBefore,
+    )
+    : liveManagerBefore;
 if (!strictProofOwnership && managerBefore.fragmentPath !== fragmentBefore.path) {
   fail('app unit FragmentPath changed between manager and descriptor inspection');
 }
@@ -1193,6 +2071,36 @@ const runtimeEnvAfter = inspectBoundFile(
   'app unit runtime environment',
   1024 * 1024,
 );
+const systemDropInSetAfter = providerBoundMode
+  ? inspectSystemDropInSet(liveManagerAfter.dropInPaths)
+  : null;
+const i00EnvironmentAfter = providerBoundMode
+  ? inspectBoundFile(
+    boundSystemPath(PRODUCTION_I00_ENV),
+    'provider-bound app I00 environment',
+    1024 * 1024,
+  )
+  : null;
+const providerManagerRawAfter = providerBoundMode
+  ? inspectProviderManager(systemctlBefore)
+  : null;
+const providerFragmentAfter = providerBoundMode
+  ? inspectBoundFile(
+    providerManagerRawAfter.fragmentPath,
+    'provider unit fragment',
+    1024 * 1024,
+  )
+  : null;
+const providerContractAfter = providerFragmentAfter === null
+  ? null
+  : validateProviderFragment(providerFragmentAfter);
+const providerManagerAfter = providerFragmentAfter === null
+  ? null
+  : bindProviderManager(
+    providerManagerRawAfter,
+    providerFragmentAfter,
+    providerContractAfter,
+  );
 const proofDropInAfter = proofDropIn === null
   ? null
   : inspectBoundFile(proofDropIn, 'isolated staging proof drop-in', 64 * 1024);
@@ -1200,11 +2108,23 @@ const proofDropInRuntimeLinkAfter = inspectProofDropInRuntimeLink();
 requireAbsentProofSentinel();
 const managerAfter = strictProofOwnership
   ? offlineManager(fragmentAfter, proofDropInAfter, systemdAnalyzeAfter)
-  : liveManagerAfter;
+  : providerBoundMode
+    ? combineSystemManager(
+      liveManagerAfter,
+      systemDropInSetAfter,
+      i00EnvironmentAfter,
+      providerManagerAfter,
+    )
+    : liveManagerAfter;
 if (canonicalJson(managerAfter) !== canonicalJson(managerBefore)
     || canonicalJson(fragmentSourceAfter) !== canonicalJson(fragmentSourceBefore)
     || canonicalJson(fragmentAfter) !== canonicalJson(fragmentBefore)
     || canonicalJson(runtimeEnvAfter) !== canonicalJson(runtimeEnvBefore)
+    || canonicalJson(systemDropInSetAfter) !== canonicalJson(systemDropInSetBefore)
+    || canonicalJson(i00EnvironmentAfter) !== canonicalJson(i00EnvironmentBefore)
+    || canonicalJson(providerManagerAfter) !== canonicalJson(providerManagerBefore)
+    || canonicalJson(providerFragmentAfter) !== canonicalJson(providerFragmentBefore)
+    || canonicalJson(providerContractAfter) !== canonicalJson(providerContractBefore)
     || canonicalJson(proofDropInAfter) !== canonicalJson(proofDropInBefore)
     || canonicalJson(systemdAnalyzeAfter) !== canonicalJson(systemdAnalyzeBefore)
     || canonicalJson(proofDropInRuntimeLinkAfter)
@@ -1244,7 +2164,21 @@ const binding = Object.freeze({
   fragmentSourceSha256: fragmentSourceBefore.sha256,
   fragmentSourceIdentity: fragmentSourceBefore.endpointIdentity,
   dropInPaths: managerBefore.dropInPaths,
-  dropInState: proofDropInBefore === null ? 'NONE' : 'EXACT_STAGING_PROOF',
+  dropInState: providerBoundMode
+    ? 'EXACT_PROVIDER_BOUND'
+    : 'EXACT_STAGING_PROOF',
+  dropInBindings: managerBefore.dropInBindings ?? null,
+  dropInSetEndpoint: managerBefore.dropInSetEndpoint ?? null,
+  dropInSetSha256: managerBefore.dropInSetSha256 ?? null,
+  environmentFilesSha256: managerBefore.environmentFilesSha256 ?? null,
+  providerBindingSha256: managerBefore.providerBindingSha256 ?? null,
+  providerUnit: managerBefore.providerUnit ?? null,
+  providerFragmentPath: managerBefore.providerFragmentPath ?? null,
+  providerFragmentSha256: managerBefore.providerFragmentSha256 ?? null,
+  providerFragmentIdentity: managerBefore.providerFragmentIdentity ?? null,
+  providerState: managerBefore.providerState ?? null,
+  providerDeploymentRiskPath: managerBefore.providerDeploymentRiskPath ?? null,
+  providerActionPreviewPath: managerBefore.providerActionPreviewPath ?? null,
   proofDropInPath: proofDropInBefore?.path ?? null,
   proofDropInSha256: proofDropInBefore?.sha256 ?? null,
   proofDropInIdentity: proofDropInBefore?.endpointIdentity ?? null,
@@ -1282,7 +2216,7 @@ if (args['expected-binding-sha256'] !== undefined
 }
 
 process.stdout.write(`${JSON.stringify({
-  schemaVersion: 3,
+  schemaVersion: 4,
   status: 'APP_UNIT_BINDING_VERIFIED',
   inspectionMode: binding.inspectionMode,
   systemctlPath: systemctlBefore.path,
@@ -1302,6 +2236,18 @@ process.stdout.write(`${JSON.stringify({
   fragmentSourceEndpointIdentity: fragmentSourceBefore.endpointIdentity,
   dropInPaths: managerBefore.dropInPaths,
   dropInState: binding.dropInState,
+  dropInBindings: binding.dropInBindings,
+  dropInSetEndpoint: binding.dropInSetEndpoint,
+  dropInSetSha256: binding.dropInSetSha256,
+  environmentFilesSha256: binding.environmentFilesSha256,
+  providerBindingSha256: binding.providerBindingSha256,
+  providerUnit: binding.providerUnit,
+  providerFragmentPath: binding.providerFragmentPath,
+  providerFragmentSha256: binding.providerFragmentSha256,
+  providerFragmentEndpointIdentity: binding.providerFragmentIdentity,
+  providerState: binding.providerState,
+  providerDeploymentRiskPath: binding.providerDeploymentRiskPath,
+  providerActionPreviewPath: binding.providerActionPreviewPath,
   proofDropInPath: binding.proofDropInPath,
   proofDropInSha256: binding.proofDropInSha256,
   proofDropInIdentity: proofDropInBefore?.identity ?? null,

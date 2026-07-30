@@ -53,7 +53,7 @@ case "$GATE" in
   validate-simulation-env.mjs|validate-simulation-path.mjs|\
   validate-simulation-root.mjs|verify-build-attestation.mjs|\
   verify-cloudflare-readback.mjs|verify-donor-root.mjs|verify-donor.mjs|\
-  verify-readback.mjs|verify-simulation-command.mjs|\
+  verify-app-unit-action-binding.mjs|verify-readback.mjs|verify-simulation-command.mjs|\
   verify-sqlite-version.mjs) ;;
   *) printf 'I00_OPS_BLOCKED: gate is outside the fixed Node launcher allowlist\n' >&2; exit 1 ;;
 esac

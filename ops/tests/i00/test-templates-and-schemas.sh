@@ -48,6 +48,7 @@ done
 
 note "systemd ordering, credential, loopback, and honest Q placeholder"
 APP_DROPIN="$(cat "$REPO_ROOT/ops/templates/i00/systemd/cosmos-app-i00.conf.template")"
+APP_RUNTIME_DROPIN="$(cat "$REPO_ROOT/ops/templates/i00/systemd/cosmos-app-runtime.conf.template")"
 PROVIDER_UNIT="$(cat "$REPO_ROOT/ops/templates/i00/systemd/cosmos-secrets-provider.service.template")"
 PROVIDER_CONFIG="$(cat "$REPO_ROOT/ops/templates/i00/aws/secrets-provider.json.template")"
 Q_UNIT="$(cat "$REPO_ROOT/ops/templates/i00/systemd/cosmos-q.service.template")"
@@ -55,7 +56,20 @@ RUNTIME_ENV_TEMPLATE="$(cat "$REPO_ROOT/ops/templates/i00/env/cosmos-i00.env.tem
 assert_contains "$APP_DROPIN" 'Requires=cosmos-secrets-provider.service'
 assert_contains "$APP_DROPIN" 'After=cosmos-secrets-provider.service'
 assert_contains "$APP_DROPIN" 'LoadCredential=app-secrets:/run/cosmos-secret-source/app-secrets.json'
-assert_contains "$APP_DROPIN" 'ExecStart=/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node /usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs'
+if printf '%s' "$APP_DROPIN" | grep -E '^(ExecStart|EnvironmentFile)=' >/dev/null; then
+  fail_test 'provider-only app drop-in changes execution or environment ownership'
+fi
+pass_assertion
+assert_eq "$(printf '%s\n' "$APP_DROPIN" | grep -Ec '^(Requires|After|LoadCredential)=')" 3
+assert_eq "$(printf '%s\n' "$APP_RUNTIME_DROPIN" | grep -c '^ExecStart=$')" 1
+assert_contains "$APP_RUNTIME_DROPIN" \
+  'ExecStart=/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node /usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs'
+assert_contains "$APP_RUNTIME_DROPIN" \
+  'EnvironmentFile=/etc/cosmos/cosmos-i00.env'
+if printf '%s' "$APP_RUNTIME_DROPIN" | grep -E '^(Requires|After|LoadCredential)=' >/dev/null; then
+  fail_test 'preserved runtime drop-in acquires provider authority'
+fi
+pass_assertion
 assert_contains "$PROVIDER_UNIT" 'Before=cosmos-app.service'
 assert_contains "$PROVIDER_UNIT" 'NoNewPrivileges=yes'
 if printf '%s' "$PROVIDER_UNIT" | grep -F 'StateDirectory=' >/dev/null; then
@@ -80,11 +94,15 @@ pass_assertion
 for exact_parent in \
   /run/cosmos-secret-source \
   /REPLACE_ME_EXACT_AUTHORIZATION_CONSUMPTION_PARENT \
-  /REPLACE_ME_EXACT_EFFECT_EVIDENCE_PARENT \
-  /REPLACE_ME_EXACT_RESULT_RECEIPT_PARENT \
-  /REPLACE_ME_EXACT_RECONCILIATION_RECEIPT_PARENT; do
+  /REPLACE_ME_EXACT_RECEIPT_PARENT \
+  /REPLACE_ME_EXACT_EFFECT_EVIDENCE_PARENT; do
   assert_contains "$PROVIDER_UNIT" "ReadWritePaths=$exact_parent"
 done
+if printf '%s' "$PROVIDER_UNIT" \
+  | grep -F 'ReadOnlyPaths=/var/lib/cosmos-authorization-consumption' >/dev/null; then
+  fail_test 'provider unit marks its exact authorization-consumption write root read-only'
+fi
+pass_assertion
 if printf '%s' "$PROVIDER_UNIT" \
   | grep -E '^ReadWritePaths=/var/(lib|backups)/cosmos($|/)' >/dev/null; then
   fail_test 'provider unit grants a broad production write root'

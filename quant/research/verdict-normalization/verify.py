@@ -12,9 +12,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -36,8 +38,20 @@ N3_RAW_SHA256 = "18098a23ad1aeb1ef8e6bfc7652177561b6d05a8904f025252ba10e9eb517a0
 N3_ACCEPTANCE_ID = "2026-07-30 ORCHESTRATOR N3-S4 ACCEPTANCE"
 N3_ACCEPTANCE_SHA256 = "522922229178f38f2998d2568ced4a50f7f4d63443db319f04e7c20f7b35290b"
 
-OWNER_BURST_ID = "2026-07-30 ORCHESTRATOR OWNER BURST REFILL"
-OWNER_BURST_SHA256 = "ddd291f474cd522381886997be8b7ada7e9824596e2306aec45ae35e6869785c"
+MAKER_ACCEPTANCE_ID = "2026-07-30 ORCHESTRATOR MAKER-FEE GRID ACCEPTANCE"
+MAKER_ACCEPTANCE_SHA256 = "4f815970ac85f46b10a3e3975f2225ff1dbd7d8b058b2435afb155dbdc2a0207"
+VOLUME_REJECTED_PREDECESSOR_ID = "2026-07-30 ORCHESTRATOR VOLUME-ECONOMICS TERMINAL"
+VOLUME_REJECTED_PREDECESSOR_SHA256 = (
+    "9d97a6019620612340573f13eafe98338e0458b353ec7d3a300c984c5676fe5c"
+)
+VOLUME_ACCEPTANCE_ID = "2026-07-30 ORCHESTRATOR VOLUME-CORRECTION ACCEPTANCE"
+VOLUME_ACCEPTANCE_SHA256 = "b032c1146a9e5b662c907525f644cb1f152c1430f1388635fc49b1046d582926"
+NORMALIZATION_REJECTION_ID = "2026-07-30 ORCHESTRATOR VERDICT-NORMALIZATION REJECTION"
+NORMALIZATION_REJECTION_SHA256 = "5e8326b8090dffb33645ae88855986e54e7df3143ddc981566caaa6c10a6522e"
+REJECTED_NORMALIZATION_COMMIT = "d350c4785abe9932d054c82d9aff03f00dc37255"
+REJECTED_NORMALIZATION_TREE = "6da92ac6c53ac378c92d313c682be900a19ae417"
+REJECTED_VOLUME_COMMIT = "20a3a66acc2bd92638fd13b1377225ff8e8def6f"
+REJECTED_VOLUME_TREE = "bb14c2880ebce1a07ff32632bb7b63aa14ec5f26"
 
 CONSUMERS = ("FINAL_PROFITABILITY", "FUTURE_S_DASH_DATA")
 
@@ -227,6 +241,25 @@ class Pin:
     blob: str
     size: int
     raw_sha256: str
+
+
+MAKER_PIN = Pin(
+    "2fd5e8a42e53286bbb8ac9260ea99986dc4ebb9e",
+    "983d535919fab24dc0b23c53b54e943320cdfa91",
+    "quant/research/maker_fee_edge_grid/result.v1.json",
+    "b784271a111a7cec808afd2f7f8c3d322d428fc4",
+    3770,
+    "d3b694562ca88cec109b8fd410fba718123e73115fb297ee1bc66f24591fb726",
+)
+
+VOLUME_PIN = Pin(
+    "88751475d2b4f30b080ac947f478a4bbc38cbbdf",
+    "9a4c4a77ff7b8b8b0df87674b4542e784dec5af0",
+    "quant/research/volume-economics/terminal-result.v1.json",
+    "26a8c1b068bdd9a63c0b1f9ea8e9b232c4b8aca8",
+    3858,
+    "d80082013147b42cfacb8bf9c0b9df420bba081ca4ba26f517b82c9b804b1929",
+)
 
 
 @dataclass(frozen=True)
@@ -728,22 +761,48 @@ S2_IDS = tuple(f"S-2{chr(code)}" for code in range(ord("A"), ord("M") + 1))
 DQ_IDS = tuple(f"DQ-{number}" for number in range(1, 16))
 TARGET_IDS = S1_IDS + VG_IDS + S2_IDS + DQ_IDS
 TARGET_DISPOSITION_PATTERN = re.compile(r"\b(S-1[A-Z]{1,2}|V-G[0-9]+|S-2[A-Z]+|DQ-[0-9]+)\b")
-FINAL_ROW_TOKENS = ("ACCEPTANCE", "REJECTION", "DISTINCTNESS STOP", "SOURCE STOP")
+CONTROL_FAMILY_TOKENS = (
+    "MAKER-FEE",
+    "MAKER FEE",
+    "MAKER GRID",
+    "VOLUME-CORRECTION",
+    "VOLUME CORRECTION",
+    "VOLUME-ECONOMICS",
+    "VOLUME ECONOMICS",
+)
 
 
 def reject_post_census_rows(rows: Mapping[str, bytes]) -> None:
+    known_control_rows = {
+        MAKER_ACCEPTANCE_ID,
+        VOLUME_REJECTED_PREDECESSOR_ID,
+        VOLUME_ACCEPTANCE_ID,
+    }
     for record_id in rows:
         upper = record_id.upper()
-        if "ORCHESTRATOR" in upper and any(token in upper for token in FINAL_ROW_TOKENS):
+        if "ORCHESTRATOR" in upper:
             for match in TARGET_DISPOSITION_PATTERN.findall(upper):
                 require(match in TARGET_IDS, f"new target disposition requires successor: {match}")
-        is_final = "ACCEPTANCE" in upper or "TERMINAL" in upper or "VERDICT" in upper
-        maker_terminal = "MAKER" in upper and is_final
-        volume_terminal = "VOLUME" in upper and "ECON" in upper and is_final
+        control_terminal = any(token in upper for token in CONTROL_FAMILY_TOKENS)
         require(
-            not maker_terminal and not volume_terminal,
-            f"pending input has a newer terminal row: {record_id}",
+            not control_terminal or record_id in known_control_rows,
+            f"unbound control terminal requires successor: {record_id}",
         )
+
+
+def reject_unbound_target_rows(
+    rows: Mapping[str, bytes],
+    allowed_receipt_ids: set[str],
+) -> None:
+    for record_id in rows:
+        upper = record_id.upper()
+        if "ORCHESTRATOR" not in upper:
+            continue
+        if TARGET_DISPOSITION_PATTERN.search(upper):
+            require(
+                record_id in allowed_receipt_ids,
+                f"unbound target disposition requires successor: {record_id}",
+            )
 
 
 def category(record_id: str) -> str:
@@ -758,10 +817,10 @@ def category(record_id: str) -> str:
     return "CONTROL"
 
 
-def pin_dict(pin: Pin, *, trusted: bool) -> dict[str, Any]:
+def pin_dict(pin: Pin, *, trusted: bool, content_read: bool = False) -> dict[str, Any]:
     return {
         "byteLength": pin.size,
-        "contentReadForNormalization": False,
+        "contentReadForNormalization": content_read,
         "gitBlob": pin.blob,
         "path": pin.path,
         "rawSha256": pin.raw_sha256,
@@ -824,10 +883,13 @@ def common_record(
     limitations: Sequence[str],
     holdout_value: str | None = None,
     oos_value: str | None = None,
+    oos_state_override: str | None = None,
     task_locator_suffix: str | None = None,
+    fees_override: Mapping[str, Any] | None = None,
+    capacity_override: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     economic = disposition == "ACCEPTED_ECONOMIC"
-    derived_oos_state = oos_state(holdout_state)
+    derived_oos_state = oos_state_override or oos_state(holdout_state)
     require(
         (derived_oos_state == "SOURCE_BOUND") == (oos_value is not None),
         f"{record_id}: OOS state/value mismatch",
@@ -836,7 +898,12 @@ def common_record(
         (holdout_state in {"OPENED", "OPENED_NO_VALID_COHORT"}) == (holdout_value is not None),
         f"{record_id}: holdout state/value mismatch",
     )
-    if economic:
+    if fees_override is not None or capacity_override is not None:
+        if fees_override is None or capacity_override is None:
+            fail(f"{record_id}: fee/capacity overrides must be paired")
+        fees = dict(fees_override)
+        capacity = dict(capacity_override)
+    elif economic:
         fees = {
             "accountEffectiveState": "UNKNOWN",
             "accountEffectiveValue": None,
@@ -903,7 +970,7 @@ def common_record(
         f"{record_id}: result pin/absence invariant",
     )
     require(
-        normalized_verdict in {None, "NO_GO", "UNMEASURED"},
+        normalized_verdict in {None, "NO_GO", "UNMEASURED", "UNKNOWN_DATA", "INVALID_TEST"},
         f"{record_id}: bad normalized verdict",
     )
     return {
@@ -1178,31 +1245,260 @@ def extra_record(
     )
 
 
-def pending_record(
-    rows: Mapping[str, bytes],
-    record_id: str,
-    reason: str,
-    task_locator_suffix: str,
-) -> dict[str, Any]:
+def maker_record(repo: Path, rows: Mapping[str, bytes]) -> dict[str, Any]:
+    verify_pin(
+        repo,
+        {
+            "byteLength": MAKER_PIN.size,
+            "gitBlob": MAKER_PIN.blob,
+            "path": MAKER_PIN.path,
+            "producerCommit": MAKER_PIN.commit,
+            "producerTree": MAKER_PIN.tree,
+            "rawSha256": MAKER_PIN.raw_sha256,
+        },
+        "BASIS-MAKER-REAL-TIER-GRID",
+    )
+    result = strict_load(
+        read_blob(repo, MAKER_PIN.commit, MAKER_PIN.path),
+        "accepted maker result",
+        decimals=True,
+    )
+    require(result["schema"] == "MakerFeeEdgeGridResultV1", "maker schema drift")
+    require(result["status"] == "BLOCKED", "maker status drift")
+    require(result["normalizedVerdict"] == "UNKNOWN_DATA", "maker verdict drift")
+    require(
+        result["blocker"] == "ACCEPTED_E1_BODY_BYTES_UNAVAILABLE",
+        "maker blocker drift",
+    )
+    require(result["accountEffectiveFees"] == "UNKNOWN", "maker account-fee drift")
+    require(result["positiveEdgeClaim"] == "NOT_MADE", "maker positive-claim drift")
+    require(result["verifiedPositiveCount"] is None, "maker positive-count null drift")
+    require(result["recommendation"] == "NONE", "maker recommendation drift")
+    require(result["capitalAuthority"] == "NONE", "maker authority drift")
+    scenarios = result["scenarios"]
+    require(type(scenarios) is list and len(scenarios) == 2, "maker scenario census drift")
+    expected_scenarios = (
+        ("PUBLIC_REGULAR_USDT_NO_BNB", "10", "10", "2", "5"),
+        ("PUBLIC_REGULAR_USDT_BNB_SENSITIVITY", "7.5", "7.5", "1.8", "4.5"),
+    )
+    null_fields = (
+        "netUsdPer1000SpotEntryNotional",
+        "interval95UsdPer1000SpotEntryNotional",
+        "maxDrawdownUsd",
+        "maxDrawdownFraction",
+        "capacityUsd",
+        "positiveSubsetCount",
+        "feeDecompositionUsd",
+        "pairAndPredeclaredRegimeBreakdown",
+    )
+    for index, scenario in enumerate(scenarios):
+        expected = expected_scenarios[index]
+        require(type(scenario) is dict, "maker scenario object drift")
+        scenario_id, spot_maker, spot_exit, usdtm_maker, usdtm_exit = expected
+        require(scenario["scenarioId"] == scenario_id, "maker scenario id drift")
+        require(scenario["measurementState"] == "NOT_MEASURED", "maker measurement drift")
+        require(scenario["spotEntryMakerBps"] == spot_maker, "maker Spot-entry fee drift")
+        require(scenario["spotExitTakerBps"] == spot_exit, "maker Spot-exit fee drift")
+        require(scenario["usdtMEntryMakerBps"] == usdtm_maker, "maker USD-M-entry fee drift")
+        require(scenario["usdtMExitTakerBps"] == usdtm_exit, "maker USD-M-exit fee drift")
+        require(
+            all(scenario[field] is None for field in null_fields),
+            "maker null economics drift",
+        )
+    gate = result["statisticalGate"]
+    require(gate["makerGridOutcomesOpened"] is False, "maker outcome-open drift")
+    require(gate["testedScenarioCount"] == 0, "maker tested-scenario drift")
+    require(gate["testedSubsetCount"] == 0, "maker tested-subset drift")
+    require(gate["independentOosHoldout"] == "NOT_OPENED", "maker OOS drift")
+    require(gate["pbo"] == "NOT_RUN", "maker PBO drift")
+    require(gate["holmFamilywise"] == "NOT_RUN", "maker Holm drift")
+    require(gate["simultaneousLowerBound"] == "NOT_RUN", "maker lower-bound drift")
+    require(
+        result["executionTruth"]["executableCapacity"] == "UNKNOWN",
+        "maker capacity drift",
+    )
     return common_record(
-        record_id=record_id,
-        disposition="PENDING",
-        n3_consumption="PENDING",
-        run_receipt=receipt(rows, OWNER_BURST_ID, OWNER_BURST_SHA256),
-        producer=None,
-        result_pin=None,
-        absence_reason="PENDING_INPUT",
-        source_verdict=None,
-        normalized_verdict=None,
-        credibility_state="PENDING",
-        credibility_reason="NO_ACCEPTED_RESULT",
-        holdout_state="PENDING",
-        pbo=pbo_fact(record_id, "PENDING", None),
-        rejection_code=None,
-        rejection_detail=None,
+        record_id="BASIS-MAKER-REAL-TIER-GRID",
+        disposition="ACCEPTED_SOURCE_ONLY",
+        n3_consumption="SOURCE_ONLY",
+        run_receipt=receipt(rows, MAKER_ACCEPTANCE_ID, MAKER_ACCEPTANCE_SHA256),
+        producer=producer_dict(MAKER_PIN),
+        result_pin=pin_dict(MAKER_PIN, trusted=False, content_read=True),
+        absence_reason=None,
+        source_verdict="UNKNOWN_DATA",
+        normalized_verdict="UNKNOWN_DATA",
+        credibility_state="NOT_CREDIBLE_POSITIVE",
+        credibility_reason="ACCEPTED_SOURCE_ONLY_UNKNOWN_DATA",
+        holdout_state="UNOPENED",
+        pbo=pbo_fact("BASIS-MAKER-REAL-TIER-GRID", "NOT_RUN", None),
+        rejection_code="UNKNOWN_DATA",
+        rejection_detail="ACCEPTED_E1_BODY_BYTES_UNAVAILABLE",
         economic_consumable=False,
-        limitations=(reason, "TASK_SUFFIX_LOCATOR_ONLY", "NO_ACTIVE_OUTCOME_BYTES_INSPECTED"),
-        task_locator_suffix=task_locator_suffix,
+        limitations=tuple(str(value) for value in result["knownLimitations"]),
+        fees_override={
+            "accountEffectiveState": "UNKNOWN",
+            "accountEffectiveValue": None,
+            "publicProxyState": "PUBLIC_SCHEDULE_SCENARIO_ONLY",
+            "publicProxyValue": (
+                "PUBLIC_REGULAR_USDT_NO_BNB=SPOT_10/10_BPS;USDTM_2/5_BPS|"
+                "PUBLIC_REGULAR_USDT_BNB_SENSITIVITY=SPOT_7.5/7.5_BPS;"
+                "USDTM_1.8/4.5_BPS"
+            ),
+        },
+        capacity_override={
+            "executableState": "UNKNOWN",
+            "executableValue": None,
+            "measurementState": "UNMEASURED",
+            "publicProxyState": "NOT_MEASURED",
+            "publicProxyValue": None,
+        },
+    )
+
+
+def volume_record(repo: Path, rows: Mapping[str, bytes]) -> dict[str, Any]:
+    verify_pin(
+        repo,
+        {
+            "byteLength": VOLUME_PIN.size,
+            "gitBlob": VOLUME_PIN.blob,
+            "path": VOLUME_PIN.path,
+            "producerCommit": VOLUME_PIN.commit,
+            "producerTree": VOLUME_PIN.tree,
+            "rawSha256": VOLUME_PIN.raw_sha256,
+        },
+        "VOLUME-ECONOMICS",
+    )
+    result = strict_load(
+        read_blob(repo, VOLUME_PIN.commit, VOLUME_PIN.path),
+        "accepted Volume result",
+        decimals=True,
+    )
+    require(
+        result["schemaVersion"] == "volume.archive-conditional-economics.v1",
+        "Volume schema drift",
+    )
+    require(result["testStatus"] == "INVALID_TEST", "Volume test-status drift")
+    require(result["measurementStatus"] == "UNMEASURED", "Volume measurement drift")
+    require(result["goNoGo"] == "NOT_APPLICABLE", "Volume go/no-go drift")
+    require(
+        result["economics"]
+        == {
+            "confidenceInterval95": None,
+            "drawdown": None,
+            "eventSample": None,
+            "netSyntheticUsdtPer1000": None,
+            "netUsdPer1000": None,
+        },
+        "Volume null economics drift",
+    )
+    require(
+        result["capacity"]
+        == {
+            "extrapolationForbidden": True,
+            "fullUniverseCapacity": "UNKNOWN",
+            "measuredCapacity": None,
+            "supports1000QuoteNotional": "UNKNOWN",
+        },
+        "Volume capacity drift",
+    )
+    require(
+        result["feePosture"]
+        == {
+            "accountEffectiveFeeState": "UNKNOWN",
+            "publicScenariosEvaluated": False,
+            "usdEquivalenceEstablished": False,
+        },
+        "Volume fee drift",
+    )
+    require(result["phases"] is None and result["sample"] is None, "Volume sample null drift")
+    verdict = result["verdict"]
+    reason_codes = [
+        "SOURCE_DUPLICATE_KLINE_OPEN_TIME_REPORTED",
+        "SOURCE_OUT_OF_ORDER_KLINE_OPEN_TIME_REPORTED",
+        "UNAUTHORIZED_SOURCE_CANONICALIZATION",
+    ]
+    require(verdict["testDisposition"] == "INVALID_TEST", "Volume disposition drift")
+    require(verdict["archiveConditional"] == "UNMEASURED", "Volume archive verdict drift")
+    require(verdict["accountEffective"] == "UNMEASURED", "Volume account verdict drift")
+    require(verdict["acceptedVe2ProspectiveLifecycle"] == "UNMEASURED", "Volume lifecycle drift")
+    require(
+        verdict["oosGate"] == "FAILED_RETROSPECTIVE_OUTCOMES_PREVIOUSLY_OPENED",
+        "Volume OOS drift",
+    )
+    require(verdict["pboGate"] == "NOT_ESTABLISHED", "Volume PBO drift")
+    require(verdict["reasonCodes"] == reason_codes, "Volume reason-code drift")
+    require(verdict["executionAuthority"] == "NONE", "Volume execution-authority drift")
+    require(verdict["repairAuthority"] == "NONE", "Volume repair-authority drift")
+    require(verdict["rerunAuthority"] == "NONE", "Volume rerun-authority drift")
+    require(
+        result["sourceRules"]
+        == {
+            "deduplicationAllowed": False,
+            "gapFillOrRepairAllowed": False,
+            "nativeMicrosecondOpenTimeRequired": True,
+            "nativeTwelveFieldParsingRequired": True,
+            "rowOrSymbolExclusionAllowed": False,
+            "sortAllowed": False,
+            "uniqueStrictlyIncreasingOpenTimeRequired": True,
+            "validationTiming": "BEFORE_ANY_FEATURE_EVENT_OR_ECONOMIC_MEASUREMENT",
+        },
+        "Volume source-rule drift",
+    )
+    require(
+        result["source"]["predecessorInvalidTestCommit"]
+        == "20a3a66acc2bd92638fd13b1377225ff8e8def6f",
+        "Volume predecessor drift",
+    )
+    for phase in ("phase0", "phase1"):
+        evidence = result["rejectedEvidence"][phase]
+        require(
+            evidence["reportedDuplicateCollapsedKeysBySymbol"] == {"NEARUSDT": 2313},
+            f"Volume {phase} duplicate evidence drift",
+        )
+        require(
+            evidence["reportedOutOfOrderTransitionsBySymbol"] == {"NEARUSDT": 1},
+            f"Volume {phase} chronology evidence drift",
+        )
+    authority = result["authority"]
+    require(authority["mode"] == "SHADOW_ONLY", "Volume mode drift")
+    require(authority["strategyEnabled"] is False, "Volume strategy-enable drift")
+    require(authority["submitAuthority"] is False, "Volume submit-authority drift")
+    require(
+        authority["orderTransferWithdrawalMoneyAuthority"] is False,
+        "Volume effect-authority drift",
+    )
+    return common_record(
+        record_id="VOLUME-ECONOMICS",
+        disposition="ACCEPTED_SOURCE_ONLY",
+        n3_consumption="SOURCE_ONLY",
+        run_receipt=receipt(rows, VOLUME_ACCEPTANCE_ID, VOLUME_ACCEPTANCE_SHA256),
+        producer=producer_dict(VOLUME_PIN),
+        result_pin=pin_dict(VOLUME_PIN, trusted=False, content_read=True),
+        absence_reason=None,
+        source_verdict="INVALID_TEST",
+        normalized_verdict="INVALID_TEST",
+        credibility_state="NOT_CREDIBLE_POSITIVE",
+        credibility_reason="ACCEPTED_SOURCE_ONLY_INVALID_TEST",
+        holdout_state="INVALIDATED_BEFORE_ECONOMICS",
+        pbo=pbo_fact("VOLUME-ECONOMICS", "NOT_ESTABLISHED", None),
+        rejection_code="INVALID_TEST",
+        rejection_detail=";".join(reason_codes),
+        economic_consumable=False,
+        limitations=tuple(reason_codes),
+        oos_state_override="FAILED_RETROSPECTIVE_OUTCOMES_PREVIOUSLY_OPENED",
+        fees_override={
+            "accountEffectiveState": "UNKNOWN",
+            "accountEffectiveValue": None,
+            "publicProxyState": "NOT_MEASURED",
+            "publicProxyValue": None,
+        },
+        capacity_override={
+            "executableState": "UNKNOWN",
+            "executableValue": None,
+            "measurementState": "UNMEASURED",
+            "publicProxyState": "NOT_MEASURED",
+            "publicProxyValue": None,
+        },
     )
 
 
@@ -1272,16 +1568,45 @@ def build_documents(
 
     require(set(records) == set(TARGET_IDS), "target disposition universe mismatch")
     ordered_records = [records[record_id] for record_id in TARGET_IDS]
+    reject_unbound_target_rows(
+        rows,
+        {str(record["runReceipt"]["recordId"]) for record in ordered_records},
+    )
 
-    pending = [
-        pending_record(
-            rows,
-            "BASIS-MAKER-REAL-TIER-GRID",
-            "ACTUAL_MAKER_FEE_PER_PAIR_PER_REGIME_PENDING",
-            "7179",
-        ),
-        pending_record(rows, "VOLUME-ECONOMICS", "VOLUME_ECONOMIC_NUMBER_PENDING", "e15a"),
+    controls = [
+        maker_record(repo, rows),
+        volume_record(repo, rows),
     ]
+    require(
+        git_tree(repo, REJECTED_NORMALIZATION_COMMIT) == REJECTED_NORMALIZATION_TREE,
+        "rejected normalization predecessor tree mismatch",
+    )
+    require(
+        git_tree(repo, REJECTED_VOLUME_COMMIT) == REJECTED_VOLUME_TREE,
+        "rejected Volume predecessor tree mismatch",
+    )
+    supersedes = {
+        "normalization": {
+            "commit": REJECTED_NORMALIZATION_COMMIT,
+            "disposition": "REJECTED_STALE_INPUT",
+            "runReceipt": receipt(
+                rows,
+                NORMALIZATION_REJECTION_ID,
+                NORMALIZATION_REJECTION_SHA256,
+            ),
+            "tree": REJECTED_NORMALIZATION_TREE,
+        },
+        "volume": {
+            "commit": REJECTED_VOLUME_COMMIT,
+            "disposition": "REJECTED_INVALID_TEST_ECONOMICS",
+            "runReceipt": receipt(
+                rows,
+                VOLUME_REJECTED_PREDECESSOR_ID,
+                VOLUME_REJECTED_PREDECESSOR_SHA256,
+            ),
+            "tree": REJECTED_VOLUME_TREE,
+        },
+    }
 
     source_spec = {
         "acceptedBoundary": {
@@ -1297,15 +1622,16 @@ def build_documents(
             "tree": N3_TREE,
         },
         "completeDispositionUniverse": True,
-        "pendingControls": pending,
+        "controlTerminals": controls,
         "records": ordered_records,
         "schema": SOURCE_SCHEMA_ID,
+        "supersedes": supersedes,
         "targetIds": list(TARGET_IDS),
         "version": VERSION,
     }
 
     all_records: list[dict[str, Any]] = []
-    for ordinal, record in enumerate([*ordered_records, *pending], start=1):
+    for ordinal, record in enumerate([*ordered_records, *controls], start=1):
         with_ordinal = dict(record)
         with_ordinal["ordinal"] = ordinal
         all_records.append(with_ordinal)
@@ -1322,16 +1648,27 @@ def build_documents(
         dispositions
         == {
             "ACCEPTED_ECONOMIC": 59,
-            "ACCEPTED_SOURCE_ONLY": 13,
+            "ACCEPTED_SOURCE_ONLY": 15,
             "ACCEPTED_STATE_ONLY": 3,
             "REJECTED_PRESERVED": 7,
             "RETIRED_DUPLICATE": 10,
-            "PENDING": 2,
         },
         "disposition count drift",
     )
     require(consumptions["CONSUMED"] == 46, "consumed target count drift")
+    require(consumptions["SOURCE_ONLY"] == 15, "source-only count drift")
+    require(consumptions["PENDING"] == 0, "pending consumption drift")
     require(categories == {"S1": 26, "VG": 38, "S2": 13, "DQ": 15, "CONTROL": 2}, "category drift")
+    require(
+        normalized
+        == {
+            "INVALID_TEST": 1,
+            "NO_GO": 28,
+            "UNKNOWN_DATA": 1,
+            "UNMEASURED": 32,
+        },
+        "normalized verdict count drift",
+    )
     require(all(record["authority"] == "NONE" for record in all_records), "authority drift")
     require(
         not any(record["credibility"]["verifiedPositive"] is True for record in all_records),
@@ -1359,7 +1696,9 @@ def build_documents(
             "authority": "NONE",
             "categoryCounts": dict(sorted(categories.items())),
             "completeDispositionUniverse": True,
+            "controlTerminalCount": 2,
             "crediblePositiveCount": None,
+            "currentProfitabilityVerdict": "UNKNOWN",
             "dispositionCounts": dict(sorted(dispositions.items())),
             "economicConsumableCount": sum(record["economicConsumable"] for record in all_records),
             "n3Baseline": {
@@ -1371,18 +1710,20 @@ def build_documents(
                 "verifiedPositiveCount": 0,
             },
             "normalizedVerdictCounts": dict(sorted(normalized.items())),
-            "pendingInputCount": 2,
+            "pendingInputCount": 0,
             "positiveEdgeClaim": "NOT_MADE",
             "recommendation": "NONE",
             "recordCount": len(all_records),
             "targetDispositionCount": len(ordered_records),
             "verifiedPositiveCount": 0,
         },
+        "supersedes": supersedes,
         "truthPolicy": {
             "accountEffectiveFeesRemainUnknown": True,
             "crediblePositiveNullPreserved": True,
             "excludedOrRejectedEconomicsPromoted": False,
             "holdoutsReopened": False,
+            "invalidTestEconomicsPromoted": False,
             "missingValuesBecomeZero": False,
             "publicCapacityPromotedToExecutable": False,
             "sealedRunsReexecuted": False,
@@ -1433,7 +1774,7 @@ def schema_document() -> dict[str, Any]:
     result_pin_schema = closed(
         {
             "byteLength": {"minimum": 1, "type": "integer"},
-            "contentReadForNormalization": {"const": False},
+            "contentReadForNormalization": {"type": "boolean"},
             "gitBlob": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
             "path": {"type": "string"},
             "rawSha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
@@ -1446,17 +1787,15 @@ def schema_document() -> dict[str, Any]:
         "authority": {"const": "NONE"},
         "capacity": closed(
             {
-                "executableState": {"enum": ["UNKNOWN", "NOT_APPLICABLE", "PENDING"]},
+                "executableState": {"enum": ["UNKNOWN", "NOT_APPLICABLE"]},
                 "executableValue": null_value,
-                "measurementState": {
-                    "enum": ["UNMEASURED", "UNTRUSTED", "NOT_APPLICABLE", "PENDING"]
-                },
+                "measurementState": {"enum": ["UNMEASURED", "UNTRUSTED", "NOT_APPLICABLE"]},
                 "publicProxyState": {
                     "enum": [
                         "BOUND_RESULT_NOT_EXECUTABLE_TRUTH",
+                        "NOT_MEASURED",
                         "UNTRUSTED",
                         "NOT_APPLICABLE",
-                        "PENDING",
                     ]
                 },
                 "publicProxyValue": null_value,
@@ -1473,7 +1812,6 @@ def schema_document() -> dict[str, Any]:
                         "NOT_ECONOMIC",
                         "REJECTED_UNVERIFIED",
                         "NOT_APPLICABLE",
-                        "PENDING",
                     ]
                 },
                 "verifiedPositive": {"type": ["boolean", "null"]},
@@ -1486,23 +1824,23 @@ def schema_document() -> dict[str, Any]:
                 "ACCEPTED_STATE_ONLY",
                 "REJECTED_PRESERVED",
                 "RETIRED_DUPLICATE",
-                "PENDING",
             ]
         },
         "economicConsumable": {"type": "boolean"},
         "fees": closed(
             {
-                "accountEffectiveState": {"enum": ["UNKNOWN", "NOT_APPLICABLE", "PENDING"]},
+                "accountEffectiveState": {"enum": ["UNKNOWN", "NOT_APPLICABLE"]},
                 "accountEffectiveValue": null_value,
                 "publicProxyState": {
                     "enum": [
                         "BOUND_RESULT_NOT_ACCOUNT_TRUTH",
+                        "PUBLIC_SCHEDULE_SCENARIO_ONLY",
+                        "NOT_MEASURED",
                         "UNTRUSTED",
                         "NOT_APPLICABLE",
-                        "PENDING",
                     ]
                 },
-                "publicProxyValue": null_value,
+                "publicProxyValue": {"type": ["string", "null"]},
             }
         ),
         "holdout": closed(
@@ -1520,7 +1858,6 @@ def schema_document() -> dict[str, Any]:
                         "NOT_APPLICABLE",
                         "NOT_CREATED",
                         "UNACQUIRED_UNOPENED",
-                        "PENDING",
                     ]
                 },
                 "value": {"type": ["string", "null"]},
@@ -1535,10 +1872,11 @@ def schema_document() -> dict[str, Any]:
                 "STATE_ONLY",
                 "EXCLUDED_UNINSPECTED",
                 "FORBIDDEN",
-                "PENDING",
             ]
         },
-        "normalizedVerdict": {"enum": ["NO_GO", "UNMEASURED", None]},
+        "normalizedVerdict": {
+            "enum": ["NO_GO", "UNMEASURED", "UNKNOWN_DATA", "INVALID_TEST", None]
+        },
         "oos": closed(
             {
                 "evidence": {"const": "EXACT_ACCEPTED_DISPOSITION"},
@@ -1546,9 +1884,9 @@ def schema_document() -> dict[str, Any]:
                     "enum": [
                         "SOURCE_BOUND",
                         "CONSUMED_NO_REOPEN",
+                        "FAILED_RETROSPECTIVE_OUTCOMES_PREVIOUSLY_OPENED",
                         "NOT_APPLICABLE",
                         "UNMEASURED",
-                        "PENDING",
                         "NOT_EVALUATED",
                     ]
                 },
@@ -1566,7 +1904,8 @@ def schema_document() -> dict[str, Any]:
                         "NOT_REPORTED",
                         "NOT_APPLICABLE",
                         "UNTRUSTED",
-                        "PENDING",
+                        "NOT_RUN",
+                        "NOT_ESTABLISHED",
                     ]
                 },
                 "value": {"type": ["string", "null"]},
@@ -1577,7 +1916,7 @@ def schema_document() -> dict[str, Any]:
         "resultPin": {"oneOf": [result_pin_schema, {"type": "null"}]},
         "runReceipt": receipt_schema,
         "sourceVerdict": nullable_string,
-        "taskLocatorSuffix": nullable_string,
+        "taskLocatorSuffix": {"type": "null"},
     }
     record_schema = {
         "additionalProperties": False,
@@ -1601,17 +1940,39 @@ def schema_document() -> dict[str, Any]:
                 "else": {"properties": {"pbo": {"properties": {"value": {"type": "null"}}}}},
             },
             {
-                "if": {"properties": {"disposition": {"const": "PENDING"}}},
+                "if": {"properties": {"category": {"const": "CONTROL"}}},
                 "then": {
                     "properties": {
-                        "absenceReason": {"const": "PENDING_INPUT"},
+                        "disposition": {"const": "ACCEPTED_SOURCE_ONLY"},
                         "economicConsumable": {"const": False},
-                        "producer": {"type": "null"},
-                        "resultPin": {"type": "null"},
-                        "taskLocatorSuffix": {"pattern": "^[0-9a-f]{4}$", "type": "string"},
+                        "n3Consumption": {"const": "SOURCE_ONLY"},
+                        "resultPin": {
+                            "not": {"type": "null"},
+                            "properties": {
+                                "contentReadForNormalization": {"const": True},
+                                "trustedForEconomics": {"const": False},
+                            },
+                        },
                     }
                 },
-                "else": {"properties": {"taskLocatorSuffix": {"type": "null"}}},
+            },
+            {
+                "if": {"properties": {"id": {"const": "BASIS-MAKER-REAL-TIER-GRID"}}},
+                "then": {
+                    "properties": {
+                        "normalizedVerdict": {"const": "UNKNOWN_DATA"},
+                        "sourceVerdict": {"const": "UNKNOWN_DATA"},
+                    }
+                },
+            },
+            {
+                "if": {"properties": {"id": {"const": "VOLUME-ECONOMICS"}}},
+                "then": {
+                    "properties": {
+                        "normalizedVerdict": {"const": "INVALID_TEST"},
+                        "sourceVerdict": {"const": "INVALID_TEST"},
+                    }
+                },
             },
         ],
         "properties": record_properties,
@@ -1634,6 +1995,26 @@ def schema_document() -> dict[str, Any]:
             "tree": {"const": N3_TREE},
         }
     )
+    supersedes_schema = closed(
+        {
+            "normalization": closed(
+                {
+                    "commit": {"const": REJECTED_NORMALIZATION_COMMIT},
+                    "disposition": {"const": "REJECTED_STALE_INPUT"},
+                    "runReceipt": receipt_schema,
+                    "tree": {"const": REJECTED_NORMALIZATION_TREE},
+                }
+            ),
+            "volume": closed(
+                {
+                    "commit": {"const": REJECTED_VOLUME_COMMIT},
+                    "disposition": {"const": "REJECTED_INVALID_TEST_ECONOMICS"},
+                    "runReceipt": receipt_schema,
+                    "tree": {"const": REJECTED_VOLUME_TREE},
+                }
+            ),
+        }
+    )
     effects_schema = closed(
         {
             "credentialsUsed": {"const": False},
@@ -1652,13 +2033,14 @@ def schema_document() -> dict[str, Any]:
             "authority": {"const": "NONE"},
             "categoryCounts": {"const": {"CONTROL": 2, "DQ": 15, "S1": 26, "S2": 13, "VG": 38}},
             "completeDispositionUniverse": {"const": True},
+            "controlTerminalCount": {"const": 2},
             "crediblePositiveCount": {"type": "null"},
+            "currentProfitabilityVerdict": {"const": "UNKNOWN"},
             "dispositionCounts": {
                 "const": {
                     "ACCEPTED_ECONOMIC": 59,
-                    "ACCEPTED_SOURCE_ONLY": 13,
+                    "ACCEPTED_SOURCE_ONLY": 15,
                     "ACCEPTED_STATE_ONLY": 3,
-                    "PENDING": 2,
                     "REJECTED_PRESERVED": 7,
                     "RETIRED_DUPLICATE": 10,
                 }
@@ -1674,8 +2056,15 @@ def schema_document() -> dict[str, Any]:
                     "verifiedPositiveCount": 0,
                 }
             },
-            "normalizedVerdictCounts": {"const": {"NO_GO": 28, "UNMEASURED": 32}},
-            "pendingInputCount": {"const": 2},
+            "normalizedVerdictCounts": {
+                "const": {
+                    "INVALID_TEST": 1,
+                    "NO_GO": 28,
+                    "UNKNOWN_DATA": 1,
+                    "UNMEASURED": 32,
+                }
+            },
+            "pendingInputCount": {"const": 0},
             "positiveEdgeClaim": {"const": "NOT_MADE"},
             "recommendation": {"const": "NONE"},
             "recordCount": {"const": 94},
@@ -1689,6 +2078,7 @@ def schema_document() -> dict[str, Any]:
             "crediblePositiveNullPreserved": {"const": True},
             "excludedOrRejectedEconomicsPromoted": {"const": False},
             "holdoutsReopened": {"const": False},
+            "invalidTestEconomicsPromoted": {"const": False},
             "missingValuesBecomeZero": {"const": False},
             "publicCapacityPromotedToExecutable": {"const": False},
             "sealedRunsReexecuted": {"const": False},
@@ -1711,6 +2101,7 @@ def schema_document() -> dict[str, Any]:
             "schema": {"const": SCHEMA_ID},
             "sourceSpecSha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"},
             "summary": summary_schema,
+            "supersedes": supersedes_schema,
             "truthPolicy": truth_policy_schema,
             "version": {"const": VERSION},
         },
@@ -1722,6 +2113,7 @@ def schema_document() -> dict[str, Any]:
             "schema",
             "sourceSpecSha256",
             "summary",
+            "supersedes",
             "truthPolicy",
             "version",
         ],
@@ -1729,6 +2121,106 @@ def schema_document() -> dict[str, Any]:
         "type": "object",
         "unevaluatedProperties": False,
     }
+
+
+def short_identity(value: str, label: str) -> str:
+    require(len(value) >= 4, f"{label}: identity too short")
+    return f"…{value[-4:]}"
+
+
+def strategy_verdicts_bytes(registry: Mapping[str, Any]) -> bytes:
+    records = registry["records"]
+    require(type(records) is list, "strategy renderer: records must be an array")
+    by_id = {str(record["id"]): record for record in records}
+    require(len(by_id) == len(records), "strategy renderer: duplicate record id")
+    maker = by_id["BASIS-MAKER-REAL-TIER-GRID"]
+    volume = by_id["VOLUME-ECONOMICS"]
+    require(maker["normalizedVerdict"] == "UNKNOWN_DATA", "strategy renderer: maker verdict")
+    require(volume["normalizedVerdict"] == "INVALID_TEST", "strategy renderer: Volume verdict")
+    require(not maker["economicConsumable"], "strategy renderer: maker consumption")
+    require(not volume["economicConsumable"], "strategy renderer: Volume consumption")
+    maker_producer = maker["producer"]
+    maker_pin = maker["resultPin"]
+    volume_producer = volume["producer"]
+    volume_pin = volume["resultPin"]
+    require(
+        type(maker_producer) is dict and type(maker_pin) is dict,
+        "strategy renderer: maker pins",
+    )
+    require(
+        type(volume_producer) is dict and type(volume_pin) is dict,
+        "strategy renderer: Volume pins",
+    )
+    summary = registry["summary"]
+    require(summary["verifiedPositiveCount"] == 0, "strategy renderer: positive drift")
+    require(summary["crediblePositiveCount"] is None, "strategy renderer: credibility drift")
+    require(
+        summary["currentProfitabilityVerdict"] == "UNKNOWN",
+        "strategy renderer: profitability drift",
+    )
+    require(summary["authority"] == "NONE", "strategy renderer: authority drift")
+    consumer = registry["consumer"]
+    require(consumer == {"ids": list(CONSUMERS), "state": "EXACT"}, "strategy renderer: consumers")
+    require(
+        all(record["consumer"] == consumer for record in records),
+        "strategy renderer: record consumer divergence",
+    )
+    registry_digest = sha256(canonical_bytes(registry))
+    lines = [
+        (
+            "FABLE5-CLEAN. Source: verified normalized registry. "
+            "Consumers: `FINAL_PROFITABILITY`, `FUTURE_S_DASH_DATA`."
+        ),
+        "",
+        "# STRATEGY VERDICT INDEX",
+        "",
+        "| item | expected | found | status |",
+        "|---|---|---|---|",
+        (
+            "| normalized data | every accepted S-1/V-G/S-2/DQ disposition plus accepted "
+            f"control terminals | records {summary['recordCount']}; research dispositions "
+            f"{summary['targetDispositionCount']}; control terminals "
+            f"{summary['controlTerminalCount']} | SERVES FINAL_PROFITABILITY + "
+            "FUTURE_S_DASH_DATA |"
+        ),
+        (
+            "| final profitability | one evidence-only current verdict | accepted/verified "
+            "positives 0/0; credible-positive count null; global profitability UNKNOWN | "
+            "UNKNOWN; recommendation NONE; authority NONE |"
+        ),
+        (
+            "| maker grid …2fd5 | exact accepted public maker scenarios | result "
+            f"{short_identity(str(maker_pin['rawSha256']), 'maker result')}; net/interval/"
+            "drawdown/capacity/subsets null; account fees UNKNOWN; OOS/PBO not run | "
+            "UNKNOWN_DATA; SOURCE_ONLY; positive claim NONE |"
+        ),
+        (
+            "| Volume "
+            f"{short_identity(str(volume_producer['commit']), 'Volume commit')} | one admissible "
+            "finite result or exact invalid-test stop | result "
+            f"{short_identity(str(volume_pin['rawSha256']), 'Volume result')}; economics excluded; "
+            f"reason {volume['rejection']['code']} | INVALID_TEST; Volume UNMEASURED; "
+            "positive claim NONE |"
+        ),
+        (
+            "| truth gates | realistic costs + executable capacity + sealed OOS + overfitting "
+            "gates | account-effective fees UNKNOWN; executable capacity UNKNOWN; sealed runs "
+            "not reopened | no GO_CANDIDATE; recommendation NONE |"
+        ),
+        (
+            "| consumer binding | both data consumers use one exact registry | registry "
+            f"{short_identity(registry_digest, 'registry digest')}; source "
+            f"{short_identity(str(registry['sourceSpecSha256']), 'source digest')} | EXACT |"
+        ),
+        (
+            "| effects | evidence-only normalization | canonical/UI/host/private/orders/money "
+            "unchanged; $0 | authority NONE |"
+        ),
+        "",
+    ]
+    raw = "\n".join(lines).encode("utf-8")
+    require(b"\r" not in raw and raw.endswith(b"\n"), "strategy renderer: LF contract")
+    return raw
 
 
 def paths(base_dir: Path) -> tuple[Path, Path, Path]:
@@ -1739,13 +2231,101 @@ def paths(base_dir: Path) -> tuple[Path, Path, Path]:
     )
 
 
-def freeze(repo: Path, run_md: Path, base_dir: Path) -> None:
+def stage_bytes(path: Path, raw: bytes, mode: int) -> Path:
+    """Write and sync bytes beside a target without changing the target."""
+
+    temporary_name: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            delete=False,
+        ) as handle:
+            temporary_name = handle.name
+            handle.write(raw)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(temporary_name, mode)
+        return Path(temporary_name)
+    except BaseException:
+        if temporary_name is not None:
+            Path(temporary_name).unlink(missing_ok=True)
+        raise
+
+
+def sync_directories(paths_to_sync: Sequence[Path]) -> None:
+    for directory in sorted({path.parent for path in paths_to_sync}, key=str):
+        descriptor = os.open(directory, os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+
+def atomic_write_many(items: Sequence[tuple[Path, bytes]]) -> None:
+    """Replace an in-place output set with rollback on a partial replace failure."""
+
+    require(bool(items), "atomic output set must not be empty")
+    targets = [path for path, _ in items]
+    require(len(set(targets)) == len(targets), "atomic output targets must be unique")
+    for path in targets:
+        require(path.exists(), f"{path}: in-place target missing")
+        require(path.is_file() and not path.is_symlink(), f"{path}: regular file required")
+
+    originals = {path: (path.read_bytes(), path.stat().st_mode & 0o777) for path in targets}
+    staged: list[tuple[Path, Path]] = []
+    replaced: list[Path] = []
+    try:
+        for path, raw in items:
+            staged.append((path, stage_bytes(path, raw, originals[path][1])))
+        for path, temporary in staged:
+            os.replace(temporary, path)
+            replaced.append(path)
+        sync_directories(targets)
+    except OSError as exc:
+        rollback_errors: list[str] = []
+        for path in reversed(replaced):
+            rollback: Path | None = None
+            try:
+                original_raw, original_mode = originals[path]
+                rollback = stage_bytes(path, original_raw, original_mode)
+                os.replace(rollback, path)
+                rollback = None
+            except OSError as rollback_exc:
+                rollback_errors.append(f"{path}: {rollback_exc}")
+            finally:
+                if rollback is not None:
+                    rollback.unlink(missing_ok=True)
+        if replaced:
+            try:
+                sync_directories(replaced)
+            except OSError as rollback_sync_exc:
+                rollback_errors.append(f"directory sync: {rollback_sync_exc}")
+        if rollback_errors:
+            raise ContractError(
+                "atomic output replacement failed and rollback was incomplete: "
+                + "; ".join(rollback_errors)
+            ) from exc
+        raise
+    finally:
+        for _, temporary in staged:
+            temporary.unlink(missing_ok=True)
+
+
+def freeze(repo: Path, run_md: Path, base_dir: Path, strategy_verdicts: Path) -> None:
     schema, source_spec, registry = build_documents(repo, run_md)
-    base_dir.mkdir(parents=True, exist_ok=True)
+    require(base_dir.exists(), f"{base_dir}: base directory missing")
     values = (schema, source_spec, registry)
-    for index, path in enumerate(paths(base_dir)):
-        value = values[index]
-        path.write_bytes(canonical_bytes(value))
+    rendered = [canonical_bytes(value) for value in values]
+    strategy_raw = strategy_verdicts_bytes(registry)
+    output_paths = paths(base_dir)
+    require(len(output_paths) == len(rendered), "materialized output count drift")
+    document_outputs = (
+        (output_paths[0], rendered[0]),
+        (output_paths[1], rendered[1]),
+        (output_paths[2], rendered[2]),
+    )
+    atomic_write_many((*document_outputs, (strategy_verdicts, strategy_raw)))
 
 
 def verify_materialized(expected: Sequence[dict[str, Any]], base_dir: Path) -> None:
@@ -1757,8 +2337,13 @@ def verify_materialized(expected: Sequence[dict[str, Any]], base_dir: Path) -> N
         require(raw == canonical_bytes(value), f"{path.name}: noncanonical or content mismatch")
 
 
-def verify(repo: Path, run_md: Path, base_dir: Path) -> None:
-    verify_materialized(build_documents(repo, run_md), base_dir)
+def verify(repo: Path, run_md: Path, base_dir: Path, strategy_verdicts: Path) -> None:
+    expected = build_documents(repo, run_md)
+    verify_materialized(expected, base_dir)
+    require(
+        strategy_verdicts.read_bytes() == strategy_verdicts_bytes(expected[2]),
+        f"{strategy_verdicts}: content mismatch",
+    )
 
 
 def parser() -> argparse.ArgumentParser:
@@ -1767,6 +2352,7 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--repo", type=Path, default=Path.cwd())
     result.add_argument("--run-md", type=Path, default=Path("/Users/cosmosgeek/Desktop/run.md"))
     result.add_argument("--base-dir", type=Path, default=Path(__file__).resolve().parent)
+    result.add_argument("--strategy-verdicts", type=Path, required=True)
     return result
 
 
@@ -1774,9 +2360,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser().parse_args(argv)
     try:
         if args.command == "freeze":
-            freeze(args.repo.resolve(), args.run_md.resolve(), args.base_dir.resolve())
+            freeze(
+                args.repo.resolve(),
+                args.run_md.resolve(),
+                args.base_dir.resolve(),
+                args.strategy_verdicts.resolve(),
+            )
         else:
-            verify(args.repo.resolve(), args.run_md.resolve(), args.base_dir.resolve())
+            verify(
+                args.repo.resolve(),
+                args.run_md.resolve(),
+                args.base_dir.resolve(),
+                args.strategy_verdicts.resolve(),
+            )
     except (ContractError, OSError, KeyError, TypeError, ValueError) as exc:
         print(f"FAIL: {exc}", file=sys.stderr)
         return 1

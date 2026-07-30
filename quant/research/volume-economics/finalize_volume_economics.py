@@ -1,33 +1,23 @@
 #!/usr/bin/env python3
-"""Network-free normalization of the finite Volume archive economics."""
+"""Network-free invalid-test finalizer for the retained Volume archive run."""
 
 from __future__ import annotations
 
 import argparse
-import csv
 import hashlib
 import json
-import math
-from collections import defaultdict
-from decimal import Decimal, ROUND_HALF_UP, getcontext
 from pathlib import Path
 from typing import Any
 
-
-getcontext().prec = 60
-
+ROOT = Path(__file__).resolve().parent
 SCHEMA = "volume.archive-conditional-economics.v1"
 POLICY_SCHEMA = "volume.economics-policy.v1"
 RAW_RESULT_SCHEMA = "TEMP_VOLUME_12M_STATEFUL_CONDITIONAL_PROXY_V4"
-EVENT_NOTIONAL = Decimal("12")
-SLIPPAGE_RATE = Decimal("5") / Decimal("10000")
-PERIOD_START_S = 1_751_328_000
-PERIOD_DAYS = 365
-BOOTSTRAP_SEED = 20_260_728
-BOOTSTRAP_BLOCK_DAYS = 7
-BOOTSTRAP_REPLICATES = 2_000
-Q12 = Decimal("0.000000000001")
-RNG_DOMAIN = b"quant-edge-rng-v1\x00"
+FROZEN_POLICY_SHA256 = "27402815b52079d9d34eda0e822ec7a7598af9f12fe797533cde731a8551266e"
+INVALID_RUN_PRODUCER_SHA256 = "576ea91a27195553902766f78fa3994430fa30ff2a55f6bc3aaab251dca1b826"
+PREDECESSOR_COMMIT = "20a3a66acc2bd92638fd13b1377225ff8e8def6f"
+PREDECESSOR_TREE = "bb14c2880ebce1a07ff32632bb7b63aa14ec5f26"
+FAIL_CLOSED_ENTRYPOINT = "measure_volume_12m_fail_closed.py"
 
 
 def sha256_file(path: Path) -> str:
@@ -36,22 +26,6 @@ def sha256_file(path: Path) -> str:
         for block in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(block)
     return digest.hexdigest()
-
-
-def canonical_decimal(value: Decimal) -> str:
-    rendered = value.quantize(Q12, rounding=ROUND_HALF_UP)
-    if rendered == 0:
-        rendered = abs(rendered)
-    return format(rendered, "f")
-
-
-def next_u64(seed: int, counter: int) -> int:
-    material = (
-        RNG_DOMAIN
-        + seed.to_bytes(16, byteorder="big", signed=False)
-        + counter.to_bytes(8, byteorder="big", signed=False)
-    )
-    return int.from_bytes(hashlib.sha256(material).digest()[:8], byteorder="big")
 
 
 def require(condition: bool, code: str) -> None:
@@ -65,167 +39,11 @@ def read_json(path: Path) -> dict[str, Any]:
     return value
 
 
-def read_events(path: Path) -> list[dict[str, str]]:
-    with path.open(newline="", encoding="utf-8") as handle:
-        rows = list(csv.DictReader(handle))
-    require(bool(rows), f"EVENTS_EMPTY:{path.name}")
-    required = {
-        "symbol",
-        "focus_session_id",
-        "proposal_s",
-        "entry_open",
-        "exit_open",
-        "direction",
-        "participation_disposition",
-    }
-    require(required.issubset(rows[0]), f"EVENT_COLUMNS_INVALID:{path.name}")
-    identities: set[tuple[str, str]] = set()
-    last_order: tuple[int, str] | None = None
-    for row in rows:
-        require(
-            row["participation_disposition"] == "ACCEPTED_12USD_1PCT",
-            f"NON_ACCEPTED_EVENT:{path.name}",
-        )
-        identity = (row["symbol"], row["focus_session_id"])
-        require(identity not in identities, f"DUPLICATE_EVENT:{path.name}")
-        identities.add(identity)
-        order = (int(row["proposal_s"]), row["symbol"])
-        require(last_order is None or order >= last_order, f"EVENT_ORDER_INVALID:{path.name}")
-        last_order = order
-        require(row["direction"] in {"LONG", "SHORT_PREOWNED"}, f"DIRECTION_INVALID:{path.name}")
-        require(Decimal(row["entry_open"]) > 0, f"ENTRY_PRICE_INVALID:{path.name}")
-        require(Decimal(row["exit_open"]) > 0, f"EXIT_PRICE_INVALID:{path.name}")
-    return rows
-
-
-def event_pnl(row: dict[str, str], fee_bps_per_side: Decimal) -> Decimal:
-    entry_open = Decimal(row["entry_open"])
-    exit_open = Decimal(row["exit_open"])
-    fee_rate = fee_bps_per_side / Decimal("10000")
-    if row["direction"] == "LONG":
-        entry = entry_open * (Decimal(1) + SLIPPAGE_RATE)
-        exit_price = exit_open * (Decimal(1) - SLIPPAGE_RATE)
-        gross = EVENT_NOTIONAL * (exit_price / entry - Decimal(1))
-    else:
-        entry = entry_open * (Decimal(1) - SLIPPAGE_RATE)
-        exit_price = exit_open * (Decimal(1) + SLIPPAGE_RATE)
-        gross = EVENT_NOTIONAL * (Decimal(1) - exit_price / entry)
-    exit_notional = EVENT_NOTIONAL * exit_price / entry
-    fees = fee_rate * (EVENT_NOTIONAL + exit_notional)
-    return gross - fees
-
-
-def bootstrap(
-    rows: list[dict[str, str]],
-    pnls: list[Decimal],
-) -> dict[str, Any]:
-    daily_pnl = [Decimal(0) for _ in range(PERIOD_DAYS)]
-    daily_notional = [Decimal(0) for _ in range(PERIOD_DAYS)]
-    for row, pnl in zip(rows, pnls, strict=True):
-        day = (int(row["proposal_s"]) - PERIOD_START_S) // 86_400
-        require(0 <= day < PERIOD_DAYS, "EVENT_OUTSIDE_PERIOD")
-        daily_pnl[day] += pnl
-        daily_notional[day] += EVENT_NOTIONAL
-
-    blocks_needed = math.ceil(PERIOD_DAYS / BOOTSTRAP_BLOCK_DAYS)
-    replicates: list[Decimal] = []
-    counter = 0
-    for _ in range(BOOTSTRAP_REPLICATES):
-        indices: list[int] = []
-        for _ in range(blocks_needed):
-            start = next_u64(BOOTSTRAP_SEED, counter) % PERIOD_DAYS
-            counter += 1
-            indices.extend(
-                (start + offset) % PERIOD_DAYS
-                for offset in range(BOOTSTRAP_BLOCK_DAYS)
-            )
-        drawn = indices[:PERIOD_DAYS]
-        denominator = sum((daily_notional[index] for index in drawn), Decimal(0))
-        require(denominator > 0, "BOOTSTRAP_ZERO_NOTIONAL")
-        numerator = sum((daily_pnl[index] for index in drawn), Decimal(0))
-        replicates.append(Decimal(1000) * numerator / denominator)
-
-    replicates.sort()
-    lower_index = math.ceil(Decimal("0.025") * len(replicates)) - 1
-    upper_index = math.ceil(Decimal("0.975") * len(replicates)) - 1
-    total_notional = EVENT_NOTIONAL * len(rows)
-    point = Decimal(1000) * sum(pnls, Decimal(0)) / total_notional
-    return {
-        "method": "SEEDED_CIRCULAR_UTC_DAY_BLOCK_BOOTSTRAP_OF_PNL_OVER_ENTRY_NOTIONAL",
-        "seed": str(BOOTSTRAP_SEED),
-        "blockLengthUtcDays": BOOTSTRAP_BLOCK_DAYS,
-        "windowUtcDays": PERIOD_DAYS,
-        "replicates": BOOTSTRAP_REPLICATES,
-        "coverage": "0.95",
-        "quantileRule": "NEAREST_RANK_CEILING",
-        "pointNetSyntheticUsdtPer1000": canonical_decimal(point),
-        "lowerNetSyntheticUsdtPer1000": canonical_decimal(replicates[lower_index]),
-        "upperNetSyntheticUsdtPer1000": canonical_decimal(replicates[upper_index]),
-    }
-
-
-def drawdown(rows: list[dict[str, str]], pnls: list[Decimal]) -> dict[str, Any]:
-    cumulative = Decimal(0)
-    peak = Decimal(0)
-    peak_index = -1
-    max_drawdown = Decimal(0)
-    max_peak_index = -1
-    max_trough_index = -1
-    for index, pnl in enumerate(pnls):
-        cumulative += pnl
-        if cumulative > peak:
-            peak = cumulative
-            peak_index = index
-        current = peak - cumulative
-        if current > max_drawdown:
-            max_drawdown = current
-            max_peak_index = peak_index
-            max_trough_index = index
-
-    def coordinate(index: int) -> dict[str, Any] | None:
-        if index < 0:
-            return None
-        return {
-            "eventIndex": index,
-            "proposalEpochSecond": int(rows[index]["proposal_s"]),
-            "symbol": rows[index]["symbol"],
-        }
-
-    return {
-        "metric": "MAX_PEAK_TO_TROUGH_CUMULATIVE_MODELED_PNL",
-        "modeledPnlUsdtAt12UsdtEventNotional": canonical_decimal(max_drawdown),
-        "cumulativeOpportunityEdgePer1000Units": canonical_decimal(
-            max_drawdown * Decimal(1000) / EVENT_NOTIONAL
-        ),
-        "peak": coordinate(max_peak_index),
-        "trough": coordinate(max_trough_index),
-        "capitalDrawdownClaim": False,
-    }
-
-
-def scenario(
-    rows: list[dict[str, str]],
-    *,
-    scenario_id: str,
-    fee_bps_per_side: Decimal,
-) -> dict[str, Any]:
-    pnls = [event_pnl(row, fee_bps_per_side) for row in rows]
-    aggregate = sum(pnls, Decimal(0))
-    total_notional = EVENT_NOTIONAL * len(rows)
-    return {
-        "id": scenario_id,
-        "feeBpsPerSide": canonical_decimal(fee_bps_per_side),
-        "slippageBpsPerSide": "5.000000000000",
-        "accountEffective": False,
-        "events": len(rows),
-        "aggregateModeledPnlSyntheticUsdt": canonical_decimal(aggregate),
-        "aggregateEntryNotionalSyntheticUsdt": canonical_decimal(total_notional),
-        "netSyntheticUsdtPer1000": canonical_decimal(
-            Decimal(1000) * aggregate / total_notional
-        ),
-        "bootstrap95": bootstrap(rows, pnls),
-        "drawdown": drawdown(rows, pnls),
-    }
+def data_row_count(path: Path) -> int:
+    with path.open("rb") as handle:
+        lines = sum(1 for _ in handle)
+    require(lines > 1, f"EVENT_LEDGER_EMPTY:{path.name}")
+    return lines - 1
 
 
 def validate_raw_binding(
@@ -233,7 +51,6 @@ def validate_raw_binding(
     result_path: Path,
     events_path: Path,
     manifest_path: Path,
-    policy: dict[str, Any],
 ) -> None:
     require(result.get("schema") == RAW_RESULT_SCHEMA, f"RAW_SCHEMA_INVALID:{result_path.name}")
     require(result.get("resultClass") == "CONDITIONAL_PROXY_ONLY", "RAW_CLASS_INVALID")
@@ -252,16 +69,158 @@ def validate_raw_binding(
         f"EVENT_HASH_INVALID:{events_path.name}",
     )
     require(
-        events_binding.get("rows") == result["base"]["events"],
+        events_binding.get("rows") == data_row_count(events_path),
         f"EVENT_COUNT_BINDING_INVALID:{events_path.name}",
     )
     require(
-        script_binding.get("sha256") == policy["source"]["measurementScriptSha256"],
-        "SCRIPT_HASH_BINDING_INVALID",
+        events_binding.get("rows") == result["base"]["events"],
+        f"RAW_EVENT_COUNT_INVALID:{result_path.name}",
+    )
+    require(
+        script_binding.get("sha256") == INVALID_RUN_PRODUCER_SHA256,
+        f"INVALID_RUN_PRODUCER_BINDING:{result_path.name}",
     )
 
 
-def main() -> None:
+def validate_chronology_map(
+    result: dict[str, Any],
+    field: str,
+    symbols: list[str],
+    result_path: Path,
+) -> dict[str, int]:
+    value = result.get(field)
+    require(isinstance(value, dict), f"CHRONOLOGY_MAP_MISSING:{result_path.name}:{field}")
+    require(set(value) == set(symbols), f"CHRONOLOGY_SYMBOL_SET:{result_path.name}:{field}")
+    output: dict[str, int] = {}
+    for symbol in symbols:
+        count = value[symbol]
+        require(
+            isinstance(count, int) and not isinstance(count, bool) and count >= 0,
+            f"CHRONOLOGY_COUNT_INVALID:{result_path.name}:{field}:{symbol}",
+        )
+        output[symbol] = count
+    return output
+
+
+def rejected_phase(
+    *,
+    result: dict[str, Any],
+    result_path: Path,
+    events_path: Path,
+    symbols: list[str],
+) -> dict[str, Any]:
+    duplicate_map = validate_chronology_map(
+        result,
+        "archiveIdenticalDuplicateRowsBySymbol",
+        symbols,
+        result_path,
+    )
+    out_of_order_map = validate_chronology_map(
+        result,
+        "archiveOutOfOrderTransitionsBySymbol",
+        symbols,
+        result_path,
+    )
+    return {
+        "rawResultSha256": sha256_file(result_path),
+        "derivedEventLedgerSha256": sha256_file(events_path),
+        "reportedDuplicateCollapsedKeysBySymbol": {
+            symbol: count for symbol, count in duplicate_map.items() if count
+        },
+        "reportedOutOfOrderTransitionsBySymbol": {
+            symbol: count for symbol, count in out_of_order_map.items() if count
+        },
+    }
+
+
+def build_invalid_packet(
+    *,
+    policy: dict[str, Any],
+    raw_manifest_path: Path,
+    sealed_manifest_path: Path,
+    sealed_manifest: dict[str, Any],
+    rejected_evidence: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "schemaVersion": SCHEMA,
+        "policyId": policy["policyId"],
+        "testStatus": "INVALID_TEST",
+        "measurementStatus": "UNMEASURED",
+        "goNoGo": "NOT_APPLICABLE",
+        "source": {
+            "acceptedVolumeCommit": policy["source"]["acceptedVolumeCommit"],
+            "acceptedVolumeTree": policy["source"]["acceptedVolumeTree"],
+            "predecessorInvalidTestCommit": PREDECESSOR_COMMIT,
+            "predecessorInvalidTestTree": PREDECESSOR_TREE,
+            "invalidRunProducerSha256": INVALID_RUN_PRODUCER_SHA256,
+            "failClosedEntrypoint": FAIL_CLOSED_ENTRYPOINT,
+            "failClosedEntrypointSha256": sha256_file(ROOT / FAIL_CLOSED_ENTRYPOINT),
+            "rawArchiveManifestSha256": sha256_file(raw_manifest_path),
+            "sealedArchiveManifestSha256": sha256_file(sealed_manifest_path),
+            "archiveCount": sealed_manifest["archiveCount"],
+            "recordedOfficialChecksumVerifications": sealed_manifest[
+                "officialChecksumVerifiedCount"
+            ],
+            "rawArchiveBytesPresentInGit": False,
+        },
+        "period": {
+            "startInclusiveUtc": policy["dataset"]["startInclusiveUtc"],
+            "endExclusiveUtc": policy["dataset"]["endExclusiveUtc"],
+            "calendarDays": 365,
+        },
+        "sample": None,
+        "economics": {
+            "netUsdPer1000": None,
+            "netSyntheticUsdtPer1000": None,
+            "confidenceInterval95": None,
+            "drawdown": None,
+            "eventSample": None,
+        },
+        "capacity": {
+            "measuredCapacity": None,
+            "supports1000QuoteNotional": "UNKNOWN",
+            "fullUniverseCapacity": "UNKNOWN",
+            "extrapolationForbidden": True,
+        },
+        "feePosture": {
+            "publicScenariosEvaluated": False,
+            "accountEffectiveFeeState": "UNKNOWN",
+            "usdEquivalenceEstablished": False,
+        },
+        "phases": None,
+        "rejectedEvidence": rejected_evidence,
+        "verdict": {
+            "testDisposition": "INVALID_TEST",
+            "archiveConditional": "UNMEASURED",
+            "reasonCodes": [
+                "SOURCE_DUPLICATE_KLINE_OPEN_TIME_REPORTED",
+                "SOURCE_OUT_OF_ORDER_KLINE_OPEN_TIME_REPORTED",
+                "UNAUTHORIZED_SOURCE_CANONICALIZATION",
+            ],
+            "oosGate": policy["verdict"]["oosGate"],
+            "pboGate": policy["verdict"]["pboGate"],
+            "accountEffective": "UNMEASURED",
+            "acceptedVe2ProspectiveLifecycle": "UNMEASURED",
+            "repairAuthority": "NONE",
+            "rerunAuthority": "NONE",
+            "executionAuthority": "NONE",
+        },
+        "sourceRules": {
+            "validationTiming": "BEFORE_ANY_FEATURE_EVENT_OR_ECONOMIC_MEASUREMENT",
+            "nativeTwelveFieldParsingRequired": True,
+            "nativeMicrosecondOpenTimeRequired": True,
+            "uniqueStrictlyIncreasingOpenTimeRequired": True,
+            "sortAllowed": False,
+            "deduplicationAllowed": False,
+            "rowOrSymbolExclusionAllowed": False,
+            "gapFillOrRepairAllowed": False,
+        },
+        "consumer": policy["consumer"],
+        "authority": policy["defaults"],
+    }
+
+
+def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--policy", type=Path, required=True)
     parser.add_argument("--raw-manifest", type=Path, required=True)
@@ -271,19 +230,22 @@ def main() -> None:
     parser.add_argument("--phase0-result", type=Path, required=True)
     parser.add_argument("--phase1-result", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
+    require(sha256_file(args.policy) == FROZEN_POLICY_SHA256, "FROZEN_POLICY_CHANGED")
     policy = read_json(args.policy)
     raw_manifest = json.loads(args.raw_manifest.read_text(encoding="utf-8"))
     sealed_manifest = read_json(args.sealed_manifest)
     phase0_result = read_json(args.phase0_result)
     phase1_result = read_json(args.phase1_result)
-    phase0_events = read_events(args.phase0_events)
-    phase1_events = read_events(args.phase1_events)
 
     require(policy.get("schemaVersion") == POLICY_SCHEMA, "POLICY_SCHEMA_INVALID")
     require(policy.get("frozenBeforeCurrentRerunCompleted") is True, "POLICY_NOT_FROZEN")
     require(policy.get("outcomesKnownFromPriorConsumedRun") is True, "OUTCOME_HISTORY_HIDDEN")
+    require(
+        policy["source"]["measurementScriptSha256"] == INVALID_RUN_PRODUCER_SHA256,
+        "POLICY_PRODUCER_BINDING",
+    )
     require(
         isinstance(raw_manifest, list) and len(raw_manifest) == 120,
         "RAW_MANIFEST_COUNT_INVALID",
@@ -315,118 +277,45 @@ def main() -> None:
         args.phase0_result,
         args.phase0_events,
         args.raw_manifest,
-        policy,
     )
     validate_raw_binding(
         phase1_result,
         args.phase1_result,
         args.phase1_events,
         args.raw_manifest,
-        policy,
     )
-    require(len(phase0_events) == phase0_result["base"]["events"], "PHASE0_COUNT_INVALID")
-    require(len(phase1_events) == phase1_result["base"]["events"], "PHASE1_COUNT_INVALID")
 
-    phases: dict[str, Any] = {}
-    for phase_id, rows, raw_result_path, events_path in (
-        ("phase0", phase0_events, args.phase0_result, args.phase0_events),
-        ("phase1", phase1_events, args.phase1_result, args.phase1_events),
-    ):
-        phases[phase_id] = {
-            "timerPhase": 0 if phase_id == "phase0" else 1,
-            "rawResultSha256": sha256_file(raw_result_path),
-            "acceptedEventsSha256": sha256_file(events_path),
-            "scenarios": [
-                scenario(
-                    rows,
-                    scenario_id="PUBLIC_10_BPS_PER_SIDE",
-                    fee_bps_per_side=Decimal("10"),
-                ),
-                scenario(
-                    rows,
-                    scenario_id="PUBLIC_12_BPS_PER_SIDE_STRESS",
-                    fee_bps_per_side=Decimal("12"),
-                ),
-            ],
-        }
-
-    stress_upper = [
-        Decimal(
-            phases[phase_id]["scenarios"][1]["bootstrap95"][
-                "upperNetSyntheticUsdtPer1000"
-            ]
-        )
-        for phase_id in ("phase0", "phase1")
-    ]
-    for phase_id, raw_result in (
-        ("phase0", phase0_result),
-        ("phase1", phase1_result),
-    ):
-        reproduced = Decimal(
-            phases[phase_id]["scenarios"][0]["netSyntheticUsdtPer1000"]
-        )
-        retained = Decimal(str(raw_result["base"]["netUsdPer1000EntryNotional"]))
-        require(
-            abs(reproduced - retained) <= Decimal("0.000000001"),
-            f"RAW_ECONOMICS_RECONCILIATION:{phase_id}",
-        )
-    require(all(value < 0 for value in stress_upper), "NO_GO_GATE_NOT_MET")
-    packet = {
-        "schemaVersion": SCHEMA,
-        "policyId": policy["policyId"],
-        "source": {
-            "acceptedVolumeCommit": policy["source"]["acceptedVolumeCommit"],
-            "acceptedVolumeTree": policy["source"]["acceptedVolumeTree"],
-            "measurementScriptSha256": policy["source"]["measurementScriptSha256"],
-            "rawArchiveManifestSha256": sha256_file(args.raw_manifest),
-            "sealedArchiveManifestSha256": sha256_file(args.sealed_manifest),
-            "archiveCount": len(raw_manifest),
-            "officialChecksumsVerified": sealed_manifest[
-                "officialChecksumVerifiedCount"
-            ],
-        },
-        "period": {
-            "startInclusiveUtc": policy["dataset"]["startInclusiveUtc"],
-            "endExclusiveUtc": policy["dataset"]["endExclusiveUtc"],
-            "calendarDays": PERIOD_DAYS,
-        },
-        "sample": {
-            "symbols": policy["dataset"]["symbols"],
-            "symbolCount": len(policy["dataset"]["symbols"]),
-            "phase0ExactEvents": len(phase0_events),
-            "phase1ExactEvents": len(phase1_events),
-            "selectionState": policy["dataset"]["selectionState"],
-            "oosState": policy["verdict"]["oosGate"],
-        },
-        "capacity": policy["capacity"],
-        "feePosture": {
-            "publicScenariosOnly": True,
-            "accountEffectiveFeeState": "UNKNOWN",
-            "usdEquivalenceEstablished": False,
-        },
-        "phases": phases,
-        "verdict": {
-            "archiveConditional": "NO_GO",
-            "reason": "BOTH_TIMER_PHASE_PUBLIC_12_BPS_STRESS_BOOTSTRAP_95_UPPER_STRICTLY_BELOW_ZERO",
-            "oosGate": policy["verdict"]["oosGate"],
-            "pboGate": policy["verdict"]["pboGate"],
-            "positiveDisposition": policy["verdict"]["positiveDisposition"],
-            "accountEffective": "UNMEASURED",
-            "acceptedVe2ProspectiveLifecycle": "UNMEASURED",
-            "executionAuthority": "NONE",
-        },
-        "limitations": [
-            "CONDITIONAL_ARCHIVE_PROXY_ONLY",
-            "USDT_TO_USD_EQUIVALENCE_NOT_ESTABLISHED",
-            "HISTORICAL_BOOK_DEPTH_RECEIVE_CLOCK_AND_POINT_IN_TIME_FILTERS_ABSENT",
-            "UNAVAILABLE_BOOK_AND_CAPPED_RAW_TAPE_GATES_ASSUMED_PASS",
-            "CURRENT_COHORT_SURVIVORSHIP_BIAS",
-            "APR_JUN_SPLIT_RETROSPECTIVE_NOT_UNTOUCHED_OOS",
-            "SINGLE_1000_USDT_CAPACITY_UNKNOWN",
-        ],
-        "consumer": policy["consumer"],
-        "authority": policy["defaults"],
+    symbols = policy["dataset"]["symbols"]
+    rejected_evidence = {
+        "phase0": rejected_phase(
+            result=phase0_result,
+            result_path=args.phase0_result,
+            events_path=args.phase0_events,
+            symbols=symbols,
+        ),
+        "phase1": rejected_phase(
+            result=phase1_result,
+            result_path=args.phase1_result,
+            events_path=args.phase1_events,
+            symbols=symbols,
+        ),
     }
+    require(
+        any(
+            phase["reportedDuplicateCollapsedKeysBySymbol"]
+            or phase["reportedOutOfOrderTransitionsBySymbol"]
+            for phase in rejected_evidence.values()
+        ),
+        "SOURCE_CHRONOLOGY_DEFECT_REQUIRED",
+    )
+
+    packet = build_invalid_packet(
+        policy=policy,
+        raw_manifest_path=args.raw_manifest,
+        sealed_manifest_path=args.sealed_manifest,
+        sealed_manifest=sealed_manifest,
+        rejected_evidence=rejected_evidence,
+    )
     args.output.write_text(
         json.dumps(packet, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

@@ -90,6 +90,11 @@ export function pinnedLegacyL15ContractCompatibility(proof) {
     : null;
 }
 
+export function recoveryTargetValidatorCohortAllowed(validatorCohortMode) {
+  return validatorCohortMode === EXACT_TRUSTED_COHORT
+    || validatorCohortMode === PINNED_LEGACY_VALIDATION_ONLY;
+}
+
 export function selectExpectedL15AmendmentContractSha256(
   validatorCohortMode,
   exactTrustedCohortSha256,

@@ -229,9 +229,11 @@ if [ "$SIMULATION" = 1 ]; then
   node "$SCRIPT_DIR/validate-config.mjs" --env "$RUNTIME_ENV" --expected-sha "$CANDIDATE_SHA" >/dev/null
 fi
 if [ "$SIMULATION" = 1 ]; then
-  node "$SCRIPT_DIR/validate-release.mjs" --release "$RELEASE" --allow-simulation --require-exact-cohort >/dev/null
+  node "$SCRIPT_DIR/validate-release.mjs" --release "$RELEASE" --allow-simulation \
+    --require-recovery-target-cohort >/dev/null
 else
-  node "$SCRIPT_DIR/validate-release.mjs" --release "$RELEASE" --require-exact-cohort \
+  node "$SCRIPT_DIR/validate-release.mjs" --release "$RELEASE" --installed-immutable \
+    --require-recovery-target-cohort \
     --trusted-build-public-key "${I00_TRUSTED_BUILD_PUBLIC_KEY:?trusted build public key is required}" >/dev/null
 fi
 if [ "$FINALIZE_ONLY" != 1 ]; then

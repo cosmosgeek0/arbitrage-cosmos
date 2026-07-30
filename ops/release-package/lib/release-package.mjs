@@ -1,6 +1,9 @@
 import {
+  chmodSync,
   closeSync,
+  constants,
   existsSync,
+  fchmodSync,
   fstatSync,
   lstatSync,
   mkdirSync,
@@ -19,6 +22,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { spawnSync } from 'node:child_process';
 
 export const PACKAGE_SCHEMA = 'cosmos.release-package.v1';
+export const I00_PACKAGE_SCHEMA = 'cosmos.i00-release-package.v1';
 export const RELEASE_INPUT_SCHEMA = 'cosmos.release-input.v1';
 export const SHA_RE = /^[0-9a-f]{40}$/;
 export const SHA256_RE = /^[0-9a-f]{64}$/;
@@ -86,6 +90,56 @@ export function requirePrivateOutputRoot(path) {
   const mode = statSync(path).mode & 0o777;
   if ((mode & 0o077) !== 0) fail('--output-root must not be accessible by group or other');
   return path;
+}
+
+export function snapshotTrustedFile(sourcePath, destinationPath, label = 'trusted file') {
+  requireAbsoluteExisting(sourcePath, label, 'file');
+  const destinationParent = dirname(destinationPath);
+  requirePrivateOutputRoot(destinationParent);
+  if (dirname(destinationPath) !== destinationParent || existsSync(destinationPath)) {
+    fail(`${label} snapshot must be one absent private-root child`);
+  }
+  const namedBefore = lstatSync(sourcePath, { bigint: true });
+  if (!namedBefore.isFile() || namedBefore.isSymbolicLink()
+      || namedBefore.nlink !== 1n || (namedBefore.mode & 0o022n) !== 0n
+      || realpathSync(sourcePath) !== sourcePath) {
+    fail(`${label} must be canonical, single-link, and not group/world writable`);
+  }
+  const descriptor = openSync(
+    sourcePath,
+    constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+  );
+  let bytes;
+  try {
+    const openedBefore = fstatSync(descriptor, { bigint: true });
+    for (const field of ['dev', 'ino', 'mode', 'nlink', 'size', 'mtimeNs', 'ctimeNs']) {
+      if (openedBefore[field] !== namedBefore[field]) {
+        fail(`${label} identity changed while opening`);
+      }
+    }
+    bytes = readFileSync(descriptor);
+    const openedAfter = fstatSync(descriptor, { bigint: true });
+    const namedAfter = lstatSync(sourcePath, { bigint: true });
+    for (const field of ['dev', 'ino', 'mode', 'nlink', 'size', 'mtimeNs', 'ctimeNs']) {
+      if (openedAfter[field] !== openedBefore[field]
+          || namedAfter[field] !== openedBefore[field]) {
+        fail(`${label} identity changed while snapshotting`);
+      }
+    }
+  } finally {
+    closeSync(descriptor);
+  }
+  writeFileSync(destinationPath, bytes, { flag: 'wx', mode: 0o600 });
+  const snapshotStat = lstatSync(destinationPath);
+  if (!snapshotStat.isFile() || snapshotStat.nlink !== 1
+      || (snapshotStat.mode & 0o077) !== 0) {
+    rmSync(destinationPath, { force: true });
+    fail(`${label} snapshot is not one owner-only regular file`);
+  }
+  return Object.freeze({
+    path: destinationPath,
+    sha256: sha256(bytes),
+  });
 }
 
 export function parseArgs(argv, booleanKeys = new Set()) {
@@ -229,6 +283,7 @@ export function listTypedTree(root) {
       const child = join(absolute, name);
       const status = lstatSync(child);
       if (status.isSymbolicLink()) fail(`symbolic links are forbidden: ${relativePath}`);
+      if ((status.mode & 0o7000) !== 0) fail(`special mode bits are forbidden: ${relativePath}`);
       if (status.isDirectory()) {
         entries.push({
           path: relativePath,
@@ -361,14 +416,24 @@ function writeAll(descriptor, buffer) {
   while (offset < buffer.length) offset += writeSync(descriptor, buffer, offset, buffer.length - offset);
 }
 
-export function writeDeterministicTar({ releaseRoot, archivePath, packageRoot, entries, epoch }) {
+export function writeDeterministicTar({
+  releaseRoot,
+  archivePath,
+  packageRoot,
+  entries,
+  epoch,
+  rootMode = TARGET_MODES.directory,
+}) {
   if (!Number.isSafeInteger(epoch) || epoch < 0) fail('source date epoch must be a non-negative integer');
+  if (!Number.isSafeInteger(rootMode) || rootMode < 0 || rootMode > 0o777) {
+    fail('archive root mode must be an ordinary POSIX mode');
+  }
   const rootEntry = {
     path: '',
     type: 'directory',
     size: 0,
     sourceMode: 0o700,
-    targetMode: TARGET_MODES.directory,
+    targetMode: rootMode,
     sha256: null,
   };
   const descriptor = openSync(archivePath, 'wx', 0o600);
@@ -379,12 +444,52 @@ export function writeDeterministicTar({ releaseRoot, archivePath, packageRoot, e
       const storedPath = entry.path ? `${packageRoot}/${entry.path}` : packageRoot;
       writeAll(descriptor, ustarHeader(storedPath, entry, epoch));
       if (entry.type !== 'file') continue;
-      const input = openSync(resolve(releaseRoot, entry.path), 'r');
+      const inputPath = resolve(releaseRoot, entry.path);
+      const namedBefore = lstatSync(inputPath, { bigint: true });
+      if (!namedBefore.isFile() || namedBefore.isSymbolicLink()
+          || namedBefore.nlink !== 1n
+          || Number(namedBefore.size) !== entry.size
+          || Number(namedBefore.mode & 0o777n) !== entry.sourceMode) {
+        fail(`release member identity changed before archive read: ${entry.path}`);
+      }
+      const input = openSync(
+        inputPath,
+        constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+      );
       try {
-        for (;;) {
-          const count = readSync(input, copyBuffer, 0, copyBuffer.length, null);
-          if (count === 0) break;
+        const openedBefore = fstatSync(input, { bigint: true });
+        if (openedBefore.dev !== namedBefore.dev || openedBefore.ino !== namedBefore.ino
+            || openedBefore.size !== namedBefore.size
+            || openedBefore.mtimeNs !== namedBefore.mtimeNs
+            || openedBefore.ctimeNs !== namedBefore.ctimeNs) {
+          fail(`release member changed while opening for archive: ${entry.path}`);
+        }
+        const hash = createHash('sha256');
+        let remaining = entry.size;
+        while (remaining > 0) {
+          const count = readSync(
+            input,
+            copyBuffer,
+            0,
+            Math.min(copyBuffer.length, remaining),
+            null,
+          );
+          if (count === 0) fail(`release member ended early during archive read: ${entry.path}`);
           writeAll(descriptor, copyBuffer.subarray(0, count));
+          hash.update(copyBuffer.subarray(0, count));
+          remaining -= count;
+        }
+        if (readSync(input, copyBuffer, 0, 1, null) !== 0
+            || hash.digest('hex') !== entry.sha256) {
+          fail(`release member bytes changed during archive read: ${entry.path}`);
+        }
+        const openedAfter = fstatSync(input, { bigint: true });
+        const namedAfter = lstatSync(inputPath, { bigint: true });
+        for (const field of ['dev', 'ino', 'mode', 'nlink', 'size', 'mtimeNs', 'ctimeNs']) {
+          if (openedAfter[field] !== openedBefore[field]
+              || namedAfter[field] !== openedBefore[field]) {
+            fail(`release member identity changed during archive read: ${entry.path}`);
+          }
         }
       } finally {
         closeSync(input);
@@ -455,8 +560,25 @@ function parseHeader(header) {
   };
 }
 
-export function inspectDeterministicTar(archivePath, expectedRoot, expectedEpoch) {
+export function inspectDeterministicTar(
+  archivePath,
+  expectedRoot,
+  expectedEpoch,
+  { extractRoot = null } = {},
+) {
   requireAbsoluteExisting(archivePath, '--archive', 'file');
+  let extractedReleaseRoot = null;
+  const extractedDirectories = [];
+  if (extractRoot !== null) {
+    requirePrivateOutputRoot(extractRoot);
+    if (readdirSync(extractRoot).length !== 0) {
+      fail('private extraction root must be empty');
+    }
+    extractedReleaseRoot = resolve(extractRoot, expectedRoot);
+    if (dirname(extractedReleaseRoot) !== extractRoot || existsSync(extractedReleaseRoot)) {
+      fail('private extraction target must be one absent direct child');
+    }
+  }
   const descriptor = openSync(archivePath, 'r');
   const archiveSize = fstatSync(descriptor).size;
   const members = [];
@@ -475,6 +597,9 @@ export function inspectDeterministicTar(archivePath, expectedRoot, expectedEpoch
       }
       if (zeroBlocks !== 0) fail('archive contains a member after a zero block');
       const member = parseHeader(header);
+      if (!Number.isSafeInteger(member.mode) || member.mode < 0 || member.mode > 0o777) {
+        fail('archive member mode is outside ordinary POSIX permissions');
+      }
       const normalizedHeader = ustarHeader(member.path, {
         type: member.type,
         size: member.size,
@@ -491,6 +616,27 @@ export function inspectDeterministicTar(archivePath, expectedRoot, expectedEpoch
         fail('archive member escapes the single package root');
       }
       if (member.type === 'directory' && member.size !== 0) fail('archive directory has data');
+      let extractedDescriptor;
+      if (extractedReleaseRoot !== null) {
+        const outputPath = resolve(extractRoot, member.path);
+        if (outputPath !== extractedReleaseRoot
+            && !outputPath.startsWith(`${extractedReleaseRoot}${sep}`)) {
+          fail('archive extraction path escapes the private release root');
+        }
+        if (member.type === 'directory') {
+          mkdirSync(outputPath, { mode: 0o700, recursive: false });
+          extractedDirectories.push({ path: outputPath, mode: member.mode });
+        } else {
+          extractedDescriptor = openSync(
+            outputPath,
+            constants.O_WRONLY
+              | constants.O_CREAT
+              | constants.O_EXCL
+              | (constants.O_NOFOLLOW ?? 0),
+            0o600,
+          );
+        }
+      }
       let digest = null;
       let retained = null;
       if (member.type === 'file') {
@@ -507,9 +653,15 @@ export function inspectDeterministicTar(archivePath, expectedRoot, expectedEpoch
           remaining -= length;
           hash.update(chunk);
           if (shouldRetain) chunks.push(chunk);
+          if (extractedDescriptor !== undefined) writeAll(extractedDescriptor, chunk);
         }
         digest = hash.digest('hex');
         if (shouldRetain) retained = Buffer.concat(chunks);
+        if (extractedDescriptor !== undefined) {
+          fchmodSync(extractedDescriptor, member.mode);
+          closeSync(extractedDescriptor);
+          extractedDescriptor = undefined;
+        }
       }
       const padding = (512 - (member.size % 512)) % 512;
       if (padding > 0) {
@@ -541,7 +693,15 @@ export function inspectDeterministicTar(archivePath, expectedRoot, expectedEpoch
       if (ancestor.type !== 'directory') fail('archive contains a file/directory prefix collision');
     }
   }
-  return Object.freeze({ members, archiveSize });
+  if (extractedReleaseRoot !== null) {
+    for (const directory of extractedDirectories.reverse()) {
+      chmodSync(directory.path, directory.mode);
+    }
+    if (realpathSync(extractedReleaseRoot) !== extractedReleaseRoot) {
+      fail('private extracted release root is not physically canonical');
+    }
+  }
+  return Object.freeze({ members, archiveSize, extractedReleaseRoot });
 }
 
 export function inspectElfBytes(bytes, expectedArch, label = 'native addon') {
@@ -746,6 +906,173 @@ export function assertTargetModePlan(entries) {
       fail(`service group cannot execute ${entry.path}`);
     }
   }
+}
+
+const I00_RELEASE_KEYS = Object.freeze([
+  'releaseId', 'gitSha', 'testedSha', 'builtAtUtc', 'schemaVersion', 'rollbackBarrier',
+  'rollbackFloor', 'compatibilitySource', 'compatibilitySourceSha256',
+  'configRevision', 'modelRevision', 'testedReceipt', 'testedReceiptSha256', 'acceptanceEvidence',
+  'activationState', 'sourceTree', 'sourceVerification', 'packageLockSha256',
+  'runtimeDepsDigestSha256', 'serverDistDigestSha256', 'webDistDigestSha256',
+  'runtimeDependencies', 'l15OpsProvenance', 'buildAttestation',
+]);
+
+export function inspectI00ReleaseTree(releaseRoot, expectedInputSha, {
+  allowSimulation = false,
+  expectedSourceTree = null,
+} = {}) {
+  requireAbsoluteExisting(releaseRoot, '--release-root');
+  if (!SHA_RE.test(expectedInputSha)) fail('expected I00 input SHA must be a full lowercase Git SHA');
+  if (basename(releaseRoot) !== `i00-${expectedInputSha}`) {
+    fail('I00 release root name must be keyed by the exact input SHA');
+  }
+  const rootMode = lstatSync(releaseRoot).mode & 0o777;
+  if (rootMode !== 0o700) fail('assembled I00 release root must retain mode 0700');
+
+  const releasePath = resolve(releaseRoot, 'release.json');
+  const artifactPath = resolve(releaseRoot, 'artifact-manifest.json');
+  requireAbsoluteExisting(releasePath, 'I00 release.json', 'file');
+  requireAbsoluteExisting(artifactPath, 'I00 artifact-manifest.json', 'file');
+  const release = readJson(releasePath, 'I00 release.json');
+  const artifactManifest = readJson(artifactPath, 'I00 artifact-manifest.json');
+  requireExactKeys(release, I00_RELEASE_KEYS, 'I00 release.json');
+  requireExactKeys(artifactManifest, [
+    'schemaVersion', 'releaseId', 'testedSha', 'testedBuildOutputs',
+    'acceptanceEvidence', 'l15OpsProvenance', 'ledgerCompatibility',
+    'buildAttestation', 'files',
+  ], 'I00 artifact manifest');
+  if (release.releaseId !== `i00-${expectedInputSha}`
+      || release.gitSha !== expectedInputSha
+      || release.testedSha !== expectedInputSha
+      || artifactManifest.releaseId !== release.releaseId
+      || artifactManifest.testedSha !== expectedInputSha
+      || release.activationState !== 'NOT_DEPLOYED'
+      || release.runtimeDependencies !== 'BUNDLED_PREBUILT') {
+    fail('I00 release identity or activation state is invalid');
+  }
+  if (!SHA_RE.test(release.sourceTree)
+      || (expectedSourceTree !== null && release.sourceTree !== expectedSourceTree)) {
+    fail('I00 release source tree differs from the frozen source binding');
+  }
+  if (allowSimulation) {
+    if (release.sourceVerification !== 'SIMULATION_ONLY'
+        || canonicalJson(release.buildAttestation)
+          !== canonicalJson({ status: 'SIMULATION_ONLY_NOT_ATTESTED' })) {
+      fail('simulation I00 release is not explicitly isolated and unattested');
+    }
+  } else if (release.sourceVerification !== 'GIT_EXACT_CLEAN'
+      || release.buildAttestation?.status !== 'VERIFIED_ED25519') {
+    fail('production I00 release lacks exact source and attestation provenance');
+  }
+
+  const entries = listTypedTree(releaseRoot);
+  for (const entry of entries) {
+    if ((entry.sourceMode & 0o022) !== 0) {
+      fail(`I00 release member is group/world writable: ${entry.path}`);
+    }
+  }
+  const expectedFiles = entries
+    .filter((entry) => entry.type === 'file' && entry.path !== 'artifact-manifest.json')
+    .map((entry) => ({
+      path: entry.path,
+      sha256: entry.sha256,
+      mode: entry.sourceMode,
+    }));
+  if (!Array.isArray(artifactManifest.files)
+      || artifactManifest.files.length !== expectedFiles.length) {
+    fail('I00 artifact manifest file count is not exact');
+  }
+  for (const entry of artifactManifest.files) {
+    requireExactKeys(entry, ['path', 'sha256', 'mode'], 'I00 artifact manifest file');
+    if (typeof entry.path !== 'string' || !SHA256_RE.test(entry.sha256)
+        || !Number.isSafeInteger(entry.mode) || entry.mode < 0 || entry.mode > 0o777) {
+      fail('I00 artifact manifest file row is invalid');
+    }
+  }
+  if (canonicalJson(artifactManifest.files) !== canonicalJson(expectedFiles)) {
+    fail('I00 artifact manifest rows differ from exact release bytes, modes, order, or uniqueness');
+  }
+
+  return Object.freeze({
+    release,
+    artifactManifest,
+    artifactManifestSha256: sha256File(artifactPath),
+    releaseJsonSha256: sha256File(releasePath),
+    rootMode,
+    entries: entries.map((entry) => Object.freeze({
+      ...entry,
+      targetMode: entry.sourceMode,
+    })),
+  });
+}
+
+export function runTrustedI00Validator({
+  releaseRoot,
+  expectedInputSha,
+  allowSimulation = false,
+  trustedBuildPublicKey = null,
+}) {
+  requireAbsoluteExisting(releaseRoot, '--release-root');
+  if (!SHA_RE.test(expectedInputSha)) fail('expected validator input SHA must be a full lowercase Git SHA');
+  if (allowSimulation) {
+    if (trustedBuildPublicKey !== null) {
+      fail('simulation I00 validation cannot accept a trusted build key');
+    }
+  } else {
+    requireAbsoluteExisting(trustedBuildPublicKey, '--trusted-build-public-key', 'file');
+    const trustedKeyStat = lstatSync(trustedBuildPublicKey);
+    if (trustedKeyStat.nlink !== 1 || (trustedKeyStat.mode & 0o022) !== 0) {
+      fail('trusted build public key must be single-link and not group/world writable');
+    }
+    if (trustedBuildPublicKey === releaseRoot
+        || trustedBuildPublicKey.startsWith(`${releaseRoot}${sep}`)) {
+      fail('trusted build public key must be external to the I00 release tree');
+    }
+  }
+  const validator = requireAbsoluteExisting(
+    resolve(import.meta.dirname, '../../i00/bin/validate-release.mjs'),
+    'trusted I00 validator',
+    'file',
+  );
+  const validatorArgs = [
+    validator,
+    '--release', releaseRoot,
+    '--require-exact-cohort',
+  ];
+  if (allowSimulation) {
+    validatorArgs.push('--allow-simulation');
+  } else {
+    validatorArgs.push('--trusted-build-public-key', trustedBuildPublicKey);
+  }
+  const result = spawnSync(process.execPath, validatorArgs, {
+    encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      PATH: '/usr/bin:/bin:/usr/local/bin',
+      LC_ALL: 'C',
+      LANG: 'C',
+    },
+  });
+  if (result.status !== 0) {
+    fail(`trusted I00 validator rejected the release: ${String(result.stderr).trim() || `exit ${result.status ?? 'unknown'}`}`);
+  }
+  let receipt;
+  try {
+    receipt = JSON.parse(result.stdout.trim());
+  } catch {
+    fail('trusted I00 validator did not return one JSON receipt');
+  }
+  if (receipt.status !== 'RELEASE_VALID_NOT_DEPLOYED'
+      || receipt.releaseId !== `i00-${expectedInputSha}`
+      || receipt.testedSha !== expectedInputSha
+      || receipt.validatorCohortMode !== 'EXACT_TRUSTED_COHORT'
+      || !SHA256_RE.test(receipt.artifactManifestSha256)
+      || !Number.isSafeInteger(receipt.fileCount)
+      || receipt.fileCount <= 0) {
+    fail('trusted I00 validator receipt is not exact');
+  }
+  return Object.freeze(receipt);
 }
 
 export function writeCreateOnly(path, bytes, mode = 0o600) {

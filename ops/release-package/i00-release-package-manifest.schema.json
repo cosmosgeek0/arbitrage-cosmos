@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cosmosgeek.org/schemas/i00-release-package-manifest.v1.json",
+  "title": "Cosmos deterministic I00 release package manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "packageClass",
+    "packageRoot",
+    "inputSha",
+    "sourceTree",
+    "sourceDateEpoch",
+    "archive",
+    "i00Release",
+    "target",
+    "nativeAddons",
+    "serviceUnitContract",
+    "archiveModePlan",
+    "archiveModePlanSha256",
+    "members",
+    "installState",
+    "deployAuthority"
+  ],
+  "properties": {
+    "schema": { "const": "cosmos.i00-release-package.v1" },
+    "packageClass": { "enum": ["OFFHOST_I00_RELEASE", "SIMULATION_I00_RELEASE"] },
+    "packageRoot": { "type": "string", "pattern": "^i00-[0-9a-f]{40}$" },
+    "inputSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sourceTree": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sourceDateEpoch": { "type": "integer", "minimum": 0 },
+    "archive": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "sha256", "size", "format"],
+      "properties": {
+        "file": { "type": "string", "pattern": "^i00-[0-9a-f]{40}\\.tar$" },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "size": { "type": "integer", "minimum": 1024 },
+        "format": { "const": "ustar" }
+      }
+    },
+    "i00Release": { "type": "object" },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "arch"],
+      "properties": {
+        "platform": { "const": "linux" },
+        "arch": { "enum": ["x64", "arm64"] }
+      }
+    },
+    "nativeAddons": { "type": "array" },
+    "serviceUnitContract": { "type": "object" },
+    "archiveModePlan": { "type": "object" },
+    "archiveModePlanSha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "members": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "type", "size", "sha256", "sourceMode", "targetMode"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "type": { "enum": ["directory", "file"] },
+          "size": { "type": "integer", "minimum": 0 },
+          "sha256": {
+            "oneOf": [
+              { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+              { "type": "null" }
+            ]
+          },
+          "sourceMode": { "type": "integer", "minimum": 0, "maximum": 511 },
+          "targetMode": { "type": "integer", "minimum": 0, "maximum": 511 }
+        }
+      }
+    },
+    "installState": { "const": "NOT_INSTALLED" },
+    "deployAuthority": { "const": "NONE" }
+  }
+}

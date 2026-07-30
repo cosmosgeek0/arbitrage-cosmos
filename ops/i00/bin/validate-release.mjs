@@ -18,6 +18,7 @@ import {
   classifyValidatorCohort,
   EXACT_TRUSTED_COHORT,
   provePinnedLegacyValidatorCohort,
+  recoveryTargetValidatorCohortAllowed,
   selectExpectedL15AmendmentContractSha256,
 } from '../cohort-compatibility.mjs';
 import { assertReleaseMatchesCompiledLedger } from '../ledger-compatibility.mjs';
@@ -29,8 +30,17 @@ import {
 const EXPECTED_AMENDMENT_CONTRACT_SHA256 = '6b749cc288e5a0a89baa6344aa67f1b14159f0b0b67beb2090f775fbaefe5445';
 const args = parseArgs(
   process.argv.slice(2),
-  new Set(['allow-simulation', 'require-exact-cohort', 'installed-immutable']),
+  new Set([
+    'allow-simulation',
+    'require-exact-cohort',
+    'require-recovery-target-cohort',
+    'installed-immutable',
+  ]),
 );
+if (args['require-exact-cohort'] === true
+    && args['require-recovery-target-cohort'] === true) {
+  fail('exact-cohort and recovery-target-cohort requirements are mutually exclusive');
+}
 if (!args.release) fail('--release is required');
 
 function directoryIdentity(stat) {
@@ -173,6 +183,15 @@ if (validatorCohortMode === null) {
 }
 if (args['require-exact-cohort'] === true && validatorCohortMode !== EXACT_TRUSTED_COHORT) {
   fail('validation-only legacy cohort compatibility cannot authorize a release effect');
+}
+if (args['require-recovery-target-cohort'] === true
+    && !recoveryTargetValidatorCohortAllowed(validatorCohortMode)) {
+  fail('validator cohort cannot authorize a rollback target');
+}
+if (args['require-recovery-target-cohort'] === true
+    && validatorCohortMode !== EXACT_TRUSTED_COHORT
+    && args['installed-immutable'] !== true) {
+  fail('pinned legacy rollback target must be an installed immutable release');
 }
 const expectedL15AmendmentContractSha256 = selectExpectedL15AmendmentContractSha256(
   validatorCohortMode,

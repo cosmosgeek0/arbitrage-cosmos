@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "volume.economics-official-source-review.v1",
+  "reviewedAtUtc": "2026-07-30T00:48:20Z",
+  "sources": [
+    {
+      "name": "Binance Spot API documentation",
+      "repository": "https://github.com/binance/binance-spot-api-docs",
+      "commit": "6b8372cad7cecbdf5dd88a3372eafff51988c5cf",
+      "disposition": "UNCHANGED_FROM_ACCEPTED_V_I3_PIN"
+    },
+    {
+      "name": "Binance public data",
+      "repository": "https://github.com/binance/binance-public-data",
+      "commit": "5c7f3197591c0d54d85dc43066226bc4c671d47a",
+      "readmeSha256": "085ab91377aa9325d44f4c7ad27cce4ab381e158403e1d7df2bad39d1a66f7c6",
+      "disposition": "CURRENT_ARCHIVE_CONTRACT"
+    }
+  ],
+  "semantics": {
+    "archive": [
+      "Daily and monthly Spot archives document aggTrades, klines, and trades.",
+      "Spot archive timestamps from 2025-01-01 use microseconds.",
+      "Each ZIP has an adjacent SHA-256 sidecar and Binance may later replace archive files.",
+      "The retained manifest therefore binds URL, sidecar, advertised digest, recomputed digest, member name, and byte size."
+    ],
+    "liveStreams": [
+      "aggTrade is aggregated for a single taker order and carries aggregate ID plus first and last raw trade IDs.",
+      "trade is one raw buyer-seller match.",
+      "bookTicker is a real-time best-bid and best-ask update, not a contiguous depth chain.",
+      "Diff-depth replay requires snapshot bridging and update-range continuity; gaps require restart."
+    ],
+    "filters": [
+      "exchangeInfo is point-in-time current data, not historical archive data.",
+      "PRICE_FILTER, PERCENT_PRICE, PERCENT_PRICE_BY_SIDE, LOT_SIZE, MARKET_LOT_SIZE, MIN_NOTIONAL, and NOTIONAL are distinct constraints.",
+      "Percent-price filters require a current reference price or documented rolling weighted average.",
+      "Archive klines cannot establish every point-in-time live order-admission rule."
+    ],
+    "fees": [
+      "Exact commissions are symbol and account specific USER_DATA with standard, special, tax, and discount components.",
+      "Public 10 and 12 basis-point values are scenarios only; account-effective fees remain UNKNOWN."
+    ]
+  },
+  "boundary": {
+    "archiveConditionalEconomics": "ALLOWED",
+    "substituteForAcceptedVe2SynchronizedDepthLifecycle": false,
+    "accountEffectiveProfitability": "UNMEASURED",
+    "executionAuthority": "NONE"
+  }
+}

@@ -1,0 +1,337 @@
+{
+  "schema": "TEMP_VOLUME_12M_STATEFUL_CONDITIONAL_PROXY_V4",
+  "resultClass": "CONDITIONAL_PROXY_ONLY",
+  "generatedAt": "2026-07-30T00:50:47.492311+00:00",
+  "repositoryHead": "5d5733a6c6748e7844df966535bc0d66708d3a7d",
+  "frozenSourceDefaults": {
+    "killSwitch": true,
+    "allowedSymbols": [],
+    "sourceNativeGrossEdgePct": null,
+    "sourceNativeNetEdgePct": null,
+    "sourceNativeEdgePer1000": null,
+    "fillExitPnlPath": "NOT_WIRED",
+    "interpretation": "source-native edge is undefined, not observed zero"
+  },
+  "deployedMutableRuntime": "UNKNOWN_OFFLINE",
+  "conditionalReplayControls": {
+    "operatorControlsNeutralized": true,
+    "description": "kill switch and empty allowlist are neutralized only for this conditional research replay"
+  },
+  "period": {
+    "startInclusive": "2025-07-01T00:00:00Z",
+    "endExclusive": "2026-07-01T00:00:00Z",
+    "researchEndExclusive": "2026-04-01T00:00:00Z",
+    "temporalSplit": "APR_JUN_RETROSPECTIVE_SPLIT; not a prospective untouched holdout"
+  },
+  "eligibilityHistory": {
+    "preRollStart": "2025-06-29T00:00:00Z",
+    "firstFullyValidPrior24hCut": "2025-06-30T00:00:00Z",
+    "prePeriodLifecycleWarmupHoursAfterFirstValidCut": 24,
+    "boundaryCarrySeconds": 100800,
+    "boundaryCarryHours": 28.0,
+    "reason": "28h carry preserves a valid prior-24h eligibility cut for every one of the 240 prior baseline minutes",
+    "syntheticBoundaryPreflight": {
+      "status": "PASS",
+      "constantRolling24hQuoteUsd": 3020000.0,
+      "short24hPlus120sBaselineSamples": 61,
+      "shortReadyViaSourceMapped60mSeed": true,
+      "full28hPlus120sBaselineSamples": 240,
+      "fullReady": true,
+      "fine15sMoveAtReentryPct": 0.0,
+      "coarse5mSeededMoveAtReentryPct": 100.0,
+      "interpretation": "24h can only represent the re-entry seed; 28h preserves a full continuous prior-240m baseline with valid prior-24h eligibility cuts"
+    }
+  },
+  "cohort": [
+    "BTCUSDT",
+    "SOLUSDT",
+    "DOGEUSDT",
+    "NEARUSDT",
+    "AAVEUSDT",
+    "FETUSDT",
+    "INJUSDT",
+    "DOTUSDT"
+  ],
+  "cohortCoverage": {
+    "currentEligibleSymbols": 87,
+    "measuredSymbols": 8,
+    "fraction": 0.09195402298850575,
+    "selectionWarning": "current-cohort survivorship; not a historical point-in-time universe",
+    "full87Capacity": "UNKNOWN"
+  },
+  "sourceMappingCoverage": {
+    "status": "PARTIAL",
+    "known": [
+      "frozen threshold literals and 2s decision cadence",
+      "detector watch/focus/reject/ignore transition ordering",
+      "source 600s cooldown and 4s focus dwell literals"
+    ],
+    "causalSurrogates": [
+      "completed 1s kline windows cut at bar t and decided at t+1",
+      "unseeded 15s price start clamped to the current eligible-run boundary; aligned 5m price uses source-mapped coarse candle seed",
+      "prior-only median with immediate last-60 completed 1m seed on eligible re-entry, then bounded growth to 240m",
+      "15m-refreshed rolling 24h kline sum for mini-ticker eligibility",
+      "kline raw trade counts and taker-buy quote for aggTrade tape fields"
+    ],
+    "unknown": [
+      "historical Spot bid/ask spread",
+      "historical top-of-book depth score and depth-vs-norm",
+      "aggTrade-row 5s trade-count multiple and min-8 gate; 1s kline count is raw trades",
+      "15s taker-buy ratio under the engine 512-aggTrade raw-window cap",
+      "raw-trade max dominance under the 512-print cap",
+      "raw-trade wash-uniformity score",
+      "historical rolling mini-ticker 24h volume; 15m-refreshed kline sum is a surrogate",
+      "public REST seed latency, failure, and retry timing on eligible re-entry",
+      "sub-second timer/transport ordering and HTTP snapshot-read cadence that can mutate trigger age",
+      "full-87 focus competition, eviction, and protected occupancy",
+      "proposal refresh, TTL, and invalidation interactions",
+      "production protection-policy parameter values",
+      "owner confirmation/add-permission stages"
+    ],
+    "unknownGatePolicy": "ASSUME_PASS for unavailable book/depth and capped raw-tape gates; result remains conditional only",
+    "bookGateCoverageFraction": 0.0,
+    "aggTradeCountGateCoverageFraction": 0.0,
+    "rawTapeForensicsCoverageFraction": 0.0
+  },
+  "executionSurrogate": {
+    "notionalUsdPerEvent": 12.0,
+    "notionalSource": "frozen app maxOrderNotionalUsd default applied by runtime each tick",
+    "runtimeMutableCurrentNotional": "UNKNOWN_OFFLINE",
+    "feeBpsPerSide": 10.0,
+    "slippageBpsPerSide": 5.0,
+    "fillTiming": "completed bar t is decided at t+1; one-second latency fills at t+2 open",
+    "shortInventory": "preowned base, no borrow or leverage",
+    "exitPolicySource": "external hypothetical 60s exit-decision horizon plus 1s fill latency; no production exit exists",
+    "exitDecisionHorizonSeconds": 60,
+    "entryToExitFillExposureSeconds": 61,
+    "capacityScope": "$12 only via 1% of the fully completed pre-entry signal second; full-87 and single-$1k capacity UNKNOWN"
+  },
+  "modeledLifecycle": {
+    "transitionModel": "chronological detector/focus state with watch retaining focus",
+    "externalEventDedup": "one first qualifying event per focus session before participation filtering",
+    "participationDoesNotMutateSourceState": true,
+    "eligibilityReset": "ineligible resets trigger/focus/proposal/cooldown state; re-entry assumes immediate successful seed of the last 60 completed Spot1m candles",
+    "baselineReentryPolicy": "SOURCE_MAPPED_60_CANDLE_SEED_WITH_IMMEDIATE_SUCCESS_ASSUMPTION; actual REST latency/failure is UNKNOWN",
+    "counterScope": "includes June 29-30 pre-roll decisions used to initialize fully-valid July 1 state",
+    "counters": {
+      "eligibility_resets": 73,
+      "focus_sessions_opened": 35710,
+      "external_events_emitted": 15733,
+      "hard_reject_cooldowns": 106,
+      "aged_soft_reject_cooldowns": 271774,
+      "focused_ignore_cooldowns": 11079,
+      "focus_max_age_cooldowns": 0
+    },
+    "transitionLedgerRows": 653175,
+    "transitionCounts": {
+      "COOLDOWN_END": 282909,
+      "COOLDOWN_START": 282959,
+      "ELIGIBILITY_REENTRY": 81,
+      "ELIGIBILITY_RESET": 73,
+      "FIRST_EXTERNAL_PROPOSAL": 15733,
+      "FOCUS_CLOSE": 35710,
+      "FOCUS_OPEN": 35710
+    },
+    "periodProposalTransitionsReconcile": true
+  },
+  "preParticipationFocusEvents": 15690,
+  "participationRejected": 10936,
+  "acceptedParticipationEvents": 4754,
+  "eventInvariants": {
+    "status": "PASS",
+    "violations": 0,
+    "uniqueExternalEventsPerFocusSession": 15690,
+    "minimumProposalFocusAgeSeconds": 4,
+    "maximumProposalFocusAgeSeconds": 106,
+    "proposalDecisionToEntrySeconds": 1,
+    "entryToExitDecisionSeconds": 60,
+    "exitDecisionToFillSeconds": 1,
+    "entryToExitFillExposureSeconds": 61,
+    "participationOnlyFilter": true,
+    "preParticipationEqualsAcceptedPlusRejected": true,
+    "rejectedFirstEventCannotReenterSameFocus": true
+  },
+  "archiveGapSecondsBySymbol": {
+    "AAVEUSDT": 0,
+    "BTCUSDT": 0,
+    "DOGEUSDT": 0,
+    "DOTUSDT": 0,
+    "FETUSDT": 0,
+    "INJUSDT": 0,
+    "NEARUSDT": 0,
+    "SOLUSDT": 0
+  },
+  "archiveIdenticalDuplicateRowsBySymbol": {
+    "AAVEUSDT": 0,
+    "BTCUSDT": 0,
+    "DOGEUSDT": 0,
+    "DOTUSDT": 0,
+    "FETUSDT": 0,
+    "INJUSDT": 0,
+    "NEARUSDT": 2313,
+    "SOLUSDT": 0
+  },
+  "archiveOutOfOrderTransitionsBySymbol": {
+    "AAVEUSDT": 0,
+    "BTCUSDT": 0,
+    "DOGEUSDT": 0,
+    "DOTUSDT": 0,
+    "FETUSDT": 0,
+    "INJUSDT": 0,
+    "NEARUSDT": 1,
+    "SOLUSDT": 0
+  },
+  "base": {
+    "events": 4754,
+    "aggregatePnlAtEffectiveDefaultNotionalUsd": -169.00319207914907,
+    "aggregateEntryNotionalUsd": 57048.0,
+    "netUsdPer1000EntryNotional": -2.9624735675071707,
+    "meanNetBpsPerEvent": -29.624735675071705,
+    "medianNetBpsPerEvent": -30.015007503751168,
+    "winRate": 0.08582246529238537,
+    "research": {
+      "events": 3652,
+      "aggregatePnlAtEffectiveDefaultNotionalUsd": -131.052965552417,
+      "aggregateEntryNotionalUsd": 43824.0,
+      "netUsdPer1000EntryNotional": -2.9904382427988545,
+      "meanUsdPerEvent": -0.03588525891358625,
+      "winRate": 0.08296823658269441
+    },
+    "temporalSplit": {
+      "events": 1102,
+      "aggregatePnlAtEffectiveDefaultNotionalUsd": -37.950226526732074,
+      "aggregateEntryNotionalUsd": 13224.0,
+      "netUsdPer1000EntryNotional": -2.869799344126745,
+      "meanUsdPerEvent": -0.03443759212952094,
+      "winRate": 0.09528130671506352
+    },
+    "bySymbol": {
+      "BTCUSDT": {
+        "events": 317,
+        "aggregatePnlAtEffectiveDefaultNotionalUsd": -11.796001603365916,
+        "aggregateEntryNotionalUsd": 3804.0,
+        "netUsdPer1000EntryNotional": -3.100946793734468,
+        "meanUsdPerEvent": -0.037211361524813615,
+        "winRate": 0.03470031545741325
+      },
+      "SOLUSDT": {
+        "events": 906,
+        "aggregatePnlAtEffectiveDefaultNotionalUsd": -31.65891162307556,
+        "aggregateEntryNotionalUsd": 10872.0,
+        "netUsdPer1000EntryNotional": -2.911967588583109,
+        "meanUsdPerEvent": -0.03494361106299731,
+        "winRate": 0.05849889624724062
+      },
+      "DOGEUSDT": {
+        "events": 848,
+        "aggregatePnlAtEffectiveDefaultNotionalUsd": -31.065851902148655,
+        "aggregateEntryNotionalUsd": 10176.0,
+        "netUsdPer1000EntryNotional": -3.0528549432142937,
+        "meanUsdPerEvent": -0.036634259318571526,
+        "winRate": 0.0695754716981132
+      },
+      "NEARUSDT": {
+        "events": 966,
+        "aggregatePnlAtEffectiveDefaultNotionalUsd": -33.037851650921596,
+        "aggregateEntryNotionalUsd": 11592.0,
+        "netUsdPer1000EntryNotional": -2.850056215572947,
+        "meanUsdPerEvent": -0.03420067458687536,
+        "winRate": 0.10248447204968944
+      },
+      "AAVEUSDT": {
+        "events": 523,
+        "aggregatePnlAtEffectiveDefaultNotionalUsd": -18.830455459872223,
+        "aggregateEntryNotionalUsd": 6276.0,
+        "netUsdPer1000EntryNotional": -3.0003912459962114,
+        "meanUsdPerEvent": -0.03600469495195454,
+        "winRate": 0.0841300191204589
+      },
+      "FETUSDT": {
+        "events": 572,
+        "aggregatePnlAtEffectiveDefaultNotionalUsd": -20.9291780161236,
+        "aggregateEntryNotionalUsd": 6864.0,
+        "netUsdPer1000EntryNotional": -3.049122671346679,
+        "meanUsdPerEvent": -0.036589472056160144,
+        "winRate": 0.11188811188811189
+      },
+      "INJUSDT": {
+        "events": 299,
+        "aggregatePnlAtEffectiveDefaultNotionalUsd": -10.407627597662469,
+        "aggregateEntryNotionalUsd": 3588.0,
+        "netUsdPer1000EntryNotional": -2.900676587977277,
+        "meanUsdPerEvent": -0.03480811905572732,
+        "winRate": 0.14381270903010032
+      },
+      "DOTUSDT": {
+        "events": 323,
+        "aggregatePnlAtEffectiveDefaultNotionalUsd": -11.27731422597907,
+        "aggregateEntryNotionalUsd": 3876.0,
+        "netUsdPer1000EntryNotional": -2.9095237941122476,
+        "meanUsdPerEvent": -0.034914285529346965,
+        "winRate": 0.10835913312693499
+      }
+    },
+    "directions": {
+      "LONG": 2337,
+      "SHORT_PREOWNED": 2417
+    },
+    "exitReasons": {
+      "EXTERNAL_EXIT_DECISION_60S_PLUS_1S_FILL": 4754
+    },
+    "participation": {
+      "cap": 0.01,
+      "median": 0.0019159971761074268,
+      "p95": 0.008305911182168363,
+      "maximum": 0.009993007226643036
+    }
+  },
+  "slippageSensitivity": {
+    "2.5": -2.4624026152582386,
+    "5.0": -2.9624735675071707,
+    "10.0": -3.962630127407548
+  },
+  "bootstrap": {
+    "repositoryInfrastructure": [
+      "quant_edge.validation.bootstrap.BootstrapSpecV1",
+      "quant_edge.randomness.DeterministicRandom"
+    ],
+    "estimand": "net USD per 1,000 USD aggregate entry notional; daily PnL and entry notional resampled jointly",
+    "spec": {
+      "blockLength": 7,
+      "coveragePerMyriad": 9500,
+      "replicates": 2000,
+      "seed": "20260728"
+    },
+    "status": "AVAILABLE",
+    "reason": null,
+    "pointNetUsdPer1000EntryNotional": -2.9624735675071707,
+    "lowerNetUsdPer1000EntryNotional": -3.0565121380165006,
+    "upperNetUsdPer1000EntryNotional": -2.867807826356
+  },
+  "archiveManifestSha256": "8826021ada900746dfff9fff9c46722d7d65c74f5e9a1a0453e65f0480801179",
+  "artifactBindings": {
+    "script": {
+      "path": "/private/tmp/volume12m.aLyp71/measure_volume_12m.py",
+      "sha256": "576ea91a27195553902766f78fa3994430fa30ff2a55f6bc3aaab251dca1b826"
+    },
+    "archiveManifest": {
+      "path": "/private/tmp/volume12m.aLyp71/archive_manifest.json",
+      "sha256": "8826021ada900746dfff9fff9c46722d7d65c74f5e9a1a0453e65f0480801179"
+    },
+    "allFirstFocusProposals": {
+      "path": "/private/tmp/volume12m.aLyp71/focus_proposals_v4_phase0.csv",
+      "rows": 15690,
+      "sha256": "1b588543fc74b875d74e59a1a9fb6112bbd58c71bbcb90eefb02438f4955a0d7"
+    },
+    "acceptedParticipationEvents": {
+      "path": "/private/tmp/volume12m.aLyp71/accepted_events_v4_phase0.csv",
+      "rows": 4754,
+      "sha256": "7b950cabcdcb4a2282956e520f03c83c7bd50451743c46b206e8e2ec5f75c1f0"
+    },
+    "sourceStateTransitions": {
+      "path": "/private/tmp/volume12m.aLyp71/state_transitions_v4_phase0.csv",
+      "rows": 653175,
+      "sha256": "3e800c7bc7aaa6743242d823cf2d8f1adf871cd6344d79c15ba3cfb8528b6cde"
+    }
+  }
+}

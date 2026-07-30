@@ -1,0 +1,43 @@
+{
+  "argv": [
+    "/private/tmp/volume12m.aLyp71/measure_volume_12m.py",
+    "--workdir",
+    "/private/tmp/volume12m.aLyp71",
+    "--tick-phase",
+    "0"
+  ],
+  "python": "3.13.14 (main, Jun 23 2026, 15:20:43) [Clang 22.1.3 ]",
+  "polars": "1.42.1",
+  "numpy": "2.5.1",
+  "scriptSha256": "576ea91a27195553902766f78fa3994430fa30ff2a55f6bc3aaab251dca1b826",
+  "tickPhase": 0,
+  "artifactBindings": {
+    "script": {
+      "path": "/private/tmp/volume12m.aLyp71/measure_volume_12m.py",
+      "sha256": "576ea91a27195553902766f78fa3994430fa30ff2a55f6bc3aaab251dca1b826"
+    },
+    "archiveManifest": {
+      "path": "/private/tmp/volume12m.aLyp71/archive_manifest.json",
+      "sha256": "8826021ada900746dfff9fff9c46722d7d65c74f5e9a1a0453e65f0480801179"
+    },
+    "allFirstFocusProposals": {
+      "path": "/private/tmp/volume12m.aLyp71/focus_proposals_v4_phase0.csv",
+      "rows": 15690,
+      "sha256": "1b588543fc74b875d74e59a1a9fb6112bbd58c71bbcb90eefb02438f4955a0d7"
+    },
+    "acceptedParticipationEvents": {
+      "path": "/private/tmp/volume12m.aLyp71/accepted_events_v4_phase0.csv",
+      "rows": 4754,
+      "sha256": "7b950cabcdcb4a2282956e520f03c83c7bd50451743c46b206e8e2ec5f75c1f0"
+    },
+    "sourceStateTransitions": {
+      "path": "/private/tmp/volume12m.aLyp71/state_transitions_v4_phase0.csv",
+      "rows": 653175,
+      "sha256": "3e800c7bc7aaa6743242d823cf2d8f1adf871cd6344d79c15ba3cfb8528b6cde"
+    }
+  },
+  "result": {
+    "path": "/private/tmp/volume12m.aLyp71/result_v4_phase0.json",
+    "sha256": "6eb83892634acf5f1be609802224fb31c825321634e8b2218842219a54fd2f7c"
+  }
+}

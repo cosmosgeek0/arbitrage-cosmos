@@ -1,0 +1,102 @@
+{
+  "schemaVersion": "volume.economics-policy.v1",
+  "milestone": "VOLUME-ECON",
+  "policyId": "VOLUME_ARCHIVE_CONDITIONAL_ECONOMICS_V1",
+  "frozenBeforeCurrentRerunCompleted": true,
+  "outcomesKnownFromPriorConsumedRun": true,
+  "purpose": "Reproduce and normalize the finite retained Binance Spot archive dataset economics without substituting archive rows for the accepted V-I2 prospective depth lifecycle.",
+  "source": {
+    "acceptedVolumeCommit": "ef12b15e7490848012992e71f86ecae9064ca9ff",
+    "acceptedVolumeTree": "e5dab9cfafdaf156e40c67530558ae307cc2ce58",
+    "historicalMeasurementSourceCommit": "5d5733a6c6748e7844df966535bc0d66708d3a7d",
+    "measurementScriptSha256": "576ea91a27195553902766f78fa3994430fa30ff2a55f6bc3aaab251dca1b826",
+    "officialArchiveOrigin": "https://data.binance.vision",
+    "archiveIntegrity": "ADJACENT_SHA256_SIDECAR_RECOMPUTED",
+    "archiveHistorySubstitutionForVe2": false
+  },
+  "dataset": {
+    "startInclusiveUtc": "2025-07-01T00:00:00Z",
+    "endExclusiveUtc": "2026-07-01T00:00:00Z",
+    "symbols": [
+      "BTCUSDT",
+      "SOLUSDT",
+      "DOGEUSDT",
+      "NEARUSDT",
+      "AAVEUSDT",
+      "FETUSDT",
+      "INJUSDT",
+      "DOTUSDT"
+    ],
+    "expectedArchives": 120,
+    "primaryTimerPhase": 0,
+    "robustnessTimerPhase": 1,
+    "selectionState": "CURRENT_COHORT_SURVIVORSHIP_BIASED",
+    "temporalSplit": "APR_JUN_RETROSPECTIVE_NOT_UNTOUCHED_OOS"
+  },
+  "economics": {
+    "quoteAsset": "USDT",
+    "usdEquivalenceEstablished": false,
+    "modeledQuoteNotionalPerEvent": "12",
+    "externalExitDecisionHorizonSeconds": 60,
+    "decisionToFillLatencySeconds": 1,
+    "slippageBpsPerSide": "5",
+    "feeScenarios": [
+      {
+        "id": "PUBLIC_10_BPS_PER_SIDE",
+        "feeBpsPerSide": "10",
+        "accountEffective": false
+      },
+      {
+        "id": "PUBLIC_12_BPS_PER_SIDE_STRESS",
+        "feeBpsPerSide": "12",
+        "accountEffective": false
+      }
+    ],
+    "accountEffectiveFeeState": "UNKNOWN"
+  },
+  "uncertainty": {
+    "method": "SEEDED_CIRCULAR_UTC_DAY_BLOCK_BOOTSTRAP_OF_PNL_OVER_ENTRY_NOTIONAL",
+    "blockLengthUtcDays": 7,
+    "windowUtcDays": 365,
+    "replicates": 2000,
+    "seed": 20260728,
+    "coverage": "0.95",
+    "quantileRule": "NEAREST_RANK_CEILING"
+  },
+  "drawdown": {
+    "metric": "MAX_PEAK_TO_TROUGH_CUMULATIVE_MODELED_PNL",
+    "ordering": [
+      "proposal_s",
+      "symbol"
+    ],
+    "normalization": "Report modeled 12-USDT-event path and the same path multiplied by 1000/12 as cumulative opportunity-edge units.",
+    "capitalDrawdownClaim": false
+  },
+  "capacity": {
+    "exactModeledQuoteNotionalPerEvent": "12",
+    "admissionProxy": "NO_MORE_THAN_1_PERCENT_OF_FULLY_COMPLETED_PRE_ENTRY_SIGNAL_SECOND",
+    "supports1000QuoteNotional": "UNKNOWN",
+    "fullUniverseCapacity": "UNKNOWN",
+    "extrapolationForbidden": true
+  },
+  "verdict": {
+    "NO_GO": "Both timer phases have a PUBLIC_12_BPS_PER_SIDE_STRESS 95 percent upper bound strictly below zero.",
+    "GO": "Forbidden in this retrospective successor. Any positive is REJECTED_OOS_PBO_NOT_ESTABLISHED.",
+    "oosGate": "FAILED_RETROSPECTIVE_OUTCOMES_PREVIOUSLY_OPENED",
+    "pboGate": "NOT_ESTABLISHED",
+    "positiveDisposition": "REJECTED_OOS_PBO_NOT_ESTABLISHED",
+    "accountEffectiveVerdict": "UNMEASURED",
+    "executionAuthority": "NONE"
+  },
+  "defaults": {
+    "strategyEnabled": false,
+    "killSwitchEngaged": true,
+    "mode": "SHADOW_ONLY",
+    "recordOnly": true,
+    "submitAuthority": false,
+    "casAuthority": false,
+    "privateOrSignedAuthority": false,
+    "orderTransferWithdrawalMoneyAuthority": false
+  },
+  "consumer": "verdict-normalization/final-profitability"
+}

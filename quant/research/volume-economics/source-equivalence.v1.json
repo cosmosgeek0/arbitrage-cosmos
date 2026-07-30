@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "volume.economics-source-equivalence.v1",
+  "historicalMeasurementSourceCommit": "5d5733a6c6748e7844df966535bc0d66708d3a7d",
+  "acceptedVolumeCommit": "ef12b15e7490848012992e71f86ecae9064ca9ff",
+  "method": "EXACT_GIT_BLOB_ID_EQUALITY",
+  "status": "PASS",
+  "paths": [
+    {
+      "path": "server/src/engine/volume/detector.ts",
+      "historicalBlob": "b29b09b3b7d9c4f2ca2d39efc1d9d4220dde2560",
+      "acceptedBlob": "b29b09b3b7d9c4f2ca2d39efc1d9d4220dde2560"
+    },
+    {
+      "path": "server/src/engine/volume/config.ts",
+      "historicalBlob": "52d71524a1dff4f827d64b37301c287ed19aa03b",
+      "acceptedBlob": "52d71524a1dff4f827d64b37301c287ed19aa03b"
+    },
+    {
+      "path": "server/src/engine/volume/rolling.ts",
+      "historicalBlob": "cd20d5d20809370f57fe027da88c1613b594599c",
+      "acceptedBlob": "cd20d5d20809370f57fe027da88c1613b594599c"
+    },
+    {
+      "path": "server/src/engine/v0/config.ts",
+      "historicalBlob": "6cd7de92a1a231210bffdfb8f9cb1f6e58ee9aa6",
+      "acceptedBlob": "6cd7de92a1a231210bffdfb8f9cb1f6e58ee9aa6"
+    },
+    {
+      "path": "quant/src/quant_edge/randomness.py",
+      "historicalBlob": "d9dd20e244ff0311b9de46fb0bc9a9f2fec1327e",
+      "acceptedBlob": "d9dd20e244ff0311b9de46fb0bc9a9f2fec1327e"
+    },
+    {
+      "path": "quant/src/quant_edge/validation/bootstrap.py",
+      "historicalBlob": "acc3b818a49450574e8e8fca400161b8bf8c0130",
+      "acceptedBlob": "acc3b818a49450574e8e8fca400161b8bf8c0130"
+    }
+  ],
+  "boundary": "Blob equality proves the mapped detector and bootstrap bytes did not change. It does not convert the archive proxy into accepted V-I2 synchronized-depth evidence."
+}

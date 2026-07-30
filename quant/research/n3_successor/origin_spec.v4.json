@@ -1,0 +1,203 @@
+{
+  "baseline": {
+    "artifacts": [
+      {
+        "name": "readme",
+        "path": "quant/research/n3_successor/README_S3.md",
+        "rawSha256": "08ed55ab082921c09a2674550f7554d46a705cb63f7e927384402d4985253701"
+      },
+      {
+        "name": "originSpec",
+        "path": "quant/research/n3_successor/origin_spec.v3.json",
+        "rawSha256": "888eedf0e68edfc9b767715e8b78d3d242f103a8666ab230b2ec2b7c3a301b82"
+      },
+      {
+        "name": "registry",
+        "path": "quant/research/n3_successor/current_profitability_registry.v3.json",
+        "rawSha256": "8815efdaf4c5f23373fa6a27bc8a90a0eeb5f91da84aec662df9e212f49bf460"
+      },
+      {
+        "name": "card",
+        "path": "quant/research/n3_successor/owner_verdict_card.v3.md",
+        "rawSha256": "a8edf60e148ddfe466a57aa31e58768c901234d9cebb4aedec1f6ab53cd91939"
+      },
+      {
+        "name": "tool",
+        "path": "quant/research/n3_successor/registry_tool_v3.py",
+        "rawSha256": "b075d371bd0d7524745592b220184292474ee3bf2285e2112fa3b75810d30a80"
+      },
+      {
+        "name": "tests",
+        "path": "quant/research/n3_successor/test_registry_v3.py",
+        "rawSha256": "de924749970844293812707a67f64738d1a2464e5c0863d2cb12c8172a3c3d74"
+      }
+    ],
+    "producerCommit": "88d2c06350e3387ab810010f6027d9d52191f3fe",
+    "producerParent": "cf00db3f44c030dc393639b4ea7493797fe2aba6",
+    "producerTree": "d5f861a1d4c4f5bdf69fed92fdfbf227d847dce0",
+    "recordId": "2026-07-30 ORCHESTRATOR N3-S3 ACCEPTANCE + DATA-CUSTODY REFILL",
+    "rowSha256": "bdbc59911a8a154346cd1bc6def14be56eb57e2bf7f86538e7225a828da5258c"
+  },
+  "canonicalOrigin": {
+    "commit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+    "tree": "37d1b88aa7c8d9ee1f70dc35d0e78613b6ed32f9"
+  },
+  "effects": {
+    "credentialsUsed": false,
+    "hostEffects": false,
+    "moneyMovedUsd": 0,
+    "ordersPlaced": 0,
+    "privateApiUsed": false,
+    "providerMutation": false,
+    "transfers": 0,
+    "uiEffects": false,
+    "withdrawals": 0
+  },
+  "economicEvidenceThrough": {
+    "recordId": "2026-07-30 ORCHESTRATOR S-1T ACCEPTANCE",
+    "rowSha256": "8bb12801be99b246f43c34a3758626f9db9f0df090a393753bd812fb4d7ac28e"
+  },
+  "incrementalOrigin": {
+    "custodyArtifacts": [
+      {
+        "path": "quant/research/s1t/evidence/preoutcome/freeze.v1.json",
+        "rawSha256": "e5fe6d685d3c02fec56a64b135a0674527e31f9d7e3ed82e68bfcbaae9c75df5"
+      },
+      {
+        "path": "quant/research/s1t/evidence/terminal/run_consumed.v1.json",
+        "rawSha256": "82af3821640aee8826d536a9739e10fdbd2cee500a0179eb80271a02c4fdde5f"
+      },
+      {
+        "path": "quant/research/s1t/trial_ledger.v1.json",
+        "rawSha256": "101248044d8bb0d755400497d7c0fa239558ae7f604e5f04d995385e5a21592d"
+      }
+    ],
+    "normalizedVerdict": "UNMEASURED",
+    "originId": "S-1T",
+    "producerCommit": "c5e683ee42e7b156dde388a12bc0299d53b4cfc9",
+    "producerTree": "6c34266d0300fbc88d85decd90bd1fd5e7bf36a9",
+    "protocolPath": "quant/research/s1t/protocol.v1.json",
+    "protocolRawSha256": "af9868d6404829dad4cf90efb290b72185028e41a3148318b5ecfa8c6ee1b9b3",
+    "recordId": "2026-07-30 ORCHESTRATOR S-1T ACCEPTANCE",
+    "resultPath": "quant/research/s1t/evidence/terminal/result.v1.json",
+    "resultRawSha256": "0558791e94d4edebcc7a20756ec022e924578b9103b655427bc3a0183b5eb16f",
+    "rowSha256": "8bb12801be99b246f43c34a3758626f9db9f0df090a393753bd812fb4d7ac28e",
+    "sourceVerdict": "UNMEASURED_RUN_CONSUMED_NO_RERUN"
+  },
+  "ledgerRows": [
+    {
+      "attemptDisposition": "SUPPORTING_TERMINAL_STATE_NO_ADDITIONAL_P",
+      "classification": "SUPPORTING_STATE_ONLY_TERMINAL_EVIDENCE",
+      "economicOriginConsumed": false,
+      "recordId": "2026-07-30 LIQ-CUSTODY1 USD-M FORCED-LIQUIDATION CUSTODY STOP",
+      "rowSha256": "483c07e4a70e0b7715e256f61ae9d3c99abf76dc6067782fe55525b5e4b698b0"
+    },
+    {
+      "attemptDisposition": "SUPPORTING_TERMINAL_STATE_NO_ADDITIONAL_P",
+      "classification": "SUPPORTING_STATE_ONLY_TERMINAL_EVIDENCE",
+      "economicOriginConsumed": false,
+      "recordId": "2026-07-30 BORROW-CUSTODY1 SPOT MARGIN SHORT-CUSTODY TERMINAL",
+      "rowSha256": "e2a7c5e6852e88603ad112b9084cf84856391896106c4c66e68427eb04394399"
+    },
+    {
+      "attemptDisposition": "RETAINED_SOURCE_BINDING_DURABILITY",
+      "classification": "ACCEPTED_SOURCE_ONLY",
+      "economicOriginConsumed": false,
+      "recordId": "2026-07-30 ORCHESTRATOR DQ-1 DURABILITY ACCEPTANCE",
+      "rowSha256": "7a80f78933f53c8a6c0295080b604634f62a5fc2dfc1743171ff0dc92431220f"
+    },
+    {
+      "attemptDisposition": "ACCEPTED_ORIGIN_P_ONE",
+      "classification": "ACCEPTED_ECONOMIC_ORIGIN",
+      "economicOriginConsumed": true,
+      "recordId": "2026-07-30 ORCHESTRATOR S-1T ACCEPTANCE",
+      "rowSha256": "8bb12801be99b246f43c34a3758626f9db9f0df090a393753bd812fb4d7ac28e"
+    },
+    {
+      "attemptDisposition": "ACCEPTED_STATE_ONLY_P_ONE",
+      "classification": "ACCEPTED_PRE_WORKTREE_STATE_STOP",
+      "economicOriginConsumed": false,
+      "recordId": "2026-07-30 ORCHESTRATOR LIQ-CUSTODY1 ACCEPTANCE",
+      "rowSha256": "05d90c8493b96ded9b625664622b56acf968884e625245a75e2e687e5b5a6e16"
+    },
+    {
+      "attemptDisposition": "ACCEPTED_STATE_ONLY_P_ONE",
+      "classification": "ACCEPTED_PRE_WORKTREE_STATE_STOP",
+      "economicOriginConsumed": false,
+      "recordId": "2026-07-30 ORCHESTRATOR BORROW-CUSTODY1 ACCEPTANCE",
+      "rowSha256": "9eaac0b4c9e4ca55f057a6c5784ae02eef92889591af2e28a1e8a5d5e8693c9f"
+    }
+  ],
+  "pendingInputs": {
+    "activeOutsideBaselineCutoff": [],
+    "activeWithinBaselineCutoff": [],
+    "requiredTruth": [
+      "ACCEPTED_PRE_OUTCOME_FAMILY_ALIAS_REGISTRY",
+      "COMPLETE_GLOBAL_ATTEMPT_LEDGER",
+      "SANITIZED_ACCOUNT_EFFECTIVE_FEES",
+      "EXECUTABLE_CAPACITY_AND_EXECUTION_PROOF",
+      "COMPLETE_MARKED_EQUITY_PATHS",
+      "SINGLE_FRESH_HOLDOUT_RECEIPT_IF_A_WINNER_EMERGES"
+    ],
+    "terminalPending": []
+  },
+  "priorAcceptedBoundary": {
+    "recordId": "2026-07-30 ORCHESTRATOR N3-S3 ACCEPTANCE + DATA-CUSTODY REFILL",
+    "rowSha256": "bdbc59911a8a154346cd1bc6def14be56eb57e2bf7f86538e7225a828da5258c"
+  },
+  "retainedSourceBinding": {
+    "bindingId": "DQ-1",
+    "bindingRecordId": "2026-07-30 ORCHESTRATOR DQ-1 ACCEPTANCE + REFILL",
+    "bindingRowSha256": "02a45154afb6e5592b124919ee2aa46e3d44e2bb118438a5599dee57d77ca7d9",
+    "consumerScope": "N3_S4_AND_FUTURE_RESEARCH_INTAKE",
+    "durabilityRecordId": "2026-07-30 ORCHESTRATOR DQ-1 DURABILITY ACCEPTANCE",
+    "durabilityRowSha256": "7a80f78933f53c8a6c0295080b604634f62a5fc2dfc1743171ff0dc92431220f",
+    "path": "quant/research/dq1/policy.v1.json",
+    "producerCommit": "ec0c9f436d01f25134c226057981b107dfc97f67",
+    "producerTree": "52f854d7fbcde842baa739333b0fc7b3e5fdc921",
+    "rawSha256": "7c134e0f3d84c15460f7e05a3f911404b6d07cc73a36656d686b24370a5f1016"
+  },
+  "schema": "N3S4OriginSpecV1",
+  "selectedAcceptedBoundary": {
+    "recordId": "2026-07-30 ORCHESTRATOR BORROW-CUSTODY1 ACCEPTANCE",
+    "rowSha256": "9eaac0b4c9e4ca55f057a6c5784ae02eef92889591af2e28a1e8a5d5e8693c9f"
+  },
+  "stateOnlyStops": [
+    {
+      "limitations": [
+        "NO_PUBLIC_USDM_12_MONTH_LIQUIDATION_CORPUS",
+        "LIQUIDATION_SNAPSHOT_ARCHIVE_EMPTY_FOR_USDM",
+        "COINM_NOT_SUBSTITUTABLE",
+        "ARCHIVE_SCHEMA_RETENTION_AND_STREAM_IDENTITY_UNDOCUMENTED",
+        "AVAILABILITY_CLOCK_UNSUPPORTED",
+        "FINALITY_REVISION_UNSUPPORTED",
+        "HISTORICAL_IDENTITY_UNSUPPORTED",
+        "HOLDOUT_NOT_CREATED_NO_PRODUCT_BYTES"
+      ],
+      "milestoneId": "LIQ-CUSTODY1",
+      "recordId": "2026-07-30 ORCHESTRATOR LIQ-CUSTODY1 ACCEPTANCE",
+      "rowSha256": "05d90c8493b96ded9b625664622b56acf968884e625245a75e2e687e5b5a6e16",
+      "taskRefSuffix": "deaa",
+      "terminalRecordId": "2026-07-30 LIQ-CUSTODY1 USD-M FORCED-LIQUIDATION CUSTODY STOP",
+      "terminalRowSha256": "483c07e4a70e0b7715e256f61ae9d3c99abf76dc6067782fe55525b5e4b698b0"
+    },
+    {
+      "limitations": [
+        "NO_IMMUTABLE_PUBLIC_12_MONTH_POINT_IN_TIME_CUSTODY_HISTORY",
+        "PUBLIC_SURFACES_CURRENT_SNAPSHOT_ONLY",
+        "INVENTORY_RATE_AND_ACCRUAL_HISTORY_USER_DATA_OR_ACCOUNT_SPECIFIC",
+        "RATE_HISTORY_12_MONTH_RETENTION_EFFECTIVE_TIME_AND_IMMUTABILITY_UNDOCUMENTED",
+        "ACCRUED_INTEREST_HISTORY_ONLY_PAST_90_DAYS",
+        "PUBLIC_SPOT_ARCHIVE_HAS_NO_MARGIN_CUSTODY_OR_HISTORICAL_IDENTITY",
+        "HOLDOUT_NOT_CREATED_NO_PRODUCT_BYTES"
+      ],
+      "milestoneId": "BORROW-CUSTODY1",
+      "recordId": "2026-07-30 ORCHESTRATOR BORROW-CUSTODY1 ACCEPTANCE",
+      "rowSha256": "9eaac0b4c9e4ca55f057a6c5784ae02eef92889591af2e28a1e8a5d5e8693c9f",
+      "taskRefSuffix": "ac11",
+      "terminalRecordId": "2026-07-30 BORROW-CUSTODY1 SPOT MARGIN SHORT-CUSTODY TERMINAL",
+      "terminalRowSha256": "e2a7c5e6852e88603ad112b9084cf84856391896106c4c66e68427eb04394399"
+    }
+  ],
+  "version": 1
+}

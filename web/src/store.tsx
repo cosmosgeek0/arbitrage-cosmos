@@ -12,7 +12,6 @@ import { setBasisUnit, setDisplayUtc, setFxRate } from './format';
 import { fireRefresh } from './lib/refresh';
 import { ApiRequestError, fetchJson, type ApiFailure } from './lib/http';
 import { createSettledPoll } from './lib/polling';
-import { readDurableMaterialCursor } from './lib/productIntegration/useProductControlRoomBinding';
 import {
   WEB_SOCKET_CLOSE_DIAGNOSTIC_ID,
   reduceTrustedWebSocketCloseDiagnostic,
@@ -255,7 +254,10 @@ export const DEFAULT_DETAIL_SYMBOL = 'BTCUSDT';
 export const ACTIVE_PAGE_STORAGE_KEY = 'cosmos-active-page';
 export const DETAIL_SYMBOL_STORAGE_KEY = 'cosmos-detail-symbol';
 
-const TOKEN_SYMBOL_PATTERN = /^[A-Z0-9]{2,32}$/;
+// Keep browser routing inside the exact symbol domain accepted by the Token
+// owner endpoints. A canonical route must not select a workspace whose every
+// backend read is guaranteed to reject.
+const TOKEN_SYMBOL_PATTERN = /^[A-Z0-9]{5,20}$/;
 
 // Account subview ids render one controlled Account page (DESIGN.md §3), so
 // their canonical paths stay nested under /account.
@@ -1187,8 +1189,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const socketGeneration = ++generation;
       const proto = location.protocol === 'https:' ? 'wss' : 'ws';
       const socketUrl = new URL(`${proto}://${location.host}/ws`);
-      const durableCursor = readDurableMaterialCursor();
-      if (durableCursor.state === 'VALID') socketUrl.searchParams.set('afterCursor', durableCursor.cursor);
+      // ProductControlRoomProvider owns material continuity over its bounded
+      // HTTP lane. The compatibility/book socket does not opt into a separate
+      // material stream that it does not consume.
       const ws = new WebSocket(socketUrl.toString());
       let connectionEstablished = false;
       let openedAtMonotonicMs: number | null = null;

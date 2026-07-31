@@ -267,6 +267,11 @@ test('application socket has no legacy state timer or push and preserves its saf
   assert.match(serverSource, /client\.close\(1011, ['"]canonical event read failed['"]\)/);
   assert.match(serverSource, /parseProductRuntimeMaterialDeliveryAfterCursor\(request\.url\)/);
   assert.match(serverSource, /record\.type === ['"]resume-material-events['"]/);
-  assert.match(storeSource, /readDurableMaterialCursor\(\)/);
-  assert.match(storeSource, /socketUrl\.searchParams\.set\(['"]afterCursor['"], durableCursor\.cursor\)/);
+  assert.match(serverSource, /if \(!delivery \|\| !delivery\.materialEventsEnabled\) return/);
+  assert.match(serverSource, /delivery\.materialEventsEnabled = true/);
+  assert.doesNotMatch(
+    storeSource,
+    /socketUrl\.searchParams\.set\(['"]afterCursor['"]/,
+    'the compatibility browser socket must not opt into unconsumed material delivery',
+  );
 });

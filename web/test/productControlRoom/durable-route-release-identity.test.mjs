@@ -184,7 +184,7 @@ test('token symbols are validated and canonicalized before they can reach a rout
   assert.equal(canonicalizeTokenSymbol(' btcusdt '), 'BTCUSDT');
   assert.equal(canonicalizeTokenSymbol('ETHUSDT'), 'ETHUSDT');
   assert.equal(canonicalizeTokenSymbol('1000SATSUSDT'), '1000SATSUSDT');
-  for (const invalid of ['', ' ', 'B', 'BTC-USDT', 'BTC/USDT', 'BTC USDT', 'a'.repeat(33), null, 7, {}]) {
+  for (const invalid of ['', ' ', 'AB', 'BTC-USDT', 'BTC/USDT', 'BTC USDT', 'a'.repeat(21), null, 7, {}]) {
     assert.equal(canonicalizeTokenSymbol(invalid), null, `${String(invalid)} is not a symbol`);
   }
   // A detail target with no honest symbol has no token path.

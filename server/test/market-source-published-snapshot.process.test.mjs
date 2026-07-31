@@ -87,6 +87,18 @@ function allSourceStates(body, expected) {
   });
 }
 
+test('market publication treats future cache and observation timestamps as non-fresh', () => {
+  const source = readFileSync('server/src/index.ts', 'utf8');
+  assert.match(
+    source,
+    /cacheAgeMs !== null && cacheAgeMs >= 0 && cacheAgeMs < MARKET_SOURCE_REFRESH_MS/,
+  );
+  assert.match(
+    source,
+    /ageMs >= 0 && ageMs <= MARKET_SOURCE_REFRESH_MS \? 'fresh' : 'stale'/,
+  );
+});
+
 test('Markets and Product GETs publish unavailable/stale snapshots without awaiting a never-settling refresh', {
   timeout: 30_000,
 }, async () => {

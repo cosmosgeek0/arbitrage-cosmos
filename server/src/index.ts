@@ -2166,7 +2166,8 @@ const initialMarketSourceSnapshot: MarketSourceSnapshot = (() => {
 
 function triggerMarketSourceRefresh(now = Date.now()): void {
   if (marketSourceInFlight) return;
-  if (marketSourceCache && now - marketSourceCache.at < MARKET_SOURCE_REFRESH_MS) return;
+  const cacheAgeMs = marketSourceCache ? now - marketSourceCache.at : null;
+  if (cacheAgeMs !== null && cacheAgeMs >= 0 && cacheAgeMs < MARKET_SOURCE_REFRESH_MS) return;
 
   const acquisition = Promise.allSettled([
     fetchAllBookTickers('spot'),
@@ -2226,7 +2227,8 @@ function publishedMarketSourceState(
   now: number,
 ): PublishedMarketSourceState {
   if (result.status !== 'fulfilled') return 'unavailable';
-  return now - result.observedAtMs <= MARKET_SOURCE_REFRESH_MS ? 'fresh' : 'stale';
+  const ageMs = now - result.observedAtMs;
+  return ageMs >= 0 && ageMs <= MARKET_SOURCE_REFRESH_MS ? 'fresh' : 'stale';
 }
 
 function readMarketOwnerSnapshot() {
@@ -3858,6 +3860,7 @@ const wsAlive = new WeakMap<WebSocket, boolean>();
 const wsMessageRate = new WeakMap<WebSocket, { startedAt: number; count: number }>();
 type WebSocketDeliveryState = {
   afterCursor: string;
+  materialEventsEnabled: boolean;
   lastSupervisorKey: string | null;
   blockedMaterialPageKey: string | null;
 };
@@ -3964,8 +3967,17 @@ wss.on('connection', (ws, request) => {
     ws.close(1008, 'invalid material cursor');
     return;
   }
+  const materialEventsEnabled = (() => {
+    try {
+      return new URL(request.url ?? '/ws', 'http://localhost')
+        .searchParams.has('afterCursor');
+    } catch {
+      return false;
+    }
+  })();
   wsDeliveryState.set(ws, {
     afterCursor,
+    materialEventsEnabled,
     lastSupervisorKey: null,
     blockedMaterialPageKey: null,
   });
@@ -4001,6 +4013,7 @@ wss.on('connection', (ws, request) => {
             return;
           }
           delivery.afterCursor = record.afterCursor;
+          delivery.materialEventsEnabled = true;
           delivery.blockedMaterialPageKey = null;
           void publishCanonicalWebSocketUpdates();
           return;
@@ -4076,7 +4089,7 @@ async function publishCanonicalWebSocketUpdates(): Promise<void> {
     await Promise.all(clients.map(async (client) => {
       if (client.readyState !== WebSocket.OPEN) return;
       const delivery = wsDeliveryState.get(client);
-      if (!delivery) return;
+      if (!delivery || !delivery.materialEventsEnabled) return;
       try {
         const page = await productIntegrationRuntime.readMaterialEvents(
           delivery.afterCursor,

@@ -14,6 +14,7 @@ const RELEVANT_KINDS = [
 ] as const;
 
 export const NOTIFICATION_ARCHIVE_LIMIT = 10_000;
+export const NOTIFICATION_BOOTSTRAP_CONCURRENCY = 2;
 
 export interface NotificationArchiveState {
   events: LedgerEvent[];
@@ -34,6 +35,40 @@ interface NotificationFeedBatch {
   items: LedgerEvent[];
   bootstrapFailures: number;
   bootstrapSuccesses: number;
+  bootstrapPending: number;
+}
+
+export interface NotificationBootstrapBatch<T extends string> {
+  attempted: T[];
+  deferred: T[];
+}
+
+export function planNotificationBootstrapBatch<T extends string>(
+  pendingKinds: readonly T[],
+  concurrency = NOTIFICATION_BOOTSTRAP_CONCURRENCY,
+): NotificationBootstrapBatch<T> {
+  const boundedConcurrency = Number.isSafeInteger(concurrency) && concurrency > 0
+    ? Math.min(concurrency, NOTIFICATION_BOOTSTRAP_CONCURRENCY)
+    : NOTIFICATION_BOOTSTRAP_CONCURRENCY;
+  return {
+    attempted: pendingKinds.slice(0, boundedConcurrency),
+    deferred: pendingKinds.slice(boundedConcurrency),
+  };
+}
+
+export function pendingNotificationKindsAfterBatch<T extends string>(
+  batch: Readonly<NotificationBootstrapBatch<T>>,
+  settled: readonly PromiseSettledResult<unknown>[],
+): T[] {
+  if (settled.length !== batch.attempted.length) {
+    throw new Error('notification bootstrap settlement is incomplete');
+  }
+  const attemptedKinds = batch.attempted;
+  const pendingBootstrapKinds = attemptedKinds.filter(
+    (_, index) => settled[index]?.status === 'rejected',
+  );
+  pendingBootstrapKinds.unshift(...batch.deferred);
+  return pendingBootstrapKinds;
 }
 
 export function retainNotificationArchive(
@@ -85,23 +120,26 @@ export function NotificationFeedProvider({ children }: { children: ReactNode }) 
         let items: LedgerEvent[] = [];
         let bootstrapFailures = 0;
         let bootstrapSuccesses = 0;
+        let bootstrapPending = 0;
         if (!bootstrapped) {
           if (bootstrapHighWater === null) {
             const head = await readEventRows('/api/events?limit=1', signal);
             bootstrapHighWater = head[0]?.id ?? 0;
           }
           const before = bootstrapHighWater > 0 ? `&beforeId=${bootstrapHighWater + 1}` : '';
-          const attemptedKinds = pendingBootstrapKinds;
+          const bootstrapBatch = planNotificationBootstrapBatch(pendingBootstrapKinds);
+          const attemptedKinds = bootstrapBatch.attempted;
           const bootstrapReads = await Promise.allSettled(attemptedKinds.map((kind) => readEventRows(
             `/api/events?since=${bootstrapSince}&kind=${encodeURIComponent(kind)}&limit=2000${before}`,
             signal,
           )));
           if (signal.aborted) throw signal.reason;
           items = bootstrapReads.flatMap((result) => result.status === 'fulfilled' ? result.value : []);
-          pendingBootstrapKinds = attemptedKinds.filter((_, index) => bootstrapReads[index]?.status === 'rejected');
-          bootstrapFailures = pendingBootstrapKinds.length;
+          bootstrapFailures = bootstrapReads.filter((result) => result.status === 'rejected').length;
           bootstrapSuccesses = attemptedKinds.length - bootstrapFailures;
-          if (bootstrapFailures === 0) {
+          pendingBootstrapKinds = pendingNotificationKindsAfterBatch(bootstrapBatch, bootstrapReads);
+          bootstrapPending = pendingBootstrapKinds.length;
+          if (bootstrapPending === 0) {
             cursor = Math.max(cursor, bootstrapHighWater);
             bootstrapped = true;
           }
@@ -115,21 +153,25 @@ export function NotificationFeedProvider({ children }: { children: ReactNode }) 
             afterId = Math.max(afterId, ...rows.map((item) => item.id));
           }
         }
-        return { items, bootstrapFailures, bootstrapSuccesses };
+        return { items, bootstrapFailures, bootstrapSuccesses, bootstrapPending };
       },
-      onSuccess: ({ items, bootstrapFailures, bootstrapSuccesses }) => {
+      onSuccess: ({ items, bootstrapFailures, bootstrapSuccesses, bootstrapPending }) => {
         if (items.length > 0) cursor = Math.max(cursor, ...items.map((item) => item.id));
         const now = Date.now();
         const cutoff = now - NOTIFICATION_ARCHIVE_DAYS * DAY_MS;
         setSnapshot((current) => {
           const archive = retainNotificationArchive(current.archive, items, cutoff);
-          if (bootstrapFailures > 0) {
+          if (bootstrapPending > 0) {
             return {
               archive,
-              status: current.lastSuccessAt === null && bootstrapSuccesses === 0 ? 'UNAVAILABLE' : 'STALE',
+              status: bootstrapFailures > 0
+                ? current.lastSuccessAt === null && bootstrapSuccesses === 0 ? 'UNAVAILABLE' : 'STALE'
+                : 'LOADING',
               lastSuccessAt: bootstrapSuccesses > 0 ? now : current.lastSuccessAt,
-              error: `${bootstrapFailures} notification history ${bootstrapFailures === 1 ? 'stream is' : 'streams are'} unavailable; retrying only failed streams.`,
-              pendingBootstrapKinds: bootstrapFailures,
+              error: bootstrapFailures > 0
+                ? `${bootstrapFailures} notification history ${bootstrapFailures === 1 ? 'stream is' : 'streams are'} unavailable; retrying with the remaining history.`
+                : null,
+              pendingBootstrapKinds: bootstrapPending,
             };
           }
           return {

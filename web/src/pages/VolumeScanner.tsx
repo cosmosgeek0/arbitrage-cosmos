@@ -988,16 +988,16 @@ export function VolumeScanner() {
           </span>
         </div>
 
-        <div className="volx-table" role="table" aria-label="Volume Scanner Decisions">
-          <div className="volx-head" role="row">
-            <span role="columnheader">State</span>
-            <span role="columnheader">Asset</span>
-            <span role="columnheader">Price</span>
-            <span role="columnheader">Volume Vs Baseline</span>
-            <span role="columnheader">Trade Flow</span>
-            <span role="columnheader">Market Quality</span>
-            <span role="columnheader">Price Move</span>
-            <span role="columnheader">Decision</span>
+        <div className="volx-table" role="region" aria-label="Volume Scanner Decisions">
+          <div className="volx-head" aria-hidden="true">
+            <span>State</span>
+            <span>Asset</span>
+            <span>Price</span>
+            <span>Volume Vs Baseline</span>
+            <span>Trade Flow</span>
+            <span>Market Quality</span>
+            <span>Price Move</span>
+            <span>Decision</span>
             <span aria-hidden="true" />
           </div>
 
@@ -1018,49 +1018,51 @@ export function VolumeScanner() {
             const five = row.windows['5s'];
             const minute = row.windows['60s'];
             const isExpanded = expanded === row.symbol;
+            const detailId = `volume-${row.symbol.toLowerCase()}-detail`;
             const watching = watchlist.includes(row.symbol);
             const ownerTruth = projectVolumeWorkspaceTruth(
               expandedIntelligence?.symbol === row.symbol ? expandedIntelligence : null,
               row.symbol,
             );
             return (
-              <div className="volx-item" role="rowgroup" key={row.symbol}>
+              <div className="volx-item" key={row.symbol}>
                 <button
                   type="button"
                   className="volx-row"
                   aria-expanded={isExpanded}
+                  aria-controls={detailId}
                   onClick={() => setExpanded(isExpanded ? null : row.symbol)}
                 >
-                  <span className={'volx-state ' + stateTone(row)} role="cell">
+                  <span className={'volx-state ' + stateTone(row)}>
                     <i aria-hidden="true" />
                     {stateLabel(row)}
                   </span>
-                  <span className="volx-asset" role="cell">
+                  <span className="volx-asset">
                     <TokenIcon symbol={row.symbol} size={28} />
                     <span><strong>{row.base}</strong><small>{row.symbol}</small></span>
                   </span>
-                  <span className="volx-number" role="cell">
+                  <span className="volx-number">
                     <strong>{fmtPrice(row.price)}</strong>
                     <small>{row.lastTradeTs ? timeAgo(row.lastTradeTs) : 'No recent trade'}</small>
                   </span>
-                  <span className="volx-window-stack" role="cell">
+                  <span className="volx-window-stack">
                     <span><em>1s</em><strong>{multiple(row.volumeMultiple['1s'])}</strong><small>{fmtMoney(one?.quoteVolume ?? null)}</small></span>
                     <span><em>5s</em><strong>{multiple(row.volumeMultiple['5s'])}</strong><small>{fmtMoney(five?.quoteVolume ?? null)}</small></span>
                     <span><em>1m</em><strong>{multiple(row.volumeMultiple['60s'])}</strong><small>{fmtMoney(minute?.quoteVolume ?? null)}</small></span>
                   </span>
-                  <span className="volx-tape" role="cell">
+                  <span className="volx-tape">
                     <strong>{windowCountLabel(five, 'tradeCount', ' Trades')}</strong>
                     <small>{ratioLabel(row.takerBuyRatio)} · {fmtMoney(five?.avgTradeSize ?? null)} Avg</small>
                   </span>
-                  <span className="volx-quality" role="cell">
+                  <span className="volx-quality">
                     <strong>{row.spreadBps === null ? '—' : row.spreadBps.toFixed(1) + ' bps'}</strong>
                     <small>{fmtMoney(row.topDepthUsd)} Top Depth</small>
                   </span>
-                  <span className="volx-move" role="cell">
+                  <span className="volx-move">
                     <strong>{fmtPct(five?.priceMovePct ?? null, 3)}</strong>
                     <small>{row.accelerationPctPerMin === null ? '—' : fmtPct(row.accelerationPctPerMin, 2) + '/min'}</small>
                   </span>
-                  <span className="volx-decision" role="cell">
+                  <span className="volx-decision">
                     <strong>{row.rejectCode ? titleCase(row.rejectCode) : titleCase(row.decisionKind)}</strong>
                     <small>{row.reason}</small>
                   </span>
@@ -1068,7 +1070,7 @@ export function VolumeScanner() {
                 </button>
 
                 {isExpanded ? (
-                  <div className="volx-detail">
+                  <div className="volx-detail" id={detailId}>
                     <div className="volx-reason">
                       <span>Scanner Decision</span>
                       <p>{row.reason}</p>

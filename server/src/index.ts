@@ -2109,48 +2109,89 @@ type ObservedMarketSourceResult<T> = PromiseSettledResult<T> & {
   observedAtMs: number;
 };
 
-type MarketSourceSnapshot = {
+type MarketSourceSnapshot = Readonly<{
   at: number;
-  spotBookRes: ObservedMarketSourceResult<Map<string, BookTicker>>;
-  perpBookRes: ObservedMarketSourceResult<Map<string, BookTicker>>;
-  perp24hRes: ObservedMarketSourceResult<Map<string, Futures24hTicker>>;
-};
+  spotBookRes: Readonly<ObservedMarketSourceResult<Map<string, BookTicker>>>;
+  perpBookRes: Readonly<ObservedMarketSourceResult<Map<string, BookTicker>>>;
+  perp24hRes: Readonly<ObservedMarketSourceResult<Map<string, Futures24hTicker>>>;
+}>;
+type PublishedMarketSourceState = 'fresh' | 'stale' | 'unavailable';
+const MARKET_SOURCE_REFRESH_MS = 2_000;
 let marketSourceCache: MarketSourceSnapshot | null = null;
 let marketSourceInFlight: Promise<MarketSourceSnapshot> | null = null;
 
 function observedMarketSourceResult<T>(
   result: PromiseSettledResult<T>,
   observedAtMs: number,
-): ObservedMarketSourceResult<T> {
+): Readonly<ObservedMarketSourceResult<T>> {
   return Object.freeze({ ...result, observedAtMs });
 }
 
-async function marketSources(): Promise<MarketSourceSnapshot> {
-  const now = Date.now();
-  if (marketSourceCache && now - marketSourceCache.at < 2_000) return marketSourceCache;
-  if (marketSourceInFlight) return marketSourceInFlight;
-  marketSourceInFlight = Promise.allSettled([
+const initialMarketSourceSnapshot: MarketSourceSnapshot = (() => {
+  const at = Date.now();
+  const unavailable = <T>(): Readonly<ObservedMarketSourceResult<T>> => Object.freeze({
+    status: 'rejected',
+    reason: 'MARKET_SOURCE_NOT_YET_OBSERVED',
+    observedAtMs: at,
+  });
+  return Object.freeze({
+    at,
+    spotBookRes: unavailable<Map<string, BookTicker>>(),
+    perpBookRes: unavailable<Map<string, BookTicker>>(),
+    perp24hRes: unavailable<Map<string, Futures24hTicker>>(),
+  });
+})();
+
+function triggerMarketSourceRefresh(now = Date.now()): void {
+  if (marketSourceInFlight) return;
+  if (marketSourceCache && now - marketSourceCache.at < MARKET_SOURCE_REFRESH_MS) return;
+
+  const refresh = Promise.allSettled([
     fetchAllBookTickers('spot'),
     fetchAllBookTickers('futures'),
     fetchAllFutures24hTickers(),
   ]).then(([spotBookRes, perpBookRes, perp24hRes]) => {
     const at = Date.now();
-    const snapshot = {
+    const snapshot: MarketSourceSnapshot = Object.freeze({
       at,
       spotBookRes: observedMarketSourceResult(spotBookRes, at),
       perpBookRes: observedMarketSourceResult(perpBookRes, at),
       perp24hRes: observedMarketSourceResult(perp24hRes, at),
-    };
+    });
     marketSourceCache = snapshot;
     return snapshot;
-  }).finally(() => {
-    marketSourceInFlight = null;
   });
-  return marketSourceInFlight;
+  marketSourceInFlight = refresh;
+  void refresh.then(
+    () => {
+      if (marketSourceInFlight === refresh) marketSourceInFlight = null;
+    },
+    (error) => {
+      if (marketSourceInFlight === refresh) marketSourceInFlight = null;
+      safeLogEvent('error_event', null, {
+        source: 'market.source_snapshot',
+        message: error instanceof Error ? error.message : 'Market source snapshot refresh failed',
+      });
+    },
+  );
 }
 
-async function readMarketOwnerSnapshot() {
-  const { spotBookRes, perpBookRes, perp24hRes } = await marketSources();
+function publishedMarketSourceState(
+  result: Readonly<ObservedMarketSourceResult<unknown>>,
+  now: number,
+): PublishedMarketSourceState {
+  if (result.status !== 'fulfilled') return 'unavailable';
+  return now - result.observedAtMs <= MARKET_SOURCE_REFRESH_MS ? 'fresh' : 'stale';
+}
+
+function readMarketOwnerSnapshot() {
+  const now = Date.now();
+  const {
+    spotBookRes,
+    perpBookRes,
+    perp24hRes,
+  } = marketSourceCache ?? initialMarketSourceSnapshot;
+  triggerMarketSourceRefresh(now);
   const at = spotBookRes.observedAtMs;
   const spotBooks = spotBookRes.status === 'fulfilled'
     ? spotBookRes.value
@@ -2173,21 +2214,30 @@ async function readMarketOwnerSnapshot() {
     }))
     .sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0));
 
-  return {
+  return Object.freeze({
     observedAtMs: at,
-    dataSources: {
-      spotBookTicker: spotBookRes.status === 'fulfilled' ? 'fresh' as const : 'unavailable' as const,
-      futuresBookTicker: perpBookRes.status === 'fulfilled' ? 'fresh' as const : 'unavailable' as const,
-      futures24hTicker: perp24hRes.status === 'fulfilled' ? 'fresh' as const : 'unavailable' as const,
-    },
-    rows,
-  };
+    dataSources: Object.freeze({
+      spotBookTicker: publishedMarketSourceState(spotBookRes, now),
+      futuresBookTicker: publishedMarketSourceState(perpBookRes, now),
+      futures24hTicker: publishedMarketSourceState(perp24hRes, now),
+    }),
+    rows: Object.freeze(rows),
+  });
 }
 
-async function readProductOwnerTruth(
+function productMarketSourceState(
+  state: PublishedMarketSourceState,
+): 'fresh' | 'unavailable' {
+  // Product owner-truth accepts only currently fresh enrichment. A retained
+  // stale Markets value may remain visible on its compatibility route, but it
+  // cannot satisfy Product freshness or readiness.
+  return state === 'fresh' ? 'fresh' : 'unavailable';
+}
+
+function readProductOwnerTruth(
   supervisor: Readonly<SystemSupervisorReadModel>,
 ) {
-  const markets = await readMarketOwnerSnapshot();
+  const markets = readMarketOwnerSnapshot();
   // The private reader owns its cadence and single-flight transport. Product
   // samples the one immutable published snapshot exactly once and never
   // triggers a credential-bearing refresh from a read route.
@@ -2195,18 +2245,23 @@ async function readProductOwnerTruth(
   return projectProductRuntimeOwnerTruthCut({
     supervisor,
     privateRead: privateReadSnapshot,
-    markets,
+    markets: Object.freeze({
+      ...markets,
+      dataSources: Object.freeze({
+        spotBookTicker: productMarketSourceState(markets.dataSources.spotBookTicker),
+        futuresBookTicker: productMarketSourceState(markets.dataSources.futuresBookTicker),
+        futures24hTicker: productMarketSourceState(markets.dataSources.futures24hTicker),
+      }),
+    }),
   });
 }
 
 app.get('/api/markets', (_req, res) => {
-  runAsync(res, async () => {
-    const snapshot = await readMarketOwnerSnapshot();
-    res.json({
-      updatedAt: Date.now(),
-      dataSources: snapshot.dataSources,
-      rows: snapshot.rows,
-    });
+  const snapshot = readMarketOwnerSnapshot();
+  res.json({
+    updatedAt: snapshot.observedAtMs,
+    dataSources: snapshot.dataSources,
+    rows: snapshot.rows,
   });
 });
 
@@ -3941,20 +3996,22 @@ async function publishCanonicalWebSocketUpdates(): Promise<void> {
   if (clients.length === 0) return;
   canonicalDeliveryInFlight = true;
   try {
-    const supervisor = await productIntegrationRuntime.readSupervisor();
-    const supervisorDelta = projectProductRuntimeSupervisorDelta(supervisor);
-    const supervisorKey = JSON.stringify(supervisorDelta);
-    for (const client of clients) {
-      const delivery = wsDeliveryState.get(client);
-      if (!delivery) {
-        client.close(1011, 'canonical delivery unavailable');
-        continue;
-      }
-      if (delivery.lastSupervisorKey !== supervisorKey && sendBoundedWebSocketJson(client, {
-        type: 'canonical-supervisor-delta',
-        payload: supervisorDelta,
-      })) {
-        delivery.lastSupervisorKey = supervisorKey;
+    const supervisor = productIntegrationRuntime.readPublishedSupervisor();
+    if (supervisor !== null) {
+      const supervisorDelta = projectProductRuntimeSupervisorDelta(supervisor);
+      const supervisorKey = JSON.stringify(supervisorDelta);
+      for (const client of clients) {
+        const delivery = wsDeliveryState.get(client);
+        if (!delivery) {
+          client.close(1011, 'canonical delivery unavailable');
+          continue;
+        }
+        if (delivery.lastSupervisorKey !== supervisorKey && sendBoundedWebSocketJson(client, {
+          type: 'canonical-supervisor-delta',
+          payload: supervisorDelta,
+        })) {
+          delivery.lastSupervisorKey = supervisorKey;
+        }
       }
     }
 

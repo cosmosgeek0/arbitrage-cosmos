@@ -245,7 +245,8 @@ test('application socket has no legacy state timer or push and preserves its saf
   assert.doesNotMatch(serverSource, /broadcast\s*\(\s*\{\s*type:\s*['"]state['"]/);
   assert.doesNotMatch(storeSource, /data\.type\s*===\s*['"]state['"]/);
   assert.doesNotMatch(deliverySource, /buildState|recentEvents|ledger\.|raw[_ -]?(?:log|metric)/i);
-  assert.match(serverSource, /productIntegrationRuntime\.readSupervisor\(\)/);
+  assert.match(deliverySource, /productIntegrationRuntime\.readPublishedSupervisor\(\)/);
+  assert.doesNotMatch(deliverySource, /productIntegrationRuntime\.readSupervisor\(\)/);
   assert.match(serverSource, /productIntegrationRuntime\.readMaterialEvents\(/);
   assert.match(serverSource, /type:\s*['"]canonical-supervisor-delta['"]/);
   assert.match(serverSource, /type:\s*['"]material-event-page['"]/);

@@ -693,7 +693,7 @@ test('completed v3 storage reapplies every event-metadata write bound on read an
   }
 });
 
-test('count queries validate every matching metadata row instead of hiding corrupt truth', () => {
+test('count queries stay aggregate-only while row reads reject corrupt truth', () => {
   const dataDir = tempDataDir('count-corrupt');
   const ledger = new Ledger(dataDir);
   try {
@@ -701,16 +701,12 @@ test('count queries validate every matching metadata row instead of hiding corru
     withoutAppendOnlyTriggers(ledger.db, () => {
       ledger.db.prepare("UPDATE events SET severity = '' WHERE kind = 'v3.count-needle'").run();
     });
-    for (const query of [
-      () => ledger.countEvents(),
-      () => ledger.countEvents(undefined, undefined, 'needle'),
+    assert.equal(ledger.countEvents(), 1);
+    assert.equal(ledger.countEvents(undefined, undefined, 'needle'), 1);
+    assert.throws(
       () => ledger.recentEvents(10, undefined, undefined, 'needle'),
-    ]) {
-      assert.throws(
-        query,
-        (error) => error instanceof Error && error.message === 'LEDGER_EVENT_SEVERITY_MALFORMED',
-      );
-    }
+      (error) => error instanceof Error && error.message === 'LEDGER_EVENT_SEVERITY_MALFORMED',
+    );
   } finally {
     ledger.close();
     rmSync(dataDir, { recursive: true, force: true });

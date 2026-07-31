@@ -38,7 +38,6 @@ import {
 const EVENT_RESULT_MAX = 2_000;
 const EVENT_SEARCH_MAX_CHARS = 64;
 const EVENT_SEARCH_SCAN_ROWS = 25_000;
-const EVENT_METADATA_VALIDATOR_SQL_FUNCTION = 'cosmos_validate_event_metadata_v1';
 const BROWSER_SESSION_MAX = 2_000;
 const BROWSER_SESSION_RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
 const HEALTH_PROBE_CACHE_MS = 5_000;
@@ -1646,32 +1645,6 @@ export class Ledger extends EventEmitter {
     mkdirSync(dataDir, { recursive: true });
     this.db = new Database(databasePath);
     try {
-      this.db.function(
-        EVENT_METADATA_VALIDATOR_SQL_FUNCTION,
-        { deterministic: true },
-        (
-          severity: unknown,
-          source: unknown,
-          strategy: unknown,
-          status: unknown,
-          reason: unknown,
-          message: unknown,
-          correlation: unknown,
-          createdAt: unknown,
-        ) => {
-          prepareStoredLedgerEventMetadata({
-            severity,
-            source,
-            strategy,
-            status,
-            reason,
-            message,
-            correlation,
-            createdAt,
-          });
-          return 1n;
-        },
-      );
       const startupSchemaVersion = this.db.pragma('user_version', { simple: true }) as unknown;
       if (!Number.isSafeInteger(startupSchemaVersion) || (startupSchemaVersion as number) < 0) {
         throw new Error('LEDGER_SCHEMA_VERSION_MALFORMED');
@@ -2206,16 +2179,12 @@ export class Ledger extends EventEmitter {
     if (until !== undefined && Number.isFinite(until)) { clauses.push('ts < ?'); params.push(until); }
     const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
     const row = this.db.prepare(`
-      SELECT COUNT(*) AS count,
-             COALESCE(SUM(${EVENT_METADATA_VALIDATOR_SQL_FUNCTION}(
-               severity, source, strategy, status, reason, message, correlation, created_at
-             )), 0) AS validatedCount
+      SELECT COUNT(*) AS count
       FROM events ${where}
     `).safeIntegers().get(...params) as {
       readonly count: bigint;
-      readonly validatedCount: bigint;
     };
-    if (row.validatedCount !== row.count || row.count > BigInt(Number.MAX_SAFE_INTEGER)) {
+    if (row.count > BigInt(Number.MAX_SAFE_INTEGER)) {
       throw new Error('LEDGER_EVENT_COUNT_MALFORMED');
     }
     return Number(row.count);

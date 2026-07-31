@@ -10,7 +10,7 @@ function tempDataDir() {
   return mkdtempSync(path.join(os.tmpdir(), 'cosmos-ledger-count-'));
 }
 
-test('countEvents keeps exact filters and metadata failure truth behind one SQL aggregate row', () => {
+test('countEvents keeps exact filters behind one native SQL aggregate row', () => {
   const dataDir = tempDataDir();
   const ledger = new Ledger(dataDir);
   try {
@@ -54,10 +54,15 @@ test('countEvents keeps exact filters and metadata failure truth behind one SQL 
 
     ledger.db.exec('DROP TRIGGER events_no_update');
     ledger.db.prepare("UPDATE events SET severity = '' WHERE kind = 'count.beta'").run();
+    assert.equal(
+      ledger.countEvents(),
+      3,
+      'the hot count path must not execute JavaScript once per matching row',
+    );
     assert.throws(
-      () => ledger.countEvents(),
+      () => ledger.recentEvents(10, 'count.beta'),
       (error) => error instanceof Error && error.message === 'LEDGER_EVENT_SEVERITY_MALFORMED',
-      'SQL aggregation must not hide matching corrupt metadata',
+      'row-bearing reads must continue to reject corrupt metadata',
     );
   } finally {
     ledger.close();
@@ -74,6 +79,7 @@ test('countEvents does not materialize an iterator of every matching event row',
 
   assert.match(countSource, /SELECT COUNT\(\*\) AS count/);
   assert.match(countSource, /\.safeIntegers\(\)\.get\(\.\.\.params\)/);
+  assert.doesNotMatch(countSource, /cosmos_validate_event_metadata/);
   assert.doesNotMatch(countSource, /\.iterate\(/);
   assert.doesNotMatch(countSource, /for \(const row of rows\)/);
 });

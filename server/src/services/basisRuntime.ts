@@ -53,6 +53,10 @@ export interface BasisStrategyDecayCadencePort {
 // Refreshing at 1.5s keeps crossed legs comfortably inside that stricter
 // trust curve while staying modest for the two all-symbol book endpoints.
 const BOOK_REFRESH_MS = 1_500;
+// The shared REST transport owns an 8s abort, but Basis must recover even when
+// an injected or lower-level fetch never observes that abort. The extra
+// headroom avoids racing the transport's own classified failure path.
+const BOOK_ACQUISITION_TIMEOUT_MS = 10_000;
 const UNIVERSE_REFRESH_MS = 15 * 60_000;
 const LEDGER_REPEAT_MS = 60_000;
 
@@ -96,6 +100,7 @@ export class BasisRuntime {
   private generation = 0;
   private starting: { generation: number; promise: Promise<void> } | null = null;
   private bookBusyGeneration: number | null = null;
+  private bookAcquisitionGeneration = 0;
   private bookTimer: NodeJS.Timeout | null = null;
   private universeTimer: NodeJS.Timeout | null = null;
   private lastBookTs: number | null = null;
@@ -408,6 +413,7 @@ export class BasisRuntime {
     if (!this.owns(generation) || this.bookBusyGeneration === generation) return;
     this.bookBusyGeneration = generation;
     const errorRevision = this.errorRevision;
+    let acquisitionTimer: NodeJS.Timeout | null = null;
     try {
       let config = this.getConfig();
       const configChanged = this.engine.updateConfig({
@@ -424,11 +430,21 @@ export class BasisRuntime {
       // at least one eligible pair exists instead of waiting 15 minutes.
       if (this.owns(generation) && this.eligibleSymbols.length === 0) this.refreshUniverse(generation);
       if (!this.owns(generation) || !this.eligibleSymbols.length) return;
-      const [spotBooks, perpBooks] = await Promise.all([
-        this.fetchBookTickers('spot'),
-        this.fetchBookTickers('futures'),
+      const acquisitionGeneration = ++this.bookAcquisitionGeneration;
+      const [spotBooks, perpBooks] = await Promise.race([
+        Promise.all([
+          this.fetchBookTickers('spot'),
+          this.fetchBookTickers('futures'),
+        ]),
+        new Promise<never>((_resolve, reject) => {
+          acquisitionTimer = setTimeout(() => {
+            reject(new Error(
+              `book acquisition ${acquisitionGeneration} exceeded ${BOOK_ACQUISITION_TIMEOUT_MS} ms`,
+            ));
+          }, BOOK_ACQUISITION_TIMEOUT_MS);
+        }),
       ]);
-      if (!this.owns(generation)) return;
+      if (!this.owns(generation) || this.bookAcquisitionGeneration !== acquisitionGeneration) return;
       config = this.getConfig();
       const changedDuringFetch = this.engine.updateConfig({
         feesPct: config.feesPct,
@@ -523,6 +539,7 @@ export class BasisRuntime {
         this.safeLogError('basis-runtime.book');
       }
     } finally {
+      if (acquisitionTimer !== null) clearTimeout(acquisitionTimer);
       if (this.bookBusyGeneration === generation) this.bookBusyGeneration = null;
     }
   }

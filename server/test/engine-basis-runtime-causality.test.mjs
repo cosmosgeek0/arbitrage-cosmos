@@ -134,6 +134,113 @@ test('BasisRuntime separates tied REST receipt from distinct source-event chrono
   });
 });
 
+test('BasisRuntime releases a never-settling acquisition and recovers on the existing cadence', async () => {
+  const originalTimers = {
+    setTimeout: globalThis.setTimeout,
+    clearTimeout: globalThis.clearTimeout,
+    setInterval: globalThis.setInterval,
+    clearInterval: globalThis.clearInterval,
+    dateNow: Date.now,
+  };
+  let nextTimerId = 0;
+  const timeouts = new Map();
+  const intervals = new Map();
+  globalThis.setTimeout = (callback, delay) => {
+    const handle = { kind: 'timeout', id: ++nextTimerId };
+    timeouts.set(handle, { callback, delay });
+    return handle;
+  };
+  globalThis.clearTimeout = (handle) => {
+    timeouts.delete(handle);
+  };
+  globalThis.setInterval = (callback, delay) => {
+    const handle = { kind: 'interval', id: ++nextTimerId };
+    intervals.set(handle, { callback, delay });
+    return handle;
+  };
+  globalThis.clearInterval = (handle) => {
+    intervals.delete(handle);
+  };
+
+  let now = T0;
+  Date.now = () => now;
+  let fetchCalls = 0;
+  const never = new Promise(() => {});
+  const fakeFetch = async () => {
+    fetchCalls += 1;
+    if (fetchCalls === 1) return never;
+    return new Map([[SYMBOL, rawBook(99.98, 100, now)]]);
+  };
+  const ledgerEvents = [];
+  const config = {
+    feesPct: 0.3,
+    minNetBasisPct: 0.01,
+    persistTicks: 1,
+    minQuoteVolume24h: 0,
+    killSwitch: false,
+    blockedSymbols: [],
+  };
+  const runtime = new BasisRuntime(
+    { logEvent(...args) { ledgerEvents.push(args); } },
+    () => config,
+    () => [{
+      symbol: SYMBOL,
+      base: 'TEST',
+      quoteVolume24h: 50_000_000,
+      hasSpot: true,
+      hasPerp: true,
+      perpMark: 101.01,
+      fundingRate: 0.0001,
+      nextFundingTime: now + 3_600_000,
+      markUpdatedAt: now,
+    }],
+    fakeFetch,
+    null,
+    () => now,
+  );
+
+  try {
+    const starting = runtime.start();
+    await Promise.resolve();
+    assert.equal(fetchCalls, 2, 'the first Spot/Perpetual acquisition starts once');
+    const acquisitionTimeout = [...timeouts.entries()].find(([, timer]) => timer.delay === 10_000);
+    assert.ok(acquisitionTimeout, 'the in-flight acquisition has a deterministic outer bound');
+
+    now += 10_000;
+    timeouts.delete(acquisitionTimeout[0]);
+    acquisitionTimeout[1].callback();
+    await starting;
+
+    const timedOut = runtime.connectionStatus();
+    assert.equal(timedOut.bookState, 'stale', 'timeout does not fabricate replacement book truth');
+    assert.match(timedOut.lastError, /book acquisition 1 exceeded 10000 ms/);
+    assert.equal(
+      ledgerEvents.filter((event) => event[0] === 'error_event').length,
+      1,
+      'the timeout uses the existing bounded error log path',
+    );
+
+    const bookCadence = [...intervals.values()].find((timer) => timer.delay === 1_500);
+    assert.ok(bookCadence, 'startup installs the unchanged book cadence after the bounded failure');
+    now += 1_500;
+    bookCadence.callback();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    assert.equal(fetchCalls, 4, 'only the later cadence starts the recovery acquisition');
+    const recovered = runtime.connectionStatus();
+    assert.equal(recovered.bookState, 'fresh', JSON.stringify(recovered));
+    assert.equal(recovered.lastBookTs, now);
+    assert.equal(recovered.lastError, null, 'successful owner cadence clears the timeout error');
+  } finally {
+    runtime.stop();
+    globalThis.setTimeout = originalTimers.setTimeout;
+    globalThis.clearTimeout = originalTimers.clearTimeout;
+    globalThis.setInterval = originalTimers.setInterval;
+    globalThis.clearInterval = originalTimers.clearInterval;
+    Date.now = originalTimers.dateNow;
+  }
+});
+
 test('BasisRuntime preserves both leadership directions across exact unchanged REST source replay', async () => {
   const cases = [
     {

@@ -250,7 +250,14 @@ test('application socket has no legacy state timer or push and preserves its saf
   assert.match(serverSource, /productIntegrationRuntime\.readMaterialEvents\(/);
   assert.match(serverSource, /type:\s*['"]canonical-supervisor-delta['"]/);
   assert.match(serverSource, /type:\s*['"]material-event-page['"]/);
-  assert.match(storeSource, /isCanonicalSupervisorDeltaMessage\(data\)\) requestCompatibilityState\(\)/);
+  assert.match(
+    storeSource,
+    /if \(isCanonicalSupervisorDeltaMessage\(data\)\) \{\s*\/\/ Protocol-valid connection evidence only\./,
+  );
+  assert.doesNotMatch(
+    storeSource,
+    /isCanonicalSupervisorDeltaMessage\(data\)\) requestCompatibilityState\(\)/,
+  );
   assert.match(serverSource, /operatorAccess\.verify\(request, \{ websocket: true \}\)/);
   assert.match(serverSource, /client\.close\(1012, ['"]service restart['"]\)/);
   assert.match(serverSource, /bookHub\.handleMessage\(ws, decoded\)/);

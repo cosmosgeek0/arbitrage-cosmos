@@ -121,13 +121,17 @@ async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAUL
 
   const work = (async (): Promise<T> => {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
-    try {
+    let timer: NodeJS.Timeout | null = null;
+    const transport = (async (): Promise<T> => {
       const res = await fetch(url, {
         headers: { Accept: 'application/json' },
         redirect: 'error',
         signal: ctrl.signal,
       });
+      if (ctrl.signal.aborted) {
+        await res.body?.cancel().catch(() => undefined);
+        throw new Error(`${label} unavailable`);
+      }
       if (!res.ok) {
         if (res.status === 429 || res.status === 418) {
           recordHostRateLimit(url.hostname, res.status, retryAfterMs(res));
@@ -142,11 +146,22 @@ async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAUL
         throw new Error(`${label} invalid content type`);
       }
       const text = await readBoundedBody(res, maxBytes);
+      if (ctrl.signal.aborted) throw new Error(`${label} unavailable`);
       try {
         return JSON.parse(text) as T;
       } catch {
         throw new Error(`${label} invalid JSON`);
       }
+    })();
+    const deadline = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        ctrl.abort();
+        reject(new Error(`${label} unavailable`));
+      }, FETCH_TIMEOUT_MS);
+      timer.unref();
+    });
+    try {
+      return await Promise.race([transport, deadline]);
     } catch (err) {
       const message = err instanceof Error && /^(?:[\w -]+) (?:HTTP \d{3}|invalid content type|invalid JSON)$/.test(err.message)
         ? err.message
@@ -156,7 +171,7 @@ async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAUL
       boundedMapSet(jsonFailures, key, { until: Date.now() + NEGATIVE_CACHE_MS, message }, 512);
       throw new Error(message);
     } finally {
-      clearTimeout(timer);
+      if (timer !== null) clearTimeout(timer);
     }
   })();
   jsonInFlight.set(key, work);

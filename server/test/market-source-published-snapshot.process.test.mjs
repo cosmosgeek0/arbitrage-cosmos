@@ -203,6 +203,30 @@ test('Markets and Product GETs publish unavailable/stale snapshots without await
       },
       'repeated reads must coalesce behind one detached refresh',
     );
+
+    await new Promise((resolve) => setTimeout(resolve, 10_500));
+    let recoveredAttempts = [];
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const afterDeadline = await boundedJson(base, '/api/markets');
+      allSourceStates(afterDeadline.body, 'stale');
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      recoveredAttempts = readFileSync(attemptFile, 'utf8').trim().split('\n').filter(Boolean);
+      if (recoveredAttempts.filter(
+        (entry) => entry === 'api.binance.com/api/v3/ticker/bookTicker',
+      ).length === 3) break;
+    }
+    assert.deepEqual(
+      Object.fromEntries([...new Set(recoveredAttempts)].sort().map((key) => [
+        key,
+        recoveredAttempts.filter((attempt) => attempt === key).length,
+      ])),
+      {
+        'api.binance.com/api/v3/ticker/bookTicker': 3,
+        'fapi.binance.com/fapi/v1/ticker/24hr': 1,
+        'fapi.binance.com/fapi/v1/ticker/bookTicker': 3,
+      },
+      'a never-settling refresh must release its busy owner and admit one later retry',
+    );
   } finally {
     if (!finished(child)) {
       child.kill('SIGKILL');

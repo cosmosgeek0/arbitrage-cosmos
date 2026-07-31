@@ -2117,14 +2117,36 @@ type MarketSourceSnapshot = Readonly<{
 }>;
 type PublishedMarketSourceState = 'fresh' | 'stale' | 'unavailable';
 const MARKET_SOURCE_REFRESH_MS = 2_000;
+const MARKET_SOURCE_ACQUISITION_TIMEOUT_MS = 10_000;
+const MARKET_SOURCE_FAILURE_LOG_MS = 60_000;
 let marketSourceCache: MarketSourceSnapshot | null = null;
 let marketSourceInFlight: Promise<MarketSourceSnapshot> | null = null;
+let marketSourceLastFailureLogAt = 0;
 
 function observedMarketSourceResult<T>(
   result: PromiseSettledResult<T>,
   observedAtMs: number,
 ): Readonly<ObservedMarketSourceResult<T>> {
   return Object.freeze({ ...result, observedAtMs });
+}
+
+function retainMarketSourceResult<T>(
+  next: Readonly<ObservedMarketSourceResult<T>>,
+  previous: Readonly<ObservedMarketSourceResult<T>> | undefined,
+): Readonly<ObservedMarketSourceResult<T>> {
+  return next.status === 'rejected' && previous?.status === 'fulfilled'
+    ? previous
+    : next;
+}
+
+function logMarketSourceRefreshFailure(message: string): void {
+  const failedAt = Date.now();
+  if (failedAt - marketSourceLastFailureLogAt < MARKET_SOURCE_FAILURE_LOG_MS) return;
+  marketSourceLastFailureLogAt = failedAt;
+  safeLogEvent('error_event', null, {
+    source: 'market.source_snapshot',
+    message,
+  });
 }
 
 const initialMarketSourceSnapshot: MarketSourceSnapshot = (() => {
@@ -2146,20 +2168,44 @@ function triggerMarketSourceRefresh(now = Date.now()): void {
   if (marketSourceInFlight) return;
   if (marketSourceCache && now - marketSourceCache.at < MARKET_SOURCE_REFRESH_MS) return;
 
-  const refresh = Promise.allSettled([
+  const acquisition = Promise.allSettled([
     fetchAllBookTickers('spot'),
     fetchAllBookTickers('futures'),
     fetchAllFutures24hTickers(),
+  ]);
+  let acquisitionTimer: NodeJS.Timeout | null = null;
+  const acquisitionDeadline = new Promise<never>((_resolve, reject) => {
+    acquisitionTimer = setTimeout(() => {
+      reject(new Error(
+        `market source acquisition exceeded ${MARKET_SOURCE_ACQUISITION_TIMEOUT_MS} ms`,
+      ));
+    }, MARKET_SOURCE_ACQUISITION_TIMEOUT_MS);
+    acquisitionTimer.unref();
+  });
+  const refresh = Promise.race([
+    acquisition,
+    acquisitionDeadline,
   ]).then(([spotBookRes, perpBookRes, perp24hRes]) => {
     const at = Date.now();
+    const nextSpot = observedMarketSourceResult(spotBookRes, at);
+    const nextPerp = observedMarketSourceResult(perpBookRes, at);
+    const nextPerp24h = observedMarketSourceResult(perp24hRes, at);
+    const previous = marketSourceCache;
     const snapshot: MarketSourceSnapshot = Object.freeze({
       at,
-      spotBookRes: observedMarketSourceResult(spotBookRes, at),
-      perpBookRes: observedMarketSourceResult(perpBookRes, at),
-      perp24hRes: observedMarketSourceResult(perp24hRes, at),
+      spotBookRes: retainMarketSourceResult(nextSpot, previous?.spotBookRes),
+      perpBookRes: retainMarketSourceResult(nextPerp, previous?.perpBookRes),
+      perp24hRes: retainMarketSourceResult(nextPerp24h, previous?.perp24hRes),
     });
     marketSourceCache = snapshot;
+    const rejectedCount = [spotBookRes, perpBookRes, perp24hRes]
+      .filter((result) => result.status === 'rejected').length;
+    if (rejectedCount > 0) {
+      logMarketSourceRefreshFailure(`${rejectedCount} market sources unavailable`);
+    }
     return snapshot;
+  }).finally(() => {
+    if (acquisitionTimer !== null) clearTimeout(acquisitionTimer);
   });
   marketSourceInFlight = refresh;
   void refresh.then(
@@ -2168,10 +2214,9 @@ function triggerMarketSourceRefresh(now = Date.now()): void {
     },
     (error) => {
       if (marketSourceInFlight === refresh) marketSourceInFlight = null;
-      safeLogEvent('error_event', null, {
-        source: 'market.source_snapshot',
-        message: error instanceof Error ? error.message : 'Market source snapshot refresh failed',
-      });
+      logMarketSourceRefreshFailure(
+        error instanceof Error ? error.message : 'Market source snapshot refresh failed',
+      );
     },
   );
 }

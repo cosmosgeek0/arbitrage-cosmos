@@ -39,6 +39,7 @@ function checkedNow(options: Readonly<ProductRuntimeOptions>): number {
 }
 
 const PRODUCT_SUPERVISOR_EMBEDDED_TRACE_LIMIT = 200;
+const PRODUCT_SUPERVISOR_SHARED_READ_TTL_MS = 1_000;
 
 function incidentTargetForControl(controlId: string, targetId: unknown): string | undefined {
   const incidentControl = /^incident\.ack\.[a-f0-9]{64}$/.test(controlId);
@@ -138,6 +139,11 @@ async function isExactTerminalCommandReplay(
 
 export class ProductIntegrationRuntimeService {
   private readonly options: Readonly<ProductRuntimeOptions>;
+  private sharedSupervisorRead: Readonly<{
+    envelope: Readonly<ProductRuntimeSupervisorEnvelope>;
+    publishedAtMonotonicMs: number;
+  }> | null = null;
+  private sharedSupervisorInFlight: Promise<Readonly<ProductRuntimeSupervisorEnvelope>> | null = null;
 
   constructor(options: Readonly<ProductRuntimeOptions>) {
     if (!options || typeof options.read?.applicationStartOk !== 'function'
@@ -175,6 +181,43 @@ export class ProductIntegrationRuntimeService {
       source,
       'TAIL_BOOTSTRAP',
     );
+  }
+
+  /**
+   * Coalesced transport read for browser polling. The canonical fresh builder
+   * remains available to command/internal owners through readSupervisor(); the
+   * HTTP surface shares one immutable envelope for a bounded second so many
+   * signed-in tabs cannot rebuild the same synchronous read graph in parallel.
+   */
+  readSupervisorShared(): Promise<Readonly<ProductRuntimeSupervisorEnvelope>> {
+    const nowMs = performance.now();
+    if (this.sharedSupervisorRead !== null
+        && nowMs - this.sharedSupervisorRead.publishedAtMonotonicMs
+          < PRODUCT_SUPERVISOR_SHARED_READ_TTL_MS) {
+      return Promise.resolve(this.sharedSupervisorRead.envelope);
+    }
+    if (this.sharedSupervisorInFlight !== null) return this.sharedSupervisorInFlight;
+    const work = this.readSupervisor()
+      .then((envelope) => {
+        this.sharedSupervisorRead = Object.freeze({
+          envelope,
+          publishedAtMonotonicMs: performance.now(),
+        });
+        return envelope;
+      })
+      .finally(() => {
+        if (this.sharedSupervisorInFlight === work) this.sharedSupervisorInFlight = null;
+      });
+    this.sharedSupervisorInFlight = work;
+    return work;
+  }
+
+  /**
+   * Non-building WebSocket projection source. Timer delivery may announce the
+   * last HTTP-published cut, but must never trigger another full Product read.
+   */
+  readPublishedSupervisor(): Readonly<ProductRuntimeSupervisorEnvelope> | null {
+    return this.sharedSupervisorRead?.envelope ?? null;
   }
 
   async readSupervisor(): Promise<Readonly<ProductRuntimeSupervisorEnvelope>> {

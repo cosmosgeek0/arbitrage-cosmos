@@ -1,5 +1,11 @@
 # STATE.md — current product state
 
+## Epoch 5R common runtime recovery overlay (2026-07-31)
+
+- Fresh source and host evidence refute a missing System Integration bootstrap and an external SQLite lock. The deployed monolithic Node process instead rebuilds the full Product supervisor on a two-second WebSocket timer while browser polling and compatibility-state invalidation multiply synchronous owner, Ledger, market, projection, hashing, and serialization work. Product and Markets also acquire three Binance REST datasets inside GET, leaving at most two seconds of the browser's ten-second request budget.
+- This candidate makes process liveness O(1), reuses one immutable canonical-owner cut across summary and trace, and coalesces browser Product supervisor reads behind one bounded published envelope. WebSocket delivery is permitted to announce only an already-published HTTP cut; its timer may not rebuild Product truth. Market-source, Ledger-count, notification-bootstrap, URL-identity, and truthful release-footer corrections are composed as separate bounded commits before freeze.
+- These changes are source-only until the exact integrated candidate is built, tested, packaged, switched, and verified at the authenticated production site. Private account remains independently `NOT_CONFIGURED`; no credential, private exchange read, money action, control mutation, deployment, or restart is authorized by this source overlay.
+
 ## M0-I2 production-capable Spot successor overlay (2026-07-30)
 
 - The containing direct successor of `…a9b5` selectively composes the accepted M0 and REALDATA patches; C-1 `…3a18` is not candidate ancestry. It keeps the original authenticated `POST /api/system-integration/m0/spot-canary` one-field source inspection unchanged: plain owner `YES` remains acknowledgement only and returns the default-closed source posture. The same existing surface now exposes a no-refresh `GET` readiness card and accepts a separate exact three-field owner acknowledgement only for a digest-verified, server-held lifecycle card. HTTP can provide no symbol, price, quantity, ticket, authority, signer, credential, endpoint, or retry instruction.

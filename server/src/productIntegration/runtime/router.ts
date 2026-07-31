@@ -41,7 +41,7 @@ function exactBody(value: unknown, keys: readonly string[]): value is Record<str
 
 /** Relative router. Mount exactly at `/api/product-integration`. */
 export function createProductIntegrationRuntimeRouter(service: ProductIntegrationRuntimeService): express.Router {
-  if (!service || typeof service.readSupervisor !== 'function' || typeof service.readMaterialEvents !== 'function'
+  if (!service || typeof service.readSupervisorShared !== 'function' || typeof service.readMaterialEvents !== 'function'
       || typeof service.readTrace !== 'function' || typeof service.previewCommand !== 'function'
       || typeof service.submitCommand !== 'function' || typeof service.readCommandResult !== 'function') {
     throw new TypeError('A ProductIntegrationRuntimeService is required.');
@@ -62,7 +62,7 @@ export function createProductIntegrationRuntimeRouter(service: ProductIntegratio
       res.status(400).json({ ok: false, code: 'INVALID_PRODUCT_QUERY', error: 'Supervisor read accepts no query fields.' });
       return;
     }
-    res.json(await service.readSupervisor());
+    res.json(await service.readSupervisorShared());
   }));
 
   router.get('/v1/material-events', asyncRoute(async (req, res) => {

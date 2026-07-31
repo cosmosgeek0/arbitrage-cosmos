@@ -730,8 +730,12 @@ function healthOutcome(f, kind) {
 async function readHealthRoutes(f) {
   const app = express();
   const readFailures = [];
+  let supervisorReads = 0;
   registerI00HealthRoutes(app, Object.freeze({
-    readSupervisor: () => f.app.supervisor(),
+    readSupervisor: () => {
+      supervisorReads += 1;
+      return f.app.supervisor();
+    },
     applicationStartOk: () => true,
     applicationStartFailureCodes: () => Object.freeze([]),
     onSupervisorReadFailure: (error) => { readFailures.push(error); },
@@ -756,6 +760,7 @@ async function readHealthRoutes(f) {
       ready: Object.freeze({ status: ready.status, body: await ready.json() }),
       trade: Object.freeze({ status: trade.status, body: await trade.json() }),
     });
+    assert.equal(supervisorReads, 2, 'process liveness must not execute the canonical supervisor');
     assert.deepEqual(readFailures, []);
     for (const [kind, outcome] of [
       ['LIVE', result.live],

@@ -20,6 +20,29 @@ function sendI00Health(
   options: Readonly<I00HealthRouteOptions>,
 ): RequestHandler {
   return (_req, res): void => {
+    if (kind === 'LIVE') {
+      // Liveness is deliberately process-only. Reading the canonical
+      // supervisor here made a watchdog probe execute every synchronous
+      // persistence and owner-evidence read, so a slow Ledger could make the
+      // healthy Node process appear dead and amplify the request backlog.
+      res.status(200).json({
+        schemaVersion: I00_HEALTH_SCHEMA,
+        kind,
+        ok: true,
+        evaluatedAtMs: options.nowMs(),
+        overallPosture: 'PROCESS_ALIVE',
+        rootBlockerComponentId: null,
+        reasonCodes: ['PROCESS_RESPONSIVE_LIVENESS_ONLY'],
+        okSemantics: 'PROCESS_LIVENESS_ONLY',
+        componentCount: 0,
+        dependencyEdgeCount: 0,
+        meaningfulAdvanceOwnerComponentId: null,
+        lastMeaningfulAdvanceAtMs: null,
+        meaningfulAdvanceAgeMs: null,
+        executionBarrier: 'LIVE_EXECUTION_NOT_IMPLEMENTED',
+      });
+      return;
+    }
     try {
       const supervisor = options.readSupervisor();
       const projection = projectI00Health(
@@ -32,16 +55,14 @@ function sendI00Health(
       res.status(projection.ok ? 200 : 503).json(projection);
     } catch (error) {
       options.onSupervisorReadFailure(error);
-      const processResponsive = kind === 'LIVE';
-      res.status(processResponsive ? 200 : 503).json({
+      res.status(503).json({
         schemaVersion: I00_HEALTH_SCHEMA,
         kind,
-        ok: processResponsive,
+        ok: false,
         evaluatedAtMs: options.nowMs(),
         overallPosture: 'FAILED',
         rootBlockerComponentId: null,
-        reasonCodes: [processResponsive ? 'SUPERVISOR_READ_UNAVAILABLE_LIVENESS_ONLY' : 'SUPERVISOR_READ_UNAVAILABLE'],
-        ...(processResponsive ? { okSemantics: 'PROCESS_LIVENESS_ONLY' } : {}),
+        reasonCodes: ['SUPERVISOR_READ_UNAVAILABLE'],
         componentCount: 0,
         dependencyEdgeCount: 0,
         meaningfulAdvanceOwnerComponentId: null,

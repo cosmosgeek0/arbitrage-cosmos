@@ -660,6 +660,10 @@ export function createCanonicalOwnerEvidenceReadPort(
   options: Readonly<CanonicalOwnerEvidenceOptions>,
 ): Readonly<CanonicalOwnerEvidenceReadPort> {
   validateOptions(options);
+  let pendingTraceCut: Readonly<{
+    snapshot: Readonly<CanonicalOwnerEvidenceSnapshot>;
+    events: readonly Readonly<SystemTraceEvent>[];
+  }> | null = null;
   const build = (): Readonly<{
     snapshot: Readonly<CanonicalOwnerEvidenceSnapshot>;
     events: readonly Readonly<SystemTraceEvent>[];
@@ -720,7 +724,18 @@ export function createCanonicalOwnerEvidenceReadPort(
     return Object.freeze({ snapshot, events: traceEvents(snapshot) });
   };
   return Object.freeze({
-    readCanonicalOwnerEvidence: () => build().snapshot,
-    readTraceEvents: () => build().events,
+    readCanonicalOwnerEvidence: () => {
+      const cut = build();
+      // A System supervisor projection reads the owner summary first and the
+      // owner trace second. Preserve that one immutable cut across both
+      // accessors instead of rebuilding and rescanning the Ledger twice.
+      pendingTraceCut = cut;
+      return cut.snapshot;
+    },
+    readTraceEvents: () => {
+      const cut = pendingTraceCut ?? build();
+      pendingTraceCut = null;
+      return cut.events;
+    },
   });
 }

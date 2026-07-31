@@ -25,6 +25,36 @@ async function close(server) {
   await new Promise((resolve) => server.close(resolve));
 }
 
+test('browser supervisor reads coalesce and WebSocket publication never rebuilds the owner graph', async () => {
+  const base = makeRead();
+  let release;
+  const admitted = new Promise((resolve) => { release = resolve; });
+  let supervisorReads = 0;
+  const service = createProductIntegrationRuntime({
+    read: Object.freeze({
+      ...base,
+      async supervisor() {
+        supervisorReads += 1;
+        await admitted;
+        return base.supervisor();
+      },
+    }),
+    clock: { nowMs: () => T0 },
+  });
+
+  const first = service.readSupervisorShared();
+  const second = service.readSupervisorShared();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(supervisorReads, 1);
+  assert.equal(service.readPublishedSupervisor(), null);
+  release();
+  const [left, right] = await Promise.all([first, second]);
+  assert.strictEqual(left, right);
+  assert.strictEqual(service.readPublishedSupervisor(), left);
+  assert.strictEqual(await service.readSupervisorShared(), left);
+  assert.equal(supervisorReads, 1);
+});
+
 test('frozen product-integration v1 routes enforce identity, exact paths, and query bounds', { concurrency: false }, async () => {
   const service = createProductIntegrationRuntime({ read: makeRead(), clock: { nowMs: () => T0 } });
   const app = express();

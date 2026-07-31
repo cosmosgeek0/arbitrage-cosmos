@@ -274,15 +274,22 @@ test('restart reconstructs the one L06 canonical journal while L12/L14 remain no
   assert.equal(acknowledgement.disposition, 'COMMITTED_NEW');
 
   const restarted = new LiveEdgeMutationJournalPersistenceAdapter(ledger, clock);
+  let inventoryReads = 0;
   const port = createCanonicalOwnerEvidenceReadPort({
     clock,
     components: Object.freeze({}),
-    mutationJournal: restarted,
+    mutationJournal: Object.freeze({
+      inspectInventory() {
+        inventoryReads += 1;
+        return restarted.inspectInventory();
+      },
+    }),
     liveEdgeControl: gatedL14(ledger, clock),
   });
   const snapshot = port.readCanonicalOwnerEvidence();
   const events = port.readTraceEvents();
 
+  assert.equal(inventoryReads, 1, 'one supervisor owner cut must not rescan the Ledger for its trace');
   assert.equal(snapshot.l06.inventoryState, 'AVAILABLE');
   assert.equal(snapshot.l06.journalCount, 1);
   assert.equal(snapshot.l06.entryCount, 1);

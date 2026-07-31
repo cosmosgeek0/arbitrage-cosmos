@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { StoreProvider, useStore } from './store';
+import { Fragment, useEffect, useRef } from 'react';
+import { StoreProvider, resolveReleaseIdentityTruth, useStore } from './store';
 import { IconClock } from './components/Icons';
 import { Sidebar, Topbar, BottomNav, Overlays, RefreshDock } from './components/Header';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -67,6 +67,9 @@ function Shell() {
   const mainRef = useRef<HTMLElement | null>(null);
   const framePage = page === 'detail' ? 'detail' : page;
   const productSnapshot = productBinding.snapshot;
+  // Footer release identity is deployment truth only: the tested commit and the
+  // schema revision are never presented as what is running.
+  const releaseIdentity = resolveReleaseIdentityTruth(productSnapshot?.ownerView.revisions ?? null);
   const productBindingState = productBinding.loading
     ? 'LOADING'
     : productBinding.error !== null
@@ -133,7 +136,18 @@ function Shell() {
                 <span className="ftr-left">
                   <span className="ftr-brand">© 2026 Arbitrage Control Room</span>
                   <i>•</i>
-                  <span>Local Candidate</span>
+                  {releaseIdentity.fallbackText !== null ? (
+                    <span data-i00-release-identity="UNKNOWN">{releaseIdentity.fallbackText}</span>
+                  ) : (
+                    releaseIdentity.facts.map((fact, index) => (
+                      <Fragment key={fact.id}>
+                        {index > 0 ? <i>•</i> : null}
+                        <span data-i00-release-identity={fact.id} title={fact.exact}>
+                          {fact.label} <code>{fact.display}</code>
+                        </span>
+                      </Fragment>
+                    ))
+                  )}
                   <i>•</i>
                   <span>No Money Paths</span>
                   <i>•</i>

@@ -178,6 +178,310 @@ const PAGE_IDS: Page[] = [
   'notifications', 'news', 'calendar',
 ];
 
+export function isPageId(value: unknown): value is Page {
+  return typeof value === 'string' && PAGE_IDS.includes(value as Page);
+}
+
+// ---- durable URL <-> page routing ----------------------------------------
+// The address bar is the durable owner of the visible page and, for Token
+// Detail, of the symbol. localStorage stays as compatibility memory for the
+// pre-routing shell's last symbol only; it never outranks the URL. Every helper
+// below is pure; the only impure edges (read/push/replace) are injected so the
+// whole contract is provable without a DOM.
+
+export const CANONICAL_DASHBOARD_PATH = '/dashboard';
+export const TOKEN_ROUTE_PREFIX = 'token';
+export const ACCOUNT_ROUTE_PREFIX = 'account';
+export const DEFAULT_DETAIL_SYMBOL = 'BTCUSDT';
+export const ACTIVE_PAGE_STORAGE_KEY = 'cosmos-active-page';
+export const DETAIL_SYMBOL_STORAGE_KEY = 'cosmos-detail-symbol';
+
+const TOKEN_SYMBOL_PATTERN = /^[A-Z0-9]{2,32}$/;
+
+// Account subview ids render one controlled Account page (DESIGN.md §3), so
+// their canonical paths stay nested under /account.
+const ACCOUNT_SUBVIEW_PAGES: Readonly<Record<string, Page>> = Object.freeze({
+  overview: 'account',
+  wallets: 'wallets',
+  execution: 'execution',
+  orders: 'orders',
+  positions: 'positions',
+  fills: 'fills',
+  pnl: 'pnl',
+});
+
+const PAGE_PATHS: Readonly<Record<Exclude<Page, 'detail'>, string>> = Object.freeze({
+  dashboard: CANONICAL_DASHBOARD_PATH,
+  'control-room': '/control-room',
+  account: '/account',
+  wallets: '/account/wallets',
+  markets: '/markets',
+  loans: '/borrow',
+  execution: '/account/execution',
+  orders: '/account/orders',
+  positions: '/account/positions',
+  fills: '/account/fills',
+  pnl: '/account/pnl',
+  strategies: '/basis',
+  volume: '/volume',
+  opportunities: '/opportunities',
+  risk: '/risk',
+  ledger: '/logs',
+  system: '/health',
+  notifications: '/notifications',
+  news: '/news',
+  calendar: '/calendar',
+});
+
+const SINGLE_SEGMENT_PAGES: Readonly<Record<string, Page>> = Object.freeze({
+  dashboard: 'dashboard',
+  'control-room': 'control-room',
+  account: 'account',
+  markets: 'markets',
+  borrow: 'loans',
+  basis: 'strategies',
+  volume: 'volume',
+  opportunities: 'opportunities',
+  risk: 'risk',
+  logs: 'ledger',
+  health: 'system',
+  notifications: 'notifications',
+  news: 'news',
+  calendar: 'calendar',
+  // Legacy internal ids remain accepted only as normalized aliases.
+  wallets: 'wallets',
+  loans: 'loans',
+  strategies: 'strategies',
+  ledger: 'ledger',
+  system: 'system',
+});
+
+export type RouteTarget = Readonly<{ page: Page; detailSymbol: string | null }>;
+
+export type RouteParseStatus = 'CANONICAL' | 'NORMALIZED' | 'UNKNOWN';
+
+export type RouteParse = Readonly<{ status: RouteParseStatus; target: RouteTarget | null }>;
+
+const UNKNOWN_ROUTE_PARSE: RouteParse = Object.freeze({ status: 'UNKNOWN', target: null });
+
+export function canonicalizeTokenSymbol(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const symbol = value.trim().toUpperCase();
+  return TOKEN_SYMBOL_PATTERN.test(symbol) ? symbol : null;
+}
+
+export function routeTarget(page: Page, detailSymbol: unknown = null): RouteTarget {
+  return Object.freeze({ page, detailSymbol: canonicalizeTokenSymbol(detailSymbol) });
+}
+
+/**
+ * The canonical path for a target. A detail target without a valid symbol has
+ * no honest token path, so it deterministically serializes to the dashboard
+ * rather than inventing a symbol.
+ */
+export function serializeRoute(target: Readonly<{ page: Page; detailSymbol?: unknown }>): string {
+  if (target.page === 'detail') {
+    const symbol = canonicalizeTokenSymbol(target.detailSymbol);
+    return symbol === null ? CANONICAL_DASHBOARD_PATH : `/${TOKEN_ROUTE_PREFIX}/${symbol}`;
+  }
+  return PAGE_PATHS[target.page] ?? CANONICAL_DASHBOARD_PATH;
+}
+
+function routeSegments(pathname: string): string[] | null {
+  const [pathOnly = ''] = pathname.split(/[?#]/, 1);
+  const segments: string[] = [];
+  for (const raw of pathOnly.split('/')) {
+    if (raw.length === 0) continue;
+    try {
+      segments.push(decodeURIComponent(raw));
+    } catch {
+      return null;
+    }
+  }
+  return segments;
+}
+
+function matchRouteTarget(segments: readonly string[]): RouteTarget | null {
+  if (segments.length === 1) {
+    const id = segments[0].toLowerCase();
+    const page = SINGLE_SEGMENT_PAGES[id];
+    return page === undefined ? null : routeTarget(page);
+  }
+  if (segments.length !== 2) return null;
+  const prefix = segments[0].toLowerCase();
+  if (prefix === TOKEN_ROUTE_PREFIX) {
+    const symbol = canonicalizeTokenSymbol(segments[1]);
+    return symbol === null ? null : routeTarget('detail', symbol);
+  }
+  if (prefix === ACCOUNT_ROUTE_PREFIX) {
+    const subview = ACCOUNT_SUBVIEW_PAGES[segments[1].toLowerCase()];
+    return subview === undefined ? null : routeTarget(subview);
+  }
+  return null;
+}
+
+/** Parses a browser pathname; root normalizes to Dashboard and unknown paths fail there. */
+export function parseRoutePath(pathname: unknown): RouteParse {
+  if (typeof pathname !== 'string') return UNKNOWN_ROUTE_PARSE;
+  const segments = routeSegments(pathname);
+  if (segments === null) return UNKNOWN_ROUTE_PARSE;
+  const target = segments.length === 0 ? routeTarget('dashboard') : matchRouteTarget(segments);
+  if (target === null) return UNKNOWN_ROUTE_PARSE;
+  const [pathOnly = ''] = pathname.split(/[?#]/, 1);
+  return Object.freeze({
+    status: serializeRoute(target) === pathOnly ? 'CANONICAL' : 'NORMALIZED',
+    target,
+  });
+}
+
+export function resolveInitialRouteTarget(pathname: unknown, memory: RouteTarget): RouteTarget {
+  const parsed = parseRoutePath(pathname);
+  if (parsed.status === 'UNKNOWN' || parsed.target === null) {
+    return mergeRouteTarget(routeTarget('dashboard'), memory);
+  }
+  return mergeRouteTarget(parsed.target, memory);
+}
+
+/**
+ * Compatibility memory: the page the owner was last on, then their configured
+ * default page, then the dashboard. The URL outranks all three.
+ */
+export function resolveMemoryRouteTarget(input: Readonly<{
+  savedPage?: unknown;
+  savedSymbol?: unknown;
+  defaultPage?: unknown;
+}>): RouteTarget {
+  const page = isPageId(input.savedPage)
+    ? input.savedPage
+    : isPageId(input.defaultPage)
+      ? input.defaultPage
+      : 'dashboard';
+  return Object.freeze({
+    page,
+    detailSymbol: canonicalizeTokenSymbol(input.savedSymbol) ?? DEFAULT_DETAIL_SYMBOL,
+  });
+}
+
+function mergeRouteTarget(next: RouteTarget, current: RouteTarget): RouteTarget {
+  const detailSymbol = canonicalizeTokenSymbol(next.detailSymbol)
+    ?? canonicalizeTokenSymbol(current.detailSymbol)
+    ?? DEFAULT_DETAIL_SYMBOL;
+  return Object.freeze({ page: next.page, detailSymbol });
+}
+
+export type RoutePathIo = Readonly<{
+  readPath: () => string;
+  pushPath: (path: string) => void;
+  replacePath: (path: string) => void;
+}>;
+
+export type DurableRouteController = Readonly<{
+  resolveInitial: (memory: RouteTarget) => RouteTarget;
+  navigate: (next: RouteTarget, current: RouteTarget) => RouteTarget;
+  resolvePop: (current: RouteTarget) => RouteTarget;
+}>;
+
+export function createDurableRouteController(io: RoutePathIo): DurableRouteController {
+  const failToDashboard = (current: RouteTarget): RouteTarget => {
+    const target = mergeRouteTarget(routeTarget('dashboard'), current);
+    io.replacePath(CANONICAL_DASHBOARD_PATH);
+    return target;
+  };
+
+  const resolveInitial = (memory: RouteTarget): RouteTarget => {
+    const parsed = parseRoutePath(io.readPath());
+    if (parsed.status === 'UNKNOWN') return failToDashboard(memory);
+    if (parsed.target === null) return failToDashboard(memory);
+    const target = mergeRouteTarget(parsed.target, memory);
+    if (parsed.status !== 'CANONICAL') io.replacePath(serializeRoute(target));
+    return target;
+  };
+
+  const navigate = (next: RouteTarget, current: RouteTarget): RouteTarget => {
+    const target = mergeRouteTarget(next, current);
+    const path = serializeRoute(target);
+    // Re-selecting the visible route is not a history event.
+    if (path !== io.readPath()) io.pushPath(path);
+    return target;
+  };
+
+  // A popped entry is already in history: it may be repaired with replaceState
+  // but never pushed, or Back would stop working.
+  const resolvePop = (current: RouteTarget): RouteTarget => {
+    const parsed = parseRoutePath(io.readPath());
+    if (parsed.status === 'UNKNOWN' || parsed.target === null) {
+      return failToDashboard(current);
+    }
+    const target = mergeRouteTarget(parsed.target, current);
+    if (parsed.status !== 'CANONICAL') io.replacePath(serializeRoute(target));
+    return target;
+  };
+
+  return Object.freeze({ resolveInitial, navigate, resolvePop });
+}
+
+const BROWSER_ROUTE_PATH_IO: RoutePathIo = Object.freeze({
+  readPath: () => window.location.pathname,
+  pushPath: (path: string) => window.history.pushState(null, '', path),
+  replacePath: (path: string) => window.history.replaceState(null, '', path),
+});
+
+// ---- Product supervisor release identity ---------------------------------
+// The footer states which release is actually deployed. Only deployment facts
+// count: a tested commit or a schema revision is not deployment identity.
+
+export const RELEASE_IDENTITY_UNKNOWN_TEXT = 'Release Identity Unknown';
+const RELEASE_COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/;
+const RELEASE_IDENTITY_SHORT_LENGTH = 12;
+
+export type ReleaseIdentityFact = Readonly<{
+  id: 'deployed' | 'config';
+  label: string;
+  display: string;
+  exact: string;
+}>;
+
+export type ReleaseIdentityTruth = Readonly<{
+  state: 'PRESENT' | 'PARTIAL' | 'UNKNOWN';
+  facts: readonly ReleaseIdentityFact[];
+  fallbackText: string | null;
+}>;
+
+function releaseIdentityValue(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 && trimmed.length <= 128 ? trimmed : null;
+}
+
+function releaseIdentityFact(id: 'deployed' | 'config', label: string, value: unknown): ReleaseIdentityFact | null {
+  const exact = releaseIdentityValue(value);
+  if (exact === null) return null;
+  const display = RELEASE_COMMIT_SHA_PATTERN.test(exact)
+    ? exact.slice(0, RELEASE_IDENTITY_SHORT_LENGTH)
+    : exact;
+  return Object.freeze({ id, label, display, exact });
+}
+
+/**
+ * Projects the supervisor revision set into footer identity facts. Absent
+ * facts are omitted rather than rendered as a placeholder, and an identity
+ * with neither deployment fact renders the exact unknown text.
+ */
+export function resolveReleaseIdentityTruth(revisions: unknown): ReleaseIdentityTruth {
+  const source = revisions && typeof revisions === 'object' && !Array.isArray(revisions)
+    ? revisions as Record<string, unknown>
+    : null;
+  const facts = [
+    releaseIdentityFact('deployed', 'Deployed', source?.deployedCommit),
+    releaseIdentityFact('config', 'Config', source?.configRevision),
+  ].filter((fact): fact is ReleaseIdentityFact => fact !== null);
+  return Object.freeze({
+    state: facts.length === 2 ? 'PRESENT' : facts.length === 1 ? 'PARTIAL' : 'UNKNOWN',
+    facts: Object.freeze(facts),
+    fallbackText: facts.length === 0 ? RELEASE_IDENTITY_UNKNOWN_TEXT : null,
+  });
+}
+
 interface Store {
   state: ServerState | null;
   stateStatus: CompatibilityStateStatus;
@@ -596,14 +900,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setBasisUnit(p.basisUnit);
     return p;
   });
-  // Restore the tab the owner was on across a hard refresh (localStorage),
-  // falling back to their configured default page, then the dashboard.
-  const [page, setPage] = useState<Page>(() => {
-    const saved = localStorage.getItem('cosmos-active-page');
-    if (saved && PAGE_IDS.includes(saved as Page)) return saved as Page;
-    return PAGE_IDS.includes(getPrefs().defaultPage as Page) ? (getPrefs().defaultPage as Page) : 'dashboard';
+  // The URL owns the visible page and the Token Detail symbol. localStorage
+  // retains only the previous symbol; root and unknown URLs resolve to the
+  // canonical dashboard without inheriting a remembered page.
+  const routeControllerRef = useRef<DurableRouteController | null>(null);
+  if (!routeControllerRef.current) {
+    routeControllerRef.current = createDurableRouteController(BROWSER_ROUTE_PATH_IO);
+  }
+  const routeController = routeControllerRef.current;
+  const [route, setRoute] = useState<RouteTarget>(() => {
+    const memory = resolveMemoryRouteTarget({
+      savedPage: localStorage.getItem(ACTIVE_PAGE_STORAGE_KEY),
+      savedSymbol: localStorage.getItem(DETAIL_SYMBOL_STORAGE_KEY),
+      defaultPage: getPrefs().defaultPage,
+    });
+    return resolveInitialRouteTarget(window.location.pathname, memory);
   });
-  const [detailSymbol, setDetailSymbol] = useState(() => localStorage.getItem('cosmos-detail-symbol') || 'BTCUSDT');
+  const routeRef = useRef<RouteTarget>(route);
+  const page = route.page;
+  const detailSymbol = route.detailSymbol ?? DEFAULT_DETAIL_SYMBOL;
   const [dataNonce, setDataNonce] = useState(0);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [webSocketCloseDiagnostic, setWebSocketCloseDiagnostic] = useState<WebSocketCloseDiagnostic | null>(null);
@@ -854,8 +1169,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
         applyProtocolObservation('VALID_ENVELOPE');
         const data = decoded.value;
-        if (isCanonicalSupervisorDeltaMessage(data)) requestCompatibilityState();
-        else if (isLiveBookMessage(data)) {
+        // ProductControlRoomProvider owns canonical supervisor refreshes.
+        // A supervisor delta must not invalidate compatibility /api/state or
+        // owner timestamp revisions create a two-second feedback loop.
+        if (isCanonicalSupervisorDeltaMessage(data)) {
+          // Protocol-valid connection evidence only.
+        } else if (isLiveBookMessage(data)) {
           for (const fn of liveBookListeners) fn(data);
         }
         // Material-event cursor consumption stays with the existing Product
@@ -1059,21 +1378,45 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return poll.stop;
   }, [prefs.refreshSec, prefs.dataCadence?.market]);
 
-  const openDetail = useCallback((symbol: string) => {
-    setDetailSymbol(symbol);
-    localStorage.setItem('cosmos-detail-symbol', symbol);
-    setPage('detail');
-    localStorage.setItem('cosmos-active-page', 'detail');
+  const applyRoute = useCallback((target: RouteTarget) => {
+    routeRef.current = target;
+    setRoute(target);
+    localStorage.setItem(ACTIVE_PAGE_STORAGE_KEY, target.page);
+    if (target.detailSymbol !== null) {
+      localStorage.setItem(DETAIL_SYMBOL_STORAGE_KEY, target.detailSymbol);
+    }
+  }, []);
+
+  const scrollToTop = useCallback(() => {
     window.scrollTo({ top: 0 });
     document.querySelector('.app-main main')?.scrollTo({ top: 0 });
   }, []);
 
+  // The initial resolution already owns the address bar; mirror it into
+  // compatibility memory and follow Back/Forward for the life of the shell.
+  useEffect(() => {
+    applyRoute(routeController.resolveInitial(routeRef.current));
+    const onPopState = () => {
+      applyRoute(routeController.resolvePop(routeRef.current));
+      scrollToTop();
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [applyRoute, routeController, scrollToTop]);
+
+  const openDetail = useCallback((symbol: string) => {
+    const requested = routeTarget('detail', symbol);
+    // An uncanonicalizable symbol is never navigated to; the visible route and
+    // the URL stay exactly where they are.
+    if (requested.detailSymbol === null) return;
+    applyRoute(routeController.navigate(requested, routeRef.current));
+    scrollToTop();
+  }, [applyRoute, routeController, scrollToTop]);
+
   const changePage = useCallback((p: Page) => {
-    setPage(p);
-    localStorage.setItem('cosmos-active-page', p);
-    window.scrollTo({ top: 0 });
-    document.querySelector('.app-main main')?.scrollTo({ top: 0 });
-  }, []);
+    applyRoute(routeController.navigate(routeTarget(p), routeRef.current));
+    scrollToTop();
+  }, [applyRoute, routeController, scrollToTop]);
 
   const saveConfig = useCallback(async (patch: Partial<AppConfig>) => {
     const result = await post<AppConfig>('/api/config', patch);

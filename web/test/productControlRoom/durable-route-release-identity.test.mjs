@@ -11,6 +11,7 @@ import {
   canonicalizeTokenSymbol,
   createDurableRouteController,
   isPageId,
+  marketSnapshotTruthEvent,
   parseRoutePath,
   resolveInitialRouteTarget,
   resolveMemoryRouteTarget,
@@ -93,6 +94,34 @@ test('every visible page has a unique canonical path that parses back to itself'
   assert.equal(serializeRoute(routeTarget('system')), '/health');
   assert.equal(serializeRoute(routeTarget('detail', 'BTCUSDT')), '/token/BTCUSDT');
   assert.equal(serializeRoute(routeTarget('dashboard')), CANONICAL_DASHBOARD_PATH);
+});
+
+test('market publication truth cannot promote a 200 stale or unavailable snapshot to current', () => {
+  const now = 1_785_489_600_000;
+  assert.deepEqual(
+    marketSnapshotTruthEvent({
+      spotBookTicker: 'fresh',
+      futuresBookTicker: 'fresh',
+      futures24hTicker: 'fresh',
+    }, now),
+    { kind: 'SUCCESS', observedAtMs: now },
+  );
+
+  const stale = marketSnapshotTruthEvent({
+    spotBookTicker: 'fresh',
+    futuresBookTicker: 'stale',
+    futures24hTicker: 'unavailable',
+  }, now);
+  assert.equal(stale.kind, 'FAILURE');
+  assert.match(stale.error, /futuresBookTicker=stale/);
+  assert.match(stale.error, /futures24hTicker=unavailable/);
+
+  const missing = marketSnapshotTruthEvent(undefined, now);
+  assert.deepEqual(missing, {
+    kind: 'FAILURE',
+    observedAtMs: now,
+    error: 'Market source truth is missing.',
+  });
 });
 
 test('non-canonical but honest paths normalize; unroutable paths stay unknown', () => {

@@ -114,6 +114,65 @@ export function reduceMarketStateTruth(
   return reduced;
 }
 
+export type MarketSourcePublicationState = 'fresh' | 'stale' | 'unavailable';
+export type MarketSourcePublicationTruth = Readonly<{
+  spotBookTicker: MarketSourcePublicationState;
+  futuresBookTicker: MarketSourcePublicationState;
+  futures24hTicker: MarketSourcePublicationState;
+}>;
+export type MarketSnapshotPayload = Readonly<{
+  updatedAt?: number;
+  dataSources: MarketSourcePublicationTruth;
+  rows: MarketRow[];
+}>;
+
+const MARKET_SOURCE_PUBLICATION_KEYS = Object.freeze([
+  'spotBookTicker',
+  'futuresBookTicker',
+  'futures24hTicker',
+] as const);
+
+/**
+ * A 200 response proves only that the publication endpoint answered. It does
+ * not make retained or unavailable exchange facts current. Validate the
+ * server-owned source labels and reduce them into the existing fail-closed
+ * market truth state.
+ */
+export function marketSnapshotTruthEvent(
+  dataSources: unknown,
+  observedAtMs: number,
+): MarketStateTruthEvent {
+  if (!dataSources || typeof dataSources !== 'object' || Array.isArray(dataSources)) {
+    return Object.freeze({
+      kind: 'FAILURE',
+      observedAtMs,
+      error: 'Market source truth is missing.',
+    });
+  }
+  const source = dataSources as Record<string, unknown>;
+  const invalid = MARKET_SOURCE_PUBLICATION_KEYS.filter((key) => (
+    !['fresh', 'stale', 'unavailable'].includes(String(source[key]))
+  ));
+  if (invalid.length > 0) {
+    return Object.freeze({
+      kind: 'FAILURE',
+      observedAtMs,
+      error: `Market source truth is invalid: ${invalid.join(', ')}.`,
+    });
+  }
+  const nonFresh = MARKET_SOURCE_PUBLICATION_KEYS.filter((key) => source[key] !== 'fresh');
+  if (nonFresh.length > 0) {
+    return Object.freeze({
+      kind: 'FAILURE',
+      observedAtMs,
+      error: `Market sources are not current: ${nonFresh
+        .map((key) => `${key}=${String(source[key])}`)
+        .join(', ')}.`,
+    });
+  }
+  return Object.freeze({ kind: 'SUCCESS', observedAtMs });
+}
+
 export type MarketFreshnessStatus = 'ERROR' | 'UNKNOWN' | 'DISCONNECTED' | 'LIVE' | 'STALE';
 
 export type MarketFreshnessTruth = Readonly<{
@@ -1351,18 +1410,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // the legacy market value; `dataCadence.market` is the new source map.
   useEffect(() => {
     const marketSec = prefs.dataCadence?.market ?? prefs.refreshSec;
-    const poll = createSettledPoll<{ updatedAt?: number; rows: MarketRow[] }>({
+    const poll = createSettledPoll<MarketSnapshotPayload>({
       intervalMs: Math.max(0.5, marketSec) * 1_000,
       request: (signal) => fetchJson('/api/markets', { signal }),
       onSuccess: (payload) => {
-          if (!Array.isArray(payload.rows)) throw new Error('Invalid market response');
-          setMarkets(payload.rows);
-          setMarketsUpdatedAt(normalizeMarketSourceTime(payload.updatedAt));
-          setMarketsError(null);
-          setMarketTruth((current) => reduceMarketStateTruth(current, {
-            kind: 'SUCCESS',
-            observedAtMs: Date.now(),
-          }));
+        if (!Array.isArray(payload.rows)) throw new Error('Invalid market response');
+        const truthEvent = marketSnapshotTruthEvent(payload.dataSources, Date.now());
+        setMarkets(payload.rows);
+        setMarketsUpdatedAt(normalizeMarketSourceTime(payload.updatedAt));
+        setMarketsError(truthEvent.kind === 'FAILURE' ? truthEvent.error : null);
+        setMarketTruth((current) => reduceMarketStateTruth(current, truthEvent));
       },
       onError: (cause) => {
         const error = mutationFailure(cause).message || 'Market refresh failed.';
@@ -1484,15 +1541,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }));
     }
     try {
-      const payload = await fetchJson<{ updatedAt?: number; rows: MarketRow[] }>('/api/markets');
+      const payload = await fetchJson<MarketSnapshotPayload>('/api/markets');
       if (!Array.isArray(payload.rows)) throw new Error('Invalid market response');
+      const truthEvent = marketSnapshotTruthEvent(payload.dataSources, Date.now());
       setMarkets(payload.rows);
       setMarketsUpdatedAt(normalizeMarketSourceTime(payload.updatedAt));
-      setMarketsError(null);
-      setMarketTruth((current) => reduceMarketStateTruth(current, {
-        kind: 'SUCCESS',
-        observedAtMs: Date.now(),
-      }));
+      setMarketsError(truthEvent.kind === 'FAILURE' ? truthEvent.error : null);
+      setMarketTruth((current) => reduceMarketStateTruth(current, truthEvent));
+      if (truthEvent.kind === 'FAILURE') issues.push('Market sources are not current');
     } catch (cause) {
       issues.push('Market refresh failed');
       const error = mutationFailure(cause).message || 'Market refresh failed.';

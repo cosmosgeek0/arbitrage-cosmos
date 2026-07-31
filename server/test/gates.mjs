@@ -670,6 +670,14 @@ for (const probePath of reservedProbePaths) {
   }
 }
 check('conventional probe paths refuse loudly instead of serving the SPA shell', reservedProbesHonest, reservedProbeDetail);
+const systemHealthSpa = await request('/health', {
+  headers: { Accept: 'text/html,application/xhtml+xml' },
+});
+check(
+  'canonical System Health document navigation reaches the SPA shell',
+  systemHealthSpa.status === 200
+    && (systemHealthSpa.headers.get('content-type') ?? '').startsWith('text/html')
+);
 const spaShell = await request('/positions');
 check(
   'ordinary SPA routes still serve the shell after probe-path reservation',

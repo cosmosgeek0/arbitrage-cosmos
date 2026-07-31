@@ -3758,7 +3758,20 @@ app.post('/api/orders/cancel', (_req, res) => {
 // probe misconfiguration instead of surfacing it. The canonical targets are
 // /health/live, /health/ready, and /health/trade-ready.
 const RESERVED_PROBE_PATHS = ['/healthz', '/readyz', '/livez', '/ready', '/live', '/status', '/health'];
-app.get(RESERVED_PROBE_PATHS, (_req, res) => {
+app.get(RESERVED_PROBE_PATHS, (req, res, next) => {
+  // `/health` is also the canonical History-API route for the operator's
+  // System Health page. A real document navigation explicitly accepts HTML;
+  // conventional probes normally send `*/*` or JSON and must continue to get
+  // the loud 404 below instead of a false-green SPA response.
+  if (
+    req.path === '/health'
+    && (req.get('Accept') ?? '')
+      .split(',')
+      .some((value) => value.trim().toLowerCase().startsWith('text/html'))
+  ) {
+    next();
+    return;
+  }
   res.status(404).json({
     ok: false,
     code: 'PROBE_PATH_NOT_REGISTERED',

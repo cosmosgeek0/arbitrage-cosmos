@@ -30,7 +30,10 @@ function sendI00Health(
         kind,
         ok: true,
         evaluatedAtMs: options.nowMs(),
-        overallPosture: 'PROCESS_ALIVE',
+        // Keep the unchanged i00.health.v1 posture field inside its declared
+        // enum. `ok` and `okSemantics` carry the process-liveness result;
+        // DEGRADED prevents a process-only probe from implying product READY.
+        overallPosture: 'DEGRADED',
         rootBlockerComponentId: null,
         reasonCodes: ['PROCESS_RESPONSIVE_LIVENESS_ONLY'],
         okSemantics: 'PROCESS_LIVENESS_ONLY',

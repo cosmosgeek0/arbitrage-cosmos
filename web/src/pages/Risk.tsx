@@ -26,16 +26,14 @@ const LIMIT_FIELDS: {
   key: LimitKey;
   label: string;
   unit: string;
-  min: number;
-  step: string;
   reason: string;
 }[] = [
-  { key: 'maxOrderNotionalUsd', label: 'Per-Order Notional', unit: 'USD', min: 0, step: '0.01', reason: 'Validate-only advisory cap for a hypothetical order.' },
-  { key: 'maxDailyNotionalUsd', label: 'Daily Notional', unit: 'USD', min: 0, step: '0.01', reason: 'Validate-only UTC-day policy input.' },
-  { key: 'maxDailyLossUsd', label: 'Daily Loss Stop', unit: 'USD', min: 0, step: '0.01', reason: 'Advisory loss threshold; private PnL remains unavailable.' },
-  { key: 'maxOpenOrders', label: 'Open Orders', unit: 'Count', min: 0, step: '1', reason: 'Advisory concurrency input; private order truth is unavailable.' },
-  { key: 'cooldownSec', label: 'Order Cooldown', unit: 'Sec', min: 0, step: '1', reason: 'Validate-only interval between hypothetical decisions.' },
-  { key: 'staleOrderMaxMin', label: 'Stale Order Age', unit: 'Min', min: 1, step: '1', reason: 'Advisory age threshold for supplied order evidence.' },
+  { key: 'maxOrderNotionalUsd', label: 'Per-Order Notional', unit: 'USD', reason: 'Validate-only advisory cap for a hypothetical order.' },
+  { key: 'maxDailyNotionalUsd', label: 'Daily Notional', unit: 'USD', reason: 'Validate-only UTC-day policy input.' },
+  { key: 'maxDailyLossUsd', label: 'Daily Loss Stop', unit: 'USD', reason: 'Advisory loss threshold; private PnL remains unavailable.' },
+  { key: 'maxOpenOrders', label: 'Open Orders', unit: 'Count', reason: 'Advisory concurrency input; private order truth is unavailable.' },
+  { key: 'cooldownSec', label: 'Order Cooldown', unit: 'Sec', reason: 'Validate-only interval between hypothetical decisions.' },
+  { key: 'staleOrderMaxMin', label: 'Stale Order Age', unit: 'Min', reason: 'Advisory age threshold for supplied order evidence.' },
 ];
 
 const STAGE_LABELS: Record<string, string> = {
@@ -366,6 +364,8 @@ export function Risk() {
           )}
         </section>
 
+        {/* The former readOnly disabled spinboxes are intentionally absent:
+            policy values have no authenticated page-local preview/apply flow. */}
         <section className="riskx-section">
           <header className="riskx-section-head">
             <div>
@@ -383,28 +383,24 @@ export function Risk() {
               <span role="columnheader">Current Value</span>
             </div>
             {LIMIT_FIELDS.map((field) => {
+              const value = configNumber(config, field.key);
+              const displayedValue = value === null ? 'UNKNOWN' : String(value);
               return (
-                <label className="riskx-limit-row" role="row" key={field.key}>
+                <div className="riskx-limit-row" role="row" key={field.key}>
                   <strong role="cell">
                     {field.label}
                   </strong>
                   <span role="cell" className="riskx-detail">{field.reason}</span>
-                  <span role="cell" className="riskx-limit-input">
-                    <input
-                      aria-label={field.label}
-                      aria-readonly="true"
-                      type="number"
-                      min={field.min}
-                      step={field.step}
-                      value={configNumber(config, field.key) === null ? '' : String(configNumber(config, field.key))}
-                      placeholder="UNKNOWN"
-                      readOnly
-                      disabled
-                      title="OWNER_GATED · CONTROL_PREVIEW_REQUIRED"
-                    />
+                  <span
+                    role="cell"
+                    className={'riskx-limit-fact' + (value === null ? ' unavailable' : '')}
+                    aria-label={`${field.label}: ${displayedValue} ${field.unit}. Owner gated; control preview required.`}
+                  >
+                    <strong>{displayedValue}</strong>
                     <em>{field.unit}</em>
+                    <small>OWNER_GATED</small>
                   </span>
-                </label>
+                </div>
               );
             })}
           </div>

@@ -452,10 +452,9 @@
 .riskx-limit-row {
   min-height: 48px;
   border-top: 1px solid var(--line);
-  cursor: text;
 }
 
-.riskx-limit-row:first-of-type { border-top: 0; }
+.riskx-limit-head + .riskx-limit-row { border-top: 0; }
 
 .riskx-limit-row > strong {
   display: inline-flex;
@@ -470,7 +469,6 @@
   background: var(--accent);
 }
 
-.riskx-limit-input,
 .riskx-notional-input {
   display: flex;
   align-items: center;
@@ -481,7 +479,6 @@
   background: transparent;
 }
 
-.riskx-limit-input:focus-within,
 .riskx-notional-input:focus-within,
 .riskx-symbol-entry input:focus,
 .riskx-probe-form label > input:focus {
@@ -489,7 +486,6 @@
   outline: 0;
 }
 
-.riskx-limit-input input,
 .riskx-notional-input input {
   width: 100%;
   min-width: 0;
@@ -507,9 +503,6 @@
   font-variant-numeric: tabular-nums;
 }
 
-.riskx-limit-input input.invalid { color: var(--down); }
-
-.riskx-limit-input em,
 .riskx-notional-input em {
   min-width: 46px;
   padding-right: 9px;
@@ -519,6 +512,47 @@
   font-weight: 450;
   text-align: right;
 }
+
+.riskx-limit-fact {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 2px 8px;
+  min-width: 0;
+  padding: 5px 0;
+  color: var(--text-2);
+  font-family: var(--ref-mono-font, var(--mono));
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.riskx-limit-fact strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.riskx-limit-fact em {
+  min-width: 46px;
+  padding-right: 9px;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 450;
+}
+
+.riskx-limit-fact small {
+  grid-column: 1 / -1;
+  color: var(--down);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: .045em;
+}
+
+.riskx-limit-fact.unavailable strong { color: var(--down); }
 
 .riskx-policy-row {
   display: grid;

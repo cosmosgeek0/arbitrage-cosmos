@@ -15,7 +15,6 @@ import { parseNotificationCursor } from '../lib/notificationCursor';
 import { fireRefresh } from '../lib/refresh';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createDelayedResetOwner, createSettledPoll, type SettledPoll } from '../lib/polling';
-import { useNotificationFeed } from '../lib/notificationFeed';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import {
   projectCanonicalIncidentNotifications,
@@ -1429,7 +1428,6 @@ function SharedTopBar() {
     fxTruth, fxBusy: currencyBusy, refreshFx: refreshCurrencyFx,
   } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
-  const notificationFeedState = useNotificationFeed();
   const theme = useResolvedTheme();
   const privateReadPresentation = projectPrivateRead(privateRead);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -1576,7 +1574,6 @@ function SharedTopBar() {
   const accountAvatar = accountProfile.avatar ?? DEFAULT_PROFILE_LOGO;
   const accountTone = 'off';
   const accountSub = 'OWNER GATED · NOT CONFIGURED';
-  const events = notificationFeedState.archive.events;
   const zone = ZONES.find((z) => z.id === prefs.clockZone) ?? ZONES[0];
   const activeClock = clockParts(zone.id, now);
   const activeClockOffset = clockOffset(zone.id, now);
@@ -1995,11 +1992,11 @@ function SharedTopBar() {
               icon={<PopupSourceMark tone="#f0a400" brand><img className="notification-source-image" src={NOTIFICATION_MARK} alt="" /></PopupSourceMark>}
               title="Notifications"
               subtitle="Interventions, state changes, and routed alerts"
-              status={notificationFeedState.status === 'CURRENT' ? unread ? `${unread} new` : compactNotifications.length ? `${compactNotifications.length} episodes` : 'No Episodes' : notificationFeedStatus}
+              status={canonicalNotificationState.status === 'CURRENT' ? unread ? `${unread} new` : compactNotifications.length ? `${compactNotifications.length} episodes` : 'No Episodes' : notificationFeedStatus}
               tone={notificationFeedTone}
             />
             <div className="ops-inline-tools" aria-label="Notification actions">
-              <span><b>Recent Alerts</b><em>{notificationFeedState.status === 'CURRENT' ? unread ? `${unread} Unread` : 'Up To Date' : notificationFeedStatus}</em></span>
+              <span><b>Recent Alerts</b><em>{canonicalNotificationState.status === 'CURRENT' ? unread ? `${unread} Unread` : 'Up To Date' : notificationFeedStatus}</em></span>
               <button type="button" onClick={markNotificationsRead} disabled={!unread}>Mark Read</button>
               <button type="button" onClick={openNotificationCenter}><IconMaximize size={13} /> Open Center</button>
             </div>
@@ -2021,7 +2018,7 @@ function SharedTopBar() {
               }) : canonicalNotificationState.status !== 'CURRENT' ? (
                 <OpsRow
                   icon={<IconBell size={15} />}
-                  title={notificationFeedState.status === 'LOADING' ? 'Feed Loading' : canonicalNotificationState.status === 'STALE' ? 'Last-Known Feed' : 'Notification Feed Unavailable'}
+                  title={canonicalNotificationState.status === 'LOADING' ? 'Feed Loading' : canonicalNotificationState.status === 'STALE' ? 'Last-Known Feed' : 'Notification Feed Unavailable'}
                   detail={notificationFeedDetail}
                   value={notificationFeedStatus}
                   tone={notificationFeedTone}

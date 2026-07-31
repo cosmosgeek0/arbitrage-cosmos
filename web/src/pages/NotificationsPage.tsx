@@ -17,13 +17,6 @@ import { liveAge } from '../format';
 import { fetchJson } from '../lib/http';
 import { parseNotificationCursor } from '../lib/notificationCursor';
 import { notificationEnabled, type CuratedNotification } from '../lib/notifications';
-import {
-  NOTIFICATION_ARCHIVE_LIMIT,
-  retainNotificationArchive,
-  useNotificationFeed,
-  type NotificationArchiveState,
-} from '../lib/notificationFeed';
-
 import { createSettledPoll } from '../lib/polling';
 import { type NotificationRuleKey, type NotificationRules } from '../lib/prefs';
 import { TIME_ZONE_OPTIONS, addDays, dayKey, formatKey, resolvedZoneLabel } from '../lib/time';
@@ -55,9 +48,6 @@ const FILTERS: { id: NotificationFilter; label: string; configured?: boolean }[]
   { id: 'health', label: 'Bot Health' },
   { id: 'infrastructure', label: 'Infrastructure' },
 ];
-
-export { NOTIFICATION_ARCHIVE_LIMIT, retainNotificationArchive };
-export type { NotificationArchiveState };
 
 const EMPTY_ROUTING: RoutingSnapshot = {
   sources: {
@@ -134,8 +124,6 @@ function statusLabel(item: CuratedNotification): string {
 export function NotificationsPage() {
   const { prefs, updatePref } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
-  const notificationFeed = useNotificationFeed();
-  const archive = notificationFeed.archive;
   const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
   const today = dayKey(new Date(), zone);
   const [query, setQuery] = useState('');
@@ -280,7 +268,6 @@ export function NotificationsPage() {
           </div>
           <div className="notifx-navigation-actions">
             <span className="notifx-curation" aria-live="polite">
-              {archive.droppedCount > 0 && <><b>Archive View Truncated</b> · <b>{archive.droppedCount.toLocaleString()}</b> Event Rows Not Retained This Session · </>}
               <b>{notifications.length}</b> Durable Episodes · <b>{groupedCount}</b> Server-Grouped Repeats
             </span>
             <button type="button" className="notifx-mark-read" onClick={markRead} disabled={unread === 0}><IconBell size={13} />{unread ? `Mark ${unread} Read` : 'All Read'}</button>

@@ -30,7 +30,6 @@ import {
   readDurableMaterialCursor,
   type ProductIntegrationEndpoints,
 } from './lib/productIntegration';
-import { NotificationFeedProvider } from './lib/notificationFeed';
 import './pages/MetricTiles.css';
 
 const PRODUCT_INTEGRATION_ENDPOINTS: Readonly<ProductIntegrationEndpoints> = Object.freeze({
@@ -176,9 +175,7 @@ export default function App() {
   return (
     <StoreProvider>
       <ProductControlRoomProvider client={productIntegrationClient} initialMaterialCursor={durableResumeCursor}>
-        <NotificationFeedProvider>
-          <Shell />
-        </NotificationFeedProvider>
+        <Shell />
       </ProductControlRoomProvider>
     </StoreProvider>
   );

@@ -30,5 +30,6 @@ test('Header quick-view overlays are bounded, abortable, and retain shared owner
   assert.doesNotMatch(source, /\bfetch\(/, 'Header must contain no raw fetch call');
   assert.match(source, /refreshFx: refreshCurrencyFx/);
   assert.match(source, /onClick=\{refreshCurrencyFx\}/);
-  assert.match(source, /const notificationFeedState = useNotificationFeed\(\)/);
+  assert.doesNotMatch(source, /useNotificationFeed|notificationFeedState/);
+  assert.match(source, /projectCanonicalIncidentNotifications/);
 });

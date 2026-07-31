@@ -3,7 +3,6 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const headerUrl = new URL('../../src/components/Header.tsx', import.meta.url);
-const notificationFeedUrl = new URL('../../src/lib/notificationFeed.tsx', import.meta.url);
 
 test('I00-050 premium Header and Notifications page share canonical incident truth without local regrouping', async () => {
   const [source, page, selector] = await Promise.all([
@@ -40,7 +39,8 @@ test('I00-050 premium Header and Notifications page share canonical incident tru
 
   const premiumNotification = source.slice(premiumNotificationStart, premiumNotificationEnd);
   assert.match(premiumNotification, /notificationFeedStatus/);
-  assert.match(premiumNotification, /notificationFeedState\.status === 'CURRENT'/);
+  assert.match(premiumNotification, /canonicalNotificationState\.status === 'CURRENT'/);
+  assert.doesNotMatch(premiumNotification, /notificationFeedState/);
   assert.match(premiumNotification, /Last-Known Feed/);
   assert.match(premiumNotification, /Notification Feed Unavailable/);
   assert.match(premiumNotification, /Feed Loading/);

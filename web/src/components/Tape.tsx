@@ -9,10 +9,13 @@ import { fmtPrice, fmtPct, signClass } from '../format';
  * liquid pairs. Every item is clickable and opens the token page.
  */
 export function Tape() {
-  const { markets, state, openDetail } = useStore();
+  const { markets, marketStatus, state, openDetail } = useStore();
 
   const items = useMemo(() => {
-    if (markets.length === 0) return [];
+    // A global ticker has no room for a sufficiently explicit retained-data
+    // receipt. Publish it only while the canonical market contract is current;
+    // stale/unavailable rows remain available on their owned, labelled pages.
+    if (marketStatus !== 'CURRENT' || markets.length === 0) return [];
     const watch = state?.config.watchlist ?? [];
     const seen = new Set<string>();
     const rows = [];
@@ -31,7 +34,7 @@ export function Tape() {
       }
     }
     return rows;
-  }, [markets, state?.config.watchlist]);
+  }, [marketStatus, markets, state?.config.watchlist]);
 
   if (items.length === 0) return null;
 

@@ -28,7 +28,14 @@ const PAGES: { page: Page; name: string; sub: string }[] = [
 ];
 
 export function Palette() {
-  const { paletteOpen, setPaletteOpen, markets, setPage, openDetail } = useStore();
+  const {
+    paletteOpen,
+    setPaletteOpen,
+    markets,
+    marketStatus,
+    setPage,
+    openDetail,
+  } = useStore();
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -143,8 +150,14 @@ export function Palette() {
                   <div className="c-name">{m.base}</div>
                   <div className="c-sub">{m.symbol}</div>
                 </span>
-                <span className={`c-right ${signClass(m.change24hPct)}`}>
-                  {fmtPrice(m.spot)} · {fmtPct(m.change24hPct, 1)}
+                <span className={`c-right ${marketStatus === 'CURRENT' ? signClass(m.change24hPct) : ''}`}>
+                  {marketStatus === 'CURRENT'
+                    ? `${fmtPrice(m.spot)} · ${fmtPct(m.change24hPct, 1)}`
+                    : marketStatus === 'STALE'
+                      ? 'STALE LAST-KNOWN'
+                      : marketStatus === 'LOADING'
+                        ? 'Market facts loading'
+                        : 'Market facts unavailable'}
                 </span>
               </button>
             );

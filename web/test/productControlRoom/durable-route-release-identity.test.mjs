@@ -124,6 +124,17 @@ test('market publication truth cannot promote a 200 stale or unavailable snapsho
   });
 });
 
+test('global market surfaces never render unlabelled retained prices', async () => {
+  const [tape, palette] = await Promise.all([
+    read('components/Tape.tsx'),
+    read('components/Palette.tsx'),
+  ]);
+  assert.match(tape, /marketStatus !== ['"]CURRENT['"] \|\| markets\.length === 0/);
+  assert.match(palette, /marketStatus === ['"]STALE['"]/);
+  assert.match(palette, /STALE LAST-KNOWN/);
+  assert.match(palette, /Market facts unavailable/);
+});
+
 test('non-canonical but honest paths normalize; unroutable paths stay unknown', () => {
   const normalized = [
     ['/markets/', 'markets', null],

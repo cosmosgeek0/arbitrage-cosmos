@@ -11,6 +11,37 @@ import {
 import './Account.css';
 
 export type AccountView = 'overview' | 'execution' | 'orders' | 'positions' | 'fills' | 'pnl';
+export type AccountCanonicalSurfaceId = 'account' | 'execution' | 'orders' | 'positions' | 'fills' | 'pnl';
+
+export type AccountViewContract = Readonly<{
+  title: 'Account' | 'Execution' | 'Open Orders' | 'Positions' | 'Recent Fills' | 'PnL';
+  page: 'account' | 'execution' | 'orders' | 'positions' | 'fills' | 'pnl';
+  surfaceId: AccountCanonicalSurfaceId;
+  readOnly: true;
+  actionControls: false;
+}>;
+
+const ACCOUNT_VIEW_CONTRACTS: Readonly<Record<AccountView, AccountViewContract>> = Object.freeze({
+  overview: Object.freeze({ title: 'Account', page: 'account', surfaceId: 'account', readOnly: true, actionControls: false }),
+  execution: Object.freeze({ title: 'Execution', page: 'execution', surfaceId: 'execution', readOnly: true, actionControls: false }),
+  orders: Object.freeze({ title: 'Open Orders', page: 'orders', surfaceId: 'orders', readOnly: true, actionControls: false }),
+  positions: Object.freeze({ title: 'Positions', page: 'positions', surfaceId: 'positions', readOnly: true, actionControls: false }),
+  fills: Object.freeze({ title: 'Recent Fills', page: 'fills', surfaceId: 'fills', readOnly: true, actionControls: false }),
+  pnl: Object.freeze({ title: 'PnL', page: 'pnl', surfaceId: 'pnl', readOnly: true, actionControls: false }),
+});
+
+const ACCOUNT_TAB_PAGES: Readonly<Record<AccountView, AccountViewContract['page']>> = Object.freeze({
+  overview: 'account',
+  execution: 'execution',
+  orders: 'orders',
+  positions: 'positions',
+  fills: 'fills',
+  pnl: 'pnl',
+});
+
+export function accountViewContract(view: AccountView): AccountViewContract {
+  return ACCOUNT_VIEW_CONTRACTS[view];
+}
 
 function EyeIcon({ off }: { off: boolean }) {
   return (
@@ -102,6 +133,7 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
     setPage,
   } = useStore();
   const [mask, setMask] = useState(() => localStorage.getItem('cosmos-balance-mask') === '1');
+  const viewContract = accountViewContract(view);
   const presentation = projectPrivateRead(privateRead);
   // The page-local projection fail-closes presentation.freshness.state,
   // presentation.freshness.label, and presentation.freshness.reason against
@@ -162,6 +194,12 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
         ? account.positions
         : null;
   const rowLabel = view === 'orders' ? 'Observed Orders' : view === 'fills' ? 'Observed Fills' : view === 'positions' ? 'Provider Position Rows' : null;
+  const accountStatus = privateRead.state === 'NOT_CONFIGURED'
+    ? 'Account Read Not Configured'
+    : `Private Account Reads · ${account.stateLabel} · ${observationSummary}`;
+  const pageStatus = view === 'overview'
+    ? accountStatus
+    : `Canonical Read-Only Projection · ${accountStatus}`;
 
   return (
     <div className="container page accountx-page">
@@ -170,12 +208,8 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
           <div className="accountx-identity">
             <span className="accountx-source-mark"><img className="accountx-page-mark" src="/account-wallet.png" alt="" aria-hidden="true" /></span>
             <span>
-              <h1>Account</h1>
-              <small>
-                {privateRead.state === 'NOT_CONFIGURED'
-                  ? 'Account Read Not Configured'
-                  : `Private Account Reads · ${account.stateLabel} · ${observationSummary}`}
-              </small>
+              <h1>{viewContract.title}</h1>
+              <small>{pageStatus}</small>
             </span>
           </div>
           <div className="accountx-tools">
@@ -211,7 +245,7 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
         <ProductSurfaceAdapter surfaceId="account" />
 
         <nav className="accountx-viewbar" aria-label="Account Views">
-          <div role="tablist">
+          <div role="tablist" aria-label="Private Account Reads">
             {([
               ['overview', 'Overview', ''],
               ['execution', 'Execution', ''],
@@ -220,7 +254,15 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
               ['fills', 'Recent Fills', tabCount(account.fills)],
               ['pnl', 'PnL', ''],
             ] as [AccountView, string, string][]).map(([id, label, count]) => (
-              <button type="button" role="tab" key={id} aria-selected={view === id} onClick={() => setPage(id === 'overview' ? 'account' : id)}>
+              <button
+                type="button"
+                role="tab"
+                key={id}
+                id={`accountx-tab-${id}`}
+                aria-controls={`accountx-panel-${id}`}
+                aria-selected={view === id}
+                onClick={() => setPage(ACCOUNT_TAB_PAGES[id])}
+              >
                 {label}{count && <span>{count}</span>}
               </button>
             ))}
@@ -234,7 +276,13 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
           </span>
         </nav>
 
-        <div className="accountx-workspace">
+        <div
+          className="accountx-workspace"
+          role="tabpanel"
+          id={`accountx-panel-${view}`}
+          aria-labelledby={`accountx-tab-${view}`}
+          tabIndex={0}
+        >
           {view === 'execution' && <ProductSurfaceAdapter surfaceId="execution" />}
           {view === 'orders' && <ProductSurfaceAdapter surfaceId="orders" />}
           {view === 'positions' && <ProductSurfaceAdapter surfaceId="positions" />}
@@ -381,7 +429,7 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
         </div>
 
         <footer className="accountx-footer">
-          <span>Private Read {account.stateLabel} · {presentation.reconciliationLabel} · Source {privateReadSource} · Execution BLOCKED</span>
+          <span>Private Read {account.stateLabel} · {presentation.reconciliationLabel} · Source {privateReadSource} · {viewContract.title} Read Only · No Account Action Controls</span>
           {rowDataset && rowLabel && (rowDataset.rows.length > 0 || rowDataset.exactEmptyCurrent) && <span>{rowDataset.rows.length} {rowLabel}</span>}
         </footer>
       </section>

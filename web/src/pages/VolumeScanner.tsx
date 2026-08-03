@@ -638,7 +638,7 @@ export function resolveVolumeRuntimeTruth(input: Readonly<{
   }
   if (
     status.eligibleSize <= 0
-    || status.observedSymbols !== status.eligibleSize
+    || status.observedSymbols <= 0
     || input.rowCount !== status.eligibleSize
     || status.tradeMessages <= 0
   ) {

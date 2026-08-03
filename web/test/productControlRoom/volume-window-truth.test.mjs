@@ -239,9 +239,20 @@ test('Volume reserves zero for current evidence and fails runtime, market, accou
   assert.match(resolveVolumeRuntimeTruth(runtimeInput({
     snapshotStatus: { ...currentStatus, openConnections: 3 },
   })).reason, /^VOLUME_STREAM_COVERAGE_NOT_CURRENT/);
-  assert.match(resolveVolumeRuntimeTruth(runtimeInput({
+  assert.deepEqual(resolveVolumeRuntimeTruth(runtimeInput({
     snapshotStatus: { ...currentStatus, observedSymbols: 15 },
+  })), {
+    current: true,
+    state: 'CURRENT',
+    label: 'Engine Feeds Current',
+    reason: null,
+  });
+  assert.match(resolveVolumeRuntimeTruth(runtimeInput({
+    snapshotStatus: { ...currentStatus, observedSymbols: 0 },
   })).reason, /^VOLUME_SYMBOL_COVERAGE_NOT_CURRENT/);
+  assert.match(resolveVolumeRuntimeTruth(runtimeInput({
+    snapshotStatus: { ...currentStatus, bookState: 'stale' },
+  })).reason, /^VOLUME_SOURCE_NOT_CURRENT/);
   assert.equal(resolveVolumeRuntimeTruth(runtimeInput({
     rowContractCurrent: false,
   })).reason, 'VOLUME_ROW_CONTRACT_NOT_CURRENT');

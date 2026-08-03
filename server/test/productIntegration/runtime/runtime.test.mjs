@@ -753,6 +753,45 @@ test('public-source freshness is unknown unless both canonical source owners are
   }
 });
 
+test('market feed readiness depends only on exact operational fresh public sources', () => {
+  const source = makeSupervisor();
+  const page = projectProductMaterialEventPage('0', 200, makeRead().events({ afterCursor: '0', limit: 200 }));
+  const project = (components) => buildProductRuntimeSupervisorEnvelope({
+    ...OPS_PROJECTION,
+    snapshot: makeSupervisor({ components, overallPosture: 'DEGRADED' }),
+    materialEvents: page,
+    traces: [],
+    nowMs: T0,
+  });
+
+  const fresh = project(source.components);
+  assert.equal(fresh.ownerView.machineReady, 'NO');
+  assert.equal(fresh.dashboard.summaries.capital.accountTruthState, 'NOT_CONFIGURED');
+  assert.equal(fresh.canonicalCockpit.marketFeedReadiness.proven, true);
+
+  const missingUsdm = project(Object.freeze(source.components.filter(
+    (component) => component.componentId !== 'public-usdm-source',
+  )));
+  assert.equal(missingUsdm.canonicalCockpit.marketFeedReadiness.proven, false);
+  assert.match(missingUsdm.canonicalCockpit.marketFeedReadiness.detail, /data freshness is unavailable/);
+
+  const nonOperational = project(Object.freeze(source.components.map((component) => (
+    component.componentId === 'public-spot-source'
+      ? Object.freeze({ ...component, readiness: 'FAILED' })
+      : component
+  ))));
+  assert.equal(nonOperational.canonicalCockpit.marketFeedReadiness.proven, false);
+  assert.match(nonOperational.canonicalCockpit.marketFeedReadiness.detail, /public-spot-source is FAILED/);
+
+  const unavailableFreshness = project(Object.freeze(source.components.map((component) => (
+    component.componentId === 'public-usdm-source'
+      ? Object.freeze({ ...component, freshness: null })
+      : component
+  ))));
+  assert.equal(unavailableFreshness.canonicalCockpit.marketFeedReadiness.proven, false);
+  assert.match(unavailableFreshness.canonicalCockpit.marketFeedReadiness.detail, /data freshness is unavailable/);
+});
+
 test('material cursor projection proves contiguous pages and fails closed on retention and internal gaps', () => {
   const proven = projectProductMaterialEventPage('0', 10, makeRead().events({ afterCursor: '0', limit: 10 }));
   assert.deepEqual({

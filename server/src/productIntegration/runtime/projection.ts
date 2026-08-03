@@ -872,13 +872,7 @@ function canonicalCockpitTruth(
     matches: projectedComponents.filter((component) => component.componentId === componentId),
   }));
   let marketFeedReadiness: ProductRuntimeCanonicalCockpitTruth['marketFeedReadiness'];
-  if (view.machineReady !== 'YES') {
-    marketFeedReadiness = Object.freeze({
-      proven: false,
-      label: 'Market Feed Readiness Unproven',
-      detail: `Canonical owner machine readiness is ${view.machineReady}.`,
-    });
-  } else if (view.dataFreshness === null) {
+  if (view.dataFreshness === null) {
     marketFeedReadiness = Object.freeze({
       proven: false,
       label: 'Market Feed Readiness Unproven',

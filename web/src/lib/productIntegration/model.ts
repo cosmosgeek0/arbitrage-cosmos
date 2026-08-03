@@ -2808,13 +2808,12 @@ function validateCanonicalCockpitTruth(
     || (feeds.proven === true) !== (feeds.label === 'Market Feed Readiness Proven')) {
     errors.push('CANONICAL_MARKET_FEED_READINESS_INVALID');
   } else if (feeds.proven === true) {
-    const ownerReady = isRecord(ownerViewValue) && ownerViewValue.machineReady === 'YES';
     const ownerFresh = isRecord(ownerViewValue)
       && typeof ownerViewValue.dataFreshness === 'string'
       && ownerViewValue.dataFreshness.length > 0;
     const sourcesOperational = ['public-spot-source', 'public-usdm-source']
       .every((componentId) => exactPresentation(componentId)?.status === 'operational');
-    if (!ownerReady || !ownerFresh || !sourcesOperational) errors.push('CANONICAL_MARKET_FEED_FALSE_GREEN');
+    if (!ownerFresh || !sourcesOperational) errors.push('CANONICAL_MARKET_FEED_FALSE_GREEN');
   }
 
   const strategy = value.strategyRuntime;

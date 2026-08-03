@@ -7,6 +7,42 @@ import {
   canonicalRefreshTargetPosture,
   canonicalWatchmanLauncherPresentation,
 } from '../../src/lib/operatorControlPosture.ts';
+import {
+  createFixtureSession,
+  validateProductSupervisorEnvelope,
+} from '../../src/lib/productIntegration/model.ts';
+import { buildProductControlRoomFixture } from '../../src/features/productControlRoom/fixtureBinding.ts';
+
+const PUBLIC_FEED_NOW = 1_800_000_000_000;
+
+function publicFeedEnvelope() {
+  const envelope = structuredClone(buildProductControlRoomFixture(
+    createFixtureSession('HEALTHY_OBSERVE', 'public-feed-readiness', PUBLIC_FEED_NOW),
+  ));
+  envelope.ownerView.machineReady = 'NO';
+  envelope.ownerView.dataFreshness = '900ms max public-source age';
+  envelope.dashboard.summaries.capital.accountTruthState = 'NOT_CONFIGURED';
+  envelope.canonicalCockpit.marketFeedReadiness = {
+    proven: true,
+    label: 'Market Feed Readiness Proven',
+    detail: 'Canonical Spot and USD-M sources are READY · LIVE PUBLIC · LIVE PUBLIC; owner freshness 900ms max public-source age.',
+  };
+  for (const componentId of ['public-spot-source', 'public-usdm-source']) {
+    const source = envelope.components.find((component) => component.componentId === componentId);
+    assert.ok(source);
+    source.canonicalPresentation = {
+      status: 'operational',
+      tone: 'ok',
+      statusLabel: 'Live Public',
+      stateLabel: 'READY · LIVE PUBLIC · LIVE PUBLIC',
+    };
+  }
+  return envelope;
+}
+
+function canonicalMarketFeedRejected(envelope) {
+  return validateProductSupervisorEnvelope(envelope).includes('CANONICAL_MARKET_FEED_FALSE_GREEN');
+}
 
 test('canonical cockpit presentation is owned by the server projection and the client derivation module is retired', async () => {
   const serverProjection = await readFile(new URL('../../../server/src/productIntegration/runtime/projection.ts', import.meta.url), 'utf8');
@@ -17,6 +53,49 @@ test('canonical cockpit presentation is owned by the server projection and the c
     readFile(new URL('../../src/lib/canonicalCockpitTruth.ts', import.meta.url), 'utf8'),
     (error) => error?.code === 'ENOENT',
   );
+});
+
+test('canonical public feed readiness is independent of global machine and private-account readiness', () => {
+  const validPublicState = publicFeedEnvelope();
+  assert.equal(validPublicState.ownerView.machineReady, 'NO');
+  assert.equal(validPublicState.dashboard.summaries.capital.accountTruthState, 'NOT_CONFIGURED');
+  assert.equal(canonicalMarketFeedRejected(validPublicState), false);
+
+  const nullFreshness = publicFeedEnvelope();
+  nullFreshness.ownerView.dataFreshness = null;
+  assert.equal(canonicalMarketFeedRejected(nullFreshness), true);
+
+  const invalidFreshness = publicFeedEnvelope();
+  invalidFreshness.ownerView.dataFreshness = '';
+  assert.equal(canonicalMarketFeedRejected(invalidFreshness), true);
+
+  const staleSource = publicFeedEnvelope();
+  const staleSpot = staleSource.components.find((component) => component.componentId === 'public-spot-source');
+  staleSpot.freshnessState = 'STALE';
+  staleSpot.canonicalPresentation = {
+    status: 'degraded', tone: 'warn', statusLabel: 'Stale', stateLabel: 'READY · LIVE PUBLIC · STALE',
+  };
+  assert.equal(canonicalMarketFeedRejected(staleSource), true);
+
+  const missingSource = publicFeedEnvelope();
+  missingSource.components = missingSource.components.filter(
+    (component) => component.componentId !== 'public-usdm-source',
+  );
+  assert.equal(canonicalMarketFeedRejected(missingSource), true);
+
+  const duplicateSource = publicFeedEnvelope();
+  duplicateSource.components.push(structuredClone(
+    duplicateSource.components.find((component) => component.componentId === 'public-spot-source'),
+  ));
+  assert.equal(canonicalMarketFeedRejected(duplicateSource), true);
+
+  const nonOperationalSource = publicFeedEnvelope();
+  nonOperationalSource.components.find(
+    (component) => component.componentId === 'public-usdm-source',
+  ).canonicalPresentation = {
+    status: 'outage', tone: 'bad', statusLabel: 'Unavailable', stateLabel: 'FAILED · LIVE PUBLIC · UNAVAILABLE',
+  };
+  assert.equal(canonicalMarketFeedRejected(nonOperationalSource), true);
 });
 
 test('all cockpit consumers render canonical supervisor presentation without client-side recomputation', async () => {

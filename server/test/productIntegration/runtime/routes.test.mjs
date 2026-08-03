@@ -30,6 +30,7 @@ test('browser supervisor reads coalesce and WebSocket publication never rebuilds
   let release;
   const admitted = new Promise((resolve) => { release = resolve; });
   let supervisorReads = 0;
+  let nowMs = T0;
   const service = createProductIntegrationRuntime({
     read: Object.freeze({
       ...base,
@@ -39,20 +40,200 @@ test('browser supervisor reads coalesce and WebSocket publication never rebuilds
         return base.supervisor();
       },
     }),
-    clock: { nowMs: () => T0 },
+    clock: { nowMs: () => nowMs },
   });
 
   const first = service.readSupervisorShared();
+  nowMs = Number.NaN;
   const second = service.readSupervisorShared();
+  assert.strictEqual(second, first, 'an existing owner read is joined before another clock/cache decision');
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(supervisorReads, 1);
   assert.equal(service.readPublishedSupervisor(), null);
+  nowMs = T0;
   release();
   const [left, right] = await Promise.all([first, second]);
   assert.strictEqual(left, right);
   assert.strictEqual(service.readPublishedSupervisor(), left);
   assert.strictEqual(await service.readSupervisorShared(), left);
   assert.equal(supervisorReads, 1);
+});
+
+test('shared supervisor cache reuses at 999ms and refreshes once at exact 1,000ms', async () => {
+  const base = makeRead();
+  let nowMs = T0;
+  let supervisorReads = 0;
+  let releaseRefresh;
+  const refreshGate = new Promise((resolve) => { releaseRefresh = resolve; });
+  const service = createProductIntegrationRuntime({
+    read: Object.freeze({
+      ...base,
+      async supervisor() {
+        supervisorReads += 1;
+        if (supervisorReads === 2) await refreshGate;
+        return base.supervisor();
+      },
+    }),
+    clock: { nowMs: () => nowMs },
+  });
+
+  const first = await service.readSupervisorShared();
+  assert.equal(first.evaluatedAtMs, T0);
+  nowMs += 999;
+  assert.strictEqual(await service.readSupervisorShared(), first);
+  assert.equal(supervisorReads, 1);
+
+  nowMs += 1;
+  const expiredLeft = service.readSupervisorShared();
+  const expiredRight = service.readSupervisorShared();
+  await new Promise((resolve) => setImmediate(resolve));
+  const readsDuringRefresh = supervisorReads;
+  const publishedDuringRefresh = service.readPublishedSupervisor();
+  releaseRefresh();
+  assert.equal(readsDuringRefresh, 2, 'exactly 1,000ms must start one fresh owner read');
+  assert.strictEqual(expiredRight, expiredLeft, 'expired concurrent callers must join one refresh');
+  assert.strictEqual(publishedDuringRefresh, first, 'an in-flight refresh cannot replace completed evidence');
+  const [left, right] = await Promise.all([expiredLeft, expiredRight]);
+  assert.strictEqual(left, right);
+  assert.notStrictEqual(left, first);
+  assert.equal(left.evaluatedAtMs, T0 + 1_000);
+  assert.strictEqual(service.readPublishedSupervisor(), left);
+  assert.equal(supervisorReads, 2);
+});
+
+test('backward injected-clock movement starts exactly one fresh shared supervisor read', async () => {
+  const base = makeRead();
+  let nowMs = T0 + 5_000;
+  let supervisorReads = 0;
+  const service = createProductIntegrationRuntime({
+    read: Object.freeze({
+      ...base,
+      async supervisor() {
+        supervisorReads += 1;
+        return base.supervisor();
+      },
+    }),
+    clock: { nowMs: () => nowMs },
+  });
+
+  const first = await service.readSupervisorShared();
+  nowMs -= 1;
+  const backwardLeft = service.readSupervisorShared();
+  const backwardRight = service.readSupervisorShared();
+  const [left, right] = await Promise.all([backwardLeft, backwardRight]);
+  assert.equal(supervisorReads, 2, 'negative cache age must start one fresh owner read');
+  assert.strictEqual(backwardRight, backwardLeft);
+  assert.strictEqual(left, right);
+  assert.notStrictEqual(left, first);
+  assert.equal(left.evaluatedAtMs, T0 + 4_999);
+  assert.strictEqual(service.readPublishedSupervisor(), left);
+});
+
+test('slow supervisor builds publish their completion evaluation time and forward jumps refresh once', async () => {
+  const base = makeRead();
+  let nowMs = T0;
+  let supervisorReads = 0;
+  let releaseFirst;
+  const firstGate = new Promise((resolve) => { releaseFirst = resolve; });
+  const service = createProductIntegrationRuntime({
+    read: Object.freeze({
+      ...base,
+      async supervisor() {
+        supervisorReads += 1;
+        if (supervisorReads === 1) await firstGate;
+        return base.supervisor();
+      },
+    }),
+    clock: { nowMs: () => nowMs },
+  });
+
+  const pending = service.readSupervisorShared();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(supervisorReads, 1);
+  assert.equal(service.readPublishedSupervisor(), null);
+  nowMs += 5_000;
+  releaseFirst();
+  const completed = await pending;
+  assert.equal(completed.evaluatedAtMs, T0 + 5_000);
+  assert.strictEqual(service.readPublishedSupervisor(), completed);
+
+  nowMs += 999;
+  assert.strictEqual(await service.readSupervisorShared(), completed);
+  assert.equal(supervisorReads, 1);
+  nowMs += 1;
+  const atTtl = await service.readSupervisorShared();
+  assert.notStrictEqual(atTtl, completed);
+  assert.equal(supervisorReads, 2);
+
+  nowMs += 5_000;
+  const forwardLeft = service.readSupervisorShared();
+  const forwardRight = service.readSupervisorShared();
+  const [left, right] = await Promise.all([forwardLeft, forwardRight]);
+  assert.equal(supervisorReads, 3, 'a forward jump beyond TTL must start one fresh owner read');
+  assert.strictEqual(forwardRight, forwardLeft);
+  assert.strictEqual(left, right);
+  assert.notStrictEqual(left, atTtl);
+});
+
+test('non-finite injected clocks fail closed without replacing completed supervisor evidence', async () => {
+  const base = makeRead();
+  let nowMs = T0;
+  let supervisorReads = 0;
+  const service = createProductIntegrationRuntime({
+    read: Object.freeze({
+      ...base,
+      async supervisor() {
+        supervisorReads += 1;
+        return base.supervisor();
+      },
+    }),
+    clock: { nowMs: () => nowMs },
+  });
+
+  const completed = await service.readSupervisorShared();
+  for (const invalidNowMs of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+    nowMs = invalidNowMs;
+    await assert.rejects(
+      Promise.resolve().then(() => service.readSupervisorShared()),
+      (error) => error?.code === 'CLOCK_INVALID',
+    );
+    assert.equal(supervisorReads, 1, `invalid clock ${String(invalidNowMs)} must not reach an owner read`);
+    assert.strictEqual(service.readPublishedSupervisor(), completed);
+  }
+});
+
+test('failed shared supervisor refresh preserves publication and permits next-call retry', async () => {
+  const base = makeRead();
+  let nowMs = T0;
+  let supervisorReads = 0;
+  let failRefresh = false;
+  const service = createProductIntegrationRuntime({
+    read: Object.freeze({
+      ...base,
+      async supervisor() {
+        supervisorReads += 1;
+        if (failRefresh) throw new Error('hostile refresh failure');
+        return base.supervisor();
+      },
+    }),
+    clock: { nowMs: () => nowMs },
+  });
+
+  const completed = await service.readSupervisorShared();
+  nowMs += 1_000;
+  failRefresh = true;
+  await assert.rejects(
+    service.readSupervisorShared(),
+    (error) => error?.code === 'PRODUCT_READ_MODEL_UNAVAILABLE',
+  );
+  assert.equal(supervisorReads, 2);
+  assert.strictEqual(service.readPublishedSupervisor(), completed);
+
+  failRefresh = false;
+  const retry = await service.readSupervisorShared();
+  assert.equal(supervisorReads, 3);
+  assert.notStrictEqual(retry, completed);
+  assert.strictEqual(service.readPublishedSupervisor(), retry);
 });
 
 test('frozen product-integration v1 routes enforce identity, exact paths, and query bounds', { concurrency: false }, async () => {

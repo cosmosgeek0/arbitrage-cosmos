@@ -141,7 +141,7 @@ export class ProductIntegrationRuntimeService {
   private readonly options: Readonly<ProductRuntimeOptions>;
   private sharedSupervisorRead: Readonly<{
     envelope: Readonly<ProductRuntimeSupervisorEnvelope>;
-    publishedAtMonotonicMs: number;
+    publishedAtMs: number;
   }> | null = null;
   private sharedSupervisorInFlight: Promise<Readonly<ProductRuntimeSupervisorEnvelope>> | null = null;
 
@@ -190,18 +190,22 @@ export class ProductIntegrationRuntimeService {
    * signed-in tabs cannot rebuild the same synchronous read graph in parallel.
    */
   readSupervisorShared(): Promise<Readonly<ProductRuntimeSupervisorEnvelope>> {
-    const nowMs = performance.now();
+    if (this.sharedSupervisorInFlight !== null) return this.sharedSupervisorInFlight;
+    const nowMs = checkedNow(this.options);
+    const sharedAgeMs = this.sharedSupervisorRead === null
+      ? null
+      : nowMs - this.sharedSupervisorRead.publishedAtMs;
     if (this.sharedSupervisorRead !== null
-        && nowMs - this.sharedSupervisorRead.publishedAtMonotonicMs
-          < PRODUCT_SUPERVISOR_SHARED_READ_TTL_MS) {
+        && sharedAgeMs !== null
+        && sharedAgeMs >= 0
+        && sharedAgeMs < PRODUCT_SUPERVISOR_SHARED_READ_TTL_MS) {
       return Promise.resolve(this.sharedSupervisorRead.envelope);
     }
-    if (this.sharedSupervisorInFlight !== null) return this.sharedSupervisorInFlight;
     const work = this.readSupervisor()
       .then((envelope) => {
         this.sharedSupervisorRead = Object.freeze({
           envelope,
-          publishedAtMonotonicMs: performance.now(),
+          publishedAtMs: envelope.evaluatedAtMs,
         });
         return envelope;
       })
@@ -213,7 +217,7 @@ export class ProductIntegrationRuntimeService {
   }
 
   /**
-   * Non-building WebSocket projection source. Timer delivery may announce the
+   * Non-building socket projection source. Delivery may announce the
    * last HTTP-published cut, but must never trigger another full Product read.
    */
   readPublishedSupervisor(): Readonly<ProductRuntimeSupervisorEnvelope> | null {

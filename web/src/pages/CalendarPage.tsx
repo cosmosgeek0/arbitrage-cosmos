@@ -8,6 +8,165 @@ import { createSettledPoll } from '../lib/polling';
 import { TIME_ZONE_OPTIONS, addDays, dayKey, formatKey, mondayFor } from '../lib/time';
 import { useStore } from '../store';
 import './LiveIntelligence.css';
+import './CalendarPage.css';
+
+type CalendarSourceState = 'fresh' | 'stale';
+type CalendarAvailableFeedTruth = Readonly<{
+  kind: 'AVAILABLE';
+  items: readonly CalItem[];
+  fetchedAt: number;
+  maxAgeMs: number;
+  sourceState: CalendarSourceState;
+}>;
+type CalendarFeedTruth =
+  | Readonly<{
+    kind: 'LOADING';
+    items: null;
+    fetchedAt: null;
+    maxAgeMs: null;
+    sourceState: null;
+  }>
+  | CalendarAvailableFeedTruth
+  | Readonly<{
+    kind: 'FAILED';
+    items: readonly CalItem[] | null;
+    fetchedAt: number | null;
+    maxAgeMs: number | null;
+    sourceState: CalendarSourceState | null;
+  }>;
+
+export type CalendarFeedPresentation = Readonly<{
+  status: 'LOADING' | 'CURRENT' | 'STALE' | 'UNAVAILABLE';
+  detail: string;
+}>;
+
+const INITIAL_CALENDAR_FEED: CalendarFeedTruth = Object.freeze({
+  kind: 'LOADING',
+  items: null,
+  fetchedAt: null,
+  maxAgeMs: null,
+  sourceState: null,
+});
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function isNullableString(value: unknown): value is string | null {
+  return value === null || typeof value === 'string';
+}
+
+function isNullableNumber(value: unknown): value is number | null {
+  return value === null || (typeof value === 'number' && Number.isFinite(value));
+}
+
+function parseCalendarItem(value: unknown): CalItem {
+  if (!isRecord(value)
+      || typeof value.id !== 'string'
+      || typeof value.title !== 'string'
+      || typeof value.country !== 'string'
+      || typeof value.indicator !== 'string'
+      || typeof value.importance !== 'number'
+      || !Number.isFinite(value.importance)
+      || typeof value.period !== 'string'
+      || !isNullableNumber(value.actual)
+      || !isNullableNumber(value.forecast)
+      || !isNullableNumber(value.previous)
+      || !isNullableString(value.unit)
+      || !isNullableString(value.scale)
+      || !isNullableString(value.currency)
+      || !isNullableString(value.category)
+      || !isNullableString(value.comment)
+      || !isNullableString(value.source)
+      || !isNullableString(value.sourceUrl)
+      || typeof value.date !== 'string'
+      || !Number.isFinite(Date.parse(value.date))) {
+    throw new TypeError('Calendar payload contains an invalid event.');
+  }
+  return {
+    id: value.id,
+    title: value.title,
+    country: value.country,
+    indicator: value.indicator,
+    importance: value.importance,
+    period: value.period,
+    actual: value.actual,
+    forecast: value.forecast,
+    previous: value.previous,
+    unit: value.unit,
+    scale: value.scale,
+    currency: value.currency,
+    category: value.category,
+    comment: value.comment,
+    source: value.source,
+    sourceUrl: value.sourceUrl,
+    date: value.date,
+  };
+}
+
+export function parseCalendarPayload(value: unknown, observedAtMs: number): CalendarAvailableFeedTruth {
+  if (!isRecord(value)
+      || !Array.isArray(value.items)
+      || (value.state !== 'fresh' && value.state !== 'stale')
+      || typeof value.fetchedAt !== 'number'
+      || !Number.isFinite(value.fetchedAt)
+      || value.fetchedAt <= 0
+      || value.fetchedAt > observedAtMs
+      || typeof value.maxAgeMs !== 'number'
+      || !Number.isFinite(value.maxAgeMs)
+      || value.maxAgeMs <= 0) {
+    throw new TypeError('Calendar payload is missing authoritative freshness truth.');
+  }
+  const items = value.items.map(parseCalendarItem)
+    .sort((left, right) => Date.parse(left.date) - Date.parse(right.date));
+  return Object.freeze({
+    kind: 'AVAILABLE',
+    items: Object.freeze(items),
+    fetchedAt: value.fetchedAt,
+    maxAgeMs: value.maxAgeMs,
+    sourceState: value.state,
+  });
+}
+
+export function calendarFeedFailure(current: CalendarFeedTruth): CalendarFeedTruth {
+  if (current.kind === 'LOADING') {
+    return Object.freeze({
+      kind: 'FAILED',
+      items: null,
+      fetchedAt: null,
+      maxAgeMs: null,
+      sourceState: null,
+    });
+  }
+  return Object.freeze({
+    kind: 'FAILED',
+    items: current.items,
+    fetchedAt: current.fetchedAt,
+    maxAgeMs: current.maxAgeMs,
+    sourceState: current.sourceState,
+  });
+}
+
+export function calendarFeedPresentation(
+  truth: CalendarFeedTruth,
+  observedAtMs: number,
+): CalendarFeedPresentation {
+  if (truth.kind === 'LOADING') {
+    return Object.freeze({ status: 'LOADING', detail: 'Awaiting the current calendar snapshot.' });
+  }
+  if (truth.kind === 'FAILED') {
+    return truth.items === null
+      ? Object.freeze({ status: 'UNAVAILABLE', detail: 'No calendar snapshot is available.' })
+      : Object.freeze({ status: 'STALE', detail: 'Calendar refresh unavailable. Showing the last available server snapshot.' });
+  }
+  if (truth.sourceState === 'stale') {
+    return Object.freeze({ status: 'STALE', detail: 'The server marked this calendar snapshot stale. Showing retained events.' });
+  }
+  if (observedAtMs < truth.fetchedAt || observedAtMs - truth.fetchedAt >= truth.maxAgeMs) {
+    return Object.freeze({ status: 'STALE', detail: 'The calendar snapshot exceeded its published freshness window. Showing retained events.' });
+  }
+  return Object.freeze({ status: 'CURRENT', detail: 'Current calendar snapshot.' });
+}
 
 function eventFingerprint(item: CalItem): string {
   return `${item.actual ?? ''}|${item.forecast ?? ''}|${item.previous ?? ''}|${item.date}`;
@@ -29,13 +188,36 @@ function ImpactBars({ importance }: { importance: number }) {
   </span>;
 }
 
+export function CalendarFeedStatus({
+  presentation,
+  fetchedAt,
+}: {
+  presentation: CalendarFeedPresentation;
+  fetchedAt: number | null;
+}) {
+  const label = presentation.status === 'CURRENT' && fetchedAt !== null
+    ? `Live · ${liveAge(fetchedAt)}`
+    : presentation.status === 'STALE' && fetchedAt !== null
+      ? `Stale · ${liveAge(fetchedAt)}`
+      : presentation.status === 'UNAVAILABLE'
+        ? 'Unavailable'
+        : 'Loading';
+  const tone = presentation.status === 'STALE'
+    ? 'stale'
+    : presentation.status === 'UNAVAILABLE'
+      ? 'error'
+      : presentation.status === 'LOADING'
+        ? 'loading'
+        : '';
+
+  return <span className={`lix-live ${tone}`.trim()} role="status" title={presentation.detail}><i />{label}</span>;
+}
+
 export function CalendarPage() {
   const { prefs, updatePref } = useStore();
   const zone = prefs.clockZone && prefs.clockZone !== 'local' ? prefs.clockZone : undefined;
   const initialToday = dayKey(new Date(), zone);
-  const [items, setItems] = useState<CalItem[] | null>(null);
-  const [fetchedAt, setFetchedAt] = useState<number | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [feed, setFeed] = useState<CalendarFeedTruth>(INITIAL_CALENDAR_FEED);
   const [query, setQuery] = useState('');
   const [country, setCountry] = useState('all');
   const [impact, setImpact] = useState<'all' | 'high' | 'medium' | 'low'>('all');
@@ -59,25 +241,24 @@ export function CalendarPage() {
 
   useEffect(() => {
     const cadence = Math.min(10, Math.max(0.5, prefs.dataCadence?.calendar ?? 10));
-    const poll = createSettledPoll<{ items: CalItem[]; fetchedAt?: number }>({
+    const poll = createSettledPoll<unknown>({
       intervalMs: cadence * 1_000,
       request: (signal) => fetchJson('/api/calendar', { signal }),
       onSuccess: (payload) => {
-          const next = [...(payload.items ?? [])].sort((a, b) => Date.parse(a.date) - Date.parse(b.date));
-          if (previousRef.current.size) {
-            const changed = next.filter((item) => previousRef.current.get(item.id) !== eventFingerprint(item)).map((item) => item.id);
-            if (changed.length) {
-              setChangedIds(new Set(changed));
-              if (changeTimerRef.current !== null) window.clearTimeout(changeTimerRef.current);
-              changeTimerRef.current = window.setTimeout(() => setChangedIds(new Set()), 1_600);
-            }
+        const nextFeed = parseCalendarPayload(payload, Date.now());
+        const next = [...nextFeed.items];
+        if (previousRef.current.size) {
+          const changed = next.filter((item) => previousRef.current.get(item.id) !== eventFingerprint(item)).map((item) => item.id);
+          if (changed.length) {
+            setChangedIds(new Set(changed));
+            if (changeTimerRef.current !== null) window.clearTimeout(changeTimerRef.current);
+            changeTimerRef.current = window.setTimeout(() => setChangedIds(new Set()), 1_600);
           }
-          previousRef.current = new Map(next.map((item) => [item.id, eventFingerprint(item)]));
-          setItems(next);
-          setFetchedAt(payload.fetchedAt ?? Date.now());
-          setFailed(false);
+        }
+        previousRef.current = new Map(next.map((item) => [item.id, eventFingerprint(item)]));
+        setFeed(nextFeed);
       },
-      onError: () => setFailed(true),
+      onError: () => setFeed(calendarFeedFailure),
     });
     poll.start();
     return () => {
@@ -87,6 +268,7 @@ export function CalendarPage() {
   }, [prefs.dataCadence?.calendar]);
 
   const weekKeys = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)), [weekStart]);
+  const items = feed.items;
   const allItems = items ?? [];
   const itemsByDay = useMemo(() => {
     const grouped = new Map<string, CalItem[]>();
@@ -115,7 +297,7 @@ export function CalendarPage() {
     const present = new Set(allItems.map((item) => item.country));
     return CALENDAR_COUNTRIES.filter((code) => present.has(code));
   }, [allItems]);
-  const status = failed ? 'Feed Unavailable' : fetchedAt ? `Live · ${liveAge(fetchedAt)}` : 'Loading';
+  const feedPresentation = calendarFeedPresentation(feed, clock);
   const rangeLabel = `${formatKey(weekStart, { month: 'short', day: 'numeric' })} — ${formatKey(addDays(weekStart, 6), { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
   const moveWeek = (delta: number) => {
@@ -136,7 +318,7 @@ export function CalendarPage() {
         <div className="lix-title calx-title">
           <img className="calx-page-mark" src="/calendar-check.png" alt="" aria-hidden="true" />
           <h1>Economic Calendar</h1>
-          <span className={`lix-live ${failed ? 'error' : ''}`}><i />{status}</span>
+          <CalendarFeedStatus presentation={feedPresentation} fetchedAt={feed.fetchedAt} />
         </div>
         <label className="lix-search">
           <IconSearch size={15} />
@@ -178,6 +360,12 @@ export function CalendarPage() {
       </section>
 
       <section className="calx-tape" aria-label="Economic Events">
+        {feedPresentation.status === 'STALE' && (
+          <div className="calx-truth-note stale" role="status">
+            <strong>Stale Calendar Snapshot</strong>
+            <span>{feedPresentation.detail}</span>
+          </div>
+        )}
         <div className="calx-day-header">
           <strong>{formatKey(selectedDay, { weekday: 'long', month: 'long', day: 'numeric' })}</strong>
           <span className="calx-col-actual">Actual</span><span>Forecast</span><span>Prior</span>
@@ -200,9 +388,9 @@ export function CalendarPage() {
               <span className="calx-number prior">{calVal(item.previous, item.unit, item.scale)}</span>
             </div>;
           })}
-          {items === null && !failed && <div className="lix-empty">Loading Economic Events…</div>}
-          {failed && <div className="lix-empty">The Calendar Feed Is Currently Unavailable.</div>}
-          {items !== null && !failed && visible.length === 0 && <div className="lix-empty">No Events Match These Filters.</div>}
+          {items === null && feedPresentation.status === 'LOADING' && <div className="lix-empty">Loading Economic Events…</div>}
+          {items === null && feedPresentation.status === 'UNAVAILABLE' && <div className="lix-empty">The Calendar Feed Is Currently Unavailable.</div>}
+          {items !== null && visible.length === 0 && <div className="lix-empty">No Events Match These Filters.</div>}
         </div>
       </section>
       </div>

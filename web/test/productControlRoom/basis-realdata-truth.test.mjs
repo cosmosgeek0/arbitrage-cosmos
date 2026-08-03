@@ -3,7 +3,203 @@ import { readFile } from 'node:fs/promises';
 import { registerHooks } from 'node:module';
 import test from 'node:test';
 
+import {
+  basisRuntimeSnapshotCurrent,
+  decodeBasisRuntimeSnapshot,
+} from '../../src/lib/basisRuntime.ts';
 import { privateReadFreshness } from '../../src/lib/privateRead.ts';
+
+const BASIS_NOW = 1_800_000_000_000;
+
+function basisRuntimePayload() {
+  return {
+    updatedAt: BASIS_NOW,
+    status: {
+      running: true,
+      bookState: 'fresh',
+      markState: 'fresh',
+      universeSize: 1,
+      watching: 0,
+      focused: 1,
+      openProposals: 1,
+      rejected: 0,
+      borrowBlocked: 0,
+      verifiedBorrow: 1,
+      dataQualityPassing: 1,
+      lastBookTs: BASIS_NOW - 1_000,
+      lastMarkTs: BASIS_NOW - 1_000,
+      lastTickTs: BASIS_NOW - 1_000,
+      ticks: 5,
+      lastError: null,
+      bookSource: 'Basis books owner',
+      markSource: 'Basis marks owner',
+      borrowSource: 'Basis borrow owner',
+    },
+    thresholds: {
+      watchGapPct: 0.2,
+      focusGapPct: 0.4,
+      minNetBasisPct: 0.1,
+      minQuoteVolume24hUsd: 10_000,
+      feesPct: 0.2,
+      persistTicks: 2,
+      maxSpreadBps: 10,
+      minDepthScore: 0.5,
+      minDataQuality: 0.5,
+      intendedNotionalUsd: 1_000,
+    },
+    rows: [{
+      symbol: 'BTCUSDT',
+      base: 'BTC',
+      state: 'PROPOSED',
+      direction: 'long_spot_short_perp',
+      spotBid: 99,
+      spotAsk: 100,
+      perpBid: 101,
+      perpAsk: 102,
+      markPrice: 101,
+      spotSpreadBps: 1,
+      perpSpreadBps: 1,
+      quoteVolume24h: 1_250_000,
+      executableGapPct: 0.8,
+      alternateGapPct: -0.8,
+      gapAgeMs: 1_000,
+      persistTicks: 3,
+      gapSlopePctPerMin: 0.1,
+      gapStabilityCv: 0.2,
+      fundingRate: 0.0001,
+      nextFundingTs: BASIS_NOW + 60_000,
+      fundingCarryPct: 0.01,
+      fundingFlipRisk: 0.1,
+      expectedHoldMs: 60_000,
+      costs: {
+        feesPct: 0.2,
+        slippagePct: 0.05,
+        fundingDragPct: 0.01,
+        borrowCostPct: 0,
+        totalPct: 0.26,
+      },
+      netEdgePct: 0.54,
+      depthScore: 0.9,
+      slippagePct: 0.05,
+      ladderBacked: true,
+      bookPressure: 0,
+      dataQuality: {
+        score: 0.95,
+        spotStalenessMs: 100,
+        perpStalenessMs: 100,
+        legSkewMs: 0,
+        markDivergenceBps: 1,
+        suspectReasons: [],
+      },
+      borrow: {
+        status: 'not_needed',
+        ok: true,
+        rejectCode: null,
+        human: 'No borrow needed',
+        costPctOverHold: 0,
+      },
+      decisionKind: 'proposal',
+      rejectCode: null,
+      reason: 'Executable Basis proposal',
+      correlationId: 'basis-correlation-one',
+      decisionTs: BASIS_NOW - 2_000,
+      priority: { score: 0.8 },
+      proposal: {
+        id: 'basis-one',
+        status: 'OPEN',
+        netEdgePct: 0.54,
+        confidence: 0.75,
+        invalidation: 'Executable gap closes',
+        stagedSizes: [{ stage: 0, fraction: 1, notionalUsd: 1_000 }],
+      },
+    }],
+  };
+}
+
+function twoBasisRows() {
+  const payload = basisRuntimePayload();
+  const second = structuredClone(payload.rows[0]);
+  second.symbol = 'ETHUSDT';
+  second.base = 'ETH';
+  second.correlationId = 'basis-correlation-two';
+  second.proposal.id = 'basis-two';
+  payload.rows.push(second);
+  payload.status.universeSize = 2;
+  payload.status.focused = 2;
+  payload.status.openProposals = 2;
+  payload.status.verifiedBorrow = 2;
+  payload.status.dataQualityPassing = 2;
+  return payload;
+}
+
+test('Basis runtime decoder is strict, detached, duplicate-safe, and time bounded', () => {
+  const input = basisRuntimePayload();
+  const decoded = decodeBasisRuntimeSnapshot(input);
+  assert.ok(decoded);
+  assert.equal(basisRuntimeSnapshotCurrent(decoded, BASIS_NOW), true);
+
+  input.rows[0].reason = 'mutated after decode';
+  input.rows[0].proposal.id = 'mutated-after-decode';
+  assert.equal(decoded.rows[0].reason, 'Executable Basis proposal');
+  assert.equal(decoded.rows[0].proposal.id, 'basis-one');
+  assert.notEqual(decoded.rows, input.rows);
+
+  const malformedRow = basisRuntimePayload();
+  delete malformedRow.rows[0].dataQuality;
+  assert.equal(decodeBasisRuntimeSnapshot(malformedRow), null);
+
+  const malformedStatus = basisRuntimePayload();
+  malformedStatus.status.bookState = 'warming';
+  assert.equal(decodeBasisRuntimeSnapshot(malformedStatus), null);
+
+  const inconsistentCount = basisRuntimePayload();
+  inconsistentCount.status.openProposals = 0;
+  assert.equal(decodeBasisRuntimeSnapshot(inconsistentCount), null);
+
+  const inconsistentProposal = basisRuntimePayload();
+  inconsistentProposal.rows[0].proposal.netEdgePct = 0.53;
+  assert.equal(decodeBasisRuntimeSnapshot(inconsistentProposal), null);
+
+  const duplicateSymbol = twoBasisRows();
+  duplicateSymbol.rows[1].symbol = duplicateSymbol.rows[0].symbol;
+  assert.equal(decodeBasisRuntimeSnapshot(duplicateSymbol), null);
+
+  const duplicateProposal = twoBasisRows();
+  duplicateProposal.rows[1].proposal.id = duplicateProposal.rows[0].proposal.id;
+  assert.equal(decodeBasisRuntimeSnapshot(duplicateProposal), null);
+
+  const hostile = basisRuntimePayload();
+  Object.defineProperty(hostile.rows[0], 'reason', { get() { throw new Error('hostile accessor'); } });
+  assert.equal(decodeBasisRuntimeSnapshot(hostile), null);
+
+  const justCurrent = basisRuntimePayload();
+  justCurrent.updatedAt = BASIS_NOW - 9_999;
+  justCurrent.status.lastBookTs = BASIS_NOW - 9_999;
+  justCurrent.status.lastMarkTs = BASIS_NOW - 9_999;
+  justCurrent.status.lastTickTs = BASIS_NOW - 9_999;
+  assert.equal(basisRuntimeSnapshotCurrent(decodeBasisRuntimeSnapshot(justCurrent), BASIS_NOW), true);
+
+  const stale = structuredClone(justCurrent);
+  stale.updatedAt = BASIS_NOW - 10_000;
+  stale.status.lastBookTs = BASIS_NOW - 10_000;
+  stale.status.lastMarkTs = BASIS_NOW - 10_000;
+  stale.status.lastTickTs = BASIS_NOW - 10_000;
+  assert.equal(basisRuntimeSnapshotCurrent(decodeBasisRuntimeSnapshot(stale), BASIS_NOW), false);
+
+  const allowedSkew = basisRuntimePayload();
+  allowedSkew.updatedAt = BASIS_NOW + 5_000;
+  allowedSkew.status.lastBookTs = BASIS_NOW + 5_000;
+  allowedSkew.status.lastMarkTs = BASIS_NOW + 5_000;
+  allowedSkew.status.lastTickTs = BASIS_NOW + 5_000;
+  assert.equal(basisRuntimeSnapshotCurrent(decodeBasisRuntimeSnapshot(allowedSkew), BASIS_NOW), true);
+
+  const futureSkew = structuredClone(allowedSkew);
+  futureSkew.updatedAt = BASIS_NOW + 5_001;
+  futureSkew.status.lastBookTs = BASIS_NOW + 5_001;
+  futureSkew.status.lastMarkTs = BASIS_NOW + 5_001;
+  futureSkew.status.lastTickTs = BASIS_NOW + 5_001;
+  assert.equal(basisRuntimeSnapshotCurrent(decodeBasisRuntimeSnapshot(futureSkew), BASIS_NOW), false);
+});
 
 test('Basis renders only canonically current runtime and exact account facts', async (context) => {
   const cssHooks = registerHooks({

@@ -9,9 +9,21 @@ import { ProductSurfaceAdapter } from '../features/productControlRoom/components
 import { projectMarketConsumerTruth } from '../components/Header';
 import { TokenIcon } from '../components/TokenIcon';
 import { countdown, fmtBasis, fmtFunding, fmtMoney, fmtPct, fmtPrice, timeAgo } from '../format';
+import {
+  BASIS_MAX_FUTURE_SKEW_MS,
+  BASIS_RUNTIME_FRESH_MS,
+  basisRuntimeSnapshotCurrent,
+  decodeBasisRuntimeSnapshot,
+  type BasisSnapshot,
+} from '../lib/basisRuntime';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
 import { useStore } from '../store';
+import {
+  decodeVolumeRuntimeSnapshot,
+  resolveVolumeRuntimeTruth,
+  volumeRowsCurrent,
+} from './VolumeScanner';
 import './Opportunities.css';
 
 type View = 'active' | 'raw';
@@ -30,6 +42,7 @@ function rawFact(value: number | null | undefined, format: (known: number) => st
 }
 
 type OpportunitySource = 'BASIS' | 'VOLUME';
+type VolumeRuntimeSnapshot = NonNullable<ReturnType<typeof decodeVolumeRuntimeSnapshot>>;
 
 export type OpportunitySourceTruthLabel =
   | 'CURRENT'
@@ -74,7 +87,7 @@ export interface OpportunitySourceRead {
   readonly updatedAt: number;
   readonly openProposals: number;
   readonly countConsistent: boolean;
-  readonly current: boolean;
+  readonly runtimeSnapshot: BasisSnapshot | VolumeRuntimeSnapshot;
   readonly evidence: string;
   readonly facts: readonly PublishedOpportunityFact[];
 }
@@ -92,16 +105,8 @@ function record(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-function finiteOrNull(value: unknown): value is number | null {
-  return value === null || (typeof value === 'number' && Number.isFinite(value));
-}
-
-function optionalFiniteOrNull(value: unknown): value is number | null | undefined {
-  return value === undefined || finiteOrNull(value);
-}
-
-function nonNegativeInteger(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+function finiteRequired(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
 }
 
 function nonEmptyString(value: unknown): value is string {
@@ -122,27 +127,31 @@ function basisFact(
     || !nonEmptyString(row.symbol)
     || !nonEmptyString(row.base)
     || (row.direction !== 'long_spot_short_perp' && row.direction !== 'short_spot_long_perp')
+    || row.decisionKind !== 'proposal'
     || !nonEmptyString(row.reason)
-    || !finiteOrNull(row.spotBid)
-    || !finiteOrNull(row.spotAsk)
-    || !finiteOrNull(row.perpBid)
-    || !finiteOrNull(row.perpAsk)
-    || !finiteOrNull(row.executableGapPct)
-    || !finiteOrNull(row.fundingRate)
-    || !finiteOrNull(row.quoteVolume24h)
-    || !finiteOrNull(row.decisionTs)
-    || !finiteOrNull(costs.feesPct)
-    || !finiteOrNull(costs.slippagePct)
-    || !finiteOrNull(costs.fundingDragPct)
-    || !finiteOrNull(costs.borrowCostPct)
-    || !finiteOrNull(costs.totalPct)
+    || !finiteRequired(row.spotBid)
+    || !finiteRequired(row.spotAsk)
+    || !finiteRequired(row.perpBid)
+    || !finiteRequired(row.perpAsk)
+    || !finiteRequired(row.executableGapPct)
+    || !finiteRequired(row.fundingRate)
+    || !finiteRequired(row.quoteVolume24h)
+    || !finiteRequired(row.decisionTs)
+    || !finiteRequired(row.netEdgePct)
+    || !finiteRequired(costs.feesPct)
+    || !finiteRequired(costs.slippagePct)
+    || !finiteRequired(costs.fundingDragPct)
+    || !finiteRequired(costs.borrowCostPct)
+    || !finiteRequired(costs.totalPct)
     || !nonEmptyString(borrow.status)
     || !nonEmptyString(borrow.human)
     || !nonEmptyString(proposal.id)
     || !nonEmptyString(proposal.status)
-    || !finiteOrNull(proposal.netEdgePct)
-    || !finiteOrNull(proposal.confidence)
-    || (proposal.invalidation !== null && !nonEmptyString(proposal.invalidation))
+    || String(proposal.status).toUpperCase() !== 'OPEN'
+    || !finiteRequired(proposal.netEdgePct)
+    || proposal.netEdgePct !== row.netEdgePct
+    || !finiteRequired(proposal.confidence)
+    || !nonEmptyString(proposal.invalidation)
   ) return null;
 
   const longSpot = row.direction === 'long_spot_short_perp';
@@ -191,20 +200,23 @@ function volumeFact(
     || !nonEmptyString(row.symbol)
     || !nonEmptyString(row.base)
     || !nonEmptyString(row.reason)
-    || !finiteOrNull(row.price)
-    || !finiteOrNull(row.decisionTs)
-    || !finiteOrNull(row.topDepthUsd)
-    || !finiteOrNull(row.spreadBps)
-    || !optionalFiniteOrNull(volumeMultiple['1s'])
-    || !optionalFiniteOrNull(volumeMultiple['5s'])
-    || !optionalFiniteOrNull(tradeCountMultiple['5s'])
+    || !finiteRequired(row.price)
+    || !finiteRequired(row.decisionTs)
+    || !finiteRequired(row.topDepthUsd)
+    || !finiteRequired(row.spreadBps)
+    || !finiteRequired(volumeMultiple['1s'])
+    || !finiteRequired(volumeMultiple['5s'])
+    || !finiteRequired(tradeCountMultiple['5s'])
     || !nonEmptyString(proposal.id)
     || !nonEmptyString(proposal.status)
+    || String(proposal.status).toLowerCase() !== 'open'
     || !nonEmptyString(proposal.direction)
     || !nonEmptyString(proposal.reason)
-    || !finiteOrNull(proposal.confidence)
-    || !optionalFiniteOrNull(proposal.featureObservedAtMs)
-    || !optionalFiniteOrNull(proposal.expiresAtMs)
+    || !finiteRequired(proposal.confidence)
+    || !finiteRequired(proposal.featureObservedAtMs)
+    || !finiteRequired(proposal.expiresAtMs)
+    || proposal.expiresAtMs <= proposal.featureObservedAtMs
+    || proposal.expiresAtMs <= row.decisionTs
   ) return null;
 
   return Object.freeze({
@@ -239,88 +251,133 @@ function volumeFact(
 }
 
 export function decodeBasisOpportunityRead(value: unknown): OpportunitySourceRead | null {
-  const source = record(value);
-  const status = record(source?.status);
-  if (
-    source === null
-    || status === null
-    || !finiteOrNull(source.updatedAt)
-    || source.updatedAt === null
-    || !Array.isArray(source.rows)
-    || typeof status.running !== 'boolean'
-    || (status.bookState !== 'fresh' && status.bookState !== 'stale')
-    || (status.markState !== 'fresh' && status.markState !== 'stale')
-    || !nonNegativeInteger(status.openProposals)
-    || (status.lastError !== null && typeof status.lastError !== 'string')
-    || !nonEmptyString(status.bookSource)
-    || !nonEmptyString(status.markSource)
-  ) return null;
+  try {
+    const source = decodeBasisRuntimeSnapshot(value);
+    if (source === null) return null;
 
-  const facts: PublishedOpportunityFact[] = [];
-  for (const candidate of source.rows) {
-    const row = record(candidate);
-    if (row === null || !nonEmptyString(row.state)) return null;
-    if (row.state !== 'PROPOSED') continue;
-    const fact = basisFact(row, source.updatedAt);
-    if (fact === null) return null;
-    facts.push(fact);
+    const facts: PublishedOpportunityFact[] = [];
+    for (const candidate of source.rows) {
+      const row = record(candidate as unknown);
+      if (row === null) return null;
+      if (row.state !== 'PROPOSED') continue;
+      const fact = basisFact(row, source.updatedAt);
+      if (fact === null) return null;
+      facts.push(fact);
+    }
+
+    return Object.freeze({
+      source: 'BASIS',
+      updatedAt: source.updatedAt,
+      openProposals: source.status.openProposals,
+      countConsistent: source.status.openProposals === facts.length,
+      runtimeSnapshot: source,
+      evidence: `${source.status.bookSource} · ${source.status.markSource}`,
+      facts: Object.freeze(facts),
+    });
+  } catch {
+    return null;
   }
-
-  return Object.freeze({
-    source: 'BASIS',
-    updatedAt: source.updatedAt,
-    openProposals: status.openProposals,
-    countConsistent: status.openProposals === facts.length,
-    current: status.running
-      && status.bookState === 'fresh'
-      && status.markState === 'fresh'
-      && status.lastError === null,
-    evidence: `${status.bookSource} · ${status.markSource}`,
-    facts: Object.freeze(facts),
-  });
 }
 
 export function decodeVolumeOpportunityRead(value: unknown): OpportunitySourceRead | null {
-  const source = record(value);
-  const status = record(source?.status);
-  if (
-    source === null
-    || status === null
-    || !finiteOrNull(source.updatedAt)
-    || source.updatedAt === null
-    || !Array.isArray(source.rows)
-    || typeof status.running !== 'boolean'
-    || !['starting', 'connecting', 'open', 'degraded'].includes(String(status.streamState))
-    || (status.bookState !== 'fresh' && status.bookState !== 'stale')
-    || !nonNegativeInteger(status.openProposals)
-    || !nonEmptyString(status.source)
-    || !nonEmptyString(status.bookSource)
-  ) return null;
+  try {
+    const source = decodeVolumeRuntimeSnapshot(value);
+    if (source === null) return null;
 
-  const facts: PublishedOpportunityFact[] = [];
-  for (const candidate of source.rows) {
-    const row = record(candidate);
-    if (row === null || !nonEmptyString(row.state)) return null;
-    if (row.state !== 'PROPOSED') continue;
-    const fact = volumeFact(row, source.updatedAt);
-    if (fact === null) return null;
-    facts.push(fact);
+    const facts: PublishedOpportunityFact[] = [];
+    const symbols = new Set<string>();
+    const proposalIds = new Set<string>();
+    for (const candidate of source.rows) {
+      const row = record(candidate as unknown);
+      if (row === null || !nonEmptyString(row.symbol) || symbols.has(row.symbol)) return null;
+      symbols.add(row.symbol);
+
+      const proposal = row.proposal === null ? null : record(row.proposal);
+      if (row.proposal !== null && proposal === null) return null;
+      if (proposal !== null) {
+        if (!nonEmptyString(proposal.id) || proposalIds.has(proposal.id)) return null;
+        proposalIds.add(proposal.id);
+      }
+
+      if (row.state !== 'PROPOSED') continue;
+      const fact = volumeFact(row, source.updatedAt);
+      if (fact === null) return null;
+      facts.push(fact);
+    }
+
+    return Object.freeze({
+      source: 'VOLUME',
+      updatedAt: source.updatedAt,
+      openProposals: source.status.openProposals,
+      countConsistent: source.status.openProposals === facts.length,
+      runtimeSnapshot: source,
+      evidence: `${source.status.source} · ${source.status.bookSource}`,
+      facts: Object.freeze(facts),
+    });
+  } catch {
+    return null;
+  }
+}
+
+function opportunityReadCurrent(
+  read: OpportunitySourceRead,
+  nowMs: number,
+): Readonly<{ current: boolean; reason: string | null }> {
+  if (!read.countConsistent) {
+    return Object.freeze({ current: false, reason: 'OPPORTUNITY_PROPOSAL_COUNT_CONFLICT' });
+  }
+  if (
+    !finiteRequired(nowMs)
+    || read.updatedAt <= 0
+    || read.updatedAt > nowMs + BASIS_MAX_FUTURE_SKEW_MS
+    || nowMs - read.updatedAt >= BASIS_RUNTIME_FRESH_MS
+  ) {
+    return Object.freeze({ current: false, reason: 'OPPORTUNITY_SOURCE_TIMESTAMP_NOT_CURRENT' });
   }
 
-  return Object.freeze({
-    source: 'VOLUME',
-    updatedAt: source.updatedAt,
-    openProposals: status.openProposals,
-    countConsistent: status.openProposals === facts.length,
-    current: status.running && status.streamState === 'open' && status.bookState === 'fresh',
-    evidence: `${status.source} · ${status.bookSource}`,
-    facts: Object.freeze(facts),
-  });
+  if (read.source === 'BASIS') {
+    if (!basisRuntimeSnapshotCurrent(read.runtimeSnapshot as BasisSnapshot, nowMs)) {
+      return Object.freeze({ current: false, reason: 'BASIS_SOURCE_TIMESTAMPS_NOT_CURRENT' });
+    }
+  } else {
+    const snapshot = read.runtimeSnapshot as VolumeRuntimeSnapshot;
+    const truth = resolveVolumeRuntimeTruth({
+      canonicalState: 'READY',
+      canonicalReason: null,
+      snapshotUpdatedAtMs: snapshot.updatedAt,
+      snapshotStatus: snapshot.status,
+      rowCount: snapshot.rows.length,
+      rowContractCurrent: volumeRowsCurrent(snapshot),
+      requestError: null,
+      nowMs,
+    });
+    if (!truth.current) {
+      return Object.freeze({ current: false, reason: truth.reason ?? 'VOLUME_SOURCE_NOT_CURRENT' });
+    }
+  }
+
+  for (const fact of read.facts) {
+    if (
+      !finite(fact.observedAtMs)
+      || fact.observedAtMs <= 0
+      || fact.observedAtMs > nowMs + BASIS_MAX_FUTURE_SKEW_MS
+      || fact.observedAtMs > read.updatedAt + BASIS_MAX_FUTURE_SKEW_MS
+      || nowMs - fact.observedAtMs >= BASIS_RUNTIME_FRESH_MS
+    ) {
+      return Object.freeze({ current: false, reason: 'OPPORTUNITY_FACT_TIMESTAMP_NOT_CURRENT' });
+    }
+    if (fact.source === 'VOLUME' && (!finite(fact.expiresAtMs) || fact.expiresAtMs <= nowMs)) {
+      return Object.freeze({ current: false, reason: 'VOLUME_PROPOSAL_EXPIRED' });
+    }
+  }
+
+  return Object.freeze({ current: true, reason: null });
 }
 
 export function projectOpportunitySourceTruth(
   read: OpportunitySourceRead | null,
   error: string | null,
+  nowMs = Date.now(),
 ): OpportunitySourceTruth {
   if (read === null) {
     return error
@@ -336,8 +393,9 @@ export function projectOpportunitySourceTruth(
   if (error !== null) {
     return Object.freeze({ label: 'STALE LAST-KNOWN', detail: error });
   }
-  if (!read.current) {
-    return Object.freeze({ label: 'DEGRADED', detail: read.evidence });
+  const runtime = opportunityReadCurrent(read, nowMs);
+  if (!runtime.current) {
+    return Object.freeze({ label: 'STALE LAST-KNOWN', detail: runtime.reason ?? read.evidence });
   }
   return Object.freeze({ label: 'CURRENT', detail: read.evidence });
 }
@@ -345,12 +403,13 @@ export function projectOpportunitySourceTruth(
 export function projectPublishedOpportunityFacts(
   basis: OpportunitySourceRead | null,
   volume: OpportunitySourceRead | null,
+  nowMs = Date.now(),
 ): readonly PublishedOpportunityFact[] {
   // Preserve owner order inside each source and a fixed Basis-then-Volume
   // section order. Never cross-strategy rank by edge or confidence.
   return Object.freeze([
-    ...(basis?.facts ?? []),
-    ...(volume?.facts ?? []),
+    ...(basis && opportunityReadCurrent(basis, nowMs).current ? basis.facts : []),
+    ...(volume && opportunityReadCurrent(volume, nowMs).current ? volume.facts : []),
   ]);
 }
 
@@ -559,16 +618,16 @@ export function Opportunities() {
   });
 
   const query = search.trim().toUpperCase();
-  const basisTruth = projectOpportunitySourceTruth(basisRead, basisError);
-  const volumeTruth = projectOpportunitySourceTruth(volumeRead, volumeError);
-  const publishedFacts = useMemo(
-    () => projectPublishedOpportunityFacts(basisRead, volumeRead),
-    [basisRead, volumeRead],
-  );
+  const opportunityNow = Date.now();
+  const basisTruth = projectOpportunitySourceTruth(basisRead, basisError, opportunityNow);
+  const volumeTruth = projectOpportunitySourceTruth(volumeRead, volumeError, opportunityNow);
+  const publishedFacts = projectPublishedOpportunityFacts(basisRead, volumeRead, opportunityNow);
   const proposalCoverageKnown = basisRead !== null
     && volumeRead !== null
     && basisRead.countConsistent
-    && volumeRead.countConsistent;
+    && volumeRead.countConsistent
+    && basisTruth.label === 'CURRENT'
+    && volumeTruth.label === 'CURRENT';
   const publishedProposalCount = proposalCoverageKnown ? publishedFacts.length : null;
   const reportedEconomicsCount = proposalCoverageKnown
     ? publishedFacts.filter((fact) => finite(fact.reportedNetEdgePct)).length

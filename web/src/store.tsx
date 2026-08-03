@@ -197,7 +197,6 @@ export function resolveMarketFreshness(input: Readonly<{
     return Object.freeze({ status: 'UNKNOWN', live: false, ageMs: null });
   }
   const ageMs = input.nowMs - sourceTimeMs;
-  if (!input.connected) return Object.freeze({ status: 'DISCONNECTED', live: false, ageMs });
   const staleAfterMs = Number.isFinite(input.staleAfterMs) && input.staleAfterMs > 0
     ? input.staleAfterMs
     : 0;

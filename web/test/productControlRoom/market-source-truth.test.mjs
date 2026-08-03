@@ -28,7 +28,7 @@ test('market freshness requires an exact source timestamp, not socket connectivi
   });
 
   assert.deepEqual(resolveMarketFreshness({
-    connected: true,
+    connected: false,
     error: null,
     sourceTimeMs: exactSourceTimeMs,
     nowMs: exactSourceTimeMs + 1_000,

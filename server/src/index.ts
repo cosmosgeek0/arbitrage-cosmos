@@ -14,7 +14,19 @@ import {
   type MarketLiquidationProjectionPort,
 } from './engine/marketData.js';
 import { projectMarketApiRow } from './engine/marketApiProjection.js';
-import { Ledger, type LedgerEvent } from './ledger.js';
+import {
+  Ledger,
+  isLedgerEventQueryHorizonError,
+  ledgerEventQueryBoundary,
+  normalizeLedgerEventApiSearch,
+  normalizeLedgerEventQueryHorizonToken,
+  projectLedgerEventForApi,
+  type LedgerEvent,
+  type LedgerEventDecisionFilter,
+  type LedgerEventQueryWindow,
+  type LedgerEventQueryOptions,
+  type LedgerEventSeverityFilter,
+} from './ledger.js';
 import { loadConfig, saveConfig } from './config.js';
 import {
   fetchBinanceServerTime,
@@ -1369,18 +1381,130 @@ function marketSymbol(value: unknown, minimum = 1, maximum = 20): string | null 
 }
 
 function eventFilters(req: express.Request):
-  | { ok: true; kind?: string; symbol?: string; q?: string; since?: number; until?: number }
+  | {
+      ok: true;
+      kind?: string;
+      symbol?: string;
+      q?: string;
+      since?: number;
+      until?: number;
+      horizon?: string;
+      options: Readonly<LedgerEventQueryOptions>;
+    }
   | { ok: false; error: string } {
   const kind = req.query.kind === undefined ? undefined : String(req.query.kind).trim();
   const symbol = req.query.symbol === undefined ? undefined : String(req.query.symbol).trim().toUpperCase();
-  const q = req.query.q === undefined ? undefined : String(req.query.q).trim();
+  const rawQ = req.query.q === undefined
+    ? undefined
+    : typeof req.query.q === 'string'
+      ? req.query.q
+      : null;
+  const q = rawQ === undefined || rawQ === null
+    ? rawQ
+    : normalizeLedgerEventApiSearch(rawQ);
   const since = optionalPositiveInteger(req.query.since);
   const until = optionalPositiveInteger(req.query.until);
+  const rawHorizon = req.query.horizon === undefined
+    ? undefined
+    : typeof req.query.horizon === 'string'
+      ? req.query.horizon
+      : null;
+  const horizon = rawHorizon === undefined || rawHorizon === null
+    ? rawHorizon
+    : normalizeLedgerEventQueryHorizonToken(rawHorizon);
+  const severity = req.query.severity === undefined
+    ? undefined
+    : typeof req.query.severity === 'string'
+      ? req.query.severity.trim().toUpperCase()
+      : null;
+  const decision = req.query.decision === undefined
+    ? undefined
+    : typeof req.query.decision === 'string'
+      ? req.query.decision.trim().toUpperCase()
+      : null;
+  const includeDebug = req.query.includeDebug === undefined
+    ? undefined
+    : req.query.includeDebug === 'true'
+      ? true
+      : req.query.includeDebug === 'false'
+        ? false
+        : null;
   if (kind !== undefined && !/^[a-zA-Z0-9._:-]{1,80}$/.test(kind)) return { ok: false, error: 'invalid event kind' };
   if (symbol !== undefined && !/^[A-Z0-9]{2,20}$/.test(symbol)) return { ok: false, error: 'invalid event symbol' };
-  if (q !== undefined && (q.length < 2 || q.length > 60 || /^[%_*\s]+$/.test(q))) return { ok: false, error: 'event search must contain 2-60 literal characters' };
+  if (q === null) {
+    return { ok: false, error: 'event search must contain 2-60 normalized literal characters' };
+  }
+  if (horizon === null) return { ok: false, error: 'event horizon token is malformed' };
   if (since === null || until === null) return { ok: false, error: 'event timestamps must be positive integers' };
-  return { ok: true, kind, symbol, q, since, until };
+  if (severity === null || !(
+    severity === undefined || ['CRITICAL', 'WARNING', 'INFO', 'DEBUG'].includes(severity)
+  )) {
+    return { ok: false, error: 'event severity must be critical, warning, info, or debug' };
+  }
+  if (decision === null || !(
+    decision === undefined || decision === 'ACCEPTED' || decision === 'REJECTED'
+  )) {
+    return { ok: false, error: 'event decision must be accepted or rejected' };
+  }
+  if (includeDebug === null) return { ok: false, error: 'includeDebug must be true or false' };
+  const options: LedgerEventQueryOptions = {
+    ...(severity === undefined ? {} : { severity: severity as LedgerEventSeverityFilter }),
+    ...(decision === undefined ? {} : { decision: decision as LedgerEventDecisionFilter }),
+    ...(includeDebug === undefined ? {} : { includeDebug }),
+  };
+  return {
+    ok: true,
+    kind,
+    symbol,
+    q,
+    since,
+    until,
+    horizon,
+    options: Object.freeze(options),
+  };
+}
+
+function labelEventQueryBoundary(
+  res: express.Response,
+  q: string | undefined,
+  options: Readonly<LedgerEventQueryOptions>,
+): void {
+  const boundary = ledgerEventQueryBoundary(q, options);
+  if (boundary === null) return;
+  res.setHeader('Cosmos-Event-Query-Boundary', boundary.kind);
+  res.setHeader(
+    'Cosmos-Event-Query-Max-Id-Span',
+    boundary.maxIdSpan === null ? 'NONE' : String(boundary.maxIdSpan),
+  );
+  res.setHeader(
+    'Cosmos-Event-Query-Boundary-Reasons',
+    boundary.reasons.length === 0 ? 'NONE' : boundary.reasons.join(','),
+  );
+}
+
+function labelEventQueryHorizon(
+  res: express.Response,
+  horizon: Readonly<LedgerEventQueryWindow> | null,
+): void {
+  if (horizon === null) return;
+  res.setHeader('Cosmos-Event-Query-Horizon-Token', horizon.token);
+  res.setHeader('Cosmos-Event-Query-Horizon-High-Water-Id', String(horizon.highWaterId));
+  res.setHeader(
+    'Cosmos-Event-Query-Horizon-After-Id-Exclusive',
+    String(horizon.afterIdExclusive),
+  );
+}
+
+function rejectEventQueryHorizonError(
+  res: express.Response,
+  error: unknown,
+): boolean {
+  if (!isLedgerEventQueryHorizonError(error)) return false;
+  res.status(400).json({
+    code: 'INVALID_EVENT_QUERY_HORIZON',
+    error: 'event horizon token is expired or does not match the exact filters',
+  });
+  return true;
 }
 
 app.get('/api/events', (req, res) => {
@@ -1388,13 +1512,44 @@ app.get('/api/events', (req, res) => {
   const offset = integerQuery(req.query.offset, 0, 0, 10_000);
   const beforeId = optionalPositiveInteger(req.query.beforeId);
   const afterId = optionalPositiveInteger(req.query.afterId);
+  const envelope = req.query.envelope === undefined
+    ? false
+    : req.query.envelope === 'true'
+      ? true
+      : null;
   const filters = eventFilters(req);
-  if (limit === null || offset === null || beforeId === null || afterId === null || (beforeId !== undefined && afterId !== undefined) || !filters.ok) {
-    const error = !filters.ok ? filters.error : 'event pagination must use bounded integers';
+  if (limit === null || offset === null || beforeId === null || afterId === null
+      || envelope === null || (beforeId !== undefined && afterId !== undefined) || !filters.ok) {
+    const error = !filters.ok
+      ? filters.error
+      : envelope === null
+        ? 'event envelope must be the exact value true'
+        : 'event pagination must use bounded integers';
     res.status(400).json({ code: 'INVALID_EVENT_QUERY', error });
     return;
   }
-  res.json(ledger.recentEvents(limit, filters.kind, filters.symbol, filters.q, filters.since, beforeId, filters.until, offset, afterId));
+  labelEventQueryBoundary(res, filters.q, filters.options);
+  try {
+    const page = ledger.recentEventsPage(
+      limit,
+      filters.kind,
+      filters.symbol,
+      filters.q,
+      filters.since,
+      beforeId,
+      filters.until,
+      offset,
+      afterId,
+      filters.options,
+      filters.horizon,
+    );
+    labelEventQueryHorizon(res, page.queryHorizon);
+    const items = page.items.map(projectLedgerEventForApi);
+    if (envelope) res.json({ items, queryHorizon: page.queryHorizon });
+    else res.json(items);
+  } catch (error) {
+    if (!rejectEventQueryHorizonError(res, error)) throw error;
+  }
 });
 
 app.get('/api/events/count', (req, res) => {
@@ -1403,7 +1558,22 @@ app.get('/api/events/count', (req, res) => {
     res.status(400).json({ code: 'INVALID_EVENT_QUERY', error: filters.error });
     return;
   }
-  res.json({ count: ledger.countEvents(filters.kind, filters.symbol, filters.q, filters.since, filters.until) });
+  labelEventQueryBoundary(res, filters.q, filters.options);
+  try {
+    const count = ledger.countEventsWithScope(
+      filters.kind,
+      filters.symbol,
+      filters.q,
+      filters.since,
+      filters.until,
+      filters.options,
+      filters.horizon,
+    );
+    labelEventQueryHorizon(res, count.queryHorizon);
+    res.json(count);
+  } catch (error) {
+    if (!rejectEventQueryHorizonError(res, error)) throw error;
+  }
 });
 
 // ---- Binance announcements proxy (real critical announcements; cached) ------

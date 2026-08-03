@@ -37,7 +37,11 @@ import {
 
 const EVENT_RESULT_MAX = 2_000;
 const EVENT_SEARCH_MAX_CHARS = 64;
+const EVENT_API_SEARCH_MAX_CHARS = 60;
 const EVENT_SEARCH_SCAN_ROWS = 25_000;
+const EVENT_QUERY_HORIZON_TOKEN = /^v1\.(0|[1-9][0-9]{0,15})\.(0|[1-9][0-9]{0,15})\.([a-f0-9]{64})$/;
+const EVENT_METADATA_PROJECTION_SQL_FUNCTION = 'cosmos_event_metadata_projection_v1';
+const EVENT_DECISION_PROJECTION_SQL_FUNCTION = 'cosmos_event_decision_projection_v1';
 const BROWSER_SESSION_MAX = 2_000;
 const BROWSER_SESSION_RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
 const HEALTH_PROBE_CACHE_MS = 5_000;
@@ -167,6 +171,12 @@ const LEGACY_JOURNAL_COMPATIBILITY_MAX_BYTES = 4 * 1_024;
 const LEGACY_PRESTART_BARRIER_WRITER = 'deploy.sh.prestart-barrier';
 const SQLITE_MAX_ROWID = 9_223_372_036_854_775_807n;
 const SQLITE_CURSOR = /^(0|[1-9][0-9]{0,18})$/;
+const LEDGER_EVENT_QUERY_HORIZON_ERRORS = new Set([
+  'LEDGER_EVENT_QUERY_HORIZON_MALFORMED',
+  'LEDGER_EVENT_QUERY_HORIZON_FILTER_MISMATCH',
+  'LEDGER_EVENT_QUERY_HORIZON_UNEXPECTED',
+  'LEDGER_EVENT_QUERY_HORIZON_EXPIRED',
+]);
 const SIX_HOURS_MS = 6 * 60 * 60 * 1_000;
 const ONE_DAY_MS = 24 * 60 * 60 * 1_000;
 const SEVEN_DAYS_MS = 7 * ONE_DAY_MS;
@@ -202,6 +212,109 @@ export interface LedgerEvent {
   message: string | null;
   correlation: string | null;
   createdAt: number;
+}
+
+export type LedgerEventSeverityFilter = 'CRITICAL' | 'WARNING' | 'INFO' | 'DEBUG';
+export type LedgerEventDecisionFilter = 'ACCEPTED' | 'REJECTED';
+
+export interface LedgerEventQueryOptions {
+  readonly severity?: LedgerEventSeverityFilter;
+  readonly decision?: LedgerEventDecisionFilter;
+  /** Undefined preserves the historical behavior and includes every row. */
+  readonly includeDebug?: boolean;
+}
+
+export type LedgerEventApiFieldProvenanceState =
+  | 'RECORDED_V3'
+  | 'PROJECTED_LEGACY_PAYLOAD'
+  | 'MIGRATED_LEGACY_TS_OR_EQUAL_RECORDED_V3'
+  | 'UNAVAILABLE'
+  | 'INVALID_LEGACY_PAYLOAD'
+  | 'INVALID_STORED_PAYLOAD';
+
+export interface LedgerEventApiFieldProvenance {
+  readonly state: LedgerEventApiFieldProvenanceState;
+  readonly path: string | null;
+  readonly basisPath?: string;
+}
+
+export type LedgerEventStoredPayloadState =
+  | 'RECORDED_JSON'
+  | 'NO_STORED_PAYLOAD'
+  | 'INVALID_STORED_PAYLOAD';
+
+export interface LedgerEventApiMetadataProjection {
+  readonly schema: 'cosmos.ledger-event-api-metadata.v1';
+  readonly payload: Readonly<{
+    readonly state: LedgerEventStoredPayloadState;
+    readonly path: 'events.data';
+  }>;
+  readonly fields: Readonly<Record<
+    keyof Omit<LedgerEventMetadataInput, 'createdAt'> | 'createdAt',
+    Readonly<LedgerEventApiFieldProvenance>
+  >>;
+  readonly decision: Readonly<{
+    value: LedgerEventDecisionFilter | null;
+    state:
+      | 'RECORDED_ALLOWED'
+      | 'RECORDED_STATUS'
+      | 'CONTRADICTORY_RECORDED_FIELDS'
+      | 'UNAVAILABLE';
+    paths: readonly string[];
+  }>;
+}
+
+export interface LedgerEventApiRecord extends LedgerEvent {
+  readonly decision: LedgerEventDecisionFilter | null;
+  readonly metadataProjection: Readonly<LedgerEventApiMetadataProjection>;
+}
+
+export type LedgerEventQueryHorizonReason =
+  | 'TEXT_SEARCH'
+  | 'PROJECTED_METADATA_FILTER';
+
+export interface LedgerEventQueryBoundary {
+  readonly kind: 'FILTERED_RETAINED_LEDGER' | 'RECENT_EVENT_ID_WINDOW';
+  readonly maxIdSpan: number | null;
+  readonly reasons: readonly LedgerEventQueryHorizonReason[];
+}
+
+export interface LedgerEventQueryWindow {
+  readonly kind: 'RECENT_EVENT_ID_WINDOW';
+  readonly maxIdSpan: number;
+  readonly token: string;
+  readonly highWaterId: number;
+  readonly afterIdExclusive: number;
+  readonly reasons: readonly LedgerEventQueryHorizonReason[];
+}
+
+export interface LedgerEventQueryHorizon extends LedgerEventQueryWindow {
+  /** Current retained-ledger high water observed with this count. */
+  readonly ledgerHighWaterId: number;
+  readonly retainedFromId: number | null;
+  readonly complete: boolean;
+  readonly appliesTo: readonly ['RECENT_EVENTS', 'COUNT'];
+}
+
+export interface LedgerEventPage {
+  readonly items: readonly LedgerEvent[];
+  readonly queryHorizon: Readonly<LedgerEventQueryWindow> | null;
+}
+
+export interface LedgerEventCountScope {
+  readonly count: number;
+  readonly scope:
+    | 'FILTERED_RETAINED_LEDGER'
+    | 'RECENT_EVENT_ID_WINDOW'
+    | 'INVALID_QUERY';
+  readonly completeness:
+    | 'COMPLETE_RETAINED_SET'
+    | 'BOUNDED_RECENT_ID_HORIZON'
+    | 'INVALID_QUERY';
+  /** One shared row/count horizon whenever projection or text inspection is required. */
+  readonly queryHorizon: Readonly<LedgerEventQueryHorizon> | null;
+  /** Backward-compatible text-search view of queryHorizon. */
+  readonly qHorizon: Readonly<LedgerEventQueryHorizon> | null;
 }
 
 export interface LedgerEventMetadataInput {
@@ -847,6 +960,581 @@ function prepareStoredLedgerEventMetadata(
     message: prepared.message ?? null,
     correlation: prepared.correlation ?? null,
     createdAt,
+  });
+}
+
+interface ProjectedLedgerEventMetadataField {
+  readonly value: string | null;
+  readonly provenance: Readonly<LedgerEventApiFieldProvenance>;
+}
+
+const LEDGER_EVENT_STORED_PAYLOAD_STATE = Symbol('ledgerEventStoredPayloadState');
+
+type LedgerEventWithStoredPayloadState = LedgerEvent & {
+  readonly [LEDGER_EVENT_STORED_PAYLOAD_STATE]?: LedgerEventStoredPayloadState;
+};
+
+function ledgerEventStoredPayloadState(
+  event: Readonly<LedgerEvent>,
+): LedgerEventStoredPayloadState {
+  const descriptor = Object.getOwnPropertyDescriptor(event, LEDGER_EVENT_STORED_PAYLOAD_STATE);
+  if (descriptor !== undefined && Object.hasOwn(descriptor, 'value')
+      && (descriptor.value === 'RECORDED_JSON'
+        || descriptor.value === 'NO_STORED_PAYLOAD'
+        || descriptor.value === 'INVALID_STORED_PAYLOAD')) {
+    return descriptor.value;
+  }
+  return event.data === null ? 'NO_STORED_PAYLOAD' : 'RECORDED_JSON';
+}
+
+function legacyPayloadField(
+  data: unknown,
+  field: keyof typeof LEDGER_EVENT_TEXT_LIMITS,
+  payloadState: LedgerEventStoredPayloadState,
+): Readonly<{ present: boolean; value: unknown }> {
+  if (payloadState === 'INVALID_STORED_PAYLOAD') {
+    return Object.freeze({ present: false, value: undefined });
+  }
+  if (data === null || typeof data !== 'object' || Array.isArray(data)
+      || Object.getPrototypeOf(data) !== Object.prototype) {
+    return Object.freeze({ present: false, value: undefined });
+  }
+  const descriptor = Object.getOwnPropertyDescriptor(data, field);
+  if (descriptor === undefined) return Object.freeze({ present: false, value: undefined });
+  if (!Object.hasOwn(descriptor, 'value')) {
+    return Object.freeze({ present: true, value: undefined });
+  }
+  return Object.freeze({ present: true, value: descriptor.value });
+}
+
+function projectLedgerEventMetadataField(
+  field: keyof typeof LEDGER_EVENT_TEXT_LIMITS,
+  recorded: string | null,
+  data: unknown,
+  payloadState: LedgerEventStoredPayloadState,
+): Readonly<ProjectedLedgerEventMetadataField> {
+  if (recorded !== null) {
+    return Object.freeze({
+      value: recorded,
+      provenance: Object.freeze({
+        state: 'RECORDED_V3',
+        path: `events.${field}`,
+      }),
+    });
+  }
+  if (payloadState === 'INVALID_STORED_PAYLOAD') {
+    return Object.freeze({
+      value: null,
+      provenance: Object.freeze({
+        state: 'INVALID_STORED_PAYLOAD',
+        path: 'events.data',
+      }),
+    });
+  }
+  const legacy = legacyPayloadField(data, field, payloadState);
+  if (!legacy.present || legacy.value === null || legacy.value === undefined) {
+    return Object.freeze({
+      value: null,
+      provenance: Object.freeze({
+        state: 'UNAVAILABLE',
+        path: legacy.present ? `data.${field}` : null,
+      }),
+    });
+  }
+  try {
+    const value = prepareLedgerEventText(field, legacy.value);
+    return Object.freeze({
+      value,
+      provenance: Object.freeze({
+        state: 'PROJECTED_LEGACY_PAYLOAD',
+        path: `data.${field}`,
+      }),
+    });
+  } catch {
+    return Object.freeze({
+      value: null,
+      provenance: Object.freeze({
+        state: 'INVALID_LEGACY_PAYLOAD',
+        path: `data.${field}`,
+      }),
+    });
+  }
+}
+
+interface ProjectedLedgerEventDecision {
+  readonly value: LedgerEventDecisionFilter | null;
+  readonly state: LedgerEventApiMetadataProjection['decision']['state'];
+  readonly paths: readonly string[];
+}
+
+function exactDecisionStatus(value: string | null): LedgerEventDecisionFilter | null {
+  if (value === null) return null;
+  const normalized = value.toUpperCase();
+  return normalized === 'ACCEPTED' || normalized === 'REJECTED' ? normalized : null;
+}
+
+function projectLedgerEventDecision(
+  data: unknown,
+  status: Readonly<ProjectedLedgerEventMetadataField>,
+  payloadState: LedgerEventStoredPayloadState,
+): Readonly<ProjectedLedgerEventDecision> {
+  let allowed: boolean | null = null;
+  if (payloadState === 'RECORDED_JSON'
+      && data !== null && typeof data === 'object' && !Array.isArray(data)
+      && Object.getPrototypeOf(data) === Object.prototype) {
+    const descriptor = Object.getOwnPropertyDescriptor(data, 'allowed');
+    if (descriptor !== undefined && Object.hasOwn(descriptor, 'value')
+        && typeof descriptor.value === 'boolean') {
+      allowed = descriptor.value;
+    }
+  }
+  const allowedDecision = allowed === null ? null : allowed ? 'ACCEPTED' : 'REJECTED';
+  const statusDecision = exactDecisionStatus(status.value);
+  if (allowedDecision !== null && statusDecision !== null && allowedDecision !== statusDecision) {
+    return Object.freeze({
+      value: null,
+      state: 'CONTRADICTORY_RECORDED_FIELDS',
+      paths: Object.freeze(['data.allowed', status.provenance.path as string]),
+    });
+  }
+  if (allowedDecision !== null) {
+    return Object.freeze({
+      value: allowedDecision,
+      state: 'RECORDED_ALLOWED',
+      paths: Object.freeze(['data.allowed']),
+    });
+  }
+  if (statusDecision !== null) {
+    return Object.freeze({
+      value: statusDecision,
+      state: 'RECORDED_STATUS',
+      paths: Object.freeze([status.provenance.path as string]),
+    });
+  }
+  return Object.freeze({
+    value: null,
+    state: 'UNAVAILABLE',
+    paths: Object.freeze([]),
+  });
+}
+
+export function projectLedgerEventForApi(
+  event: Readonly<LedgerEvent>,
+): Readonly<LedgerEventApiRecord> {
+  const payloadState = ledgerEventStoredPayloadState(event);
+  const projected = Object.fromEntries(LEDGER_EVENT_TEXT_FIELDS.map((field) => [
+    field,
+    projectLedgerEventMetadataField(field, event[field], event.data, payloadState),
+  ])) as Record<
+    keyof typeof LEDGER_EVENT_TEXT_LIMITS,
+    Readonly<ProjectedLedgerEventMetadataField>
+  >;
+  const decision = projectLedgerEventDecision(event.data, projected.status, payloadState);
+  const createdAtProvenRecorded = event.createdAt !== event.ts
+    || LEDGER_EVENT_TEXT_FIELDS.some((field) => event[field] !== null);
+  const fields = Object.freeze({
+    severity: projected.severity.provenance,
+    source: projected.source.provenance,
+    strategy: projected.strategy.provenance,
+    status: projected.status.provenance,
+    reason: projected.reason.provenance,
+    message: projected.message.provenance,
+    correlation: projected.correlation.provenance,
+    createdAt: createdAtProvenRecorded
+      ? Object.freeze({
+        state: 'RECORDED_V3' as const,
+        path: 'events.created_at',
+      })
+      : Object.freeze({
+        state: 'MIGRATED_LEGACY_TS_OR_EQUAL_RECORDED_V3' as const,
+        path: 'events.created_at',
+        basisPath: 'events.ts',
+      }),
+  });
+  return Object.freeze({
+    ...event,
+    severity: projected.severity.value,
+    source: projected.source.value,
+    strategy: projected.strategy.value,
+    status: projected.status.value,
+    reason: projected.reason.value,
+    message: projected.message.value,
+    correlation: projected.correlation.value,
+    decision: decision.value,
+    metadataProjection: Object.freeze({
+      schema: 'cosmos.ledger-event-api-metadata.v1',
+      payload: Object.freeze({
+        state: payloadState,
+        path: 'events.data',
+      }),
+      fields,
+      decision: Object.freeze({
+        value: decision.value,
+        state: decision.state,
+        paths: decision.paths,
+      }),
+    }),
+  });
+}
+
+interface ParsedStoredEventData {
+  readonly data: unknown;
+  readonly payloadState: LedgerEventStoredPayloadState;
+}
+
+function parsedStoredEventData(value: unknown): Readonly<ParsedStoredEventData> {
+  if (value === null) {
+    return Object.freeze({ data: null, payloadState: 'NO_STORED_PAYLOAD' });
+  }
+  if (typeof value !== 'string') {
+    return Object.freeze({ data: null, payloadState: 'INVALID_STORED_PAYLOAD' });
+  }
+  try {
+    return Object.freeze({
+      data: JSON.parse(value) as unknown,
+      payloadState: 'RECORDED_JSON',
+    });
+  } catch {
+    return Object.freeze({ data: null, payloadState: 'INVALID_STORED_PAYLOAD' });
+  }
+}
+
+const LEDGER_EVENT_SEVERITY_FILTERS = new Set<LedgerEventSeverityFilter>([
+  'CRITICAL',
+  'WARNING',
+  'INFO',
+  'DEBUG',
+]);
+const LEDGER_EVENT_SEVERITY_FAMILIES = Object.freeze({
+  CRITICAL: Object.freeze(['CRITICAL', 'ERROR', 'FATAL', 'EMERGENCY', 'ALERT']),
+  WARNING: Object.freeze(['WARNING', 'WARN']),
+  INFO: Object.freeze(['INFO', 'NOTICE', 'NORMAL']),
+  DEBUG: Object.freeze(['DEBUG', 'TRACE']),
+} satisfies Readonly<Record<LedgerEventSeverityFilter, readonly string[]>>);
+const LEDGER_EVENT_DECISION_FILTERS = new Set<LedgerEventDecisionFilter>([
+  'ACCEPTED',
+  'REJECTED',
+]);
+
+interface PreparedLedgerEventQueryOptions {
+  readonly severity?: LedgerEventSeverityFilter;
+  readonly decision?: LedgerEventDecisionFilter;
+  readonly includeDebug: boolean;
+}
+
+function prepareLedgerEventQueryOptions(
+  input: Readonly<LedgerEventQueryOptions> | undefined,
+): Readonly<PreparedLedgerEventQueryOptions> {
+  if (input === undefined) return Object.freeze({ includeDebug: true });
+  if (input === null || typeof input !== 'object' || Array.isArray(input)
+      || Object.getPrototypeOf(input) !== Object.prototype) {
+    throw new Error('LEDGER_EVENT_QUERY_OPTIONS_MALFORMED');
+  }
+  let descriptors: PropertyDescriptorMap;
+  try {
+    descriptors = Object.getOwnPropertyDescriptors(input);
+  } catch {
+    throw new Error('LEDGER_EVENT_QUERY_OPTIONS_MALFORMED');
+  }
+  const keys = Reflect.ownKeys(descriptors);
+  if (keys.some((key) => typeof key !== 'string'
+      || !['severity', 'decision', 'includeDebug'].includes(key))) {
+    throw new Error('LEDGER_EVENT_QUERY_OPTIONS_MALFORMED');
+  }
+  for (const descriptor of Object.values(descriptors)) {
+    if (!Object.hasOwn(descriptor, 'value')) {
+      throw new Error('LEDGER_EVENT_QUERY_OPTIONS_MALFORMED');
+    }
+  }
+  const severity = descriptors.severity?.value as unknown;
+  const decision = descriptors.decision?.value as unknown;
+  const includeDebug = descriptors.includeDebug === undefined
+    ? true
+    : descriptors.includeDebug.value as unknown;
+  if ((severity !== undefined && (typeof severity !== 'string'
+        || !LEDGER_EVENT_SEVERITY_FILTERS.has(severity as LedgerEventSeverityFilter)))
+      || (decision !== undefined && (typeof decision !== 'string'
+        || !LEDGER_EVENT_DECISION_FILTERS.has(decision as LedgerEventDecisionFilter)))
+      || typeof includeDebug !== 'boolean') {
+    throw new Error('LEDGER_EVENT_QUERY_OPTIONS_MALFORMED');
+  }
+  return Object.freeze({
+    severity: severity as LedgerEventSeverityFilter | undefined,
+    decision: decision as LedgerEventDecisionFilter | undefined,
+    includeDebug,
+  });
+}
+
+function ledgerEventQueryBoundaryFromPrepared(
+  q: string | undefined,
+  preparedOptions: Readonly<PreparedLedgerEventQueryOptions>,
+): Readonly<LedgerEventQueryBoundary> | null {
+  if (q !== undefined && normalizeLedgerEventSearch(q) === null) return null;
+  const reasons: LedgerEventQueryHorizonReason[] = [];
+  if (q !== undefined) reasons.push('TEXT_SEARCH');
+  if (preparedOptions.severity !== undefined
+      || preparedOptions.decision !== undefined
+      || !preparedOptions.includeDebug) {
+    reasons.push('PROJECTED_METADATA_FILTER');
+  }
+  return Object.freeze({
+    kind: reasons.length === 0 ? 'FILTERED_RETAINED_LEDGER' : 'RECENT_EVENT_ID_WINDOW',
+    maxIdSpan: reasons.length === 0 ? null : EVENT_SEARCH_SCAN_ROWS,
+    reasons: Object.freeze(reasons),
+  });
+}
+
+export function ledgerEventQueryBoundary(
+  q: string | undefined,
+  options: Readonly<LedgerEventQueryOptions> | undefined,
+): Readonly<LedgerEventQueryBoundary> | null {
+  return ledgerEventQueryBoundaryFromPrepared(q, prepareLedgerEventQueryOptions(options));
+}
+
+interface ParsedLedgerEventQueryHorizonToken {
+  readonly token: string;
+  readonly highWaterId: number;
+  readonly afterIdExclusive: number;
+  readonly queryIdentityDigest: string;
+}
+
+function parseLedgerEventQueryHorizonToken(
+  value: unknown,
+): Readonly<ParsedLedgerEventQueryHorizonToken> | null {
+  if (typeof value !== 'string') return null;
+  const match = EVENT_QUERY_HORIZON_TOKEN.exec(value);
+  if (match === null) return null;
+  const highWaterId = Number(match[1]);
+  const afterIdExclusive = Number(match[2]);
+  if (!Number.isSafeInteger(highWaterId)
+      || !Number.isSafeInteger(afterIdExclusive)
+      || afterIdExclusive !== Math.max(0, highWaterId - EVENT_SEARCH_SCAN_ROWS)) {
+    return null;
+  }
+  return Object.freeze({
+    token: value,
+    highWaterId,
+    afterIdExclusive,
+    queryIdentityDigest: match[3] as string,
+  });
+}
+
+export function normalizeLedgerEventQueryHorizonToken(value: string): string | null {
+  return parseLedgerEventQueryHorizonToken(value)?.token ?? null;
+}
+
+export function isLedgerEventQueryHorizonError(error: unknown): boolean {
+  return error instanceof Error && LEDGER_EVENT_QUERY_HORIZON_ERRORS.has(error.message);
+}
+
+interface LedgerEventQueryParts {
+  readonly clauses: readonly string[];
+  readonly params: readonly (string | number)[];
+  readonly boundary: Readonly<LedgerEventQueryBoundary>;
+  readonly horizonReasons: readonly LedgerEventQueryHorizonReason[];
+  readonly queryIdentityDigest: string;
+}
+
+function ledgerEventQueryIdentityDigest(input: Readonly<{
+  kind: string | null;
+  symbol: string | null;
+  q: string | null;
+  since: number | null;
+  until: number | null;
+  options: Readonly<PreparedLedgerEventQueryOptions>;
+}>): string {
+  return createHash('sha256')
+    .update(JSON.stringify([
+      'cosmos.ledger-event-query-horizon.v1',
+      input.kind,
+      input.symbol,
+      input.q,
+      input.since,
+      input.until,
+      input.options.severity ?? null,
+      input.options.decision ?? null,
+      input.options.includeDebug,
+    ]), 'utf8')
+    .digest('hex');
+}
+
+function ledgerEventSeverityProjectionSql(): string {
+  return `UPPER(TRIM(${EVENT_METADATA_PROJECTION_SQL_FUNCTION}(severity, data, 'severity')))`;
+}
+
+function ledgerEventQueryParts(
+  kind: string | undefined,
+  symbol: string | undefined,
+  q: string | undefined,
+  since: number | undefined,
+  until: number | undefined,
+  options: Readonly<LedgerEventQueryOptions> | undefined,
+): Readonly<LedgerEventQueryParts> | null {
+  const clauses: string[] = [];
+  const params: (string | number)[] = [];
+  const preparedOptions = prepareLedgerEventQueryOptions(options);
+  let normalizedQ: string | undefined;
+  if (q === undefined) {
+    normalizedQ = undefined;
+  } else {
+    const normalized = normalizeLedgerEventSearch(q);
+    if (normalized === null) return null;
+    normalizedQ = normalized;
+  }
+  const boundary = ledgerEventQueryBoundaryFromPrepared(normalizedQ, preparedOptions);
+  if (boundary === null) return null;
+  if (kind) { clauses.push('kind = ?'); params.push(kind); }
+  if (symbol) { clauses.push('symbol = ?'); params.push(symbol); }
+  if (normalizedQ !== undefined) {
+    const like = eventSearchPattern(normalizedQ);
+    if (!like) return null;
+    clauses.push(`(
+      data LIKE ? ESCAPE '\\' OR kind LIKE ? ESCAPE '\\' OR symbol LIKE ? ESCAPE '\\'
+      OR severity LIKE ? ESCAPE '\\' OR source LIKE ? ESCAPE '\\'
+      OR strategy LIKE ? ESCAPE '\\' OR status LIKE ? ESCAPE '\\'
+      OR reason LIKE ? ESCAPE '\\' OR message LIKE ? ESCAPE '\\'
+      OR correlation LIKE ? ESCAPE '\\'
+    )`);
+    params.push(like, like, like, like, like, like, like, like, like, like);
+  }
+  if (since !== undefined && Number.isFinite(since)) { clauses.push('ts >= ?'); params.push(since); }
+  if (until !== undefined && Number.isFinite(until)) { clauses.push('ts < ?'); params.push(until); }
+  const severityProjection = ledgerEventSeverityProjectionSql();
+  if (preparedOptions.severity !== undefined) {
+    const family = LEDGER_EVENT_SEVERITY_FAMILIES[preparedOptions.severity];
+    clauses.push(`${severityProjection} IN (${family.map(() => '?').join(', ')})`);
+    params.push(...family);
+  }
+  if (!preparedOptions.includeDebug) {
+    const debugFamily = LEDGER_EVENT_SEVERITY_FAMILIES.DEBUG;
+    clauses.push(`COALESCE(${severityProjection}, '') NOT IN (${
+      debugFamily.map(() => '?').join(', ')
+    })`);
+    params.push(...debugFamily);
+  }
+  if (preparedOptions.decision !== undefined) {
+    clauses.push(`${EVENT_DECISION_PROJECTION_SQL_FUNCTION}(status, data) = ?`);
+    params.push(preparedOptions.decision);
+  }
+  return Object.freeze({
+    clauses: Object.freeze(clauses),
+    params: Object.freeze(params),
+    boundary,
+    horizonReasons: boundary.reasons,
+    queryIdentityDigest: ledgerEventQueryIdentityDigest({
+      kind: kind || null,
+      symbol: symbol || null,
+      q: normalizedQ ?? null,
+      since: since !== undefined && Number.isFinite(since) ? since : null,
+      until: until !== undefined && Number.isFinite(until) ? until : null,
+      options: preparedOptions,
+    }),
+  });
+}
+
+interface LedgerEventRetainedBounds {
+  readonly highWaterId: number;
+  readonly retainedFromId: number | null;
+}
+
+function readLedgerEventRetainedBounds(
+  db: Database.Database,
+): Readonly<LedgerEventRetainedBounds> {
+  const high = db.prepare(
+    'SELECT COALESCE(MAX(id), 0) AS highWaterId FROM events',
+  ).safeIntegers().get() as { readonly highWaterId: bigint };
+  const retained = db.prepare(
+    'SELECT MIN(id) AS retainedFromId FROM events',
+  ).safeIntegers().get() as { readonly retainedFromId: bigint | null };
+  if (high.highWaterId < 0n
+      || high.highWaterId > BigInt(Number.MAX_SAFE_INTEGER)
+      || (retained.retainedFromId !== null
+        && (retained.retainedFromId < 1n
+          || retained.retainedFromId > BigInt(Number.MAX_SAFE_INTEGER)))) {
+    throw new Error('LEDGER_EVENT_COUNT_MALFORMED');
+  }
+  return Object.freeze({
+    highWaterId: Number(high.highWaterId),
+    retainedFromId: retained.retainedFromId === null ? null : Number(retained.retainedFromId),
+  });
+}
+
+function ledgerEventQueryWindow(
+  filter: Readonly<LedgerEventQueryParts>,
+  retainedBounds: Readonly<LedgerEventRetainedBounds>,
+  requestedToken: string | undefined,
+): Readonly<LedgerEventQueryWindow> | null {
+  if (filter.boundary.kind !== 'RECENT_EVENT_ID_WINDOW') {
+    if (requestedToken !== undefined) {
+      throw new Error('LEDGER_EVENT_QUERY_HORIZON_UNEXPECTED');
+    }
+    return null;
+  }
+
+  let highWaterId: number;
+  let afterIdExclusive: number;
+  let token: string;
+  if (requestedToken !== undefined) {
+    const parsed = parseLedgerEventQueryHorizonToken(requestedToken);
+    if (parsed === null) throw new Error('LEDGER_EVENT_QUERY_HORIZON_MALFORMED');
+    if (parsed.queryIdentityDigest !== filter.queryIdentityDigest) {
+      throw new Error('LEDGER_EVENT_QUERY_HORIZON_FILTER_MISMATCH');
+    }
+    if (parsed.highWaterId > retainedBounds.highWaterId) {
+      throw new Error('LEDGER_EVENT_QUERY_HORIZON_EXPIRED');
+    }
+    highWaterId = parsed.highWaterId;
+    afterIdExclusive = parsed.afterIdExclusive;
+    token = parsed.token;
+  } else {
+    highWaterId = retainedBounds.highWaterId;
+    afterIdExclusive = Math.max(0, highWaterId - EVENT_SEARCH_SCAN_ROWS);
+    token = `v1.${highWaterId}.${afterIdExclusive}.${filter.queryIdentityDigest}`;
+  }
+
+  return Object.freeze({
+    kind: 'RECENT_EVENT_ID_WINDOW',
+    maxIdSpan: EVENT_SEARCH_SCAN_ROWS,
+    token,
+    highWaterId,
+    afterIdExclusive,
+    reasons: filter.horizonReasons,
+  });
+}
+
+// SQLite documents MATERIALIZED as an optimization fence. Combined with
+// NOT INDEXED (which still permits rowid lookup), this forces every projected
+// metadata/text query to first admit at most one immutable 25,000-ID rowid
+// range before day/kind/payload filters can influence index selection.
+const LEDGER_EVENT_HORIZON_CTE = `
+  WITH event_horizon AS MATERIALIZED (
+    SELECT *
+    FROM events NOT INDEXED
+    WHERE id > ? AND id <= ?
+    LIMIT ?
+  )
+`;
+
+interface LedgerEventQuerySource {
+  readonly prefix: string;
+  readonly table: 'events' | 'event_horizon';
+  readonly params: readonly number[];
+}
+
+function ledgerEventQuerySource(
+  window: Readonly<LedgerEventQueryWindow> | null,
+): Readonly<LedgerEventQuerySource> {
+  if (window === null) {
+    return Object.freeze({ prefix: '', table: 'events', params: Object.freeze([]) });
+  }
+  return Object.freeze({
+    prefix: LEDGER_EVENT_HORIZON_CTE,
+    table: 'event_horizon',
+    params: Object.freeze([
+      window.afterIdExclusive,
+      window.highWaterId,
+      EVENT_SEARCH_SCAN_ROWS,
+    ]),
   });
 }
 
@@ -1645,6 +2333,55 @@ export class Ledger extends EventEmitter {
     mkdirSync(dataDir, { recursive: true });
     this.db = new Database(databasePath);
     try {
+      this.db.function(
+        EVENT_METADATA_PROJECTION_SQL_FUNCTION,
+        { deterministic: true },
+        (recorded: unknown, serializedData: unknown, field: unknown) => {
+          if (typeof field !== 'string' || !LEDGER_EVENT_TEXT_FIELDS.includes(
+            field as keyof typeof LEDGER_EVENT_TEXT_LIMITS,
+          )) {
+            throw new Error('LEDGER_EVENT_METADATA_PROJECTION_FIELD_MALFORMED');
+          }
+          const metadataField = field as keyof typeof LEDGER_EVENT_TEXT_LIMITS;
+          let recordedValue: string | null;
+          try {
+            recordedValue = prepareLedgerEventText(metadataField, recorded);
+          } catch {
+            throw new Error(`LEDGER_EVENT_${metadataField.toUpperCase()}_MALFORMED`);
+          }
+          const parsed = parsedStoredEventData(serializedData);
+          return projectLedgerEventMetadataField(
+            metadataField,
+            recordedValue,
+            parsed.data,
+            parsed.payloadState,
+          ).value;
+        },
+      );
+      this.db.function(
+        EVENT_DECISION_PROJECTION_SQL_FUNCTION,
+        { deterministic: true },
+        (recordedStatus: unknown, serializedData: unknown) => {
+          let statusValue: string | null;
+          try {
+            statusValue = prepareLedgerEventText('status', recordedStatus);
+          } catch {
+            throw new Error('LEDGER_EVENT_STATUS_MALFORMED');
+          }
+          const parsed = parsedStoredEventData(serializedData);
+          const status = projectLedgerEventMetadataField(
+            'status',
+            statusValue,
+            parsed.data,
+            parsed.payloadState,
+          );
+          return projectLedgerEventDecision(
+            parsed.data,
+            status,
+            parsed.payloadState,
+          ).value;
+        },
+      );
       const startupSchemaVersion = this.db.pragma('user_version', { simple: true }) as unknown;
       if (!Number.isSafeInteger(startupSchemaVersion) || (startupSchemaVersion as number) < 0) {
         throw new Error('LEDGER_SCHEMA_VERSION_MALFORMED');
@@ -2105,89 +2842,172 @@ export class Ledger extends EventEmitter {
     return exactEvents;
   }
 
-  recentEvents(limit = 100, kind?: string, symbol?: string, q?: string, since?: number, beforeId?: number, until?: number, offset = 0, afterId?: number): LedgerEvent[] {
-    const clauses: string[] = [];
-    const params: (string | number)[] = [];
-    if (kind) {
-      clauses.push('kind = ?');
-      params.push(kind);
+  recentEventsPage(
+    limit = 100,
+    kind?: string,
+    symbol?: string,
+    q?: string,
+    since?: number,
+    beforeId?: number,
+    until?: number,
+    offset = 0,
+    afterId?: number,
+    options?: Readonly<LedgerEventQueryOptions>,
+    horizonToken?: string,
+  ): Readonly<LedgerEventPage> {
+    const base = ledgerEventQueryParts(kind, symbol, q, since, until, options);
+    if (base === null) {
+      return Object.freeze({ items: Object.freeze([]), queryHorizon: null });
     }
-    if (symbol) {
-      clauses.push('symbol = ?');
-      params.push(symbol);
-    }
-    if (q) {
-      const like = eventSearchPattern(q);
-      if (!like) return [];
-      clauses.push("id > (SELECT COALESCE(MAX(id), 0) - ? FROM events)");
-      params.push(EVENT_SEARCH_SCAN_ROWS);
-      clauses.push(`(
-        data LIKE ? ESCAPE '\\' OR kind LIKE ? ESCAPE '\\' OR symbol LIKE ? ESCAPE '\\'
-        OR severity LIKE ? ESCAPE '\\' OR source LIKE ? ESCAPE '\\'
-        OR strategy LIKE ? ESCAPE '\\' OR status LIKE ? ESCAPE '\\'
-        OR reason LIKE ? ESCAPE '\\' OR message LIKE ? ESCAPE '\\'
-        OR correlation LIKE ? ESCAPE '\\'
-      )`);
-      params.push(like, like, like, like, like, like, like, like, like, like);
-    }
-    if (since !== undefined && Number.isFinite(since)) {
-      clauses.push('ts >= ?');
-      params.push(since);
-    }
-    if (beforeId !== undefined && Number.isFinite(beforeId)) {
-      clauses.push('id < ?');
-      params.push(beforeId);
-    }
-    if (afterId !== undefined && Number.isFinite(afterId)) {
-      clauses.push('id > ?');
-      params.push(afterId);
-    }
-    if (until !== undefined && Number.isFinite(until)) {
-      clauses.push('ts < ?');
-      params.push(until);
-    }
-    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-    const safeLimit = boundedInteger(limit, 1, EVENT_RESULT_MAX, 100);
-    const safeOffset = boundedInteger(offset, 0, Number.MAX_SAFE_INTEGER, 0);
-    const order = afterId === undefined ? 'DESC' : 'ASC';
-    const rows = this.db
-      .prepare(`SELECT * FROM events ${where} ORDER BY id ${order} LIMIT ? OFFSET ?`)
-      .all(...params, safeLimit, safeOffset) as EventDbRow[];
-    return rows.map(parseEvent);
+    return this.db.transaction(() => {
+      const retainedBounds = base.boundary.kind === 'RECENT_EVENT_ID_WINDOW'
+        ? readLedgerEventRetainedBounds(this.db)
+        : Object.freeze({ highWaterId: 0, retainedFromId: null });
+      const queryHorizon = ledgerEventQueryWindow(base, retainedBounds, horizonToken);
+      const source = ledgerEventQuerySource(queryHorizon);
+      const clauses = [...base.clauses];
+      const params = [...base.params];
+      if (beforeId !== undefined && Number.isFinite(beforeId)) {
+        clauses.push('id < ?');
+        params.push(beforeId);
+      }
+      if (afterId !== undefined && Number.isFinite(afterId)) {
+        clauses.push('id > ?');
+        params.push(afterId);
+      }
+      const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+      const safeLimit = boundedInteger(limit, 1, EVENT_RESULT_MAX, 100);
+      const safeOffset = boundedInteger(offset, 0, Number.MAX_SAFE_INTEGER, 0);
+      const order = afterId === undefined ? 'DESC' : 'ASC';
+      const rows = this.db.prepare(`
+        ${source.prefix}
+        SELECT * FROM ${source.table}
+        ${where}
+        ORDER BY id ${order}
+        LIMIT ? OFFSET ?
+      `).all(...source.params, ...params, safeLimit, safeOffset) as EventDbRow[];
+      return Object.freeze({
+        items: Object.freeze(rows.map(parseEvent)),
+        queryHorizon,
+      });
+    })();
   }
 
-  countEvents(kind?: string, symbol?: string, q?: string, since?: number, until?: number): number {
-    const clauses: string[] = [];
-    const params: (string | number)[] = [];
-    if (kind) { clauses.push('kind = ?'); params.push(kind); }
-    if (symbol) { clauses.push('symbol = ?'); params.push(symbol); }
-    if (q) {
-      const like = eventSearchPattern(q);
-      if (!like) return 0;
-      clauses.push("id > (SELECT COALESCE(MAX(id), 0) - ? FROM events)");
-      params.push(EVENT_SEARCH_SCAN_ROWS);
-      clauses.push(`(
-        data LIKE ? ESCAPE '\\' OR kind LIKE ? ESCAPE '\\' OR symbol LIKE ? ESCAPE '\\'
-        OR severity LIKE ? ESCAPE '\\' OR source LIKE ? ESCAPE '\\'
-        OR strategy LIKE ? ESCAPE '\\' OR status LIKE ? ESCAPE '\\'
-        OR reason LIKE ? ESCAPE '\\' OR message LIKE ? ESCAPE '\\'
-        OR correlation LIKE ? ESCAPE '\\'
-      )`);
-      params.push(like, like, like, like, like, like, like, like, like, like);
+  recentEvents(
+    limit = 100,
+    kind?: string,
+    symbol?: string,
+    q?: string,
+    since?: number,
+    beforeId?: number,
+    until?: number,
+    offset = 0,
+    afterId?: number,
+    options?: Readonly<LedgerEventQueryOptions>,
+    horizonToken?: string,
+  ): LedgerEvent[] {
+    return [...this.recentEventsPage(
+      limit,
+      kind,
+      symbol,
+      q,
+      since,
+      beforeId,
+      until,
+      offset,
+      afterId,
+      options,
+      horizonToken,
+    ).items];
+  }
+
+  countEvents(
+    kind?: string,
+    symbol?: string,
+    q?: string,
+    since?: number,
+    until?: number,
+    options?: Readonly<LedgerEventQueryOptions>,
+    horizonToken?: string,
+  ): number {
+    return this.countEventsWithScope(
+      kind,
+      symbol,
+      q,
+      since,
+      until,
+      options,
+      horizonToken,
+    ).count;
+  }
+
+  countEventsWithScope(
+    kind?: string,
+    symbol?: string,
+    q?: string,
+    since?: number,
+    until?: number,
+    options?: Readonly<LedgerEventQueryOptions>,
+    horizonToken?: string,
+  ): Readonly<LedgerEventCountScope> {
+    const filter = ledgerEventQueryParts(kind, symbol, q, since, until, options);
+    if (filter === null) {
+      return Object.freeze({
+        count: 0,
+        scope: 'INVALID_QUERY',
+        completeness: 'INVALID_QUERY',
+        queryHorizon: null,
+        qHorizon: null,
+      });
     }
-    if (since !== undefined && Number.isFinite(since)) { clauses.push('ts >= ?'); params.push(since); }
-    if (until !== undefined && Number.isFinite(until)) { clauses.push('ts < ?'); params.push(until); }
-    const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
-    const row = this.db.prepare(`
-      SELECT COUNT(*) AS count
-      FROM events ${where}
-    `).safeIntegers().get(...params) as {
-      readonly count: bigint;
-    };
-    if (row.count > BigInt(Number.MAX_SAFE_INTEGER)) {
-      throw new Error('LEDGER_EVENT_COUNT_MALFORMED');
-    }
-    return Number(row.count);
+    return this.db.transaction(() => {
+      const retainedBounds = filter.boundary.kind === 'RECENT_EVENT_ID_WINDOW'
+        ? readLedgerEventRetainedBounds(this.db)
+        : Object.freeze({ highWaterId: 0, retainedFromId: null });
+      const queryWindow = ledgerEventQueryWindow(filter, retainedBounds, horizonToken);
+      const source = ledgerEventQuerySource(queryWindow);
+      const where = filter.clauses.length ? `WHERE ${filter.clauses.join(' AND ')}` : '';
+      const row = this.db.prepare(`
+        ${source.prefix}
+        SELECT COUNT(*) AS count
+        FROM ${source.table}
+        ${where}
+      `).safeIntegers().get(...source.params, ...filter.params) as {
+        readonly count: bigint;
+      };
+      if (row.count < 0n || row.count > BigInt(Number.MAX_SAFE_INTEGER)) {
+        throw new Error('LEDGER_EVENT_COUNT_MALFORMED');
+      }
+      const count = Number(row.count);
+      if (queryWindow === null) {
+        return Object.freeze({
+          count,
+          scope: 'FILTERED_RETAINED_LEDGER' as const,
+          completeness: 'COMPLETE_RETAINED_SET' as const,
+          queryHorizon: null,
+          qHorizon: null,
+        });
+      }
+      const complete = retainedBounds.retainedFromId === null
+        || (retainedBounds.highWaterId === queryWindow.highWaterId
+          && retainedBounds.retainedFromId > queryWindow.afterIdExclusive);
+      const queryHorizon: LedgerEventQueryHorizon = Object.freeze({
+        ...queryWindow,
+        ledgerHighWaterId: retainedBounds.highWaterId,
+        retainedFromId: retainedBounds.retainedFromId,
+        complete,
+        appliesTo: Object.freeze(['RECENT_EVENTS', 'COUNT'] as const),
+      });
+      return Object.freeze({
+        count,
+        scope: 'RECENT_EVENT_ID_WINDOW' as const,
+        completeness: complete
+          ? 'COMPLETE_RETAINED_SET' as const
+          : 'BOUNDED_RECENT_ID_HORIZON' as const,
+        queryHorizon,
+        qHorizon: filter.horizonReasons.includes('TEXT_SEARCH') ? queryHorizon : null,
+      });
+    })();
   }
 
   eventsSince(ts: number, kind: string): LedgerEvent[] {
@@ -5614,11 +6434,14 @@ function unprovenProductOperatorEventPage(
 
 function parseEvent(r: EventDbRow): LedgerEvent {
   let data: unknown = null;
-  if (r.data) {
+  let payloadState: LedgerEventStoredPayloadState = 'NO_STORED_PAYLOAD';
+  if (r.data !== null) {
     try {
       data = JSON.parse(r.data) as unknown;
+      payloadState = 'RECORDED_JSON';
     } catch {
       data = { unavailable: true, reason: 'invalid_json' };
+      payloadState = 'INVALID_STORED_PAYLOAD';
     }
   }
   const metadata = prepareStoredLedgerEventMetadata({
@@ -5631,7 +6454,7 @@ function parseEvent(r: EventDbRow): LedgerEvent {
     correlation: r.correlation,
     createdAt: r.created_at,
   });
-  return {
+  const event: LedgerEventWithStoredPayloadState = {
     id: r.id,
     ts: r.ts,
     kind: r.kind,
@@ -5646,6 +6469,13 @@ function parseEvent(r: EventDbRow): LedgerEvent {
     correlation: metadata.correlation,
     createdAt: metadata.createdAt as number,
   };
+  Object.defineProperty(event, LEDGER_EVENT_STORED_PAYLOAD_STATE, {
+    configurable: false,
+    enumerable: false,
+    writable: false,
+    value: payloadState,
+  });
+  return event;
 }
 
 function parseUnresolvedOrderRow(row: UnresolvedOrderDbRow): UnresolvedOrderRequest[] {
@@ -5778,9 +6608,30 @@ function nullableBoundedText(value: unknown, maxLength: number): string | null {
   return boundedText(value, maxLength) || null;
 }
 
-function eventSearchPattern(value: string): string | null {
+export function normalizeLedgerEventSearch(value: string): string | null {
+  if (typeof value !== 'string') return null;
   const literal = value.normalize('NFKC').trim();
-  if (literal.length < 2 || literal.length > EVENT_SEARCH_MAX_CHARS) return null;
+  if (literal.length < 2
+      || literal.length > EVENT_SEARCH_MAX_CHARS) {
+    return null;
+  }
+  return literal;
+}
+
+export function normalizeLedgerEventApiSearch(value: string): string | null {
+  const literal = normalizeLedgerEventSearch(value);
+  if (literal === null
+      || literal.length > EVENT_API_SEARCH_MAX_CHARS
+      || /^[%_*\s]+$/u.test(literal)
+      || /[\p{Cc}\p{Bidi_Control}]/u.test(literal)) {
+    return null;
+  }
+  return literal;
+}
+
+function eventSearchPattern(value: string): string | null {
+  const literal = normalizeLedgerEventSearch(value);
+  if (literal === null) return null;
   const escaped = literal.replace(/[\\%_]/g, (character) => `\\${character}`);
   return `%${escaped}%`;
 }

@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { resolveMarketFreshness, useStore } from '../store';
+import {
+  resolveMarketFreshness,
+  useStore,
+  type CompatibilityStateStatus,
+  type MarketFreshnessStatus,
+} from '../store';
 import { TokenIcon, brandColor } from '../components/TokenIcon';
 import { Num } from '../components/Num';
 import { EmptyState } from '../components/ui';
@@ -9,11 +14,12 @@ import { primeIcons } from '../lib/iconManifest';
 import { tokenName } from '../lib/tokenNames';
 import { PillSelect, pageList, Star } from '../components/PillSelect';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
+import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import type { MarketRow } from '../types';
 import './Markets.css';
 
 type View = 'overview' | 'derivatives' | 'basis' | 'liquidity';
-type Filter = 'all' | 'watchlist' | 'paired' | 'books' | 'spotOnly' | 'movers';
+type Filter = 'all' | 'watchlist' | 'paired' | 'books' | 'spotOnly';
 type SortKey =
   | 'base'
   | 'spot'
@@ -48,7 +54,6 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'paired', label: 'Spot + Perp' },
   { id: 'books', label: 'Executable Books' },
   { id: 'spotOnly', label: 'Spot Only' },
-  { id: 'movers', label: 'Liquid Movers' },
 ];
 
 function readMarketView(): View {
@@ -210,7 +215,74 @@ function ChangeCell({ value }: { value: number | null | undefined }) {
   );
 }
 
+function VolumeValue({ value }: { value: number | null | undefined }) {
+  return finite(value)
+    ? <Num value={value}>{fmtMoney(value)}</Num>
+    : <span className="mkx-dim">UNKNOWN</span>;
+}
+
+export type MarketRuntimeTruth = Readonly<{
+  current: boolean;
+  state: 'LOADING' | 'CURRENT' | 'UNAVAILABLE';
+  label: 'Feed Loading' | 'Feed Current' | 'Feed Unavailable';
+  reason: string | null;
+}>;
+
+export function resolveMarketRuntimeTruth(input: Readonly<{
+  canonicalContinuity: 'UNPROVEN' | 'BACKFILL' | 'PROVEN' | 'BLOCKED';
+  canonicalMarketFeedReadinessProven: boolean;
+  canonicalLoading: boolean;
+  canonicalReason: string | null;
+  marketStatus: CompatibilityStateStatus;
+  marketFreshnessStatus: MarketFreshnessStatus;
+  marketsLastSuccessAtMs: number | null;
+  marketsError: string | null;
+}>): MarketRuntimeTruth {
+  const canonicalReady = input.canonicalContinuity === 'PROVEN'
+    && input.canonicalMarketFeedReadinessProven;
+  if (!canonicalReady) {
+    if (input.canonicalLoading && input.marketStatus === 'LOADING') {
+      return Object.freeze({ current: false, state: 'LOADING', label: 'Feed Loading', reason: null });
+    }
+    return Object.freeze({
+      current: false,
+      state: 'UNAVAILABLE',
+      label: 'Feed Unavailable',
+      reason: input.canonicalReason ?? 'CANONICAL_MARKET_FEED_READINESS_UNAVAILABLE',
+    });
+  }
+  if (input.marketStatus === 'LOADING') {
+    return Object.freeze({ current: false, state: 'LOADING', label: 'Feed Loading', reason: null });
+  }
+  if (input.marketStatus !== 'CURRENT') {
+    return Object.freeze({
+      current: false,
+      state: 'UNAVAILABLE',
+      label: 'Feed Unavailable',
+      reason: input.marketsError ?? `MARKET_SOURCE_${input.marketStatus}`,
+    });
+  }
+  if (input.marketsLastSuccessAtMs === null) {
+    return Object.freeze({
+      current: false,
+      state: 'UNAVAILABLE',
+      label: 'Feed Unavailable',
+      reason: 'MARKET_SOURCE_SUCCESS_TIMESTAMP_UNAVAILABLE',
+    });
+  }
+  if (input.marketFreshnessStatus !== 'LIVE') {
+    return Object.freeze({
+      current: false,
+      state: 'UNAVAILABLE',
+      label: 'Feed Unavailable',
+      reason: input.marketsError ?? `MARKET_SOURCE_${input.marketFreshnessStatus}`,
+    });
+  }
+  return Object.freeze({ current: true, state: 'CURRENT', label: 'Feed Current', reason: null });
+}
+
 export function Markets() {
+  const { binding } = useProductControlRoomContext();
   const {
     markets,
     marketStatus,
@@ -234,8 +306,6 @@ export function Markets() {
   const [now, setNow] = useState(() => Date.now());
 
   const watchlist = state?.config.watchlist ?? [];
-  const feesPct = state?.config.feesPct ?? 0;
-  const marketReadSucceeded = marketsLastSuccessAtMs !== null;
   const iconBases = useMemo(() => [...new Set(markets.map((market) => market.base))], [markets]);
 
   useEffect(() => { primeIcons(iconBases); }, [iconBases]);
@@ -247,25 +317,6 @@ export function Markets() {
     try { window.localStorage.setItem(VIEW_STORAGE, view); } catch { /* Optional preference. */ }
   }, [view]);
 
-  const withChange = markets.filter((market) => finite(market.change24hPct));
-  const gainers = withChange.filter((market) => (market.change24hPct ?? 0) > 0).length;
-  const losers = withChange.filter((market) => (market.change24hPct ?? 0) < 0).length;
-  const pairedCount = markets.filter((market) => market.hasSpot && market.hasPerp).length;
-  const executableCount = markets.filter(hasExecutableBooks).length;
-  // F-064: unknown per-row volumes must not be summed as zeros into a
-  // headline tile. Sum only known rows and disclose the coverage.
-  const volumeKnownRows = markets.filter((market) => finite(market.quoteVolume24h));
-  const totalVolume = volumeKnownRows.reduce((sum, market) => sum + (market.quoteVolume24h ?? 0), 0);
-  const volumeCoverageComplete = volumeKnownRows.length === markets.length;
-  const byVolume = useMemo(
-    () => [...markets].filter((market) => (market.quoteVolume24h ?? 0) > 0).sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0)),
-    [markets],
-  );
-  const top50 = byVolume.slice(0, 50);
-  const top50Weight = top50.reduce((sum, market) => sum + (market.quoteVolume24h ?? 0), 0);
-  const top50Pulse = top50Weight > 0
-    ? top50.reduce((sum, market) => sum + (market.change24hPct ?? 0) * (market.quoteVolume24h ?? 0), 0) / top50Weight
-    : null;
   const marketFreshness = resolveMarketFreshness({
     connected,
     error: marketsError,
@@ -273,21 +324,43 @@ export function Markets() {
     nowMs: now,
     staleAfterMs: Math.max(12_000, prefs.refreshSec * 2500),
   });
-  const marketFreshnessLabel = marketStatus === 'LOADING'
-    ? 'Feed Loading'
-    : marketStatus === 'UNAVAILABLE'
-      ? 'Feed Unavailable'
-      : marketStatus === 'STALE'
-        ? 'STALE LAST-KNOWN'
-        : marketFreshness.status === 'ERROR'
-          ? 'Feed Error'
-          : marketFreshness.status === 'UNKNOWN'
-            ? 'Freshness Unknown'
-            : marketFreshness.status === 'LIVE'
-              ? `Live · ${fmtLiveAge(marketFreshness.ageMs)}`
-              : marketFreshness.status === 'STALE'
-                ? `Data Stale · ${fmtLiveAge(marketFreshness.ageMs)}`
-                : 'Reconnecting';
+  const canonicalMarketSurface = binding.snapshot?.surfaces.markets;
+  const marketEvidenceReason = canonicalMarketSurface?.evidence.find((datum) => datum.unavailableReason)?.unavailableReason ?? null;
+  const canonicalMarketReason = binding.continuity !== 'PROVEN'
+    ? binding.error ?? `CANONICAL_CONTINUITY_${binding.continuity}`
+    : marketEvidenceReason
+      ?? canonicalMarketSurface?.blocker
+      ?? binding.snapshot?.canonicalCockpit.marketFeedReadiness.detail
+      ?? binding.error
+      ?? 'CANONICAL_MARKET_FEED_READINESS_UNAVAILABLE';
+  const marketTruth = resolveMarketRuntimeTruth({
+    canonicalContinuity: binding.continuity,
+    canonicalMarketFeedReadinessProven: binding.snapshot?.canonicalCockpit.marketFeedReadiness.proven ?? false,
+    canonicalLoading: binding.loading && binding.snapshot === null && binding.error === null,
+    canonicalReason: canonicalMarketReason,
+    marketStatus,
+    marketFreshnessStatus: marketFreshness.status,
+    marketsLastSuccessAtMs,
+    marketsError,
+  });
+  const marketReadSucceeded = marketTruth.current;
+  const marketFreshnessLabel = marketTruth.current
+    ? `Live · ${fmtLiveAge(marketFreshness.ageMs)}`
+    : marketTruth.label;
+  const marketUnassertedDetail = marketTruth.state === 'LOADING'
+    ? 'Awaiting current source truth'
+    : 'Canonical source unavailable';
+
+  const knownChanges24h = markets.map((market) => market.change24hPct).filter(finite);
+  const changeCoverageComplete = markets.length > 0 && knownChanges24h.length === markets.length;
+  const breadthKnown = marketReadSucceeded && changeCoverageComplete;
+  const gainers = knownChanges24h.filter((change) => change > 0).length;
+  const losers = knownChanges24h.filter((change) => change < 0).length;
+  const pairedCount = markets.filter((market) => market.hasSpot && market.hasPerp).length;
+  const executableCount = markets.filter(hasExecutableBooks).length;
+  const volumeKnownRows = markets.filter((market) => finite(market.quoteVolume24h));
+  const totalVolume = volumeKnownRows.reduce((sum, market) => sum + (market.quoteVolume24h ?? 0), 0);
+  const volumeCoverageComplete = markets.length > 0 && volumeKnownRows.length === markets.length;
 
   const rows = useMemo(() => {
     let filtered = markets;
@@ -300,7 +373,6 @@ export function Markets() {
       case 'paired': filtered = filtered.filter((market) => market.hasSpot && market.hasPerp); break;
       case 'books': filtered = filtered.filter(hasExecutableBooks); break;
       case 'spotOnly': filtered = filtered.filter((market) => market.hasSpot && !market.hasPerp); break;
-      case 'movers': filtered = filtered.filter((market) => finite(market.change24hPct) && Math.abs(market.change24hPct) >= 2 && (market.quoteVolume24h ?? 0) >= 1_000_000); break;
       case 'all': break;
     }
     const direction = sortDesc ? -1 : 1;
@@ -319,10 +391,10 @@ export function Markets() {
 
   useEffect(() => setPageN(0), [filter, search, sortKey, sortDesc, pageSize, view]);
 
-  const pages = Math.max(1, Math.ceil(rows.length / pageSize));
+  const pages = marketReadSucceeded ? Math.max(1, Math.ceil(rows.length / pageSize)) : 1;
   const safePage = Math.min(pageN, pages - 1);
-  const visible = rows.slice(safePage * pageSize, safePage * pageSize + pageSize);
-  const visibleStart = rows.length ? safePage * pageSize + 1 : 0;
+  const visible = marketReadSucceeded ? rows.slice(safePage * pageSize, safePage * pageSize + pageSize) : [];
+  const visibleStart = visible.length ? safePage * pageSize + 1 : 0;
   const visibleEnd = safePage * pageSize + visible.length;
 
   const applyView = (next: View) => {
@@ -358,22 +430,18 @@ export function Markets() {
 
   const renderViewHead = () => {
     if (view === 'derivatives') return <>{tableHead('Perp Mark', 'perpChange24hPct')}{tableHead('Funding', 'fundingRate')}{tableHead('Open Interest', 'openInterestUsd')}{tableHead('OI Change', 'openInterestChangePct')}{tableHead('Liq 15m', 'liquidations15mUsd')}{tableHead('Perp Volume', 'perpVolume24h')}</>;
-    if (view === 'basis') return <>{tableHead('Best Executable', 'executableBasisBestPct')}{tableHead('Long Spot', 'executableBasisLongSpotPct')}{tableHead('Short Spot', 'executableBasisShortSpotPct')}{tableHead('Net After Fees', 'executableBasisBestPct')}{tableHead('Funding', 'fundingRate')}{tableHead('Direction', null, 'l', 'mkx-direction-col')}</>;
+    if (view === 'basis') return <>{tableHead('Best Executable', 'executableBasisBestPct')}{tableHead('Long Spot', 'executableBasisLongSpotPct')}{tableHead('Short Spot', 'executableBasisShortSpotPct')}{tableHead('Funding', 'fundingRate')}{tableHead('Direction', null, 'l', 'mkx-direction-col')}</>;
     if (view === 'liquidity') return <>{tableHead('Spot Spread', 'spotSpreadPct')}{tableHead('Perp Spread', 'perpSpreadPct')}{tableHead('Top Depth', 'depth')}{tableHead('Volume', 'quoteVolume24h')}{tableHead('24h Range', null)}{tableHead('Change', 'change24hPct')}</>;
     return <>{tableHead('Market Price', 'spot')}{tableHead('Native Chart', 'sparkGrowth', 'r', 'mkx-chart-col')}{tableHead('Change', 'change24hPct')}{tableHead('Volume', 'quoteVolume24h')}{tableHead('Open Interest', 'openInterestUsd')}{tableHead('Funding', 'fundingRate')}</>;
   };
 
   const renderViewCells = (market: MarketRow) => {
-    if (view === 'derivatives') return <><td className="r mkx-num"><Num value={market.perpMark}>{fmtPrice(market.perpMark)}</Num></td><td className={`r mkx-num ${signClass(market.fundingRate)}`}><Num value={market.fundingRate}>{fmtFunding(market.fundingRate)}</Num></td><td className="r mkx-num"><Num value={market.openInterestUsd}>{fmtMoney(market.openInterestUsd)}</Num></td><ChangeCell value={market.openInterestChangePct} /><td className="r mkx-num"><Num value={market.liquidations15mUsd}>{fmtMoney(market.liquidations15mUsd)}</Num></td><td className="r mkx-num"><Num value={market.perpVolume24h}>{fmtMoney(market.perpVolume24h)}</Num></td></>;
-    if (view === 'basis') {
-      const net = finite(market.executableBasisBestPct) ? market.executableBasisBestPct - feesPct : null;
-      return <><td className={`r mkx-num ${signClass(market.executableBasisBestPct)}`}><Num value={market.executableBasisBestPct}>{fmtBasis(market.executableBasisBestPct)}</Num></td><td className={`r mkx-num ${signClass(market.executableBasisLongSpotPct)}`}><Num value={market.executableBasisLongSpotPct}>{fmtBasis(market.executableBasisLongSpotPct)}</Num></td><td className={`r mkx-num ${signClass(market.executableBasisShortSpotPct)}`}><Num value={market.executableBasisShortSpotPct}>{fmtBasis(market.executableBasisShortSpotPct)}</Num></td><td className={`r mkx-num ${signClass(net)}`}><Num value={net}>{fmtBasis(net)}</Num></td><td className={`r mkx-num ${signClass(market.fundingRate)}`}><Num value={market.fundingRate}>{fmtFunding(market.fundingRate)}</Num></td><td className="l mkx-direction">{market.executableBasisSide === 'LONG_SPOT_SHORT_PERP' ? 'Buy Spot · Sell Perp' : market.executableBasisSide === 'SHORT_SPOT_LONG_PERP' ? 'Sell Spot · Buy Perp' : '—'}</td></>;
-    }
-    if (view === 'liquidity') return <><td className="r mkx-num"><Num value={market.spotSpreadPct}>{fmtBps(market.spotSpreadPct)}</Num></td><td className="r mkx-num"><Num value={market.perpSpreadPct}>{fmtBps(market.perpSpreadPct)}</Num></td><td className="r mkx-num"><Num value={depthUsd(market)}>{fmtMoney(depthUsd(market))}</Num></td><td className="r mkx-num"><Num value={market.quoteVolume24h}>{fmtMoney(market.quoteVolume24h)}</Num></td><td className="r mkx-range">{finite(market.low24h) && finite(market.high24h) ? `${fmtPrice(market.low24h)} – ${fmtPrice(market.high24h)}` : '—'}</td><ChangeCell value={market.change24hPct} /></>;
-    return <><td className="r mkx-num mkx-price"><Num value={market.spot}>{fmtPrice(market.spot)}</Num></td><td className="r mkx-chart"><RowSpark values={market.spark} color={brandColor(market.symbol)} /></td><ChangeCell value={market.change24hPct} /><td className="r mkx-num"><Num value={market.quoteVolume24h}>{fmtMoney(market.quoteVolume24h)}</Num></td><td className="r mkx-num">{market.hasPerp ? <Num value={market.openInterestUsd}>{fmtMoney(market.openInterestUsd)}</Num> : <span className="mkx-dim">Spot Only</span>}</td><td className={`r mkx-num ${finite(market.fundingRate) ? signClass(market.fundingRate) : ''}`}>{market.hasPerp && finite(market.fundingRate) ? <Num value={market.fundingRate}>{fmtFunding(market.fundingRate)}</Num> : <span className="mkx-dim">—</span>}</td></>;
+    if (view === 'derivatives') return <><td className="r mkx-num"><Num value={market.perpMark}>{fmtPrice(market.perpMark)}</Num></td><td className={`r mkx-num ${signClass(market.fundingRate)}`}><Num value={market.fundingRate}>{fmtFunding(market.fundingRate)}</Num></td><td className="r mkx-num"><Num value={market.openInterestUsd}>{fmtMoney(market.openInterestUsd)}</Num></td><ChangeCell value={market.openInterestChangePct} /><td className="r mkx-num"><Num value={market.liquidations15mUsd}>{fmtMoney(market.liquidations15mUsd)}</Num></td><td className="r mkx-num"><VolumeValue value={market.perpVolume24h} /></td></>;
+    if (view === 'basis') return <><td className={`r mkx-num ${signClass(market.executableBasisBestPct)}`}><Num value={market.executableBasisBestPct}>{fmtBasis(market.executableBasisBestPct)}</Num></td><td className={`r mkx-num ${signClass(market.executableBasisLongSpotPct)}`}><Num value={market.executableBasisLongSpotPct}>{fmtBasis(market.executableBasisLongSpotPct)}</Num></td><td className={`r mkx-num ${signClass(market.executableBasisShortSpotPct)}`}><Num value={market.executableBasisShortSpotPct}>{fmtBasis(market.executableBasisShortSpotPct)}</Num></td><td className={`r mkx-num ${signClass(market.fundingRate)}`}><Num value={market.fundingRate}>{fmtFunding(market.fundingRate)}</Num></td><td className="l mkx-direction">{market.executableBasisSide === 'LONG_SPOT_SHORT_PERP' ? 'Buy Spot · Sell Perp' : market.executableBasisSide === 'SHORT_SPOT_LONG_PERP' ? 'Sell Spot · Buy Perp' : '—'}</td></>;
+    if (view === 'liquidity') return <><td className="r mkx-num"><Num value={market.spotSpreadPct}>{fmtBps(market.spotSpreadPct)}</Num></td><td className="r mkx-num"><Num value={market.perpSpreadPct}>{fmtBps(market.perpSpreadPct)}</Num></td><td className="r mkx-num"><Num value={depthUsd(market)}>{fmtMoney(depthUsd(market))}</Num></td><td className="r mkx-num"><VolumeValue value={market.quoteVolume24h} /></td><td className="r mkx-range">{finite(market.low24h) && finite(market.high24h) ? `${fmtPrice(market.low24h)} – ${fmtPrice(market.high24h)}` : '—'}</td><ChangeCell value={market.change24hPct} /></>;
+    return <><td className="r mkx-num mkx-price"><Num value={market.spot}>{fmtPrice(market.spot)}</Num></td><td className="r mkx-chart"><RowSpark values={market.spark} color={brandColor(market.symbol)} /></td><ChangeCell value={market.change24hPct} /><td className="r mkx-num"><VolumeValue value={market.quoteVolume24h} /></td><td className="r mkx-num">{market.hasPerp ? <Num value={market.openInterestUsd}>{fmtMoney(market.openInterestUsd)}</Num> : <span className="mkx-dim">Spot Only</span>}</td><td className={`r mkx-num ${finite(market.fundingRate) ? signClass(market.fundingRate) : ''}`}>{market.hasPerp && finite(market.fundingRate) ? <Num value={market.fundingRate}>{fmtFunding(market.fundingRate)}</Num> : <span className="mkx-dim">—</span>}</td></>;
   };
 
-  const top50Up = (top50Pulse ?? 0) >= 0;
   const filtersActive = filter !== 'all' || search.length > 0;
 
   return (
@@ -397,10 +465,10 @@ export function Markets() {
         </header>
 
         <div className="mkx-summary" aria-label="Market Summary">
-          <article><span>Tracked Markets</span><strong>{marketReadSucceeded ? markets.length.toLocaleString('en-US') : 'UNKNOWN'}</strong><small>{marketReadSucceeded ? 'USDT Universe' : 'Awaiting source read'}</small></article>
-          <article><span>Spot + Perp</span><strong>{marketReadSucceeded ? pairedCount.toLocaleString('en-US') : 'UNKNOWN'}</strong><small>{marketReadSucceeded ? `${executableCount.toLocaleString('en-US')} Executable Books` : 'Awaiting source read'}</small></article>
-          <article><span>24h Volume</span><strong>{marketReadSucceeded ? fmtMoney(totalVolume) : 'UNKNOWN'}</strong><small>{marketReadSucceeded ? (volumeCoverageComplete ? 'Binance Spot Quote' : `Binance Spot Quote · ${volumeKnownRows.length} of ${markets.length} rows known`) : 'Awaiting source read'}</small></article>
-          <article><span>Market Breadth</span><strong>{marketReadSucceeded ? `${gainers.toLocaleString('en-US')} / ${losers.toLocaleString('en-US')}` : 'UNKNOWN'}</strong><small className={!marketReadSucceeded || top50Pulse === null ? '' : top50Up ? 'pos' : 'neg'}>{!marketReadSucceeded ? 'Awaiting source read' : top50Pulse === null ? 'Warming' : `${top50Up ? 'Up' : 'Down'} ${fmtPct(Math.abs(top50Pulse), 2, false)} · Top 50`}</small></article>
+          <article><span>Tracked Markets</span><strong>{marketReadSucceeded ? markets.length.toLocaleString('en-US') : 'UNKNOWN'}</strong><small>{marketReadSucceeded ? 'USDT Universe' : marketUnassertedDetail}</small></article>
+          <article><span>Spot + Perp</span><strong>{marketReadSucceeded ? pairedCount.toLocaleString('en-US') : 'UNKNOWN'}</strong><small>{marketReadSucceeded ? `${executableCount.toLocaleString('en-US')} Executable Books` : marketUnassertedDetail}</small></article>
+          <article><span>24h Volume</span><strong>{marketReadSucceeded && volumeCoverageComplete ? fmtMoney(totalVolume) : 'UNKNOWN'}</strong><small>{!marketReadSucceeded ? marketUnassertedDetail : volumeCoverageComplete ? 'Binance Spot Quote · Complete Coverage' : `Coverage UNKNOWN · ${volumeKnownRows.length} of ${markets.length} rows known`}</small></article>
+          <article><span>Market Breadth</span><strong>{breadthKnown ? `${gainers.toLocaleString('en-US')} / ${losers.toLocaleString('en-US')}` : 'UNKNOWN'}</strong><small>{!marketReadSucceeded ? marketUnassertedDetail : changeCoverageComplete ? `Complete Change Coverage · ${knownChanges24h.length.toLocaleString('en-US')} rows` : `Change Coverage UNKNOWN · ${knownChanges24h.length.toLocaleString('en-US')} of ${markets.length.toLocaleString('en-US')} rows known`}</small></article>
         </div>
 
         <ProductSurfaceAdapter surfaceId="markets" />
@@ -411,7 +479,7 @@ export function Markets() {
               <button key={item.id} type="button" role="tab" aria-selected={view === item.id} onClick={() => applyView(item.id)}>{item.label}</button>
             ))}
           </div>
-          <span className={`mkx-live ${marketFreshness.live ? 'on' : ''}`}><i />{marketFreshnessLabel}</span>
+          <span className={`mkx-live ${marketReadSucceeded ? 'on' : ''}`} title={marketTruth.reason ?? undefined}><i />{marketFreshnessLabel}</span>
         </nav>
 
         <div className="mkx-controls">
@@ -448,7 +516,7 @@ export function Markets() {
               })}
             </tbody>
           </table>
-          {!marketReadSucceeded && <EmptyState title={marketStatus === 'LOADING' ? 'Markets Loading' : 'Markets Unavailable'}>No market summary is asserted until a source read succeeds.</EmptyState>}
+          {!marketReadSucceeded && <EmptyState title={marketTruth.state === 'LOADING' ? 'Markets Loading' : 'Markets Unavailable'}>{marketTruth.reason ?? 'Waiting for canonical market-source truth and a current live read.'}</EmptyState>}
           {marketReadSucceeded && rows.length === 0 && <EmptyState title="No Markets Found">{filter === 'watchlist' ? 'Star markets to build the watchlist.' : 'Change the filter or search.'}</EmptyState>}
         </div>
 

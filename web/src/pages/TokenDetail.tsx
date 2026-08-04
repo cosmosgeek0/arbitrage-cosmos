@@ -5,12 +5,18 @@
    honest spot-only fallbacks. The second base row is reserved (owner). */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FileText, Globe2, Grid2X2, Search, Star as StarIcon, X } from 'lucide-react';
-import { useStore } from '../store';
+import { resolveMarketFreshness, useStore } from '../store';
 import { TokenIcon } from '../components/TokenIcon';
+import { projectMarketConsumerTruth } from '../components/Header';
 import { PillSelect } from '../components/PillSelect';
 import { normalizeTvCandles, type TvCandle } from '../components/TradingViewChart';
 import { TradingViewWidget } from '../components/TradingViewWidget';
-import type { BasisRow as BasisEngineRow, BasisSnapshot as BasisEngineSnapshot } from '../lib/basisRuntime';
+import {
+  basisRuntimeSnapshotCurrent,
+  decodeBasisRuntimeSnapshot,
+  type BasisRow as BasisEngineRow,
+  type BasisSnapshot as BasisEngineSnapshot,
+} from '../lib/basisRuntime';
 import { BoundedTtlCache } from '../lib/boundedTtlCache';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
@@ -28,6 +34,7 @@ import { baseOf, countdown, fmtBasis, fmtFunding, fmtMoney, fmtPct, fmtPrice, ti
 import { formatClockZone } from '../lib/time';
 import { tokenName } from '../lib/tokenNames';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
+import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import type { MarketRow } from '../types';
 import './Markets.css';
 import './TokenDetail.css';
@@ -545,13 +552,13 @@ function MoneyFlowCard({ symbol, base }: { symbol: string; base: string }) {
   );
 }
 
-function PositioningCard({ symbol, base, hasPerp }: { symbol: string; base: string; hasPerp: boolean }) {
+function PositioningCard({ symbol, base, hasPerp }: { symbol: string; base: string; hasPerp: boolean | null }) {
   const [period, setPeriod] = useState<'5m' | '15m' | '1h' | '4h'>('5m');
   const [telemetry, setTelemetry] = useState<FuturesTelemetry | null>(null);
   const [telemetryError, setTelemetryError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!hasPerp) {
+    if (hasPerp !== true) {
       setTelemetry(null);
       setTelemetryError(null);
       return;
@@ -603,7 +610,7 @@ function PositioningCard({ symbol, base, hasPerp }: { symbol: string; base: stri
         <h3 title="Binance USD-M taker buy/sell volume plus global and top-trader long/short ratios. Public history is limited to the latest 30 days.">
           Futures Positioning <em className="tdx-src">Binance USD-M · 30D Max</em>
         </h3>
-        {hasPerp && (
+        {hasPerp === true && (
           <PillSelect
             value={period}
             options={[{ id: '5m' as const, label: '5m' }, { id: '15m' as const, label: '15m' }, { id: '1h' as const, label: '1H' }, { id: '4h' as const, label: '4H' }]}
@@ -612,7 +619,9 @@ function PositioningCard({ symbol, base, hasPerp }: { symbol: string; base: stri
           />
         )}
       </div>
-      {!hasPerp ? (
+      {hasPerp === null ? (
+        <p className="tdx-dimnote">Market Presence UNKNOWN — positioning is withheld until current market truth identifies the instrument.</p>
+      ) : hasPerp === false ? (
         <p className="tdx-dimnote">Spot Only — {base} has no Binance USD-M positioning feed.</p>
       ) : !telemetry ? (
         <div className="tdx-chart-empty small">{telemetryError ?? 'Reading Positioning…'}</div>
@@ -641,17 +650,134 @@ function PositioningCard({ symbol, base, hasPerp }: { symbol: string; base: stri
 type IntelTab = 'funding' | 'volume' | 'liq' | 'basis';
 
 interface IntelPoint { t: number; a: number; b?: number }
+type LiquidationRecorderState = 'live' | 'connecting' | 'down' | 'invalid' | 'not_applicable';
+type LiquidationRecorderTruth = Readonly<{
+  state: 'LIVE' | 'STARTING' | 'UNAVAILABLE' | 'UNKNOWN' | 'NOT_APPLICABLE';
+  mayClaimLive: boolean;
+  value: string;
+  note: string;
+}>;
+
+interface LiquidationOwnerPayload {
+  since: number | null;
+  state: LiquidationRecorderState;
+  points: { t: number; long: number; short: number }[];
+}
+
 interface IntelDataset {
   points: IntelPoint[];
   price: { t: number; v: number }[];
   liqSince: number | null;
+  liqState: LiquidationRecorderState;
 }
+
+const BINANCE_LIQUIDATION_EPOCH_MS = Date.UTC(2017, 0, 1);
 
 const intelCache = new BoundedTtlCache<string, IntelDataset>({ maxEntries: 64, ttlMs: TOKEN_DATA_CACHE_TTL_MS });
 const intelInflight = new Map<string, Promise<IntelDataset>>();
 
 const intelKey = (symbol: string, tab: IntelTab, opt: string, hasPerp: boolean) =>
   `${symbol}:${hasPerp ? 'perp' : 'spot'}:${tab}:${opt}`;
+
+function isPlausibleLiquidationTimestamp(value: unknown, observedAtMs: number): value is number {
+  return (
+    typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && value >= BINANCE_LIQUIDATION_EPOCH_MS
+    && Number.isSafeInteger(observedAtMs)
+    && observedAtMs >= BINANCE_LIQUIDATION_EPOCH_MS
+    && value <= observedAtMs
+  );
+}
+
+export function parseLiquidationOwnerPayload(
+  payload: unknown,
+  observedAtMs: number = Date.now(),
+): LiquidationOwnerPayload {
+  if (typeof payload !== 'object' || payload === null) {
+    return { since: null, state: 'invalid', points: [] };
+  }
+  const candidate = payload as { since?: unknown; state?: unknown; points?: unknown };
+  const state = candidate.state === 'live' || candidate.state === 'connecting' || candidate.state === 'down'
+    ? candidate.state
+    : 'invalid';
+  const since = isPlausibleLiquidationTimestamp(candidate.since, observedAtMs)
+    ? candidate.since
+    : null;
+  if (state === 'invalid' || since === null || !Array.isArray(candidate.points)) {
+    return { since: null, state: 'invalid', points: [] };
+  }
+  const points = candidate.points.every((point) => (
+    typeof point === 'object' && point !== null
+    && isPlausibleLiquidationTimestamp((point as { t?: unknown }).t, observedAtMs)
+    && typeof (point as { long?: unknown }).long === 'number'
+    && Number.isFinite((point as { long: number }).long)
+    && (point as { long: number }).long >= 0
+    && typeof (point as { short?: unknown }).short === 'number'
+    && Number.isFinite((point as { short: number }).short)
+    && (point as { short: number }).short >= 0
+    && (
+      (point as { long: number }).long > 0
+      || (point as { short: number }).short > 0
+    )
+  ))
+    ? candidate.points as { t: number; long: number; short: number }[]
+    : null;
+  if (points === null) {
+    return { since: null, state: 'invalid', points: [] };
+  }
+  return { since, state, points };
+}
+
+export function projectLiquidationRecorderTruth(
+  state: LiquidationRecorderState,
+  pointCount: number,
+  since: number | null,
+  observedAtMs: number = Date.now(),
+): LiquidationRecorderTruth {
+  const hasUsableEvidence = Number.isSafeInteger(pointCount) && pointCount > 0
+    && isPlausibleLiquidationTimestamp(since, observedAtMs);
+  if (state === 'live' && hasUsableEvidence) {
+    return Object.freeze({
+      state: 'LIVE',
+      mayClaimLive: true,
+      value: timeAgo(since),
+      note: 'Persistent live owner evidence',
+    });
+  }
+  if (state === 'live' || state === 'connecting') {
+    return Object.freeze({
+      state: 'STARTING',
+      mayClaimLive: false,
+      value: 'STARTING',
+      note: state === 'live'
+        ? 'Recorder is live · waiting for usable event evidence'
+        : 'Recorder is connecting · live evidence not established',
+    });
+  }
+  if (state === 'down') {
+    return Object.freeze({
+      state: 'UNAVAILABLE',
+      mayClaimLive: false,
+      value: 'UNAVAILABLE',
+      note: 'Recorder is down · live evidence unavailable',
+    });
+  }
+  if (state === 'not_applicable') {
+    return Object.freeze({
+      state: 'NOT_APPLICABLE',
+      mayClaimLive: false,
+      value: 'NOT APPLICABLE',
+      note: 'Spot Only · no perpetual liquidation recorder',
+    });
+  }
+  return Object.freeze({
+    state: 'UNKNOWN',
+    mayClaimLive: false,
+    value: 'UNKNOWN',
+    note: 'Recorder state is invalid or unavailable',
+  });
+}
 
 async function fetchIntelDataset(symbol: string, tab: IntelTab, opt: string, hasPerp: boolean, signal?: AbortSignal): Promise<IntelDataset> {
   const candleMarket = hasPerp ? 'futures' : 'spot';
@@ -667,10 +793,11 @@ async function fetchIntelDataset(symbol: string, tab: IntelTab, opt: string, has
       points: candles.map((row) => ({ t: row.t, a: row.qv || row.v * row.c })),
       price: candles.map((row) => ({ t: row.t, v: row.c })),
       liqSince: null,
+      liqState: 'not_applicable',
     };
   }
 
-  if (!hasPerp) return { points: [], price: [], liqSince: null };
+  if (!hasPerp) return { points: [], price: [], liqSince: null, liqState: 'not_applicable' };
 
   if (tab === 'funding') {
     const rows = await fetchJson<{ t: number; ratePct: number }[]>(`/api/futures/funding-hist?symbol=${symbol}&limit=1000`, { signal });
@@ -680,19 +807,23 @@ async function fetchIntelDataset(symbol: string, tab: IntelTab, opt: string, has
       points: normalized.filter((row) => row.t >= cut).map((row) => ({ t: row.t, a: row.ratePct })),
       price: await priceFor('8h', 1000),
       liqSince: null,
+      liqState: 'not_applicable',
     };
   }
 
   if (tab === 'liq') {
     const buckets: Record<string, number> = { '5m': 3e5, '15m': 9e5, '1h': 36e5, '4h': 144e5, '12h': 432e5, '1d': 864e5 };
-    const data = await fetchJson<{ since: number; points: { t: number; long: number; short: number }[] }>(`/api/futures/liquidations?symbol=${symbol}&bucketMs=${buckets[opt] ?? 36e5}`, { signal });
-    const normalized = normalizeTimedRows(data.points ?? [], (point) => (
+    const data = parseLiquidationOwnerPayload(
+      await fetchJson<unknown>(`/api/futures/liquidations?symbol=${symbol}&bucketMs=${buckets[opt] ?? 36e5}`, { signal }),
+    );
+    const normalized = normalizeTimedRows(data.points, (point) => (
       Number.isFinite(point.long) && point.long >= 0 && Number.isFinite(point.short) && point.short >= 0
     ));
     return {
       points: normalized.map((point) => ({ t: point.t, a: point.long, b: point.short })),
       price: await priceFor(opt === '5m' || opt === '15m' ? opt : '1h', 1000),
-      liqSince: Number.isFinite(data.since) && data.since > 0 ? data.since : null,
+      liqSince: data.since,
+      liqState: data.state,
     };
   }
 
@@ -704,6 +835,7 @@ async function fetchIntelDataset(symbol: string, tab: IntelTab, opt: string, has
     points: basis.map((row) => ({ t: row.t, a: row.basisRatePct })),
     price: basis.map((row) => ({ t: row.t, v: row.futuresPrice })),
     liqSince: null,
+    liqState: 'not_applicable',
   };
 }
 
@@ -718,9 +850,9 @@ function requestIntelDataset(symbol: string, tab: IntelTab, opt: string, hasPerp
   if (!signal && pending) return pending;
   const request = fetchIntelDataset(symbol, tab, opt, hasPerp, signal)
     .then((value) => {
-      // An upstream empty response must not become a five-minute blank chart.
-      // Liquidations are the exception: an empty live bucket is valid data.
-      if (value.points.length > 0 || tab === 'liq') {
+      // Historical chart responses may be reused, but recorder truth must be
+      // re-established from the current owner state on every liquidation view.
+      if (value.points.length > 0 && tab !== 'liq') {
         intelCache.set(key, value);
       }
       return value;
@@ -747,12 +879,15 @@ const INTEL_TITLE: Record<IntelTab, string> = {
   basis: 'Basis',
 };
 
-function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInterest, clockZone }: { symbol: string; base: string; name: string; hasPerp: boolean; market: MarketRow | undefined; openInterest: TokenIntelligenceRead['openInterest'] | null; clockZone: string }) {
-  const initialTab: IntelTab = hasPerp ? 'funding' : 'volume';
-  const initial = intelCache.get(intelKey(symbol, initialTab, INTEL_DEFAULT[initialTab], hasPerp));
+function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInterest, clockZone }: { symbol: string; base: string; name: string; hasPerp: boolean | null; market: MarketRow | undefined; openInterest: TokenIntelligenceRead['openInterest'] | null; clockZone: string }) {
+  const intelHasPerp = hasPerp === true;
+  const initialTab: IntelTab = intelHasPerp ? 'funding' : 'volume';
+  const initial = hasPerp === null
+    ? undefined
+    : intelCache.get(intelKey(symbol, initialTab, INTEL_DEFAULT[initialTab], intelHasPerp));
   const [tab, setTab] = useState<IntelTab>(initialTab);
   const [opt, setOpt] = useState(INTEL_DEFAULT[initialTab]);
-  const [dataset, setDataset] = useState<IntelDataset>(initial ?? { points: [], price: [], liqSince: null });
+  const [dataset, setDataset] = useState<IntelDataset>(initial ?? { points: [], price: [], liqSince: null, liqState: 'invalid' });
   const [loading, setLoading] = useState(!initial);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [hov, setHov] = useState<number | null>(null);
@@ -761,21 +896,27 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
   const [chartBox, setChartBox] = useState({ width: 1160, height: 380 });
 
   useEffect(() => {
-    if (!hasPerp && tab !== 'volume') {
+    if (hasPerp !== true && tab !== 'volume') {
       setTab('volume');
       setOpt(INTEL_DEFAULT.volume);
     }
   }, [hasPerp, tab]);
 
   useEffect(() => {
-    const key = intelKey(symbol, tab, opt, hasPerp);
+    if (hasPerp === null) {
+      setDataset({ points: [], price: [], liqSince: null, liqState: 'invalid' });
+      setLoading(false);
+      setLoadError(null);
+      return;
+    }
+    const key = intelKey(symbol, tab, opt, intelHasPerp);
     const cached = intelCache.get(key);
     if (cached) {
       setDataset(cached);
       setLoading(false);
       setLoadError(null);
     } else {
-      setDataset({ points: [], price: [], liqSince: null });
+      setDataset({ points: [], price: [], liqSince: null, liqState: tab === 'liq' ? 'invalid' : 'not_applicable' });
       setLoading(true);
     }
     let first = true;
@@ -784,7 +925,7 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
       request: (signal) => {
         const force = !first;
         first = false;
-        return requestIntelDataset(symbol, tab, opt, hasPerp, force, signal);
+        return requestIntelDataset(symbol, tab, opt, intelHasPerp, force, signal);
       },
       onSuccess: (next) => {
         setDataset(next);
@@ -794,11 +935,14 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
       onError: (error) => {
         setLoading(false);
         setLoadError(error instanceof Error ? error.message : 'Data source unavailable');
+        if (tab === 'liq') {
+          setDataset({ points: [], price: [], liqSince: null, liqState: 'invalid' });
+        }
       },
     });
     poll.start();
     return poll.stop;
-  }, [hasPerp, opt, symbol, tab]);
+  }, [hasPerp, intelHasPerp, opt, symbol, tab]);
 
   useEffect(() => {
     const host = wrapRef.current;
@@ -817,13 +961,14 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
   }, [dataset.points.length, tab]);
 
   const switchTab = (next: IntelTab) => {
+    if (hasPerp === null || (next !== 'volume' && hasPerp !== true)) return;
     const nextOpt = INTEL_DEFAULT[next];
-    const cached = intelCache.get(intelKey(symbol, next, nextOpt, hasPerp));
+    const cached = intelCache.get(intelKey(symbol, next, nextOpt, intelHasPerp));
     if (cached) {
       setDataset(cached);
       setLoading(false);
     } else {
-      setDataset({ points: [], price: [], liqSince: null });
+      setDataset({ points: [], price: [], liqSince: null, liqState: next === 'liq' ? 'invalid' : 'not_applicable' });
       setLoading(true);
     }
     setTab(next);
@@ -831,7 +976,8 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
     setHov(null);
   };
 
-  const { points, price, liqSince } = dataset;
+  const { points, price, liqSince, liqState } = dataset;
+  const liquidationRecorderTruth = projectLiquidationRecorderTruth(liqState, points.length, liqSince);
   const W = chartBox.width;
   const H = chartBox.height;
   const PAD_L = 80;
@@ -896,36 +1042,41 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
     return closest;
   };
 
-  const source = tab === 'volume' && !hasPerp ? 'Binance Spot' : 'Binance USD-M';
+  const source = hasPerp === null
+    ? 'Market Presence Unknown'
+    : tab === 'volume' && hasPerp === false
+      ? 'Binance Spot'
+      : 'Binance USD-M';
   const selected = points[points.length - 1];
   const metricSets: Record<IntelTab, { label: string; value: string; note: string; tone?: 'up' | 'down' }[]> = {
     funding: [
-      { label: 'Current Rate', value: hasPerp ? fmtFunding(market?.fundingRate) : 'Spot Only', note: market?.fundingRate === null || market?.fundingRate === undefined ? 'Awaiting Contract Feed' : market.fundingRate > 0 ? 'Longs Pay Shorts' : market.fundingRate < 0 ? 'Shorts Pay Longs' : 'Neutral' },
-      { label: 'Annualized', value: hasPerp ? fmtPct(market?.fundingAnnualPct, 2) : '—', note: 'Simple Annualized' },
-      { label: 'Next Settlement', value: hasPerp && market?.nextFundingTime ? countdown(market.nextFundingTime) : '—', note: 'Exchange Schedule' },
-      { label: 'Latest Print', value: selected ? `${selected.a.toFixed(4)}%` : '—', note: opt === 'all' ? 'Full Available History' : opt.toUpperCase() + ' Window', tone: selected?.a && selected.a < 0 ? 'down' : 'up' },
+      { label: 'Current Rate', value: hasPerp === true ? fmtFunding(market?.fundingRate) : hasPerp === false ? 'Spot Only' : 'UNKNOWN', note: hasPerp === null ? 'Market presence unavailable' : market?.fundingRate === null || market?.fundingRate === undefined ? 'Awaiting Contract Feed' : market.fundingRate > 0 ? 'Longs Pay Shorts' : market.fundingRate < 0 ? 'Shorts Pay Longs' : 'Neutral' },
+      { label: 'Annualized', value: hasPerp === true ? fmtPct(market?.fundingAnnualPct, 2) : hasPerp === false ? '—' : 'UNKNOWN', note: 'Simple Annualized' },
+      { label: 'Next Settlement', value: hasPerp === true && market?.nextFundingTime ? countdown(market.nextFundingTime) : hasPerp === null ? 'UNKNOWN' : '—', note: 'Exchange Schedule' },
+      { label: 'Latest Print', value: hasPerp === true ? selected ? `${selected.a.toFixed(4)}%` : '—' : hasPerp === false ? 'Spot Only' : 'UNKNOWN', note: opt === 'all' ? 'Full Available History' : opt.toUpperCase() + ' Window', tone: hasPerp === true && selected ? selected.a < 0 ? 'down' : selected.a > 0 ? 'up' : undefined : undefined },
     ],
     volume: [
-      { label: hasPerp ? 'Perpetual Volume' : 'Spot Volume', value: hasPerp ? fmtMoney(market?.perpVolume24h) : fmtMoney(market?.quoteVolume24h), note: 'Rolling 24 Hours' },
-      { label: 'Latest Interval', value: selected ? '$' + fmtCompact(selected.a) : '—', note: INTEL_OPTIONS.volume.find((item) => item.id === opt)?.label ?? opt },
-      { label: 'Open Interest', value: hasPerp ? fmtMoney(openInterest?.value?.quoteUsd) : 'Spot Only', note: hasPerp ? `${openInterest?.state ?? 'UNAVAILABLE'} · Owner snapshot` : 'No Perpetual Contract' },
-      { label: 'OI / Volume', value: market?.oiToPerpVolume24h === null || market?.oiToPerpVolume24h === undefined ? '—' : `${market.oiToPerpVolume24h.toFixed(2)}×`, note: hasPerp ? 'Leverage Density' : 'Not Applicable' },
+      { label: hasPerp === true ? 'Perpetual Volume' : hasPerp === false ? 'Spot Volume' : 'Market Volume', value: hasPerp === true ? fmtMoney(market?.perpVolume24h) : hasPerp === false ? fmtMoney(market?.quoteVolume24h) : 'UNKNOWN', note: 'Rolling 24 Hours' },
+      { label: 'Latest Interval', value: hasPerp === null ? 'UNKNOWN' : selected ? '$' + fmtCompact(selected.a) : '—', note: INTEL_OPTIONS.volume.find((item) => item.id === opt)?.label ?? opt },
+      { label: 'Open Interest', value: hasPerp === true && openInterest?.state === 'FRESH' ? fmtMoney(openInterest.value?.quoteUsd) : hasPerp === false ? 'Spot Only' : 'UNKNOWN', note: hasPerp === true ? `${openInterest?.state ?? 'UNAVAILABLE'} · Owner snapshot` : hasPerp === false ? 'No Perpetual Contract' : 'Market presence unavailable' },
+      { label: 'OI / Volume', value: hasPerp === null ? 'UNKNOWN' : market?.oiToPerpVolume24h === null || market?.oiToPerpVolume24h === undefined ? '—' : `${market.oiToPerpVolume24h.toFixed(2)}×`, note: hasPerp === true ? 'Leverage Density' : hasPerp === false ? 'Not Applicable' : 'Market presence unavailable' },
     ],
     liq: [
-      { label: 'Liquidations · 15m', value: hasPerp ? fmtMoney(market?.liquidations15mUsd) : 'Spot Only', note: 'Confirmed Force Orders' },
-      { label: 'Long Liquidations', value: fmtMoney(market?.longLiquidations15mUsd), note: '15 Minute Window', tone: 'down' },
-      { label: 'Short Liquidations', value: fmtMoney(market?.shortLiquidations15mUsd), note: '15 Minute Window', tone: 'up' },
-      { label: 'Recorder', value: liqSince ? timeAgo(liqSince) : 'Starting…', note: 'Persistent Live Binance Stream' },
+      { label: 'Liquidations · 15m', value: hasPerp === true ? fmtMoney(market?.liquidations15mUsd) : hasPerp === false ? 'Spot Only' : 'UNKNOWN', note: 'Confirmed Force Orders' },
+      { label: 'Long Liquidations', value: hasPerp === true ? fmtMoney(market?.longLiquidations15mUsd) : hasPerp === false ? 'Spot Only' : 'UNKNOWN', note: '15 Minute Window', tone: hasPerp === true && typeof market?.longLiquidations15mUsd === 'number' && Number.isFinite(market.longLiquidations15mUsd) && market.longLiquidations15mUsd > 0 ? 'down' : undefined },
+      { label: 'Short Liquidations', value: hasPerp === true ? fmtMoney(market?.shortLiquidations15mUsd) : hasPerp === false ? 'Spot Only' : 'UNKNOWN', note: '15 Minute Window', tone: hasPerp === true && typeof market?.shortLiquidations15mUsd === 'number' && Number.isFinite(market.shortLiquidations15mUsd) && market.shortLiquidations15mUsd > 0 ? 'up' : undefined },
+      { label: 'Recorder', value: hasPerp === true ? liquidationRecorderTruth.value : hasPerp === false ? 'Spot Only' : 'UNKNOWN', note: hasPerp === true ? liquidationRecorderTruth.note : hasPerp === false ? 'Spot Only · no perpetual liquidation recorder' : 'Market presence unavailable' },
     ],
     basis: [
-      { label: 'Perpetual Mark', value: fmtPrice(market?.perpMark), note: 'Binance USD-M' },
-      { label: 'Index Price', value: fmtPrice(market?.perpIndexPrice), note: 'Reference Basket' },
-      { label: 'Mark Basis', value: fmtBasis(market?.markIndexBasisPct), note: 'Mark Versus Index', tone: (market?.markIndexBasisPct ?? 0) < 0 ? 'down' : 'up' },
-      { label: 'Executable Gap', value: fmtBasis(market?.executableBasisBestPct), note: market?.executableBasisSide === 'LONG_SPOT_SHORT_PERP' ? 'Buy Spot · Sell Perp' : market?.executableBasisSide === 'SHORT_SPOT_LONG_PERP' ? 'Sell Spot · Buy Perp' : 'No Crossed-Book Edge' },
+      { label: 'Perpetual Mark', value: hasPerp === true ? fmtPrice(market?.perpMark) : hasPerp === false ? 'Spot Only' : 'UNKNOWN', note: 'Binance USD-M' },
+      { label: 'Index Price', value: hasPerp === true ? fmtPrice(market?.perpIndexPrice) : hasPerp === false ? 'Spot Only' : 'UNKNOWN', note: 'Reference Basket' },
+      { label: 'Mark Basis', value: hasPerp === true ? fmtBasis(market?.markIndexBasisPct) : hasPerp === false ? 'Spot Only' : 'UNKNOWN', note: 'Mark Versus Index', tone: hasPerp === true && typeof market?.markIndexBasisPct === 'number' && Number.isFinite(market.markIndexBasisPct) ? market.markIndexBasisPct < 0 ? 'down' : market.markIndexBasisPct > 0 ? 'up' : undefined : undefined },
+      { label: 'Executable Gap', value: hasPerp === true ? fmtBasis(market?.executableBasisBestPct) : hasPerp === false ? 'Spot Only' : 'UNKNOWN', note: market?.executableBasisSide === 'LONG_SPOT_SHORT_PERP' ? 'Buy Spot · Sell Perp' : market?.executableBasisSide === 'SHORT_SPOT_LONG_PERP' ? 'Sell Spot · Buy Perp' : hasPerp === null ? 'Market presence unavailable' : hasPerp === false ? 'Not Applicable' : 'No Crossed-Book Edge' },
     ],
   };
   const activePoint = hov !== null ? points[hov] : null;
   const requiresPerp = tab !== 'volume';
+  const retainedAfterRefreshFailure = loadError !== null && points.length > 0;
   const formatAxis = (value: number) => tab === 'funding' || tab === 'basis' ? `${value.toFixed(4)}%` : '$' + fmtCompact(value);
   const formatValue = (value: number) => tab === 'funding' || tab === 'basis' ? `${value.toFixed(4)}%` : '$' + fmtFull(value, 0);
 
@@ -936,32 +1087,46 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
           <span className="tkx-section-label">Derivatives Intelligence</span>
           <p>Funding, leverage, participation, forced unwinds and carry for {base}.</p>
         </div>
-        <PillSelect value={opt} options={INTEL_OPTIONS[tab]} onChange={setOpt} ariaLabel="Data interval" />
+        {hasPerp !== null ? <PillSelect value={opt} options={INTEL_OPTIONS[tab]} onChange={setOpt} ariaLabel="Data interval" /> : null}
       </div>
       <div className="cgx-tabs tkx-intelligence-tabs" role="tablist" aria-label="Derivatives data">
-        <button type="button" role="tab" aria-selected={tab === 'funding'} className={tab === 'funding' ? 'on' : ''} data-testid="token-cgx-funding" onClick={() => switchTab('funding')}>Funding</button>
-        <button type="button" role="tab" aria-selected={tab === 'volume'} className={tab === 'volume' ? 'on' : ''} data-testid="token-cgx-volume" onClick={() => switchTab('volume')}>Volume</button>
-        <button type="button" role="tab" aria-selected={tab === 'liq'} className={tab === 'liq' ? 'on' : ''} data-testid="token-cgx-liquidation" onClick={() => switchTab('liq')}>Liquidation</button>
-        <button type="button" role="tab" aria-selected={tab === 'basis'} className={tab === 'basis' ? 'on' : ''} data-testid="token-cgx-basis" onClick={() => switchTab('basis')}>Basis</button>
+        <button type="button" role="tab" aria-selected={tab === 'funding'} className={tab === 'funding' ? 'on' : ''} data-testid="token-cgx-funding" disabled={hasPerp !== true} title={hasPerp === null ? 'Perpetual availability unknown' : hasPerp === false ? 'Not applicable to a spot-only market' : undefined} onClick={() => switchTab('funding')}>Funding</button>
+        <button type="button" role="tab" aria-selected={tab === 'volume'} className={tab === 'volume' ? 'on' : ''} data-testid="token-cgx-volume" disabled={hasPerp === null} title={hasPerp === null ? 'Market availability unknown' : undefined} onClick={() => switchTab('volume')}>Volume</button>
+        <button type="button" role="tab" aria-selected={tab === 'liq'} className={tab === 'liq' ? 'on' : ''} data-testid="token-cgx-liquidation" disabled={hasPerp !== true} title={hasPerp === null ? 'Perpetual availability unknown' : hasPerp === false ? 'Not applicable to a spot-only market' : undefined} onClick={() => switchTab('liq')}>Liquidation</button>
+        <button type="button" role="tab" aria-selected={tab === 'basis'} className={tab === 'basis' ? 'on' : ''} data-testid="token-cgx-basis" disabled={hasPerp !== true} title={hasPerp === null ? 'Perpetual availability unknown' : hasPerp === false ? 'Not applicable to a spot-only market' : undefined} onClick={() => switchTab('basis')}>Basis</button>
       </div>
       <div className="tkx-instrument-metrics" aria-label={`${INTEL_TITLE[tab]} snapshot`}>
-        {metricSets[tab].map((metric) => (
-          <div key={metric.label}>
-            <span>{metric.label}</span>
-            <strong className={metric.tone ?? ''}>{metric.value}</strong>
-            <small>{metric.note}</small>
-          </div>
-        ))}
+        {metricSets[tab].map((metric) => {
+          const tone = retainedAfterRefreshFailure && metric.tone === 'up' ? '' : metric.tone ?? '';
+          return (
+            <div key={metric.label}>
+              <span>{metric.label}</span>
+              <strong className={tone}>{metric.value}</strong>
+              <small>{metric.note}</small>
+            </div>
+          );
+        })}
       </div>
       <h3 className="cgx-title">{name} {INTEL_TITLE[tab]} <em className="tdx-src">{source}</em></h3>
-      {requiresPerp && !hasPerp ? (
+      {retainedAfterRefreshFailure ? <p className="tdx-updated" role="status">refresh unavailable · last verified</p> : null}
+      {hasPerp === null ? (
+        <div className="tdx-cgx-empty"><p className="tdx-dimnote">Market Presence UNKNOWN — derivative values and data controls are withheld until canonical market truth is current.</p></div>
+      ) : requiresPerp && hasPerp === false ? (
         <div className="tdx-cgx-empty"><p className="tdx-dimnote">Spot Only — {base} has no Binance USD-M perpetual feed for this view.</p></div>
       ) : !model ? (
         <div className="tdx-cgx-empty">
           {loading
             ? <div className="tkx-chart-skeleton" aria-label={`Loading ${INTEL_TITLE[tab]}`}><i /><i /><i /><i /></div>
             : tab === 'liq'
-            ? <p className="tdx-dimnote">The live liquidation recorder is active. The chart will populate as force-order events arrive.</p>
+            ? <p className="tdx-dimnote" role={loadError ? 'alert' : 'status'}>
+                {liquidationRecorderTruth.state === 'STARTING'
+                  ? liquidationRecorderTruth.note
+                  : liquidationRecorderTruth.state === 'UNAVAILABLE'
+                    ? 'UNAVAILABLE · liquidation recorder is down.'
+                    : liquidationRecorderTruth.state === 'LIVE'
+                      ? 'LIVE · recorder owner and event evidence verified; waiting for enough points to chart.'
+                      : `UNKNOWN · ${loadError ?? 'liquidation recorder evidence is unavailable.'}`}
+              </p>
             : <p className="tdx-dimnote" role={loadError ? 'alert' : undefined}>{loadError ? `${INTEL_TITLE[tab]} unavailable — ${loadError}` : `No ${INTEL_TITLE[tab].toLowerCase()} data returned for this interval.`}</p>}
         </div>
       ) : (
@@ -987,11 +1152,11 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
               {hov !== null && <line x1={model.xi(hov)} x2={model.xi(hov)} y1={PAD_T} y2={H - PAD_B} stroke="var(--muted)" strokeWidth="1" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" />}
               {tab === 'basis' && <path d={model.valueLine} fill="none" stroke="var(--accent)" strokeWidth="1.35" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />}
               {tab === 'volume' && points.map((point, index) => <rect key={point.t} x={model.xi(index) - model.barWidth / 2} y={model.ay(point.a)} width={model.barWidth} height={Math.max(1, H - PAD_B - model.ay(point.a))} rx="1" fill="var(--accent)" opacity={hov === null ? 0.58 : hov === index ? 0.92 : 0.2} />)}
-              {tab === 'funding' && points.map((point, index) => <rect key={point.t} x={model.xi(index) - model.barWidth / 2} y={point.a >= 0 ? model.ay(point.a) : model.zeroY} width={model.barWidth} height={Math.max(1, Math.abs(model.ay(point.a) - model.zeroY))} rx="1" fill={point.a >= 0 ? 'var(--up)' : 'var(--down)'} opacity={hov === null ? 0.72 : hov === index ? 1 : 0.25} />)}
+              {tab === 'funding' && points.map((point, index) => <rect key={point.t} x={model.xi(index) - model.barWidth / 2} y={point.a >= 0 ? model.ay(point.a) : model.zeroY} width={model.barWidth} height={Math.max(1, Math.abs(model.ay(point.a) - model.zeroY))} rx="1" fill={point.a >= 0 ? retainedAfterRefreshFailure ? 'var(--muted)' : 'var(--up)' : 'var(--down)'} opacity={hov === null ? 0.72 : hov === index ? 1 : 0.25} />)}
               {tab === 'liq' && points.map((point, index) => (
                 <g key={point.t}>
                   <rect x={model.xi(index) - model.barWidth / 2} y={model.ay(point.a)} width={model.barWidth} height={Math.max(0.5, model.zeroY - model.ay(point.a))} rx="1" fill="var(--down)" opacity={hov === null ? 0.78 : hov === index ? 1 : 0.25} />
-                  <rect x={model.xi(index) - model.barWidth / 2} y={model.zeroY} width={model.barWidth} height={Math.max(0.5, model.ay(-(point.b ?? 0)) - model.zeroY)} rx="1" fill="var(--up)" opacity={hov === null ? 0.78 : hov === index ? 1 : 0.25} />
+                  <rect x={model.xi(index) - model.barWidth / 2} y={model.zeroY} width={model.barWidth} height={Math.max(0.5, model.ay(-(point.b ?? 0)) - model.zeroY)} rx="1" fill={retainedAfterRefreshFailure ? 'var(--muted)' : 'var(--up)'} opacity={hov === null ? 0.78 : hov === index ? 1 : 0.25} />
                 </g>
               ))}
               {(tab === 'funding' || tab === 'liq' || tab === 'basis') && <line x1={PAD_L} x2={W - PAD_R} y1={model.zeroY} y2={model.zeroY} stroke="var(--line-2)" strokeWidth="1" vectorEffect="non-scaling-stroke" />}
@@ -1007,18 +1172,18 @@ function DerivativesIntelligence({ symbol, base, name, hasPerp, market, openInte
                   ...(tab === 'liq'
                     ? [
                         { dot: 'var(--down)', label: 'Long Liquidations', value: '$' + fmtFull(activePoint.a, 0) },
-                        { dot: 'var(--up)', label: 'Short Liquidations', value: '$' + fmtFull(activePoint.b ?? 0, 0) },
+                        { dot: retainedAfterRefreshFailure ? 'var(--muted)' : 'var(--up)', label: 'Short Liquidations', value: '$' + fmtFull(activePoint.b ?? 0, 0) },
                       ]
-                    : [{ dot: tab === 'funding' ? (activePoint.a >= 0 ? 'var(--up)' : 'var(--down)') : 'var(--accent)', label: INTEL_TITLE[tab], value: formatValue(activePoint.a) }]),
+                    : [{ dot: tab === 'funding' ? (activePoint.a >= 0 ? retainedAfterRefreshFailure ? 'var(--muted)' : 'var(--up)' : 'var(--down)') : 'var(--accent)', label: INTEL_TITLE[tab], value: formatValue(activePoint.a) }]),
                   ...(model.priceAt(activePoint.t) !== null ? [{ dot: '#F0B90B', label: `${base} Price`, value: fmtFull(model.priceAt(activePoint.t) as number, 2) }] : []),
                 ]}
               />
             )}
           </div>
           <div className="tdx-legend">
-            {tab === 'liq' ? <><span><i className="sw" style={{ background: 'var(--down)' }} />Long Liquidations</span><span><i className="sw" style={{ background: 'var(--up)' }} />Short Liquidations</span></> : <span><i className="sw" style={{ background: 'var(--accent)', opacity: 0.8 }} />{INTEL_TITLE[tab]}</span>}
+            {tab === 'liq' ? <><span><i className="sw" style={{ background: 'var(--down)' }} />Long Liquidations</span><span><i className="sw" style={{ background: retainedAfterRefreshFailure ? 'var(--muted)' : 'var(--up)' }} />Short Liquidations</span></> : <span><i className="sw" style={{ background: 'var(--accent)', opacity: 0.8 }} />{INTEL_TITLE[tab]}</span>}
             <span><i className="dot" style={{ borderColor: '#F0B90B' }} />{base} Price</span>
-            {tab === 'liq' && liqSince ? <span className="cgx-note">Recording Since {formatClockZone(liqSince, clockZone, { month: 'short', day: 'numeric' })} · No Historical REST Feed</span> : null}
+            {tab === 'liq' && liquidationRecorderTruth.mayClaimLive && liqSince ? <span className="cgx-note">Recording Since {formatClockZone(liqSince, clockZone, { month: 'short', day: 'numeric' })} · No Historical REST Feed</span> : null}
           </div>
         </>
       )}
@@ -1048,6 +1213,7 @@ function TokenEvidenceWorkspace({
   news,
   newsError,
   borrowTruth,
+  marketCurrent,
 }: {
   symbol: string;
   base: string;
@@ -1058,6 +1224,7 @@ function TokenEvidenceWorkspace({
   news: TokenNewsContext | null;
   newsError: string | null;
   borrowTruth: BorrowTruthState;
+  marketCurrent: boolean;
 }) {
   const thesis = intelligence?.bridge.thesis ?? null;
   const usableThesisAtCut = thesis?.freshness === 'FRESH'
@@ -1195,18 +1362,18 @@ function TokenEvidenceWorkspace({
       <div className="tkx-owner-current" aria-label="Current owner values">
         <div>
           <span>Canonical OI</span>
-          <strong>{fmtMoney(intelligence?.openInterest.value?.quoteUsd)}</strong>
-          <small>{intelligence?.openInterest.state ?? 'UNAVAILABLE'} · {intelligence?.openInterest.dataset ?? 'usd_m.open_interest'}</small>
+          <strong>{marketCurrent && intelligence?.openInterest.state === 'FRESH' ? fmtMoney(intelligence.openInterest.value?.quoteUsd) : 'UNKNOWN'}</strong>
+          <small>{marketCurrent ? `${intelligence?.openInterest.state ?? 'UNAVAILABLE'} · ${intelligence?.openInterest.dataset ?? 'usd_m.open_interest'}` : 'Market truth is not current; value withheld.'}</small>
         </div>
         <div>
           <span>OI Change</span>
-          <strong>{fmtPct(intelligence?.openInterest.value?.changePct, 2)}</strong>
-          <small>MarketEngine owner observation; no client recompute.</small>
+          <strong>{marketCurrent && intelligence?.openInterest.state === 'FRESH' ? fmtPct(intelligence.openInterest.value?.changePct, 2) : 'UNKNOWN'}</strong>
+          <small>{marketCurrent ? 'MarketEngine owner observation; no client recompute.' : 'Market truth is not current; value withheld.'}</small>
         </div>
         <div>
           <span>Sampled Liquidations · 15m</span>
-          <strong>{fmtMoney(intelligence?.liquidation.value?.total15mUsd)}</strong>
-          <small>{intelligence?.liquidation.state ?? 'UNAVAILABLE'} · latest-per-symbol lower bound</small>
+          <strong>{marketCurrent && intelligence?.liquidation.state === 'FRESH' ? fmtMoney(intelligence.liquidation.value?.total15mUsd) : 'UNKNOWN'}</strong>
+          <small>{marketCurrent ? `${intelligence?.liquidation.state ?? 'UNAVAILABLE'} · latest-per-symbol lower bound` : 'Market truth is not current; value withheld.'}</small>
         </div>
         <div>
           <span>Tagged News</span>
@@ -1241,7 +1408,20 @@ function TokenEvidenceWorkspace({
 }
 
 export function TokenDetail({ symbol }: { symbol: string }) {
-  const { markets, state, prefs, toggleWatch, setPage, openDetail } = useStore();
+  const { binding } = useProductControlRoomContext();
+  const {
+    markets,
+    marketStatus,
+    marketsLastSuccessAtMs,
+    marketsUpdatedAt,
+    marketsError,
+    connected,
+    state,
+    prefs,
+    toggleWatch,
+    setPage,
+    openDetail,
+  } = useStore();
   const [range, setRange] = useState<RangeKey>('1D');
   const [ivl, setIvl] = useState<'auto' | IntervalKey>('auto');
   const [tv, setTv] = useState(false);
@@ -1254,18 +1434,52 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   const [watchError, setWatchError] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [basisSnapshot, setBasisSnapshot] = useState<BasisEngineSnapshot | null>(null);
+  const [basisError, setBasisError] = useState<string | null>(null);
   const [intelligence, setIntelligence] = useState<TokenIntelligenceRead | null>(null);
   const [intelligenceError, setIntelligenceError] = useState<string | null>(null);
   const [accountContext, setAccountContext] = useState<SymbolAccountContext | null>(null);
   const [accountContextError, setAccountContextError] = useState<string | null>(null);
   const [newsContext, setNewsContext] = useState<TokenNewsContext | null>(null);
   const [newsContextError, setNewsContextError] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
 
-  const live = markets.find((m) => m.symbol === symbol);
+  const marketTruth = projectMarketConsumerTruth({
+    status: marketStatus,
+    lastSuccessAtMs: marketsLastSuccessAtMs,
+    sourceUpdatedAtMs: marketsUpdatedAt,
+    nowMs,
+  });
+  const marketFreshness = resolveMarketFreshness({
+    connected,
+    error: marketsError,
+    sourceTimeMs: marketsUpdatedAt,
+    nowMs,
+    staleAfterMs: Math.max(12_000, (prefs.dataCadence?.market ?? prefs.refreshSec) * 2500),
+  });
+  const marketCurrent = marketTruth.label === 'CURRENT' && marketFreshness.live;
+  const marketStateLabel = marketTruth.label === 'CURRENT' && !marketFreshness.live
+    ? `MARKET ${marketFreshness.status}`
+    : marketTruth.label;
+  const live = marketCurrent ? markets.find((market) => market.symbol === symbol) : undefined;
   const base = baseOf(symbol);
   const name = profile?.name ?? tokenName(base);
   const watchlisted = state?.config.watchlist.includes(symbol) ?? false;
-  const hasPerp = live?.hasPerp ?? false;
+  const marketPresence = live?.hasPerp === true
+    ? 'SPOT_PERP'
+    : live?.hasSpot === true
+      ? 'SPOT_ONLY'
+      : 'UNKNOWN';
+  const hasPerp = marketPresence === 'SPOT_PERP'
+    ? true
+    : marketPresence === 'SPOT_ONLY'
+      ? false
+      : null;
+  const tokenMarketCurrent = marketCurrent && marketPresence !== 'UNKNOWN';
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // The shell keeps one scroll container across routes. A symbol workspace
   // must always open at its identity and live snapshot, never halfway down a
@@ -1277,11 +1491,11 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   // Futures klines have no 1s granularity — coerce to 1m on that source.
   const raw = ivl === 'auto' ? RANGES[range] : { interval: ivl, limit: INTERVAL_LIMIT[ivl] };
   const effective = src === 'futures' && raw.interval === '1s' ? { interval: '1m', limit: 60 } : raw;
-  const tvSymbol = src === 'futures' && hasPerp ? `BINANCE:${symbol}.P` : `BINANCE:${symbol}`;
+  const tvSymbol = src === 'futures' && hasPerp === true ? `BINANCE:${symbol}.P` : `BINANCE:${symbol}`;
   const tvInterval = effective.interval;
 
   useEffect(() => {
-    if (!hasPerp && src === 'futures') setSrc('spot');
+    if (hasPerp !== true && src === 'futures') setSrc('spot');
   }, [hasPerp, src]);
 
   // ---- price series: server-owned public kline history --------------------
@@ -1349,16 +1563,30 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   // Basis context comes from the same crossed-book runtime that drives the
   // Basis page. It is never recomputed or inferred in this component.
   useEffect(() => {
-    if (!hasPerp) {
+    if (hasPerp !== true) {
       setBasisSnapshot(null);
+      setBasisError(null);
       return;
     }
     setBasisSnapshot(null);
+    setBasisError(null);
     const poll = createSettledPoll<BasisEngineSnapshot>({
       intervalMs: 2_000,
-      request: (signal) => fetchJson('/api/engine/basis', { cache: 'no-store', signal }),
-      onSuccess: setBasisSnapshot,
-      onError: () => setBasisSnapshot(null),
+      request: async (signal) => {
+        const decoded = decodeBasisRuntimeSnapshot(
+          await fetchJson<unknown>('/api/engine/basis', { cache: 'no-store', signal }),
+        );
+        if (decoded === null) throw new TypeError('Basis runtime read failed its published contract.');
+        return decoded;
+      },
+      onSuccess: (next) => {
+        setBasisSnapshot(next);
+        setBasisError(null);
+      },
+      onError: (error) => {
+        setBasisSnapshot(null);
+        setBasisError(apiErrorMessage(error, 'Basis runtime unavailable'));
+      },
     });
     poll.start();
     return poll.stop;
@@ -1451,20 +1679,59 @@ export function TokenDetail({ symbol }: { symbol: string }) {
     // and the candle error at the chart footer tells the truth.
     return [] as { t: number; v: number }[];
   }, [candles]);
-  const price = live?.spot ?? lastOf(points)?.v ?? null;
+  const price = live?.spot ?? null;
+  const chartPrice = lastOf(points)?.v ?? null;
   const first = points[0]?.v ?? null;
-  const rangeAbs = price !== null && first !== null ? price - first : null;
-  const rangePct = price !== null && first && first > 0 ? ((price - first) / first) * 100 : null;
+  const rangeAbs = chartPrice !== null && first !== null ? chartPrice - first : null;
+  const rangePct = chartPrice !== null && first !== null && first > 0
+    ? ((chartPrice - first) / first) * 100
+    : null;
   const up = (rangePct ?? 0) >= 0;
-  const basisContext = basisSnapshot?.rows.find((row) => row.symbol === symbol) ?? null;
+  const basisComponent = binding.snapshot?.components.find((component) => component.componentId === 'basis-engine');
+  const basisCanonicalReason = binding.continuity !== 'PROVEN'
+    ? binding.error ?? `CANONICAL_CONTINUITY_${binding.continuity}`
+    : basisComponent
+      ? `BASIS_ENGINE_${basisComponent.observedLifecycle}: ${[
+        basisComponent.blockerCode,
+        basisComponent.canonicalPresentation.stateLabel,
+      ].filter(Boolean).join(' · ')}`
+      : 'BASIS_ENGINE_CANONICAL_TRUTH_MISSING';
+  const basisCanonicalReady = Boolean(
+    binding.continuity === 'PROVEN'
+    && basisComponent?.observedLifecycle === 'READY'
+    && basisComponent.canonicalPresentation.status === 'operational',
+  );
+  const basisCanonicalLoading = Boolean(
+    binding.loading && binding.snapshot === null && binding.error === null
+    || binding.continuity === 'PROVEN'
+      && basisComponent
+      && ['START_REQUESTED', 'STARTING', 'WARMING'].includes(basisComponent.observedLifecycle),
+  );
+  const basisSnapshotIsCurrent = basisSnapshot !== null
+    && basisRuntimeSnapshotCurrent(basisSnapshot, nowMs);
+  const basisCurrent = tokenMarketCurrent
+    && basisCanonicalReady
+    && basisError === null
+    && basisSnapshotIsCurrent;
+  const basisReason = basisError
+    ?? (!basisCanonicalReady
+      ? basisCanonicalLoading ? 'STARTING' : basisCanonicalReason
+      : basisSnapshot === null
+        ? 'STARTING'
+        : !basisSnapshotIsCurrent
+          ? 'BASIS_SOURCE_TIMESTAMPS_NOT_CURRENT'
+          : null);
+  const basisContext = basisCurrent && basisSnapshot
+    ? basisSnapshot.rows.find((row) => row.symbol === symbol) ?? null
+    : null;
 
   const searchMatches = useMemo(() => {
     const needle = q.trim().toUpperCase();
-    if (!needle) return [];
+    if (!needle || !marketCurrent) return [];
     return markets
       .filter((m) => m.base.includes(needle) || tokenName(m.base).toUpperCase().includes(needle))
       .slice(0, 8);
-  }, [markets, q]);
+  }, [marketCurrent, markets, q]);
 
   const toggleCurrentWatch = async () => {
     if (watchBusy) return;
@@ -1484,16 +1751,22 @@ export function TokenDetail({ symbol }: { symbol: string }) {
     ? 'Buy Spot · Sell Perp'
     : live?.executableBasisSide === 'SHORT_SPOT_LONG_PERP'
       ? 'Sell Spot · Buy Perp'
-      : hasPerp
+      : hasPerp === true
         ? 'No Crossed-Book Edge'
-        : 'Spot Only';
-  const fundingPosture = !hasPerp || live?.fundingRate === null || live?.fundingRate === undefined
-    ? 'Spot Only'
-    : live.fundingRate > 0
-      ? 'Longs Pay'
-      : live.fundingRate < 0
-        ? 'Shorts Pay'
-        : 'Flat Funding';
+        : hasPerp === false
+          ? 'Spot Only'
+          : 'Market Presence UNKNOWN';
+  const fundingPosture = hasPerp === null
+    ? 'Market Presence UNKNOWN'
+    : hasPerp === false
+      ? 'Spot Only'
+      : live?.fundingRate === null || live?.fundingRate === undefined
+        ? 'Funding UNKNOWN'
+        : live.fundingRate > 0
+          ? 'Longs Pay'
+          : live.fundingRate < 0
+            ? 'Shorts Pay'
+            : 'Flat Funding';
   return (
     <div className="container page tkx-page">
       <section className="tkx-frame" aria-label="token workspace">
@@ -1545,30 +1818,36 @@ export function TokenDetail({ symbol }: { symbol: string }) {
         <div className="tkx-summary" aria-label="Token Summary">
           <div>
             <span>Spot Price</span>
-            <strong>{fmtPrice(price)}</strong>
-            <small><Chg pct={live?.change24hPct}>{live?.change24hPct === null || live?.change24hPct === undefined ? '—' : fmtPct(Math.abs(live.change24hPct), 2, false)}</Chg> · {fmtMoney(live?.quoteVolume24h)} 24h</small>
+            <strong>{tokenMarketCurrent ? fmtPrice(price) : 'UNKNOWN'}</strong>
+            <small>{tokenMarketCurrent
+              ? <><Chg pct={live?.change24hPct}>{live?.change24hPct === null || live?.change24hPct === undefined ? '—' : fmtPct(Math.abs(live.change24hPct), 2, false)}</Chg> · {fmtMoney(live?.quoteVolume24h)} 24h</>
+              : marketPresence === 'UNKNOWN' && marketCurrent ? 'Market Presence UNKNOWN' : marketStateLabel}</small>
           </div>
           <div>
             <span>Executable Gap</span>
-            <strong>{fmtBasis(live?.executableBasisBestPct)}</strong>
+            <strong>{tokenMarketCurrent ? fmtBasis(live?.executableBasisBestPct) : 'UNKNOWN'}</strong>
             <small>
               {executableDirection}
-              {basisContext && (basisContext.direction === 'long_spot_short_perp' || basisContext.borrow.status === 'available') && basisContext.netEdgePct !== null
+              {basisCurrent && basisContext && (basisContext.direction === 'long_spot_short_perp' || basisContext.borrow.status === 'available') && basisContext.netEdgePct !== null
                 ? ' · Net ' + fmtBasis(basisContext.netEdgePct)
-                : basisContext?.borrow.status === 'unknown'
+                : basisCurrent && basisContext?.borrow.status === 'unknown'
                   ? ' · Borrow Cost Unknown'
+                  : hasPerp === true && !basisCurrent
+                    ? ` · Basis ${basisReason ?? 'NOT CURRENT'}`
                   : ''}
             </small>
           </div>
           <div>
             <span>Funding</span>
-            <strong>{hasPerp ? fmtFunding(live?.fundingRate) : 'Spot Only'}</strong>
-            <small>{fundingPosture}{live?.nextFundingTime ? ' · ' + countdown(live.nextFundingTime) : ''}</small>
+            <strong>{hasPerp === true ? fmtFunding(live?.fundingRate) : hasPerp === false ? 'Spot Only' : 'UNKNOWN'}</strong>
+            <small>{fundingPosture}{hasPerp === true && live?.nextFundingTime ? ' · ' + countdown(live.nextFundingTime) : ''}</small>
           </div>
           <div>
             <span>Open Interest</span>
-            <strong>{hasPerp ? fmtMoney(intelligence?.openInterest.value?.quoteUsd) : 'Spot Only'}</strong>
-            <small>{hasPerp ? <><Chg pct={intelligence?.openInterest.value?.changePct}>{intelligence?.openInterest.value?.changePct === null || intelligence?.openInterest.value?.changePct === undefined ? 'UNKNOWN' : fmtPct(Math.abs(intelligence.openInterest.value.changePct), 2, false)}</Chg> · {intelligence?.openInterest.state ?? 'UNAVAILABLE'} · {intelligence?.liquidation.state ?? 'UNAVAILABLE'} Liq</> : 'No derivatives telemetry'}</small>
+            <strong>{hasPerp === true && intelligence?.openInterest.state === 'FRESH' ? fmtMoney(intelligence.openInterest.value?.quoteUsd) : hasPerp === false ? 'Spot Only' : 'UNKNOWN'}</strong>
+            <small>{hasPerp === true
+              ? <><Chg pct={intelligence?.openInterest.state === 'FRESH' ? intelligence.openInterest.value?.changePct : null}>{intelligence?.openInterest.state === 'FRESH' && intelligence.openInterest.value?.changePct !== null && intelligence.openInterest.value?.changePct !== undefined ? fmtPct(Math.abs(intelligence.openInterest.value.changePct), 2, false) : 'UNKNOWN'}</Chg> · {intelligence?.openInterest.state ?? 'UNAVAILABLE'} · {intelligence?.liquidation.state ?? 'UNAVAILABLE'} Liq</>
+              : hasPerp === false ? 'No derivatives telemetry' : 'Market Presence UNKNOWN'}</small>
           </div>
         </div>
 
@@ -1584,6 +1863,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
           news={newsContext}
           newsError={newsContextError}
           borrowTruth={accountContext?.borrowTruthState ?? (accountContextError ? 'UNAVAILABLE' : 'UNKNOWN')}
+          marketCurrent={tokenMarketCurrent}
         />
 
         <div className="tkx-workspace">
@@ -1592,7 +1872,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
             <div className="tkx-range-result">
               <span>{ivl === 'auto' ? range : INTERVAL_LABEL[ivl]} Change</span>
               <strong>{rangeAbs !== null ? fmtPrice(Math.abs(rangeAbs)) : '—'}</strong>
-              <Chg pct={rangePct}>{fmtPct(Math.abs(rangePct ?? 0), 2, false)}</Chg>
+              <Chg pct={rangePct}>{rangePct === null ? '—' : fmtPct(Math.abs(rangePct), 2, false)}</Chg>
             </div>
             <div className="tdx-controls">
               <div className="tdx-ranges" role="tablist" aria-label="Chart range">
@@ -1602,7 +1882,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
                   </button>
                 ))}
               </div>
-              {hasPerp && (
+              {hasPerp === true && (
                 <div className="tdx-kind tdx-srcseg" role="tablist" aria-label="Chart source">
                   <button type="button" role="tab" aria-selected={src === 'spot'} className={src === 'spot' ? 'on' : ''} onClick={() => setSrc('spot')}>Spot</button>
                   <button type="button" role="tab" aria-selected={src === 'futures'} className={src === 'futures' ? 'on' : ''} onClick={() => setSrc('futures')}>Futures</button>
@@ -1640,7 +1920,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
             <MoneyFlowCard symbol={symbol} base={base} />
             <PositioningCard symbol={symbol} base={base} hasPerp={hasPerp} />
           </div>
-          <DerivativesIntelligence symbol={symbol} base={base} name={name} hasPerp={hasPerp} market={live} openInterest={intelligence?.openInterest ?? null} clockZone={prefs.clockZone} />
+          <DerivativesIntelligence symbol={symbol} base={base} name={name} hasPerp={hasPerp} market={live} openInterest={tokenMarketCurrent ? intelligence?.openInterest ?? null : null} clockZone={prefs.clockZone} />
         </div>
       </section>
       {chartFocus && (
@@ -1649,7 +1929,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
             <span>
               <TokenIcon symbol={symbol} size={28} />
               <b>{base} TradingView Workspace</b>
-              <em>{src === 'futures' && hasPerp ? 'Binance USD-M Perpetual' : 'Binance Spot'} · {INTERVAL_LABEL[(effective.interval as IntervalKey)] ?? effective.interval}</em>
+              <em>{src === 'futures' && hasPerp === true ? 'Binance USD-M Perpetual' : 'Binance Spot'} · {INTERVAL_LABEL[(effective.interval as IntervalKey)] ?? effective.interval}</em>
             </span>
             <button type="button" aria-label="Close Full Chart" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setChartFocus(false); }}><IconClose size={17} /></button>
           </div>

@@ -7,7 +7,12 @@ import { IconSearch } from '../components/Icons';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { fmtBasis, fmtMoney, timeAgo } from '../format';
 import { exactOrDash, hasMarginLiability, projectPrivateRead } from '../lib/privateRead';
-import type { BasisRow, BasisSnapshot } from '../lib/basisRuntime';
+import {
+  basisRuntimeSnapshotCurrent,
+  decodeBasisRuntimeSnapshot,
+  type BasisRow,
+  type BasisSnapshot,
+} from '../lib/basisRuntime';
 import './Markets.css';
 import './Loans.css';
 
@@ -32,11 +37,23 @@ export function Loans() {
   const [basisError, setBasisError] = useState<string | null>(null);
   const [view, setView] = useState<LoanView>('overview');
   const [search, setSearch] = useState('');
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const poll = createSettledPoll<BasisSnapshot>({
       intervalMs: 2_000,
-      request: (signal) => fetchJson('/api/engine/basis', { cache: 'no-store', signal }),
+      request: async (signal) => {
+        const decoded = decodeBasisRuntimeSnapshot(
+          await fetchJson<unknown>('/api/engine/basis', { cache: 'no-store', signal }),
+        );
+        if (decoded === null) throw new TypeError('Basis runtime read failed its published contract.');
+        return decoded;
+      },
       onSuccess: (next) => {
         setBasis(next);
         setBasisError(null);
@@ -47,29 +64,38 @@ export function Loans() {
     return poll.stop;
   }, []);
 
+  const basisCurrent = basis !== null
+    && basisError === null
+    && basisRuntimeSnapshotCurrent(basis, nowMs);
+  const basisRuntimeReason = basisError
+    ?? basis?.status.lastError
+    ?? (basis === null
+      ? 'Public Basis Loading'
+      : !basis.status.running
+        ? 'BASIS_RUNTIME_STOPPED'
+        : basis.status.bookState !== 'fresh' || basis.status.markState !== 'fresh'
+          ? `BASIS_SOURCE_NOT_CURRENT: books=${basis.status.bookState}; marks=${basis.status.markState}`
+          : 'BASIS_SOURCE_TIMESTAMPS_NOT_CURRENT');
+
   const preflightRows = useMemo(() => {
     const query = search.trim().toUpperCase();
-    return (basis?.rows ?? [])
+    return (basisCurrent && basis ? basis.rows : [])
       .filter((row) => row.direction === 'short_spot_long_perp')
       .filter((row) => !query || row.base.includes(query) || row.symbol.includes(query))
       .sort((a, b) => (b.executableGapPct ?? Number.NEGATIVE_INFINITY) - (a.executableGapPct ?? Number.NEGATIVE_INFINITY));
-  }, [basis?.rows, search]);
+  }, [basis, basisCurrent, search]);
 
-  const basisRuntimeError = basisError ?? basis?.status.lastError ?? null;
-  const basisLive = !!basis && !basisRuntimeError;
   const privatePresentation = projectPrivateRead(privateRead);
   // Server-normalized fixed-scale zeros stay zeros: `0.00000000` borrowed and
   // interest is an observed no-liability row, not an outstanding loan.
   const liabilityRows = privateRead.margin.assets?.filter(hasMarginLiability) ?? null;
   const sourceTone = view === 'preflight'
-    ? (basisLive ? 'on' : basis ? 'partial' : '')
+    ? (basisCurrent ? 'on' : basis ? 'partial' : '')
     : privatePresentation.guardTone === 'ok' ? 'on' : privatePresentation.guardTone === 'warn' ? 'partial' : '';
   const sourceText = view === 'preflight'
-    ? basisRuntimeError
-      ? `Public Source Error · ${basis ? 'Cached' : 'No Data'}`
-      : basis
-        ? `Public Basis · ${timeAgo(basis.updatedAt)}`
-        : 'Loading Public Basis'
+    ? basisCurrent && basis
+      ? `Public Basis · ${timeAgo(basis.updatedAt)}`
+      : `Public Basis Unavailable · ${basisRuntimeReason}`
     : `Binance Private Read · ${privatePresentation.stateLabel} · ${privatePresentation.freshness.label}`;
   // A stale observation outranks coverage wording: the age is why the shown
   // liabilities cannot be trusted, whatever the coverage says about scope.
@@ -80,7 +106,7 @@ export function Loans() {
   const viewCounts: Record<LoanView, string> = {
     overview: liabilityRows === null ? '—' : String(liabilityRows.length),
     assets: privateRead.margin.assets === null ? '—' : String(privateRead.margin.assets.length),
-    preflight: basis ? String(preflightRows.length) : '—',
+    preflight: basisCurrent ? String(preflightRows.length) : '—',
     activity: '—',
   };
 
@@ -123,7 +149,7 @@ export function Loans() {
               </button>
             ))}
           </div>
-          <span className={`borrowx-live ${sourceTone}`} title={view === 'preflight' ? basisRuntimeError ?? '' : privateSourceReason}><i />{sourceText}</span>
+          <span className={`borrowx-live ${sourceTone}`} title={view === 'preflight' ? basisCurrent ? '' : basisRuntimeReason : privateSourceReason}><i />{sourceText}</span>
         </nav>
 
         <div className="borrowx-workspace">
@@ -208,7 +234,7 @@ export function Loans() {
                   </tr>
                 ))}</tbody>
               </table>
-              {preflightRows.length === 0 && <div className="borrowx-empty">{basisRuntimeError ?? (basis ? 'No Reverse-Basis Rows In The Current Eligible Universe' : 'Public Basis Evidence Unavailable')}</div>}
+              {preflightRows.length === 0 && <div className="borrowx-empty">{basisCurrent ? 'No Reverse-Basis Rows In The Current Eligible Universe' : basisRuntimeReason}</div>}
             </div>
           )}
 
@@ -218,8 +244,8 @@ export function Loans() {
         </div>
 
         <footer className="borrowx-footer">
-          <span>{view === 'preflight' ? basisRuntimeError ? `Public Borrow Source Error: ${basisRuntimeError}` : `Public Borrow Source: ${basis?.status.borrowSource ?? 'Loading'}` : `Private Liability Truth: ${privateRead.reconciliation.liabilities.state} · Money Actions Blocked`}</span>
-          <span>{view === 'preflight' ? basis ? `${preflightRows.length} Public Rows` : 'Public Rows Unknown' : liabilityRows === null ? 'Private Counts Unknown' : `${liabilityRows.length} Liability Assets`}</span>
+          <span>{view === 'preflight' ? basisCurrent && basis ? `Public Borrow Source: ${basis.status.borrowSource}` : `Public Borrow Source Unavailable: ${basisRuntimeReason}` : `Private Liability Truth: ${privateRead.reconciliation.liabilities.state} · Money Actions Blocked`}</span>
+          <span>{view === 'preflight' ? basisCurrent ? `${preflightRows.length} Public Rows` : 'Public Rows Unknown' : liabilityRows === null ? 'Private Counts Unknown' : `${liabilityRows.length} Liability Assets`}</span>
           {view === 'preflight' && <button type="button" onClick={() => setPage('strategies')}>Open Basis</button>}
         </footer>
       </section>

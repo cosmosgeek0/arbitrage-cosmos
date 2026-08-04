@@ -84,7 +84,7 @@ const SURFACE_EVIDENCE = Object.freeze({
  * exact same-margin owner, unlike the required borrow-preflight evidence.
  */
 const OPTIONAL_SURFACE_EVIDENCE: Readonly<Partial<Record<keyof typeof SURFACE_EVIDENCE, readonly string[]>>> = Object.freeze({
-  markets: Object.freeze(['q-assessment']),
+  markets: Object.freeze(['wake-up', 'flow', 'candidate-focus', 'q-assessment']),
   borrow: Object.freeze([
     'collateral-amount',
     'collateral-asset',

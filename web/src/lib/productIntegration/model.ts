@@ -893,6 +893,7 @@ export const REQUIRED_SURFACE_EVIDENCE: Readonly<Record<SurfaceId, readonly stri
  * same-margin owner exists; the rows remain visible so the absence is honest.
  */
 export const OPTIONAL_SURFACE_EVIDENCE: Readonly<Partial<Record<SurfaceId, readonly string[]>>> = Object.freeze({
+  markets: Object.freeze(['wake-up', 'flow', 'candidate-focus', 'q-assessment']),
   borrow: Object.freeze([
     'collateral-amount',
     'collateral-asset',

@@ -491,12 +491,6 @@ export function Dashboard() {
 
   const marketSurfaceFreshness = productSnapshot?.surfaces.markets.evidence
     .find((datum) => datum.fieldId === 'source-freshness');
-  const canonicalMarketSourcesCurrent = Boolean(
-    marketFeedReadiness?.proven === true
-    && marketSurfaceFreshness?.truthLabel === 'LIVE_PUBLIC'
-    && marketSurfaceFreshness.value !== null
-    && marketSurfaceFreshness.unavailableReason === null,
-  );
   const marketFreshness = resolveMarketFreshness({
     connected,
     error: marketsError,
@@ -504,6 +498,21 @@ export function Dashboard() {
     nowMs,
     staleAfterMs: Math.max(12_000, prefs.refreshSec * 2_500),
   });
+  const canonicalMarketSourcesCurrent = Boolean(
+    marketFeedReadiness?.proven === true
+    && (
+      (
+        marketSurfaceFreshness?.truthLabel === 'LIVE_PUBLIC'
+        && marketSurfaceFreshness.value !== null
+        && marketSurfaceFreshness.unavailableReason === null
+      )
+      || (
+        marketStatus === 'CURRENT'
+        && marketsLastSuccessAtMs !== null
+        && marketFreshness.live
+      )
+    ),
+  );
   const marketValuesCurrent = Boolean(
     canonicalMarketSourcesCurrent
     && marketStatus === 'CURRENT'
@@ -532,7 +541,7 @@ export function Dashboard() {
     ? `Product continuity ${productBinding.continuity}`
     : marketFeedReadiness?.proven !== true
       ? marketFeedReadiness?.detail ?? 'Canonical market readiness unproven'
-      : marketSurfaceFreshness?.truthLabel !== 'LIVE_PUBLIC'
+      : !canonicalMarketSourcesCurrent
         ? marketSurfaceFreshness?.unavailableReason ?? 'Canonical market source freshness unavailable'
         : marketStatus === 'STALE'
           ? 'STALE LAST-KNOWN · numeric market values withheld'

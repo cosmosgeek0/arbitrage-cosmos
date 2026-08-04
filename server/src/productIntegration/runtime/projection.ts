@@ -1181,6 +1181,7 @@ function unavailableOwnerTruthBinding(
     dashboard: unavailableOwnerTruthSurface('dashboard', unavailableReason, truthLabel, source),
     account: unavailableOwnerTruthSurface('account', unavailableReason, truthLabel, source),
     markets: unavailableOwnerTruthSurface('markets', unavailableReason, truthLabel, source),
+    opportunities: unavailableOwnerTruthSurface('opportunities', unavailableReason, truthLabel, source),
   }), 0);
 }
 

@@ -59,7 +59,7 @@ export interface BasisRow {
   priority: { score: number } | null;
   proposal: {
     id: string;
-    status: string;
+    status: 'open' | 'updated';
     netEdgePct: number | null;
     confidence: number | null;
     invalidation: string | null;
@@ -114,6 +114,7 @@ const ROW_STATES = ['IDLE', 'WATCHING', 'FOCUS', 'PROPOSED', 'REJECTED', 'ACTIVE
 const DIRECTIONS = ['long_spot_short_perp', 'short_spot_long_perp'] as const;
 const DECISIONS = ['ignore', 'watch', 'focus', 'proposal', 'reject'] as const;
 const BORROW_STATES = ['not_needed', 'unknown', 'available', 'unavailable'] as const;
+const ACTIVE_PROPOSAL_STATES = ['open', 'updated'] as const;
 
 function plainRecord(value: unknown): UnknownRecord | null {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -248,7 +249,7 @@ function validBasisRow(value: unknown): value is BasisRow {
   if (proposal !== null) {
     if (
       !boundedText(proposal.id, 256, false)
-      || !boundedText(proposal.status, 64, false)
+      || !oneOf(proposal.status, ACTIVE_PROPOSAL_STATES)
       || !nullableNumber(proposal.netEdgePct)
       || !(proposal.confidence === null || unitInterval(proposal.confidence))
       || !nullableText(proposal.invalidation)
@@ -275,7 +276,6 @@ function validBasisRow(value: unknown): value is BasisRow {
       proposal === null
       || row.decisionKind !== 'proposal'
       || row.decisionTs === null
-      || String(proposal.status).toUpperCase() !== 'OPEN'
       || !finiteNumber(row.netEdgePct)
       || !finiteNumber(proposal.netEdgePct)
       || row.netEdgePct !== proposal.netEdgePct

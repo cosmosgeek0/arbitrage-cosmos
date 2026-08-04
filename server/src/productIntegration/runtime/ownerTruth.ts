@@ -1,4 +1,5 @@
 import type { PrivateReadSnapshot, PrivateReadState } from '../../services/privateRead.js';
+import type { ProductionOpportunitiesReadResult } from '../../systemIntegration/production/types.js';
 import type { SystemSupervisorReadModel } from '../../systemIntegration/supervisor/types.js';
 import {
   PRODUCT_RUNTIME_OWNER_TRUTH_FIELDS,
@@ -15,12 +16,14 @@ const OWNER_SOURCE = 'server.ownerTruth';
 const SUPERVISOR_SOURCE = 'systemIntegration.supervisor';
 const PRIVATE_READ_SOURCE = 'services.privateRead';
 const MARKET_SOURCE = 'intelligenceRuntime.marketSources';
+const OPPORTUNITIES_SOURCE = 'systemIntegration.opportunities';
 const DASHBOARD_MAX_AGE_MS = 60_000;
 const ACCOUNT_MAX_AGE_MS = 45_000;
 // The current public REST owner internally caches futures 24h facts for 15 s.
 // Leave bounded assembly headroom without claiming a tighter age than the
 // source itself can prove.
 const MARKETS_MAX_AGE_MS = 30_000;
+const OPPORTUNITIES_MAX_AGE_MS = 10_000;
 const MAX_VALUE_CHARS = 240;
 const MAX_MARKET_ROWS = 128;
 const MAX_SYMBOLS_IN_VALUE = 4;
@@ -71,6 +74,8 @@ export interface ProductRuntimeOwnerTruthProjectionInput {
   readonly supervisor: Readonly<SystemSupervisorReadModel>;
   readonly privateRead: Readonly<PrivateReadSnapshot>;
   readonly markets: Readonly<ProductRuntimeOwnerTruthMarketsInput>;
+  /** Omitted only by legacy callers that have no canonical proposal read port. */
+  readonly opportunities?: ProductionOpportunitiesReadResult;
 }
 
 function validObservedAt(value: unknown): number | null {
@@ -1135,10 +1140,219 @@ function marketSurface(
   );
 }
 
+function opportunitiesSurface(
+  supervisor: Readonly<SystemSupervisorReadModel>,
+  opportunities: ProductionOpportunitiesReadResult,
+): Readonly<ProductRuntimeOwnerTruthSurfaceCut> {
+  const observedAtMs = validObservedAt(opportunities.evaluatedAtMs)
+    ?? validObservedAt(supervisor.evaluatedAtMs)
+    ?? 0;
+  if (opportunities.state !== 'AVAILABLE') {
+    return unavailableSurface(
+      'opportunities',
+      observedAtMs,
+      OPPORTUNITIES_MAX_AGE_MS,
+      opportunities.state === 'DEGRADED'
+        ? 'CANONICAL_OPPORTUNITIES_DEGRADED'
+        : 'CANONICAL_OPPORTUNITIES_UNAVAILABLE',
+      'UNAVAILABLE',
+      OPPORTUNITIES_SOURCE,
+    );
+  }
+
+  const proposals = Object.freeze([
+    ...opportunities.view.basis.proposals,
+    ...opportunities.view.volume.proposals,
+  ]);
+  const decisions = Object.freeze([
+    ...opportunities.view.basis.decisions,
+    ...opportunities.view.volume.decisions,
+  ]);
+  const proposalIds = new Set(proposals.map((proposal) => proposal.canonicalId));
+  const proposalCorrelations = new Set(opportunities.identities.flatMap((identity) => (
+    identity.canonicalProjectionId !== null
+      && proposalIds.has(identity.canonicalProjectionId)
+      ? [identity.correlationId]
+      : []
+  )));
+  const basisRevision = printable(supervisor.summaries.strategies.basis.sourceRevision);
+  const volumeRevision = printable(supervisor.summaries.strategies.volume.sourceRevision);
+  const confidences = proposals.filter((proposal) => proposal.confidence !== null);
+  const economics = proposals.filter((proposal) => proposal.netEdgePct !== null);
+  const expiries = proposals.flatMap((proposal) => (
+    proposal.expiresAtMs === null ? [] : [proposal.expiresAtMs]
+  ));
+  const risk = supervisor.summaries.risk;
+  const riskBound = risk.latestVerdict !== 'UNAVAILABLE'
+    && risk.correlationId !== null
+    && proposalCorrelations.has(risk.correlationId);
+  const strategyRejections = decisions.filter((decision) => (
+    decision.lifecycle === 'REJECTED' || decision.rejectionReasons.length > 0
+  )).length + proposals.filter((proposal) => (
+    proposal.lifecycle === 'REJECTED' || proposal.rejectionReasons.length > 0
+  )).length;
+  const structuralRejects = opportunities.view.basis.rejects.length
+    + opportunities.view.volume.rejects.length;
+
+  const fields = {
+    'strategy-source-revision': basisRevision !== null && volumeRevision !== null
+      ? available(
+          'strategy-source-revision',
+          line([
+            `basisRevision=${basisRevision}`,
+            `volumeRevision=${volumeRevision}`,
+            `canonicalReadAtMs=${opportunities.evaluatedAtMs}`,
+          ])!,
+          OPPORTUNITIES_SOURCE,
+        )
+      : unavailable(
+          'strategy-source-revision',
+          'STRATEGY_SOURCE_REVISION_NOT_PUBLISHED',
+          OPPORTUNITIES_SOURCE,
+          'UNKNOWN',
+        ),
+    'evidence-conflict-missing': available(
+      'evidence-conflict-missing',
+      line([
+        `basisPresence=${opportunities.view.basis.presence}`,
+        `basisDecisions=${opportunities.view.basis.decisions.length}`,
+        `basisProposals=${opportunities.view.basis.proposals.length}`,
+        `basisRejects=${opportunities.view.basis.rejects.length}`,
+        `volumePresence=${opportunities.view.volume.presence}`,
+        `volumeDecisions=${opportunities.view.volume.decisions.length}`,
+        `volumeProposals=${opportunities.view.volume.proposals.length}`,
+        `volumeRejects=${opportunities.view.volume.rejects.length}`,
+        `balanced=${opportunities.view.reconciliation.balanced ? 'YES' : 'NO'}`,
+      ])!,
+      OPPORTUNITIES_SOURCE,
+    ),
+    'model-assessment': proposals.length > 0 && confidences.length === proposals.length
+      ? available(
+          'model-assessment',
+          line([
+            `canonicalProposals=${proposals.length}`,
+            `ownerConfidencePublished=${confidences.length}`,
+            ...confidences.slice(0, 2).map((proposal) => (
+              `${proposal.canonicalId}:confidence=${proposal.confidence}`
+            )),
+          ])!,
+          OPPORTUNITIES_SOURCE,
+        )
+      : unavailable(
+          'model-assessment',
+          proposals.length === 0
+            ? 'NO_CANONICAL_PROPOSAL'
+            : 'CANONICAL_MODEL_ASSESSMENT_INCOMPLETE',
+          OPPORTUNITIES_SOURCE,
+          'UNKNOWN',
+        ),
+    'net-economics': proposals.length > 0 && economics.length === proposals.length
+      ? available(
+          'net-economics',
+          line([
+            `canonicalProposals=${proposals.length}`,
+            `ownerNetEdgePublished=${economics.length}`,
+            ...economics.slice(0, 2).map((proposal) => (
+              `${proposal.canonicalId}:netEdgePct=${proposal.netEdgePct}`
+            )),
+          ])!,
+          OPPORTUNITIES_SOURCE,
+        )
+      : unavailable(
+          'net-economics',
+          proposals.length === 0
+            ? 'NO_CANONICAL_PROPOSAL'
+            : 'CANONICAL_PROPOSAL_NET_ECONOMICS_INCOMPLETE',
+          OPPORTUNITIES_SOURCE,
+          'UNKNOWN',
+        ),
+    'capital-risk-verdict': riskBound
+      ? available(
+          'capital-risk-verdict',
+          line([
+            `verdict=${risk.latestVerdict}`,
+            `correlationId=${risk.correlationId}`,
+            risk.latestVerdictId === null ? null : `verdictId=${risk.latestVerdictId}`,
+            risk.latestVerdictAtMs === null ? null : `evaluatedAtMs=${risk.latestVerdictAtMs}`,
+          ])!,
+          OPPORTUNITIES_SOURCE,
+        )
+      : unavailable(
+          'capital-risk-verdict',
+          proposals.length === 0
+            ? 'NO_CANONICAL_PROPOSAL'
+            : 'CANONICAL_PROPOSAL_RISK_VERDICT_NOT_BOUND',
+          OPPORTUNITIES_SOURCE,
+          'UNKNOWN',
+        ),
+    'size-staging': unavailable(
+      'size-staging',
+      proposals.length === 0
+        ? 'NO_CANONICAL_PROPOSAL'
+        : 'CANONICAL_PROPOSAL_SIZE_STAGING_NOT_PUBLISHED',
+      OPPORTUNITIES_SOURCE,
+      proposals.length === 0 ? 'UNKNOWN' : 'NOT_CONFIGURED',
+    ),
+    'expiry-invalidation': proposals.length > 0 && expiries.length === proposals.length
+      ? available(
+          'expiry-invalidation',
+          line([
+            `canonicalProposals=${proposals.length}`,
+            `earliestExpiresAtMs=${Math.min(...expiries)}`,
+            `latestExpiresAtMs=${Math.max(...expiries)}`,
+          ])!,
+          OPPORTUNITIES_SOURCE,
+        )
+      : unavailable(
+          'expiry-invalidation',
+          proposals.length === 0
+            ? 'NO_CANONICAL_PROPOSAL'
+            : 'CANONICAL_PROPOSAL_EXPIRY_INCOMPLETE',
+          OPPORTUNITIES_SOURCE,
+          'UNKNOWN',
+        ),
+    'entry-exit-recovery': unavailable(
+      'entry-exit-recovery',
+      proposals.length === 0
+        ? 'NO_CANONICAL_PROPOSAL'
+        : 'CANONICAL_PROPOSAL_ENTRY_EXIT_RECOVERY_NOT_PUBLISHED',
+      OPPORTUNITIES_SOURCE,
+      proposals.length === 0 ? 'UNKNOWN' : 'NOT_CONFIGURED',
+    ),
+    approval: available(
+      'approval',
+      line([
+        `canonicalProposals=${proposals.length}`,
+        `maximumActionAuthority=${opportunities.maximumActionAuthority}`,
+        `capitalReservationAuthority=${opportunities.capitalReservationAuthority}`,
+        `executionAuthority=${opportunities.executionAuthority}`,
+      ])!,
+      OPPORTUNITIES_SOURCE,
+    ),
+    rejection: available(
+      'rejection',
+      line([
+        `canonicalDecisions=${decisions.length}`,
+        `strategyRejections=${strategyRejections}`,
+        `structuralRejects=${structuralRejects}`,
+      ])!,
+      OPPORTUNITIES_SOURCE,
+    ),
+  };
+  return availableSurface(
+    'opportunities',
+    opportunities.evaluatedAtMs,
+    OPPORTUNITIES_MAX_AGE_MS,
+    OPPORTUNITIES_SOURCE,
+    fields,
+  );
+}
+
 /**
  * Pure owner-truth composition. The caller supplies one already sampled
  * supervisor cut, one current PrivateRead snapshot, and the same bounded public
- * Markets projection used by the public Markets route; this function performs no I/O.
+ * Markets and canonical Opportunities projections used by their public routes;
+ * this function performs no I/O.
  */
 export function projectProductRuntimeOwnerTruthCut(
   input: Readonly<ProductRuntimeOwnerTruthProjectionInput>,
@@ -1150,15 +1364,24 @@ export function projectProductRuntimeOwnerTruthCut(
     spotLive: publicSourceLive(input.supervisor, 'public-spot-source'),
     usdmLive: publicSourceLive(input.supervisor, 'public-usdm-source'),
   }));
+  const opportunities = input.opportunities === undefined
+    ? null
+    : opportunitiesSurface(input.supervisor, input.opportunities);
   const cutObservedAtMs = Math.max(
     dashboard.observedAtMs,
     account.observedAtMs,
     markets.observedAtMs,
+    opportunities?.observedAtMs ?? 0,
   );
   return Object.freeze({
     schemaVersion: PRODUCT_RUNTIME_OWNER_TRUTH_SCHEMA,
     source: OWNER_SOURCE,
     observedAtMs: cutObservedAtMs,
-    surfaces: Object.freeze([dashboard, account, markets]),
+    surfaces: Object.freeze([
+      dashboard,
+      account,
+      markets,
+      ...(opportunities === null ? [] : [opportunities]),
+    ]),
   });
 }

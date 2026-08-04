@@ -106,7 +106,7 @@ function basisRuntimePayload() {
       priority: { score: 0.8 },
       proposal: {
         id: 'basis-one',
-        status: 'OPEN',
+        status: 'open',
         netEdgePct: 0.54,
         confidence: 0.75,
         invalidation: 'Executable gap closes',
@@ -143,6 +143,12 @@ test('Basis runtime decoder is strict, detached, duplicate-safe, and time bounde
   assert.equal(decoded.rows[0].reason, 'Executable Basis proposal');
   assert.equal(decoded.rows[0].proposal.id, 'basis-one');
   assert.notEqual(decoded.rows, input.rows);
+
+  const advancingProposal = basisRuntimePayload();
+  advancingProposal.rows[0].proposal.status = 'updated';
+  assert.ok(decodeBasisRuntimeSnapshot(advancingProposal));
+  advancingProposal.rows[0].proposal.status = 'expired';
+  assert.equal(decodeBasisRuntimeSnapshot(advancingProposal), null);
 
   const malformedRow = basisRuntimePayload();
   delete malformedRow.rows[0].dataQuality;

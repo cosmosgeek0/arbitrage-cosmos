@@ -114,15 +114,12 @@ export interface ProductRuntimeMaterialSourcePage {
 
 export const PRODUCT_RUNTIME_OWNER_TRUTH_SCHEMA = 'product-owner-truth.v1' as const;
 
-/**
- * The only three product surfaces that receive this additional non-System
- * owner readback. Every other surface keeps its existing owner; this cut may
- * never widen beyond these three.
- */
+/** Product surfaces with an explicitly mounted non-Product owner readback. */
 export const PRODUCT_RUNTIME_OWNER_TRUTH_SURFACE_IDS = Object.freeze([
   'dashboard',
   'account',
   'markets',
+  'opportunities',
 ] as const);
 export type ProductRuntimeOwnerTruthSurfaceId = (typeof PRODUCT_RUNTIME_OWNER_TRUTH_SURFACE_IDS)[number];
 
@@ -165,6 +162,18 @@ export const PRODUCT_RUNTIME_OWNER_TRUTH_FIELDS: Readonly<Record<
     'candidate-focus',
     'source-freshness',
     'q-assessment',
+  ]),
+  opportunities: Object.freeze([
+    'strategy-source-revision',
+    'evidence-conflict-missing',
+    'model-assessment',
+    'net-economics',
+    'capital-risk-verdict',
+    'size-staging',
+    'expiry-invalidation',
+    'entry-exit-recovery',
+    'approval',
+    'rejection',
   ]),
 });
 
@@ -264,7 +273,7 @@ export interface ProductRuntimeOwnerTruthSurfaceBinding {
 
 /**
  * The validated projection of one injected cut. Every owner-owned row of all
- * three surfaces is present here — bound to a value or carrying an exact
+ * mounted surfaces is present here — bound to a value or carrying an exact
  * unavailable reason. There is no partially decided surface.
  */
 export interface ProductRuntimeOwnerTruthBinding {

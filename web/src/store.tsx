@@ -121,6 +121,7 @@ export type MarketSourcePublicationTruth = Readonly<{
 }>;
 export type MarketSnapshotPayload = Readonly<{
   updatedAt?: number;
+  streamUpdatedAt?: number | null;
   dataSources: MarketSourcePublicationTruth;
   rows: MarketRow[];
 }>;
@@ -133,13 +134,15 @@ const MARKET_SOURCE_PUBLICATION_KEYS = Object.freeze([
 
 /**
  * A 200 response proves only that the publication endpoint answered. It does
- * not make retained or unavailable exchange facts current. Validate the
- * server-owned source labels and reduce them into the existing fail-closed
- * market truth state.
+ * not make retained exchange facts current. The paired stream timestamp owns
+ * row liveness; REST source labels remain structural enrichment truth and are
+ * still fail-closed when an older server cannot publish that timestamp.
  */
 export function marketSnapshotTruthEvent(
   dataSources: unknown,
   observedAtMs: number,
+  streamUpdatedAt?: unknown,
+  staleAfterMs?: number,
 ): MarketStateTruthEvent {
   if (!dataSources || typeof dataSources !== 'object' || Array.isArray(dataSources)) {
     return Object.freeze({
@@ -160,6 +163,22 @@ export function marketSnapshotTruthEvent(
     });
   }
   const nonFresh = MARKET_SOURCE_PUBLICATION_KEYS.filter((key) => source[key] !== 'fresh');
+  if (streamUpdatedAt !== undefined) {
+    const sourceTimeMs = normalizeMarketSourceTime(streamUpdatedAt);
+    const sourceAgeMs = sourceTimeMs === null ? null : observedAtMs - sourceTimeMs;
+    if (sourceAgeMs === null
+      || sourceAgeMs < 0
+      || !Number.isFinite(staleAfterMs)
+      || staleAfterMs! <= 0
+      || sourceAgeMs >= staleAfterMs!) {
+      return Object.freeze({
+        kind: 'FAILURE',
+        observedAtMs,
+        error: 'Public market stream is not current.',
+      });
+    }
+    return Object.freeze({ kind: 'SUCCESS', observedAtMs });
+  }
   if (nonFresh.length > 0) {
     return Object.freeze({
       kind: 'FAILURE',
@@ -1417,7 +1436,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       request: (signal) => fetchJson('/api/markets', { signal }),
       onSuccess: (payload) => {
         if (!Array.isArray(payload.rows)) throw new Error('Invalid market response');
-        const truthEvent = marketSnapshotTruthEvent(payload.dataSources, Date.now());
+        const observedAtMs = Date.now();
+        const truthEvent = marketSnapshotTruthEvent(
+          payload.dataSources,
+          observedAtMs,
+          payload.streamUpdatedAt,
+          Math.max(12_000, marketSec * 2_500),
+        );
         setMarkets(payload.rows);
         setMarketsUpdatedAt(normalizeMarketSourceTime(payload.updatedAt));
         setMarketsError(truthEvent.kind === 'FAILURE' ? truthEvent.error : null);
@@ -1545,7 +1570,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       const payload = await fetchJson<MarketSnapshotPayload>('/api/markets');
       if (!Array.isArray(payload.rows)) throw new Error('Invalid market response');
-      const truthEvent = marketSnapshotTruthEvent(payload.dataSources, Date.now());
+      const observedAtMs = Date.now();
+      const marketSec = prefs.dataCadence?.market ?? prefs.refreshSec;
+      const truthEvent = marketSnapshotTruthEvent(
+        payload.dataSources,
+        observedAtMs,
+        payload.streamUpdatedAt,
+        Math.max(12_000, marketSec * 2_500),
+      );
       setMarkets(payload.rows);
       setMarketsUpdatedAt(normalizeMarketSourceTime(payload.updatedAt));
       setMarketsError(truthEvent.kind === 'FAILURE' ? truthEvent.error : null);

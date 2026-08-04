@@ -2418,18 +2418,38 @@ function readMarketOwnerSnapshot() {
   } = marketSourceCache ?? initialMarketSourceSnapshot;
   triggerMarketSourceRefresh(now);
   const at = spotBookRes.observedAtMs;
-  const spotBooks = spotBookRes.status === 'fulfilled'
+  const dataSources = Object.freeze({
+    spotBookTicker: publishedMarketSourceState(spotBookRes, now),
+    futuresBookTicker: publishedMarketSourceState(perpBookRes, now),
+    futures24hTicker: publishedMarketSourceState(perp24hRes, now),
+  });
+  const spotBooks = spotBookRes.status === 'fulfilled' && dataSources.spotBookTicker === 'fresh'
     ? spotBookRes.value
     : new Map<string, BookTicker>();
-  const perpBooks = perpBookRes.status === 'fulfilled'
+  const perpBooks = perpBookRes.status === 'fulfilled' && dataSources.futuresBookTicker === 'fresh'
     ? perpBookRes.value
     : new Map<string, BookTicker>();
-  const perp24h = perp24hRes.status === 'fulfilled'
+  const perp24h = perp24hRes.status === 'fulfilled' && dataSources.futures24hTicker === 'fresh'
     ? perp24hRes.value
     : new Map<string, Futures24hTicker>();
 
-  const rows = engine
-    .allRows()
+  const ownerRows = engine.allRows();
+  let latestSpotObservedAtMs: number | null = null;
+  let latestUsdmObservedAtMs: number | null = null;
+  for (const row of ownerRows) {
+    const spotObservedAtMs = engine.priceUpdatedAt(row.symbol);
+    const usdmObservedAtMs = engine.markEventTimestamp(row.symbol);
+    if (spotObservedAtMs !== null) {
+      latestSpotObservedAtMs = Math.max(latestSpotObservedAtMs ?? 0, spotObservedAtMs);
+    }
+    if (usdmObservedAtMs !== null) {
+      latestUsdmObservedAtMs = Math.max(latestUsdmObservedAtMs ?? 0, usdmObservedAtMs);
+    }
+  }
+  const streamUpdatedAt = latestSpotObservedAtMs !== null && latestUsdmObservedAtMs !== null
+    ? Math.min(latestSpotObservedAtMs, latestUsdmObservedAtMs)
+    : null;
+  const rows = ownerRows
     .map((row) => projectMarketApiRow({
       row,
       spotBook: spotBooks.get(row.symbol),
@@ -2440,12 +2460,9 @@ function readMarketOwnerSnapshot() {
     .sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0));
 
   return Object.freeze({
-    observedAtMs: at,
-    dataSources: Object.freeze({
-      spotBookTicker: publishedMarketSourceState(spotBookRes, now),
-      futuresBookTicker: publishedMarketSourceState(perpBookRes, now),
-      futures24hTicker: publishedMarketSourceState(perp24hRes, now),
-    }),
+    observedAtMs: streamUpdatedAt ?? at,
+    streamUpdatedAt,
+    dataSources,
     rows: Object.freeze(rows),
   });
 }
@@ -2463,6 +2480,9 @@ function readProductOwnerTruth(
   supervisor: Readonly<SystemSupervisorReadModel>,
 ) {
   const markets = readMarketOwnerSnapshot();
+  const opportunities = systemIntegrationProduction.opportunities.readSnapshot(
+    systemIntegrationClock.nowMs(),
+  );
   // The private reader owns its cadence and single-flight transport. Product
   // samples the one immutable published snapshot exactly once and never
   // triggers a credential-bearing refresh from a read route.
@@ -2478,6 +2498,7 @@ function readProductOwnerTruth(
         futures24hTicker: productMarketSourceState(markets.dataSources.futures24hTicker),
       }),
     }),
+    opportunities,
   });
 }
 
@@ -2485,6 +2506,7 @@ app.get('/api/markets', (_req, res) => {
   const snapshot = readMarketOwnerSnapshot();
   res.json({
     updatedAt: snapshot.observedAtMs,
+    streamUpdatedAt: snapshot.streamUpdatedAt,
     dataSources: snapshot.dataSources,
     rows: snapshot.rows,
   });

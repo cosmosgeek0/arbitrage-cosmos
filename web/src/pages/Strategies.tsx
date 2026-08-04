@@ -18,7 +18,12 @@ import { privateReadFreshness, projectPrivateRead } from '../lib/privateRead';
 import { useStore } from '../store';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
-import type { BasisRow, BasisSnapshot } from '../lib/basisRuntime';
+import {
+  basisRuntimeSnapshotCurrent,
+  decodeBasisRuntimeSnapshot,
+  type BasisRow,
+  type BasisSnapshot,
+} from '../lib/basisRuntime';
 import './VolumeScanner.css';
 import './BasisScanner.css';
 
@@ -103,19 +108,20 @@ export type BasisRuntimeTruth = Readonly<{
 export function resolveBasisRuntimeTruth(input: Readonly<{
   canonicalState: 'LOADING' | 'READY' | 'UNAVAILABLE';
   canonicalReason: string | null;
-  snapshotStatus: Pick<BasisSnapshot['status'], 'running' | 'bookState' | 'markState' | 'lastError'> | null;
+  snapshot: BasisSnapshot | null;
   requestError: string | null;
+  nowMs?: number;
 }>): BasisRuntimeTruth {
   if (input.requestError) {
     return Object.freeze({ current: false, state: 'UNAVAILABLE', label: 'Unavailable', reason: input.requestError });
   }
-  if (input.snapshotStatus && !input.snapshotStatus.running) {
+  if (input.snapshot && !input.snapshot.status.running) {
     const canonicalSuffix = input.canonicalReason ? ` · ${input.canonicalReason}` : '';
     return Object.freeze({
       current: false,
       state: 'UNAVAILABLE',
       label: 'Unavailable',
-      reason: input.snapshotStatus.lastError ?? `BASIS_RUNTIME_STOPPED${canonicalSuffix}`,
+      reason: input.snapshot.status.lastError ?? `BASIS_RUNTIME_STOPPED${canonicalSuffix}`,
     });
   }
   if (input.canonicalState === 'UNAVAILABLE') {
@@ -126,23 +132,31 @@ export function resolveBasisRuntimeTruth(input: Readonly<{
       reason: input.canonicalReason ?? 'BASIS_ENGINE_CANONICAL_TRUTH_UNAVAILABLE',
     });
   }
-  if (!input.snapshotStatus) {
+  if (!input.snapshot) {
     return Object.freeze({ current: false, state: 'STARTING', label: 'Starting', reason: null });
   }
-  if (input.snapshotStatus.lastError) {
+  if (input.snapshot.status.lastError) {
     return Object.freeze({
       current: false,
       state: 'UNAVAILABLE',
       label: 'Unavailable',
-      reason: input.snapshotStatus.lastError,
+      reason: input.snapshot.status.lastError,
     });
   }
-  if (input.snapshotStatus.bookState !== 'fresh' || input.snapshotStatus.markState !== 'fresh') {
+  if (input.snapshot.status.bookState !== 'fresh' || input.snapshot.status.markState !== 'fresh') {
     return Object.freeze({
       current: false,
       state: 'UNAVAILABLE',
       label: 'Unavailable',
-      reason: `BASIS_SOURCE_NOT_CURRENT: books=${input.snapshotStatus.bookState}; marks=${input.snapshotStatus.markState}`,
+      reason: `BASIS_SOURCE_NOT_CURRENT: books=${input.snapshot.status.bookState}; marks=${input.snapshot.status.markState}`,
+    });
+  }
+  if (!basisRuntimeSnapshotCurrent(input.snapshot, input.nowMs)) {
+    return Object.freeze({
+      current: false,
+      state: 'UNAVAILABLE',
+      label: 'Unavailable',
+      reason: 'BASIS_SOURCE_TIMESTAMPS_NOT_CURRENT',
     });
   }
   if (input.canonicalState === 'LOADING') {
@@ -239,11 +253,23 @@ export function Strategies() {
   const [filter, setFilter] = useState<Filter>('all');
   const [search, setSearch] = useState('');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 1_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const poll = createSettledPoll<BasisSnapshot>({
       intervalMs: 2_000,
-      request: (signal) => fetchJson('/api/engine/basis', { cache: 'no-store', signal }),
+      request: async (signal) => {
+        const decoded = decodeBasisRuntimeSnapshot(
+          await fetchJson('/api/engine/basis', { cache: 'no-store', signal }),
+        );
+        if (decoded === null) throw new TypeError('Basis runtime read failed its published contract.');
+        return decoded;
+      },
       onSuccess: (next) => {
         setSnapshot(next);
         setError(null);
@@ -277,10 +303,11 @@ export function Strategies() {
   const basisTruth = resolveBasisRuntimeTruth({
     canonicalState: basisCanonicalReady ? 'READY' : basisCanonicalLoading ? 'LOADING' : 'UNAVAILABLE',
     canonicalReason: basisCanonicalReason,
-    snapshotStatus: snapshot?.status ?? null,
+    snapshot,
     requestError: error,
+    nowMs,
   });
-  const accountNow = Date.now();
+  const accountNow = nowMs;
   const privatePresentation = projectPrivateRead(privateRead, accountNow);
   const spotFreshness = privateReadFreshness({
     ...privateRead,

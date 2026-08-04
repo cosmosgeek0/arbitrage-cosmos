@@ -94,6 +94,7 @@ import {
   createCanonicalOwnerEvidenceReadPort,
   type CanonicalOwnerEvidenceReadPort,
 } from './systemIntegration/adapters/index.js';
+import { createProductionOpportunityOwners } from './systemIntegration/adapters/opportunityOwners.js';
 import type { SystemControlMutation } from './systemIntegration/contracts/index.js';
 import {
   SIGNED_Q_READINESS_WAIVER,
@@ -287,6 +288,10 @@ const systemIntegrationProduction = createProductionSystemIntegrationPorts({
   market: engine,
   basis: basisRuntime,
   volume: volumeRuntime,
+  opportunityOwners: createProductionOpportunityOwners({
+    basis: basisRuntime,
+    volume: volumeRuntime,
+  }),
   capitalSummary: capitalSummaryReadPort,
   // The current production host has no Q transport/owner mount. Keep that
   // absence explicit so the signed readiness policy can match only the exact
@@ -1043,6 +1048,9 @@ app.use('/api', operatorAccess.middleware());
 // bypassing it by registration order.
 app.post('/api/notifications/ingest/aws', (_req, res) => {
   sendOwnerGated(res, 'AWS_NOTIFICATION_INGEST');
+});
+app.get('/api/system-integration/opportunities', (_req, res) => {
+  res.json(systemIntegrationProduction.opportunities.readSnapshot(systemIntegrationClock.nowMs()));
 });
 app.use('/api/system-integration', createSystemIntegrationRouter({
   read: systemIntegration.read,

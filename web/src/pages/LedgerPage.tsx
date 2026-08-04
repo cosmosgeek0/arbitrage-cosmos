@@ -89,6 +89,13 @@ interface LedgerCountEvidence {
   qHorizon: LedgerCountHorizon | null;
 }
 
+type LedgerDaySeverity = Exclude<Severity, 'Unknown'>;
+
+interface LedgerDayCounts {
+  total: LedgerCountEvidence;
+  severities: Readonly<Record<LedgerDaySeverity, LedgerCountEvidence>>;
+}
+
 const SEVERITY_TONE: Record<Severity, Tone> = {
   Critical: 'bad',
   Warning: 'warn',
@@ -105,12 +112,27 @@ const SEVERITY_FILTERS: { id: SeverityFilter; label: string }[] = [
 ];
 const LOG_PAGE_SIZE = 200;
 export const LOG_SEARCH_DEBOUNCE_MS = 400;
+const LEDGER_DAY_SEVERITIES = Object.freeze([
+  'Critical',
+  'Warning',
+  'Info',
+  'Debug',
+] as const satisfies readonly LedgerDaySeverity[]);
 const UNKNOWN_COUNT_EVIDENCE: LedgerCountEvidence = Object.freeze({
   count: null,
   scope: 'UNKNOWN',
   completeness: 'UNKNOWN',
   queryHorizon: null,
   qHorizon: null,
+});
+const UNKNOWN_DAY_COUNTS: LedgerDayCounts = Object.freeze({
+  total: UNKNOWN_COUNT_EVIDENCE,
+  severities: Object.freeze({
+    Critical: UNKNOWN_COUNT_EVIDENCE,
+    Warning: UNKNOWN_COUNT_EVIDENCE,
+    Info: UNKNOWN_COUNT_EVIDENCE,
+    Debug: UNKNOWN_COUNT_EVIDENCE,
+  }),
 });
 
 const KNOWN_KINDS = [
@@ -932,6 +954,29 @@ export function decodeLedgerCountEvidence(value: unknown): LedgerCountEvidence {
   };
 }
 
+function decodeLedgerDayCounts(
+  totalPayload: unknown,
+  severityPayloads: Readonly<Record<LedgerDaySeverity, unknown>>,
+): LedgerDayCounts {
+  const total = decodeLedgerCountEvidence(totalPayload);
+  const severities = Object.fromEntries(LEDGER_DAY_SEVERITIES.map((severity) => [
+    severity,
+    decodeLedgerCountEvidence(severityPayloads[severity]),
+  ])) as Record<LedgerDaySeverity, LedgerCountEvidence>;
+  if (total.count === null || LEDGER_DAY_SEVERITIES.some((severity) => severities[severity].count === null)) {
+    throw new Error('LEDGER_EVENT_COUNT_MALFORMED');
+  }
+  const classifiedCount = LEDGER_DAY_SEVERITIES.reduce(
+    (sum, severity) => sum + (severities[severity].count as number),
+    0,
+  );
+  if (classifiedCount > total.count) throw new Error('LEDGER_EVENT_COUNT_INCONSISTENT');
+  return Object.freeze({
+    total,
+    severities: Object.freeze(severities),
+  });
+}
+
 export function ledgerCountLabel(
   evidence: LedgerCountEvidence,
   filtered: boolean,
@@ -1010,7 +1055,7 @@ export function LedgerPage() {
   const [includeDebug, setIncludeDebug] = useState(false);
   // F-065: malformed or missing count evidence stays unknown, never a real 0.
   const [totalCountEvidence, setTotalCountEvidence] = useState<LedgerCountEvidence>(UNKNOWN_COUNT_EVIDENCE);
-  const [dayTotals, setDayTotals] = useState<Record<string, LedgerCountEvidence>>({});
+  const [dayTotals, setDayTotals] = useState<Record<string, LedgerDayCounts>>({});
   const [dayTotalsError, setDayTotalsError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [rawOpen, setRawOpen] = useState(false);
@@ -1048,7 +1093,14 @@ export function LedgerPage() {
     decision,
     includeDebug ? 'debug' : 'no-debug',
   ].join('\u0000');
-  const dayCountKey = `${eventReadKey}\u0000${dayKeys.join(',')}`;
+  const dayCountKey = [
+    dayKeys.join(','),
+    zone ?? 'local',
+    kind,
+    symbol.trim().toUpperCase(),
+    serverQuery,
+    decision,
+  ].join('\u0000');
 
   useEffect(() => {
     const debouncer = searchDebouncerRef.current;
@@ -1161,24 +1213,32 @@ export function LedgerPage() {
     setDayTotals({});
     setDayTotalsError(null);
     setLoadedDayCountKey(null);
-    const poll = createSettledPoll<Record<string, LedgerCountEvidence>>({
+    const poll = createSettledPoll<Record<string, LedgerDayCounts>>({
       intervalMs: 60_000,
       request: async (signal) => {
-        const pairs = await Promise.all(dayKeys.filter((key) => key !== selectedDay).map(async (key) => {
-          const params = eventParams({
-            day: key,
-            zone,
-            kind,
-            symbol,
-            query: serverQuery,
-            severity,
-            decision,
-            includeDebug,
-          });
-          const payload = await fetchJson<unknown>(`/api/events/count?${params}`, { cache: 'no-store', signal });
-          const evidence = decodeLedgerCountEvidence(payload);
-          if (evidence.count === null) throw new Error('LEDGER_EVENT_COUNT_MALFORMED');
-          return [key, evidence] as const;
+        const pairs = await Promise.all(dayKeys.map(async (key) => {
+          const fetchCount = (countSeverity: SeverityFilter) => {
+            const params = eventParams({
+              day: key,
+              zone,
+              kind,
+              symbol,
+              query: serverQuery,
+              severity: countSeverity,
+              decision,
+              includeDebug: true,
+            });
+            return fetchJson<unknown>(`/api/events/count?${params}`, { cache: 'no-store', signal });
+          };
+          const [totalPayload, ...severityPayloadList] = await Promise.all([
+            fetchCount('all'),
+            ...LEDGER_DAY_SEVERITIES.map(fetchCount),
+          ]);
+          const severityPayloads = Object.fromEntries(LEDGER_DAY_SEVERITIES.map((countSeverity, index) => [
+            countSeverity,
+            severityPayloadList[index],
+          ])) as Record<LedgerDaySeverity, unknown>;
+          return [key, decodeLedgerDayCounts(totalPayload, severityPayloads)] as const;
         }));
         return Object.fromEntries(pairs);
       },
@@ -1195,7 +1255,7 @@ export function LedgerPage() {
     });
     poll.start();
     return poll.stop;
-  }, [dayCountKey, dayKeys, decision, includeDebug, kind, selectedDay, serverQuery, severity, symbol, zone]);
+  }, [dayCountKey, dayKeys, decision, kind, serverQuery, symbol, zone]);
 
   const events = useMemo(() => {
     const map = new Map<number, CanonicalLedgerEvent>();
@@ -1214,6 +1274,10 @@ export function LedgerPage() {
   const renderedTotalCountEvidence = rowsCurrent ? totalCountEvidence : UNKNOWN_COUNT_EVIDENCE;
   const renderedTotalCount = renderedTotalCountEvidence.count;
   const renderedDayTotals = countsCurrent ? dayTotals : {};
+  const dayFilterActive = kind !== 'all'
+    || symbol.trim() !== ''
+    || serverQuery !== ''
+    || decision !== 'all';
   const selected = selectedId === null ? null : renderedEvents.find((ev) => ev.id === selectedId) ?? null;
   const canClear = kind !== 'all'
     || symbol !== ''
@@ -1362,20 +1426,21 @@ export function LedgerPage() {
         <section className="calx-week logx-week" aria-label="Log Days" title={dayTotalsError ?? undefined}>
           {dayTotalsError && <div className="lix-empty" role="status">Day counts unavailable: {dayTotalsError}</div>}
           {dayKeys.map((key) => {
-            const countEvidence = key === selectedDay
-              ? renderedTotalCountEvidence
-              : renderedDayTotals[key] ?? UNKNOWN_COUNT_EVIDENCE;
-            const count = countEvidence.count;
+            const counts = renderedDayTotals[key] ?? UNKNOWN_DAY_COUNTS;
+            const count = counts.total.count;
             return <button type="button" key={key} aria-pressed={key === selectedDay} className={`${key === selectedDay ? 'selected' : ''} ${key === today ? 'today' : ''}`} onClick={() => { setSelectedDay(key); setSelectedId(null); }}>
               <span className="calx-day-name">{formatKey(key, { weekday: 'short' })} <b>{formatKey(key, { day: 'numeric' })}</b></span>
-              <span><em>{filterActive ? 'Matching Logs' : 'Logs'}</em><b>{count ?? '—'}</b></span>
-              <span className="logx-day-severity"><em>{key === selectedDay ? 'Current Day' : 'Select Day'}</em><b><i className="info">
-                {count === null
-                  ? 'Count Pending'
-                  : countEvidence.completeness === 'BOUNDED_RECENT_ID_HORIZON'
-                    ? 'Bounded Search'
-                    : 'Complete Retained'}
-              </i></b></span>
+              <span><em>{dayFilterActive ? 'Matching Total' : 'Total'}</em><b title={ledgerCountLabel(counts.total, dayFilterActive)}>{count ?? '—'}</b></span>
+              <span className="logx-day-severity"><em>{key === selectedDay ? 'Current Day' : 'Select Day'}</em><b>
+                {LEDGER_DAY_SEVERITIES.map((countSeverity) => {
+                  const evidence = counts.severities[countSeverity];
+                  return <i
+                    key={countSeverity}
+                    className={countSeverity.toLowerCase()}
+                    title={ledgerCountLabel(evidence, dayFilterActive)}
+                  >{countSeverity.charAt(0)} {evidence.count ?? '—'}</i>;
+                })}
+              </b></span>
             </button>;
           })}
         </section>

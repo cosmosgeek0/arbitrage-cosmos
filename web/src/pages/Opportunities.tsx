@@ -97,6 +97,21 @@ export interface OpportunitySourceTruth {
   readonly detail: string;
 }
 
+export interface CanonicalOpportunityRead {
+  readonly state: 'AVAILABLE' | 'DEGRADED' | 'UNAVAILABLE';
+  readonly evaluatedAtMs: number | null;
+  readonly reasonCodes: readonly string[];
+  readonly proposalCount: number | null;
+  readonly maximumActionAuthority: 'ADVISORY';
+  readonly capitalReservationAuthority: 'NONE';
+  readonly executionAuthority: 'NONE';
+}
+
+export interface CanonicalOpportunityTruth {
+  readonly label: 'AVAILABLE' | 'UNAVAILABLE';
+  readonly detail: string;
+}
+
 function record(value: unknown): Record<string, unknown> | null {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
   const prototype = Object.getPrototypeOf(value);
@@ -111,6 +126,90 @@ function finiteRequired(value: unknown): value is number {
 
 function nonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function stringArray(value: unknown): readonly string[] | null {
+  if (!Array.isArray(value) || !value.every(nonEmptyString)) return null;
+  return Object.freeze([...value]);
+}
+
+function canonicalIdBucket(value: unknown): Readonly<{
+  decisions: readonly string[];
+  proposals: readonly string[];
+}> | null {
+  const bucket = record(value);
+  if (bucket === null) return null;
+  const decisions = stringArray(bucket.decisions);
+  const proposals = stringArray(bucket.proposals);
+  if (decisions === null || proposals === null) return null;
+  return Object.freeze({ decisions, proposals });
+}
+
+export function decodeCanonicalOpportunityRead(value: unknown): CanonicalOpportunityRead | null {
+  try {
+    const root = record(value);
+    if (root === null
+      || (root.state !== 'AVAILABLE' && root.state !== 'DEGRADED' && root.state !== 'UNAVAILABLE')
+      || root.maximumActionAuthority !== 'ADVISORY'
+      || root.capitalReservationAuthority !== 'NONE'
+      || root.executionAuthority !== 'NONE') return null;
+
+    const reasonCodes = stringArray(root.reasonCodes);
+    if (reasonCodes === null) return null;
+    const evaluatedAtMs = root.evaluatedAtMs === null
+      ? null
+      : Number.isSafeInteger(root.evaluatedAtMs) && (root.evaluatedAtMs as number) > 0
+        ? root.evaluatedAtMs as number
+        : null;
+    if (root.state !== 'UNAVAILABLE' && evaluatedAtMs === null) return null;
+    if (root.state === 'AVAILABLE' && reasonCodes.length !== 0) return null;
+    if (root.state !== 'AVAILABLE' && reasonCodes.length === 0) return null;
+
+    let proposalCount: number | null = null;
+    if (root.state === 'UNAVAILABLE') {
+      if (root.view !== null || root.ownerOrderedCanonicalIds !== null) return null;
+    } else {
+      if (record(root.view) === null) return null;
+      const ordered = record(root.ownerOrderedCanonicalIds);
+      if (ordered === null) return null;
+      const basis = canonicalIdBucket(ordered.basis);
+      const volume = canonicalIdBucket(ordered.volume);
+      if (basis === null || volume === null) return null;
+      proposalCount = basis.proposals.length + volume.proposals.length;
+    }
+
+    return Object.freeze({
+      state: root.state,
+      evaluatedAtMs,
+      reasonCodes,
+      proposalCount,
+      maximumActionAuthority: 'ADVISORY' as const,
+      capitalReservationAuthority: 'NONE' as const,
+      executionAuthority: 'NONE' as const,
+    });
+  } catch {
+    return null;
+  }
+}
+
+export function projectCanonicalOpportunityTruth(
+  read: CanonicalOpportunityRead | null,
+  error: string | null,
+): CanonicalOpportunityTruth {
+  if (error !== null) return Object.freeze({ label: 'UNAVAILABLE', detail: error });
+  if (read === null) {
+    return Object.freeze({
+      label: 'UNAVAILABLE',
+      detail: 'CANONICAL_OPPORTUNITY_READ_PENDING',
+    });
+  }
+  if (read.state !== 'AVAILABLE') {
+    return Object.freeze({ label: 'UNAVAILABLE', detail: read.reasonCodes.join(' · ') });
+  }
+  return Object.freeze({
+    label: 'AVAILABLE',
+    detail: `${read.proposalCount ?? 0} canonical proposals · ADVISORY / NONE / NONE`,
+  });
 }
 
 function basisFact(
@@ -566,8 +665,10 @@ export function Opportunities() {
   const [search, setSearch] = useState('');
   const [basisRead, setBasisRead] = useState<OpportunitySourceRead | null>(null);
   const [volumeRead, setVolumeRead] = useState<OpportunitySourceRead | null>(null);
+  const [canonicalRead, setCanonicalRead] = useState<CanonicalOpportunityRead | null>(null);
   const [basisError, setBasisError] = useState<string | null>(null);
   const [volumeError, setVolumeError] = useState<string | null>(null);
+  const [canonicalError, setCanonicalError] = useState<string | null>(null);
 
   useEffect(() => {
     const basisPoll = createSettledPoll<OpportunitySourceRead>({
@@ -602,11 +703,32 @@ export function Opportunities() {
       },
       onError: (reason) => setVolumeError(apiErrorMessage(reason, 'Volume proposal facts unavailable')),
     });
+    const canonicalPoll = createSettledPoll<CanonicalOpportunityRead>({
+      intervalMs: 2_000,
+      request: async (signal) => {
+        const decoded = decodeCanonicalOpportunityRead(await fetchJson<unknown>(
+          '/api/system-integration/opportunities',
+          { cache: 'no-store', signal },
+        ));
+        if (decoded === null) throw new TypeError('CANONICAL_OPPORTUNITY_READ_MALFORMED');
+        return decoded;
+      },
+      onSuccess: (next) => {
+        setCanonicalRead(next);
+        setCanonicalError(null);
+      },
+      onError: (reason) => setCanonicalError(apiErrorMessage(
+        reason,
+        'CANONICAL_OPPORTUNITY_READ_UNAVAILABLE',
+      )),
+    });
     basisPoll.start();
     volumePoll.start();
+    canonicalPoll.start();
     return () => {
       basisPoll.stop();
       volumePoll.stop();
+      canonicalPoll.stop();
     };
   }, []);
 
@@ -621,6 +743,7 @@ export function Opportunities() {
   const opportunityNow = Date.now();
   const basisTruth = projectOpportunitySourceTruth(basisRead, basisError, opportunityNow);
   const volumeTruth = projectOpportunitySourceTruth(volumeRead, volumeError, opportunityNow);
+  const canonicalTruth = projectCanonicalOpportunityTruth(canonicalRead, canonicalError);
   const publishedFacts = projectPublishedOpportunityFacts(basisRead, volumeRead, opportunityNow);
   const proposalCoverageKnown = basisRead !== null
     && volumeRead !== null
@@ -699,8 +822,8 @@ export function Opportunities() {
           </div>
           <div className="opportunityx-summary-cell">
             <span>Canonical Projection</span>
-            <strong>NOT MOUNTED</strong>
-            <small>No new legacy proposals or mutations are accepted · Basis and Volume own strategy decisions · action authority NONE</small>
+            <strong>{canonicalTruth.label}</strong>
+            <small>{canonicalTruth.detail}</small>
           </div>
           <div className="opportunityx-summary-cell">
             <span>Raw Market Rows</span>
@@ -736,7 +859,7 @@ export function Opportunities() {
           <span className="opportunityx-view-note">
             {view === 'active'
               ? proposalCoverageKnown
-                ? `${publishedFacts.length} ${currentProposalCoverage ? 'current' : 'retained/degraded'} owner-ordered rows · canonical projection not mounted`
+                ? `${publishedFacts.length} ${currentProposalCoverage ? 'current' : 'retained/degraded'} owner-ordered rows · canonical projection ${canonicalTruth.label}`
                 : `${publishedFacts.length} known owner-ordered rows · coverage UNKNOWN`
               : marketTruth.factsAvailable
                 ? `${rawRows.length} ${marketTruth.retained ? 'retained' : 'source-order'} rows`

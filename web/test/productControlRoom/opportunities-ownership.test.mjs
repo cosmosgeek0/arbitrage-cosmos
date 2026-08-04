@@ -16,8 +16,10 @@ registerHooks({
 
 const {
   PublishedOpportunityFacts,
+  decodeCanonicalOpportunityRead,
   decodeBasisOpportunityRead,
   decodeVolumeOpportunityRead,
+  projectCanonicalOpportunityTruth,
   projectOpportunitySourceTruth,
   projectPublishedOpportunityFacts,
 } = await import('../../src/pages/Opportunities.tsx');
@@ -313,6 +315,52 @@ test('Opportunities source truth fails closed for retained, conflicting, unavail
   assert.equal(decodeVolumeOpportunityRead(malformedVolume), null);
 });
 
+test('Opportunities canonical projection admits trustworthy zero and exposes exact unavailable reasons', () => {
+  const zero = decodeCanonicalOpportunityRead({
+    state: 'AVAILABLE',
+    evaluatedAtMs: NOW,
+    reasonCodes: [],
+    view: {},
+    identities: [],
+    losses: [],
+    ownerOrderedCanonicalIds: {
+      basis: { decisions: [], proposals: [] },
+      volume: { decisions: [], proposals: [] },
+    },
+    maximumActionAuthority: 'ADVISORY',
+    capitalReservationAuthority: 'NONE',
+    executionAuthority: 'NONE',
+  });
+  assert.ok(zero);
+  assert.equal(zero.proposalCount, 0);
+  assert.deepEqual(projectCanonicalOpportunityTruth(zero, null), {
+    label: 'AVAILABLE',
+    detail: '0 canonical proposals · ADVISORY / NONE / NONE',
+  });
+
+  const unavailable = decodeCanonicalOpportunityRead({
+    state: 'UNAVAILABLE',
+    evaluatedAtMs: NOW,
+    reasonCodes: ['BASIS_OPPORTUNITY_OWNER_UNAVAILABLE'],
+    view: null,
+    identities: [],
+    losses: [],
+    ownerOrderedCanonicalIds: null,
+    maximumActionAuthority: 'ADVISORY',
+    capitalReservationAuthority: 'NONE',
+    executionAuthority: 'NONE',
+  });
+  assert.ok(unavailable);
+  assert.deepEqual(projectCanonicalOpportunityTruth(unavailable, null), {
+    label: 'UNAVAILABLE',
+    detail: 'BASIS_OPPORTUNITY_OWNER_UNAVAILABLE',
+  });
+  assert.equal(decodeCanonicalOpportunityRead({
+    ...unavailable,
+    maximumActionAuthority: 'EXECUTE',
+  }), null);
+});
+
 test('Opportunities withholds stale, skewed, expired, duplicate, inconsistent, and incomplete facts', () => {
   const currentBasis = decodeBasisOpportunityRead(basisPayload());
   const currentVolume = decodeVolumeOpportunityRead(volumePayload());
@@ -388,11 +436,16 @@ test('Opportunities uses only existing passive engine reads and shared market tr
   const source = await readFile(new URL('../../src/pages/Opportunities.tsx', import.meta.url), 'utf8');
   const endpoints = [...source.matchAll(/'(\/api\/[^']+)'/g)].map((match) => match[1]);
 
-  assert.deepEqual(new Set(endpoints), new Set(['/api/engine/basis', '/api/engine/volume']));
+  assert.deepEqual(new Set(endpoints), new Set([
+    '/api/engine/basis',
+    '/api/engine/volume',
+    '/api/system-integration/opportunities',
+  ]));
   assert.match(source, /createSettledPoll<OpportunitySourceRead>/);
   assert.match(source, /\{ cache: 'no-store', signal \}/);
   assert.match(source, /basisPoll\.stop\(\)/);
   assert.match(source, /volumePoll\.stop\(\)/);
+  assert.match(source, /canonicalPoll\.stop\(\)/);
   assert.match(source, /row\.state !== 'PROPOSED'/);
   assert.match(source, /projectPublishedOpportunityFacts/);
   assert.match(source, /executableBasisBestPct/);

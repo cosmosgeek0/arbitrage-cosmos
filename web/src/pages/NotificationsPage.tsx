@@ -33,12 +33,13 @@ import './LiveIntelligence.css';
 import './NotificationsPage.css';
 
 type NotificationFilter = 'all' | 'action' | 'execution' | 'health' | 'infrastructure';
+type RoutingReadbackState = 'PENDING' | 'CURRENT' | 'UNAVAILABLE';
 
 const RULES: { key: NotificationRuleKey; label: string; short: string; configured?: boolean }[] = [
-  { key: 'critical', label: 'Needs Attention', short: 'Failed dependencies, owner-gated boundaries, and emergency controls' },
+  { key: 'critical', label: 'Needs Attention', short: 'Show these canonical episodes in this browser inbox' },
   { key: 'execution', label: 'Execution NOT_CONFIGURED', short: 'No canonical execution incident producer is mounted', configured: false },
-  { key: 'health', label: 'Bot Health', short: 'Engine, stream, connection, and control transitions' },
-  { key: 'infrastructure', label: 'Infrastructure Evidence', short: 'Unverified external events; AWS remains OWNER_GATED' },
+  { key: 'health', label: 'Bot Health', short: 'Show canonical engine, stream, connection, and control episodes' },
+  { key: 'infrastructure', label: 'Infrastructure Evidence', short: 'Show owner-gated infrastructure evidence in this browser' },
 ];
 
 const FILTERS: { id: NotificationFilter; label: string; configured?: boolean }[] = [
@@ -56,7 +57,7 @@ const EMPTY_ROUTING: RoutingSnapshot = {
     aws: { available: false, label: 'AWS Infrastructure', detail: 'OWNER_GATED · external AWS state is not verified' },
   },
   destinations: {
-    inApp: { available: false, state: 'UNAVAILABLE', label: 'In-App', detail: 'Canonical Product incident routing is unavailable' },
+    inApp: { available: false, state: 'UNAVAILABLE', label: 'In-App', detail: 'Direct local capability readback is unavailable' },
     email: { available: false, state: 'NOT_CONFIGURED', label: 'Email', detail: 'Delivery provider is not connected' },
     telegram: { available: false, state: 'NOT_CONFIGURED', label: 'Telegram', detail: 'Bot and chat routing are not connected' },
     whatsapp: { available: false, state: 'NOT_CONFIGURED', label: 'WhatsApp', detail: 'Cloud API is not connected' },
@@ -121,6 +122,10 @@ function statusLabel(item: CuratedNotification): string {
   return 'Update';
 }
 
+function truthfulIncidentCount(available: boolean, value: number): number | '—' {
+  return available ? value : '—';
+}
+
 export function NotificationsPage() {
   const { prefs, updatePref } = useStore();
   const { binding: productBinding } = useProductControlRoomContext();
@@ -132,7 +137,7 @@ export function NotificationsPage() {
   const [draftRules, setDraftRules] = useState<NotificationRules>(() => prefs.alerts);
   const [seen, setSeen] = useState(() => parseNotificationCursor(localStorage.getItem('cosmos-notif-seen')));
   const [routingReadback, setRoutingReadback] = useState<RoutingSnapshot>(EMPTY_ROUTING);
-  const [routingFailed, setRoutingFailed] = useState(false);
+  const [routingState, setRoutingState] = useState<RoutingReadbackState>('PENDING');
 
   useEffect(() => setDraftRules(prefs.alerts), [prefs.alerts]);
 
@@ -143,11 +148,11 @@ export function NotificationsPage() {
       onSuccess: (next) => {
         const decoded = decodeNotificationRoutingSnapshot(next);
         setRoutingReadback(decoded ?? EMPTY_ROUTING);
-        setRoutingFailed(decoded === null);
+        setRoutingState(decoded === null ? 'UNAVAILABLE' : 'CURRENT');
       },
       onError: () => {
         setRoutingReadback(EMPTY_ROUTING);
-        setRoutingFailed(true);
+        setRoutingState('UNAVAILABLE');
       },
     });
     poll.start();
@@ -163,10 +168,13 @@ export function NotificationsPage() {
     : [];
   const canonicalInAppAvailable = productBinding.continuity === 'PROVEN'
     && incidentAvailability.state === 'AVAILABLE';
+  const incidentTruthAvailable = canonicalInAppAvailable;
+  const localRoutingReadbackCurrent = routingState === 'CURRENT';
+  const directInAppCapabilityEligible = canonicalInAppAvailable && localRoutingReadbackCurrent;
   const routing = useMemo(() => failClosedRouting(
     routingReadback,
-    canonicalInAppAvailable && !routingFailed,
-  ), [canonicalInAppAvailable, routingFailed, routingReadback]);
+    directInAppCapabilityEligible,
+  ), [directInAppCapabilityEligible, routingReadback]);
   const notifications = useMemo(() => projectCanonicalIncidentNotifications(
     incidentAvailability,
     canonicalIncidents,
@@ -217,18 +225,26 @@ export function NotificationsPage() {
   const botDetail = productSnapshot
     ? `Basis ${basisComponent?.observedLifecycle ?? 'UNKNOWN'} / ${basisComponent?.capability ?? 'UNKNOWN'} / ${basisComponent?.truthLabel ?? 'UNKNOWN'} · Volume ${volumeComponent?.observedLifecycle ?? 'UNKNOWN'} / ${volumeComponent?.capability ?? 'UNKNOWN'} / ${volumeComponent?.truthLabel ?? 'UNKNOWN'}`
     : productBinding.error ?? 'Canonical Product supervisor truth is unavailable';
-  const routingSourceAvailable = (key: keyof RoutingSnapshot['sources'], connector: ConnectorState) => (
-    !routingFailed
+  const routingSourceAvailable = (_key: keyof RoutingSnapshot['sources'], connector: ConnectorState) => (
+    localRoutingReadbackCurrent
     && connector.available
-    && (key !== 'bot' || runtimePresentation.tone === 'ok')
   );
   const availableRoutingSourceCount = (Object.entries(routing.sources) as [keyof RoutingSnapshot['sources'], ConnectorState][])
     .filter(([key, connector]) => routingSourceAvailable(key, connector)).length;
   const executionState = 'OWNER_GATED';
-  const latestAction = enabled.find((item) => item.needsAction);
+  const latestAction = notifications.find((item) => item.needsAction);
+  const attentionLabel = !incidentTruthAvailable
+    ? 'Incident State UNKNOWN'
+    : latestAction?.title ?? 'No Active Intervention';
+  const attentionDetail = !incidentTruthAvailable
+    ? 'Canonical Product incident truth is unavailable; this is not an all-clear'
+    : latestAction?.subject ?? 'No active intervention is present in the canonical incident read model';
+  const directRoutingStatusLabel = routingState === 'PENDING'
+    ? 'Direct Readback Pending'
+    : 'Direct Readback Unavailable';
 
   const markRead = () => {
-    if (!enabled.length) return;
+    if (!incidentTruthAvailable || !enabled.length) return;
     const latest = Math.max(...enabled.map((item) => item.id));
     setSeen(latest);
     localStorage.setItem('cosmos-notif-seen', String(latest));
@@ -254,23 +270,36 @@ export function NotificationsPage() {
         <div><span>Bot</span><strong className={botTone}><i />{botState}</strong><em>{botDetail}</em></div>
         <div><span>Execution</span><strong>{executionState}</strong><em>LIVE_EXECUTION_NOT_IMPLEMENTED</em></div>
         <div><span>Engines</span><strong>{runtimePresentation.livePublicCount === null ? 'UNKNOWN' : runtimePresentation.livePublicCount} / 2 Live Public</strong><em>Canonical lifecycle, capability, and truth · continuity {productBinding.continuity}</em></div>
-        <div className={latestAction ? 'attention' : ''}><span>Attention</span><strong>{latestAction ? latestAction.title : 'Incident State UNKNOWN'}</strong><em>{latestAction ? latestAction.subject : 'No current intervention was observed; this is not an all-clear'}</em></div>
+        <div className={latestAction ? 'attention' : ''}><span>Attention</span><strong>{attentionLabel}</strong><em>{attentionDetail}</em></div>
       </section>
 
-      <ProductSurfaceAdapter surfaceId="notifications" />
+      <section className="notifx-supervisor-binding" aria-label="Supervisor Catalog and Build Binding">
+        <header className="notifx-supervisor-binding-label">
+          <span>Supervisor Catalog / Build Binding</span>
+          <strong>Not Live Delivery Or Direct Routing Readback</strong>
+          <em>This required adapter can show catalog/build states such as IN_APP WIRED_LOCAL. It cannot override the separate local non-authoritative capability readback below.</em>
+        </header>
+        <ProductSurfaceAdapter surfaceId="notifications" />
+      </section>
 
       <>
         <section className="calx-navigation notifx-navigation" aria-label="Notifications Navigation">
           <div className="calx-range-controls">
-            <button type="button" className="calx-today" onClick={() => setSelectedDay('active')}>Active</button>
-            <button type="button" className="calx-today" onClick={() => setSelectedDay(today)}>Today</button>
+            <button type="button" className="calx-today" onClick={() => setSelectedDay('active')} disabled={!incidentTruthAvailable}>Active</button>
+            <button type="button" className="calx-today" onClick={() => setSelectedDay(today)} disabled={!incidentTruthAvailable}>Today</button>
             <strong>{rangeLabel}</strong><span className="newsx-range-note">Seven-Day Inbox</span>
           </div>
           <div className="notifx-navigation-actions">
             <span className="notifx-curation" aria-live="polite">
-              <b>{notifications.length}</b> Durable Episodes · <b>{groupedCount}</b> Server-Grouped Repeats
+              <b>{truthfulIncidentCount(incidentTruthAvailable, notifications.length)}</b> Durable Episodes · <b>{truthfulIncidentCount(incidentTruthAvailable, groupedCount)}</b> Server-Grouped Repeats
             </span>
-            <button type="button" className="notifx-mark-read" onClick={markRead} disabled={unread === 0}><IconBell size={13} />{unread ? `Mark ${unread} Read` : 'All Read'}</button>
+            <button
+              type="button"
+              className="notifx-mark-read"
+              onClick={markRead}
+              disabled={!incidentTruthAvailable || unread === 0}
+              title="Stores the read cursor in this browser only; incident acknowledgement is a separate durable control."
+            ><IconBell size={13} />{!incidentTruthAvailable ? 'Read State Unavailable' : unread ? `Mark ${unread} Read Here` : 'All Read Here'}</button>
             <PillSelect value={prefs.clockZone} options={TIME_ZONE_OPTIONS.map((option) => ({ ...option }))} onChange={(value) => updatePref('clockZone', value)} ariaLabel="Time Zone" className="lix-select lix-zone-select" />
           </div>
         </section>
@@ -280,22 +309,23 @@ export function NotificationsPage() {
             type="button"
             className={selectedDay === 'active' ? 'selected' : ''}
             onClick={() => setSelectedDay('active')}
+            disabled={!incidentTruthAvailable}
           >
             <span className="calx-day-name">Active <b>∞</b></span>
-            <span><em>Alerts</em><b>{activeItems.length}</b></span>
-            <span><em>Attention</em><b className={activeItems.length ? 'notifx-count-bad' : ''}>{activeItems.length}</b></span>
-            <span><em>Recovered</em><b className="notifx-count-good">{activeItems.filter((item) => item.severity === 'resolved').length}</b></span>
+            <span><em>Alerts</em><b>{truthfulIncidentCount(incidentTruthAvailable, activeItems.length)}</b></span>
+            <span><em>Attention</em><b className={incidentTruthAvailable && activeItems.length ? 'notifx-count-bad' : ''}>{truthfulIncidentCount(incidentTruthAvailable, activeItems.length)}</b></span>
+            <span><em>Recovered</em><b className={incidentTruthAvailable ? 'notifx-count-good' : ''}>{truthfulIncidentCount(incidentTruthAvailable, activeItems.filter((item) => item.severity === 'resolved').length)}</b></span>
           </button>
           {dayKeys.map((key) => {
             const items = itemsByDay.get(key) ?? [];
             const total = items.length;
             const attention = items.filter((item) => item.needsAction).length;
             const recovered = items.filter((item) => item.severity === 'resolved').length;
-            return <button type="button" key={key} className={`${key === selectedDay ? 'selected' : ''} ${key === today ? 'today' : ''}`} onClick={() => setSelectedDay(key)}>
+            return <button type="button" key={key} className={`${key === selectedDay ? 'selected' : ''} ${key === today ? 'today' : ''}`} onClick={() => setSelectedDay(key)} disabled={!incidentTruthAvailable}>
               <span className="calx-day-name">{formatKey(key, { weekday: 'short' })} <b>{formatKey(key, { day: 'numeric' })}</b></span>
-              <span><em>Alerts</em><b>{total}</b></span>
-              <span><em>Attention</em><b className={attention ? 'notifx-count-bad' : ''}>{attention}</b></span>
-              <span><em>Recovered</em><b className="notifx-count-good">{recovered}</b></span>
+              <span><em>Alerts</em><b>{truthfulIncidentCount(incidentTruthAvailable, total)}</b></span>
+              <span><em>Attention</em><b className={incidentTruthAvailable && attention ? 'notifx-count-bad' : ''}>{truthfulIncidentCount(incidentTruthAvailable, attention)}</b></span>
+              <span><em>Recovered</em><b className={incidentTruthAvailable ? 'notifx-count-good' : ''}>{truthfulIncidentCount(incidentTruthAvailable, recovered)}</b></span>
             </button>;
           })}
         </section>
@@ -312,7 +342,7 @@ export function NotificationsPage() {
                 onClick={() => setFilter(option.id)}
               >{option.label}</button>)}
             </div>
-            <button type="button" className="notifx-route-summary" onClick={() => document.querySelector('.notifx-routing')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><IconShield size={13} /><span>{routingFailed ? 'Routing Unavailable' : routing.destinations.inApp.state === 'WIRED_LOCAL' ? 'In-App WIRED_LOCAL' : 'In-App Unavailable'}</span><em>Inspect Sources & Delivery</em></button>
+            <button type="button" className="notifx-route-summary" onClick={() => document.querySelector('.notifx-routing')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><IconShield size={13} /><span>{!localRoutingReadbackCurrent ? directRoutingStatusLabel : routing.destinations.inApp.state === 'WIRED_LOCAL' ? 'Local Capability · In-App WIRED_LOCAL' : 'Local Capability · In-App Unavailable'}</span><em>Inspect Non-Authoritative Capability</em></button>
           </div>
         </section>
 
@@ -321,7 +351,7 @@ export function NotificationsPage() {
             <div><strong>{selectedDay === 'active'
               ? 'Active Attention — No Age Cutoff'
               : formatKey(selectedDay, { weekday: 'long', month: 'long', day: 'numeric' })}</strong><span>{resolvedZoneLabel(prefs.clockZone)}</span></div>
-            <p><b>{selectedAction}</b> Need Attention <i /> <b>{selectedTotal}</b> Curated Alerts <i /> <b>{selectedRecovered}</b> Recovered</p>
+            <p><b>{truthfulIncidentCount(incidentTruthAvailable, selectedAction)}</b> Need Attention <i /> <b>{truthfulIncidentCount(incidentTruthAvailable, selectedTotal)}</b> Curated Alerts <i /> <b>{truthfulIncidentCount(incidentTruthAvailable, selectedRecovered)}</b> Recovered</p>
           </div>
           <div className="notifx-inbox-body" key={`${selectedDay}-${filter}`}>
             {filtered.map((item) => {
@@ -335,59 +365,62 @@ export function NotificationsPage() {
                 {incident && <IncidentAcknowledgementButton incident={incident} />}
               </article>;
             })}
-            {incidentAvailability.state !== 'AVAILABLE' && <div className="lix-empty">Incident Truth {incidentAvailability.state} · {incidentAvailability.blocker}</div>}
+            {incidentAvailability.state !== 'AVAILABLE' && <div className="lix-empty">Incident Truth {incidentAvailability.state} · {incidentAvailability.blocker ?? 'INCIDENT_OWNER_UNKNOWN'}</div>}
             {incidentAvailability.state === 'AVAILABLE' && filtered.length === 0 && <div className="lix-empty">{query ? `Nothing Matches “${query}”.` : 'No Canonical Incident Episodes Match This View.'}</div>}
           </div>
         </section>
       </>
-      <section className="notifx-routing" aria-label="Notification Routing">
+      <section className="notifx-routing" aria-label="Local Non-Authoritative Notification Capability Readback">
         <div className="notifx-routing-intro">
-          <div><span>Routing</span><h2>Choose What Interrupts You — And Where It Goes.</h2><p>Logs keep every event. Notifications keep only transitions, interventions, and selected outcomes.</p></div>
-          <span className="notifx-policy-badge"><IconShield size={14} />State Changes Only</span>
+          <div><span>Local Capability Truth</span><h2>Non-Authoritative Routing Capability.</h2><p>This direct local endpoint readback describes declared capability only. It is not live delivery evidence or server routing authority.</p></div>
+          <span className={`notifx-policy-badge ${localRoutingReadbackCurrent ? '' : 'unavailable'}`}><IconShield size={14} />{localRoutingReadbackCurrent ? 'Local Readback Current' : directRoutingStatusLabel}</span>
         </div>
 
-        <div className="notifx-routing-grid">
-          <section className="notifx-connector-group">
-            <header><div><span>Sources</span><h3>Signals Into The Inbox</h3></div><em>{routingFailed ? 'Status Unavailable' : `${availableRoutingSourceCount} Available · gated sources excluded`}</em></header>
-            {(Object.entries(routing.sources) as [keyof RoutingSnapshot['sources'], ConnectorState][]).map(([key, connector]) => {
-              const available = routingSourceAvailable(key, connector);
-              const sourceStatus = routingFailed
-                ? 'Unavailable'
-                : key === 'bot'
-                  ? connector.available ? botState : 'Not Configured'
-                  : key === 'execution' || key === 'aws' ? 'OWNER_GATED' : available ? 'Available' : 'Not Configured';
-              return <article key={key}>
+        {localRoutingReadbackCurrent ? <>
+          <div className="notifx-routing-grid">
+            <section className="notifx-connector-group">
+              <header><div><span>Declared Sources</span><h3>Local Source Capability</h3></div><em>{availableRoutingSourceCount} available in this non-authoritative readback</em></header>
+              {(Object.entries(routing.sources) as [keyof RoutingSnapshot['sources'], ConnectorState][]).map(([key, connector]) => {
+                const available = routingSourceAvailable(key, connector);
+                const sourceStatus = key === 'execution' || key === 'aws'
+                  ? 'OWNER_GATED'
+                  : available ? 'Available' : 'Not Configured';
+                return <article key={key}>
+                  <span className="notifx-connector-icon">{connectorIcon(key)}</span>
+                  <span><b>{connector.label}</b><em>{connector.detail}</em>{connector.endpoint && <small>{connector.endpoint}</small>}</span>
+                  <strong className={available ? 'ready' : 'waiting'}><i />{sourceStatus}</strong>
+                </article>;
+              })}
+            </section>
+
+            <section className="notifx-connector-group">
+              <header><div><span>Declared Destinations</span><h3>Local Destination Capability</h3></div><em>Not a live delivery receipt</em></header>
+              {(Object.entries(routing.destinations) as [keyof RoutingSnapshot['destinations'], ConnectorState][]).map(([key, connector]) => <article key={key}>
                 <span className="notifx-connector-icon">{connectorIcon(key)}</span>
-                <span><b>{connector.label}</b><em>{connector.detail}</em>{connector.endpoint && <small>{connector.endpoint}</small>}</span>
-                <strong className={available ? 'ready' : 'waiting'}><i />{sourceStatus}</strong>
-              </article>;
-            })}
-          </section>
+                <span><b>{connector.label}</b><em>{connector.detail}</em></span>
+                <strong className={connector.available ? 'ready' : 'waiting'}><i />{connector.available ? connector.state ?? 'Active' : connector.state ?? 'NOT_CONFIGURED'}</strong>
+              </article>)}
+            </section>
+          </div>
 
-          <section className="notifx-connector-group">
-            <header><div><span>Destinations</span><h3>Where Alerts Are Delivered</h3></div><em>Credentials Stay Server-Side</em></header>
-            {(Object.entries(routing.destinations) as [keyof RoutingSnapshot['destinations'], ConnectorState][]).map(([key, connector]) => <article key={key}>
-              <span className="notifx-connector-icon">{connectorIcon(key)}</span>
-              <span><b>{connector.label}</b><em>{connector.detail}</em></span>
-              <strong className={!routingFailed && connector.available ? 'ready' : 'waiting'}><i />{routingFailed ? 'Unavailable' : connector.available ? connector.state ?? 'Active' : connector.state ?? 'NOT_CONFIGURED'}</strong>
-            </article>)}
+          <section className="notifx-noise-policy">
+            <div><IconShield size={16} /><span><b>Transitions Only · {routing.policy.transitionsOnly ? 'YES' : 'NO'}</b><em>Local non-authoritative capability policy.</em></span></div>
+            <div><IconPulse size={16} /><span><b>Repeat Window · {routing.policy.repeatWindowMinutes} Minutes</b><em>Declared grouping capability; canonical Product episodes remain server-owned.</em></span></div>
+            <div><IconActivity size={16} /><span><b>Raw Logs Excluded · {routing.policy.rawLogsExcluded ? 'YES' : 'NO'}</b><em>This page does not regroup or present raw event rows.</em></span></div>
           </section>
-        </div>
+        </> : <div className="notifx-routing-unavailable" role="status">
+          <IconShield size={18} />
+          <span><b>Local Capability {directRoutingStatusLabel}</b><em>Direct capability and policy rows stay withheld until this local readback validates. The supervisor catalog/build band above is separate and may still show its binding state.</em></span>
+        </div>}
+      </section>
 
-        <section className="notifx-rule-panel">
-          <header><div><span>Preferences</span><h3>What Deserves An Interruption</h3><p>Disabled categories remain searchable in Logs and never disappear from the ledger.</p></div><div className="notifx-rule-actions"><button type="button" onClick={() => setDraftRules(prefs.alerts)} disabled={!rulesDirty}>Discard</button><button type="button" className="primary" onClick={saveRules} disabled={!rulesDirty}>Save Preferences</button></div></header>
-          <div className="notifx-rule-list" role="group" aria-label="Notification Preferences">
+      <section className="notifx-rule-panel notifx-local-rules" aria-label="This Browser Inbox Filters">
+          <header><div><span>This Browser Only</span><h3>Inbox Visibility</h3><p>These controls only filter canonical Product incident episodes in this browser. They do not change Product routing, delivery, acknowledgement, or Ledger state.</p></div><div className="notifx-rule-actions"><button type="button" onClick={() => setDraftRules(prefs.alerts)} disabled={!rulesDirty}>Discard</button><button type="button" className="primary" onClick={saveRules} disabled={!rulesDirty}>Save This Browser</button></div></header>
+          <div className="notifx-rule-list" role="group" aria-label="This Browser Inbox Visibility">
             {RULES.map((rule) => <button type="button" key={rule.key} className={draftRules[rule.key] && rule.configured !== false ? 'on' : ''} aria-pressed={rule.configured === false ? false : draftRules[rule.key]} disabled={rule.configured === false} aria-disabled={rule.configured === false} onClick={() => setDraftRules((current) => ({ ...current, [rule.key]: !current[rule.key] }))}>
-              <i>{categoryIcon(rule.key, 15)}</i><span><b>{rule.label}</b><em>{rule.short}</em></span><strong>{rule.configured === false ? 'NOT_CONFIGURED' : `${categoryCounts[rule.key].toLocaleString()} Events`}</strong><small><i /></small>
+              <i>{categoryIcon(rule.key, 15)}</i><span><b>{rule.label}</b><em>{rule.short}</em></span><strong>{rule.configured === false ? 'NOT_CONFIGURED' : incidentTruthAvailable ? `${categoryCounts[rule.key].toLocaleString()} Episodes` : 'COUNT UNAVAILABLE'}</strong><small><i /></small>
             </button>)}
           </div>
-        </section>
-
-        <section className="notifx-noise-policy">
-          <div><IconShield size={16} /><span><b>Transitions Only</b><em>Repeated telemetry never enters this inbox.</em></span></div>
-          <div><IconPulse size={16} /><span><b>Incident Grouping</b><em>Canonical connection-state repeats collapse into durable episodes with a real count.</em></span></div>
-          <div><IconActivity size={16} /><span><b>Logs Stay Complete</b><em>No raw evidence is deleted or hidden.</em></span></div>
-        </section>
       </section>
     </div>
   </div>;

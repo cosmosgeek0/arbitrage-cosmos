@@ -1,5 +1,5 @@
 /* Notifications shares the News / Calendar frame but not the Logs product.
-   This is a curated exception inbox and routing surface. */
+   This is a canonical incident inbox with read-only routing readback. */
 
 .notifx-toolbar { justify-content: flex-start; }
 .notifx-toolbar .lix-search { margin-left: auto; }
@@ -87,6 +87,49 @@
   white-space: nowrap;
 }
 
+.notifx-supervisor-binding {
+  border-bottom: 1px solid var(--line-2);
+}
+.notifx-supervisor-binding-label {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 45px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--tile) 34%, var(--panel));
+}
+.notifx-supervisor-binding-label span {
+  color: var(--text-2);
+  font-size: 9.5px;
+  font-weight: 610;
+  letter-spacing: .075em;
+  text-transform: uppercase;
+}
+.notifx-supervisor-binding-label strong {
+  padding: 3px 7px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 8.75px;
+  font-weight: 570;
+  line-height: 12px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.notifx-supervisor-binding-label em {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 410;
+  line-height: 14px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .notifx-navigation { border-top: 0; }
 .notifx-navigation-actions { display: flex; align-items: center; gap: 7px; }
 .notifx-curation { color: var(--muted); font-size: 10.5px; font-weight: 420; white-space: nowrap; }
@@ -110,6 +153,10 @@
 
 .notifx-week { grid-template-columns: repeat(8, minmax(0, 1fr)); padding-top: 4px; }
 .notifx-week > button { min-height: 118px; }
+.notifx-week > button:disabled {
+  cursor: default;
+  opacity: .72;
+}
 .notifx-week .notifx-count-bad { color: var(--down); }
 .notifx-week .notifx-count-good { color: var(--up); }
 
@@ -123,7 +170,7 @@
   border: 1px solid var(--line-2);
   border-radius: 7px;
   background: var(--panel);
-  color: var(--up);
+  color: var(--text-2);
   font: inherit;
 }
 .notifx-route-summary:hover { background: var(--hover); }
@@ -246,12 +293,43 @@
   gap: 7px;
   height: 30px;
   padding: 0 10px;
-  border: 1px solid color-mix(in srgb, var(--up) 25%, var(--line));
+  border: 1px solid var(--line-2);
   border-radius: 999px;
-  color: var(--up) !important;
+  color: var(--text-2) !important;
   letter-spacing: 0 !important;
   text-transform: none !important;
   white-space: nowrap;
+}
+.notifx-policy-badge.unavailable {
+  border-color: var(--line-2);
+  color: var(--muted) !important;
+}
+
+.notifx-routing-unavailable {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 126px;
+  padding: 22px;
+  color: var(--muted);
+}
+.notifx-routing-unavailable > span {
+  display: grid;
+  gap: 2px;
+}
+.notifx-routing-unavailable b {
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 520;
+  line-height: 17px;
+}
+.notifx-routing-unavailable em {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-style: normal;
+  font-weight: 410;
+  line-height: 15px;
 }
 
 .notifx-routing-grid { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--line-2); }
@@ -284,10 +362,14 @@
 .notifx-connector-group article small { color: var(--faint); font-family: var(--mono); font-size: 8.75px; line-height: 12px; }
 .notifx-connector-group article > strong { display: inline-flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 570; text-transform: uppercase; white-space: nowrap; }
 .notifx-connector-group article > strong i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.notifx-connector-group article > strong.ready { color: var(--up); }
+.notifx-connector-group article > strong.ready { color: var(--text-2); }
 .notifx-connector-group article > strong.waiting { color: var(--muted); }
 
 .notifx-rule-panel { border-bottom: 1px solid var(--line-2); }
+.notifx-local-rules {
+  border-top: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--tile) 20%, var(--panel));
+}
 .notifx-rule-panel > header {
   display: flex;
   align-items: center;
@@ -360,6 +442,9 @@
   .notifx-toolbar { align-items: stretch; }
   .notifx-view-switch { align-self: flex-start; }
   .notifx-toolbar .lix-search { width: 100%; margin-left: 0; }
+  .notifx-supervisor-binding-label { grid-template-columns: 1fr; }
+  .notifx-supervisor-binding-label strong { justify-self: start; }
+  .notifx-supervisor-binding-label em { text-align: left; white-space: normal; }
   .notifx-navigation-actions { width: 100%; justify-content: space-between; }
   .notifx-route-summary em { display: none; }
   .notifx-inbox { overflow-x: auto; }

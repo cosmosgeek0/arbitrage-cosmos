@@ -150,6 +150,10 @@ test('Basis runtime decoder is strict, detached, duplicate-safe, and time bounde
   advancingProposal.rows[0].proposal.status = 'expired';
   assert.equal(decodeBasisRuntimeSnapshot(advancingProposal), null);
 
+  const observedFractionalHold = basisRuntimePayload();
+  observedFractionalHold.rows[0].expectedHoldMs = 15_031_832.257978078;
+  assert.ok(decodeBasisRuntimeSnapshot(observedFractionalHold));
+
   const malformedRow = basisRuntimePayload();
   delete malformedRow.rows[0].dataQuality;
   assert.equal(decodeBasisRuntimeSnapshot(malformedRow), null);

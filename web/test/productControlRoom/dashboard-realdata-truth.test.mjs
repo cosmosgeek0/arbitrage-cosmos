@@ -25,7 +25,10 @@ const cssLoader = `
   }
 `;
 register(`data:text/javascript,${encodeURIComponent(cssLoader)}`, import.meta.url);
-const { decodeDashboardPnlData } = await import('../../src/pages/Dashboard.tsx');
+const {
+  decodeDashboardPnlData,
+  selectDashboardMarketValues,
+} = await import('../../src/pages/Dashboard.tsx');
 
 function completePnlPayload() {
   return {
@@ -126,16 +129,26 @@ test('Dashboard withholds market numbers until both canonical and store freshnes
     dashboardSource,
     /canonicalMarketSourcesCurrent[\s\S]*marketStatus === 'CURRENT'[\s\S]*marketsLastSuccessAtMs !== null[\s\S]*marketFreshness\.live/,
   );
-  assert.match(
-    dashboardSource,
-    /const marketValueDetail = marketValuesCurrent && liveMarket/,
-  );
-  assert.match(dashboardSource, /formatUsdtPrice\(liveMarket\.spot\)/);
+  assert.match(dashboardSource, /selectDashboardMarketValues\(markets\)/);
+  assert.match(dashboardSource, /formatCompactUsdtPrice\(row\.spot\)/);
   assert.match(dashboardSource, /liveMarketValues\.length > 0/);
   assert.match(dashboardSource, /STALE LAST-KNOWN · numeric market values withheld/);
   assert.match(dashboardSource, /Market stream disconnected · numeric values withheld/);
   assert.doesNotMatch(dashboardSource, /['"]\/api\/markets/);
   assert.doesNotMatch(dashboardSource, /['"]\/api\/engine\/(?:basis|volume)/);
+  assert.deepEqual(
+    selectDashboardMarketValues([
+      { symbol: 'USDCUSDT', base: 'USDC', spot: 1.001 },
+      { symbol: 'BTCUSDT', base: 'BTC', spot: 63_844 },
+      { symbol: 'ETHUSDT', base: 'ETH', spot: 1_865 },
+      { symbol: 'SOLUSDT', base: 'SOL', spot: 73.76 },
+    ]).map(({ symbol, spot }) => ({ symbol, spot })),
+    [
+      { symbol: 'BTCUSDT', spot: 63_844 },
+      { symbol: 'ETHUSDT', spot: 1_865 },
+      { symbol: 'SOLUSDT', spot: 73.76 },
+    ],
+  );
 
   const observedAtMs = 1_900_000_000_000;
   assert.equal(resolveMarketFreshness({

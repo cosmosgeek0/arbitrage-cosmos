@@ -212,7 +212,7 @@ function validBasisRow(value: unknown): value is BasisRow {
     || !nullableTimestamp(row.nextFundingTs)
     || !nullableNumber(row.fundingCarryPct)
     || !(row.fundingFlipRisk === null || unitInterval(row.fundingFlipRisk))
-    || !nonnegativeInteger(row.expectedHoldMs)
+    || !nonnegativeNumber(row.expectedHoldMs)
     || !validCosts(row.costs)
     || !nullableNumber(row.netEdgePct)
     || !(row.depthScore === null || unitInterval(row.depthScore))

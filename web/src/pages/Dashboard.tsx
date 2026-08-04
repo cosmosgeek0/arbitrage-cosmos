@@ -26,6 +26,7 @@ import { exactOrDash, projectPrivateRead, worstTone } from '../lib/privateRead';
 import { resolveMarketFreshness, useStore, type Page } from '../store';
 import { fmtBasis, fmtPrice, signClass, timeAgo } from '../format';
 import type { SystemTraceDecision } from '../lib/systemIntegration';
+import type { MarketRow } from '../types';
 import './Dashboard.css';
 
 type RangeId = '1W' | '1M' | '3M' | '6M';
@@ -37,6 +38,10 @@ const RANGES: { id: RangeId; ms: number }[] = [
   { id: '3M', ms: 93 * 86_400_000 },
   { id: '6M', ms: 186 * 86_400_000 },
 ];
+
+const DASHBOARD_MARKET_VALUE_SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT'] as const;
+const DASHBOARD_MARKET_VALUE_LIMIT = DASHBOARD_MARKET_VALUE_SYMBOLS.length;
+type DashboardMarketValueRow = MarketRow & { spot: number };
 
 interface Source<T> {
   data: T | null;
@@ -88,6 +93,28 @@ function finite(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
 }
 
+export function selectDashboardMarketValues(rows: readonly MarketRow[]) {
+  const preferred = DASHBOARD_MARKET_VALUE_SYMBOLS
+    .map((symbol) => rows.find((row) => row.symbol === symbol));
+  const selected: DashboardMarketValueRow[] = [];
+  const admittedSymbols = new Set<string>();
+
+  for (const row of [...preferred, ...rows]) {
+    const spot = row?.spot;
+    if (
+      !row
+      || admittedSymbols.has(row.symbol)
+      || !finite(spot)
+      || spot <= 0
+    ) continue;
+    admittedSymbols.add(row.symbol);
+    selected.push({ ...row, spot });
+    if (selected.length === DASHBOARD_MARKET_VALUE_LIMIT) break;
+  }
+
+  return selected;
+}
+
 function finiteSum(values: readonly number[]): number | null {
   let total = 0;
   for (const value of values) {
@@ -97,19 +124,18 @@ function finiteSum(values: readonly number[]): number | null {
   return total;
 }
 
-function formatUsdtPrice(value: number): string {
-  if (!finite(value)) return '—';
-  const normalized = Object.is(value, -0) ? 0 : value;
-  const absolute = Math.abs(normalized);
+function formatCompactUsdtPrice(value: number): string {
+  if (!finite(value) || value <= 0) return '—';
+  const absolute = Math.abs(value);
   const digits = absolute >= 1_000 ? 2
-    : absolute >= 1 ? absolute >= 100 ? 2 : 3
-      : absolute >= 0.1 ? 4
-        : absolute >= 0.001 ? 6
-          : 8;
-  return `${normalized.toLocaleString('en-US', {
-    minimumFractionDigits: normalized === 0 ? 2 : digits,
-    maximumFractionDigits: normalized === 0 ? 2 : digits,
-  })} USDT`;
+    : absolute >= 100 ? 2
+      : absolute >= 1 ? 3
+        : absolute >= 0.1 ? 4
+          : absolute >= 0.001 ? 6
+            : 8;
+  return value.toLocaleString('en-US', {
+    maximumFractionDigits: digits,
+  });
 }
 
 function source<T>(): Source<T> {
@@ -519,23 +545,27 @@ export function Dashboard() {
     && marketsLastSuccessAtMs !== null
     && marketFreshness.live,
   );
-  const liveMarket = useMemo(
-    () => markets.find((row) => (
-      typeof row.symbol === 'string'
-      && row.symbol.length > 0
-      && (finite(row.spot) || finite(row.perpMark) || finite(row.basisPct))
-    )) ?? null,
+  const liveMarkets = useMemo(
+    () => selectDashboardMarketValues(markets),
     [markets],
   );
-  const liveMarketValues = liveMarket
+  const liveMarketValues = liveMarkets.map((row) => (
+    `${row.base} ${formatCompactUsdtPrice(row.spot)}`
+  ));
+  const marketValueDetail = marketValuesCurrent && liveMarketValues.length > 0
+    ? `Spot · ${liveMarketValues.join(' · ')} USDT`
+    : null;
+  const leadMarket = liveMarkets[0] ?? null;
+  const leadMarketPerp = leadMarket?.perpMark;
+  const leadMarketBasis = leadMarket?.basisPct;
+  const leadMarketStructureValues = leadMarket
     ? [
-        finite(liveMarket.spot) ? `Spot ${formatUsdtPrice(liveMarket.spot)}` : null,
-        finite(liveMarket.perpMark) ? `Perp ${formatUsdtPrice(liveMarket.perpMark)}` : null,
-        finite(liveMarket.basisPct) ? `Basis ${fmtBasis(liveMarket.basisPct)}` : null,
+        finite(leadMarketPerp) ? `Perp ${formatCompactUsdtPrice(leadMarketPerp)} USDT` : null,
+        finite(leadMarketBasis) ? `Basis ${fmtBasis(leadMarketBasis)}` : null,
       ].filter((value): value is string => value !== null)
     : [];
-  const marketValueDetail = marketValuesCurrent && liveMarket && liveMarketValues.length > 0
-    ? `${liveMarket.symbol} · ${liveMarketValues.join(' · ')}`
+  const leadMarketStructureDetail = leadMarket && leadMarketStructureValues.length > 0
+    ? `${leadMarket.symbol} · ${leadMarketStructureValues.join(' · ')}`
     : null;
   const marketStateDetail = !productCurrent
     ? `Product continuity ${productBinding.continuity}`
@@ -557,7 +587,7 @@ export function Dashboard() {
                     ? `Market source error${marketsError ? ` · ${marketsError}` : ''}`
                     : marketFreshness.status === 'UNKNOWN'
                       ? 'Market source freshness unknown'
-                      : 'No finite market row is available';
+                      : 'No positive finite Spot market row is available';
   const publicSourceTone: Tone = marketValueDetail
     ? 'ok'
     : marketStatus === 'STALE' || marketFreshness.status === 'STALE'
@@ -566,7 +596,11 @@ export function Dashboard() {
   const canonicalPublicSourceDetail = [spotSource, usdMSource].filter(Boolean).map((component) => (
     `${component!.componentId} · ${component!.observedLifecycle} · ${component!.capability} · ${component!.truthLabel}`
   )).join(' / ') || 'UNKNOWN · canonical public-source components are unavailable';
-  const publicSourceDetail = `${marketValueDetail ?? marketStateDetail} / ${canonicalPublicSourceDetail}`;
+  const publicSourceDetail = [
+    marketValueDetail ?? marketStateDetail,
+    marketValueDetail ? leadMarketStructureDetail : null,
+    canonicalPublicSourceDetail,
+  ].filter((value): value is string => value !== null).join(' / ');
   const ledgerReady = Boolean(
     ledger?.writable === true
     && ledger.schemaCompatibilityState === 'AVAILABLE',

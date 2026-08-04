@@ -438,6 +438,9 @@
   white-space: nowrap;
 }
 .mkx-pager { gap: 3px; flex: none; }
+@container (min-width: 651px) {
+  .mkx-pager { margin-right: 100px; }
+}
 .mkx-pager button {
   display: grid;
   min-width: 28px;

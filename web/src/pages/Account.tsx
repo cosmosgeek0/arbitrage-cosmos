@@ -8,6 +8,7 @@ import {
   projectAccountTruth,
   type AccountDataset,
 } from './accountTruth';
+import { Fills as LocalLedgerFills } from './Fills';
 import './Account.css';
 
 export type AccountView = 'overview' | 'execution' | 'orders' | 'positions' | 'fills' | 'pnl';
@@ -401,6 +402,8 @@ export function Account({ view = 'overview' }: { readonly view?: AccountView }) 
               </div>
             </section>
           )}
+
+          {view === 'fills' && <LocalLedgerFills />}
 
           {view === 'fills' && (
             <section className="accountx-table-view" aria-label="Recent Fills">

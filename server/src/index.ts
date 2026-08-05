@@ -722,6 +722,51 @@ function privateOrderTruthState(
     : 'UNAVAILABLE';
 }
 
+// The compatibility view is rebuilt synchronously: the canonical supervisor
+// projection is CPU work on the event loop and buildState adds durable reads
+// (recent fills, recent events) plus a large serialization. Each poller used to
+// pay for all of it, so N signed-in tabs pinned the loop N times per interval.
+// One build is now shared for a bounded second — the same coalescing TTL the
+// canonical supervisor transport read already uses. The published cut is served
+// verbatim: its own timestamps are never rewritten, so a shared reader is told
+// exactly when the cut was taken and never receives a fabricated freshness.
+const LEGACY_STATE_SHARED_READ_TTL_MS = 1_000;
+let legacyStateSharedRead: {
+  built: unknown;
+  serialized: string | null;
+  publishedAtMs: number;
+} | null = null;
+let legacyStateBuildInFlight: Promise<void> | null = null;
+
+// buildState is the single builder of this view, so it is also the single
+// publisher of the cut that concurrent readers may share.
+function publishLegacyStateBuild<T>(built: T): T {
+  legacyStateSharedRead = { built, serialized: null, publishedAtMs: Date.now() };
+  return built;
+}
+
+function publishedLegacyStateBody(nowMs: number): string | null {
+  const shared = legacyStateSharedRead;
+  if (shared === null) return null;
+  const ageMs = nowMs - shared.publishedAtMs;
+  if (!(ageMs >= 0 && ageMs < LEGACY_STATE_SHARED_READ_TTL_MS)) return null;
+  if (shared.serialized === null) shared.serialized = JSON.stringify(shared.built);
+  return shared.serialized;
+}
+
+// Claims the single build slot. A request that does not win the claim awaits the
+// winner instead of starting a second identical rebuild.
+function claimLegacyStateBuild(): () => void {
+  if (legacyStateBuildInFlight !== null) return () => {};
+  let resolveClaim: () => void = () => {};
+  const claim = new Promise<void>((resolve) => { resolveClaim = resolve; });
+  legacyStateBuildInFlight = claim;
+  return () => {
+    if (legacyStateBuildInFlight === claim) legacyStateBuildInFlight = null;
+    resolveClaim();
+  };
+}
+
 function buildState(canonicalSupervisor: ReturnType<typeof systemIntegration.supervisor>) {
   const privateAccountTruth = privateAccountTruthState();
   const hasPrivateReadback = privateAccountTruth === 'AVAILABLE';
@@ -730,7 +775,7 @@ function buildState(canonicalSupervisor: ReturnType<typeof systemIntegration.sup
   const dayOpen = hasPrivateReadback ? account.dayOpenEquity() : null;
   const dailyLossPolicy = hasPrivateReadback ? account.dailyLossPolicy() : null;
   const staleMs = config.staleOrderMaxMin * 60 * 1000;
-  return {
+  return publishLegacyStateBuild({
     schemaVersion: 'legacy.state.compatibility.v2' as const,
     stateClass: 'COMPATIBILITY_VIEW' as const,
     readinessSemantics: 'NOT_EVALUATED' as const,
@@ -800,7 +845,7 @@ function buildState(canonicalSupervisor: ReturnType<typeof systemIntegration.sup
       rejectionsToday: risk.rejectionsTodayCount(),
     },
     events: ledger.recentEvents(30),
-  };
+  });
 }
 
 const app = express();
@@ -1309,8 +1354,30 @@ app.get('/api/health', (_req, res) => {
 app.get('/api/state', (_req, res) => {
   runAsync(res, async () => {
     try {
-      const stateSupervisor = await systemIntegration.supervisor();
-      res.json(buildState(stateSupervisor));
+      // Concurrent and rapid pollers share one rebuild. A published cut is
+      // served only while it is under the bounded TTL; past it every reader
+      // rebuilds, so a cached success can never outlive its own truth window.
+      const published = publishedLegacyStateBody(Date.now());
+      const pending = published === null ? legacyStateBuildInFlight : null;
+      if (pending !== null) await pending;
+      const shared = published ?? publishedLegacyStateBody(Date.now());
+      if (shared !== null) {
+        res.type('application/json').send(shared);
+        return;
+      }
+      const releaseBuild = claimLegacyStateBuild();
+      try {
+        const stateSupervisor = await systemIntegration.supervisor();
+        res.json(buildState(stateSupervisor));
+      } catch (error) {
+        // A failed build must never leave an earlier success standing in for
+        // canonical truth: drop the shared cut so every reader reaches the
+        // truthful unavailability below instead of a retained success.
+        legacyStateSharedRead = null;
+        throw error;
+      } finally {
+        releaseBuild();
+      }
     } catch {
       res.status(503).json({
         ok: false,
@@ -2409,20 +2476,55 @@ function publishedMarketSourceState(
   return ageMs >= 0 && ageMs <= MARKET_SOURCE_REFRESH_MS ? 'fresh' : 'stale';
 }
 
-function readMarketOwnerSnapshot() {
-  const now = Date.now();
-  const {
-    spotBookRes,
-    perpBookRes,
-    perp24hRes,
-  } = marketSourceCache ?? initialMarketSourceSnapshot;
-  triggerMarketSourceRefresh(now);
-  const at = spotBookRes.observedAtMs;
-  const dataSources = Object.freeze({
-    spotBookTicker: publishedMarketSourceState(spotBookRes, now),
-    futuresBookTicker: publishedMarketSourceState(perpBookRes, now),
-    futures24hTicker: publishedMarketSourceState(perp24hRes, now),
-  });
+type PublishedMarketDataSources = Readonly<{
+  spotBookTicker: PublishedMarketSourceState;
+  futuresBookTicker: PublishedMarketSourceState;
+  futures24hTicker: PublishedMarketSourceState;
+}>;
+
+type MarketOwnerProjection = Readonly<{
+  observedAtMs: number;
+  streamUpdatedAt: number | null;
+  rows: readonly ReturnType<typeof projectMarketApiRow>[];
+}>;
+
+// The owner projection is O(all symbols) three times over: one pass for the
+// stream observation timestamps, one projectMarketApiRow map that also builds a
+// 36-point spark per symbol, and a sort. Every envelope build and every
+// /api/markets read re-ran it, so N pollers cost N full projections on the
+// event loop. It is memoised here on the refresh clock this route already owns.
+let marketOwnerProjectionMemo: Readonly<{
+  sourceSnapshot: MarketSourceSnapshot;
+  dataSourceKey: string;
+  projectedAtMs: number;
+  projection: MarketOwnerProjection;
+}> | null = null;
+
+function projectMarketOwnerRows(
+  sourceSnapshot: MarketSourceSnapshot,
+  dataSources: PublishedMarketDataSources,
+  now: number,
+): MarketOwnerProjection {
+  // The memo is keyed by the exact published source snapshot and by the
+  // freshness triple derived from it, so a landed refresh or a source ageing
+  // out of freshness always recomputes rather than republishing older rows
+  // under a newer claim. It additionally expires with the refresh interval, so
+  // a snapshot that has not yet been replaced can never pin a projection for
+  // longer than the cadence this route already publishes on.
+  const dataSourceKey = [
+    dataSources.spotBookTicker,
+    dataSources.futuresBookTicker,
+    dataSources.futures24hTicker,
+  ].join('|');
+  const memo = marketOwnerProjectionMemo;
+  if (memo !== null
+      && memo.sourceSnapshot === sourceSnapshot
+      && memo.dataSourceKey === dataSourceKey) {
+    const memoAgeMs = now - memo.projectedAtMs;
+    if (memoAgeMs >= 0 && memoAgeMs < MARKET_SOURCE_REFRESH_MS) return memo.projection;
+  }
+
+  const { spotBookRes, perpBookRes, perp24hRes } = sourceSnapshot;
   const spotBooks = spotBookRes.status === 'fulfilled' && dataSources.spotBookTicker === 'fresh'
     ? spotBookRes.value
     : new Map<string, BookTicker>();
@@ -2459,11 +2561,41 @@ function readMarketOwnerSnapshot() {
     }))
     .sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0));
 
-  return Object.freeze({
-    observedAtMs: streamUpdatedAt ?? at,
+  const projection: MarketOwnerProjection = Object.freeze({
+    observedAtMs: streamUpdatedAt ?? spotBookRes.observedAtMs,
     streamUpdatedAt,
-    dataSources,
     rows: Object.freeze(rows),
+  });
+  marketOwnerProjectionMemo = Object.freeze({
+    sourceSnapshot,
+    dataSourceKey,
+    projectedAtMs: now,
+    projection,
+  });
+  return projection;
+}
+
+function readMarketOwnerSnapshot() {
+  const now = Date.now();
+  const sourceSnapshot = marketSourceCache ?? initialMarketSourceSnapshot;
+  const {
+    spotBookRes,
+    perpBookRes,
+    perp24hRes,
+  } = sourceSnapshot;
+  triggerMarketSourceRefresh(now);
+  const dataSources: PublishedMarketDataSources = Object.freeze({
+    spotBookTicker: publishedMarketSourceState(spotBookRes, now),
+    futuresBookTicker: publishedMarketSourceState(perpBookRes, now),
+    futures24hTicker: publishedMarketSourceState(perp24hRes, now),
+  });
+  const projection = projectMarketOwnerRows(sourceSnapshot, dataSources, now);
+
+  return Object.freeze({
+    observedAtMs: projection.observedAtMs,
+    streamUpdatedAt: projection.streamUpdatedAt,
+    dataSources,
+    rows: projection.rows,
   });
 }
 
@@ -4227,16 +4359,28 @@ wss.on('connection', (ws, request) => {
   ws.on('close', () => bookHub.drop(ws));
 });
 
-function sendBoundedWebSocketJson(client: WebSocket, message: unknown): boolean {
-  if (client.readyState !== WebSocket.OPEN) return false;
-  let serialized: string;
+// A frame is the serialized form of one outbound message plus its measured
+// size. Serializing is O(payload) and was previously repeated per connected
+// client for payloads that are identical across clients; a frame lets one
+// serialization be reused for every recipient of the same bytes.
+type BoundedWebSocketFrame = Readonly<{ serialized: string; messageBytes: number }> | null;
+
+function boundedWebSocketFrame(message: unknown): BoundedWebSocketFrame {
   try {
-    serialized = JSON.stringify(message);
+    const serialized = JSON.stringify(message);
+    return Object.freeze({ serialized, messageBytes: Buffer.byteLength(serialized) });
   } catch {
+    return null;
+  }
+}
+
+function sendBoundedWebSocketFrame(client: WebSocket, frame: BoundedWebSocketFrame): boolean {
+  if (client.readyState !== WebSocket.OPEN) return false;
+  if (frame === null) {
     client.close(1011, 'canonical serialization failed');
     return false;
   }
-  const messageBytes = Buffer.byteLength(serialized);
+  const { serialized, messageBytes } = frame;
   if (messageBytes > WS_MAX_OUTBOUND_MESSAGE_BYTES) {
     client.close(1009, 'canonical message exceeds bound');
     return false;
@@ -4257,6 +4401,15 @@ function sendBoundedWebSocketJson(client: WebSocket, message: unknown): boolean 
   }
 }
 
+// Delivery admission for one client: an open socket that owns delivery state
+// and has opted into material events.
+function admittedMaterialDeliveryState(client: WebSocket): WebSocketDeliveryState | null {
+  if (client.readyState !== WebSocket.OPEN) return null;
+  const delivery = wsDeliveryState.get(client);
+  if (!delivery || !delivery.materialEventsEnabled) return null;
+  return delivery;
+}
+
 let websocketHeartbeatTimer: NodeJS.Timeout | null = null;
 let canonicalDeliveryTimer: NodeJS.Timeout | null = null;
 let canonicalDeliveryInFlight = false;
@@ -4271,55 +4424,81 @@ async function publishCanonicalWebSocketUpdates(): Promise<void> {
     if (supervisor !== null) {
       const supervisorDelta = projectProductRuntimeSupervisorDelta(supervisor);
       const supervisorKey = JSON.stringify(supervisorDelta);
+      // The delta payload carries no per-client state, so every recipient gets
+      // byte-identical bytes: serialize the frame once per tick rather than
+      // once per connected tab.
+      const supervisorFrame = boundedWebSocketFrame({
+        type: 'canonical-supervisor-delta',
+        payload: supervisorDelta,
+      });
       for (const client of clients) {
         const delivery = wsDeliveryState.get(client);
         if (!delivery) {
           client.close(1011, 'canonical delivery unavailable');
           continue;
         }
-        if (delivery.lastSupervisorKey !== supervisorKey && sendBoundedWebSocketJson(client, {
-          type: 'canonical-supervisor-delta',
-          payload: supervisorDelta,
-        })) {
+        if (delivery.lastSupervisorKey !== supervisorKey
+            && sendBoundedWebSocketFrame(client, supervisorFrame)) {
           delivery.lastSupervisorKey = supervisorKey;
         }
       }
     }
 
-    await Promise.all(clients.map(async (client) => {
-      if (client.readyState !== WebSocket.OPEN) return;
-      const delivery = wsDeliveryState.get(client);
-      if (!delivery || !delivery.materialEventsEnabled) return;
+    // Material delivery input differs between clients by exactly one value —
+    // the resume cursor each connection owns; the page bound is a shared
+    // constant. Clients holding the same cursor therefore request the identical
+    // page, so they share one owner read and one serialization, while each
+    // still advances its own cursor and its own blocked-page memory from that
+    // shared projection. Clients on different cursors keep separate reads.
+    const materialGroups = new Map<string, WebSocket[]>();
+    for (const client of clients) {
+      const delivery = admittedMaterialDeliveryState(client);
+      if (delivery === null) continue;
+      const group = materialGroups.get(delivery.afterCursor);
+      if (group === undefined) materialGroups.set(delivery.afterCursor, [client]);
+      else group.push(client);
+    }
+
+    await Promise.all([...materialGroups].map(async ([afterCursor, group]) => {
+      let projected: ReturnType<typeof projectProductRuntimeMaterialDeliveryPage>;
       try {
         const page = await productIntegrationRuntime.readMaterialEvents(
-          delivery.afterCursor,
+          afterCursor,
           PRODUCT_RUNTIME_MATERIAL_DELIVERY_PAGE_LIMIT,
         );
-        const projected = projectProductRuntimeMaterialDeliveryPage(delivery.afterCursor, page);
-        const blockedPageKey = projected.continuity === 'CONTINUOUS'
-          ? null
-          : [
-              projected.afterCursor,
-              projected.nextCursor,
-              projected.continuity,
-              projected.missingFromCursor,
-              projected.missingToCursor,
-              projected.hasMore,
-            ].join('|');
-        if (blockedPageKey !== null && delivery.blockedMaterialPageKey === blockedPageKey) return;
-        if (projected.events.length === 0 && projected.continuity === 'CONTINUOUS') return;
-        if (!sendBoundedWebSocketJson(client, {
-          type: 'material-event-page',
-          payload: projected,
-        })) return;
+        projected = projectProductRuntimeMaterialDeliveryPage(afterCursor, page);
+      } catch {
+        for (const client of group) {
+          if (client.readyState === WebSocket.OPEN) client.close(1011, 'canonical event read failed');
+        }
+        return;
+      }
+      if (projected.events.length === 0 && projected.continuity === 'CONTINUOUS') return;
+      const blockedPageKey = projected.continuity === 'CONTINUOUS'
+        ? null
+        : [
+            projected.afterCursor,
+            projected.nextCursor,
+            projected.continuity,
+            projected.missingFromCursor,
+            projected.missingToCursor,
+            projected.hasMore,
+          ].join('|');
+      const pageFrame = boundedWebSocketFrame({
+        type: 'material-event-page',
+        payload: projected,
+      });
+      for (const client of group) {
+        const delivery = admittedMaterialDeliveryState(client);
+        if (delivery === null) continue;
+        if (blockedPageKey !== null && delivery.blockedMaterialPageKey === blockedPageKey) continue;
+        if (!sendBoundedWebSocketFrame(client, pageFrame)) continue;
         if (projected.continuity === 'CONTINUOUS') {
           delivery.afterCursor = projected.nextCursor;
           delivery.blockedMaterialPageKey = null;
         } else {
           delivery.blockedMaterialPageKey = blockedPageKey;
         }
-      } catch {
-        if (client.readyState === WebSocket.OPEN) client.close(1011, 'canonical event read failed');
       }
     }));
   } catch {

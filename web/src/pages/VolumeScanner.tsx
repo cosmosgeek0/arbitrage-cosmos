@@ -801,23 +801,45 @@ export function VolumeScanner() {
     nowMs,
   });
   const rows = volumeTruth.current && Array.isArray(snapshot?.rows) ? snapshot.rows : [];
+  // A failed canonical envelope must not blank this page's own live feed. The
+  // engine snapshot is re-resolved against the identical contract and freshness
+  // rules with the canonical gate held READY, so rows stay visible only while
+  // this page's own evidence is valid and current. This decouples row
+  // VISIBILITY from envelope continuity and nothing else: every canonical
+  // claim, ledger cell, and owner control still reads volumeTruth.
+  const canonicalBindingProven = binding.continuity === 'PROVEN';
+  const volumeEngineFeedTruth = resolveVolumeRuntimeTruth({
+    canonicalState: 'READY',
+    canonicalReason: null,
+    snapshotUpdatedAtMs: snapshot?.updatedAt ?? null,
+    snapshotStatus: snapshot?.status ?? null,
+    rowCount: Array.isArray(snapshot?.rows) ? snapshot.rows.length : null,
+    rowContractCurrent: snapshot ? volumeRowsCurrent(snapshot) : null,
+    requestError: error,
+    nowMs,
+  });
+  const volumeEngineRowsVisible = !volumeTruth.current
+    && !canonicalBindingProven
+    && volumeEngineFeedTruth.current;
+  const volumeEngineFeedNote = `Canonical binding not proven · ${binding.continuity} · Volume engine feed live`;
+  const visibleRows = volumeEngineRowsVisible && Array.isArray(snapshot?.rows) ? snapshot.rows : rows;
   const query = search.trim().toUpperCase();
   const counts = useMemo(() => ({
-    all: rows.length,
-    watching: rows.filter((row) => row.state === 'WATCHING').length,
-    focus: rows.filter((row) => row.state === 'FOCUS' || row.state === 'PROPOSED').length,
-    rejected: rows.filter(isRejectedVolumeRow).length,
-    warming: rows.filter((row) => !row.baseline.ready).length,
-  }), [rows]);
+    all: visibleRows.length,
+    watching: visibleRows.filter((row) => row.state === 'WATCHING').length,
+    focus: visibleRows.filter((row) => row.state === 'FOCUS' || row.state === 'PROPOSED').length,
+    rejected: visibleRows.filter(isRejectedVolumeRow).length,
+    warming: visibleRows.filter((row) => !row.baseline.ready).length,
+  }), [visibleRows]);
 
-  const filteredRows = useMemo(() => rows.filter((row) => {
+  const filteredRows = useMemo(() => visibleRows.filter((row) => {
     if (query && !row.symbol.includes(query) && !row.base.includes(query) && !row.reason.toUpperCase().includes(query)) return false;
     if (filter === 'watching') return row.state === 'WATCHING';
     if (filter === 'focus') return row.state === 'FOCUS' || row.state === 'PROPOSED';
     if (filter === 'rejected') return isRejectedVolumeRow(row);
     if (filter === 'warming') return !row.baseline.ready;
     return true;
-  }), [filter, query, rows]);
+  }), [filter, query, visibleRows]);
 
   const watchlist = state?.config.watchlist ?? [];
   const marketFreshness = resolveMarketFreshness({
@@ -871,7 +893,9 @@ export function VolumeScanner() {
             <span className="volx-updated">
               {volumeTruth.current && snapshot
                 ? 'Updated ' + timeAgo(snapshot.updatedAt)
-                : volumeTruth.reason ?? 'Connecting'}
+                : volumeEngineRowsVisible && snapshot
+                  ? volumeEngineFeedNote + ' · updated ' + timeAgo(snapshot.updatedAt)
+                  : volumeTruth.reason ?? 'Connecting'}
             </span>
           </div>
           <label className="volx-search">
@@ -977,14 +1001,16 @@ export function VolumeScanner() {
                 }}
               >
                 {item.label}
-                <span>{volumeTruth.current ? counts[item.id] : 'UNKNOWN'}</span>
+                <span>{volumeTruth.current || volumeEngineRowsVisible ? counts[item.id] : 'UNKNOWN'}</span>
               </button>
             ))}
           </div>
           <span className="volx-view-note">
             {volumeTruth.current && snapshot
               ? snapshot.status.openConnections + '/' + snapshot.status.streamConnections + ' trade streams · book ' + snapshot.status.bookState
-              : volumeTruth.reason ?? 'Runtime starting'}
+              : volumeEngineRowsVisible && snapshot
+                ? volumeEngineFeedNote + ' · ' + snapshot.status.openConnections + '/' + snapshot.status.streamConnections + ' trade streams'
+                : volumeTruth.reason ?? 'Runtime starting'}
           </span>
         </div>
 
@@ -1001,7 +1027,7 @@ export function VolumeScanner() {
             <span aria-hidden="true" />
           </div>
 
-          {volumeTruth.state === 'UNAVAILABLE' ? (
+          {volumeTruth.state === 'UNAVAILABLE' && !volumeEngineRowsVisible ? (
             <div className="volx-empty">
               <Activity size={18} />
               <strong>Volume Runtime Unavailable</strong>

@@ -351,17 +351,36 @@ export function Strategies() {
     marginLiabilityBtc: privatePresentation.marginLiabilityBtc,
     liabilityCount: privatePresentation.counts.liabilities,
   });
+  // A failed canonical envelope must not blank this page's own live feed. The
+  // engine snapshot is re-resolved against the identical contract and freshness
+  // rules with the canonical gate held READY, so rows stay visible only while
+  // this page's own evidence is valid and current. This decouples row
+  // VISIBILITY from envelope continuity and nothing else: every canonical
+  // claim, count of canonical facts, and control gate still reads basisTruth.
+  const canonicalBindingProven = binding.continuity === 'PROVEN';
+  const basisEngineFeedTruth = resolveBasisRuntimeTruth({
+    canonicalState: 'READY',
+    canonicalReason: null,
+    snapshot,
+    requestError: error,
+    nowMs,
+  });
+  const basisEngineRowsVisible = !basisTruth.current
+    && !canonicalBindingProven
+    && basisEngineFeedTruth.current;
+  const basisEngineFeedNote = `Canonical binding not proven · ${binding.continuity} · Basis engine feed live`;
   const rows = basisTruth.current ? snapshot?.rows ?? [] : [];
+  const visibleRows = basisEngineRowsVisible ? snapshot?.rows ?? [] : rows;
   const query = search.trim().toUpperCase();
   const counts = useMemo(() => ({
-    all: rows.length,
-    candidates: rows.filter((row) => row.state === 'WATCHING' || row.state === 'FOCUS' || row.state === 'PROPOSED').length,
-    proposals: rows.filter((row) => row.state === 'PROPOSED').length,
-    borrow: rows.filter((row) => row.rejectCode?.startsWith('borrow_')).length,
-    rejected: rows.filter((row) => row.decisionKind === 'reject').length,
-  }), [rows]);
+    all: visibleRows.length,
+    candidates: visibleRows.filter((row) => row.state === 'WATCHING' || row.state === 'FOCUS' || row.state === 'PROPOSED').length,
+    proposals: visibleRows.filter((row) => row.state === 'PROPOSED').length,
+    borrow: visibleRows.filter((row) => row.rejectCode?.startsWith('borrow_')).length,
+    rejected: visibleRows.filter((row) => row.decisionKind === 'reject').length,
+  }), [visibleRows]);
 
-  const filteredRows = useMemo(() => rows.filter((row) => {
+  const filteredRows = useMemo(() => visibleRows.filter((row) => {
     if (
       query &&
       !row.symbol.includes(query) &&
@@ -374,7 +393,7 @@ export function Strategies() {
     if (filter === 'borrow') return row.rejectCode?.startsWith('borrow_');
     if (filter === 'rejected') return row.decisionKind === 'reject';
     return true;
-  }), [filter, query, rows]);
+  }), [filter, query, visibleRows]);
 
   const watchlist = state?.config.watchlist ?? [];
   const basisUnassertedDetail = basisTruth.reason ?? 'Canonical Basis runtime loading';
@@ -397,7 +416,9 @@ export function Strategies() {
             <span className="volx-updated">
               {basisTruth.current && snapshot
                 ? 'Updated ' + timeAgo(snapshot.updatedAt)
-                : basisUnassertedDetail}
+                : basisEngineRowsVisible && snapshot
+                  ? basisEngineFeedNote + ' · updated ' + timeAgo(snapshot.updatedAt)
+                  : basisUnassertedDetail}
             </span>
           </div>
           <label className="volx-search">
@@ -468,14 +489,16 @@ export function Strategies() {
                 }}
               >
                 {item.label}
-                <span>{basisTruth.current ? counts[item.id] : 'UNKNOWN'}</span>
+                <span>{basisTruth.current || basisEngineRowsVisible ? counts[item.id] : 'UNKNOWN'}</span>
               </button>
             ))}
           </div>
           <span className="volx-view-note">
             {basisTruth.current && snapshot
               ? 'Crossed books ' + snapshot.status.bookState + ' · marks ' + snapshot.status.markState
-              : basisUnassertedDetail}
+              : basisEngineRowsVisible && snapshot
+                ? basisEngineFeedNote + ' · crossed books ' + snapshot.status.bookState + ' · marks ' + snapshot.status.markState
+                : basisUnassertedDetail}
           </span>
         </div>
 
@@ -492,7 +515,7 @@ export function Strategies() {
             <span aria-hidden="true" />
           </div>
 
-          {basisTruth.state === 'UNAVAILABLE' ? (
+          {basisTruth.state === 'UNAVAILABLE' && !basisEngineRowsVisible ? (
             <div className="volx-empty">
               <Activity size={18} />
               <strong>Basis Runtime Unavailable</strong>

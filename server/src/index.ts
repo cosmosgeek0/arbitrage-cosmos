@@ -8,6 +8,8 @@ import http from 'node:http';
 import path from 'node:path';
 import fs from 'node:fs';
 import { createHash } from 'node:crypto';
+import { gzip as gzipCallback } from 'node:zlib';
+import { promisify } from 'node:util';
 import WebSocket, { WebSocketServer } from 'ws';
 import {
   MarketEngine,
@@ -731,8 +733,22 @@ function privateOrderTruthState(
 // verbatim: its own timestamps are never rewritten, so a shared reader is told
 // exactly when the cut was taken and never receives a fabricated freshness.
 const LEGACY_STATE_SHARED_READ_TTL_MS = 1_000;
+// Two serializations of one build generation. `full` is the historical
+// compatibility document, byte-for-byte; `slim` is the browser's view of the
+// same cut. Both are produced inside the single build, so no view can ever
+// describe a different generation than the other, and a build failure denies
+// both identically. The gzip slots are memoised per generation so compression
+// is paid once per second rather than once per request; they hold nothing the
+// identity strings do not already say.
+type LegacyStateBodies = {
+  readonly full: string;
+  readonly slim: string;
+  fullGzip: Promise<Buffer> | null;
+  slimGzip: Promise<Buffer> | null;
+};
+type LegacyStateView = 'full' | 'slim';
 type LegacyStateBodyCache = Readonly<{
-  promise: Promise<string>;
+  promise: Promise<LegacyStateBodies>;
   publishedAtMs: number | null;
 }>;
 let legacyStateBodyCache: LegacyStateBodyCache | null = null;
@@ -818,13 +834,37 @@ function buildState(canonicalSupervisor: ReturnType<typeof systemIntegration.sup
   };
 }
 
+// The browser's view of the same cut. The compatibility document carries a
+// canonical supervisor projection that dominates its size and that exactly one
+// client expression reads — the kill-switch posture — plus keys no client reads
+// at all. The slim view drops those and republishes the one fact that was being
+// read, taken from the identical source the full document carries, so a client
+// on either view derives the same posture. The read is deliberately optional-
+// chained to mirror the client's own expression: if the control snapshot were
+// ever absent, this key is absent too, and the client's `!== false` check halts
+// exactly as it halts today. Omission is never rewritten into a cleared kill.
+function slimLegacyState(state: ReturnType<typeof buildState>) {
+  const {
+    canonicalSupervisor,
+    canonicalSupervisorEndpoint,
+    canonicalReadinessEndpoint,
+    readinessSemantics,
+    stateClass,
+    scanner,
+    feeds,
+    ...shared
+  } = state;
+  return { ...shared, killSwitchEngaged: canonicalSupervisor?.control?.killSwitchEngaged };
+}
+
 // One promise is both the single-flight identity and the cache. The builder
-// snapshots and serializes the compatibility view before that promise resolves,
-// so the winner and every waiter receive the same immutable string bytes and no
-// mutable owner object is ever published. A rejected build clears only itself;
-// its current waiters all observe the same rejection and only a later request
-// can claim the next attempt.
-function readLegacyStateBody(nowMs = Date.now()): Promise<string> {
+// snapshots and serializes both views of the compatibility state before that
+// promise resolves, so the winner and every waiter receive the same immutable
+// string bytes and no mutable owner object is ever published. A rejected build
+// clears only itself; its current waiters all observe the same rejection and
+// only a later request can claim the next attempt — and because both views come
+// from the one build, a failure denies both rather than leaving either servable.
+function readLegacyStateBodies(nowMs = Date.now()): Promise<LegacyStateBodies> {
   const cached = legacyStateBodyCache;
   if (cached !== null) {
     if (cached.publishedAtMs === null) return cached.promise;
@@ -832,11 +872,15 @@ function readLegacyStateBody(nowMs = Date.now()): Promise<string> {
     if (ageMs >= 0 && ageMs < LEGACY_STATE_SHARED_READ_TTL_MS) return cached.promise;
   }
 
-  const build = (async (): Promise<string> => {
+  const build = (async (): Promise<LegacyStateBodies> => {
     const stateSupervisor = await systemIntegration.supervisor();
-    const serialized = JSON.stringify(buildState(stateSupervisor));
-    if (typeof serialized !== 'string') throw new Error('LEGACY_STATE_SERIALIZATION_UNAVAILABLE');
-    return serialized;
+    const state = buildState(stateSupervisor);
+    const serialized = JSON.stringify(state);
+    const serializedSlim = JSON.stringify(slimLegacyState(state));
+    if (typeof serialized !== 'string' || typeof serializedSlim !== 'string') {
+      throw new Error('LEGACY_STATE_SERIALIZATION_UNAVAILABLE');
+    }
+    return { full: serialized, slim: serializedSlim, fullGzip: null, slimGzip: null };
   })();
   legacyStateBodyCache = Object.freeze({ promise: build, publishedAtMs: null });
   void build.then(
@@ -850,6 +894,18 @@ function readLegacyStateBody(nowMs = Date.now()): Promise<string> {
     },
   );
   return build;
+}
+
+// Compression of a published generation is memoised on that generation, so a
+// second of pollers shares one gzip rather than one per request. The memo is
+// discarded with the generation it belongs to; it can never outlive its bytes.
+function legacyStateGzip(bodies: LegacyStateBodies, view: LegacyStateView): Promise<Buffer> {
+  if (view === 'slim') {
+    if (bodies.slimGzip === null) bodies.slimGzip = gzipAsync(bodies.slim);
+    return bodies.slimGzip;
+  }
+  if (bodies.fullGzip === null) bodies.fullGzip = gzipAsync(bodies.full);
+  return bodies.fullGzip;
 }
 
 const app = express();
@@ -966,6 +1022,56 @@ function runAsync(res: express.Response, task: () => Promise<void>): void {
       res.end();
     }
   });
+}
+
+// Compression is applied per-route to the few large JSON reads, never as app
+// middleware: a blanket wrap would also touch small control and error responses
+// whose exact bytes other owners assert on. gzip is asynchronous on purpose —
+// the synchronous variant would re-pin the event loop this cache exists to free.
+// Identity remains the default: a client that does not advertise gzip, or a body
+// below the threshold, receives exactly the bytes it receives today.
+const gzipAsync = promisify(gzipCallback);
+const GZIP_MIN_BYTES = 1024;
+
+function acceptsGzip(req: express.Request): boolean {
+  const raw = req.headers['accept-encoding'];
+  const header = Array.isArray(raw) ? raw.join(',') : typeof raw === 'string' ? raw : '';
+  for (const element of header.split(',')) {
+    const [token, ...parameters] = element.split(';');
+    if ((token ?? '').trim().toLowerCase() !== 'gzip') continue;
+    // `gzip;q=0` advertises gzip only to refuse it. Honour the refusal.
+    const quality = parameters.map((p) => p.trim()).find((p) => p.toLowerCase().startsWith('q='));
+    return quality === undefined || Number(quality.slice(2)) > 0;
+  }
+  return false;
+}
+
+// `precompressed` lets a cached generation pay for compression once per build
+// rather than once per request. Status code and content type are set by the
+// caller and never altered here; a compression failure falls back to identity
+// so no read can be lost to the optimisation.
+async function sendJsonBody(
+  req: express.Request,
+  res: express.Response,
+  body: string,
+  precompressed?: () => Promise<Buffer>,
+): Promise<void> {
+  res.type('application/json');
+  if (Buffer.byteLength(body) <= GZIP_MIN_BYTES || !acceptsGzip(req)) {
+    res.send(body);
+    return;
+  }
+  let compressed: Buffer;
+  try {
+    compressed = precompressed ? await precompressed() : await gzipAsync(body);
+  } catch {
+    if (!res.headersSent) res.send(body);
+    return;
+  }
+  if (res.headersSent) return;
+  res.setHeader('Content-Encoding', 'gzip');
+  res.setHeader('Vary', 'Accept-Encoding');
+  res.send(compressed);
 }
 
 function sendLiveExecutionNotImplemented(res: express.Response, operation: string): void {
@@ -1355,12 +1461,19 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-app.get('/api/state', (_req, res) => {
+// `?view=slim` selects the browser's view of the same cached generation. Any
+// other value — including none — resolves to the full compatibility document,
+// whose bytes are unchanged. An unrecognised view is never an error: this route
+// is a compatibility surface and must not start rejecting readers it accepted.
+app.get('/api/state', (req, res) => {
   runAsync(res, async () => {
+    const view: LegacyStateView = req.query.view === 'slim' ? 'slim' : 'full';
+    let bodies: LegacyStateBodies;
     try {
-      const body = await readLegacyStateBody();
-      res.type('application/json').send(body);
+      bodies = await readLegacyStateBodies();
     } catch {
+      // Both views are denied by the same failed build, with the bytes this
+      // route has always published when canonical truth is unavailable.
       res.status(503).json({
         ok: false,
         available: false,
@@ -1374,7 +1487,9 @@ app.get('/api/state', (_req, res) => {
         canonicalSupervisor: null,
         error: 'Canonical supervisor truth is unavailable; no legacy state fallback is published.',
       });
+      return;
     }
+    await sendJsonBody(req, res, bodies[view], () => legacyStateGzip(bodies, view));
   });
 });
 
@@ -2582,13 +2697,17 @@ function readProductOwnerTruth(
   });
 }
 
-app.get('/api/markets', (_req, res) => {
-  const snapshot = readMarketOwnerSnapshot();
-  res.json({
-    updatedAt: snapshot.observedAtMs,
-    streamUpdatedAt: snapshot.streamUpdatedAt,
-    dataSources: snapshot.dataSources,
-    rows: snapshot.rows,
+app.get('/api/markets', (req, res) => {
+  runAsync(res, async () => {
+    const snapshot = readMarketOwnerSnapshot();
+    // Serialized here rather than by res.json so the same bytes can be offered
+    // identity or gzipped. The document is unchanged in either case.
+    await sendJsonBody(req, res, JSON.stringify({
+      updatedAt: snapshot.observedAtMs,
+      streamUpdatedAt: snapshot.streamUpdatedAt,
+      dataSources: snapshot.dataSources,
+      rows: snapshot.rows,
+    }));
   });
 });
 

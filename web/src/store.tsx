@@ -873,7 +873,12 @@ export function failClosedState(serverState: ServerState): ServerState {
   const config = failClosedConfig(serverState.config);
   // A compatibility payload without the canonical control snapshot is not
   // evidence that the kill is clear. Treat missing or malformed truth as halt.
-  const canonicalKillEngaged = serverState.canonicalSupervisor?.control?.killSwitchEngaged !== false;
+  // The slim view publishes the posture directly; the full view still carries it
+  // inside the canonical projection. Both are read here so either document is
+  // judged by the same rule, and a document carrying neither still halts.
+  const canonicalKillEngaged = (
+    serverState.killSwitchEngaged ?? serverState.canonicalSupervisor?.control?.killSwitchEngaged
+  ) !== false;
   const hasCompletePrivateAccountReadback = serverState.account != null && Array.isArray(serverState.positions);
   const privateAccountTruth = !serverState.binance.keysPresent || serverState.privateAccountTruth === 'NOT_CONFIGURED'
     ? 'NOT_CONFIGURED'

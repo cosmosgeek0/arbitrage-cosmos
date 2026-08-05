@@ -227,6 +227,11 @@ export interface ServerState {
   canonicalReadinessEndpoint: '/health/ready';
   canonicalSupervisorEndpoint: '/api/system-integration/supervisor';
   canonicalSupervisor: SystemSupervisorSnapshot;
+  /** Present on the slim view, which omits the canonical supervisor projection
+   * the browser never rendered. It carries the one fact that projection was
+   * read for, from the identical source, and is absent — not false — whenever
+   * that source is absent, so the fail-closed check below still halts. */
+  killSwitchEngaged?: boolean;
   now: number;
   mode: 'HALTED' | 'MANUAL';
   privateAccountTruth: 'AVAILABLE' | 'UNAVAILABLE' | 'NOT_CONFIGURED';

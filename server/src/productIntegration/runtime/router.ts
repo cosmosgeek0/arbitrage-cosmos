@@ -1,4 +1,6 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
+import { gzip as gzipCallback } from 'node:zlib';
+import { promisify } from 'node:util';
 import type { ProductIntegrationRuntimeService } from './service.js';
 import { isProductRuntimeCursor } from './events.js';
 import { isProductRuntimeTraceId } from './trace.js';
@@ -32,6 +34,48 @@ function limit(value: unknown, fallback?: number): number | null {
   return Number.isInteger(parsed) && parsed <= PRODUCT_RUNTIME_MAX_QUERY_LIMIT ? parsed : null;
 }
 
+// The supervisor envelope is the one large read this router publishes, so it —
+// and only it — is offered compressed. gzip is asynchronous on purpose: the
+// synchronous variant would block the event loop this route shares with every
+// other reader. Identity stays the default for any client that does not ask for
+// gzip or any body small enough that compression would not pay for itself, and
+// a compression failure falls back to identity rather than losing the read.
+const gzipAsync = promisify(gzipCallback);
+const GZIP_MIN_BYTES = 1024;
+
+function acceptsGzip(req: Request): boolean {
+  const raw = req.headers['accept-encoding'];
+  const header = Array.isArray(raw) ? raw.join(',') : typeof raw === 'string' ? raw : '';
+  for (const element of header.split(',')) {
+    const [token, ...parameters] = element.split(';');
+    if ((token ?? '').trim().toLowerCase() !== 'gzip') continue;
+    // `gzip;q=0` advertises gzip only to refuse it. Honour the refusal.
+    const quality = parameters.map((p) => p.trim()).find((p) => p.toLowerCase().startsWith('q='));
+    return quality === undefined || Number(quality.slice(2)) > 0;
+  }
+  return false;
+}
+
+async function sendJsonBody(req: Request, res: Response, value: unknown): Promise<void> {
+  const body = JSON.stringify(value);
+  res.type('application/json');
+  if (Buffer.byteLength(body) <= GZIP_MIN_BYTES || !acceptsGzip(req)) {
+    res.send(body);
+    return;
+  }
+  let compressed: Buffer;
+  try {
+    compressed = await gzipAsync(body);
+  } catch {
+    if (!res.headersSent) res.send(body);
+    return;
+  }
+  if (res.headersSent) return;
+  res.setHeader('Content-Encoding', 'gzip');
+  res.setHeader('Vary', 'Accept-Encoding');
+  res.send(compressed);
+}
+
 function exactBody(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const actual = Object.keys(value as Record<string, unknown>).sort();
@@ -62,7 +106,7 @@ export function createProductIntegrationRuntimeRouter(service: ProductIntegratio
       res.status(400).json({ ok: false, code: 'INVALID_PRODUCT_QUERY', error: 'Supervisor read accepts no query fields.' });
       return;
     }
-    res.json(await service.readSupervisorShared());
+    await sendJsonBody(req, res, await service.readSupervisorShared());
   }));
 
   router.get('/v1/material-events', asyncRoute(async (req, res) => {

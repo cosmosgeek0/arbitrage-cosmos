@@ -1139,7 +1139,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const requestId = nextPrivateReadRequestId();
       const controller = new AbortController();
       stateRefreshController = controller;
-      void fetchJson<ServerState>('/api/state', { cache: 'no-store', signal: controller.signal })
+      void fetchJson<ServerState>('/api/state?view=slim', { cache: 'no-store', signal: controller.signal })
         .then((snapshot) => {
           if (!closed && !controller.signal.aborted) {
             setState(failClosedState(snapshot));

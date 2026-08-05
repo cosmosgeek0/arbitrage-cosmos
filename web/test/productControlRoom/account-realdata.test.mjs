@@ -369,7 +369,7 @@ test('Account page consumes the shared authenticated cadence and adds no transpo
   assert.match(page, /position\.marginType \?\? 'Margin Mode Not Published'/);
   assert.match(page, /position\.leverage === null/);
 
-  assert.match(store, /fetchJson<ServerState>\('\/api\/state', \{ cache: 'no-store', signal: controller\.signal \}\)/);
+  assert.match(store, /fetchJson<ServerState>\('\/api\/state\?view=slim', \{ cache: 'no-store', signal: controller\.signal \}\)/);
   assert.match(store, /privateReadCadenceRef/);
   assert.match(store, /reduceRealDataClientTuple\(current, event\)/);
   assert.match(privateRead, /event\.requestId <= current\.privateRead\.appliedRequestId/);

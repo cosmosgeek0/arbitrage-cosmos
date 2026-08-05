@@ -2409,16 +2409,14 @@ function publishedMarketSourceState(
   return ageMs >= 0 && ageMs <= MARKET_SOURCE_REFRESH_MS ? 'fresh' : 'stale';
 }
 
-async function readMarketOwnerSnapshot() {
-  triggerMarketSourceRefresh();
-  // Refresh owns failure logging; readers retain the last truthful cut.
-  await marketSourceInFlight?.catch(() => undefined);
+function readMarketOwnerSnapshot() {
   const now = Date.now();
   const {
     spotBookRes,
     perpBookRes,
     perp24hRes,
   } = marketSourceCache ?? initialMarketSourceSnapshot;
+  triggerMarketSourceRefresh(now);
   const at = spotBookRes.observedAtMs;
   const dataSources = Object.freeze({
     spotBookTicker: publishedMarketSourceState(spotBookRes, now),
@@ -2478,10 +2476,10 @@ function productMarketSourceState(
   return state === 'fresh' ? 'fresh' : 'unavailable';
 }
 
-async function readProductOwnerTruth(
+function readProductOwnerTruth(
   supervisor: Readonly<SystemSupervisorReadModel>,
 ) {
-  const markets = await readMarketOwnerSnapshot();
+  const markets = readMarketOwnerSnapshot();
   const opportunities = systemIntegrationProduction.opportunities.readSnapshot(
     systemIntegrationClock.nowMs(),
   );
@@ -2505,14 +2503,12 @@ async function readProductOwnerTruth(
 }
 
 app.get('/api/markets', (_req, res) => {
-  runAsync(res, async () => {
-    const snapshot = await readMarketOwnerSnapshot();
-    res.json({
-      updatedAt: snapshot.observedAtMs,
-      streamUpdatedAt: snapshot.streamUpdatedAt,
-      dataSources: snapshot.dataSources,
-      rows: snapshot.rows,
-    });
+  const snapshot = readMarketOwnerSnapshot();
+  res.json({
+    updatedAt: snapshot.observedAtMs,
+    streamUpdatedAt: snapshot.streamUpdatedAt,
+    dataSources: snapshot.dataSources,
+    rows: snapshot.rows,
   });
 });
 

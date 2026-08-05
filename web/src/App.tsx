@@ -2,7 +2,6 @@ import { Fragment, useEffect, useRef } from 'react';
 import { StoreProvider, resolveReleaseIdentityTruth, useStore } from './store';
 import { IconClock } from './components/Icons';
 import { Sidebar, Topbar, BottomNav, Overlays, RefreshDock } from './components/Header';
-import { AccountCockpitRail } from './components/AccountCockpitRail';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Tape } from './components/Tape';
 import { Palette } from './components/Palette';
@@ -91,7 +90,6 @@ function Shell() {
         <div className="app-main">
           {prefs.tape && <Tape />}
           <main ref={mainRef} className={`app-page-main page-${framePage}`}>
-            <AccountCockpitRail />
             <section
               className={`app-page-frame frame-${framePage}`}
               aria-label={`${framePage} workspace`}

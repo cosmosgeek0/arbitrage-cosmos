@@ -731,41 +731,11 @@ function privateOrderTruthState(
 // verbatim: its own timestamps are never rewritten, so a shared reader is told
 // exactly when the cut was taken and never receives a fabricated freshness.
 const LEGACY_STATE_SHARED_READ_TTL_MS = 1_000;
-let legacyStateSharedRead: {
-  built: unknown;
-  serialized: string | null;
-  publishedAtMs: number;
-} | null = null;
-let legacyStateBuildInFlight: Promise<void> | null = null;
-
-// buildState is the single builder of this view, so it is also the single
-// publisher of the cut that concurrent readers may share.
-function publishLegacyStateBuild<T>(built: T): T {
-  legacyStateSharedRead = { built, serialized: null, publishedAtMs: Date.now() };
-  return built;
-}
-
-function publishedLegacyStateBody(nowMs: number): string | null {
-  const shared = legacyStateSharedRead;
-  if (shared === null) return null;
-  const ageMs = nowMs - shared.publishedAtMs;
-  if (!(ageMs >= 0 && ageMs < LEGACY_STATE_SHARED_READ_TTL_MS)) return null;
-  if (shared.serialized === null) shared.serialized = JSON.stringify(shared.built);
-  return shared.serialized;
-}
-
-// Claims the single build slot. A request that does not win the claim awaits the
-// winner instead of starting a second identical rebuild.
-function claimLegacyStateBuild(): () => void {
-  if (legacyStateBuildInFlight !== null) return () => {};
-  let resolveClaim: () => void = () => {};
-  const claim = new Promise<void>((resolve) => { resolveClaim = resolve; });
-  legacyStateBuildInFlight = claim;
-  return () => {
-    if (legacyStateBuildInFlight === claim) legacyStateBuildInFlight = null;
-    resolveClaim();
-  };
-}
+type LegacyStateBodyCache = Readonly<{
+  promise: Promise<string>;
+  publishedAtMs: number | null;
+}>;
+let legacyStateBodyCache: LegacyStateBodyCache | null = null;
 
 function buildState(canonicalSupervisor: ReturnType<typeof systemIntegration.supervisor>) {
   const privateAccountTruth = privateAccountTruthState();
@@ -775,7 +745,7 @@ function buildState(canonicalSupervisor: ReturnType<typeof systemIntegration.sup
   const dayOpen = hasPrivateReadback ? account.dayOpenEquity() : null;
   const dailyLossPolicy = hasPrivateReadback ? account.dailyLossPolicy() : null;
   const staleMs = config.staleOrderMaxMin * 60 * 1000;
-  return publishLegacyStateBuild({
+  return {
     schemaVersion: 'legacy.state.compatibility.v2' as const,
     stateClass: 'COMPATIBILITY_VIEW' as const,
     readinessSemantics: 'NOT_EVALUATED' as const,
@@ -845,7 +815,41 @@ function buildState(canonicalSupervisor: ReturnType<typeof systemIntegration.sup
       rejectionsToday: risk.rejectionsTodayCount(),
     },
     events: ledger.recentEvents(30),
-  });
+  };
+}
+
+// One promise is both the single-flight identity and the cache. The builder
+// snapshots and serializes the compatibility view before that promise resolves,
+// so the winner and every waiter receive the same immutable string bytes and no
+// mutable owner object is ever published. A rejected build clears only itself;
+// its current waiters all observe the same rejection and only a later request
+// can claim the next attempt.
+function readLegacyStateBody(nowMs = Date.now()): Promise<string> {
+  const cached = legacyStateBodyCache;
+  if (cached !== null) {
+    if (cached.publishedAtMs === null) return cached.promise;
+    const ageMs = nowMs - cached.publishedAtMs;
+    if (ageMs >= 0 && ageMs < LEGACY_STATE_SHARED_READ_TTL_MS) return cached.promise;
+  }
+
+  const build = (async (): Promise<string> => {
+    const stateSupervisor = await systemIntegration.supervisor();
+    const serialized = JSON.stringify(buildState(stateSupervisor));
+    if (typeof serialized !== 'string') throw new Error('LEGACY_STATE_SERIALIZATION_UNAVAILABLE');
+    return serialized;
+  })();
+  legacyStateBodyCache = Object.freeze({ promise: build, publishedAtMs: null });
+  void build.then(
+    () => {
+      if (legacyStateBodyCache?.promise === build) {
+        legacyStateBodyCache = Object.freeze({ promise: build, publishedAtMs: Date.now() });
+      }
+    },
+    () => {
+      if (legacyStateBodyCache?.promise === build) legacyStateBodyCache = null;
+    },
+  );
+  return build;
 }
 
 const app = express();
@@ -1354,30 +1358,8 @@ app.get('/api/health', (_req, res) => {
 app.get('/api/state', (_req, res) => {
   runAsync(res, async () => {
     try {
-      // Concurrent and rapid pollers share one rebuild. A published cut is
-      // served only while it is under the bounded TTL; past it every reader
-      // rebuilds, so a cached success can never outlive its own truth window.
-      const published = publishedLegacyStateBody(Date.now());
-      const pending = published === null ? legacyStateBuildInFlight : null;
-      if (pending !== null) await pending;
-      const shared = published ?? publishedLegacyStateBody(Date.now());
-      if (shared !== null) {
-        res.type('application/json').send(shared);
-        return;
-      }
-      const releaseBuild = claimLegacyStateBuild();
-      try {
-        const stateSupervisor = await systemIntegration.supervisor();
-        res.json(buildState(stateSupervisor));
-      } catch (error) {
-        // A failed build must never leave an earlier success standing in for
-        // canonical truth: drop the shared cut so every reader reaches the
-        // truthful unavailability below instead of a retained success.
-        legacyStateSharedRead = null;
-        throw error;
-      } finally {
-        releaseBuild();
-      }
+      const body = await readLegacyStateBody();
+      res.type('application/json').send(body);
     } catch {
       res.status(503).json({
         ok: false,
@@ -2488,42 +2470,15 @@ type MarketOwnerProjection = Readonly<{
   rows: readonly ReturnType<typeof projectMarketApiRow>[];
 }>;
 
-// The owner projection is O(all symbols) three times over: one pass for the
-// stream observation timestamps, one projectMarketApiRow map that also builds a
-// 36-point spark per symbol, and a sort. Every envelope build and every
-// /api/markets read re-ran it, so N pollers cost N full projections on the
-// event loop. It is memoised here on the refresh clock this route already owns.
-let marketOwnerProjectionMemo: Readonly<{
-  sourceSnapshot: MarketSourceSnapshot;
-  dataSourceKey: string;
-  projectedAtMs: number;
-  projection: MarketOwnerProjection;
-}> | null = null;
-
 function projectMarketOwnerRows(
   sourceSnapshot: MarketSourceSnapshot,
   dataSources: PublishedMarketDataSources,
-  now: number,
 ): MarketOwnerProjection {
-  // The memo is keyed by the exact published source snapshot and by the
-  // freshness triple derived from it, so a landed refresh or a source ageing
-  // out of freshness always recomputes rather than republishing older rows
-  // under a newer claim. It additionally expires with the refresh interval, so
-  // a snapshot that has not yet been replaced can never pin a projection for
-  // longer than the cadence this route already publishes on.
-  const dataSourceKey = [
-    dataSources.spotBookTicker,
-    dataSources.futuresBookTicker,
-    dataSources.futures24hTicker,
-  ].join('|');
-  const memo = marketOwnerProjectionMemo;
-  if (memo !== null
-      && memo.sourceSnapshot === sourceSnapshot
-      && memo.dataSourceKey === dataSourceKey) {
-    const memoAgeMs = now - memo.projectedAtMs;
-    if (memoAgeMs >= 0 && memoAgeMs < MARKET_SOURCE_REFRESH_MS) return memo.projection;
-  }
-
+  // MarketEngine exposes no single immutable cut/revision spanning rows,
+  // per-symbol source times, and sparks. The REST snapshot is immutable, but it
+  // cannot key those independently mutable owner facts. Recompute each read so
+  // feed-loss invalidation and later engine generations are visible immediately
+  // without introducing a second projection owner.
   const { spotBookRes, perpBookRes, perp24hRes } = sourceSnapshot;
   const spotBooks = spotBookRes.status === 'fulfilled' && dataSources.spotBookTicker === 'fresh'
     ? spotBookRes.value
@@ -2561,18 +2516,11 @@ function projectMarketOwnerRows(
     }))
     .sort((a, b) => (b.quoteVolume24h ?? 0) - (a.quoteVolume24h ?? 0));
 
-  const projection: MarketOwnerProjection = Object.freeze({
+  return Object.freeze({
     observedAtMs: streamUpdatedAt ?? spotBookRes.observedAtMs,
     streamUpdatedAt,
     rows: Object.freeze(rows),
   });
-  marketOwnerProjectionMemo = Object.freeze({
-    sourceSnapshot,
-    dataSourceKey,
-    projectedAtMs: now,
-    projection,
-  });
-  return projection;
 }
 
 function readMarketOwnerSnapshot() {
@@ -2589,7 +2537,7 @@ function readMarketOwnerSnapshot() {
     futuresBookTicker: publishedMarketSourceState(perpBookRes, now),
     futures24hTicker: publishedMarketSourceState(perp24hRes, now),
   });
-  const projection = projectMarketOwnerRows(sourceSnapshot, dataSources, now);
+  const projection = projectMarketOwnerRows(sourceSnapshot, dataSources);
 
   return Object.freeze({
     observedAtMs: projection.observedAtMs,

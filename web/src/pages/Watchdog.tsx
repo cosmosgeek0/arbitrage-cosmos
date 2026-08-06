@@ -103,7 +103,7 @@ export function projectWatchdogReading(payload: unknown, observedAtMs: number): 
     loopP95Ms: nonNegative(loop.p95Ms),
     loopMaxMs: nonNegative(loop.maxMs),
     buildDurationMs: nonNegative(build.lastBuildDurationMs),
-    buildAtMs: nonNegative(build.lastBuildAtMs),
+    buildAtMs: nonNegative(build.lastBuildCompletedAtMs ?? build.lastBuildAtMs),
     buildInFlight: boolOrNull(build.inFlight),
     staleServedCount: nonNegative(build.staleServedCount),
   });

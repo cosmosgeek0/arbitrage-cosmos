@@ -676,6 +676,16 @@ const DEEP_FROZEN_SUBTREES: readonly string[] = Object.freeze(['traceIndex', 're
  * sourced timestamp — copy any undeclared excess property by reference into a
  * shallowly frozen parent. This walk closes that gap once per snapshot
  * generation so no reader can observe a published cut change under it.
+ *
+ * The freeze deliberately extends to caller-owned nested inputs carried in by
+ * reference: each component's `sourceTimestamp`, `freshness`, `retry`,
+ * `dataQuality`, `checkpoint`, `queue` and `lastFailure`, and the summary
+ * objects behind `input.summaries`. Anything a caller retains and mutates
+ * across ticks will therefore throw a TypeError in strict mode from here on.
+ * That is the intended contract, not a regression: these values are inputs to
+ * an immutable published cut, so mutating one after construction would silently
+ * change a snapshot that has already been serialized and digested. Build a new
+ * object per tick instead of mutating a retained one.
  */
 function deepFreezeReadModel(model: Readonly<SystemSupervisorReadModel>): void {
   const seen = new WeakSet<object>();

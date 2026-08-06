@@ -1143,6 +1143,19 @@ type RetainedTraceScanRow = Readonly<{
   record: Readonly<PersistedTraceEventRecord> | null;
 }>;
 
+/**
+ * Self-healing audit cadence for the incremental trace scan. The incremental
+ * window assumes rows of the canonical trace kind only ever append above the
+ * watermark, which the append-only triggers guarantee — but those triggers are
+ * absent during a migration or restore window, and an id-renumbering import can
+ * land a row at or below the watermark. Such a row is invisible to `afterId`
+ * forever, so the window is periodically rebuilt from the full rescan, which is
+ * the reference implementation by definition. Roughly one audit per minute at
+ * the one-second envelope cadence.
+ */
+const TRACE_SCAN_AUDIT_CALLS = 60;
+const TRACE_SCAN_AUDIT_INTERVAL_MS = 60_000;
+
 /** Exactly the per-row derivation the full trace rescan performs, done once per row. */
 function retainedTraceScanRow(row: LedgerEventRecord): RetainedTraceScanRow {
   const discarded = (): RetainedTraceScanRow => Object.freeze({ id: row.id, correlationId: null, record: null });
@@ -1177,6 +1190,9 @@ export class SystemLedgerPersistenceAdapter {
    * doubles that do not are served by the unconditional full rescan.
    */
   private traceScanIncrementalUnavailable = false;
+  /** Incremental refreshes served since the window was last rebuilt by a full rescan. */
+  private traceScanCallsSinceFullScan = 0;
+  private traceScanLastFullScanAtMs = 0;
 
   constructor(private readonly ledger: LedgerPersistencePort) {
     if (!ledger
@@ -1975,7 +1991,15 @@ export class SystemLedgerPersistenceAdapter {
   private readTraceScanWindow(): PersistenceResult<readonly RetainedTraceScanRow[]> {
     const limit = SYSTEM_PERSISTENCE_LIMITS.maximumLedgerScan;
     const retained = this.traceScanWindow;
-    if (retained !== null && !this.traceScanIncrementalUnavailable) {
+    const nowMs = Date.now();
+    // Force the reference path periodically so a row that appeared at or below
+    // the watermark cannot stay invisible: the rescan replaces the window rather
+    // than merely asserting against it.
+    const auditDue = this.traceScanCallsSinceFullScan >= TRACE_SCAN_AUDIT_CALLS
+      || nowMs - this.traceScanLastFullScanAtMs >= TRACE_SCAN_AUDIT_INTERVAL_MS;
+    const auditing = auditDue && retained !== null && !this.traceScanIncrementalUnavailable;
+    this.traceScanCallsSinceFullScan += 1;
+    if (retained !== null && !this.traceScanIncrementalUnavailable && !auditDue) {
       let batch: LedgerEventRecord[];
       try {
         batch = this.ledger.recentEvents(
@@ -2014,6 +2038,28 @@ export class SystemLedgerPersistenceAdapter {
       return failed('PERSISTENCE_READ_FAILED', errorMessage(error, 'trace query failed'));
     }
     const rows = Object.freeze([...raw].sort((left, right) => left.id - right.id).map(retainedTraceScanRow));
+    if (auditing && retained !== null) {
+      // What the incremental refresh would have produced this tick: the retained
+      // window plus exactly the rows above its watermark, re-trimmed. Divergence
+      // from the rescan means a row entered at or below the watermark.
+      const projected = [...retained.rows, ...rows.filter((row) => row.id > retained.watermarkId)];
+      const expected = projected.slice(Math.max(0, projected.length - limit));
+      const divergentPositions = expected.length === rows.length
+        ? expected.reduce((count, row, index) => (
+          row.id === rows[index].id && row.correlationId === rows[index].correlationId ? count : count + 1
+        ), 0)
+        : Math.abs(expected.length - rows.length);
+      if (divergentPositions > 0) {
+        console.warn(JSON.stringify({
+          event: 'system_integration_trace_scan_window_repaired',
+          incrementalRowCount: expected.length,
+          rescanRowCount: rows.length,
+          divergentPositionCount: divergentPositions,
+        }));
+      }
+    }
+    this.traceScanCallsSinceFullScan = 0;
+    this.traceScanLastFullScanAtMs = nowMs;
     // A port that overruns its own limit is not the canonical Ledger; serve it
     // the unconditional rescan rather than a trimmed window.
     this.traceScanWindow = this.traceScanIncrementalUnavailable || raw.length > limit

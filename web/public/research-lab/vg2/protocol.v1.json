@@ -1,0 +1,190 @@
+{
+  "authority": {
+    "accountData": "FORBIDDEN",
+    "capitalAuthority": "NONE",
+    "consumer": "N3 profitability verdict",
+    "effectUsd": "0",
+    "execution": "FORBIDDEN",
+    "host": "FORBIDDEN",
+    "orders": "FORBIDDEN",
+    "privateApi": "FORBIDDEN",
+    "provider": "FORBIDDEN",
+    "scope": "PUBLIC_RESEARCH_ONLY",
+    "ui": "FORBIDDEN"
+  },
+  "bootstrap": {
+    "blockLengthDays": 7,
+    "coveragePerMyriad": 9500,
+    "replicates": 4096,
+    "seed": 421337
+  },
+  "capacityProxy": {
+    "executableCapacity": "UNKNOWN",
+    "gateInitialUsd": "1000",
+    "label": "PRIOR_30D_MEDIAN_QUOTE_VOLUME_PARTICIPATION_PROXY",
+    "participationBasisPoints": 1
+  },
+  "costs": {
+    "accountEffectiveFee": "UNKNOWN",
+    "baseAdverseExecutionBasisPointsPerSide": 10,
+    "currentPublicRegularTakerFeeBasisPointsPerSide": 10,
+    "discountAssumed": false,
+    "historicalBookSpreadImpact": "UNKNOWN",
+    "stressAdverseExecutionBasisPointsPerSide": 25
+  },
+  "data": {
+    "developmentArchiveMonths": [
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02"
+    ],
+    "discoverySha256": "b4a8f7abd36df19eff0510dfcc3c61fd0df9fdcab5f4d248892ee10010fb21c3",
+    "holdoutArchiveMonths": [
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ],
+    "interval": "1d",
+    "quoteAsset": "USDT",
+    "sourceAcquisitionManifestSha256": "01f58272602e43bfb914b649adc00d8273b2d423492220a55f86443bb6441176",
+    "sourceRoot": "/private/tmp/cosmos-s1f-weekly-momentum-cash-v1",
+    "timestampUnitFrom2025": "MICROSECONDS",
+    "universeLaw": "FROZEN_ARCHIVE_DISCOVERED_USDT_UNION_MINUS_STABLE_FIAT_AND_PAIRED_LEVERAGED;_CAUSAL_HISTORY_AND_LIQUIDITY_SCREEN;NO_CURRENT_EXCHANGEINFO_BACKFILL"
+  },
+  "economics": {
+    "initialUsd": "1000",
+    "longOnly": true,
+    "quantityMode": "FRACTIONAL_RESEARCH_ONLY",
+    "shorting": false,
+    "sleevesEqualHoldingDays": true,
+    "unusedAllocation": "USDT_CASH"
+  },
+  "formalGoGates": {
+    "developmentAdjustedPValueExclusiveMaximum": "0.05",
+    "developmentBootstrapLowerBoundExclusiveMinimumUsd": "0",
+    "developmentDistinctAssetsMinimum": 20,
+    "developmentPositiveFoldMinimum": 3,
+    "developmentRoundTripsMinimum": 100,
+    "developmentValidCohortDaysMinimum": 80,
+    "holdoutAdjustedPValueExclusiveMaximum": "0.05",
+    "holdoutBootstrapLowerBoundExclusiveMinimumUsd": "0",
+    "holdoutDistinctAssetsMinimum": 15,
+    "holdoutEntryCoverageMinimum": "0.95",
+    "holdoutMaximumDrawdownMaximum": "0.10",
+    "holdoutRoundTripsMinimum": 40,
+    "holdoutValidCohortDaysMinimum": 60,
+    "stressNetUsdExclusiveMinimum": "0",
+    "topAssetGrossProfitShareMaximum": "0.20",
+    "topFiveTradeGrossProfitShareMaximum": "0.40",
+    "whiteRealityCheckPValueExclusiveMaximum": "0.05"
+  },
+  "holdout": {
+    "endUtcDate": "2026-06-30",
+    "maximumOpenCount": 1,
+    "openedOnlyAfterSelectionHash": true,
+    "startUtcDate": "2026-03-01"
+  },
+  "inference": {
+    "familywiseAlphaPerMyriad": 500,
+    "holmFamily": "ALL_12_DEVELOPMENT_NET_RETURN_TRIALS",
+    "pbo": {
+      "blockCount": 8,
+      "role": "DIAGNOSTIC_ONLY",
+      "symmetricSplitCount": 70
+    },
+    "whiteRealityCheck": "SYNCHRONOUS_CENTERED_CIRCULAR_BLOCK_BOOTSTRAP_OVER_12_TRIAL_DAILY_NET_RETURN_MATRIX"
+  },
+  "missingness": {
+    "duplicateOrConflictingFullBar": "UNMEASURED",
+    "incompleteDailyBar": "EXCLUDE_ROW_AND_STOP_CONTIGUOUS_ELIGIBILITY",
+    "missingEntryAfterSelection": "ALLOCATION_REMAINS_CASH_NO_REPLACEMENT",
+    "missingExitAfterSuccessfulEntry": "UNMEASURED",
+    "missingHistory": "INELIGIBLE_UNTIL_CONTIGUOUS_LOOKBACK_RESTORED",
+    "unknownValueToZero": "FORBIDDEN"
+  },
+  "partitions": {
+    "development": {
+      "calibrationEndUtcDate": "2025-10-31",
+      "folds": [
+        {
+          "endUtcDate": "2025-11-30",
+          "id": "WF-2025-11",
+          "startUtcDate": "2025-11-01"
+        },
+        {
+          "endUtcDate": "2025-12-31",
+          "id": "WF-2025-12",
+          "startUtcDate": "2025-12-01"
+        },
+        {
+          "endUtcDate": "2026-01-31",
+          "id": "WF-2026-01",
+          "startUtcDate": "2026-01-01"
+        },
+        {
+          "endUtcDate": "2026-02-28",
+          "id": "WF-2026-02",
+          "startUtcDate": "2026-02-01"
+        }
+      ],
+      "startUtcDate": "2025-07-01"
+    },
+    "measurementWindow": {
+      "calendarMonths": 12,
+      "endUtcDate": "2026-06-30",
+      "startUtcDate": "2025-07-01"
+    }
+  },
+  "selection": {
+    "championMetric": "MEDIAN_FOUR_WALK_FORWARD_FOLD_BASE_NET_USD_PER_1000",
+    "holdoutAlwaysOpenedForLockedChampion": true,
+    "tieBreak": [
+      "LOWER_HOLD_DAYS",
+      "LARGER_LOOKBACK_DAYS",
+      "SMALLER_TOP_FRACTION",
+      "LEXICOGRAPHIC_TRIAL_ID"
+    ]
+  },
+  "signal": {
+    "entry": "NEXT_UTC_DAILY_OPEN_AFTER_COMPLETED_SIGNAL_DAY",
+    "liquidityMinimumPrior30dMedianQuoteVolumeUsd": "5000000",
+    "minimumEligibleRiskSet": 20,
+    "minimumPositiveCandidates": 3,
+    "positiveDirection": "LN(CLOSE_T/CLOSE_T_MINUS_1)>0",
+    "rank": "DESCENDING_OWN_HISTORY_LOG_QUOTE_VOLUME_SHOCK_THEN_DESCENDING_SIGNAL_RETURN_THEN_UTF8_SYMBOL",
+    "shock": "LN(QUOTE_VOLUME_T)-MEDIAN(LN(QUOTE_VOLUME_T_MINUS_J),J=1..LOOKBACK)",
+    "signalAvailability": "AFTER_COMPLETED_UTC_DAILY_CLOSE"
+  },
+  "trials": {
+    "attemptedCount": 12,
+    "holdingDays": [
+      1,
+      3
+    ],
+    "lookbackDays": [
+      10,
+      20,
+      40
+    ],
+    "topFractions": [
+      "0.10",
+      "0.20"
+    ]
+  },
+  "verdictLaw": {
+    "GO": "VALID_MEASUREMENT_AND_ALL_FORMAL_GATES_PASS;PUBLIC_RESEARCH_ONLY",
+    "NO_GO": "VALID_MEASUREMENT_AND_ONE_OR_MORE_FORMAL_ECONOMIC_STATISTICAL_RISK_OR_PROXY_CAPACITY_GATES_FAIL",
+    "UNMEASURED": "CUSTODY_SCHEMA_TIMESTAMP_SAMPLE_OR_SUCCESSFUL_EXIT_FAILURE_PREVENTS_PREREGISTERED_ESTIMATE"
+  },
+  "version": "VG2ProtocolV1"
+}

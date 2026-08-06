@@ -1,0 +1,226 @@
+.rlcmp-tray,
+.rlcmp-tray * {
+  box-sizing: border-box;
+}
+
+.rlcmp-tray {
+  position: relative;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: 164px minmax(280px, 1fr) auto;
+  align-items: center;
+  width: 100%;
+  min-height: 58px;
+  border-bottom: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--accent) 3%, var(--panel));
+  color: var(--text);
+  font-family: var(--font, Inter, -apple-system, BlinkMacSystemFont, sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+
+.rlcmp-tray-intro {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  min-height: 58px;
+  padding: 7px 14px;
+  border-right: 1px solid var(--line-2);
+}
+
+.rlcmp-tray-intro > svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.rlcmp-tray-intro > div {
+  display: grid;
+  min-width: 0;
+}
+
+.rlcmp-tray-intro strong {
+  color: var(--text);
+  font-size: 11.5px;
+  font-weight: 510;
+  line-height: 16px;
+}
+
+.rlcmp-tray-intro span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 410;
+  line-height: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rlcmp-tray-selection {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-width: 0;
+}
+
+.rlcmp-tray-family {
+  position: relative;
+  display: grid;
+  align-content: center;
+  min-width: 0;
+  min-height: 58px;
+  padding: 7px 45px 7px 13px;
+}
+
+.rlcmp-tray-family + .rlcmp-tray-family {
+  border-left: 1px solid var(--line);
+}
+
+.rlcmp-tray-family > span {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 14px;
+}
+
+.rlcmp-tray-family > code,
+.rlcmp-tray-family > strong {
+  overflow: hidden;
+  color: var(--text-2);
+  font-family: var(--mono, ui-monospace, monospace);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rlcmp-tray-family > small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 410;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rlcmp-tray-family > button {
+  position: absolute;
+  top: 7px;
+  right: 3px;
+  display: grid;
+  width: 44px;
+  min-height: 44px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.rlcmp-tray-family > button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.rlcmp-tray-family-empty {
+  padding-right: 13px;
+  background: color-mix(in srgb, var(--tile) 24%, transparent);
+}
+
+.rlcmp-tray-family-empty > strong {
+  color: var(--muted);
+  font-family: var(--font, Inter, sans-serif);
+  font-weight: 450;
+}
+
+.rlcmp-tray-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 58px;
+  padding: 7px 9px;
+  border-left: 1px solid var(--line-2);
+}
+
+.rlcmp-tray-actions button {
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 510;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.rlcmp-tray-clear {
+  background: transparent;
+  color: var(--muted);
+}
+
+.rlcmp-tray-clear:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.rlcmp-tray-open {
+  min-width: 132px;
+  border-color: var(--text) !important;
+  background: var(--text);
+  color: var(--bg);
+}
+
+.rlcmp-tray-open:disabled {
+  border-color: var(--line-2) !important;
+  background: var(--hover);
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.rlcmp-tray-family > button:focus-visible,
+.rlcmp-tray-actions button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  .rlcmp-tray {
+    grid-template-columns: 1fr auto;
+  }
+
+  .rlcmp-tray-intro {
+    display: none;
+  }
+
+  .rlcmp-tray-family {
+    min-height: 56px;
+  }
+
+  .rlcmp-tray-actions {
+    min-height: 56px;
+  }
+
+  .rlcmp-tray-clear {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .rlcmp-tray {
+    grid-template-columns: 1fr;
+  }
+
+  .rlcmp-tray-actions {
+    min-height: 0;
+    padding: 0 9px 9px;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+  }
+
+  .rlcmp-tray-open {
+    width: 100%;
+  }
+}

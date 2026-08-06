@@ -1,0 +1,359 @@
+{
+  "schema": "S1PVolumeLeadBasisReversionProtocolV1",
+  "protocolId": "s1p-binance-relative-volume-intensity-precedes-own-basis-reversion-v1",
+  "frozenForDateUtc": "2026-07-29",
+  "canonicalBaseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "consumer": {
+    "task": "N3_SUCCESSOR_OR_ORCHESTRATOR",
+    "purpose": "PROFITABILITY_SCOREBOARD_INPUT",
+    "productAuthority": "NONE"
+  },
+  "scope": {
+    "publicOnly": true,
+    "privateApi": false,
+    "orders": false,
+    "testOrders": false,
+    "transfers": false,
+    "withdrawals": false,
+    "money": false,
+    "host": false,
+    "ui": false,
+    "executionAuthority": "NONE"
+  },
+  "distinctness": {
+    "family": "RELATIVE_VOLUME_INTENSITY_EVENT_PRECEDES_OWN_SYMBOL_NORMAL_BASIS_REVERSION",
+    "leadMeaning": "THE_RELATIVE_VOLUME_EVENT_TEMPORALLY_PRECEDES_THE_LATER_BASIS_EVENT_NOT_A_CLAIM_THAT_USD_M_VOLUME_PREDICTS_FUTURE_SPOT_VOLUME",
+    "requiredSequence": [
+      "SAME_BAR_USD_M_MINUS_SPOT_SEASONALLY_ROBUST_QUOTE_VOLUME_INTENSITY_Z_CROSSES_FIRST",
+      "OWN_SYMBOL_BASIS_IS_NOT_EXTREME_AT_VOLUME_EVENT",
+      "ONE_TO_SIX_LATER_BARS_OWN_SYMBOL_POSITIVE_BASIS_NEWLY_CROSSES_THRESHOLD",
+      "NEXT_SYNCHRONIZED_OPEN_LONG_SPOT_SHORT_SAME_SYMBOL_USD_M_PERPETUAL"
+    ],
+    "notVg9": [
+      "NO_VOLUME_LEADERSHIP_SPREAD_RETURN_OR_DIRECTIONAL_TRADE",
+      "NO_CROSS_SYMBOL_VOLUME_RANK_OR_LONG_SHORT_VOLUME_PORTFOLIO",
+      "VOLUME_EVENT_ALONE_NEVER_ENTERS",
+      "ONLY_A_LATER_OWN_SYMBOL_POSITIVE_BASIS_CROSS_CAN_CREATE_A_PAIRED_BASIS_TRADE"
+    ],
+    "preRunVg9CollisionGate": {
+      "assignmentCompared": "V_G9_PUBLIC_ONLY_BINANCE_SPOT_VERSUS_USD_M_VOLUME_LEADERSHIP_SPREAD",
+      "requiredBeforeAnyArchiveBodyOpen": true,
+      "stopCondition": "IF_V_G9_FINAL_PROTOCOL_REQUIRES_THE_SAME_LATER_OWN_SYMBOL_BASIS_CROSS_AND_PAIRED_BASIS_REVERSION_TRADE_STOP_UNMEASURED_WITHOUT_OPENING_DATA"
+    },
+    "notS1h": [
+      "NO_ETH_MINUS_BTC_OR_OTHER_CROSS_ASSET_BASIS_RESIDUAL",
+      "NO_CONTEMPORANEOUS_BASIS_ONLY_ENTRY",
+      "EACH_SYMBOL_IS_EVALUATED_ONLY_AGAINST_ITS_OWN_CAUSAL_BASIS_HISTORY"
+    ],
+    "forbiddenSignalFamilies": [
+      "FUNDING_RATE_SIGN_FORECAST_SETTLEMENT_CLOCK_OR_TIME_TO_FUNDING",
+      "PREMIUM_INDEX_MARK_INDEX_OR_COIN_M_SIGNAL",
+      "DATED_FUTURES_OR_CALENDAR_BASIS",
+      "SPOT_PRICE_RETURN_SIGN_RANK_OR_BREAKOUT",
+      "TAKER_BUY_FLOW",
+      "TRADE_COUNT_OR_TRADE_NOTIONAL",
+      "VOLUME_COMPRESSION_FRESH_LOW_WICK_CLIMAX_OR_CROSS_SECTIONAL_SHARE",
+      "SAME_BAR_VOLUME_AND_BASIS_TRIGGER",
+      "BASIS_ONLY_ENTRY"
+    ]
+  },
+  "data": {
+    "authority": "https://data.binance.vision",
+    "interval": "5m",
+    "symbols": [
+      "BTCUSDT",
+      "ETHUSDT"
+    ],
+    "targetMonthsInclusive": [
+      "2025-07",
+      "2026-06"
+    ],
+    "series": [
+      "SPOT_KLINES",
+      "USD_M_KLINES",
+      "USD_M_MARK_PRICE_KLINES_FUNDING_VALUATION_ONLY",
+      "USD_M_FUNDING_RATE_PNL_ONLY"
+    ],
+    "signalFields": [
+      "SPOT_OPEN",
+      "SPOT_CLOSE",
+      "SPOT_QUOTE_ASSET_VOLUME",
+      "USD_M_OPEN",
+      "USD_M_CLOSE",
+      "USD_M_QUOTE_ASSET_VOLUME"
+    ],
+    "checksumRequired": true,
+    "sharedArchivePolicy": "READ_ONLY",
+    "sharedDiscoveryPath": "/private/tmp/cosmos-s1h-btc-eth-rv-basis-v1/DISCOVERY.v1.json",
+    "sharedDiscoverySha256": "5fd5924a63fd31c08378002e3d508d6de5d895383c3322ce3cd82caad35b1c0f",
+    "sharedArchiveRoot": "/private/tmp/cosmos-s1h-btc-eth-rv-basis-v1/archives",
+    "archiveCount": 96,
+    "allowedSharedReads": [
+      "DISCOVERY.v1.json",
+      "CHECKSUM_ADDRESSED_ARCHIVE_ZIPS"
+    ],
+    "forbiddenSharedReads": [
+      "ACQUISITION.v1.json",
+      "FREEZE_CANDIDATE.v1.json",
+      "RESULT_CANDIDATE.v1.json",
+      "S1H_RUN_CONSUMED.v1.json"
+    ],
+    "archiveBodiesMayOpenOnlyAfterS1pRunMarker": true,
+    "holdoutArchiveBodiesMayOpenOnlyAfterS1pCandidateSealAndHoldoutMarker": true,
+    "historicalExchangeInfoSnapshots": "UNAVAILABLE",
+    "validation": {
+      "discovery": "EXACTLY_96_UNIQUE_EXPECTED_ROWS_AND_NO_UNEXPECTED_SERIES",
+      "archiveSha256": "MUST_MATCH_DISCOVERY_BEFORE_ZIP_MEMBER_OPEN",
+      "zipShape": "EXACTLY_ONE_NON_DIRECTORY_CSV_MEMBER",
+      "bars": "FINITE_POSITIVE_OHLC_NONNEGATIVE_QUOTE_VOLUME_STRICT_UNIQUE_COMPLETE_FIVE_MINUTE_GRID",
+      "clocks": "SPOT_USD_M_AND_MARK_PRICE_OPEN_TIMES_IDENTICAL_WITHIN_EACH_PHASE_AND_ACROSS_SYMBOLS",
+      "funding": "EXACT_CALC_TIME_FUNDING_INTERVAL_HOURS_LAST_FUNDING_RATE_HEADER_NONEMPTY_STRICT_UNIQUE_FINITE_ON_HOUR_ROWS_LEADING_TRAILING_AND_INTERNAL_GAPS_MUST_NOT_EXCEED_THE_APPLICABLE_DECLARED_INTERVAL_ANY_INTERVAL_TRANSITION_IS_TERMINAL_UNMEASURED_EACH_TIMESTAMP_MUST_HAVE_EXACT_MARK_PRICE_OPEN",
+      "failure": "TERMINAL_UNMEASURED_NO_REPAIR_NO_RERUN"
+    }
+  },
+  "calendar": {
+    "timezone": "UTC",
+    "sample": {
+      "startInclusive": "2025-07-01T00:00:00Z",
+      "endExclusive": "2026-07-01T00:00:00Z",
+      "completeMonths": 12
+    },
+    "development": {
+      "startInclusive": "2025-07-01T00:00:00Z",
+      "endExclusive": "2026-04-01T00:00:00Z",
+      "entryEmbargo": "IGNORE_ANY_VOLUME_EVENT_UNLESS_ITS_WORST_CASE_EVENT_TO_EXIT_OPEN_INDEX_IS_STRICTLY_BEFORE_DEVELOPMENT_END",
+      "worstCaseExitOpenIndexOffsetFromVolumeEvent": 295,
+      "months": [
+        "2025-07",
+        "2025-08",
+        "2025-09",
+        "2025-10",
+        "2025-11",
+        "2025-12",
+        "2026-01",
+        "2026-02",
+        "2026-03"
+      ]
+    },
+    "walkForward": [
+      {
+        "trainStart": "2025-07-01T00:00:00Z",
+        "trainEnd": "2025-10-01T00:00:00Z",
+        "forwardStart": "2025-10-01T00:00:00Z",
+        "forwardEnd": "2026-01-01T00:00:00Z"
+      },
+      {
+        "trainStart": "2025-07-01T00:00:00Z",
+        "trainEnd": "2026-01-01T00:00:00Z",
+        "forwardStart": "2026-01-01T00:00:00Z",
+        "forwardEnd": "2026-04-01T00:00:00Z"
+      }
+    ],
+    "holdout": {
+      "startInclusive": "2026-04-01T00:00:00Z",
+      "endExclusive": "2026-07-01T00:00:00Z",
+      "months": [
+        "2026-04",
+        "2026-05",
+        "2026-06"
+      ],
+      "allowedOpenCount": 1,
+      "championOnly": true,
+      "entryEmbargo": "IGNORE_ANY_VOLUME_EVENT_UNLESS_ITS_WORST_CASE_EVENT_TO_EXIT_OPEN_INDEX_IS_STRICTLY_BEFORE_HOLDOUT_END",
+      "worstCaseExitOpenIndexOffsetFromVolumeEvent": 295,
+      "crossBoundaryPositions": "FORBIDDEN"
+    }
+  },
+  "calibration": {
+    "history": "PREVIOUS_28_COMPLETE_UTC_DAYS_FROZEN_AT_EACH_UTC_DAY_START",
+    "volume": {
+      "transform": "LOG1P_QUOTE_ASSET_VOLUME",
+      "seasonality": "SAME_FIVE_MINUTE_UTC_SLOT_ACROSS_PRIOR_COMPLETE_DAYS",
+      "location": "MEDIAN",
+      "scale": "MAX_1_POINT_4826_TIMES_MAD_0_POINT_05",
+      "currentDayExcluded": true
+    },
+    "basis": {
+      "basisBps": "10000_TIMES_LOG_USD_M_CLOSE_DIV_SPOT_CLOSE",
+      "location": "MEDIAN_ALL_PRIOR_WINDOW_SYNCHRONIZED_BARS",
+      "scale": "MAX_1_POINT_4826_TIMES_MAD_1_BPS",
+      "currentDayExcluded": true
+    }
+  },
+  "signal": {
+    "relativeVolumeIntensityZ": "USD_M_SEASONAL_VOLUME_Z_MINUS_SPOT_SEASONAL_VOLUME_Z_ON_THE_SAME_CLOSED_BAR",
+    "volumeEvent": "RELATIVE_VOLUME_INTENSITY_Z_NEWLY_CROSSES_FROZEN_TRIAL_THRESHOLD_FROM_STRICTLY_BELOW_TO_AT_OR_ABOVE",
+    "basisAtVolumeEvent": "ABS_OWN_BASIS_Z_STRICTLY_BELOW_1",
+    "armedBarsAfterVolumeEvent": 6,
+    "armScope": "ONE_ARM_PER_TRIAL_PER_SYMBOL",
+    "armCalibration": "CAPTURE_VOLUME_AND_BASIS_LOCATION_AND_SCALE_AT_VOLUME_EVENT",
+    "basisEvent": "IN_ARMED_BAR_1_THROUGH_6_OWN_BASIS_Z_UNDER_THE_CAPTURED_ARM_CALIBRATION_NEWLY_CROSSES_FROZEN_POSITIVE_THRESHOLD_FROM_STRICTLY_BELOW_TO_AT_OR_ABOVE_AND_RAW_BASIS_IS_POSITIVE",
+    "utcCalibrationResetWhileArmed": "USE_CAPTURED_ARM_CALIBRATION_FOR_CURRENT_AND_PREVIOUS_BASIS_VALUES",
+    "strictTemporalOrder": true,
+    "barIndexLaw": {
+      "signalEvaluation": "AFTER_CLOSE_OF_BAR_I_USING_ONLY_BARS_AT_OR_BEFORE_I",
+      "entryFill": "OPEN_OF_BAR_I_PLUS_1_IMMEDIATELY_AFTER_BASIS_EVENT_BAR_I",
+      "exitEvaluation": "AFTER_CLOSE_OF_HELD_BAR_J",
+      "exitFill": "OPEN_OF_BAR_J_PLUS_1",
+      "maximumHold": "TIME_STOP_AFTER_CLOSE_OF_ENTRY_INDEX_PLUS_287_AND_FILL_AT_OPEN_OF_ENTRY_INDEX_PLUS_288"
+    },
+    "entry": "OPEN_OF_IMMEDIATELY_FOLLOWING_SYNCHRONIZED_BAR_LONG_SPOT_SHORT_SAME_SYMBOL_USD_M_EQUAL_BASE",
+    "onePortfolioPositionMaximum": 1,
+    "overlap": "FORBIDDEN",
+    "sameBarPriority": [
+      "PROCESS_EXISTING_POSITION_EXIT_FIRST",
+      "PROCESS_EXISTING_ARM_BASIS_CROSSES",
+      "WINNER_IS_OLDEST_ARM_THEN_LARGEST_BASIS_THRESHOLD_EXCESS_THEN_SYMBOL_ASCENDING",
+      "CANCEL_ALL_OTHER_ARMS_WHEN_ONE_ENTRY_IS_SCHEDULED",
+      "PROCESS_NEW_VOLUME_EVENTS_ONLY_IF_NO_POSITION_OR_SCHEDULED_ENTRY"
+    ],
+    "simultaneousVolumeEvents": "ARM_EACH_ELIGIBLE_SYMBOL_IN_SYMBOL_ASCENDING_ORDER",
+    "ignoredEvents": "EVENTS_DURING_A_POSITION_OR_WHILE_THE_SYMBOL_IS_ALREADY_ARMED_CREATE_NO_DEFERRED_STATE",
+    "armExpiry": "PROCESS_BAR_VOLUME_EVENT_PLUS_6_THEN_EXPIRE_IF_NO_BASIS_EVENT",
+    "rearm": "AFTER_EXPIRY_OR_POSITION_CLOSE_REQUIRE_OWN_BASIS_Z_AT_OR_BELOW_0_POINT_5_AND_RELATIVE_VOLUME_INTENSITY_Z_BELOW_1_BEFORE_A_FUTURE_UPWARD_THRESHOLD_CROSS_CAN_ARM",
+    "exit": [
+      "FROZEN_ENTRY_CALIBRATION_OWN_BASIS_Z_AT_OR_BELOW_0_POINT_5",
+      "FROZEN_ENTRY_CALIBRATION_OWN_BASIS_WORSENS_1_POINT_5_Z_ABOVE_ENTRY",
+      "MAXIMUM_288_BARS_OR_24_HOURS",
+      "DATA_INVALID"
+    ],
+    "exitExecution": "OPEN_OF_IMMEDIATELY_FOLLOWING_SYNCHRONIZED_BAR",
+    "fundingSignalUse": "FORBIDDEN"
+  },
+  "trials": {
+    "familySize": 4,
+    "relativeVolumeIntensityThresholdZ": [
+      "2.0",
+      "3.0"
+    ],
+    "basisThresholdZ": [
+      "2.0",
+      "3.0"
+    ],
+    "maximumHoldBars": 288,
+    "maximumHoldHours": 24,
+    "legNotionalUsd": "500",
+    "portfolioCapitalUsd": "1000",
+    "leverage": false,
+    "borrowing": false,
+    "championSelection": "HIGHEST_STRESS_DAILY_BLOCK_LOWER_BOUND_THEN_STRESS_NET_THEN_TRIAL_ID",
+    "championSealedBeforeHoldoutOpen": true
+  },
+  "costs": {
+    "reportingDenomination": "USDT_TREATED_AS_USD_AT_FROZEN_1_TO_1",
+    "orderStyle": "FOUR_MARKET_TAKER_FILLS",
+    "entryReference": "NEXT_FIVE_MINUTE_OPEN",
+    "exitReference": "NEXT_FIVE_MINUTE_OPEN",
+    "base": {
+      "spotFeeBpsPerFill": "10",
+      "perpetualFeeBpsPerFill": "5",
+      "adverseExecutionBpsPerFill": "2"
+    },
+    "stress": {
+      "spotFeeBpsPerFill": "10",
+      "perpetualFeeBpsPerFill": "10",
+      "adverseExecutionBpsPerFill": "5"
+    },
+    "severe": {
+      "spotFeeBpsPerFill": "10",
+      "perpetualFeeBpsPerFill": "10",
+      "adverseExecutionBpsPerFill": "10"
+    },
+    "favorableFundingCredit": "DISCARDED",
+    "shortPerpetualFundingCashflow": "BASE_QUANTITY_TIMES_SETTLEMENT_MARK_TIMES_PUBLISHED_FUNDING_RATE",
+    "adverseFundingDebit": "MAX_0_MINUS_SHORT_PERPETUAL_FUNDING_CASHFLOW",
+    "discardedFavorableFundingCredit": "MAX_0_SHORT_PERPETUAL_FUNDING_CASHFLOW",
+    "accountEffectiveSpotCommission": "UNKNOWN",
+    "accountEffectiveUsdMCommission": "UNKNOWN",
+    "historicalPromotionTaxAndDiscountState": "UNKNOWN",
+    "borrowCost": "NOT_APPLICABLE_NO_SPOT_SHORT",
+    "capitalOpportunityCost": "UNMEASURED"
+  },
+  "statistics": {
+    "dailyMatrix": "SYNCHRONOUS_UTC_DAYS_ALL_FOUR_TRIALS_INCLUDING_ZERO_RETURN_DAYS",
+    "bootstrap": {
+      "method": "SEEDED_SYNCHRONOUS_CIRCULAR_BLOCK",
+      "replicates": 8192,
+      "seed": 2026072903,
+      "blockLengthDays": 7,
+      "oneSidedAlpha": "0.05",
+      "lowerBound": "ONE_SIDED_95_PERCENT_BASIC_BOOTSTRAP_MEAN_RETURN"
+    },
+    "multiplicity": {
+      "family": "ALL_FOUR_FROZEN_TRIALS",
+      "holmFwer": "0.05",
+      "synchronousMaxRealityCheckAlpha": "0.05"
+    },
+    "pbo": {
+      "method": "CSCV",
+      "developmentBlocks": 8,
+      "inSampleBlocks": 4,
+      "splits": 70,
+      "selectionStatistic": "STRESS_SUM_DAILY_RETURN",
+      "tieBreak": "LOWEST_TRIAL_ID",
+      "underperformanceRule": "SELECTED_OOS_SCORE_AT_OR_BELOW_CROSS_TRIAL_OOS_MEDIAN",
+      "maximum": "0.50",
+      "diagnosticOnly": true,
+      "holdoutIncluded": false
+    }
+  },
+  "capacity": {
+    "authority": "CAUSAL_IMMEDIATELY_PRIOR_COMPLETE_FIVE_MINUTE_QUOTE_VOLUME_PROXY_ONLY",
+    "baseParticipationBps": "1",
+    "stressParticipationBps": "0.5",
+    "fillReference": "FOR_A_FILL_AT_OPEN_INDEX_I_USE_SPOT_AND_USD_M_QUOTE_VOLUME_FROM_CLOSED_INDEX_I_MINUS_1",
+    "notionalReference": "ACTUAL_ABSOLUTE_FILL_NOTIONAL_EQUALS_EQUAL_BASE_QUANTITY_TIMES_THAT_LEG_FILL_OPEN_PRICE",
+    "formula": "ACTUAL_FILL_NOTIONAL_MUST_BE_AT_OR_BELOW_PARTICIPATION_BPS_DIV_10000_TIMES_SAME_LEG_PRIOR_QUOTE_VOLUME",
+    "aggregation": "EVERY_ENTRY_AND_EXIT_FILL_ON_BOTH_LEGS_FOR_EVERY_TRADE_MUST_PASS",
+    "bothLegsAndEntryExitRequired": true,
+    "historicalMatchedDepth": "UNAVAILABLE",
+    "historicalFilters": "UNAVAILABLE",
+    "queueLatencyAndImpact": "UNAVAILABLE",
+    "executableCapacity": "UNMEASURED"
+  },
+  "gates": {
+    "minimumDevelopmentRoundTrips": 24,
+    "minimumRoundTripsPerAsset": 8,
+    "minimumActiveCalendarQuarters": 3,
+    "holdout": {
+      "minimumRoundTrips": 8,
+      "minimumRoundTripsPerAsset": 2,
+      "minimumActiveCalendarMonths": 2,
+      "requireBaseStressAndSevereNetPositive": true,
+      "requireStressLowerBoundPositive": true,
+      "requireCapacityProxyPass": true,
+      "requireBothAssetsStressPositive": true,
+      "requireRemoveBestMonthStressPositive": true,
+      "maximumLiquidationDrawdownPct": "10",
+      "multiplicity": "NOT_APPLICABLE_ONE_DEVELOPMENT_SEALED_CHAMPION_ONLY"
+    },
+    "maximumLiquidationDrawdownPct": "10",
+    "maximumPbo": "0.50",
+    "requireBaseStressAndSevereNetPositive": true,
+    "requireStressWalkForwardNetPositiveEachFold": true,
+    "requireStressLowerBoundPositive": true,
+    "requireHolmPass": true,
+    "requireMaxRealityCheckPass": true,
+    "requireCapacityProxyPass": true,
+    "requireBothAssetsStressPositive": true,
+    "requireRemoveBestQuarterStressPositive": true,
+    "validNegativeResultVerdict": "NO_GO",
+    "allPublicProxyGatesPassVerdict": "UNMEASURED",
+    "invalidEvidenceVerdict": "UNMEASURED",
+    "capitalVerdictRegardlessOfResearch": "NO_GO",
+    "executionAuthority": "NONE"
+  },
+  "runControl": {
+    "archiveContentOpenRunsAllowed": 1,
+    "runMarkerMustPrecedeFirstDevelopmentArchiveDecompression": true,
+    "candidateSealMustPrecedeFirstHoldoutArchiveDecompression": true,
+    "holdoutOpenMarkerMustPrecedeFirstHoldoutArchiveDecompression": true,
+    "secondRunRefused": true,
+    "postRunRepairOrRerun": "FORBIDDEN",
+    "networkDuringEvaluation": false,
+    "developmentFailure": "SEAL_NO_GO_WITH_HOLDOUT_UNOPENED",
+    "validDataFailure": "SEAL_UNMEASURED_WITH_NO_REPAIR_OR_RERUN",
+    "allPublicProxyGatesPass": "SEAL_UNMEASURED_ACCOUNT_EFFECTIVE_PROFITABILITY_UNKNOWN",
+    "noSharedWrites": true
+  }
+}

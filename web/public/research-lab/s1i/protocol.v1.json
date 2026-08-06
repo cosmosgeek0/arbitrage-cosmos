@@ -1,0 +1,256 @@
+{
+  "schema": "S1IPremiumDislocationProtocolV1",
+  "protocolId": "s1i-binance-usdm-cross-sectional-premium-mean-reversion-v1",
+  "frozenForDateUtc": "2026-07-29",
+  "canonicalBaseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "consumer": {
+    "task": "N3",
+    "purpose": "PROFITABILITY_VERDICT",
+    "productAuthority": "NONE"
+  },
+  "distinctness": {
+    "family": "USDM_CROSS_SECTIONAL_PREMIUM_DISLOCATION_PRICE_MEAN_REVERSION",
+    "notCarry": "EIGHT_HOUR_NORMALIZED_FUNDING_RATE_IS_A_STRICTLY_PRIOR_NUISANCE_CONTROL_AND_MEASURED_POSITIONS_REQUIRE_NO_IN_POSITION_SETTLEMENT",
+    "notFundingDispersion": "RANKS_OUT_OF_SAMPLE_PREMIUM_RESIDUALS_FROM_PRIOR_30_DAY_OLS_NOT_FUNDING_RATE_AND_GATES_THE_SELECTED_PORTFOLIO_FUNDING_EXPOSURE",
+    "notSpotBasisExecution": "ONE_USDM_LONG_BASKET_AND_ONE_USDM_SHORT_BASKET_ONLY",
+    "notDirectional": "EQUAL_DOLLAR_LONG_AND_SHORT_SIDES_AT_EVERY_VALID_ENTRY"
+  },
+  "data": {
+    "authority": "https://data.binance.vision",
+    "listingEndpoint": "https://s3-ap-northeast-1.amazonaws.com/data.binance.vision",
+    "market": "futures/um",
+    "interval": "1h",
+    "types": [
+      "klines",
+      "premiumIndexKlines",
+      "fundingRate"
+    ],
+    "screenMonth": "2025-06",
+    "targetMonthsInclusive": [
+      "2025-07",
+      "2026-06"
+    ],
+    "checksumRequired": true,
+    "screenMonthRegularKlineBodiesMayOpenBeforeFreeze": true,
+    "june2025PremiumAndFundingArchivesArePriorResidualizationWarmupOnly": true,
+    "outcomeArchiveBodiesMayOpenOnlyAfterFreeze": true,
+    "holdoutBodiesMayOpenOnlyAfterCandidateSeal": true,
+    "currentExchangeInfoMaySelectHistoricalUniverse": false,
+    "premiumIgnoredFieldsMayBeUsed": false
+  },
+  "universe": {
+    "discovery": "COMPLETE_COMMON_PREFIX_LIST",
+    "symbolPattern": "^[A-Z0-9]+USDT$",
+    "stableOrFiatBaseExclusions": [
+      "BUSD",
+      "DAI",
+      "FDUSD",
+      "TUSD",
+      "USDC",
+      "USDE",
+      "USDP",
+      "USDS",
+      "UST",
+      "USTC"
+    ],
+    "selectionCutoffExclusiveUtc": "2025-07-01T00:00:00Z",
+    "screenMetric": "FULL_2025_06_REGULAR_KLINE_QUOTE_VOLUME_SUM",
+    "screenRequiredHourlyRows": 720,
+    "rankDirection": "DESC_SYMBOL_ASC_TIE_BREAK",
+    "cohortSize": 30,
+    "minimumEntryEligible": 20,
+    "futureCoverageMaySelectUniverse": false,
+    "outcomeAwareReplacement": false
+  },
+  "calendar": {
+    "timezone": "UTC",
+    "observation": {
+      "startInclusive": "2025-07-01T00:00:00Z",
+      "endExclusive": "2026-07-01T00:00:00Z"
+    },
+    "entryHoursUtc": [
+      1,
+      9,
+      17
+    ],
+    "development": {
+      "startInclusive": "2025-07-01T00:00:00Z",
+      "endExclusive": "2026-04-01T00:00:00Z"
+    },
+    "embargo": {
+      "startInclusive": "2026-04-01T00:00:00Z",
+      "endExclusive": "2026-04-02T00:00:00Z"
+    },
+    "holdout": {
+      "startInclusive": "2026-04-02T00:00:00Z",
+      "endExclusive": "2026-07-01T00:00:00Z",
+      "allowedOpenCount": 1
+    },
+    "walkForwardTestMonths": [
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03"
+    ],
+    "walkForwardTraining": "EXPANDING_FROM_2025_07_TEST_MONTH_STRICTLY_EXCLUDED"
+  },
+  "trials": {
+    "familySize": 18,
+    "premiumMeanLookbackHours": [
+      1,
+      6,
+      24
+    ],
+    "tailFractions": [
+      "0.20",
+      "0.30"
+    ],
+    "holdingHours": [
+      1,
+      2,
+      4
+    ],
+    "primary": "lb06_tail20_hold02",
+    "signal": "CURRENT_CROSS_SECTIONAL_RESIDUAL_OF_CLOSED_PREMIUM_INDEX_MEAN_USING_OLS_COEFFICIENTS_FIT_ONLY_ON_THE_PRIOR_30_SAME_ANCHOR_DAILY_PANELS_AND_LATEST_STRICTLY_PRE_ENTRY_EIGHT_HOUR_NORMALIZED_FUNDING_RATE",
+    "long": "LOWEST_PREMIUM_SIGNAL_ATOMIC_TAIL",
+    "short": "HIGHEST_PREMIUM_SIGNAL_ATOMIC_TAIL",
+    "entry": "REGULAR_FUTURES_KLINE_OPEN_AFTER_ONE_FULL_HOUR_SIGNAL_LATENCY",
+    "exit": "REGULAR_FUTURES_KLINE_OPEN_AT_ENTRY_PLUS_HOLD",
+    "weighting": "USD500_EQUAL_WITHIN_LONG_SIDE_AND_USD500_EQUAL_WITHIN_SHORT_SIDE",
+    "rebalance": "THREE_NONOVERLAPPING_DAILY_ENTRY_ANCHORS",
+    "primaryPredeclaredBeforeOutcomes": true,
+    "diagnosticsCannotReplacePrimary": true,
+    "holdoutEvaluatesPrimaryOnly": true
+  },
+  "funding": {
+    "role": "STRICTLY_PRE_ENTRY_CROSS_SECTIONAL_NUISANCE_CONTROL_NOT_RETURN_PREDICTOR",
+    "latestKnownRateUsedOnlyAsOutOfSampleOlsNuisanceControl": true,
+    "normalization": "RATE_TIMES_8_DIVIDED_BY_ARCHIVE_FUNDING_INTERVAL_HOURS",
+    "residualizationTrainingDays": 30,
+    "minimumPriorTrainingPairs": 600,
+    "coefficientFit": "POOLED_SYMBOL_DAY_OLS_WITH_INTERCEPT_USING_ONLY_THE_PRIOR_30_SAME_UTC_ANCHOR_DAILY_PANELS",
+    "usedAsPositiveSelectionInput": false,
+    "maximumMeanAbsoluteOutOfSampleSignalFundingCorrelation": "0.25",
+    "maximumMeanAbsoluteSelectedPortfolioFundingExposure8h": "0.00005",
+    "selectedPortfolioExposure": "ABSOLUTE_ONE_HALF_TIMES_LONG_MEAN_NORMALIZED_RATE_MINUS_ONE_HALF_TIMES_SHORT_MEAN_NORMALIZED_RATE",
+    "settlements": "ACTUAL_ARCHIVE_TIMESTAMPS_AT_OR_BETWEEN_ENTRY_AND_EXIT_BOUNDARIES",
+    "inPositionSettlementHandling": "COHORT_INVALID_AND_STUDY_UNMEASURED_BECAUSE_NO_POST_FREEZE_PLAINTEXT_MARK_PRICE_CAPTURE_IS_ALLOWED",
+    "boundaryCollisionHandling": "COHORT_INVALID_BECAUSE_EVENT_ORDERING_AT_AN_EQUAL_TIMESTAMP_IS_NOT_ASSUMED",
+    "measuredCohortsRequireZeroActualFundingSettlements": true,
+    "fundingPnlIsZeroForEveryMeasuredCohort": true,
+    "fundingPnlCannotSatisfyGrossPriceMeanReversionGate": true,
+    "ordinaryEntryAnchorsAvoidDefaultSettlementHours": true
+  },
+  "costs": {
+    "reportingDenomination": "USDT_TREATED_AS_USD_AT_FROZEN_1_TO_1",
+    "referenceGrossNotionalUsd": "1000",
+    "orderStyle": "MARKET_TAKER_SCENARIO",
+    "officialIllustrativeTakerFeeBpsPerFill": "5",
+    "officialIllustrativeFeeIsAccountTruth": false,
+    "accountEffectiveCommission": "UNKNOWN_PUBLIC_ONLY",
+    "bnbVipPromotionTaxAssumed": false,
+    "baseAdverseExecutionBpsPerFill": "2",
+    "stressAdverseExecutionBpsPerFill": "5",
+    "severeAdverseExecutionBpsPerFill": "10",
+    "grossScenarioFeeAndAdverseBps": "0",
+    "decomposition": [
+      "GROSS_FUTURES_PRICE",
+      "FUNDING_ZERO_REQUIRED_FOR_MEASURED_COHORT",
+      "TAKER_FEE_SCENARIO",
+      "ADVERSE_EXECUTION_SCENARIO",
+      "NET"
+    ]
+  },
+  "capacity": {
+    "authority": "PUBLIC_QUOTE_VOLUME_PROXY_ONLY",
+    "basis": "SUM_OF_24_COMPLETE_PRE_ENTRY_HOURLY_REGULAR_KLINE_QUOTE_VOLUMES",
+    "participationBps": "1",
+    "portfolioProxy": "MINIMUM_SELECTED_LEG_CAPACITY_TO_ACTUAL_LEG_NOTIONAL_RATIO_TIMES_USD1000_GROSS",
+    "actualLegMustFit": true,
+    "minimumPortfolioProxyUsd": "1000",
+    "historicalBookDepth": "UNAVAILABLE",
+    "executableCapacity": "UNKNOWN"
+  },
+  "missingness": {
+    "invalidChecksumOrSchema": "TERMINAL_UNMEASURED",
+    "screenPartialMonth": "CAUSALLY_INELIGIBLE",
+    "entryMissingSignalOrPrice": "SYMBOL_INELIGIBLE_NO_REPLACEMENT_OUTSIDE_FROZEN_COHORT",
+    "fewerThanMinimumEligible": "COHORT_INVALID",
+    "atomicTailBelowFivePerSide": "COHORT_INVALID",
+    "selectedMissingExit": "COHORT_INVALID",
+    "selectedInPositionFundingSettlement": "COHORT_INVALID_UNMEASURED",
+    "invalidCohortMayBecomeEconomicZero": false,
+    "goRequiresZeroInvalidPrimaryCohorts": true
+  },
+  "statistics": {
+    "dailyMatrix": "UTC_DAILY_SUM_OF_THREE_NONOVERLAPPING_COHORT_RETURNS",
+    "bootstrap": {
+      "method": "SEEDED_SYNCHRONOUS_CIRCULAR_MOVING_BLOCK",
+      "replicates": 8192,
+      "seed": 2026072901,
+      "blockLengthDays": 7,
+      "coveragePct": "95"
+    },
+    "multiplicity": {
+      "family": "ALL_18_FROZEN_TRIALS",
+      "oneSidedAlpha": "0.05",
+      "methods": [
+        "BONFERRONI_LOWER_BOUND",
+        "HOLM_ONE_SIDED_P_VALUES",
+        "WHITE_SYNCHRONOUS_MAX_MEAN_REALITY_CHECK"
+      ]
+    },
+    "pbo": {
+      "method": "CSCV",
+      "developmentCoreDays": 264,
+      "blocks": 12,
+      "daysPerBlock": 22,
+      "inSampleBlocks": 6,
+      "splits": 924,
+      "selectionStatistic": "STRESS_NET_SUM",
+      "underperformanceRule": "SELECTED_OOS_SCORE_LESS_THAN_OR_EQUAL_TO_CROSS_TRIAL_OOS_MEDIAN",
+      "maximum": "0.50",
+      "holdoutIncluded": false
+    },
+    "walkForward": {
+      "deployedPolicy": "FIXED_PREDECLARED_PRIMARY_LB06_TAIL20_HOLD02",
+      "priorExpandingStressNet": "REPORTED_NOT_USED_TO_SELECT_OR_REPLACE_POLICY",
+      "testMonths": 6,
+      "holdoutIncluded": false
+    }
+  },
+  "gates": {
+    "minimumPrimaryDevelopmentCohorts": 800,
+    "minimumPrimaryHoldoutCohorts": 260,
+    "minimumDistinctSymbolsPerSideAcrossHoldout": 10,
+    "maximumExitBoundaryDrawdownPct": "20",
+    "maximumAbsoluteBtcDailyBeta": "0.25",
+    "maximumMeanAbsoluteOutOfSampleSignalFundingCorrelation": "0.25",
+    "maximumMeanAbsoluteSelectedPortfolioFundingExposure8h": "0.00005",
+    "requireGrossHoldoutPositive": true,
+    "requireDevelopmentGrossPricePositive": true,
+    "requireFundingNeutralSignal": true,
+    "requireBaseAndStressHoldoutPositive": true,
+    "requireHoldoutBaseIntervalLowerPositive": true,
+    "requireDevelopmentMultiplicityPass": true,
+    "pboIsDiagnosticOnly": true,
+    "requireWalkForwardStressPositive": true,
+    "requireCapacityProxyPass": true,
+    "researchPositiveMeaning": "PUBLIC_SCENARIO_POSITIVE_BUT_REAL_COSTS_STILL_UNMEASURED",
+    "positivePublicScenarioVerdict": "UNMEASURED",
+    "nonPositiveOrStatisticallyFailedVerdict": "NO_GO",
+    "capitalVerdictRegardless": "NO_GO",
+    "executionAuthority": "NONE"
+  },
+  "runControl": {
+    "archiveContentOpenRunsAllowed": 1,
+    "runMarkerMustPrecedeFirstDevelopmentDecompression": true,
+    "candidateSealMustPrecedeFirstHoldoutDecompression": true,
+    "holdoutOpenMarkerMustPrecedeFirstHoldoutDecompression": true,
+    "secondRunRefused": true,
+    "postHoldoutProtocolOrEvaluatorRepair": "FORBIDDEN",
+    "networkDuringEvaluation": false
+  }
+}

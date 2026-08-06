@@ -1,0 +1,341 @@
+{
+  "schema": "BasisForwardMeasurementProtocolV1",
+  "version": 1,
+  "milestone": "B-E2",
+  "campaignId": "be2-forward-20260729-v1",
+  "frozenAtUtc": "2026-07-28T17:00:35Z",
+  "baseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "objective": "Prospectively preserve synchronized public Binance Spot and USD-M execution evidence needed to replace historical proxy slippage and capacity inputs without inventing history.",
+  "truthBoundary": {
+    "posture": "RECORDED_RESEARCH_ONLY",
+    "authority": "NONE",
+    "eligibleClaims": [
+      "DISPLAYED_STANDARD_BOOK_COST_AT_CAPTURE",
+      "DISPLAYED_STANDARD_BOOK_CAPACITY_LOWER_BOUND_AT_CAPTURE",
+      "POINT_IN_TIME_PUBLIC_CONFIGURATION",
+      "DETERMINISTIC_RECORDED_REPLAY"
+    ],
+    "ineligibleClaims": [
+      "ORDER_OR_FILL",
+      "ACCOUNT_ACTUAL_FEE",
+      "ACCOUNT_COLLATERAL_CAPACITY",
+      "MAKER_QUEUE_POSITION",
+      "RPI_API_EXECUTABILITY",
+      "VENUE_TOTAL_CAPACITY",
+      "HISTORICAL_DEPTH",
+      "EXPECTED_PROFITABILITY",
+      "LIVE_READINESS",
+      "CAPITAL_AUTHORITY"
+    ]
+  },
+  "prospectiveWindow": {
+    "startInclusiveUtc": "2026-07-29T00:00:00Z",
+    "endExclusiveUtc": "2026-08-12T00:00:00Z",
+    "durationDays": 14,
+    "stopRule": "STOP_AT_END_EXCLUSIVE_WITH_NO_EARLY_STOPPING",
+    "lateStartLaw": "A late start does not move the interval; missed time is explicit missing coverage.",
+    "protocolChangeLaw": "Any material protocol, universe, threshold, fee-scenario, or estimator change creates a new campaign and a new future interval."
+  },
+  "universe": {
+    "selectionState": "FROZEN_BEFORE_OUTCOME_ACCESS",
+    "construction": "LONG_SPOT_SHORT_USDM",
+    "quoteAsset": "USDT",
+    "pairs": [
+      {
+        "spotSymbol": "BTCUSDT",
+        "usdMSymbol": "BTCUSDT"
+      },
+      {
+        "spotSymbol": "ETHUSDT",
+        "usdMSymbol": "ETHUSDT"
+      },
+      {
+        "spotSymbol": "BNBUSDT",
+        "usdMSymbol": "BNBUSDT"
+      },
+      {
+        "spotSymbol": "SOLUSDT",
+        "usdMSymbol": "SOLUSDT"
+      }
+    ],
+    "reverseConstruction": "OUT_OF_SCOPE_BORROW_TRUTH_UNAVAILABLE",
+    "survivorSubstitution": "FORBIDDEN"
+  },
+  "evaluationSchedule": {
+    "entrySlotsUtcHours": [
+      0,
+      4,
+      8,
+      12,
+      16,
+      20
+    ],
+    "holdDurationSeconds": 14400,
+    "slotToleranceMilliseconds": 500,
+    "overlap": "NON_OVERLAPPING_PER_PAIR",
+    "entryLegOrderForMeasurement": [
+      "SPOT_BUY",
+      "USDM_SELL"
+    ],
+    "exitLegOrderForMeasurement": [
+      "USDM_BUY",
+      "SPOT_SELL"
+    ],
+    "lifecycleReferenceCommit": "dc07b664089dc770487576b33e4cd3c70b66b268",
+    "lifecycleReferenceRole": "READ_ONLY_SEMANTIC_REFERENCE_NOT_EXECUTION_AUTHORITY"
+  },
+  "normalization": {
+    "kind": "SPOT_ENTRY_QUOTE_BUDGET",
+    "requestedQuote": "1000.00000000",
+    "quoteUnit": "USDT",
+    "feesIncludedInBudget": false,
+    "combinedGrossExposure": false,
+    "quantityLaw": "Greatest common legal base quantity whose exact walked Spot entry cost is at most the requested quote budget.",
+    "rounding": "FLOOR_TO_COMMON_LEGAL_QUANTITY_LATTICE",
+    "reportFields": [
+      "requestedSpotEntryQuote",
+      "actualSpotEntryNotional",
+      "matchedUsdMEntryNotional",
+      "pairedBaseQuantity",
+      "roundingResidualQuote",
+      "fourFillTurnover",
+      "perLegVwap",
+      "perLegDisplayedBookSlippage",
+      "perLegFeeScenarioCost",
+      "observedFundingCost",
+      "residualHedgeQuantity",
+      "displayedCapacityLowerBound"
+    ]
+  },
+  "streams": {
+    "spot": {
+      "baseUrls": [
+        "wss://stream.binance.com:9443",
+        "wss://stream.binance.com:443"
+      ],
+      "marketDataOnlyUrl": "wss://data-stream.binance.vision",
+      "timestampUnit": "MICROSECOND",
+      "depth": "<symbol>@depth@100ms",
+      "bookTicker": "<symbol>@bookTicker",
+      "trade": "<symbol>@trade",
+      "snapshot": "GET /api/v3/depth?limit=5000",
+      "sequenceLaw": "Buffer first; refetch while snapshot lastUpdateId is below first U; discard u<=lastUpdateId; first retained U<=lastUpdateId<=u; thereafter ignore stale u<local and resync when U>local+1.",
+      "connectionMaximumSeconds": 86400,
+      "pingSeconds": 20,
+      "pongDeadlineSeconds": 60,
+      "incomingControlMessagesPerSecondMaximum": 5
+    },
+    "usdM": {
+      "baseUrl": "wss://fstream.binance.com",
+      "publicRoute": "/public",
+      "marketRoute": "/market",
+      "timestampUnit": "MILLISECOND",
+      "depth": "<symbol>@depth@100ms",
+      "bookTicker": "<symbol>@bookTicker",
+      "aggregateTrade": "<symbol>@aggTrade",
+      "markFunding": "<symbol>@markPrice@1s",
+      "standardSnapshot": "GET /fapi/v1/depth?limit=1000",
+      "rpiSnapshot": "GET /fapi/v1/rpiDepth?limit=1000",
+      "rpiDepth": "<symbol>@rpiDepth@500ms",
+      "sequenceLaw": "Buffer first; discard u<lastUpdateId; first retained U<=lastUpdateId<=u; thereafter require pu==previous u and resnapshot on mismatch.",
+      "productDiscriminator": "st=1 when present; st=2 is rejected",
+      "connectionMaximumSeconds": 86400,
+      "pingSeconds": 180,
+      "pongDeadlineSeconds": 10,
+      "incomingControlMessagesPerSecondMaximum": 10
+    }
+  },
+  "receiveAndContinuity": {
+    "clockOwner": "ONE_INGRESS_PROCESS_PER_SESSION",
+    "receiveWallClock": "time.time_ns",
+    "receiveMonotonicClock": "time.monotonic_ns",
+    "ordering": "JOURNAL_ORDINAL_THEN_SOURCE_RECEIVE_ORDINAL",
+    "monotonicComparisonScope": "ONE_PROCESS_SESSION_ONLY",
+    "preserveSeparately": [
+      "SOURCE_EVENT_TIME",
+      "SOURCE_TRANSACTION_OR_TRADE_TIME",
+      "SOURCE_NEXT_FUNDING_TIME",
+      "LOCAL_RECEIVE_WALL_TIME",
+      "LOCAL_RECEIVE_MONOTONIC_TIME",
+      "PERSISTENCE_TIME"
+    ],
+    "generationLaw": "Each open, reconnect, forced 24-hour rotation, gap, or overflow increments generation and requires a fresh snapshot bridge; stale generations cannot mutate or restore eligibility.",
+    "dropLaw": "Any unrecorded drop, sequence gap, clock discontinuity, or queue overflow makes every intersecting evaluation window ineligible.",
+    "bookMaximumAgeNanoseconds": "500000000",
+    "pairMaximumReceiveSkewNanoseconds": "100000000",
+    "pairMaximumExchangeEventSkewMilliseconds": 1000,
+    "tradeMaximumAgeNanoseconds": "2000000000",
+    "fundingObservationMaximumAgeNanoseconds": "2000000000"
+  },
+  "pointInTimeConfiguration": {
+    "pollCadenceSeconds": 60,
+    "spotEndpoints": [
+      "GET /api/v3/exchangeInfo",
+      "GET /api/v3/executionRules"
+    ],
+    "usdMEndpoints": [
+      "GET /fapi/v1/exchangeInfo",
+      "GET /fapi/v1/fundingInfo",
+      "GET /fapi/v1/time"
+    ],
+    "bindingLaw": "Store canonical response bytes, retrieval clocks, status, headers needed for rate-limit provenance, and SHA-256; a changed digest starts a new configuration epoch.",
+    "uncertainChangeLaw": "The interval between the last old digest and first new digest is configuration-uncertain and ineligible.",
+    "filterLaw": "Evaluate exact decimal PRICE_FILTER, LOT_SIZE, MARKET_LOT_SIZE, MIN_NOTIONAL, NOTIONAL and applicable percent/reference filters; unknown, duplicate, malformed, account-state, or unmodeled filters block legal-size proof.",
+    "precisionLaw": "Never substitute pricePrecision for tickSize or quantityPrecision for stepSize.",
+    "marketReferenceLaw": "Sizing, slippage, and filter reference prices are distinct and never substituted."
+  },
+  "rpi": {
+    "standardDepthCoverage": "EXCLUDES_RPI",
+    "rpiDepthCoverage": "INCLUDES_AGGREGATED_RPI_WITH_CROSSED_LEVELS_HIDDEN",
+    "apiTakerEligibility": "UNKNOWN",
+    "snapshotStreamBridge": "UNKNOWN_NO_OFFICIAL_RPI_BRIDGING_PROCEDURE",
+    "mergeLaw": "Never merge or subtract standard and RPI books unless a future protocol proves common sequence identity and executable eligibility.",
+    "capacityLaw": "Standard coherent depth may establish a displayed executable lower bound; missing standard depth, snapshot-edge exhaustion, or any reliance on RPI returns UNKNOWN or NOT_PROVEN, never zero.",
+    "tradeLaw": "Preserve USD-M aggregate q and nq independently; q-nq is bucket-level RPI-involved quantity evidence, not fill eligibility."
+  },
+  "feesFundingAndSlippage": {
+    "executionRole": "TAKER",
+    "feeRatesAreInputs": true,
+    "accountEffectiveRates": "PENDING_SANITIZED_OWNER_EVIDENCE",
+    "publicScenarios": [
+      {
+        "id": "PUBLIC_REGULAR_SPOT_ONLY_USDM_UNKNOWN",
+        "spotTakerBps": "10.00000000",
+        "usdMTakerBps": null,
+        "state": "INCOMPLETE"
+      },
+      {
+        "id": "FAQ_EXAMPLE_ONLY_NOT_RATE_TRUTH",
+        "spotTakerBps": "10.00000000",
+        "usdMTakerBps": "5.00000000",
+        "state": "HYPOTHETICAL_SENSITIVITY_ONLY"
+      }
+    ],
+    "feeLaw": "Apply each explicit scenario rate to each exact walked leg notional; unknown rates remain null and block net results.",
+    "displayedBookSlippage": "Exact depth-walk cashflow relative to that leg's contemporaneous touch, reported diagnostically and not double-counted.",
+    "latencyStressBpsPerFillLeg": "2.00000000",
+    "latencyStressLaw": "Additive adverse sensitivity on every one of four fill legs after displayed-book walking; it is not an observed fill.",
+    "fundingLaw": "A streamed rate is prospective only. Settled cost uses complete funding-history rows, actual funding timestamps, mark prices, rateType, and witnessed position intervals. For the short USD-M leg, positive funding is a credit and therefore a negative cost.",
+    "missingFundingLaw": "Zero only when complete interval evidence proves no funding boundary; otherwise UNKNOWN."
+  },
+  "capacity": {
+    "impactCeilingsBps": [
+      "1.00000000",
+      "2.00000000",
+      "5.00000000",
+      "10.00000000"
+    ],
+    "primaryImpactCeilingBps": "5.00000000",
+    "definition": "Greatest common legal base quantity observable on both coherent standard ladders while each walked leg and the pair remain within the declared impact ceiling.",
+    "outputKind": "DISPLAYED_STANDARD_BOOK_LOWER_BOUND",
+    "snapshotBoundaryLaw": "Reaching the captured depth edge prevents a total-capacity claim."
+  },
+  "journal": {
+    "encoding": "REPOSITORY_CANONICAL_JSON_OBJECT_PLUS_LF",
+    "appendOnly": true,
+    "recordDomain": "cosmos.basis-forward.record.v1",
+    "hashAlgorithm": "SHA-256",
+    "chain": "Each record binds the preceding record SHA-256, protocol SHA-256, configuration SHA-256, session, generation, ordinals, clocks, source identity, payload and record hash.",
+    "seal": "Acceptance requires an externally supplied exact record count and terminal record SHA-256; a valid prefix is not a complete journal.",
+    "segmentLaw": "Segments are immutable after seal; segment and corpus manifests are published last and exclusively, with exact byte length, line count, file SHA-256, first and last record hash, previous manifest hash, and completeness counters.",
+    "tamperResponse": "Never repair in place; preserve corrupt bytes, classify, and start a new recovery-linked segment."
+  },
+  "replay": {
+    "networkAllowed": false,
+    "ambientClockAllowed": false,
+    "environmentInputAllowed": false,
+    "randomnessAllowed": false,
+    "floatingPointAllowed": false,
+    "inputOrder": "SEALED_JOURNAL_ORDINAL",
+    "determinismLaw": "Identical admitted evidence and parameter bytes produce byte-identical receipts across path, timezone, locale, and PYTHONHASHSEED.",
+    "failureLaw": "Admission validates external seal, canonical bytes, record chain, ordinals, lifecycle, generations, protocol/config bindings, segment inventory and completeness before emitting any derived cost/capacity input."
+  },
+  "reporting": {
+    "primaryEstimand": "MEAN_OBSERVED_FOUR_HOUR_NET_USD_PER_1000_SPOT_ENTRY_QUOTE",
+    "eligibility": "Only complete entry and exit synchronized cuts with complete point-in-time public configuration, exact fee scenario, and complete intervening funding evidence.",
+    "uncertainty": {
+      "method": "CIRCULAR_BLOCK_BOOTSTRAP_BY_UTC_DAY",
+      "blockDays": 1,
+      "replicates": 2000,
+      "seed": 20260728,
+      "intervalLevel": "0.95",
+      "role": "DESCRIPTIVE_NOMINAL_INTERVAL_NOT_FORECAST"
+    },
+    "predeclaredBreakdowns": [
+      "PAIR",
+      "BTC_24H_RETURN_SIGN",
+      "BTC_7D_REALIZED_VOLATILITY_FIXED_THRESHOLDS"
+    ],
+    "btcVolatilityAnnualizedThresholds": [
+      "0.40000000",
+      "0.80000000"
+    ],
+    "multipleTestingLaw": "Subsets are descriptive and cannot establish a positive family result without the accepted S-META1 familywise procedure; small-N subsets are marked INSUFFICIENT below 20 complete trips.",
+    "campaignCoverageGate": "Report prospective result eligible only if every pair has at least 20 complete trips and at least 90 percent of scheduled trip slots are complete; otherwise mechanics/evidence remain usable but profitability is UNKNOWN.",
+    "positiveClaimLaw": "This substrate does not itself produce VERIFIED_POSITIVE, build/no-build, M0, or capital decisions."
+  },
+  "publicArchiveBoundary": {
+    "spotOfficialArchiveDocumentedFamilies": [
+      "aggTrades",
+      "klines",
+      "trades"
+    ],
+    "usdMRawDiffDepthAvailable": false,
+    "usdMRpiDepthArchiveAvailable": false,
+    "historicalSynchronizationClaim": "UNAVAILABLE",
+    "checksumLaw": "Any later archive input must bind official URL, sidecar bytes, ZIP bytes, byte length, retrieval time, schema, timestamp unit and SHA-256; replacement objects create a new revision."
+  },
+  "mechanicsSmoke": {
+    "eligibleForCampaign": false,
+    "eligibleForProfitability": false,
+    "maximumDurationSeconds": 60,
+    "pair": "BTCUSDT",
+    "publicOnly": true,
+    "purpose": "Prove parsing, clocks, append/seal, tamper rejection and deterministic replay mechanics only.",
+    "resultStorage": "TEMPORARY_OUTSIDE_REPOSITORY"
+  },
+  "officialSources": [
+    {
+      "title": "Binance Spot WebSocket streams",
+      "url": "https://github.com/binance/binance-spot-api-docs/blob/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/web-socket-streams.md",
+      "revision": "6b8372cad7cecbdf5dd88a3372eafff51988c5cf"
+    },
+    {
+      "title": "Binance Spot filters",
+      "url": "https://github.com/binance/binance-spot-api-docs/blob/6b8372cad7cecbdf5dd88a3372eafff51988c5cf/filters.md",
+      "revision": "6b8372cad7cecbdf5dd88a3372eafff51988c5cf"
+    },
+    {
+      "title": "Binance USD-M public streams",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/ws-streams/public",
+      "revision": "LIVE_OFFICIAL_REFERENCE_INSPECTED_2026-07-28"
+    },
+    {
+      "title": "Binance USD-M market streams",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/ws-streams/market",
+      "revision": "LIVE_OFFICIAL_REFERENCE_INSPECTED_2026-07-28"
+    },
+    {
+      "title": "Binance USD-M REST market data",
+      "url": "https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data",
+      "revision": "LIVE_OFFICIAL_REFERENCE_INSPECTED_2026-07-28"
+    },
+    {
+      "title": "Binance public data archive",
+      "url": "https://github.com/binance/binance-public-data/blob/5c7f3197591c0d54d85dc43066226bc4c671d47a/README.md",
+      "revision": "5c7f3197591c0d54d85dc43066226bc4c671d47a"
+    }
+  ],
+  "externalEffects": {
+    "privateOrSignedCalls": 0,
+    "credentials": 0,
+    "orders": 0,
+    "transfers": 0,
+    "withdrawals": 0,
+    "moneyUsd": 0,
+    "hostProviderBrowserActions": 0,
+    "canonicalEdits": 0,
+    "pushLandingDeploy": 0
+  },
+  "integrationConsumer": "N-3_AFTER_PROSPECTIVE_INTERVAL"
+}

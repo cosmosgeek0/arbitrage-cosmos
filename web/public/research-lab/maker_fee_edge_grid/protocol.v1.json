@@ -1,0 +1,121 @@
+{
+  "schema": "MakerFeeEdgeGridProtocolV1",
+  "version": 1,
+  "protocolId": "MAKER-FEE-EDGE-GRID",
+  "freezeState": "FROZEN_BEFORE_GRID_OUTCOMES",
+  "frozenAtUtc": "2026-07-30T00:36:30Z",
+  "baseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "consumer": "verdict-normalization/final profitability",
+  "authority": "NONE",
+  "capitalAuthority": "NONE",
+  "inputContract": {
+    "reuseOnly": true,
+    "networkAcquisitionForbidden": true,
+    "reconstructionFromSummariesForbidden": true,
+    "acceptedMeasurementSha256": "9dbcfc8db6b420b9187330278459d597b70d9cdf938d4be566a3a6279bc68f7c",
+    "acceptedMeasurementBytes": 63443,
+    "acceptedManifestSha256": "79e2544a0620e03ee09644e21a9ab563ec7eca1b699f9ea823eecef0b6a305ea",
+    "acceptedManifestBytes": 486732,
+    "acceptedDerivedLedgerSha256": "a2e4ef2ad8ff63f5a2cb325dec2355c1c3ab8c4ccf1025e28fc2d0810df8102f",
+    "acceptedAuditPlanSha256": "e7e60e1e648de1583bc925d93bfcf8c94d0e73e165a4a5fce3f7b81b9e197fca",
+    "allBodyHashesMustVerifyBeforeMeasurement": true
+  },
+  "acceptedContextOnly": {
+    "custodyPosture": "ACCEPTED_RECEIPT_ONLY_UNTIL_BODIES_VERIFY",
+    "windowUtc": {
+      "startInclusive": "2025-07-01T00:00:00Z",
+      "endExclusive": "2026-07-01T00:00:00Z"
+    },
+    "roundTrips": 366,
+    "frozenPairCount": 40,
+    "activePairCount": 18,
+    "populatedWeekCount": 33,
+    "unit": "USD_PER_1000_SPOT_ENTRY_NOTIONAL",
+    "acceptedAllTakerPublicProxyNetUsd": "-1.8724979631579157",
+    "acceptedAllTakerPublicProxyStatus": "CONTEXT_ONLY_NOT_MAKER_GRID_OUTCOME"
+  },
+  "scenarios": [
+    {
+      "scenarioId": "PUBLIC_REGULAR_USDT_NO_BNB",
+      "spotEntryMakerBps": "10",
+      "spotExitTakerBps": "10",
+      "usdtMEntryMakerBps": "2",
+      "usdtMExitTakerBps": "5",
+      "discountAssumption": "NONE"
+    },
+    {
+      "scenarioId": "PUBLIC_REGULAR_USDT_BNB_SENSITIVITY",
+      "spotEntryMakerBps": "7.5",
+      "spotExitTakerBps": "7.5",
+      "usdtMEntryMakerBps": "1.8",
+      "usdtMExitTakerBps": "4.5",
+      "discountAssumption": "SPOT_25_PERCENT_AND_USDT_M_10_PERCENT_APPLY"
+    }
+  ],
+  "executionModel": {
+    "entryRole": "MAKER_ON_SPOT_AND_USDT_M",
+    "exitRole": "TAKER_ON_SPOT_AND_USDT_M",
+    "makerFillLaw": "CAUSAL_RESTING_ORDER_PLUS_STRICT_TRADE_THROUGH_PLUS_SUFFICIENT_AGGRESSIVE_SIZE_REQUIRED",
+    "touchAloneIsFill": false,
+    "makerFillEvidenceInAcceptedKlineProxy": "UNKNOWN",
+    "fundingCapture": "UNCHANGED_EXACT_ACCEPTED_LEDGER_EVENTS_AND_SIGN",
+    "slippageBpsPerFill": "5",
+    "slippageScope": "UNCHANGED_ON_ALL_FOUR_FILL_NOTIONALS_TO_ISOLATE_FEE_ROLE_SCENARIO",
+    "slippagePosture": "MODELED_SENSITIVITY_NOT_PROVEN_CONSERVATIVE",
+    "denominator": "1000_USD_SPOT_ENTRY_NOTIONAL_NOT_TOTAL_DEPLOYED_CAPITAL",
+    "pairSet": "UNCHANGED_FROZEN_ACCEPTED_E1_PAIR_ORDER",
+    "tradeSelection": "UNCHANGED_ACCEPTED_E1_NON_OVERLAPPING_FOUR_HOUR_TRADES"
+  },
+  "requestedOutputs": {
+    "perScenario": [
+      "NET_USD_PER_1000_SPOT_ENTRY_NOTIONAL",
+      "DEPENDENCE_AWARE_95_PERCENT_INTERVAL",
+      "MARKED_EQUITY_MAX_DRAWDOWN",
+      "EXECUTABLE_CAPACITY_USD",
+      "FEE_DECOMPOSITION",
+      "PAIR_AND_PREDECLARED_REGIME_BREAKDOWN"
+    ],
+    "missingBodyLaw": "NULL_AND_UNKNOWN_NEVER_ZERO",
+    "capacityLaw": "UNKNOWN_WITHOUT_CAUSAL_SYNCHRONIZED_DEPTH_AND_QUEUE_EVIDENCE"
+  },
+  "positiveGate": {
+    "required": [
+      "familyPositiveEligible",
+      "completeAttemptLedgerVerified",
+      "sealedInputBodiesVerified",
+      "causalMakerEntryFillVerified",
+      "publicNoBnbPlus2BpsPerSidePassed",
+      "accountEffectiveFeeScenarioPassed",
+      "independentOosHoldoutPassed",
+      "simultaneousLowerBoundPositive",
+      "holmFamilywisePassed",
+      "pboPassed",
+      "markedDrawdownPassed",
+      "executableCapacityPassed"
+    ],
+    "attemptedFamilyFloor": 2976,
+    "legacyFamilyId": "F01_BASIS_TRIGGER_HOLD",
+    "legacyFamilyPositiveEligible": false,
+    "legacyFamilyState": "INADMISSIBLE_FOR_POSITIVE_CLAIM_METHOD_AND_PROVENANCE_MISMATCH",
+    "legacyPboState": "UNAVAILABLE_INCOMPLETE_PRIOR_TRIAL_LEDGER",
+    "legacyPeriodState": "REUSED_PERIOD_NOT_UNTOUCHED",
+    "bnbScenarioMayRescueRequiredPublicOrAccountScenario": false,
+    "pboMayOverrideAnotherGate": false,
+    "positiveWithoutEveryGate": "REJECTED_POSITIVE_UNVERIFIED",
+    "allGatesPassDisposition": "FAMILY_QUALIFYING_NOT_CAPITAL_AUTHORITY",
+    "verifiedPositiveEmitter": "VERDICT_NORMALIZATION_FINAL_PROFITABILITY_CONSUMER_ONLY",
+    "noIndependentHoldoutBody": "POSITIVE_INELIGIBLE"
+  },
+  "accountTruth": {
+    "accountEffectiveFees": "UNKNOWN",
+    "bnbSettingBalanceAndEligibility": "UNKNOWN",
+    "symbolPromotionSpecialTaxAndAffiliateTreatment": "UNKNOWN",
+    "realizedMakerRoleAndCommission": "UNKNOWN"
+  },
+  "preservation": {
+    "rejectedBE2Bytes": "READ_ONLY_UNCHANGED",
+    "holdout": "NOT_OPENED",
+    "canonical": "NOT_EDITED",
+    "hostProviderPrivateAccountOrdersMoney": "NOT_ACCESSED"
+  }
+}

@@ -1,0 +1,147 @@
+{
+  "schemaVersion": "ve1.protocol.v1",
+  "milestone": "V-E1",
+  "frozenAt": "2026-07-28",
+  "objective": "Measure the exact accepted Volume strategy and economic-exit semantics from official public historical inputs, or stop with an exact blocker.",
+  "candidate": {
+    "commit": "6c8184331d85d098d2919e37d217f220f4c3214c",
+    "tree": "fb0fa7314fcaf2194947354e95d5b9fda61c6f09",
+    "parent": "b078ee48358aa89ffe6999766bbe4e8f40212442",
+    "sourceFiles": [
+      {
+        "path": "server/src/engine/volume/strategyEconomicExit.ts",
+        "sha256": "fb090c365d53c83c4d5f38135fa49d367f879788c9cef973ae640884ce15dd05"
+      },
+      {
+        "path": "server/src/engine/volume/strategyEconomicExitLedger.ts",
+        "sha256": "051668c6ab2242dc648acd4ae71f08118eb313e115528315b9788ac0f6456bad"
+      },
+      {
+        "path": "server/src/engine/volume/strategyObservation.ts",
+        "sha256": "2a458fddc261f241158f82f8ade4090eb49d2d602f5ff25044150c5dc2456a83"
+      },
+      {
+        "path": "server/src/engine/volume/strategySlice.ts",
+        "sha256": "c2d01851f17db23e8db17bd6692d15bb4f41fea49e579433d4e7bf516b17a6e7"
+      },
+      {
+        "path": "server/src/engine/volume/strategyEconomics.ts",
+        "sha256": "beb2cd0185294970671c8273b9a7a5e5c4a8e3277e2148e631acc923072c0c99"
+      },
+      {
+        "path": "server/src/services/volumeRuntime.ts",
+        "sha256": "bc3d58923df956957ffcd064f78f48770f66d875f9a326e6acb6450f473a0a2b"
+      }
+    ]
+  },
+  "window": {
+    "warmup": {
+      "start": "2025-06-30T00:00:00Z",
+      "endExclusive": "2025-07-01T00:00:00Z",
+      "scored": false
+    },
+    "measurement": {
+      "start": "2025-07-01T00:00:00Z",
+      "endExclusive": "2026-07-01T00:00:00Z",
+      "months": 12
+    },
+    "research": {
+      "start": "2025-07-01T00:00:00Z",
+      "endExclusive": "2026-03-01T00:00:00Z",
+      "months": 8
+    },
+    "holdout": {
+      "start": "2026-03-01T00:00:00Z",
+      "endExclusive": "2026-07-01T00:00:00Z",
+      "months": 4,
+      "opened": false
+    },
+    "archiveTimestampRule": "Spot archive timestamps from 2025-01-01 are microseconds; divide exact integer timestamps by 1000 only after the mapping gate passes."
+  },
+  "freeze": {
+    "noRetuneAfterHoldoutOpen": true,
+    "holdoutOpenCondition": "All exact-input and accepted-policy admission gates pass.",
+    "substitutionsForbidden": [
+      "candles for aggregate-trade event and receive clocks",
+      "trades or current bookTicker for historical top of book",
+      "synthetic or current depth for historical synchronized depth",
+      "current exchangeInfo for point-in-time symbol filters",
+      "assumed entry fills, exit cadence, partial-fill handling, inventory, or account fees"
+    ]
+  },
+  "archiveChecksumPolicy": {
+    "requiredIfAdmitted": true,
+    "algorithm": "SHA-256",
+    "officialSidecarName": "<archive>.CHECKSUM",
+    "releaseCadence": {
+      "daily": "next day",
+      "monthly": "first Monday of the following month"
+    },
+    "replacementPolicy": "Re-fetch and revalidate both sidecar and ZIP bytes because Binance may replace archive objects.",
+    "bind": [
+      "download URL",
+      "official .CHECKSUM sidecar bytes",
+      "archive ZIP bytes",
+      "object size"
+    ],
+    "archiveObjects": [],
+    "archiveRootSha256": null,
+    "state": "NOT_OPENED_MAPPING_GATE_FAILED"
+  },
+  "reportingPlanIfAdmitted": {
+    "state": "NOT_EXECUTABLE_UNTIL_ACCEPTED_LIFECYCLE_AND_INPUT_MAPPING_EXIST",
+    "primaryEstimator": null,
+    "primaryEstimatorReason": "The accepted candidate defines neither a production entry-to-terminal-fill unit nor a repeated exit-evaluation lifecycle; no estimator is invented.",
+    "uncertainty": {
+      "intendedMethod": "7-day circular block bootstrap after a primary estimator and evaluation unit are accepted",
+      "replicates": 2000,
+      "seed": 20260728,
+      "intervalLevel": 0.95
+    },
+    "regimes": [
+      "direction",
+      "BTC 30-day trend",
+      "BTC 30-day realized-volatility research-tercile",
+      "symbol 24-hour quote-volume research-tercile"
+    ],
+    "capacity": "Displayed synchronized-depth capacity only; no extrapolation beyond observed levels."
+  },
+  "feeScenarios": {
+    "accountEffective": "UNKNOWN",
+    "asOf": "2026-07-28",
+    "scenarios": [
+      {
+        "id": "PUBLIC_REGULAR",
+        "entryBps": 10,
+        "exitBps": 10,
+        "roundTripBps": 20,
+        "conditions": "Public Regular User Spot maker/taker table; scenario only, not account or historical proof.",
+        "stressedEntryBps": 12,
+        "stressedExitBps": 12,
+        "stressedRoundTripBps": 24,
+        "evidenceClass": "LIVE_CURRENT_REFERENCE_NOT_CONTENT_FROZEN",
+        "scenarioOnly": true
+      },
+      {
+        "id": "PUBLIC_BNB_CONDITIONAL",
+        "entryBps": 7.5,
+        "exitBps": 7.5,
+        "roundTripBps": 15,
+        "conditions": "Conditional on eligible BNB deduction, sufficient Spot BNB, and applicable schedule; none inferred.",
+        "stressedEntryBps": 9.5,
+        "stressedExitBps": 9.5,
+        "stressedRoundTripBps": 19,
+        "evidenceClass": "LIVE_CURRENT_REFERENCE_NOT_CONTENT_FROZEN",
+        "scenarioOnly": true
+      }
+    ],
+    "stressBpsPerSide": 2
+  },
+  "authority": {
+    "signedOrPrivateCalls": false,
+    "accountFeeLookup": "NOT_PERFORMED",
+    "fundingAuthority": "NONE",
+    "inventoryAuthority": "NONE",
+    "ordersOrMoneyActions": false
+  }
+}

@@ -1,0 +1,394 @@
+{
+  "allocation": {
+    "blocking_state_update": "only an accepted noncash cohort updates the global prior-exit block or any per-symbol cooldown; a cash cohort never blocks a later candidate",
+    "candidate_cohort": "all transition candidates from the fixed June-2025 top-100 contract-quote-volume universe sharing the same trial decision hour, before any member removal",
+    "cash_rule": "the entire candidate cohort is exactly 1000 USD cash if any member has an exactly zero final-confirmation funding rate, is inside its noncash cooldown, or would overlap the prior accepted noncash cohort; members are never dropped",
+    "compounding": false,
+    "gross_reference_usd": 1000.0,
+    "invalid_evidence_is_not_cash": true,
+    "leverage_claim": false,
+    "member_notional": "1000 USD divided equally across every transition confirming at the same decision hour",
+    "net_usd_per_1000": "sum of complete accepted-cohort net cashflows over the fixed partition; cash cohorts and calendar days without a candidate contribute exactly zero; the fixed 1000 USD gross is never compounded",
+    "partial_cohort": false,
+    "renormalization": false,
+    "rule": "each eligible decision hour is the complete synchronized event cohort or exactly 1000 USD cash"
+  },
+  "authority": {
+    "canonical_branch": "NONE",
+    "deployment": "NONE",
+    "execution": "NONE",
+    "host": "NONE",
+    "live": "NONE",
+    "money_moved_usd": 0,
+    "orders": "NONE",
+    "private_read": "NONE",
+    "provider": "NONE",
+    "transfers": "NONE",
+    "ui": "NONE",
+    "withdrawals": "NONE"
+  },
+  "canonical_base": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "capacity": {
+    "cohort_capacity_formula": "for m equal-weight members, m times the minimum member_capacity_quote_proxy; this is the largest total cohort notional whose equal member allocation does not exceed any member proxy",
+    "executable_capacity_usd": "UNKNOWN",
+    "member_capacity_formula": "participation_rate times member_reference_quote_volume",
+    "member_reference_quote_volume": "minimum of (a) the sum of the 24 complete contract-kline quote_volume values in [entry-24h, entry) and (b) the fourth value after sorting the seven nonoverlapping 24-hour quote_volume sums [entry-24d, entry-24(d-1)) for d=1..7",
+    "label": "PUBLIC_COARSE_PRIOR_VOLUME_PARTICIPATION_PROXY",
+    "participation_rate": 0.00005,
+    "population": "one cohort-capacity value for every accepted noncash cohort in the scored partition; cash cohorts and no-event hours are excluded; zero accepted noncash cohorts makes capacity UNMEASURED",
+    "reported_minimum": "minimum of the complete noncash-cohort population",
+    "reported_p05": "sort the complete noncash-cohort population ascending and take element ceil(0.05*n)-1 using zero-based indexing",
+    "required_input_validity": "exactly 168 unique hourly contract bars immediately preceding entry, wholly inside the same scored partition, with finite nonnegative quote_volume; any violation is INVALID_EVIDENCE_UNMEASURED, never cash",
+    "unit_disclosure": "source quote_volume is USDT for the fixed June-2025 top-100 *USDT universe; reported USD capacity is a nominal 1 USDT = 1 USD proxy with USDT/USD basis unmeasured",
+    "unknown_components": [
+      "historical spread",
+      "order-book depth",
+      "queue position",
+      "latency",
+      "fill probability",
+      "market impact",
+      "historical filters",
+      "USDT/USD basis",
+      "account leverage and margin"
+    ]
+  },
+  "observation_clock": {
+    "archive_publication_latency": "UNKNOWN",
+    "availability_claim": "NONE; monthly archive rows are retrospective and their historical live-public availability time is not established",
+    "decision_hour": "decision_hour_ms = ((final_confirmation_calc_time_ms + entry_lag_hours * 3600000 + 3599999) // 3600000) * 3600000, the integer-millisecond ceil_hour(final_confirmation_calc_time_ms + entry_lag_hours * 3600000); this is a retrospective simulation index, not a proven live decision time",
+    "event_time": "calc_time of the first short-cadence settlement",
+    "final_confirmation_time": "calc_time of confirmation row confirmation_rows, and the only row whose settled funding-rate sign defines direction",
+    "future_or_target_row_as_signal": false,
+    "historical_announcement_backfill": false,
+    "label": "RETROSPECTIVE_OBSERVED_SETTLEMENT_ASSOCIATION",
+    "lag_safe_claim": false,
+    "policy_effect_claim": false
+  },
+  "consumer": "N3 successor/final convergence",
+  "costs": {
+    "account_effective_fee": "UNKNOWN",
+    "all_fills": "taker proxy",
+    "equations": {
+      "adverse_attribution_usd": "A = side_sign * q * ((X - E) - (P1 - P0)) = -q * adverse_rate * (P0 + P1)",
+      "entry_fill_proxy": "E = P0 * (1 + side_sign * adverse_rate)",
+      "exit_fill_proxy": "X = P1 * (1 - side_sign * adverse_rate)",
+      "fee_usd": "F = fee_rate * q * (abs(E) + abs(X))",
+      "funding_usd": "U = sum[-side_sign * q * Mk * rk] for every included funding settlement k",
+      "mark_price_pnl_usd": "G = side_sign * q * (P1 - P0)",
+      "member_net_usd": "G + U + A - F",
+      "quantity": "q = member_notional_usd / P0",
+      "rates": "fee_rate = public_fee_bp_per_fill / 10000 and adverse_rate = adverse_execution_bp_per_fill / 10000"
+    },
+    "notation": "P0 and P1 are positive finite entry and exit mark-price 1h opens; side_sign is +1 long or -1 short; q is positive; Mk is the positive finite settlement mark proxy; rk is the finite settled funding rate",
+    "scenario_net": "sum member_net_usd across every accepted noncash cohort; a complete cash cohort contributes zero",
+    "scenarios": {
+      "base": {
+        "adverse_execution_bp_per_fill": 2.0,
+        "public_fee_bp_per_fill": 5.0
+      },
+      "severe": {
+        "adverse_execution_bp_per_fill": 10.0,
+        "public_fee_bp_per_fill": 10.0
+      },
+      "stress": {
+        "adverse_execution_bp_per_fill": 5.0,
+        "public_fee_bp_per_fill": 8.0
+      }
+    }
+  },
+  "custody": {
+    "development_bodies": "no July-2025 through March-2026 CSV member is decompressed before run_consumed.v1.json exists; development fundingRate rows are outcome-bearing because later settlements enter funding cashflow",
+    "holdout_bodies": "compressed bytes may be hashed, but April through June CSV data rows remain unopened unless every development gate passes and one champion is sealed",
+    "holdout_preexisting_exposure": "BTCUSDT 2026-06 fundingRate, markPriceKlines/1h, and klines/1h CSV headers were exposed before this lifecycle; those three members are HEADER_ONLY_SCHEMA_EXPOSED, not SEALED_UNOPENED; zero data rows or outcome values were read",
+    "one_run": true,
+    "repair_or_rerun": false,
+    "run_marker": "run_consumed.v1.json is atomically created with O_CREAT|O_EXCL|O_NOFOLLOW before any development CSV member is opened",
+    "screen_bodies": "June-2025 CSV members open only after a committed static protocol and screen_consumed.v1.json; they determine membership and are not scored",
+    "screen_marker": "screen_consumed.v1.json is atomically created with O_CREAT|O_EXCL|O_NOFOLLOW before any June screen CSV member is opened"
+  },
+  "development_gates": {
+    "active_cohorts_min": 30,
+    "active_weeks_min": 12,
+    "all_must_pass_before_holdout": true,
+    "base_capacity_min_usd_gte": 1000.0,
+    "base_net_usd_per_1000_gt": 0.0,
+    "bonferroni_base_lower_bound_gt": 0.0,
+    "bonferroni_stress_lower_bound_gt": 0.0,
+    "champion_holm_p_lte": 0.05,
+    "distinct_traded_symbols_min": 12,
+    "pbo_lte": 0.5,
+    "remove_best_month_stress_net_usd_per_1000_gt": 0.0,
+    "remove_best_symbol_stress_net_usd_per_1000_gt": 0.0,
+    "severe_hourly_marked_equity_max_drawdown_lte": 0.1,
+    "stress_net_usd_per_1000_gt": 0.0,
+    "white_reality_check_base_p_lte": 0.05,
+    "white_reality_check_stress_p_lte": 0.05
+  },
+  "event": {
+    "confirmation_rule": "starting with the first short-cadence row, the first confirmation_rows consecutive rows carry the same new interval and every gap from its immediately prior row matches that interval plus or minus 1000ms",
+    "cooldown_clock": "a candidate final-confirmation time must be at least 7*24 hours after that symbol's previous accepted noncash final-confirmation time; equality is allowed",
+    "cooldown_days_per_symbol": 7,
+    "cooldown_zero_or_cash_update": false,
+    "eligible_new_interval_hours": [
+      1,
+      4
+    ],
+    "historical_interval_source": "official archive funding_interval_hours, cross-checked against adjacent calc_time gaps",
+    "launch_at_short_interval": "excluded by complete June-2025 stable-8h screen and six-row stable baseline",
+    "pre_transition_rows": 6,
+    "pre_transition_rule": "all six immediately preceding rows have interval 8 and adjacent timestamp gaps of 8h plus or minus 1000ms",
+    "signal_row": "the last row of the configured one- or two-row confirmation sequence",
+    "transition_rule": "first row after the stable baseline has interval 4 or 1 and its gap from the prior row matches that new interval plus or minus 1000ms",
+    "type": "8H_TO_4H_OR_1H_COMPRESSION"
+  },
+  "execution": {
+    "entry": "markPriceKlines 1h open at the trial decision hour",
+    "exit": "markPriceKlines 1h open at entry plus hold_hours",
+    "historical_filter_claim": false,
+    "maker_assumption": false,
+    "mark_price_is_executable_price_claim": false,
+    "missing_duplicate_or_nonfinite_required_value": "INVALID_EVIDENCE_UNMEASURED, never cash and never zero-filled",
+    "nonoverlap": "the complete candidate cohort is valid cash unless its entry is strictly after the exit of the previous accepted noncash cohort; equality is forbidden; only an accepted noncash cohort advances the blocking exit",
+    "quantity": "continuous member_notional divided by entry mark open; no current filter is backfilled historically"
+  },
+  "evidence_validity": {
+    "finite_rule": "every required numeric screen, signal, settlement, valuation, drawdown, and capacity value must parse to a finite number; NaN, positive or negative infinity, malformed numeric text, and nonpositive required prices are INVALID_EVIDENCE_UNMEASURED",
+    "invalid_scope": "one invalid required member or bar invalidates the sealed run; it never removes a member, creates cash, substitutes another symbol, or fabricates zero",
+    "zero_signal_exception": "an exactly zero finite funding rate on any final confirmation row is valid evidence but makes the entire synchronized candidate cohort cash"
+  },
+  "estimand": {
+    "claim_scope": "observational net profitability association only for the fixed June-2025 top-100 contract-quote-volume stable-8h Binance USD-M *USDT universe",
+    "eligible_count_below_cutoff": "if fewer than 100 symbols pass every June eligibility rule, the estimand contains all eligible symbols and is reported as top-min(100, eligible_count), never padded",
+    "generalization_beyond_universe": "NONE",
+    "rank_cutoff_n": 100,
+    "selected_universe": "the first min(100, eligible_count) symbols after descending exact June-2025 klines/1h quote-volume total and ASCII symbol ascending tie-break",
+    "tested_rank_cutoffs": [
+      100
+    ]
+  },
+  "forbidden": [
+    "credentials or signed private calls",
+    "current exchangeInfo as historical membership",
+    "current fundingInfo applied historically",
+    "announced or policy effective time inferred from archive rows",
+    "causal policy effect, treatment effect, ATE, or impact claim",
+    "partial cohort or symbol replacement",
+    "testing, reporting, or retuning any universe cutoff other than the frozen N=100 rule",
+    "outcome-byte reuse",
+    "maker-fill or executable-capacity claim",
+    "UI, canonical, live, host, provider, private, order, transfer, withdrawal, or money effects"
+  ],
+  "funding_cashflow": {
+    "booked": true,
+    "boundary_equal_entry_or_exit": "excluded",
+    "formula": "for each included settlement k, -side_sign * q * Mk * rk; sum all included settlements once",
+    "included_settlements": "calc_time strictly greater than entry and strictly less than exit",
+    "settlement_mark_proxy": "markPriceKlines 1h open at floor(calc_time to its UTC hour)"
+  },
+  "git_lineage": {
+    "canonical_base_role": "clean starting parent before any S-1T file exists",
+    "final_result_commit": "a later clean commit containing the exact protocol and terminal result is the producer commit supplied to N3 successor",
+    "preseal_rule": "the frozen static producer commit has canonical_base as its first parent and the worktree is clean",
+    "static_producer_commit": "resolved and recorded by preseal; it is not equal to canonical_base"
+  },
+  "holdout_gates_if_opened": {
+    "active_cohorts_min": 10,
+    "active_weeks_min": 6,
+    "base_capacity_min_usd_gte": 1000.0,
+    "base_net_usd_per_1000_gt": 0.0,
+    "distinct_traded_symbols_min": 6,
+    "pointwise_base_lower_bound_gt": 0.0,
+    "pointwise_stress_lower_bound_gt": 0.0,
+    "remove_best_month_stress_net_usd_per_1000_gt": 0.0,
+    "remove_best_symbol_stress_net_usd_per_1000_gt": 0.0,
+    "severe_hourly_marked_equity_max_drawdown_lte": 0.1,
+    "stress_net_usd_per_1000_gt": 0.0
+  },
+  "multiplicity": {
+    "bonferroni": "the selection lower bound for each trial-scenario cell is the uncentered bootstrap nearest-rank lower quantile at familywise_alpha/(2*family_size) = 0.05/24; all 24 cells share the same resample indices",
+    "bonferroni_hypotheses": 24,
+    "bonferroni_lower_quantile_exact": "1/480",
+    "family_size": 12,
+    "familywise_alpha": 0.05,
+    "holm": "for each trial raw_p=max(base centered one-sided p, stress centered one-sided p); sort by (raw_p, trial_id); using one-based i and k, adjusted p at sorted rank i is min(1, max over k<=i of ((family_size-k+1)*raw_p_k)); map adjusted values back to trial_id",
+    "pbo": {
+      "blocks": "split the complete development daily grid into 12 contiguous chronological blocks; with q,r=divmod(n_days,12), the earliest r blocks contain q+1 days and the rest q days",
+      "is_score": "for each trial, minimum of its base and stress sums over the six in-sample blocks",
+      "loss": "lambda <= 0",
+      "oos_rank": "ascending worst-tie rank = 1 + count(other trial OOS scores strictly lower); percentile = rank/(family_size+1); lambda = log(percentile/(1-percentile))",
+      "oos_score": "minimum of the trial's base and stress sums over the complementary six blocks",
+      "splits": "all C(12,6)=924 six-block in-sample choices",
+      "tie_rule": "among maximum-IS-score trials choose the one with the lowest OOS rank; if still tied choose lexicographically smallest trial_id",
+      "value": "number of loss splits divided by exactly 924"
+    },
+    "white_reality_check": "separately for base and stress, observed=max across 12 trials of the complete-grid net sum; on each shared centered resample compute max across trials of the centered resampled sum; p=(1+count(resampled_max>=observed))/(4096+1)"
+  },
+  "n3_handoff": {
+    "acceptance_state": "DEFERRED_TO_N3_SUCCESSOR_NEW_VERSION",
+    "family_key_template": "POST_SMETA1::S-1T::<protocol_raw_sha256>",
+    "frozen_n3_v1_mutation": false,
+    "normalized_verdict": {
+      "PUBLIC_PROXY_PASS_CAPITAL_NO_GO": "NO_GO",
+      "NO_GO_DEVELOPMENT_HOLDOUT_UNOPENED": "NO_GO",
+      "NO_GO": "NO_GO",
+      "UNMEASURED_RUN_CONSUMED_NO_RERUN": "UNMEASURED"
+    },
+    "required_exact_origin_pins": [
+      "producer_commit",
+      "producer_tree",
+      "protocol_path_and_blob",
+      "result_path_and_blob",
+      "source_verdict",
+      "custody_state",
+      "limitations",
+      "accepted_orchestrator_row_sha256"
+    ]
+  },
+  "protocol_id": "s1t-binance-usdm-funding-interval-transition-v1",
+  "research_question": "Within the fixed June-2025 top-100 contract-quote-volume stable-8h Binance USD-M *USDT universe, in a retrospective archive after an observed funding settlement cadence compression from 8 hours to 4 or 1 hours, is the contrarian side of the final confirming settled funding sign associated with positive net USD per fixed 1000 USD cohort after public proxy costs?",
+  "result_contract": {
+    "allowed_verdicts": [
+      "PUBLIC_PROXY_PASS_CAPITAL_NO_GO",
+      "NO_GO_DEVELOPMENT_HOLDOUT_UNOPENED",
+      "NO_GO",
+      "UNMEASURED_RUN_CONSUMED_NO_RERUN"
+    ],
+    "capital_authority_constant": "NO_GO",
+    "null_numeric_semantics": "UNMEASURED, never fabricated zero",
+    "required_fields": [
+      "verdict",
+      "capital_authority",
+      "net_usd_per_1000_by_scenario",
+      "price_funding_fee_and_adverse_attribution",
+      "bootstrap_intervals",
+      "activity_counters",
+      "holm_p_values",
+      "white_reality_check_p_by_scenario",
+      "pbo",
+      "severe_hourly_marked_equity_max_drawdown",
+      "public_capacity_proxy",
+      "remove_best_symbol_and_month_stress_net",
+      "account_effective_fees",
+      "executable_capacity",
+      "development_and_holdout_custody",
+      "limitations"
+    ]
+  },
+  "screen": {
+    "candidate_symbol_rule": "symbol matches ASCII regular expression ^[A-Z0-9]+USDT$",
+    "current_exchange_info": "forbidden as historical membership",
+    "eligible_definition": "a June-enumerated candidate is eligible only if it passes candidate_symbol_rule, funding_validation, and both hourly datasets in hourly_validation; eligibility uses no July-2025-or-later path, value, or metadata",
+    "funding_validation": "June funding has exactly 90 rows at the expected 00:00, 08:00, and 16:00 UTC settlements in [2025-06-01,2025-07-01), strictly increasing unique millisecond calc_time, finite rate, interval exactly 8, and adjacent gaps 8h plus or minus 1000ms",
+    "hourly_validation": "June markPriceKlines/1h and klines/1h each have exactly one valid row for every one of the 720 UTC-hour opens in [2025-06-01,2025-07-01), with no missing or duplicate hour; every klines/1h quote_volume token matches ^[0-9]+(\\.[0-9]+)?$ and is finite and nonnegative",
+    "later_coverage": "post-June presence, absence, completeness, or value never admits, excludes, reranks, replaces, or pads a selected symbol; every selected-universe fundingRate month in an opened scored partition is mandatory for complete transition surveillance, while market-data bars are mandatory for each in-horizon candidate; any required gap is invalid evidence",
+    "month": "2025-06",
+    "outcome_scoring": false,
+    "rank_cutoff_n": 100,
+    "rank_cutoff_trials": "N=100 is the only permitted cutoff; no other N is computed, tested, reported, or used for sensitivity analysis",
+    "ranking_order": "sort every eligible symbol by exact numeric june_contract_quote_volume_total descending, then by raw ASCII symbol bytes ascending",
+    "screen_ledger": "record every June-enumerated candidate and eligibility disposition; for every eligible symbol additionally record canonical exact-decimal june_contract_quote_volume_total, one-based rank, and exactly SELECTED or REJECTED_BY_RANK",
+    "selection_rule": "select ranks 1 through min(100, eligible_count); if eligible_count is less than 100 select all eligible symbols; never replace a selected symbol using later evidence",
+    "stable_cadence": "every June row interval is 8 and adjacent gaps are 8h plus or minus 1000ms",
+    "universe_rule": "enumerate candidates only from June-2025 fundingRate paths in the frozen cache inventory, apply only the June eligibility rules, rank eligible symbols only by the frozen June contract quote-volume rule, and fix the selected top-min(100, eligible_count) universe before any July-2025-or-later member is inspected",
+    "volume_arithmetic": "parse each of the 720 original June klines/1h quote_volume ASCII tokens as an arbitrary-precision base-10 decimal, sum without binary floating point or rounding, compare exact numeric sums, and serialize the ledger total without exponent notation after removing insignificant leading integer zeros and trailing fractional zeros while retaining one zero for a zero total"
+  },
+  "signal": {
+    "direction": "negative sign of the finite funding rate on the final confirmation row; exactly zero makes the entire synchronized candidate cohort cash; nonfinite is invalid evidence",
+    "endogeneity": "interval changes are exchange-selected and may co-move with cap pressure and funding extremity",
+    "interpretation": "observational profitability association only",
+    "rate_normalization": "funding_rate * 8 / funding_interval_hours for reporting; direction uses only the final confirming settled sign"
+  },
+  "sources": {
+    "archive_root": "https://data.binance.vision/data/futures/um/monthly",
+    "cache_manifest": "/private/tmp/cosmos-s1d-funding-dispersion-v1/s1d_acquisition_manifest.json",
+    "cache_root": "/private/tmp/cosmos-s1d-funding-dispersion-v1/raw",
+    "cache_state": "PREEXISTING_OFFICIAL_ARCHIVE_CACHE",
+    "checksum_suffix": ".CHECKSUM",
+    "engine_network_access": false,
+    "fresh_public_download": false,
+    "publisher": "Binance",
+    "remote_revision_disclosure": "frozen cached bytes are evaluated without a current-remote-equality claim",
+    "rest_or_private_fallback": false
+  },
+  "statistics": {
+    "activity": {
+      "active_cohort": "one accepted noncash complete synchronized cohort",
+      "active_week": "a UTC ISO Monday-through-Sunday week containing at least one accepted noncash cohort entry",
+      "distinct_traded_symbol": "a symbol appearing in at least one accepted noncash cohort"
+    },
+    "bootstrap": {
+      "alpha": 0.05,
+      "circular_block_days": 7,
+      "centered_one_sided_p": "T=sum(x); z=x-mean(x); p=(1+count(sum(resample(z))>=T))/(replicates+1)",
+      "pointwise_interval": "two-sided percentile interval uses nearest-rank uncentered resample-sum quantiles alpha/2 and 1-alpha/2",
+      "pointwise_one_sided_lower": "nearest-rank uncentered resample-sum quantile alpha",
+      "quantile": "for sorted B values and 0<q<=1, value at zero-based index max(0,ceil(q*B)-1)",
+      "replicates": 4096,
+      "resample": "for each replicate concatenate ceil(n_days/7) circular seven-day blocks and truncate to exactly n_days",
+      "shared_indices": "one index matrix per partition is reused for every trial and scenario",
+      "start_index": "partition_id is exactly development or holdout; for zero-based replicate b and block draw j, unsigned_big_endian_first_8_raw_digest_bytes(SHA256(ASCII(decimal_seed|partition_id|decimal_b|decimal_j))) modulo n_days",
+      "seed": 20260729
+    },
+    "daily_realization": "assign a cohort's complete final realized net to its UTC exit day; every other fixed partition day is zero",
+    "drawdown": {
+      "funding_booking": "book each included funding cashflow at the first UTC-hour grid timestamp greater than or equal to calc_time; entry- and exit-boundary settlements remain excluded",
+      "grid": "every UTC-hour timestamp from partition start through partition end inclusive, with no omitted hour",
+      "invalid": "any missing, duplicate, nonfinite, or nonpositive required hourly mark is INVALID_EVIDENCE_UNMEASURED",
+      "mark_equity": "E_h = 1000 + cumulative realized price PnL + cumulative booked funding + cumulative entry/exit adverse attribution - cumulative entry/exit fees + sum over open members of side_sign*q*(M_h-P0)",
+      "max_drawdown": "initialize peak=1000; in timestamp order set peak=max(peak,E_h) and dd=max(dd,(peak-E_h)/1000); report dd under the severe scenario",
+      "ordering": "at hour h use the h mark open; apply included funding assigned to h; close exits at h and remove their unrealized PnL while realizing mark-price PnL and exit costs; then open entries at h with zero mark PnL and immediate entry adverse/fee costs; same-hour exit and entry cannot occur; record E_h after this complete ordering"
+    },
+    "partition_calendar": "use every UTC calendar day whose start is in [partition_start,partition_end); no-event and cash-only days are explicit zeros",
+    "robustness": {
+      "common_law": "use the selected trial's accepted noncash cohorts, remove the named group without replacement or renormalization, retain all other cash/noncash scheduling and costs, and sum stress member nets",
+      "remove_best_entry_month": "group complete cohort stress net by the UTC month of entry; remove the group with greatest contribution, breaking ties by lexicographically smaller YYYY-MM",
+      "remove_best_symbol": "group member stress net by symbol; remove the group with greatest contribution, breaking ties by lexicographically smaller symbol; other members retain their original fixed notional and no removed notional is reassigned"
+    },
+    "selection_metric": "maximize the minimum of base and stress Bonferroni lower confidence bounds",
+    "selection_tie_breaks": [
+      "higher stress net USD per 1000",
+      "lower severe drawdown",
+      "lexicographically smaller trial_id"
+    ],
+    "unit": "net USD per fixed 1000 USD cohort"
+  },
+  "strategy_id": "S-1T",
+  "trial_family": {
+    "cartesian_product": true,
+    "confirmation_rows": [
+      1,
+      2
+    ],
+    "count": 12,
+    "entry_lag_hours": [
+      1,
+      2
+    ],
+    "hold_hours": [
+      4,
+      8,
+      12
+    ],
+    "ledger": "trial_ledger.v1.json"
+  },
+  "verdict_law": {
+    "all_public_proxy_gates_pass": "PUBLIC_PROXY_PASS_CAPITAL_NO_GO",
+    "capital_authority": "NO_GO while account-effective costs and executable capacity remain UNKNOWN",
+    "development_gate_failure": "NO_GO_DEVELOPMENT_HOLDOUT_UNOPENED",
+    "holdout_gate_failure": "NO_GO",
+    "source_or_semantic_failure_after_marker": "UNMEASURED_RUN_CONSUMED_NO_RERUN",
+    "verified_policy_effect_claim_allowed": false
+  },
+  "window": {
+    "development_end": "2026-04-01T00:00:00Z",
+    "development_start": "2025-07-01T00:00:00Z",
+    "embargo": "2026-04-01T00:00:00Z through 2026-04-08T00:00:00Z",
+    "holdout_end": "2026-07-01T00:00:00Z",
+    "holdout_start": "2026-04-08T00:00:00Z",
+    "partition_horizon_rule": "for a trial event, all six stable rows, every confirmation row, final signal row, decision hour, entry, all funding settlements used, every hourly mark through exit, exit, and all 168 capacity-lookback hours must lie wholly inside the same scored partition; otherwise it is structurally outside that partition and is never scored or carried",
+    "partition_invalid_rule": "once an in-horizon candidate exists, any missing, duplicate, malformed, or nonfinite required evidence invalidates the sealed run; it is not structural cash",
+    "partition_isolation": "development and holdout are scored on separate exclusive-end grids; the embargo is never scored; no development position enters the embargo and no holdout event uses embargo or development rows for baseline, confirmation, signal, capacity, entry, funding, marks, or exit",
+    "screen_end": "2025-07-01T00:00:00Z",
+    "screen_start": "2025-06-01T00:00:00Z"
+  }
+}

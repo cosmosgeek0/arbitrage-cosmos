@@ -1,0 +1,250 @@
+{
+  "acquisition": {
+    "archiveMutationLaw": "BIND_EXACT_ZIP_AND_CHECKSUM_BYTES;URL_ALONE_IS_INSUFFICIENT",
+    "concurrencyMaximum": 4,
+    "newRequestsPerSecondMaximum": 2,
+    "retryableStatus": [
+      408,
+      429,
+      500,
+      502,
+      503,
+      504
+    ],
+    "transportRetryMaximum": 3
+  },
+  "authority": {
+    "accountData": "FORBIDDEN",
+    "capitalAuthority": "NONE",
+    "consumer": "N3 successor/final convergence",
+    "effectUsd": "0",
+    "execution": "FORBIDDEN",
+    "host": "FORBIDDEN",
+    "orders": "FORBIDDEN",
+    "privateApi": "FORBIDDEN",
+    "provider": "FORBIDDEN",
+    "scope": "PUBLIC_RESEARCH_ONLY",
+    "ui": "FORBIDDEN"
+  },
+  "canonicalBase": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "costs": {
+    "accountEffectiveFee": "UNKNOWN",
+    "baseAdverseExecutionBasisPointsPerSide": 2,
+    "baseAllInRoundTripBasisPoints": 24,
+    "currentPublicRegularTakerFeeBasisPointsPerSide": 10,
+    "discountAssumed": false,
+    "funding": "NOT_APPLICABLE_SPOT_ONLY",
+    "historicalBookSpreadImpact": "UNKNOWN",
+    "roundTripSensitivityBasisPoints": [
+      0,
+      10,
+      20,
+      24,
+      40,
+      80
+    ],
+    "stressAdverseExecutionBasisPointsPerSide": 10,
+    "stressAllInRoundTripBasisPoints": 40
+  },
+  "data": {
+    "archiveMonths": [
+      "2025-01",
+      "2025-02",
+      "2025-03",
+      "2025-04",
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ],
+    "archiveUrlTemplate": "https://data.binance.vision/data/spot/monthly/klines/{symbol}/1h/{symbol}-1h-{month}.zip",
+    "expectedRowsByMonth": {
+      "2025-01": 744,
+      "2025-02": 672,
+      "2025-03": 744,
+      "2025-04": 720,
+      "2025-05": 744,
+      "2025-06": 720,
+      "2025-07": 744,
+      "2025-08": 744,
+      "2025-09": 720,
+      "2025-10": 744,
+      "2025-11": 720,
+      "2025-12": 744,
+      "2026-01": 744,
+      "2026-02": 672,
+      "2026-03": 744,
+      "2026-04": 720,
+      "2026-05": 744,
+      "2026-06": 720
+    },
+    "interval": "1h",
+    "product": "BINANCE_SPOT",
+    "quoteAsset": "USDT",
+    "quoteVolumeColumnZeroBased": 7,
+    "stateRoot": "/Users/cosmosgeek/.codex/research-data/vg19-abnormal-volume-autocorrelation-1be1-019faead",
+    "symbols": [
+      "ADAUSDT",
+      "AVAXUSDT",
+      "BNBUSDT",
+      "BTCUSDT",
+      "DOGEUSDT",
+      "ETHUSDT",
+      "LINKUSDT",
+      "SOLUSDT",
+      "TRXUSDT",
+      "XRPUSDT"
+    ],
+    "timestampUnit": "MICROSECONDS",
+    "universeLaw": "FIXED_2026_07_29_MAJOR_SPOT_USDT_COHORT;SURVIVORSHIP_LIMITED;NO_HISTORICAL_TOP_TEN_CLAIM"
+  },
+  "economics": {
+    "benchmark": "EQUAL_WEIGHT_ALL_TEN_FIXED_SYMBOLS_DURING_IDENTICAL_PRIMARY_EXPOSURE_WINDOWS",
+    "entry": "OPEN_T_PLUS_2_AFTER_COMPLETED_SIGNAL_HOUR;ONE_COMPLETE_BAR_INTERVENES",
+    "initialUsd": "1000",
+    "longOnly": true,
+    "maximumGrossExposure": "1.0",
+    "missingCandidates": "USDT_CASH",
+    "overlappingCohorts": false,
+    "quantityMode": "FRACTIONAL_PUBLIC_RESEARCH_ONLY",
+    "shorting": false
+  },
+  "formalGates": {
+    "accountEffectiveFeesMeasuredRequiredForVerifiedPositive": true,
+    "developmentToHoldoutSignReversalAllowed": false,
+    "executableCapacityMeasuredRequiredForVerifiedPositive": true,
+    "holdoutAbsoluteBootstrapLowerBoundExclusiveMinimum": "0",
+    "holdoutCohortsMinimum": 100,
+    "holdoutDistinctSelectedSymbolsMinimum": 8,
+    "holdoutDistinctWeeksMinimum": 12,
+    "holdoutExcessBootstrapLowerBoundExclusiveMinimum": "0",
+    "holdoutMaximumDrawdownMaximum": "0.15",
+    "holdoutMaximumSymbolSelectionShare": "0.20",
+    "holdoutStressCumulativeReturnExclusiveMinimum": "0",
+    "mechanismLag1BootstrapLowerBoundExclusiveMinimum": "0",
+    "mechanismLag1MustExceedLag24": true
+  },
+  "holdout": {
+    "endExclusiveUtc": "2026-07-01T00:00:00Z",
+    "maximumOpenCount": 1,
+    "openOnlyAfterPrimarySeal": true,
+    "startUtc": "2026-03-01T00:00:00Z"
+  },
+  "inference": {
+    "bootstrap": {
+      "blockLengthHours": 168,
+      "coveragePerMyriad": 9500,
+      "replicates": 4096,
+      "seed": 190719
+    },
+    "mechanism": {
+      "aggregate": "CROSS_SYMBOL_MEDIAN",
+      "bootstrapLaw": "SYNCHRONOUS_CIRCULAR_UTC_WEEK_BLOCKS_WITH_FIXED_PARTITION_RANKS",
+      "estimand": "PER_SYMBOL_SPEARMAN_CORRELATION_OF_CAUSAL_SURPRISE",
+      "lagsHours": [
+        1,
+        2,
+        4,
+        8,
+        12,
+        24
+      ],
+      "primaryLagHours": 1
+    },
+    "pbo": {
+      "blockCount": 16,
+      "developmentCoreEndExclusiveUtc": "2026-02-16T00:00:00Z",
+      "developmentCoreStartUtc": "2025-07-07T00:00:00Z",
+      "expectedSymmetricSplitCount": 12870,
+      "role": "DIAGNOSTIC_ONLY",
+      "trialCount": 54
+    },
+    "primaryWasFrozenBeforeOutcomes": true
+  },
+  "lifecycle": {
+    "developmentOpenMaximum": 1,
+    "holdoutOpenMaximum": 1,
+    "markerCreateMode": "EXCLUSIVE",
+    "postOutcomeSemanticMutation": "FORBIDDEN",
+    "repairOrRerun": "FORBIDDEN",
+    "reportMode": "HASH_AND_BINDING_VERIFICATION_ONLY"
+  },
+  "missingness": {
+    "archiveChecksumMismatch": "UNMEASURED_STOP",
+    "duplicateUnsortedOrMissingFullBar": "UNMEASURED_STOP",
+    "invalidSeasonalScale": "INELIGIBLE_SYMBOL_HOUR;NO_ZERO_SUBSTITUTION",
+    "missingSelectedEntryOrExit": "UNMEASURED_STOP",
+    "unknownValueToZero": "FORBIDDEN"
+  },
+  "partitions": {
+    "development": {
+      "endExclusiveUtc": "2026-03-01T00:00:00Z",
+      "startUtc": "2025-07-01T00:00:00Z"
+    },
+    "holdout": {
+      "endExclusiveUtc": "2026-07-01T00:00:00Z",
+      "startUtc": "2026-03-01T00:00:00Z"
+    },
+    "warmup": {
+      "endExclusiveUtc": "2025-07-01T00:00:00Z",
+      "startUtc": "2025-01-01T00:00:00Z"
+    }
+  },
+  "primary": {
+    "holdHours": 4,
+    "lookbackWeeks": 26,
+    "minimumCandidates": 3,
+    "thresholdZ": "2.5",
+    "topK": 3,
+    "trialId": "W26-Z2.5-K3-H4"
+  },
+  "seasonality": {
+    "baseline": "MEDIAN_OF_PRIOR_MATCHING_UTC_HOUR_OF_WEEK_LOG1P_QUOTE_VOLUME",
+    "lookbackObservationsPrimary": 26,
+    "minimumValidObservations": 20,
+    "scale": "1.4826_TIMES_MEDIAN_ABSOLUTE_DEVIATION",
+    "scaleMustBePositive": true,
+    "surprise": "(LOG1P_QUOTE_VOLUME-MEDIAN)/SCALE",
+    "usesCurrentOrFutureObservation": false
+  },
+  "trials": {
+    "attemptedCount": 54,
+    "holdHours": [
+      2,
+      4,
+      8
+    ],
+    "lookbackWeeks": [
+      8,
+      13,
+      26
+    ],
+    "role": "DEVELOPMENT_PBO_DIAGNOSTIC_ONLY;CANNOT_REPLACE_PRIMARY",
+    "thresholdZ": [
+      "2.0",
+      "2.5",
+      "3.0"
+    ],
+    "topK": [
+      3,
+      5
+    ]
+  },
+  "verdictLaw": {
+    "NO_GO": "VALID_MEASUREMENT_AND_ONE_OR_MORE_MEASURED_MECHANISM_ECONOMIC_SAMPLE_OR_RISK_GATES_FAIL",
+    "PUBLIC_RESEARCH_GO": "ALL_PUBLIC_MEASURED_GATES_PASS;NEVER_CAPITAL_OR_EXECUTION_AUTHORITY",
+    "UNMEASURED": "CUSTODY_SCHEMA_TIMESTAMP_OR_EXIT_FAILURE_PREVENTS_ESTIMATE;OR_ALL_PUBLIC_GATES_PASS_BUT_ACCOUNT_FEE_OR_EXECUTABLE_CAPACITY_TRUTH_IS_ABSENT",
+    "capitalAuthorityForEveryVerdict": "NONE"
+  },
+  "version": "VG19ProtocolV1"
+}

@@ -1,0 +1,300 @@
+{
+  "schema": "s2a.protocol.v1",
+  "strategy_id": "S-2A",
+  "strategy_family": "USD_M_BTC_FACTOR_IDIOSYNCRATIC_ONE_HOUR_RETURN_REVERSAL_WITH_STRICTLY_LAGGED_QUOTE_VOLUME_CONFIRMATION",
+  "canonical_base": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "freeze_rule": "Protocol, code, tests, sources, fixed cohort, clocks, costs, inference, gates, provenance, and holdout law are immutable before any archive body request.",
+  "distinctness": {
+    "collision_rail": [
+      "USD-M venue",
+      "causal BTC-factor one-hour return residual",
+      "quote-volume confirmation hour strictly precedes the residual-return hour",
+      "symmetric idiosyncratic reversal with mechanical BTC factor hedge"
+    ],
+    "comparison_record": "DISTINCTNESS.md"
+  },
+  "sources": {
+    "root": "https://data.binance.vision/data/futures/um/monthly",
+    "kline_path": "klines/{symbol}/1h/{symbol}-1h-{month}.zip",
+    "mark_price_path": "markPriceKlines/{symbol}/1h/{symbol}-1h-{month}.zip",
+    "funding_path": "fundingRate/{symbol}/{symbol}-fundingRate-{month}.zip",
+    "checksum_suffix": ".CHECKSUM",
+    "kline_csv_header": [
+      "open_time",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "close_time",
+      "quote_volume",
+      "count",
+      "taker_buy_volume",
+      "taker_buy_quote_volume",
+      "ignore"
+    ],
+    "funding_csv_header": [
+      "calc_time",
+      "funding_interval_hours",
+      "last_funding_rate"
+    ],
+    "mark_price_csv_header": [
+      "open_time",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "close_time",
+      "quote_volume",
+      "count",
+      "taker_buy_volume",
+      "taker_buy_quote_volume",
+      "ignore"
+    ],
+    "mark_price_ignored_slots": [
+      5,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "funding_timestamp_canonicalization": "nearest UTC hour only when absolute publisher jitter is at most 1000 ms; reject collision, reordering, or larger drift",
+    "funding_completeness": "after timestamp canonicalization every loaded row for a symbol must declare one identical funding_interval_hours value and every consecutive gap must equal it; any interval transition is ambiguous and terminal UNMEASURED; first event must equal the frozen start and the final interval must cover the frozen end",
+    "transport_retries_within_single_invocation": 3,
+    "publisher": "Binance",
+    "market": "USD-M Futures",
+    "public_only": true
+  },
+  "window": {
+    "study_start": "2025-07-01T00:00:00Z",
+    "development_end": "2026-04-01T00:00:00Z",
+    "holdout_end": "2026-07-01T00:00:00Z",
+    "development_months": [
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03"
+    ],
+    "holdout_months": [
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ],
+    "holdout_body_policy": "NOT_REQUESTED_NOT_HASHED_NOT_DECOMPRESSED_NOT_PARSED_UNLESS_ALL_DEVELOPMENT_GATES_PASS"
+  },
+  "universe": {
+    "selection": "fixed_predeclared_no_replacement",
+    "factor_symbol": "BTCUSDT",
+    "idiosyncratic_symbols": [
+      "ETHUSDT",
+      "BNBUSDT",
+      "XRPUSDT",
+      "ADAUSDT",
+      "DOGEUSDT",
+      "SOLUSDT",
+      "TRXUSDT",
+      "LTCUSDT",
+      "BCHUSDT",
+      "LINKUSDT",
+      "AVAXUSDT"
+    ],
+    "instrument": "USD-M perpetual public archive",
+    "current_exchange_info_is_not_historical_membership": true,
+    "survivorship_limitation": "KNOWN"
+  },
+  "clock": {
+    "bar_interval_ms": 3600000,
+    "signal_hour": "fully closed UTC hour t",
+    "fit_window_hours": 336,
+    "fit_excludes_signal_hour": true,
+    "volume_confirmation_hour": "t-1",
+    "volume_baseline_hours": 168,
+    "volume_baseline_end": "t-2",
+    "entry": "open of UTC hour t+1",
+    "exit": "open after the frozen hold hours",
+    "non_overlap": "each trial ignores new signals until its exact prior exit",
+    "funding_interval": "(entry,exit] canonicalized observed public funding timestamps",
+    "partition_boundary": "entry and exit must both remain inside the evaluated partition",
+    "pbo_boundary_guard": "entry and exit must share one UTC day, so no accepted label crosses a daily or CSCV block boundary"
+  },
+  "residualization": {
+    "return": "natural_log(close_t/close_t_minus_1)",
+    "model": "OLS with intercept: contract return on BTCUSDT return",
+    "fit_rows": 336,
+    "fit_data": "the 336 consecutive returns ending at t-1",
+    "signal_residual": "return_t-(alpha_fit+beta_fit*btc_return_t)",
+    "scale": "sample standard deviation of the fit residuals with ddof=1",
+    "minimum_scale": 1e-12,
+    "standardized_signal": "signal_residual/fit_residual_sample_std",
+    "no_cross_sectional_demeaning": true
+  },
+  "volume_confirmation": {
+    "field": "quote_volume",
+    "formula": "quote_volume_t_minus_1 / median(quote_volume_t_minus_169_through_t_minus_2)",
+    "thresholds": [
+      1.25,
+      1.5
+    ],
+    "strictly_lagged": true,
+    "same_hour_volume_forbidden": true,
+    "future_volume_forbidden": true
+  },
+  "signal": {
+    "absolute_residual_z_thresholds": [
+      1.5,
+      2.0
+    ],
+    "direction": "contrarian",
+    "long": "single most negative qualifying residual z",
+    "short": "single most positive qualifying residual z",
+    "atomic_boundary_ties": "cash",
+    "both_sides_required": true,
+    "current_hour_volume_forbidden": true
+  },
+  "allocation": {
+    "capital_usd": 1000.0,
+    "raw_idiosyncratic_weights": {
+      "long": 0.5,
+      "short": -0.5
+    },
+    "btc_hedge": "-sum(raw_idiosyncratic_weight_i*beta_i)",
+    "normalization": "divide every nonzero weight by total absolute weight",
+    "estimated_btc_beta_after_normalization": 0.0,
+    "gross_notional": 1.0,
+    "maximum_absolute_btc_weight": 0.35,
+    "maximum_absolute_member_weight": 0.7,
+    "maximum_absolute_net_notional": 0.35,
+    "invalid_weight_rule": "cash"
+  },
+  "response": {
+    "hold_hours": [
+      2,
+      4,
+      8
+    ],
+    "entry_price": "exact next-hour open",
+    "exit_price": "exact horizon-hour open",
+    "price_pnl": "signed linear-contract return times entry notional",
+    "funding_pnl": "negative fixed contract quantity times the public hourly mark-price open at each canonicalized funding timestamp times each observed funding rate in (entry,exit]",
+    "funding_mark_price_proxy": "official 1h markPriceKlines open at the canonicalized funding hour; exact settlement mark price is not present in the checksum-bound funding archive",
+    "trials": 12
+  },
+  "costs": {
+    "entry_and_exit_notional_charged": true,
+    "scenarios": {
+      "gross": {
+        "public_fee_bp_per_fill": 0.0,
+        "adverse_execution_bp_per_fill": 0.0
+      },
+      "base": {
+        "public_fee_bp_per_fill": 5.0,
+        "adverse_execution_bp_per_fill": 5.0
+      },
+      "stress": {
+        "public_fee_bp_per_fill": 8.0,
+        "adverse_execution_bp_per_fill": 10.0
+      },
+      "severe": {
+        "public_fee_bp_per_fill": 10.0,
+        "adverse_execution_bp_per_fill": 20.0
+      }
+    },
+    "account_effective_fee": "UNKNOWN",
+    "spread_depth_queue_latency_impact_fill_probability": "UNKNOWN",
+    "usdt_usd_parity": "UNMEASURED"
+  },
+  "capacity": {
+    "measure": "one-basis-point participation in each nonzero leg's lagged confirmation-hour quote volume",
+    "participation_rate": 0.0001,
+    "cohort_formula": "minimum_i(participation_rate*quote_volume_i_t_minus_1/absolute_weight_i)",
+    "development_gate_p05_usd": 1000.0,
+    "executable_capacity": "UNKNOWN"
+  },
+  "statistics": {
+    "selection_metric": "development_base_net_usd_per_1000",
+    "selection_tie_break": "lexicographic_trial_id",
+    "daily_calendar": "complete UTC days including zero-cash days",
+    "bootstrap": {
+      "replicates": 4096,
+      "development_seed": 20260730,
+      "holdout_seed": 20260731,
+      "circular_block_days": 7,
+      "pointwise_interval": 0.95,
+      "familywise_method": "Bonferroni lower quantile across 12 trials"
+    },
+    "multiplicity": {
+      "one_sided_centered_block_p": true,
+      "holm": true,
+      "white_reality_check": true,
+      "program_wide_external_trial_count": "UNKNOWN",
+      "external_adjusted_p": "UNMEASURED"
+    },
+    "pbo": {
+      "method": "CSCV",
+      "chronological_blocks": 12,
+      "train_blocks": 6,
+      "splits": 924,
+      "role": "diagnostic only; never alters selection, confidence intervals, multiplicity gates, or verdict",
+      "boundary_safety": "accepted positions never cross UTC days; CSCV blocks contain complete daily labels"
+    },
+    "drawdown": "maximum peak-to-trough loss on complete daily cumulative base PnL divided by fixed 1000 USD"
+  },
+  "development_gates": {
+    "candidate_hours_min": 5000,
+    "active_round_trips_min": 96,
+    "active_weeks_min": 16,
+    "distinct_idiosyncratic_symbols_min": 8,
+    "base_net_usd_per_1000_gt": 0.0,
+    "stress_net_usd_per_1000_gt": 0.0,
+    "pointwise_lower_bound_gt": 0.0,
+    "familywise_lower_bound_gt": 0.0,
+    "champion_holm_p_lte": 0.05,
+    "white_reality_check_p_lte": 0.05,
+    "max_drawdown_lte": 0.2,
+    "capacity_p05_usd_gte": 1000.0
+  },
+  "holdout_gates_if_opened": {
+    "active_round_trips_min": 24,
+    "active_weeks_min": 8,
+    "base_net_usd_per_1000_gt": 0.0,
+    "stress_net_usd_per_1000_gt": 0.0,
+    "pointwise_lower_bound_gt": 0.0,
+    "max_drawdown_lte": 0.2
+  },
+  "verdict_law": {
+    "development_gate_failure": "NO_GO",
+    "holdout_gate_failure": "NO_GO",
+    "measurement_failure_after_run_marker": "UNMEASURED",
+    "public_proxy_all_gates_pass": "GO",
+    "program_wide_verdict_after_local_pass": "UNMEASURED_PENDING_EXTERNAL_MULTIPLICITY",
+    "capital_verdict": "NO_GO_WHILE_ACCOUNT_EFFECTIVE_FEES_EXECUTABLE_CAPACITY_AND_PROGRAM_WIDE_MULTIPLICITY_ARE_UNKNOWN"
+  },
+  "forbidden": [
+    "Spot data",
+    "pair-spread residuals",
+    "same-hour or future volume confirmation",
+    "return continuation",
+    "funding as signal",
+    "open interest",
+    "premium index",
+    "current-volume universe ranking",
+    "retrospective symbol replacement",
+    "maker-fill claims",
+    "credentials",
+    "private endpoints",
+    "orders",
+    "transfers",
+    "withdrawals",
+    "providers",
+    "cloud or host mutation",
+    "UI mutation",
+    "canonical-branch mutation"
+  ]
+}

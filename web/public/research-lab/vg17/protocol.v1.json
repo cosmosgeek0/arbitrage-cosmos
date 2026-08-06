@@ -1,0 +1,210 @@
+{
+  "authority": {
+    "accountData": "FORBIDDEN",
+    "capitalAuthority": "NONE",
+    "consumer": "N3 successor/final convergence",
+    "effectUsd": "0",
+    "execution": "FORBIDDEN",
+    "host": "FORBIDDEN",
+    "orders": "FORBIDDEN",
+    "privateApi": "FORBIDDEN",
+    "provider": "FORBIDDEN",
+    "scope": "PUBLIC_RESEARCH_ONLY",
+    "ui": "FORBIDDEN"
+  },
+  "baseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "bootstrap": {
+    "coveragePerMyriad": 9500,
+    "primaryBlockLengthDays": 7,
+    "replicates": 4096,
+    "secondaryBlockLengthDays": 14,
+    "seed": 170717
+  },
+  "capacity": {
+    "executableCapacity": "UNMEASURED",
+    "historicalBookDepth": "UNMEASURED",
+    "participationSensitivityBasisPoints": "1",
+    "stressParticipationSensitivityBasisPoints": "0.5",
+    "volumeReference": "MIN(SIGNAL_DAY_QUOTE_VOLUME,TRAILING_7_COMPLETE_DAY_MEDIAN_QUOTE_VOLUME)",
+    "warning": "DESCRIPTIVE_PUBLIC_QUOTE_VOLUME_SENSITIVITY_NOT_EXECUTABLE_CAPACITY"
+  },
+  "cohort": {
+    "eligibleMinimum": 15,
+    "fixedSymbols": [
+      "AAVEUSDT",
+      "ADAUSDT",
+      "ATOMUSDT",
+      "AVAXUSDT",
+      "BCHUSDT",
+      "BNBUSDT",
+      "BTCUSDT",
+      "DOGEUSDT",
+      "DOTUSDT",
+      "ETCUSDT",
+      "ETHUSDT",
+      "FILUSDT",
+      "LINKUSDT",
+      "LTCUSDT",
+      "NEARUSDT",
+      "SOLUSDT",
+      "TRXUSDT",
+      "UNIUSDT",
+      "XLMUSDT",
+      "XRPUSDT"
+    ],
+    "minimumTrailing28DayMedianQuoteVolumeUsd": "5000000",
+    "scopeWarning": "FIXED_DISCLOSED_SURVIVOR_COHORT;NO_INFERENCE_TO_FULL_OR_DELISTED_BINANCE_UNIVERSE",
+    "tieLaw": "IF_THE_SCORE_TIE_GROUP_CROSSES_K_THE_UNFILLED_BOUNDARY_SLOTS_REMAIN_CASH",
+    "weightLaw": "EACH_SELECTED_SLOT_RECEIVES_CURRENT_ROTATING_SLEEVE_CASH_DIVIDED_BY_K;UNFILLED_SLOTS_STAY_CASH;NO_REWEIGHTING"
+  },
+  "costs": {
+    "accountEffectiveFee": "UNKNOWN",
+    "baseAdversePriceBasisPointsPerFill": 10,
+    "discountAssumed": false,
+    "historicalSpreadImpact": "UNKNOWN",
+    "publicRegularTakerFeeBasisPointsPerFill": 10,
+    "severeAdversePriceBasisPointsPerFill": 50,
+    "stressAdversePriceBasisPointsPerFill": 25
+  },
+  "data": {
+    "developmentArchiveMonths": [
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02"
+    ],
+    "holdoutArchiveMonths": [
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ],
+    "interval": "1d",
+    "quoteAsset": "USDT",
+    "sourceRoot": "/private/tmp/cosmos-s1f-weekly-momentum-cash-v1",
+    "timestampUnit": "MICROSECONDS",
+    "warmupStartUtcDate": "2025-05-01"
+  },
+  "economics": {
+    "initialUsd": "1000",
+    "leverage": false,
+    "longOnly": true,
+    "quantityMode": "FRACTIONAL_RESEARCH_ONLY",
+    "sevenVintageSleeves": true,
+    "shorting": false,
+    "unusedAllocation": "USDT_CASH"
+  },
+  "formalGates": {
+    "development": {
+      "activeEntryDaysMinimum": 160,
+      "baseAndStressBootstrapLowerBoundsExclusiveMinimumUsdPerDay": "0",
+      "distinctAssetsMinimum": 15,
+      "holmAdjustedChampionRequired": true,
+      "maximumCloseMarkDrawdownFraction": "0.40",
+      "pboMaximum": "0.50",
+      "publicParticipationSensitivityMustCoverIntendedLegs": true,
+      "roundTripsMinimum": 100,
+      "stressNetMeanExclusiveMinimumUsdPerDay": "0",
+      "whiteRealityCheckPValueExclusiveMaximum": "0.05"
+    },
+    "holdout": {
+      "activeEntryDaysMinimum": 80,
+      "baseAndStressBootstrapLowerBoundsExclusiveMinimumUsdPerDay": "0",
+      "distinctAssetsMinimum": 12,
+      "maximumCloseMarkDrawdownFraction": "0.40",
+      "publicParticipationSensitivityMustCoverIntendedLegs": true,
+      "roundTripsMinimum": 40,
+      "stressNetMeanExclusiveMinimumUsdPerDay": "0"
+    }
+  },
+  "inference": {
+    "cscv": {
+      "blockCount": 12,
+      "blockLengthDays": 20,
+      "developmentRowsUsed": 240,
+      "expectedSymmetricSplitCount": 924,
+      "role": "DIAGNOSTIC_AND_FROZEN_DEVELOPMENT_GATE_NOT_A_P_VALUE_OR_RETURN_ESTIMATE"
+    },
+    "holm": "ONE_SIDED_CENTERED_SYNCHRONOUS_CIRCULAR_BLOCK_BOOTSTRAP_P_VALUES_OVER_ALL_12_TRIALS",
+    "whiteRealityCheck": "SYNCHRONOUS_MAX_CENTERED_MEAN_ACROSS_ALL_12_TRIALS"
+  },
+  "missingness": {
+    "conflictingOrDuplicateBar": "UNMEASURED",
+    "invalidChecksumSchemaTimestampOrDailyGrid": "UNMEASURED",
+    "missingEntryAfterValidSelection": "THAT_FIXED_SLOT_REMAINS_CASH_NO_REPLACEMENT",
+    "missingOpenedPositionExit": "UNMEASURED",
+    "validCohortBelowMinimum": "WHOLE_SLEEVE_REMAINS_CASH",
+    "zeroOrNegativeQuoteVolume": "UNMEASURED",
+    "unknownValueToZero": "FORBIDDEN"
+  },
+  "partitions": {
+    "development": {
+      "dailyPathEndUtcDate": "2026-02-28",
+      "entryEndUtcDate": "2026-02-21",
+      "entryStartUtcDate": "2025-07-01"
+    },
+    "embargo": {
+      "endUtcDate": "2026-03-07",
+      "startUtcDate": "2026-03-01"
+    },
+    "holdout": {
+      "dailyPathEndUtcDate": "2026-06-30",
+      "entryEndUtcDate": "2026-06-23",
+      "entryStartUtcDate": "2026-03-08",
+      "maximumOpenCount": 1
+    }
+  },
+  "runControl": {
+    "candidateMustBeSealedBeforeHoldoutOpen": true,
+    "freezeBeforeAnyArchiveDecompression": true,
+    "maximumArchiveDecompressionRuns": 1,
+    "noRepairRerunRunnerUpOrSymbolDrop": true,
+    "resultNullsNeverNumericZero": true
+  },
+  "selection": {
+    "championMetric": "HIGHEST_DEVELOPMENT_STRESS_7_DAY_BLOCK_BOOTSTRAP_LOWER_BOUND_USD_PER_DAY",
+    "tieBreak": [
+      "LOWER_LOOKBACK_DAYS",
+      "LOWER_SELECTED_COUNT",
+      "LEXICOGRAPHIC_TRIAL_ID"
+    ]
+  },
+  "signal": {
+    "availability": "ENTRY_DAY_E_USES_ONLY_COMPLETE_BARS_THROUGH_E_MINUS_2",
+    "definition": "MEAN_OVER_L_OF(ABS(LN(CLOSE_D/CLOSE_D_MINUS_1))*10000*1000000/QUOTE_VOLUME_D)",
+    "direction": "HIGH_SCORE_LONG_ONLY",
+    "entry": "ENTRY_DAY_OPEN_AFTER_ONE_FULL_UTC_DAY_COMPUTATION_LAG",
+    "exit": "ENTRY_DAY_PLUS_7_CALENDAR_DAYS_OPEN",
+    "interpretation": "AMIHUD_STYLE_IMPACT_EFFICIENCY_REGIME_NOT_CAUSAL_OR_OBSERVED_MARKET_IMPACT",
+    "minimumConsecutiveHistoryDays": 57,
+    "unit": "ABSOLUTE_LOG_RETURN_BASIS_POINTS_PER_USD_1M_QUOTE_VOLUME"
+  },
+  "trials": {
+    "attemptedCount": 12,
+    "holdingCalendarDays": 7,
+    "lookbackDays": [
+      7,
+      14,
+      28,
+      56
+    ],
+    "selectedCounts": [
+      3,
+      6,
+      9
+    ]
+  },
+  "verdictLaw": {
+    "GO": "VALID_PUBLIC_MEASUREMENT_AND_ALL_DEVELOPMENT_AND_SINGLE_HOLDOUT_GATES_PASS;PUBLIC_SCENARIO_ONLY",
+    "NO_GO": "VALID_MEASUREMENT_AND_ONE_OR_MORE_FROZEN_ECONOMIC_STATISTICAL_RISK_OR_PROXY_GATES_FAIL",
+    "UNMEASURED": "CUSTODY_SCHEMA_TIMESTAMP_CAUSALITY_RUN_CONTROL_OR_OPEN_POSITION_EXIT_PROOF_INVALID",
+    "globalVerifiedPositiveCeiling": "UNAVAILABLE_WITHOUT_UPDATED_GLOBAL_V_G_ATTEMPT_LEDGER",
+    "version": "VG17ProtocolV1"
+  }
+}

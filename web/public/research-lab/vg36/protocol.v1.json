@@ -1,0 +1,220 @@
+{
+  "baseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "capacity": {
+    "executableCapacity": "UNMEASURED",
+    "participationFraction": "0.0001",
+    "proxy": "AT_EACH_ENTRY_TWELVE_TIMES_THE_MINIMUM_CONSTITUENT_LAGGED_30_COMPLETE_DAY_MEDIAN_QUOTE_VOLUME_TIMES_1BP",
+    "role": "MANDATORY_REPORT_ONLY_NEVER_EXECUTION_AUTHORITY"
+  },
+  "costScenarios": [
+    {
+      "id": "gross",
+      "perExecutedSideBps": 0
+    },
+    {
+      "id": "fee_only",
+      "perExecutedSideBps": 10
+    },
+    {
+      "id": "base",
+      "perExecutedSideBps": 20
+    },
+    {
+      "id": "stress",
+      "perExecutedSideBps": 35
+    },
+    {
+      "id": "severe",
+      "perExecutedSideBps": 60
+    }
+  ],
+  "data": {
+    "archiveInterval": "1d",
+    "archiveRoot": "/Users/cosmosgeek/.codex/evidence/cosmos-vg3-public-volume-v1-4ddd-r5/archives/data/spot/monthly/klines",
+    "archiveRootMutation": "FORBIDDEN",
+    "developmentArchiveMonths": [
+      "2025-03",
+      "2025-04",
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02"
+    ],
+    "developmentFinalOpenUtc": "2026-02-28",
+    "developmentFirstOpenUtc": "2025-07-01",
+    "holdoutArchiveMonths": [
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ],
+    "holdoutFinalOpenUtc": "2026-06-30",
+    "holdoutFirstOpenUtc": "2026-03-01",
+    "klineFields": {
+      "openPrice": 1,
+      "openTime": 0,
+      "quoteAssetVolume": 7,
+      "takerBuyQuoteAssetVolume": 10
+    },
+    "sourceMonths": [
+      "2025-03",
+      "2025-04",
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ],
+    "sourcePairCount": 192,
+    "timestampUnit": "MICROSECOND"
+  },
+  "developmentGates": {
+    "baseAbsoluteAndExcessHolmAdjustedPAtMost": "0.05",
+    "baseAbsoluteAndExcessMeanAndTotalMustExceed": "0",
+    "baseAbsoluteAndExcessOneSided95LcbMustExceed": "0",
+    "baseAbsoluteAndExcessWhiteMaxStatPAtMost": "0.05",
+    "minimumCompletedTrades": 4,
+    "minimumPositiveAbsoluteMonths": 5,
+    "minimumPositiveExcessMonths": 5,
+    "stressAbsoluteAndExcessTotalMustExceed": "0",
+    "stressMaximumMarkedOpenDrawdownFraction": "0.20"
+  },
+  "execution": {
+    "acceptedSignalSuppression": "IGNORE_ALL_SIGNALS_WHILE_EMBARGO_PENDING_OR_HOLDING_THROUGH_EXIT_OPEN",
+    "alwaysOnComparator": "IDENTICAL_STATIC_EQUAL_WEIGHT_COHORT_FIXED_UNITS_FROM_PARTITION_FIRST_OPEN_TO_FINAL_OPEN_UNDER_IDENTICAL_COST_SCENARIO",
+    "cashYield": "0",
+    "embargo": "FULL_DAY_T_PLUS_1",
+    "entry": "SIGNAL_COMPLETED_DAY_T_ENTER_ALL_TWELVE_EQUAL_WEIGHT_AT_DAY_T_PLUS_2_OPEN",
+    "exit": "FIXED_H_UTC_DAYS_AFTER_ENTRY_AT_OPEN",
+    "fractionalResearchUnits": true,
+    "internalRebalancing": "NONE",
+    "leverage": false,
+    "partitionAdmission": "ENTRY_AND_EXIT_OPENS_MUST_BE_INSIDE_PARTITION_SIGNAL_MAY_PRECEDE_FIRST_OPEN_BY_AT_MOST_TWO_DAYS",
+    "shorting": false,
+    "startingCashUsdt": "1000"
+  },
+  "globalEligibility": {
+    "capitalAuthority": "NONE",
+    "localGoGlobalDisposition": "NO_GO_SHARED_HOLDOUT_INELIGIBLE",
+    "reason": "GLOBAL_SHARED_ARCHIVE_AND_HOLDOUT_REUSE_RISK",
+    "verifiedPositiveEligibility": "INELIGIBLE"
+  },
+  "holdoutGates": {
+    "baseAbsoluteAndExcessMeanAndTotalMustExceed": "0",
+    "baseAbsoluteAndExcessOneSided95LcbMustExceed": "0",
+    "baseAbsoluteAndExcessRawPAtMost": "0.05",
+    "minimumCompletedTrades": 2,
+    "minimumPositiveAbsoluteMonths": 3,
+    "minimumPositiveExcessMonths": 3,
+    "stressAbsoluteAndExcessTotalMustExceed": "0",
+    "stressMaximumMarkedOpenDrawdownFraction": "0.20"
+  },
+  "inference": {
+    "bootstrapReplicates": 4096,
+    "bootstrapSeed": 202607300036,
+    "cscv": "EIGHT_DEVELOPMENT_CALENDAR_MONTHS_CHOOSE_FOUR_MEAN_EXCESS_FAMILY_DIAGNOSTIC_NOT_THE_GATE_AND_LCB_SELECTION_PROCEDURE_NO_HOLDING_PURGE_REPORT_ONLY",
+    "interval": "TWO_SIDED_90_PERCENT_PERCENTILE_AND_ONE_SIDED_95_PERCENT_LOWER_BOUND",
+    "multiplicity": "SEPARATE_HOLM_ABSOLUTE_AND_EXCESS_FAMILIES_PLUS_SEPARATE_WHITE_CENTERED_MAX_STAT_ABSOLUTE_AND_EXCESS",
+    "primaryCircularBlockDays": 7,
+    "selection": "HIGHEST_BASE_EXCESS_95LCB_THEN_BASE_ABSOLUTE_95LCB_THEN_LOWER_TURNOVER_THEN_LARGER_K_THEN_LONGER_L_THEN_SHORTER_H_THEN_LEXICOGRAPHICALLY_GREATEST_TRIAL_ID",
+    "sensitivityCircularBlockDays": 14,
+    "whiteRealityCheck": "COMMON_REPLICATE_INDICES_CENTER_EACH_TRIAL_BY_ITS_OBSERVED_MEAN_AND_COMPARE_MAX_CENTERED_BOOTSTRAP_MEAN_WITH_OBSERVED_FAMILY_MAX"
+  },
+  "lifecycle": {
+    "candidateSeal": "WRITE_ONLY_AFTER_ALL_DEVELOPMENT_GATES_PASS",
+    "defectDisposition": "TERMINAL_UNMEASURED_NO_REPAIR_NO_RERUN",
+    "gitLineage": "BASE_1BE1_TO_DIRECT_SOURCE_COMMIT_TO_DIRECT_FREEZE_COMMIT_TO_DIRECT_TERMINAL_COMMIT_EXCLUSIVE_VG36_SCOPE",
+    "holdoutBodyOpenReceipt": "WRITE_EXCLUSIVELY_AFTER_FIRST_HOLDOUT_ZIP_MEMBER_HANDLE_OPENS",
+    "holdoutMarker": "WRITE_EXCLUSIVELY_AFTER_CANDIDATE_SEAL_AND_BEFORE_ANY_HOLDOUT_ARCHIVE_OPEN",
+    "runMarker": "ONE_EXCLUSIVE_MARKER_BEFORE_ANY_DEVELOPMENT_ARCHIVE_OPEN"
+  },
+  "provenance": {
+    "binancePublicDataCommit": "5c7f3197591c0d54d85dc43066226bc4c671d47a",
+    "binanceSpotApiDocsCommit": "6b8372cad7cecbdf5dd88a3372eafff51988c5cf",
+    "refreshDateUtc": "2026-07-29",
+    "scope": "BINANCE_PUBLIC_SPOT_ONLY_NO_CREDENTIALS_NO_SIGNED_ENDPOINTS"
+  },
+  "question": "Does an isolated strictly lagged negative shock in equal-weight Spot taker-buy quote-volume share earn positive post-cost all-majors cohort absolute and always-on-cohort excess returns after a full-day embargo?",
+  "schema": "VG36TakerBuyQuoteShareShockProtocolV1",
+  "signal": {
+    "candidateGrid": {
+      "holdDays": [
+        1,
+        3,
+        5
+      ],
+      "lookbackPriorInnovations": [
+        20,
+        60
+      ],
+      "negativeShockThreshold": [
+        "1.5",
+        "2.5"
+      ],
+      "trialCount": 12
+    },
+    "cohortScalar": "EQUAL_ARITHMETIC_MEAN_OF_EXACTLY_TWELVE_PER_BAR_SHARES",
+    "innovation": "LOGIT_COHORT_SHARE_T_MINUS_LOGIT_COHORT_SHARE_T_MINUS_1",
+    "isolation": "CURRENT_Z_LE_NEGATIVE_K_AND_IMMEDIATELY_PRIOR_PRIOR_ONLY_Z_GT_NEGATIVE_1",
+    "madScale": "1.4826",
+    "perBarShare": "TAKER_BUY_QUOTE_ASSET_VOLUME_FIELD_10_DIVIDED_BY_QUOTE_ASSET_VOLUME_FIELD_7",
+    "standardization": "CURRENT_INNOVATION_MINUS_MEDIAN_OF_ONLY_PRIOR_L_INNOVATIONS_DIVIDED_BY_1_4826_TIMES_THEIR_MAD",
+    "trialIdentity": "vg36-l{L}-k{K-tenths}-h{H}",
+    "unavailableMad": "ZERO_MAD_IS_TERMINAL_UNMEASURED",
+    "unusedForSignal": [
+      "OPEN",
+      "HIGH",
+      "LOW",
+      "CLOSE",
+      "BASE_VOLUME",
+      "QUOTE_VOLUME_LEVEL",
+      "TRADE_COUNT",
+      "TAKER_BUY_BASE_VOLUME"
+    ]
+  },
+  "universe": {
+    "cohort": [
+      "BTCUSDT",
+      "ETHUSDT",
+      "BNBUSDT",
+      "XRPUSDT",
+      "ADAUSDT",
+      "DOGEUSDT",
+      "SOLUSDT",
+      "TRXUSDT",
+      "LTCUSDT",
+      "LINKUSDT",
+      "AVAXUSDT",
+      "DOTUSDT"
+    ],
+    "cohortLaw": "STATIC_EXACT_TWELVE_NO_RANKING_SUBSTITUTION_ADDITION_REMOVAL_OR_BACKFILL",
+    "historicalUniverseLimitation": "RETROSPECTIVE_STATIC_COHORT_MAY_HAVE_SURVIVOR_SELECTION_BIAS",
+    "quoteAsset": "USDT",
+    "requiredCoverage": "EVERY_MEMBER_HAS_ONE_UNIQUE_CONTIGUOUS_VALID_DAILY_BAR_FOR_EVERY_DECLARED_DAY"
+  },
+  "verdictLaw": {
+    "NO_GO": "VALID_MEASUREMENT_FAILS_ANY_FROZEN_LOCAL_GATE_OR_LOCAL_PASS_REMAINS_GLOBALLY_INELIGIBLE_DUE_TO_SHARED_HOLDOUT_RISK",
+    "UNMEASURED": "ANY_REQUIRED_CUSTODY_COLLISION_SCHEMA_TIMESTAMP_CONTINUITY_CAUSAL_EXIT_OR_LIFECYCLE_PROOF_IS_INVALID_OR_MISSING",
+    "accountEffectiveFees": "UNKNOWN",
+    "causalIdentification": "NOT_CLAIMED",
+    "capitalAuthority": "NONE",
+    "consumer": "N3_SUCCESSOR_ORCHESTRATOR_SCOREBOARD",
+    "executableCapacity": "UNMEASURED",
+    "localGo": "ALL_LOCAL_DEVELOPMENT_AND_SINGLE_HOLDOUT_GATES_PASS"
+  }
+}

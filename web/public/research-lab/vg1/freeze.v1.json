@@ -1,0 +1,112 @@
+{
+  "schema": "VG1FreezeReceiptV1",
+  "classification": "NON_DIRECTOR_MACHINE_EVIDENCE",
+  "canonicalBaseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "codeCommit": "afcba93eb20fb916d8843f122ff54890a53aeb86",
+  "codeTree": "52ba40617a7df396f14b9aa073798b3cde16e872",
+  "codeParent": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "codeInventory": [
+    {
+      "path": "quant/research/vg1/OFFICIAL_SOURCE_RESEARCH.md",
+      "size": 5985,
+      "sha256": "17a89a85cfe8fe21875457b6f5696c7127ec9d2172012996239851bfcc72380d",
+      "gitBlobSha": "ed5b626fccd6c620c0887b9b7a414e56530778a0"
+    },
+    {
+      "path": "quant/research/vg1/README.md",
+      "size": 5115,
+      "sha256": "76825c9a1297b7025398af1b409a842dfde43dc60a238bbf9bd6bb2f4d12e381",
+      "gitBlobSha": "3634948afea4ae8c7542238a8d4a8ae0131f60a2"
+    },
+    {
+      "path": "quant/research/vg1/archive_manifest.v1.json",
+      "size": 12125,
+      "sha256": "ea2731a569abbe8f0d4025e9195267e57970fc5cf1550dd118313e4d8199e8a6",
+      "gitBlobSha": "0fdfb483c33e5dbf1280679c3745dee765f0141a"
+    },
+    {
+      "path": "quant/research/vg1/experiment.py",
+      "size": 302414,
+      "sha256": "3de23d14e1ec20a8db171c7fbd890eee7af47dd106ed9ab17d68108cff1f5ff4",
+      "gitBlobSha": "47da799bb3c7b703b5d329c21461a3de4f31c2b4"
+    },
+    {
+      "path": "quant/research/vg1/failure.schema.v1.json",
+      "size": 11338,
+      "sha256": "4c7b36fe82f0f027563669895fc8cdc920d8efedfd4cb2897db27c55df1b7958",
+      "gitBlobSha": "3e8dba00e7f617f867ef64dc714a1bf9b030e08a"
+    },
+    {
+      "path": "quant/research/vg1/packet_contract.v1.json",
+      "size": 13528,
+      "sha256": "188be2419627233f47d497db1ef77c04f1aa27dcf5f9279b4bdfa957e2a33bd9",
+      "gitBlobSha": "7fb7f65829619ef4f1a202bed7b18339271e06ae"
+    },
+    {
+      "path": "quant/research/vg1/protocol.v1.json",
+      "size": 50310,
+      "sha256": "6ea9caf90ef8caf5d6968a4ea809a8f89fac771b63e283d6fb3e27a879f4ba50",
+      "gitBlobSha": "e5cff02beed83b376567ba5a31293eb4a5765908"
+    },
+    {
+      "path": "quant/research/vg1/result.schema.v1.json",
+      "size": 63556,
+      "sha256": "7133914fa1800fbd46b38fe99369fd38114726487604cc04ce3945d03f0dca91",
+      "gitBlobSha": "f2be46e1009ac6ec8532ba9b3f2d50b17c72cb2c"
+    },
+    {
+      "path": "quant/research/vg1/runtime.v1.json",
+      "size": 3531,
+      "sha256": "bfc7b56c5b5682bf59fa8209cc7679ce6d9a7858604bc4e4ff1281d7c18e3470",
+      "gitBlobSha": "3764264da699fa30486f87f399f64d2ed4561b86"
+    },
+    {
+      "path": "quant/research/vg1/test_experiment.py",
+      "size": 52715,
+      "sha256": "911e861eac6dd5313b721edae5f7e5ae375f767121ff3fd7acc8ed5c863de6cb",
+      "gitBlobSha": "11ff704704329300e05fc51e4155850f70fb9db5"
+    }
+  ],
+  "codeInventoryRoot": "b6df54221d91e844638f77bdb14db101efd5494de807a834b036d6325c635553",
+  "officialSourcePins": {
+    "publicDataRepositoryCommit": "5c7f3197591c0d54d85dc43066226bc4c671d47a",
+    "publicDataReadmeSha256": "085ab91377aa9325d44f4c7ad27cce4ab381e158403e1d7df2bad39d1a66f7c6",
+    "spotApiDocsRepositoryCommit": "6b8372cad7cecbdf5dd88a3372eafff51988c5cf",
+    "restApiSha256": "49ea6809243fc7fb426e07f2fe662097736c7bb405bd2da5eef637d715427999",
+    "filtersSha256": "4b5a8f0f5d15bcf68fd7ac2059ba6c88da641c06fd7885e642330c5ac8124dd3",
+    "commissionFaqSha256": "580cfa59c9f55adae0d27bf38d2bc7f268ad759fdf054486e356464c30bbd54c",
+    "feeScheduleObservationDate": "2026-07-29",
+    "feeScheduleContentBinding": "NON_CONTENT_FROZEN_SCENARIO_ONLY",
+    "archiveManifestSha256": "ea2731a569abbe8f0d4025e9195267e57970fc5cf1550dd118313e4d8199e8a6"
+  },
+  "runtimeClosure": {
+    "runtimeLockSha256": "bfc7b56c5b5682bf59fa8209cc7679ce6d9a7858604bc4e4ff1281d7c18e3470",
+    "runtimeRoot": "/private/tmp/cosmos-vg1-runtime-v1",
+    "runtimeFileCount": 3075,
+    "runtimeTotalBytes": 178684679,
+    "runtimeMerkleSha256": "3326f1f34fc5e3a45dcecc0e27e9ae30e0b10649793e1a0e5ea94802424a752c",
+    "symlinkCount": 0,
+    "pycFileCount": 0,
+    "pthFileCount": 0,
+    "hostProductVersion": "26.5.2",
+    "hostBuildVersion": "25F84",
+    "hostKernelRelease": "25.5.0",
+    "runtimeCommandPrefix": [
+      "/private/tmp/cosmos-vg1-runtime-v1/venv/bin/python",
+      "-I",
+      "-B"
+    ]
+  },
+  "externalState": {
+    "path": "/private/tmp/cosmos-vg1-btc-demand-pressure-v1",
+    "mustBeAbsent": true,
+    "observedAbsent": true
+  },
+  "preOutcomeAttestation": {
+    "targetBtcusdtSpot1hZipBodiesOpened": false,
+    "targetBtcusdtSpot1hCsvMembersOpened": false,
+    "targetBtcusdtSpot1hEconomicOutcomesComputedOrInspected": false,
+    "publicChecksumSidecarsObserved": true,
+    "relatedOneMinuteArchiveFormatAuditOccurred": true
+  }
+}

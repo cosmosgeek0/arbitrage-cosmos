@@ -1,0 +1,39 @@
+{
+  "schema": "s2a.freeze.v1",
+  "strategy_id": "S-2A",
+  "canonical_base": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "frozen_at_utc": "2026-07-29T20:08:34Z",
+  "outcome_bodies_opened_before_freeze": 0,
+  "official_history_gate": {
+    "study_window": "[2025-07-01T00:00:00Z, 2026-07-01T00:00:00Z)",
+    "archive_and_checksum_urls_planned": 864,
+    "archive_and_checksum_urls_http_200": 864,
+    "study_window_bodies_opened": 0,
+    "pre_window_schema_samples_only": true
+  },
+  "one_run_rule": {
+    "external_marker_first": true,
+    "packet_marker_second": true,
+    "both_precede_first_source_body": true,
+    "any_later_failure_consumes_run": true,
+    "external_only_terminal_state": "PACKET_START_MARKER"
+  },
+  "holdout_rule": {
+    "development_must_pass_every_frozen_gate": true,
+    "external_marker_first": true,
+    "packet_marker_second": true,
+    "both_precede_first_holdout_source_body": true,
+    "external_only_terminal_state": "HOLDOUT_MARKER"
+  },
+  "frozen_files": {
+    "README.md": "e9f95a4abea63265633fa36ab2354dd8b77338685c1613a241d9b7967f385767",
+    "OFFICIAL_SOURCE_RESEARCH.md": "dc9473b70f4b6781513f5647be205ee065bd45cb7b856ec6941152611f71c2bd",
+    "DISTINCTNESS.md": "ba37b5b6e82bde0c83d7931126f103ff6820e4b1db413032e2ab2e0e3d1c38fb",
+    "__init__.py": "34d2df27b2a89290c94ee4878fedcba28ef60c97c96fe978388f49cb813b96fd",
+    "protocol.v1.json": "9ba2895e74df77b2727cb2aad4b2d98781caa3284922542ec36d6923a263bb4c",
+    "experiment.py": "3d2608c96eec7f8d716bbeb6114073c2c95ab070e83e60230c07f7a61a7c1ccd",
+    "verifier.py": "4850c69b1c88650ce27d493d5d58e6c404578f0bc0274a9d742309c641aeef01",
+    "test_experiment.py": "b7442cfb1423cab61425bd24192761d2cb73f5324ea1118fe94b48dc89974e14",
+    "test_verifier.py": "015349117a237cc79c2e65617ae30be87f20cdd8a2cbe37ba4f45cde3c84c14f"
+  }
+}

@@ -1,0 +1,190 @@
+{
+  "version": "VG21ProtocolV1",
+  "question": "Does positive symbol-specific daily quote-volume surprise conditioned on a lagged leave-one-out market-wide volume factor predict positive next-open Spot cohort returns versus zero-yield cash?",
+  "canonicalBase": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "authority": {
+    "consumer": "N3 successor/final convergence",
+    "execution": "NONE",
+    "capital": "NONE",
+    "privateData": "FORBIDDEN",
+    "orders": "FORBIDDEN",
+    "hostMutation": "FORBIDDEN",
+    "uiMutation": "FORBIDDEN"
+  },
+  "data": {
+    "venue": "Binance Spot",
+    "publicOnly": true,
+    "interval": "1d",
+    "quoteAsset": "USDT",
+    "sourceRoot": "/private/tmp/cosmos-s1f-weekly-momentum-cash-v1",
+    "sourceAcquisitionManifestSha256": "01f58272602e43bfb914b649adc00d8273b2d423492220a55f86443bb6441176",
+    "discoverySha256": "b4a8f7abd36df19eff0510dfcc3c61fd0df9fdcab5f4d248892ee10010fb21c3",
+    "universeSha256": "a597d8339aafb74c40b8899cade9445150c3f431f4c2e7fe2bfac37d8d1b0592",
+    "archiveMonths": [
+      "2025-03",
+      "2025-04",
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ],
+    "developmentArchiveMonths": [
+      "2025-03",
+      "2025-04",
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02"
+    ],
+    "holdoutArchiveMonths": [
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ],
+    "timestampUnit": "MICROSECOND",
+    "quoteVolumeFieldIndex": 7,
+    "pointInTimeMembership": "current bar plus 60 consecutive prior complete bars and prior-30-day median quote volume at least 5000000 USDT",
+    "currentExchangeInfoHistoricalBackfill": "FORBIDDEN"
+  },
+  "sourcePins": {
+    "binancePublicDataCommit": "5c7f3197591c0d54d85dc43066226bc4c671d47a",
+    "binancePublicDataReadmeSha256": "085ab91377aa9325d44f4c7ad27cce4ab381e158403e1d7df2bad39d1a66f7c6",
+    "binanceSpotApiDocsCommit": "6b8372cad7cecbdf5dd88a3372eafff51988c5cf",
+    "spotRestApiSha256": "49ea6809243fc7fb426e07f2fe662097736c7bb405bd2da5eef637d715427999",
+    "filtersSha256": "4b5a8f0f5d15bcf68fd7ac2059ba6c88da641c06fd7885e642330c5ac8124dd3",
+    "marketDataOnlyFaqSha256": "57d608507426215c43f11907c07ed693f02725840d9ee4d6630f134de402b6da",
+    "commissionFaqSha256": "580cfa59c9f55adae0d27bf38d2bc7f268ad759fdf054486e356464c30bbd54c"
+  },
+  "feature": {
+    "priceFree": true,
+    "ownSurpriseLookbackDays": 20,
+    "liquidityLookbackDays": 30,
+    "consecutiveHistoryDays": 60,
+    "marketFactor": "leave-one-out cross-sectional median own-volume surprise",
+    "minimumOtherFactorSymbols": 30,
+    "factorLagDays": 1,
+    "regression": "rolling OLS with intercept, fit ends d-1",
+    "residualScale": "trailing 20-day median absolute deviation of raw lag-conditioned residuals, ending d-1; zero or missing scale is ineligible",
+    "scoreQuantization": "0.000000000001",
+    "forbiddenInputs": [
+      "price direction",
+      "return sign",
+      "breakout",
+      "volatility",
+      "entropy",
+      "taker flow",
+      "trade count",
+      "market share",
+      "large-cap subset",
+      "diffusion or lead-lag portfolio",
+      "factor-alone direction",
+      "market-regime gate"
+    ]
+  },
+  "timing": {
+    "observation": "UTC day d complete at d+1 00:00:00 UTC",
+    "decisionSeal": "d+1 00:05:00 UTC",
+    "entry": "d+2 00:00:00 UTC open",
+    "cashYield": 0,
+    "missingSelectedEntry": "ENTIRE_SLEEVE_CASH",
+    "missingSuccessfulExit": "UNMEASURED"
+  },
+  "trials": {
+    "familySize": 12,
+    "regressionLookbackDays": [30, 60],
+    "topFractions": ["0.10", "0.20"],
+    "holdDays": [1, 3, 5],
+    "selection": "highest development stress 14-day block-bootstrap LCB, then 28-day LCB, stress net USD, lower turnover, trial id"
+  },
+  "partitions": {
+    "developmentSignalStart": "2025-07-01",
+    "developmentSignalEnd": "2026-02-21",
+    "embargoStart": "2026-02-22",
+    "embargoEnd": "2026-02-28",
+    "holdoutSignalStart": "2026-03-01",
+    "holdoutSignalEnd": "2026-06-23",
+    "holdoutMaximumOpenCount": 1
+  },
+  "costs": {
+    "initialPortfolioUsd": "1000",
+    "publicTakerFeePerLeg": "0.0010",
+    "accountEffectiveFee": "UNKNOWN",
+    "baseAdversePerLeg": "0.0010",
+    "stressAdversePerLeg": "0.0025",
+    "severeAdversePerLeg": "0.0050",
+    "baseParticipation": "0.0001",
+    "stressParticipation": "0.00005",
+    "capacityProxy": "prior-30-day median quote volume excluding the signal, entry, and exit bars, times participation; checked independently before entry and exit",
+    "historicalSpread": "UNMEASURED",
+    "historicalDepth": "UNMEASURED",
+    "historicalFilters": "UNMEASURED",
+    "executableCapacity": "UNMEASURED"
+  },
+  "inference": {
+    "replicates": 4096,
+    "coverage": "0.95",
+    "primaryBlockDays": 14,
+    "sensitivityBlockDays": 28,
+    "familywiseAlpha": "0.05",
+    "procedures": [
+      "synchronized circular-block confidence bounds",
+      "one-sided centered synchronized bootstrap p-values",
+      "Holm-Bonferroni FWER",
+      "White max-T reality check",
+      "eight-block CSCV PBO diagnostic"
+    ],
+    "seeds": "seed-table.v1.json"
+  },
+  "gates": {
+    "developmentMinimums": {
+      "validFormationDays": 160,
+      "closedCohorts": 100,
+      "symbolRoundTrips": 300,
+      "distinctAssets": 20,
+      "activeMonths": 6,
+      "positiveMonths": 5
+    },
+    "holdoutMinimums": {
+      "validFormationDays": 70,
+      "closedCohorts": 40,
+      "symbolRoundTrips": 120,
+      "distinctAssets": 12,
+      "activeMonths": 3,
+      "positiveMonths": 3
+    },
+    "required": [
+      "base and stress net USD greater than zero",
+      "base and stress 14-day and 28-day lower confidence bounds greater than zero",
+      "Holm-selected champion and White max-T p-value at most 0.05",
+      "stress maximum drawdown at most 0.40",
+      "base and stress public capacity proxy at least 1000 USD",
+      "top-asset gross-profit share at most 0.20",
+      "top-five-cohort gross-profit share at most 0.40"
+    ],
+    "pbo": "DIAGNOSTIC_ONLY"
+  },
+  "terminalLaw": {
+    "technicalCustodyOrCausalityFailure": "UNMEASURED; capital NO_GO; null economics",
+    "developmentGateFailure": "NO_GO; holdout unopened",
+    "holdoutGateFailure": "NO_GO",
+    "allGatesPass": "GO for public forward shadow only; execution and capital authority NONE",
+    "rerun": "FORBIDDEN"
+  }
+}

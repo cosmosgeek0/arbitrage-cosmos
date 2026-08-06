@@ -1,0 +1,321 @@
+{
+  "schema": "cosmos.quant.research.s1m.protocol.v1",
+  "milestone": "S-1M",
+  "baseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "status": "CUSTODY_BREACH_DECLARED_TERMINAL_UNMEASURED",
+  "consumer": "N3 successor / orchestrator scoreboard",
+  "authority": "NONE",
+  "strategyFamily": "USDM_OWN_HISTORY_FUNDING_ACCELERATION_CONTRARIAN",
+  "distinctness": {
+    "S-1C": "Funding-level settlement event and immediate post-settlement unwind; S-1M uses a robust own-history second difference and enters at the next full hour.",
+    "S-1D": "Cross-sectional cumulative funding rank and multi-day carry; S-1M never ranks funding levels across contracts and holds at most two later settlements.",
+    "S-1G": "Spot-hedged cash-and-carry; S-1M has no Spot leg and does not book forecast funding.",
+    "S-1H": "BTC/ETH relative basis residual with funding excluded as signal; S-1M uses settled funding acceleration only.",
+    "S-1I": "Cross-sectional Premium Index level dislocation with funding excluded as signal; S-1M uses neither premium nor basis.",
+    "S-1J": "Reserved Spot-hedged funding carry family; S-1M has one USD-M perpetual leg.",
+    "S-1K": "Reserved COIN-M versus USD-M family; S-1M uses USD-M only.",
+    "S-1L": "Reserved dated-future calendar basis family; S-1M uses perpetuals only."
+  },
+  "calendar": {
+    "screenMonth": "2025-06",
+    "warmupStartInclusive": "2025-04-01T00:00:00Z",
+    "developmentStartInclusive": "2025-07-01T00:00:00Z",
+    "developmentEndExclusive": "2026-04-01T00:00:00Z",
+    "embargoStartInclusive": "2026-04-01T00:00:00Z",
+    "embargoEndExclusive": "2026-04-08T00:00:00Z",
+    "holdoutStartInclusive": "2026-04-08T00:00:00Z",
+    "holdoutEndExclusive": "2026-07-01T00:00:00Z",
+    "archiveMonthsInclusive": [
+      "2025-04",
+      "2026-06"
+    ],
+    "timezone": "UTC"
+  },
+  "universe": {
+    "selectionCount": 12,
+    "symbolGrammar": "^[A-Z0-9]+USDT$",
+    "excludedBases": [
+      "USDC",
+      "FDUSD",
+      "TUSD",
+      "USDP",
+      "BUSD",
+      "DAI",
+      "EUR",
+      "TRY",
+      "JPY",
+      "XAU",
+      "XAG"
+    ],
+    "requiredPreOutcomeMonths": [
+      "2025-04",
+      "2025-05",
+      "2025-06"
+    ],
+    "requiredProducts": [
+      "fundingRate",
+      "klines_1h",
+      "markPriceKlines_1h"
+    ],
+    "minimumFundingObservationsBeforeDevelopment": 63,
+    "rank": "SUM_OF_2025_06_CONTRACT_KLINE_QUOTE_VOLUME_DESC_THEN_SYMBOL_ASC",
+    "currentExchangeMembershipUsed": false,
+    "futureCoverageCanReplaceSymbol": false,
+    "lifecycleRule": "retain every selected symbol; a trailing suffix with no official monthly fundingRate object makes that symbol inactive from the first absent month, requires no contract/mark archive because no funding-acceleration signal exists, and can never trigger replacement",
+    "exactFrozenListArtifact": "universe.v1.json"
+  },
+  "signal": {
+    "rateNormalization": "x_j = funding_rate * 10000 * 8 / funding_interval_hours, in eight-hour-equivalent basis points",
+    "cadenceNormalization": "d_j = observed hours since j-1 divided by 8",
+    "velocity": "v_j = (x_j - x_j-1) / d_j",
+    "acceleration": "a_j = (v_j - v_j-1) / ((d_j + d_j-1) / 2)",
+    "robustZ": "z_j = (a_j - median(previous L accelerations)) / max(1.4826 * MAD(previous L accelerations), 0.05)",
+    "historyExcludesCurrent": true,
+    "entryAlignment": "sign(x_j) = sign(v_j) = sign(a_j)",
+    "direction": "negative sign of x_j",
+    "decisionReady": "first complete UTC hour strictly after exact funding timestamp",
+    "simultaneousSelection": "largest absolute z, then largest prior complete 24-hour quote volume, then symbol",
+    "maximumConcurrentPositions": 1,
+    "rearm": "same symbol requires abs(z) below 1 after a close",
+    "leverageAssumption": "NONE_1X_NOTIONAL_PROXY",
+    "compounding": false
+  },
+  "trials": {
+    "count": 16,
+    "lookbackFundingObservations": [
+      63,
+      126
+    ],
+    "absoluteZEntry": [
+      "2.5",
+      "3.5"
+    ],
+    "minimumAbsoluteNormalizedFundingBp": [
+      "1",
+      "3"
+    ],
+    "maximumSubsequentFundingSettlements": [
+      1,
+      2
+    ],
+    "ledger": "trial_ledger.v1.json",
+    "selectionMetric": "DEVELOPMENT_STRESS_TAKER_FALLBACK_NET_USD_PER_ORIGINAL_1000",
+    "selectionPopulation": "ALL_16_TRIALS_BEFORE_ANY_ADMISSION_FILTER",
+    "selectionOrdering": "highest development stress net, then lower stress hourly drawdown, then lexical trialId",
+    "admissionTarget": "THE_SINGLE_SELECTED_CHAMPION; its Holm hypothesis and alpha/16 lower bound must pass after the 16-trial family is evaluated",
+    "tieBreak": "LOWER_STRESS_DRAWDOWN_THEN_TRIAL_ID"
+  },
+  "entryAndExit": {
+    "referenceNotionalUsd": "1000",
+    "takerQuantity": "quantity = 1000 / unadjusted entry-reference open; adverse execution is a separate cash cost and never moves the signal or reference price",
+    "entryReference": "contract kline open at first full UTC hour strictly after signal funding timestamp",
+    "takerFallback": "immediate at entry reference",
+    "makerProxy": {
+      "offsetBp": "1",
+      "strictTradeThroughBp": "0.5",
+      "longLimit": "entry-reference open * (1 - 1/10000)",
+      "shortLimit": "entry-reference open * (1 + 1/10000)",
+      "fillPriceAndQuantity": "the frozen limit; quantity = 1000 / limit",
+      "long": "entry-hour low <= limit * (1 - strictTradeThroughBp/10000)",
+      "short": "entry-hour high >= limit * (1 + strictTradeThroughBp/10000)",
+      "verdictAuthority": false,
+      "stressSchedule": "NONE_DIAGNOSTIC_BASE_ONLY"
+    },
+    "exitTriggers": [
+      "first later funding acceleration opposite entry acceleration",
+      "first later abs(z) <= 0.5",
+      "frozen maximum later funding settlement count",
+      "partition boundary before entry"
+    ],
+    "exitReference": "contract kline open at first full UTC hour strictly after trigger funding timestamp",
+    "fundingAtExitTrigger": "included because the position existed at that settlement",
+    "boundaryCrossingPosition": "not opened",
+    "causalBoundaryBuffer": "entry is ineligible during the final (24 * maximumSubsequentFundingSettlements + 1) hours of a partition; if an earlier selected signal still lacks a later exit-trigger funding event, the evaluation is terminal UNMEASURED rather than future-filtered",
+    "pyramiding": false
+  },
+  "costs": {
+    "accountEffectiveFees": "UNKNOWN",
+    "rateUnit": "fraction of absolute fill notional",
+    "base": {
+      "makerFee": "0.0002",
+      "takerFee": "0.0004",
+      "takerAdverseExecution": "0.0002",
+      "makerAdverseSelection": "0.0001",
+      "favorableFundingMultiplier": "1",
+      "adverseFundingMultiplier": "1"
+    },
+    "stress": {
+      "takerFee": "0.0008",
+      "takerAdverseExecution": "0.0005",
+      "favorableFundingMultiplier": "0.5",
+      "adverseFundingMultiplier": "1.5"
+    },
+    "severe": {
+      "takerFee": "0.0010",
+      "takerAdverseExecution": "0.0010",
+      "favorableFundingMultiplier": "0",
+      "adverseFundingMultiplier": "2"
+    },
+    "stressRepricesSameSignals": true
+  },
+  "economics": {
+    "side": "long=+1; short=-1",
+    "priceGross": "side * quantity * (exitReferenceOpen - entryFillReference)",
+    "fillNotional": "entry absolute notional plus abs(quantity * exitReferenceOpen)",
+    "feeCashCost": "scenario fee rate multiplied by each fill's absolute notional",
+    "executionCashCost": "scenario adverse-execution rate multiplied by each fill's absolute notional",
+    "fundingCashFlow": "sum of event cash flows after entry signal and through the exit trigger, with scenario favorable/adverse multipliers applied per event",
+    "net": "price gross + adjusted funding - fees - adverse execution",
+    "makerDiagnostic": "maker-limit price gross and funding, 2 bp maker entry fee plus 1 bp entry adverse-selection cost, then 4 bp taker exit fee plus 2 bp taker-exit adverse-execution cost",
+    "rounding": "Decimal arithmetic; JSON monetary fields rounded to 0.00000001 USD only at serialization"
+  },
+  "funding": {
+    "eventSelection": "exact archived settlement timestamps while position is open, including exit-trigger settlement",
+    "formula": "-position_sign * quantity * mark_price_open_in_settlement_hour * settled_funding_rate",
+    "forecastBooked": false,
+    "intervalHardcoded": false,
+    "archiveRateTypeField": "UNAVAILABLE",
+    "archiveSettlementMarkField": "UNAVAILABLE_HOURLY_MARK_PROXY_USED"
+  },
+  "statistics": {
+    "seed": 2026072901,
+    "bootstrapReplicates": 4096,
+    "bootstrapBlockDays": 7,
+    "familywiseAlpha": "0.05",
+    "dailyAttribution": "each completed trade's full net is assigned to its exit UTC day; every other valid calendar day is an explicit zero",
+    "bootstrapStatistic": "total stress net USD per original 1000 over the complete partition calendar",
+    "synchronization": "each replicate uses the same circular seven-day block-start sequence for all 16 trial daily series",
+    "oneSidedPValue": "(1 + count of centered-null bootstrap totals greater than or equal to observed total) / (4096 + 1)",
+    "quantileConvention": "sorted empirical values at zero-based index ceil(q * N) - 1, clamped to [0,N-1]",
+    "multiplicity": "ONE_SIDED_HOLM_STEP_DOWN_ACROSS_ALL_16_SYNCHRONOUS_DAILY_SERIES; sort p then trialId, reject while p_i <= 0.05/(16-i); champion must be among rejected hypotheses",
+    "familywiseLowerBound": "champion uncentered percentile-bootstrap lower bound at q=0.05/16 must be strictly positive",
+    "pbo": {
+      "developmentCoreDays": 264,
+      "blocks": 12,
+      "daysPerBlock": 22,
+      "splits": 924,
+      "coreSelection": "the final 264 development UTC days ending 2026-04-01 exclusive; earlier development days are excluded only from PBO",
+      "selection": "six in-sample blocks; highest stress daily mean then lexical trialId",
+      "oosRank": "rank all 16 trials by six-block out-of-sample stress daily mean descending then lexical trialId; rank 1 is best",
+      "logit": "lambda = log(((17-rank)/17) / (rank/17)); lambda < 0 exactly when rank > 8",
+      "overfitEvent": "selected in-sample champion has out-of-sample rank greater than 8",
+      "reportedPbo": "overfit-event count divided by 924",
+      "thresholdDiagnosticOnly": "0.20"
+    },
+    "holdoutInterval": "two-sided 95 percent circular seven-day block bootstrap of total stress net USD per original 1000"
+  },
+  "capacity": {
+    "basis": "minimum of prior complete UTC-day quote volume and median preceding seven complete UTC-day quote volumes",
+    "participationFraction": "0.00005",
+    "referenceNotionalUsd": "1000",
+    "requiredMinimumProxyUsd": "1000",
+    "gatePredicate": "every completed trade must have capacity proxy >= 1000; zero completed trades fails sample admission before capacity can authorize anything",
+    "reported": [
+      "minimum",
+      "median",
+      "fifthPercentile"
+    ],
+    "executableCapacity": "UNKNOWN"
+  },
+  "developmentAdmission": {
+    "gateTarget": "single champion selected across all 16 trials before filtering",
+    "minimumCompletedTakerTrades": 60,
+    "minimumActiveWeeks": 20,
+    "minimumSymbols": 8,
+    "minimumLongTrades": 20,
+    "minimumShortTrades": 20,
+    "baseNetPositive": true,
+    "stressNetPositive": true,
+    "familywiseLowerBoundPositive": true,
+    "holmPass": true,
+    "removeBestSymbolStressPositive": true,
+    "removeBestMonthStressPositive": true,
+    "maximumStressDrawdownFraction": "0.10",
+    "capacityProxyPass": true,
+    "allRequiredBeforeHoldoutOpen": true
+  },
+  "holdoutAdmission": {
+    "minimumCompletedTakerTrades": 20,
+    "minimumActiveWeeks": 8,
+    "minimumSymbols": 5,
+    "minimumLongTrades": 5,
+    "minimumShortTrades": 5,
+    "baseNetPositive": true,
+    "stressNetPositive": true,
+    "stress95PercentLowerBoundPositive": true,
+    "removeBestSymbolStressPositive": true,
+    "removeBestMonthStressPositive": true,
+    "maximumStressDrawdownFraction": "0.10",
+    "capacityProxyPass": true
+  },
+  "riskAndConcentration": {
+    "drawdownCurve": "hourly mark-price-open liquidation-equity proxy while a taker position is active, including incurred entry cost and settled funding through the observation time, reserving the scenario exit fee and adverse-execution cost; exact realized net at exit; flat hours carry realized equity",
+    "drawdownDenominator": "original 1000 USD, not peak equity",
+    "drawdownThreshold": "maximum peak-to-trough loss divided by 1000 must be <= 0.10",
+    "intrahourState": "UNMEASURED",
+    "activeWeek": "ISO UTC year-week containing a trade exit",
+    "symbolAttribution": "full trade net attributed to its traded symbol",
+    "monthAttribution": "full trade net attributed to exit UTC calendar month",
+    "removeBest": "total stress net minus the largest strictly positive group contribution; must remain strictly positive"
+  },
+  "dataValidity": {
+    "archivePreFreezeAccess": "screen may parse only April-June 2025 rows; prepare may hash every declared ZIP and open only its sole member header, never an outcome row",
+    "developmentRunAccess": "after RUN_CONSUMED exists, parse only April 2025 through March 2026 rows",
+    "holdoutAccess": "April-June 2026 rows may be parsed only after development_result and candidate_seal exist, all development gates pass, and HOLDOUT_OPEN is atomically written",
+    "duplicates": "duplicate funding timestamps or hourly open times are terminal UNMEASURED",
+    "hourlyBars": "contract and mark series must be unique and exactly one hour apart throughout every opened month range; any gap is terminal UNMEASURED",
+    "fundingCadence": "elapsed milliseconds must match either the preceding or current archived funding_interval_hours within 1000 ms; otherwise terminal UNMEASURED",
+    "lifecycleAbsence": "after at least one complete selected month, a trailing suffix of absent official fundingRate monthly objects is a frozen inactive lifecycle, not a gap; a later reappearance is terminal UNMEASURED; the exact selected symbol remains and is never replaced",
+    "history": "a signal is ineligible until exactly L preceding acceleration observations exist; this is not missing evidence",
+    "causalPrice": "any missing entry, exit, active-settlement mark proxy, prior-24h volume, or drawdown mark for a selected trade is terminal UNMEASURED"
+  },
+  "oneRun": {
+    "declaredRuns": 1,
+    "runMarker": "RUN_CONSUMED.v1.json",
+    "candidateSeal": "candidate_seal.v1.json",
+    "freezeArtifact": "freeze.v1.json",
+    "freezeHash": "SHA-256 over canonical bytes",
+    "freezeBindings": [
+      "README.md",
+      "OFFICIAL_SOURCE_RESEARCH.md",
+      "protocol.v1.json",
+      "universe.v1.json",
+      "source_manifest.v1.json including every publisher and verified archive digest",
+      "trial_ledger.v1.json",
+      "experiment.py",
+      "test_experiment.py when present",
+      "CUSTODY_BREACH.v1.json when present; its presence forces terminal UNMEASURED before any outcome row is opened by the runner"
+    ],
+    "candidateSealBindings": [
+      "freeze.v1.json SHA-256",
+      "development_result.v1.json SHA-256",
+      "selected champion trialId"
+    ],
+    "holdoutMarker": "HOLDOUT_OPEN.v1.json",
+    "result": "result.v1.json",
+    "markerBeforeDevelopmentRead": true,
+    "sealBeforeHoldoutRead": true,
+    "holdoutOpenOnlyAfterAllDevelopmentAdmissionPasses": true,
+    "rerunAfterMarker": false,
+    "protocolOrEvaluatorDriftAfterFreeze": "TERMINAL_UNMEASURED"
+  },
+  "terminal": {
+    "UNMEASURED": "invalid custody, checksum/schema/cadence, causal price gap, marker or digest drift, or otherwise incomplete economics",
+    "NO_GO": "valid measured evidence fails an economic, multiplicity, sample, concentration, drawdown, or capacity proxy gate",
+    "GO": "reserved for a fully measured positive result with independently proven account-effective fees, maker/execution validity, historical filters, and executable capacity",
+    "publicOnlyPositiveProxy": "UNMEASURED_WITH_CAPITAL_VERDICT_NO_GO",
+    "authority": "NONE",
+    "requiredResultFields": [
+      "terminalState and reasonCodes",
+      "headline base/stress/severe net USD per original 1000",
+      "holdout state and two-sided interval or unopened reason",
+      "16-trial Holm state, alpha/16 lower bound, and PBO",
+      "trade/sample/direction counts",
+      "hourly drawdown",
+      "capacity proxy and executable-capacity state",
+      "account-effective-fee and maker-entry states",
+      "funding rateType and settlement-mark limitations",
+      "provenance digests, one-run markers, consumer, and authority"
+    ]
+  }
+}

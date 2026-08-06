@@ -1,0 +1,36 @@
+{
+  "schema": "VG9Phase1FreezeV1",
+  "phase": "PROTOCOL_CODE_TEST_CITATION_AND_SOURCE_METADATA_FROZEN",
+  "frozenForDateUtc": "2026-07-29",
+  "canonicalBaseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "fileSha256": {
+    "DISTINCTNESS.md": "2cb930e7f8c98f402db1028a0b38f1af1e973a252de9fb8486ff27324e0cb8be",
+    "OFFICIAL_SOURCE_RESEARCH.md": "225ac048a2d0517ccc5514ccd128250ea52cf0900666c022bdaec4fa68a6f8e7",
+    "README.md": "d11fcaea12ff7dd4b5890e1fa6fd679f6b70da60d320f7deae3cabf231534709",
+    "__init__.py": "64b6a6f3beb61c0caae0ecbd93eb5c4945dc0905e55ce580d4a94e0883c6416f",
+    "experiment.py": "05e250343160515e3fe0d7349160c505505ccc7dd72ae3d6fcb97cf7a28a3c68",
+    "protocol.v1.json": "d8539d23a46aface73bfc6a72c08fcd548a7c8590b0fc7e1c6210b31a8c94b66",
+    "source_manifest.v1.json": "9c865892a20c4ab9a527d39f421bbcdfd9a39bf3ef69eaea3c6aa56f302889cd",
+    "test_experiment.py": "219d916d7fc434d467de1ffc46d863e80082c2fc78433a4b589c29417de0c814",
+    "test_verify.py": "06471ce4197f01a4e879f55ab6ddfef66eb60f1b92fed9d745dda2099cac2d54",
+    "verify.py": "3862d8cbce461a8d67a83e3805b225b46a3d02cdd0841db0f29260620a91b104"
+  },
+  "source": {
+    "archiveBodyBytesReadByPhase1": false,
+    "pairedSymbolMonthRows": 4365,
+    "inventorySha256": "23d6c912d0b8c3a80dfb5dd84ba5d86e06d647bf0b1521ed30b12d404b1a7251",
+    "currentExchangeInfoUsed": false,
+    "sharedArchivesMutated": false
+  },
+  "partition": {
+    "developmentOpened": false,
+    "candidateSealed": false,
+    "holdoutOpened": false,
+    "outcomeProduced": false,
+    "walkForwardPlanSha256": "d219a4c26fbbd45ef580e80b1321a99cc7a8f4c5da7fec86ee60f2806295e248"
+  },
+  "developmentOpened": false,
+  "holdoutOpened": false,
+  "outcome": null,
+  "authority": "NONE"
+}

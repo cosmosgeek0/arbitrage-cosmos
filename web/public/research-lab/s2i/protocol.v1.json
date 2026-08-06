@@ -1,0 +1,208 @@
+{
+  "base_commit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "calendar": {
+    "development": "[2025-07-01T00:00:00Z,2026-03-01T00:00:00Z)",
+    "embargo": "[2026-03-01T00:00:00Z,2026-03-08T00:00:00Z)",
+    "holdout": "[2026-03-08T00:00:00Z,2026-07-01T00:00:00Z)",
+    "planned_economic_window": "[2025-07-01T00:00:00Z,2026-07-01T00:00:00Z)",
+    "timezone": "UTC",
+    "warmup": "[2025-06-01T00:00:00Z,2025-07-01T00:00:00Z)"
+  },
+  "clock": {
+    "bar_interval": "1h",
+    "causal_entry": "Signal bar closes at t+1h; one full guard hour follows; entry is USD-M open t+2h; exit is entry+H.",
+    "decision_guard_hours": 1,
+    "historical_cross_engine_offset": "UNKNOWN",
+    "join": "Normalize native units to integer milliseconds and join exact UTC open timestamps; never join by row number or nearest timestamp.",
+    "native_units": {
+      "spot_archive": "microseconds_from_2025",
+      "usdm_archive": "milliseconds"
+    },
+    "scope": "PUBLISHER_TIMESTAMP_ASSOCIATION_AT_HOUR_BAR_GRANULARITY_ONLY"
+  },
+  "consumer": {
+    "capital_authority": "NONE",
+    "purpose": "PROFITABILITY_SCOREBOARD_INPUT",
+    "task": "N3 successor/final convergence"
+  },
+  "development_gates": {
+    "base_total_gt_usd": "0",
+    "capacity_proxy_p05_gte_usd": "1000",
+    "holm_adjusted_absolute_p_lte": "0.05",
+    "holm_adjusted_excess_p_lte": "0.05",
+    "maximum_marked_gross_lte_usd": "1000",
+    "maximum_severe_drawdown_lte_usd": "100",
+    "minimum_active_utc_days": 120,
+    "minimum_portfolio_formations": 1000,
+    "remove_best_month_stress_total_gt_usd": "0",
+    "required_symbol_directions": "ALL_FIXED_SYMBOLS_BOTH_LONG_AND_SHORT",
+    "severe_total_gt_usd": "0",
+    "stress_90pct_lower_bound_gt_usd": "0",
+    "stress_excess_90pct_lower_bound_gt_usd": "0",
+    "stress_total_gt_usd": "0",
+    "white_reality_check_p_lte": "0.05"
+  },
+  "distinctness": {
+    "family": "COMPLETED_SPOT_RETURN_INNOVATION_TO_LATER_SAME_SYMBOL_USDM_RETURN",
+    "forbidden_predictors": [
+      "basis or premium",
+      "funding",
+      "volume or taker flow",
+      "open interest",
+      "future or holdout data"
+    ],
+    "matched_comparator": "Identical USD-M lifecycle ranked by prior standardized own-USD-M return.",
+    "payoff": "USD-M_ONLY_EQUAL_LONG_SHORT_OR_CASH",
+    "reverse_diagnostic": "Contemporaneous USD-M innovation ranked against later Spot return; diagnostic only.",
+    "spot_position": "FORBIDDEN"
+  },
+  "economics": {
+    "account_effective_commission": "UNKNOWN",
+    "capital_usd": "1000",
+    "cash_reserve_usd": "40",
+    "compounding": false,
+    "funding": "For each leg, signed public funding at entry_time <= funding_time < exit_time using the mark-price bar containing funding_time. Each event must be within 60 seconds after a UTC hour; adjacent and boundary coverage must match the row funding_interval_hours within 60 seconds.",
+    "entry_gross_usd": "960",
+    "leverage_claim": "ECONOMIC_1X_PROXY_ONLY; marked gross is measured and must remain <=1000",
+    "market_neutrality": "ZERO_NET_NOTIONAL_PROXY; beta and factor neutrality are unproven",
+    "scenarios": {
+      "base": {
+        "adverse_execution_bps_per_fill": "2",
+        "illustrative_taker_fee_bps_per_fill": "5"
+      },
+      "severe": {
+        "adverse_execution_bps_per_fill": "10",
+        "illustrative_taker_fee_bps_per_fill": "10"
+      },
+      "stress": {
+        "adverse_execution_bps_per_fill": "5",
+        "illustrative_taker_fee_bps_per_fill": "10"
+      }
+    },
+    "sleeves": "H staggered hourly sleeves, each entry gross 960/H; close matured sleeve before replacing it; initial aggregate entry gross is 960 and initial cash is 40. Marked gross drift is measured and gated at 1000.",
+    "spot_cashflow": "NONE"
+  },
+  "holdout_gates": {
+    "capacity_proxy_p05_gte_usd": "1000",
+    "maximum_marked_gross_lte_usd": "1000",
+    "maximum_severe_drawdown_lte_usd": "100",
+    "minimum_active_utc_days": 60,
+    "minimum_portfolio_formations": 400,
+    "required_symbol_directions": "ALL_FIXED_SYMBOLS_BOTH_LONG_AND_SHORT",
+    "severe_total_gt_usd": "0",
+    "stress_90pct_lower_bound_gt_usd": "0",
+    "stress_excess_90pct_lower_bound_gt_usd": "0",
+    "stress_total_gt_usd": "0"
+  },
+  "milestone": "S-2I",
+  "provenance": {
+    "archive_base": "https://data.binance.vision",
+    "checksum": "Publisher .CHECKSUM SHA-256 required for every ZIP.",
+    "documentation_commits": {
+      "binance-public-data": "5c7f3197591c0d54d85dc43066226bc4c671d47a",
+      "binance-spot-api-docs": "6b8372cad7cecbdf5dd88a3372eafff51988c5cf"
+    },
+    "raw_root": "/private/tmp/cosmos-s2i-spot-usdm-leadlag-v1-fbce/raw",
+    "raw_storage": "EXTERNAL_TO_GIT_READ_ONLY_AFTER_ACQUISITION",
+    "state_root": "/private/tmp/cosmos-s2i-spot-usdm-leadlag-v1-fbce/state"
+  },
+  "schema": "cosmos.s2i.protocol.v1",
+  "scope": {
+    "canonical_or_live_runtime": false,
+    "capital_authority": "NONE",
+    "host": false,
+    "money": false,
+    "orders": false,
+    "private_api": false,
+    "provider": false,
+    "public_only": true,
+    "test_orders": false,
+    "transfers": false,
+    "ui": false,
+    "withdrawals": false
+  },
+  "sealing": {
+    "candidate_seal_before_holdout_member_access": true,
+    "failure_policy": "RUN_REMAINS_CONSUMED",
+    "freeze_before_outcome_member_access": true,
+    "holdout_marker_before_first_holdout_member_access": true,
+    "run_marker_before_first_development_member_access": true,
+    "run_marker_create_once": true,
+    "run_once": true
+  },
+  "signal": {
+    "fit": "At each hour, rolling OLS Spot_return = alpha + beta*USD-M_return on the prior 672 complete common hours, excluding the signal hour.",
+    "minimum_fit_observations": 504,
+    "predictor": "Current Spot return minus fitted alpha and beta times current USD-M return, divided by prior residual standard deviation.",
+    "ranking": "Long highest K and short lowest K predictor values; deterministic symbol tie-break.",
+    "rolling_hours": 672
+  },
+  "sources": {
+    "datasets": [
+      "monthly Spot klines 1h",
+      "monthly USD-M contract klines 1h",
+      "monthly USD-M mark-price klines 1h",
+      "monthly USD-M fundingRate"
+    ],
+    "months": [
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ]
+  },
+  "statistics": {
+    "bootstrap": {
+      "block_days": 7,
+      "confidence": "0.90",
+      "method": "Common-seeded circular block bootstrap over synchronous UTC days including cash days.",
+      "replicates": 8192,
+      "seed": 2026073009
+    },
+    "drawdown": "Peak-to-trough hourly marked scenario equity including entry/exit costs and funding.",
+    "holm": "One-sided centered block-bootstrap p-values adjusted together across 12 absolute-stress and 12 matched-excess hypotheses.",
+    "pbo": {
+      "chronological_blocks": 8,
+      "combinations": 70,
+      "method": "Complete CSCV over four of eight development calendar-month blocks.",
+      "role": "DIAGNOSTIC_ONLY"
+    },
+    "white_reality_check": "Common-seeded centered maximum-mean block bootstrap across 12 matched-excess series."
+  },
+  "trials": {
+    "champion_selection": "Maximum development stress total; lexicographically lowest trial_id breaks an exact tie; no fallback if that champion fails any gate.",
+    "horizon_hours": [1, 2, 3, 6],
+    "names_per_side": [2, 3, 4],
+    "trial_count": 12
+  },
+  "universe": {
+    "missing_policy": "No substitutions. A sleeve stays cash unless all eight fixed names are eligible; a missing required post-entry mark is UNMEASURED.",
+    "selection": "Fixed before archive outcome access; no outcome or current-volume ranking.",
+    "survivorship_limitation": true,
+    "symbols": [
+      "ADAUSDT",
+      "BNBUSDT",
+      "BTCUSDT",
+      "DOGEUSDT",
+      "ETHUSDT",
+      "LINKUSDT",
+      "SOLUSDT",
+      "XRPUSDT"
+    ]
+  },
+  "verdict_law": {
+    "custody_schema_clock_lifecycle_or_required_metric_failure": "UNMEASURED",
+    "development_or_holdout_economic_gate_failure": "NO_GO",
+    "every_gate_passes": "GO_PUBLIC_PROXY_LOCAL",
+    "product_or_capital_authority": "NONE"
+  }
+}

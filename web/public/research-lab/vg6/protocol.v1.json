@@ -1,0 +1,229 @@
+{
+  "authority": {
+    "accountData": "FORBIDDEN",
+    "capitalAuthority": "NONE",
+    "capitalVerdict": "NO_GO",
+    "consumer": "N3 successor/orchestrator profitability scoreboard",
+    "effectUsd": "0",
+    "execution": "FORBIDDEN",
+    "host": "FORBIDDEN",
+    "orders": "FORBIDDEN",
+    "privateApi": "FORBIDDEN",
+    "provider": "FORBIDDEN",
+    "scope": "PUBLIC_RESEARCH_ONLY",
+    "ui": "FORBIDDEN"
+  },
+  "bootstrap": {
+    "blockLengthDays": 7,
+    "coveragePerMyriad": 9500,
+    "replicates": 4096,
+    "seed": 2026072906
+  },
+  "capacityProxy": {
+    "actualBookDepth": "UNMEASURED",
+    "executableCapacity": "UNMEASURED",
+    "gateP05UsdMinimum": "1000",
+    "label": "ONE_BASIS_POINT_OF_CAUSAL_PRIOR_30D_MEDIAN_DAILY_QUOTE_VOLUME",
+    "participationBasisPoints": 1,
+    "signalEligibilityPrior30dMedianQuoteVolumeUsdMinimum": "10000000"
+  },
+  "costScenarios": {
+    "accountEffectiveFee": "UNKNOWN",
+    "base": {
+      "adversePriceBasisPointsPerFill": 5,
+      "feeBasisPointsPerFill": 10
+    },
+    "combinedStress": {
+      "adversePriceBasisPointsPerFill": 10,
+      "feeBasisPointsPerFill": 20
+    },
+    "feeOnly": {
+      "adversePriceBasisPointsPerFill": 0,
+      "feeBasisPointsPerFill": 10
+    },
+    "feeStress": {
+      "adversePriceBasisPointsPerFill": 5,
+      "feeBasisPointsPerFill": 20
+    },
+    "historicalSpreadImpactQueueFill": "UNMEASURED",
+    "vipBnbPromotionTaxAssumed": false
+  },
+  "data": {
+    "developmentArchiveMonths": [
+      "2025-04",
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02"
+    ],
+    "discoverySha256": "b4a8f7abd36df19eff0510dfcc3c61fd0df9fdcab5f4d248892ee10010fb21c3",
+    "holdoutArchiveMonths": [
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ],
+    "interval": "1d",
+    "quoteAsset": "USDT",
+    "sourceAcquisitionManifestSha256": "01f58272602e43bfb914b649adc00d8273b2d423492220a55f86443bb6441176",
+    "sourceRoot": "/private/tmp/cosmos-s1f-weekly-momentum-cash-v1",
+    "timestampUnitFrom2025": "MICROSECONDS",
+    "universeLaw": "ARCHIVE_DISCOVERY_USDT_ASCII_SYMBOLS_WITH_2025_04_2025_05_2025_06_PAIRS;DISCOVERY_STABLE_FIAT_AND_PAIRED_LEVERAGED_EXCLUSIONS_PRESERVED;NO_CURRENT_EXCHANGEINFO_BACKFILL;NO_FUTURE_COMPLETENESS_FILTER"
+  },
+  "formalGates": {
+    "development": {
+      "activeMonthsMinimum": 6,
+      "adjustedPValueExclusiveMaximum": "0.05",
+      "baseBootstrapLowerExclusiveMinimumUsd": "0",
+      "baseNetExclusiveMinimumUsd": "0",
+      "combinedStressBootstrapLowerExclusiveMinimumUsd": "0",
+      "combinedStressNetExclusiveMinimumUsd": "0",
+      "distinctAssetsMinimum": 12,
+      "maximumDrawdownMaximum": "0.20",
+      "roundTripsMinimum": 60
+    },
+    "holdout": {
+      "activeMonthsMinimum": 3,
+      "baseBootstrapLowerExclusiveMinimumUsd": "0",
+      "baseNetExclusiveMinimumUsd": "0",
+      "combinedStressBootstrapLowerExclusiveMinimumUsd": "0",
+      "combinedStressNetExclusiveMinimumUsd": "0",
+      "distinctAssetsMinimum": 8,
+      "maximumDrawdownMaximum": "0.20",
+      "roundTripsMinimum": 20
+    },
+    "p05CapacityProxyUsdMinimum": "1000",
+    "topAssetPositiveGrossProfitShareMaximum": "0.25",
+    "topFiveTradePositiveGrossProfitShareMaximum": "0.40"
+  },
+  "holdout": {
+    "embargoDays": 7,
+    "endUtcDateInclusive": "2026-06-30",
+    "maximumOpenCount": 1,
+    "metadataCustodyBeforeSelection": "COMPRESSED_BYTES_SIZES_HASHES_AND_CHECKSUMS_MAY_BE_BOUND_ONLY_AFTER_CODE_FREEZE;NO_ZIP_MEMBER_OPEN",
+    "openedOnlyAfterFrozenDevelopmentSelectionAndGates": true,
+    "startUtcDateInclusive": "2026-03-01"
+  },
+  "inference": {
+    "familywiseAlphaPerMyriad": 500,
+    "holmFamily": "ALL_16_FROZEN_DEVELOPMENT_COMBINED_STRESS_TRIALS",
+    "pbo": {
+      "blockCount": 8,
+      "blocks": [
+        "2025-07",
+        "2025-08",
+        "2025-09",
+        "2025-10",
+        "2025-11",
+        "2025-12",
+        "2026-01",
+        "2026-02"
+      ],
+      "role": "DIAGNOSTIC_ONLY",
+      "scoreLaw": "CALENDAR_MONTH_MARK_TO_MARKET_NET_CHANGES_SLICED_FROM_EACH_ACTUAL_CONTINUOUS_DEVELOPMENT_SIMULATION;NO_MONTHLY_RESET_OR_BOUNDARY_TRADE_DROP",
+      "symmetricSplitCount": 70
+    },
+    "rawPValue": "SYNCHRONOUS_CENTERED_CIRCULAR_BLOCK_BOOTSTRAP_ONE_SIDED",
+    "terminalInterval": "SEEDED_CIRCULAR_BLOCK_BOOTSTRAP_PERCENTILE_95_PERCENT"
+  },
+  "lineage": {
+    "baseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+    "baseTree": "37d1b88aa7c8d9ee1f70dc35d0e78613b6ed32f9",
+    "freezeSequence": "CLEAN_CODE_COMMIT_THEN_CHECKSUM_METADATA_INVENTORY_THEN_CLEAN_SOURCE_SEAL_COMMIT_THEN_ONE_RUN",
+    "exclusiveWriterScope": "quant/research/vg6/**"
+  },
+  "lifecycle": {
+    "dataFreeFinalize": "IDEMPOTENT;NEVER_OPENS_ARCHIVES;SEALS_UNMEASURED_IF_NO_DURABLE_RESULT_EXISTS_AFTER_MARKER_CONSUMPTION",
+    "developmentMaximumOpenCount": 1,
+    "holdoutMaximumOpenCount": 1,
+    "terminalMarkerWriteOrder": "DURABLE_RESULT_THEN_DURABLE_VERDICT_THEN_TERMINAL_MARKER_THEN_PACKET_CHECKSUMS"
+  },
+  "missingness": {
+    "duplicateOrConflictingBar": "UNMEASURED",
+    "incompleteOrMalformedBar": "UNMEASURED",
+    "missingEntryAfterSignal": "ALLOCATION_REMAINS_CASH_NO_REPLACEMENT",
+    "missingExitAfterSuccessfulEntry": "UNMEASURED",
+    "missingHistory": "INELIGIBLE_UNTIL_CONTIGUOUS_LOOKBACK_RESTORED",
+    "unknownValueToZero": "FORBIDDEN"
+  },
+  "partitions": {
+    "development": {
+      "endUtcDateInclusive": "2026-02-28",
+      "startUtcDateInclusive": "2025-07-01"
+    },
+    "measurementWindow": {
+      "calendarMonths": 12,
+      "endUtcDateInclusive": "2026-06-30",
+      "startUtcDateInclusive": "2025-07-01"
+    },
+    "warmup": {
+      "endUtcDateInclusive": "2025-06-30",
+      "startUtcDateInclusive": "2025-04-01"
+    }
+  },
+  "portfolio": {
+    "initialUsd": "1000",
+    "longOnly": true,
+    "maximumOneOpenPositionPerSymbol": true,
+    "quantityMode": "FRACTIONAL_RESEARCH_ONLY",
+    "shortBorrowLeverage": "FORBIDDEN",
+    "sleeves": "HOLDING_DAYS_EQUAL_CASH_SLEEVES_ROTATED_BY_UTC_DATE",
+    "stopsTargetsPyramiding": "FORBIDDEN",
+    "unusedAllocation": "USDT_CASH"
+  },
+  "selection": {
+    "championMetric": "DEVELOPMENT_COMBINED_STRESS_NET_USD_PER_1000",
+    "holdoutOpenRule": "ONLY_IF_CHAMPION_PASSES_EVERY_DEVELOPMENT_GATE",
+    "tieBreak": [
+      "LOWER_HOLD_DAYS",
+      "TIGHTER_RANGE_MAXIMUM",
+      "LOWER_VOLUME_RATIO_MAXIMUM",
+      "SHORTER_COMPRESSION_DAYS",
+      "LEXICOGRAPHIC_TRIAL_ID"
+    ]
+  },
+  "signal": {
+    "breakout": "COMPLETED_CLOSE_T_STRICTLY_ABOVE_MAX_HIGH_T_MINUS_20_THROUGH_T_MINUS_1",
+    "breakoutDayVolumeRatio": "QUOTE_VOLUME_T_DIV_MEDIAN_PRIOR_20_COMPLETE_DAYS_EXCLUDING_T",
+    "breakoutDayVolumeRatioStrictMaximum": "1.50",
+    "compression": "PRIOR_L_COMPLETED_DAYS_ONLY",
+    "entry": "NEXT_UTC_DAILY_OPEN_AFTER_COMPLETED_SIGNAL_DAY",
+    "exit": "UTC_DAILY_OPEN_EXACTLY_H_CALENDAR_DAYS_AFTER_ENTRY",
+    "lowVolumeBaseline": "MEDIAN_QUOTE_VOLUME_OF_60_COMPLETED_DAYS_ENDING_BEFORE_COMPRESSION_WINDOW",
+    "lowVolumeRatio": "MEAN_COMPRESSION_QUOTE_VOLUME_DIVIDED_BY_LOW_VOLUME_BASELINE",
+    "rangeRatio": "COMPRESSION_MAX_HIGH_MINUS_MIN_LOW_DIVIDED_BY_LAST_COMPRESSION_CLOSE",
+    "sameSymbolOpenSignal": "SUPPRESSED_NO_REPLACEMENT",
+    "signalAvailability": "AFTER_COMPLETED_UTC_DAILY_CLOSE"
+  },
+  "trials": {
+    "attemptedCount": 16,
+    "compressionDays": [
+      5,
+      10
+    ],
+    "holdingDays": [
+      3,
+      7
+    ],
+    "rangeRatioMaximums": [
+      "0.04",
+      "0.07"
+    ],
+    "volumeRatioMaximums": [
+      "0.50",
+      "0.75"
+    ]
+  },
+  "verdictLaw": {
+    "GO": "VALID_MEASUREMENT_AND_ALL_DEVELOPMENT_AND_SINGLE_OPEN_HOLDOUT_GATES_PASS;PUBLIC_FORWARD_SHADOW_RESEARCH_ONLY",
+    "NO_GO": "VALID_MEASUREMENT_AND_ONE_OR_MORE_ECONOMIC_STATISTICAL_SAMPLE_RISK_CONCENTRATION_CAPACITY_OR_FEE_STRESS_GATES_FAIL;FAILED_DEVELOPMENT_LEAVES_HOLDOUT_UNOPENED",
+    "UNMEASURED": "CUSTODY_SCHEMA_TIMESTAMP_CHRONOLOGY_LIFECYCLE_OR_IMPLEMENTATION_FAILURE_PREVENTS_PREREGISTERED_ESTIMATE"
+  },
+  "version": "VG6ProtocolV1"
+}

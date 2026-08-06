@@ -732,6 +732,13 @@ function privateOrderTruthState(
 // canonical supervisor transport read already uses. The published cut is served
 // verbatim: its own timestamps are never rewritten, so a shared reader is told
 // exactly when the cut was taken and never receives a fabricated freshness.
+//
+// Past that second the last true cut is served immediately while the
+// replacement builds in the background, because awaiting the rebuild is what
+// produced the red "STALE LAST-KNOWN" banner in production: the projection is
+// multi-second at scale, so any poll that landed on an expired TTL crossed the
+// browser's 10s abort. Only the cold first read still awaits a build, and a
+// build that failed is never papered over with the previous success.
 const LEGACY_STATE_SHARED_READ_TTL_MS = 1_000;
 // Two serializations of one build generation. `full` is the historical
 // compatibility document, byte-for-byte; `slim` is the browser's view of the
@@ -747,11 +754,23 @@ type LegacyStateBodies = {
   slimGzip: Promise<Buffer> | null;
 };
 type LegacyStateView = 'full' | 'slim';
-type LegacyStateBodyCache = Readonly<{
-  promise: Promise<LegacyStateBodies>;
-  publishedAtMs: number | null;
+// The last completed build's bytes held immutably beside the moment they were
+// published. Serving is decided against publishedAtMs; the bodies are never
+// rewritten, so a reader served past the TTL still reads the cut's own `now`.
+type LegacyStatePublishedCut = Readonly<{
+  bodies: LegacyStateBodies;
+  publishedAtMs: number;
 }>;
-let legacyStateBodyCache: LegacyStateBodyCache | null = null;
+let legacyStatePublishedCut: LegacyStatePublishedCut | null = null;
+let legacyStateBuildInFlight: Promise<LegacyStateBodies> | null = null;
+// The last build attempt's outcome. A recorded failure is never masked by a
+// stale success: it is replayed verbatim until a later build succeeds.
+let legacyStateLastBuildError: Error | null = null;
+let legacyStateLastBuildDurationMs: number | null = null;
+let legacyStateLastBuildCompletedAtMs: number | null = null;
+let legacyStateBuildsStarted = 0;
+let legacyStateBuildsSucceeded = 0;
+let legacyStateStaleServedCount = 0;
 
 function buildState(canonicalSupervisor: ReturnType<typeof systemIntegration.supervisor>) {
   const privateAccountTruth = privateAccountTruthState();
@@ -857,22 +876,22 @@ function slimLegacyState(state: ReturnType<typeof buildState>) {
   return { ...shared, killSwitchEngaged: canonicalSupervisor?.control?.killSwitchEngaged };
 }
 
-// One promise is both the single-flight identity and the cache. The builder
-// snapshots and serializes both views of the compatibility state before that
-// promise resolves, so the winner and every waiter receive the same immutable
-// string bytes and no mutable owner object is ever published. A rejected build
-// clears only itself; its current waiters all observe the same rejection and
-// only a later request can claim the next attempt — and because both views come
-// from the one build, a failure denies both rather than leaving either servable.
-function readLegacyStateBodies(nowMs = Date.now()): Promise<LegacyStateBodies> {
-  const cached = legacyStateBodyCache;
-  if (cached !== null) {
-    if (cached.publishedAtMs === null) return cached.promise;
-    const ageMs = nowMs - cached.publishedAtMs;
-    if (ageMs >= 0 && ageMs < LEGACY_STATE_SHARED_READ_TTL_MS) return cached.promise;
-  }
-
-  const build = (async (): Promise<LegacyStateBodies> => {
+// The one compatibility build, single-flight guarded. Every caller — the
+// awaiting cold-start request and the detached background rebuild — joins the
+// same build rather than starting a second supervisor projection. The builder
+// snapshots and serializes both views before the promise resolves, so the
+// winner and every waiter receive the same immutable string bytes and no
+// mutable owner object is ever published. Success publishes that one
+// generation; failure is recorded and replayed verbatim, and because both views
+// come from the one build a failure denies both rather than leaving either
+// servable.
+function startLegacyStateBuild(): Promise<LegacyStateBodies> {
+  if (legacyStateBuildInFlight !== null) return legacyStateBuildInFlight;
+  legacyStateBuildsStarted += 1;
+  // Build timing is diagnostic only and never state truth: the published cut
+  // keeps the `now` its own build stamped.
+  const startedAtMs = Date.now();
+  const work = (async (): Promise<LegacyStateBodies> => {
     const stateSupervisor = await systemIntegration.supervisor();
     const state = buildState(stateSupervisor);
     const serialized = JSON.stringify(state);
@@ -881,19 +900,86 @@ function readLegacyStateBodies(nowMs = Date.now()): Promise<LegacyStateBodies> {
       throw new Error('LEGACY_STATE_SERIALIZATION_UNAVAILABLE');
     }
     return { full: serialized, slim: serializedSlim, fullGzip: null, slimGzip: null };
-  })();
-  legacyStateBodyCache = Object.freeze({ promise: build, publishedAtMs: null });
-  void build.then(
-    () => {
-      if (legacyStateBodyCache?.promise === build) {
-        legacyStateBodyCache = Object.freeze({ promise: build, publishedAtMs: Date.now() });
-      }
-    },
-    () => {
-      if (legacyStateBodyCache?.promise === build) legacyStateBodyCache = null;
-    },
-  );
-  return build;
+  })()
+    .then((bodies) => {
+      legacyStatePublishedCut = Object.freeze({ bodies, publishedAtMs: Date.now() });
+      legacyStateLastBuildError = null;
+      legacyStateBuildsSucceeded += 1;
+      return bodies;
+    })
+    .catch((error: unknown) => {
+      // The published cut is retained for its gzip memo and for telemetry but is
+      // no longer servable: a recorded failure fails closed until one succeeds.
+      legacyStateLastBuildError = error instanceof Error ? error : new Error(String(error));
+      throw legacyStateLastBuildError;
+    })
+    .finally(() => {
+      const completedAtMs = Date.now();
+      legacyStateLastBuildCompletedAtMs = completedAtMs;
+      legacyStateLastBuildDurationMs = Math.max(0, completedAtMs - startedAtMs);
+      if (legacyStateBuildInFlight === work) legacyStateBuildInFlight = null;
+    });
+  legacyStateBuildInFlight = work;
+  return work;
+}
+
+// Starts a rebuild detached from whatever request observed the expiry, so no
+// response awaits the synchronous supervisor projection. setImmediate keeps even
+// the build's synchronous prefix off the responding request's turn.
+function startDetachedLegacyStateBuild(): void {
+  if (legacyStateBuildInFlight !== null) return;
+  const observedCut = legacyStatePublishedCut;
+  setImmediate(() => {
+    if (legacyStateBuildInFlight !== null) return;
+    // The cut this rebuild was scheduled for has already been replaced, so
+    // there is nothing left to refresh. Without this, a burst of readers that
+    // all observed one expiry would each schedule an immediate, and every
+    // immediate that ran after the first build had completed would start a
+    // redundant one. A recorded failure republishes nothing, so the retry path
+    // still reaches the build.
+    if (legacyStatePublishedCut !== observedCut) return;
+    // The rejection is recorded on legacyStateLastBuildError by
+    // startLegacyStateBuild; a detached build must never surface as an
+    // unhandled rejection.
+    void startLegacyStateBuild().catch(() => undefined);
+  });
+}
+
+// Coalesced shared read for browser polling. Inside the TTL the published cut is
+// returned unchanged. Past it the last true cut is handed over immediately —
+// it carries its own `now`, so the client renders its staleness honestly — while
+// the replacement builds in the background. Only the cold first read awaits a
+// build, and a recorded failure is never papered over with the prior success.
+function readLegacyStateBodies(nowMs = Date.now()): Promise<LegacyStateBodies> {
+  // Cold start joins the one in-flight build before any clock or cache
+  // decision: there is no cut to serve and no second build may be started.
+  if (legacyStatePublishedCut === null && legacyStateBuildInFlight !== null) {
+    return legacyStateBuildInFlight;
+  }
+  const published = legacyStatePublishedCut;
+  const ageMs = published === null ? null : nowMs - published.publishedAtMs;
+  if (published !== null && ageMs !== null && ageMs >= 0 && ageMs < LEGACY_STATE_SHARED_READ_TTL_MS) {
+    return Promise.resolve(published.bodies);
+  }
+  if (legacyStateLastBuildError !== null) {
+    // Fail closed with exactly the denial this route has always published, and
+    // keep attempting recovery on every such request.
+    startDetachedLegacyStateBuild();
+    return Promise.reject(legacyStateLastBuildError);
+  }
+  if (published !== null) {
+    // Expired and the last attempt did not fail: serve the prior cut now and
+    // rebuild detached. Every published cut here is reader-driven — this route
+    // has no boot prime. If one is ever added, its cut must carry prime
+    // provenance and be excluded from this branch, exactly as the canonical
+    // supervisor excludes its BOOT_PRIME cut from stale service.
+    legacyStateStaleServedCount += 1;
+    startDetachedLegacyStateBuild();
+    return Promise.resolve(published.bodies);
+  }
+  // No cut has ever been published: await the one single-flight build, which is
+  // exactly the deployed cold-start path.
+  return startLegacyStateBuild();
 }
 
 // Compression of a published generation is memoised on that generation, so a
@@ -906,6 +992,35 @@ function legacyStateGzip(bodies: LegacyStateBodies, view: LegacyStateView): Prom
   }
   if (bodies.fullGzip === null) bodies.fullGzip = gzipAsync(bodies.full);
   return bodies.fullGzip;
+}
+
+// Read-only build health for the operational watchdog, the state lane's parallel
+// to the canonical supervisor's envelopeBuild block. Never builds, never
+// mutates, and carries no state content — only the health of this builder.
+function legacyStateBuildStats(): Readonly<{
+  lastBuildDurationMs: number | null;
+  lastBuildCompletedAtMs: number | null;
+  lastBuildError: string | null;
+  buildsStarted: number;
+  buildsSucceeded: number;
+  staleServedCount: number;
+  inFlight: boolean;
+}> {
+  return Object.freeze({
+    lastBuildDurationMs: legacyStateLastBuildDurationMs,
+    lastBuildCompletedAtMs: legacyStateLastBuildCompletedAtMs,
+    // The bounded denial code this route publishes for the recorded failure,
+    // never the thrown message: the watchdog carries no owner detail.
+    lastBuildError: legacyStateLastBuildError === null
+      ? null
+      : legacyStateLastBuildError.message === 'LEGACY_STATE_SERIALIZATION_UNAVAILABLE'
+        ? 'LEGACY_STATE_SERIALIZATION_UNAVAILABLE'
+        : 'CANONICAL_SUPERVISOR_UNAVAILABLE',
+    buildsStarted: legacyStateBuildsStarted,
+    buildsSucceeded: legacyStateBuildsSucceeded,
+    staleServedCount: legacyStateStaleServedCount,
+    inFlight: legacyStateBuildInFlight !== null,
+  });
 }
 
 const app = express();
@@ -1224,8 +1339,8 @@ app.get('/api/notification-routing', (_req, res) => {
   res.json(notificationRoutingSnapshot());
 });
 
-// Read-only operational watchdog. Answers "is the loop breathing and is the
-// envelope builder healthy" without building anything: loop lag, builder
+// Read-only operational watchdog. Answers "is the loop breathing and are the
+// builders healthy" without building anything: loop lag, both lanes' builder
 // counters, the published cut's age and digest prefix, connected delivery
 // clients, and process footprint. Carries no secrets, no operator identity, and
 // no owner truth, and shares the same /api operator admission as every other
@@ -1236,6 +1351,9 @@ app.get('/api/watchdog', (_req, res) => {
   res.json({
     loopLag: loopLagSnapshot(),
     envelopeBuild: stats.envelopeBuild,
+    // The compatibility-state lane's own builder health, reported beside the
+    // canonical envelope's so one read shows both lanes.
+    stateBuild: legacyStateBuildStats(),
     cache: stats.cache,
     wsClients: connectedDeliveryClientCount(),
     process: {

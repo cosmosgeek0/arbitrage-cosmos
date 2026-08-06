@@ -89,15 +89,21 @@ test('shared supervisor cache reuses at 999ms and refreshes once at exact 1,000m
   await new Promise((resolve) => setImmediate(resolve));
   const readsDuringRefresh = supervisorReads;
   const publishedDuringRefresh = service.readPublishedSupervisor();
-  releaseRefresh();
   assert.equal(readsDuringRefresh, 2, 'exactly 1,000ms must start one fresh owner read');
-  assert.strictEqual(expiredRight, expiredLeft, 'expired concurrent callers must join one refresh');
-  assert.strictEqual(publishedDuringRefresh, first, 'an in-flight refresh cannot replace completed evidence');
+  // contract updated 2026-08-06: stale-serve with background rebuild (owner-directed)
   const [left, right] = await Promise.all([expiredLeft, expiredRight]);
-  assert.strictEqual(left, right);
-  assert.notStrictEqual(left, first);
-  assert.equal(left.evaluatedAtMs, T0 + 1_000);
-  assert.strictEqual(service.readPublishedSupervisor(), left);
+  assert.strictEqual(left, first, 'an expired read serves the prior cut without awaiting the rebuild');
+  assert.strictEqual(right, first, 'every expired caller is served the same prior cut immediately');
+  assert.strictEqual(publishedDuringRefresh, first, 'an in-flight refresh cannot replace completed evidence');
+  releaseRefresh();
+  for (let attempt = 0; attempt < 50 && service.readPublishedSupervisor() === first; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  // contract updated 2026-08-06: stale-serve with background rebuild (owner-directed)
+  const republished = service.readPublishedSupervisor();
+  assert.notStrictEqual(republished, first, 'the background refresh replaces the published cut');
+  assert.equal(republished.evaluatedAtMs, T0 + 1_000);
+  assert.strictEqual(await service.readSupervisorShared(), republished, 'a later poll returns the refreshed cut');
   assert.equal(supervisorReads, 2);
 });
 
@@ -121,12 +127,18 @@ test('backward injected-clock movement starts exactly one fresh shared superviso
   const backwardLeft = service.readSupervisorShared();
   const backwardRight = service.readSupervisorShared();
   const [left, right] = await Promise.all([backwardLeft, backwardRight]);
+  // contract updated 2026-08-06: stale-serve with background rebuild (owner-directed)
+  // A negative cache age is treated as expiry, so it takes the same stale-serve
+  // path: the prior cut is returned at once and one background refresh follows.
+  assert.strictEqual(left, first, 'a negative cache age serves the prior cut without awaiting a rebuild');
+  assert.strictEqual(right, first);
+  for (let attempt = 0; attempt < 50 && service.readPublishedSupervisor() === first; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
   assert.equal(supervisorReads, 2, 'negative cache age must start one fresh owner read');
-  assert.strictEqual(backwardRight, backwardLeft);
-  assert.strictEqual(left, right);
-  assert.notStrictEqual(left, first);
-  assert.equal(left.evaluatedAtMs, T0 + 4_999);
-  assert.strictEqual(service.readPublishedSupervisor(), left);
+  const republished = service.readPublishedSupervisor();
+  assert.notStrictEqual(republished, first, 'the background refresh replaces the published cut');
+  assert.equal(republished.evaluatedAtMs, T0 + 4_999);
 });
 
 test('slow supervisor builds publish their completion evaluation time and forward jumps refresh once', async () => {
@@ -161,18 +173,27 @@ test('slow supervisor builds publish their completion evaluation time and forwar
   assert.strictEqual(await service.readSupervisorShared(), completed);
   assert.equal(supervisorReads, 1);
   nowMs += 1;
+  // contract updated 2026-08-06: stale-serve with background rebuild (owner-directed)
   const atTtl = await service.readSupervisorShared();
-  assert.notStrictEqual(atTtl, completed);
+  assert.strictEqual(atTtl, completed, 'an expired read returns the stored cut without awaiting the slow build');
+  for (let attempt = 0; attempt < 50 && service.readPublishedSupervisor() === completed; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
   assert.equal(supervisorReads, 2);
+  const afterTtlRefresh = service.readPublishedSupervisor();
+  assert.notStrictEqual(afterTtlRefresh, completed, 'the background refresh replaces the published cut');
 
   nowMs += 5_000;
   const forwardLeft = service.readSupervisorShared();
   const forwardRight = service.readSupervisorShared();
   const [left, right] = await Promise.all([forwardLeft, forwardRight]);
+  // contract updated 2026-08-06: stale-serve with background rebuild (owner-directed)
+  assert.strictEqual(left, afterTtlRefresh, 'a forward jump beyond TTL serves the stored cut immediately');
+  assert.strictEqual(right, afterTtlRefresh);
+  for (let attempt = 0; attempt < 50 && supervisorReads < 3; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
   assert.equal(supervisorReads, 3, 'a forward jump beyond TTL must start one fresh owner read');
-  assert.strictEqual(forwardRight, forwardLeft);
-  assert.strictEqual(left, right);
-  assert.notStrictEqual(left, atTtl);
 });
 
 test('non-finite injected clocks fail closed without replacing completed supervisor evidence', async () => {
@@ -222,16 +243,33 @@ test('failed shared supervisor refresh preserves publication and permits next-ca
   const completed = await service.readSupervisorShared();
   nowMs += 1_000;
   failRefresh = true;
+  // contract updated 2026-08-06: stale-serve with background rebuild (owner-directed)
+  // The first expired call is served the stored cut and starts the refresh that
+  // will fail; only once that failure is recorded does the read fail closed.
+  assert.strictEqual(await service.readSupervisorShared(), completed, 'the first expired call serves the stored cut');
+  for (let attempt = 0; attempt < 50 && supervisorReads < 2; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.equal(supervisorReads, 2);
+  assert.strictEqual(service.readPublishedSupervisor(), completed);
+
+  // contract updated 2026-08-06: stale-serve with background rebuild (owner-directed)
+  // A recorded build failure is never masked by the previous success.
   await assert.rejects(
     service.readSupervisorShared(),
     (error) => error?.code === 'PRODUCT_READ_MODEL_UNAVAILABLE',
   );
-  assert.equal(supervisorReads, 2);
   assert.strictEqual(service.readPublishedSupervisor(), completed);
 
   failRefresh = false;
-  const retry = await service.readSupervisorShared();
-  assert.equal(supervisorReads, 3);
+  // contract updated 2026-08-06: stale-serve with background rebuild (owner-directed)
+  // Each failing call schedules a fresh attempt, so service restores itself.
+  let retry = null;
+  for (let attempt = 0; attempt < 200 && retry === null; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+    try { retry = await service.readSupervisorShared(); } catch { retry = null; }
+  }
+  assert.ok(retry, 'a later successful build restores service');
   assert.notStrictEqual(retry, completed);
   assert.strictEqual(service.readPublishedSupervisor(), retry);
 });

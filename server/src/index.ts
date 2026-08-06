@@ -1224,6 +1224,27 @@ app.get('/api/notification-routing', (_req, res) => {
   res.json(notificationRoutingSnapshot());
 });
 
+// Read-only operational watchdog. Answers "is the loop breathing and is the
+// envelope builder healthy" without building anything: loop lag, builder
+// counters, the published cut's age and digest prefix, connected delivery
+// clients, and process footprint. Carries no secrets, no operator identity, and
+// no owner truth, and shares the same /api operator admission as every other
+// route. The body is a few hundred bytes and changes on every read, so it is
+// sent uncompressed and uncached.
+app.get('/api/watchdog', (_req, res) => {
+  const stats = productIntegrationRuntime.readWatchdogStats();
+  res.json({
+    loopLag: loopLagSnapshot(),
+    envelopeBuild: stats.envelopeBuild,
+    cache: stats.cache,
+    wsClients: connectedDeliveryClientCount(),
+    process: {
+      rssMb: Math.round((process.memoryUsage.rss() / (1024 * 1024)) * 10) / 10,
+      uptimeSec: Math.round(process.uptime()),
+    },
+  });
+});
+
 // ---- active session tracking ------------------------------------------------
 // Records each visiting browser profile by a random first-party device token.
 // IP + user-agent remains the privacy-safe fallback when cookies are disabled.
@@ -4481,6 +4502,41 @@ let websocketHeartbeatTimer: NodeJS.Timeout | null = null;
 let canonicalDeliveryTimer: NodeJS.Timeout | null = null;
 let canonicalDeliveryInFlight = false;
 
+// ---- event-loop lag sampler -------------------------------------------------
+// Drift between a tick's scheduled arrival and its actual arrival is the most
+// direct evidence that a synchronous segment is monopolising the loop. The ring
+// keeps the last 100 samples (~10s of history) and the timer is unref()'d, so
+// sampling neither holds the process open nor grows without bound.
+const LOOP_LAG_SAMPLE_MS = 100;
+const LOOP_LAG_RING_MAX = 100;
+const loopLagRing: number[] = [];
+let loopLagCurrentMs = 0;
+let loopLagTimer: NodeJS.Timeout | null = null;
+
+function roundedMs(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function loopLagSnapshot(): { currentMs: number; p95Ms: number; maxMs: number } {
+  if (loopLagRing.length === 0) return { currentMs: 0, p95Ms: 0, maxMs: 0 };
+  const sorted = [...loopLagRing].sort((left, right) => left - right);
+  const rank = Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * 0.95) - 1));
+  return {
+    currentMs: roundedMs(loopLagCurrentMs),
+    p95Ms: roundedMs(sorted[rank] ?? 0),
+    maxMs: roundedMs(sorted[sorted.length - 1] ?? 0),
+  };
+}
+
+// Delivery clients are exactly the open sockets that own delivery state.
+function connectedDeliveryClientCount(): number {
+  let count = 0;
+  for (const client of wss.clients) {
+    if (client.readyState === WebSocket.OPEN && wsDeliveryState.get(client) !== undefined) count += 1;
+  }
+  return count;
+}
+
 async function publishCanonicalWebSocketUpdates(): Promise<void> {
   if (canonicalDeliveryInFlight || shuttingDown) return;
   const clients = [...wss.clients].filter((client) => client.readyState === WebSocket.OPEN);
@@ -4609,6 +4665,19 @@ function startServerTimers(): void {
   canonicalDeliveryTimer = setInterval(() => {
     void publishCanonicalWebSocketUpdates();
   }, CANONICAL_DELIVERY_MS);
+  let expectedLoopTickAtMs = Date.now() + LOOP_LAG_SAMPLE_MS;
+  loopLagTimer = setInterval(() => {
+    const nowMs = Date.now();
+    loopLagCurrentMs = Math.max(0, nowMs - expectedLoopTickAtMs);
+    loopLagRing.push(loopLagCurrentMs);
+    if (loopLagRing.length > LOOP_LAG_RING_MAX) loopLagRing.shift();
+    expectedLoopTickAtMs = nowMs + LOOP_LAG_SAMPLE_MS;
+  }, LOOP_LAG_SAMPLE_MS);
+  // Observation only: sampling must never keep the event loop alive (F-053).
+  loopLagTimer.unref();
+  // One eager envelope build at boot so the first browser poll usually finds a
+  // published cut rather than paying for the cold build itself.
+  productIntegrationRuntime.primeSupervisor();
   void publishCanonicalWebSocketUpdates();
 }
 
@@ -4706,12 +4775,13 @@ function gracefulShutdown(signal: NodeJS.Signals): Promise<GracefulShutdownOutco
     ordinaryShutdownAdmission.beginIrreversibleClose();
     shuttingDown = true;
     console.log(`ordinary drain accepted for ${signal}; closing control-room services`);
-    for (const timer of [eventRetentionTimer, websocketHeartbeatTimer, canonicalDeliveryTimer]) {
+    for (const timer of [eventRetentionTimer, websocketHeartbeatTimer, canonicalDeliveryTimer, loopLagTimer]) {
       if (timer) clearInterval(timer);
     }
     eventRetentionTimer = null;
     websocketHeartbeatTimer = null;
     canonicalDeliveryTimer = null;
+    loopLagTimer = null;
     privateRead.stop();
     bookHub.stop();
     for (const socket of pendingWsUpgradeSockets) {

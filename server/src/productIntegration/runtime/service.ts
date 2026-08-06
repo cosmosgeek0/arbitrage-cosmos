@@ -137,13 +137,47 @@ async function isExactTerminalCommandReplay(
   }
 }
 
+/**
+ * Read-only build/cache telemetry for the operational watchdog. Carries no
+ * envelope content, no operator identity, and no owner truth — only the health
+ * of the builder itself and the identity prefix of the published cut.
+ */
+export interface ProductRuntimeWatchdogStats {
+  readonly envelopeBuild: Readonly<{
+    lastBuildDurationMs: number | null;
+    lastBuildCompletedAtMs: number | null;
+    lastBuildError: string | null;
+    buildsStarted: number;
+    buildsSucceeded: number;
+    staleServedCount: number;
+    inFlight: boolean;
+  }>;
+  readonly cache: Readonly<{
+    ageMs: number | null;
+    digestPrefix8: string | null;
+  }>;
+}
+
 export class ProductIntegrationRuntimeService {
   private readonly options: Readonly<ProductRuntimeOptions>;
   private sharedSupervisorRead: Readonly<{
     envelope: Readonly<ProductRuntimeSupervisorEnvelope>;
     publishedAtMs: number;
+    // Whether this cut may stand in for a build the caller would otherwise
+    // await. See BOOT_PRIME below: the boot cut is built before the operator
+    // has touched the process, so it is published for warmth but never served
+    // past its TTL in place of fresh truth.
+    staleServable: boolean;
   }> | null = null;
   private sharedSupervisorInFlight: Promise<Readonly<ProductRuntimeSupervisorEnvelope>> | null = null;
+  // The last build attempt's outcome. A recorded failure is never masked by a
+  // stale success: it is replayed verbatim until a later build succeeds.
+  private lastBuildError: ProductRuntimeError | null = null;
+  private lastBuildDurationMs: number | null = null;
+  private lastBuildCompletedAtMs: number | null = null;
+  private buildsStarted = 0;
+  private buildsSucceeded = 0;
+  private staleServedCount = 0;
 
   constructor(options: Readonly<ProductRuntimeOptions>) {
     if (!options || typeof options.read?.applicationStartOk !== 'function'
@@ -184,36 +218,171 @@ export class ProductIntegrationRuntimeService {
   }
 
   /**
-   * Coalesced transport read for browser polling. The canonical fresh builder
-   * remains available to command/internal owners through readSupervisor(); the
-   * HTTP surface shares one immutable envelope for a bounded second so many
-   * signed-in tabs cannot rebuild the same synchronous read graph in parallel.
+   * The injected clock read for diagnostics only. Unlike checkedNow() an
+   * unreadable clock withholds the measurement rather than failing the caller:
+   * telemetry must never be able to break a build or a watchdog read.
    */
-  readSupervisorShared(): Promise<Readonly<ProductRuntimeSupervisorEnvelope>> {
-    if (this.sharedSupervisorInFlight !== null) return this.sharedSupervisorInFlight;
-    const nowMs = checkedNow(this.options);
-    const sharedAgeMs = this.sharedSupervisorRead === null
-      ? null
-      : nowMs - this.sharedSupervisorRead.publishedAtMs;
-    if (this.sharedSupervisorRead !== null
-        && sharedAgeMs !== null
-        && sharedAgeMs >= 0
-        && sharedAgeMs < PRODUCT_SUPERVISOR_SHARED_READ_TTL_MS) {
-      return Promise.resolve(this.sharedSupervisorRead.envelope);
+  private telemetryNowMs(): number | null {
+    try {
+      const nowMs = this.options.clock.nowMs();
+      return Number.isFinite(nowMs) && nowMs >= 0 ? nowMs : null;
+    } catch {
+      return null;
     }
+  }
+
+  /**
+   * The one canonical envelope build, single-flight guarded. Every caller —
+   * awaiting cold-start request, detached background rebuild, boot prime —
+   * joins the same build rather than starting a second read graph. Success
+   * replaces the published cut; failure is recorded and replayed verbatim.
+   */
+  private startSupervisorBuild(
+    origin: 'READER' | 'BOOT_PRIME' = 'READER',
+  ): Promise<Readonly<ProductRuntimeSupervisorEnvelope>> {
+    if (this.sharedSupervisorInFlight !== null) return this.sharedSupervisorInFlight;
+    this.buildsStarted += 1;
+    // Build timing is diagnostic only and never envelope truth, but it still
+    // reads the one injected clock this service is allowed to observe — the
+    // module stays free of ambient time. A clock that cannot answer withholds
+    // the measurement instead of failing the build.
+    const startedAtMs = this.telemetryNowMs();
     const work = this.readSupervisor()
       .then((envelope) => {
         this.sharedSupervisorRead = Object.freeze({
           envelope,
           publishedAtMs: envelope.evaluatedAtMs,
+          staleServable: origin !== 'BOOT_PRIME',
         });
+        this.lastBuildError = null;
+        this.buildsSucceeded += 1;
         return envelope;
       })
+      .catch((error: unknown) => {
+        // The published cut is retained for identity/telemetry but is no longer
+        // servable: a recorded failure fails closed until a build succeeds.
+        this.lastBuildError = error instanceof ProductRuntimeError
+          ? error
+          : new ProductRuntimeError(
+              'PRODUCT_READ_MODEL_UNAVAILABLE',
+              'Canonical System Integration read evidence is unavailable.',
+              503,
+            );
+        throw this.lastBuildError;
+      })
       .finally(() => {
+        const completedAtMs = this.telemetryNowMs();
+        this.lastBuildCompletedAtMs = completedAtMs;
+        this.lastBuildDurationMs = startedAtMs === null || completedAtMs === null
+          ? null
+          : Math.max(0, completedAtMs - startedAtMs);
         if (this.sharedSupervisorInFlight === work) this.sharedSupervisorInFlight = null;
       });
     this.sharedSupervisorInFlight = work;
     return work;
+  }
+
+  /**
+   * Starts a rebuild detached from whatever request observed the expiry, so no
+   * response waits on the 6.5-14.1s synchronous read graph. setImmediate keeps
+   * even the build's synchronous prefix off the responding request's turn.
+   */
+  private startDetachedSupervisorBuild(origin: 'READER' | 'BOOT_PRIME' = 'READER'): void {
+    if (this.sharedSupervisorInFlight !== null) return;
+    setImmediate(() => {
+      if (this.sharedSupervisorInFlight !== null) return;
+      // The rejection is recorded on lastBuildError by startSupervisorBuild;
+      // a detached build must never surface as an unhandled rejection.
+      void this.startSupervisorBuild(origin).catch(() => undefined);
+    });
+  }
+
+  /**
+   * Boot-time eager build. Never awaited by a caller: it warms the read graph
+   * and gives socket delivery something to announce before the first poll.
+   *
+   * The cut it publishes is deliberately NOT stale-servable. It is built before
+   * any operator has touched the process — before safe mode is set, before the
+   * managed components have settled — so it warms the single-flight path and
+   * feeds the non-building socket projection source, but a reader is never
+   * handed it in place of a build. Readers await one real build rather than
+   * receiving pre-operator truth; that single await is today's deployed
+   * behaviour and is bounded by the restart window.
+   */
+  primeSupervisor(): void {
+    this.startDetachedSupervisorBuild('BOOT_PRIME');
+  }
+
+  /**
+   * Coalesced transport read for browser polling. The canonical fresh builder
+   * remains available to command/internal owners through readSupervisor(); the
+   * HTTP surface shares one immutable envelope for a bounded second so many
+   * signed-in tabs cannot rebuild the same synchronous read graph in parallel.
+   *
+   * Past the TTL the last true cut is served immediately — it carries its own
+   * evaluatedAtMs and digest, so the client renders its staleness honestly —
+   * while the replacement builds in the background. No request ever awaits the
+   * expensive build except the cold first one, and a build that failed is never
+   * papered over with the previous success.
+   */
+  readSupervisorShared(): Promise<Readonly<ProductRuntimeSupervisorEnvelope>> {
+    // Cold start joins the one in-flight build before any clock or cache
+    // decision: there is no cut to serve and no second graph may be started.
+    if (this.sharedSupervisorRead === null && this.sharedSupervisorInFlight !== null) {
+      return this.sharedSupervisorInFlight;
+    }
+    const nowMs = checkedNow(this.options);
+    const published = this.sharedSupervisorRead;
+    const sharedAgeMs = published === null ? null : nowMs - published.publishedAtMs;
+    if (published !== null
+        && published.staleServable
+        && sharedAgeMs !== null
+        && sharedAgeMs >= 0
+        && sharedAgeMs < PRODUCT_SUPERVISOR_SHARED_READ_TTL_MS) {
+      return Promise.resolve(published.envelope);
+    }
+    if (this.lastBuildError !== null) {
+      // Fail closed with exactly the code the awaited path would have produced,
+      // and keep attempting recovery on every such request.
+      this.startDetachedSupervisorBuild();
+      return Promise.reject(this.lastBuildError);
+    }
+    if (published !== null && published.staleServable) {
+      this.staleServedCount += 1;
+      this.startDetachedSupervisorBuild();
+      return Promise.resolve(published.envelope);
+    }
+    // No cut, or a cut that may not stand in for fresh truth: await the one
+    // single-flight build, exactly as the deployed path does today.
+    return this.startSupervisorBuild();
+  }
+
+  /**
+   * Read-only builder health for the operational watchdog. Never builds, never
+   * mutates, and exposes no envelope content beyond the published digest prefix.
+   */
+  readWatchdogStats(): Readonly<ProductRuntimeWatchdogStats> {
+    const published = this.sharedSupervisorRead;
+    let ageMs: number | null = null;
+    let digestPrefix8: string | null = null;
+    if (published !== null) {
+      const nowMs = this.telemetryNowMs();
+      ageMs = nowMs === null ? null : Math.max(0, Math.round(nowMs - published.publishedAtMs));
+      const digest = published.envelope.digest;
+      digestPrefix8 = (digest.startsWith('sha256:') ? digest.slice(7) : digest).slice(0, 8);
+    }
+    return Object.freeze({
+      envelopeBuild: Object.freeze({
+        lastBuildDurationMs: this.lastBuildDurationMs,
+        lastBuildCompletedAtMs: this.lastBuildCompletedAtMs,
+        lastBuildError: this.lastBuildError === null ? null : this.lastBuildError.code,
+        buildsStarted: this.buildsStarted,
+        buildsSucceeded: this.buildsSucceeded,
+        staleServedCount: this.staleServedCount,
+        inFlight: this.sharedSupervisorInFlight !== null,
+      }),
+      cache: Object.freeze({ ageMs, digestPrefix8 }),
+    });
   }
 
   /**
@@ -248,6 +417,11 @@ export class ProductIntegrationRuntimeService {
         );
       }
       const snapshot = await this.options.read.supervisor();
+      // Loop-breathing yield. The segments either side of each of these is
+      // synchronous and expensive; without them one build monopolises the event
+      // loop and every concurrent reader queues behind it. Step order is
+      // unchanged — a yield adds a scheduling boundary, never a reordering.
+      await new Promise((resolve) => setImmediate(resolve));
       const opsReadback = await this.options.read.opsReadback(snapshot);
       let bootReleaseReadback: Readonly<BootReleaseReadback> | null = null;
       let bootReleaseReadbackUnavailableReason: 'BOOT_RELEASE_READBACK_NOT_CONFIGURED'
@@ -299,7 +473,9 @@ export class ProductIntegrationRuntimeService {
           ownerTruthUnavailableReason = 'OWNER_TRUTH_CUT_NOT_CONFIGURED';
         }
       }
+      await new Promise((resolve) => setImmediate(resolve));
       const materialEvents = await this.readSupervisorMaterialTail();
+      await new Promise((resolve) => setImmediate(resolve));
       const correlationIds = [...new Set(snapshot.recentCorrelatedDecisions.map((event) => event.correlationId))].slice(0, 4);
       const traces: Readonly<ProductRuntimeCorrelationTrace>[] = [];
       for (const correlationId of correlationIds) {
@@ -317,6 +493,9 @@ export class ProductIntegrationRuntimeService {
           traces.push(projectProductCorrelationTrace(correlationId, sourceTrace));
         }
       }
+      await new Promise((resolve) => setImmediate(resolve));
+      // nowMs is read after the last yield so the published evaluation time
+      // stays as close as possible to the projection it stamps.
       const nowMs = checkedNow(this.options);
       const opsIntakeInterlock = evaluateCanonicalOpsIntakeGate(opsReadback, nowMs);
       if (opsIntakeInterlock.reasonCodes.some((code) => (

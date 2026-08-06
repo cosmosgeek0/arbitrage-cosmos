@@ -255,11 +255,6 @@ function restartState(
   return 'UNKNOWN';
 }
 
-function cloneDashboard(snapshot: Readonly<SystemSupervisorReadModel>): Readonly<SystemSupervisorReadModel> {
-  const clone = JSON.parse(JSON.stringify(snapshot)) as SystemSupervisorReadModel;
-  return Object.freeze(clone);
-}
-
 function components(
   snapshot: Readonly<SystemSupervisorReadModel>,
   nowMs: number,
@@ -1558,7 +1553,11 @@ export function buildProductRuntimeSupervisorEnvelope(input: Readonly<{
 }>): Readonly<ProductRuntimeSupervisorEnvelope> {
   if (!Number.isFinite(input.nowMs)) throw new TypeError('nowMs must be injected finite UTC milliseconds');
   if (typeof input.applicationStartOk !== 'boolean') throw new TypeError('applicationStartOk must be an injected boolean');
-  const dashboard = cloneDashboard(input.snapshot);
+  // Embedded by reference, not deep-cloned. The canonical read model is
+  // deep-frozen at its single construction site, so the published envelope
+  // cannot observe it change; and JSON.stringify∘JSON.parse∘JSON.stringify is
+  // JSON.stringify, so the serialized bytes are unchanged by dropping the clone.
+  const dashboard = input.snapshot;
   const projectedServiceReadinessPolicy = serviceReadinessPolicy(input.snapshot.serviceReadinessPolicy);
   const projectedComponents = components(input.snapshot, input.nowMs);
   const incidentSnapshot = projectProductRuntimeIncidentSnapshot(input.incidentSnapshot ?? Object.freeze({

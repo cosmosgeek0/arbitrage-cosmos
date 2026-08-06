@@ -657,6 +657,49 @@ function deriveOverallTruthLabel(
   return 'UNKNOWN';
 }
 
+/**
+ * Read-model fields whose entire subtree is already deep-frozen where it is
+ * built: `buildSystemTraceIndex` freezes the index, every entry, every snapshot,
+ * every cloned event and each of its arrays, and `StructuredFailure` is a flat
+ * record behind an unknown-field guard; `recentCorrelatedDecisions` likewise
+ * builds each decision frozen with a frozen `referenceIds`. Skipping them keeps
+ * this walk O(components + summaries) instead of O(trace events), which matters
+ * because the index carries up to MAX_TRACE_INPUT_EVENTS entries.
+ */
+const DEEP_FROZEN_SUBTREES: readonly string[] = Object.freeze(['traceIndex', 'recentCorrelatedDecisions']);
+
+/**
+ * The read model is published as an immutable cut and is read by reference
+ * (Product embeds it as `dashboard` rather than deep-cloning it). Every level is
+ * frozen where it is constructed, but the spreads that carry a caller's object
+ * forward — the control state, the summaries blocks, and each component's
+ * sourced timestamp — copy any undeclared excess property by reference into a
+ * shallowly frozen parent. This walk closes that gap once per snapshot
+ * generation so no reader can observe a published cut change under it.
+ */
+function deepFreezeReadModel(model: Readonly<SystemSupervisorReadModel>): void {
+  const seen = new WeakSet<object>();
+  const walk = (value: unknown): void => {
+    if (value === null || typeof value !== 'object') return;
+    const node = value as object;
+    // Never short-circuit on `Object.isFrozen`: a frozen parent is exactly the
+    // case that can still hold an unfrozen child. The visited set bounds the
+    // walk against shared references and cycles instead.
+    if (seen.has(node)) return;
+    seen.add(node);
+    Object.freeze(node);
+    if (Array.isArray(node)) {
+      for (const item of node) walk(item);
+      return;
+    }
+    for (const nested of Object.values(node as Record<string, unknown>)) walk(nested);
+  };
+  for (const [key, value] of Object.entries(model as unknown as Record<string, unknown>)) {
+    if (DEEP_FROZEN_SUBTREES.includes(key)) continue;
+    walk(value);
+  }
+}
+
 export function buildSystemSupervisorProjection(
   input: Readonly<SystemSupervisorProjectionInput>,
 ): ContractResult<Readonly<SystemSupervisorReadModel>> {
@@ -757,6 +800,7 @@ export function buildSystemSupervisorProjection(
       traceIndex,
       recentCorrelatedDecisions: recentCorrelatedDecisions(traceIndex),
     });
+    deepFreezeReadModel(result);
     return ok(result);
   } catch (error) {
     return invalid(input, error instanceof Error ? error.message : 'unknown supervisor projection failure');

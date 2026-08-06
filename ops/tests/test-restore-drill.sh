@@ -24,8 +24,19 @@ mkdir -p "$DATA_DIR"
 sqlite3 "$DB" "
   PRAGMA journal_mode=WAL;
   CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, kind TEXT NOT NULL);
+  CREATE TABLE ledger_schema_compatibility(
+    singleton INTEGER PRIMARY KEY,
+    current_schema_version INTEGER NOT NULL,
+    rollback_floor INTEGER NOT NULL
+  );
+  INSERT INTO ledger_schema_compatibility(
+    singleton, current_schema_version, rollback_floor
+  ) VALUES (1, 3, 3);
+  PRAGMA user_version=3;
   INSERT INTO events(ts, kind) VALUES (1,'a'),(2,'b'),(3,'c'),(4,'d'),(5,'e'),(6,'f'),(7,'g');
 "
+json_write "$DATA_DIR/journal-compat.json" "dataSchema=3" "rollbackFloor=3" \
+  "updatedAtUtc=2026-07-12T00:00:00Z" "updatedBy=test"
 assert_rc 0 bash "$BIN/backup.sh"
 
 note "1. drill passes; report written; production untouched"

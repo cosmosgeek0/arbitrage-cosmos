@@ -2646,6 +2646,148 @@ json_get_nonnegative_safe_integer() {
   ' "$1" "$2"
 }
 
+# Reads the optional deployment journal once and returns a versioned snapshot:
+# state|dataSchema|rollbackFloor|dev|ino|size|mtimeNs|ctimeNs|sha256.
+# True absence is a successful ABSENT token. A PENDING token is the one exact
+# committed-forward state written before a floor-raising release can become
+# boot-selectable. Exit 4 is unreadable/unstable, 5 is an invalid
+# floor/document, 6 is a non-regular endpoint, and 7 is an invalid dataSchema.
+# Exit 8 is any other valid-integer floor/schema relation violation.
+# For 7 and 8, stdout still carries a complete version token so rollback can
+# use an independently valid floor and recheck the exact bytes for staleness.
+journal_state_snapshot() {
+  i00_guard_node - "$1" <<'NODE'
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const file = process.argv[2];
+const absent = fs.lstatSync(file, { bigint: true, throwIfNoEntry: false });
+if (absent === undefined) {
+  process.stdout.write('ABSENT|0|0|-|-|-|-|-|-');
+  process.exit(0);
+}
+const before = absent;
+if (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1n
+    || before.size > 1048576n) process.exit(6);
+const noFollow = fs.constants.O_NOFOLLOW;
+const nonblock = fs.constants.O_NONBLOCK;
+if (!Number.isInteger(noFollow) || noFollow <= 0
+    || !Number.isInteger(nonblock) || nonblock <= 0) process.exit(4);
+const sameFile = (left, right) => left.dev === right.dev && left.ino === right.ino;
+let descriptor;
+let bytes;
+try {
+  descriptor = fs.openSync(file, fs.constants.O_RDONLY | noFollow | nonblock);
+  const opened = fs.fstatSync(descriptor, { bigint: true });
+  if (!opened.isFile() || opened.nlink !== 1n || !sameFile(before, opened)
+      || before.size !== opened.size || before.mtimeNs !== opened.mtimeNs
+      || before.ctimeNs !== opened.ctimeNs) process.exit(4);
+  const capacity = Number(opened.size) + 1;
+  const buffer = Buffer.alloc(capacity);
+  let length = 0;
+  while (length < capacity) {
+    const count = fs.readSync(
+      descriptor,
+      buffer,
+      length,
+      capacity - length,
+      null,
+    );
+    if (count === 0) break;
+    length += count;
+  }
+  if (BigInt(length) !== opened.size) process.exit(4);
+  bytes = buffer.subarray(0, length);
+  const readBack = fs.fstatSync(descriptor, { bigint: true });
+  const namedBack = fs.lstatSync(file, { bigint: true, throwIfNoEntry: false });
+  if (!readBack.isFile() || readBack.nlink !== 1n || !sameFile(opened, readBack)
+      || readBack.size !== BigInt(bytes.length)
+      || readBack.mtimeNs !== opened.mtimeNs || readBack.ctimeNs !== opened.ctimeNs
+      || !namedBack?.isFile() || namedBack.isSymbolicLink()
+      || namedBack.nlink !== 1n || !sameFile(readBack, namedBack)
+      || namedBack.size !== readBack.size || namedBack.mtimeNs !== readBack.mtimeNs
+      || namedBack.ctimeNs !== readBack.ctimeNs) process.exit(4);
+} catch {
+  process.exit(4);
+} finally {
+  if (descriptor !== undefined) {
+    try { fs.closeSync(descriptor); } catch { process.exit(4); }
+  }
+}
+const sourceByHolder = new WeakMap();
+let root;
+try {
+  root = JSON.parse(bytes.toString('utf8'), function (property, value, context) {
+    if (context && typeof context.source === 'string') {
+      let properties = sourceByHolder.get(this);
+      if (!properties) {
+        properties = new Map();
+        sourceByHolder.set(this, properties);
+      }
+      properties.set(property, context.source);
+    }
+    return value;
+  });
+} catch {
+  process.exit(5);
+}
+if (root === null || typeof root !== 'object' || Array.isArray(root)) process.exit(5);
+const safeInteger = (property) => {
+  if (!Object.prototype.hasOwnProperty.call(root, property)) return '0';
+  const value = root[property];
+  const source = sourceByHolder.get(root)?.get(property);
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0
+      || typeof source !== 'string' || !/^(?:0|[1-9][0-9]*)$/u.test(source)) {
+    return null;
+  }
+  const exact = BigInt(source);
+  if (exact > BigInt(Number.MAX_SAFE_INTEGER) || BigInt(value) !== exact) {
+    return null;
+  }
+  return source;
+};
+const rollbackFloor = safeInteger('rollbackFloor');
+if (rollbackFloor === null) process.exit(5);
+const dataSchema = safeInteger('dataSchema');
+const digest = crypto.createHash('sha256').update(bytes).digest('hex');
+const pendingWriter = 'deploy.sh.prestart-barrier';
+const pendingMarker = root.updatedBy === pendingWriter;
+const pendingKeys = ['dataSchema', 'rollbackFloor', 'updatedAtUtc', 'updatedBy'].sort();
+const actualKeys = Object.keys(root).sort();
+const canonicalUtc = (value) => {
+  if (typeof value !== 'string'
+      || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u.test(value)) {
+    return false;
+  }
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return false;
+  const normalized = value.length === 20
+    ? `${value.slice(0, -1)}.000Z`
+    : value;
+  return new Date(parsed).toISOString() === normalized;
+};
+const snapshot = (state, schema) => [
+  state, schema, rollbackFloor, String(before.dev), String(before.ino),
+  String(before.size), String(before.mtimeNs), String(before.ctimeNs), digest,
+].join('|');
+if (dataSchema === null) {
+  fs.writeSync(1, snapshot('PRESENT', 'INVALID'));
+  process.exitCode = 7;
+} else {
+  const committedForward = BigInt(rollbackFloor) > BigInt(dataSchema);
+  if (pendingMarker
+      && (!committedForward
+        || rollbackFloor === '0'
+        || actualKeys.length !== pendingKeys.length
+        || actualKeys.some((key, index) => key !== pendingKeys[index])
+        || !canonicalUtc(root.updatedAtUtc))) {
+    process.exit(5);
+  }
+  fs.writeSync(1, snapshot(pendingMarker ? 'PENDING' : 'PRESENT', dataSchema));
+  if (committedForward && !pendingMarker) process.exitCode = 8;
+}
+NODE
+}
+
 # json_write FILE KEY=VALUE...  VALUE is parsed as JSON when possible
 # (numbers, booleans), otherwise stored as a string.
 json_write() {
@@ -2665,6 +2807,399 @@ json_write() {
     }
     fs.writeFileSync(file, JSON.stringify(obj, null, 2) + "\n");
   ' "$file" "$@"
+}
+
+# Publishes one JSON object through a same-directory, exclusive, no-follow
+# staging file under the deploy lock's documented sole-writer contract. The
+# complete staged bytes and parent directory are fsynced, the named endpoint
+# must still match the caller's complete snapshot immediately before the
+# path-based atomic replacement, and the final name, inode, mode, and bytes are
+# verified afterward. The rename itself is unconditional, so this is a
+# stale-version guard under the documented sole-writer contract, not a
+# kernel-enforced compare-and-swap. Exit 1 means no publication was observed;
+# exit 2 means rename completed and durability or final verification is
+# uncertain, so callers must not assume rollback is safe.
+json_write_exact_regular_or_absent() {
+  local file="$1" expected_snapshot="$2"; shift 2
+  fs_mkdir_p "$(path_dirname "$file")"
+  i00_guard_node -e '
+    const crypto = require("crypto");
+    const fs = require("fs");
+    const path = require("path");
+    const file = process.argv[1];
+    const expectedSnapshot = process.argv[2];
+    const parent = path.dirname(file);
+    const descriptorRoot = /^\/proc\/self\/fd\/([1-9][0-9]*)$/u.exec(parent);
+    const noFollow = fs.constants.O_NOFOLLOW;
+    const nonblock = fs.constants.O_NONBLOCK;
+    const directoryFlag = fs.constants.O_DIRECTORY;
+    if (!Number.isInteger(noFollow) || noFollow <= 0
+        || !Number.isInteger(nonblock) || nonblock <= 0
+        || !Number.isInteger(directoryFlag) || directoryFlag <= 0) {
+      process.exit(1);
+    }
+    const sameFile = (left, right) => left.dev === right.dev && left.ino === right.ino;
+    const sameVersion = (left, right) => sameFile(left, right)
+      && left.size === right.size && left.mtimeNs === right.mtimeNs
+      && left.ctimeNs === right.ctimeNs && left.nlink === right.nlink;
+    let parentDescriptor;
+    let closeParent = false;
+    let parentBefore;
+    if (descriptorRoot) {
+      parentDescriptor = Number(descriptorRoot[1]);
+      if (!Number.isSafeInteger(parentDescriptor)) process.exit(1);
+      parentBefore = fs.fstatSync(parentDescriptor, { bigint: true });
+      if (!parentBefore.isDirectory()) process.exit(1);
+    } else {
+      parentBefore = fs.lstatSync(parent, { bigint: true, throwIfNoEntry: false });
+      if (!parentBefore?.isDirectory() || parentBefore.isSymbolicLink()
+          || fs.realpathSync.native(parent) !== parent) {
+        process.exit(1);
+      }
+    }
+    const before = fs.lstatSync(file, { bigint: true, throwIfNoEntry: false });
+    if (before !== undefined
+        && (!before.isFile() || before.isSymbolicLink() || before.nlink !== 1n)) {
+      process.exit(1);
+    }
+    let sourceState = "ABSENT";
+    let sourceDataSchemaValue = 0n;
+    let sourceRollbackFloorValue = 0n;
+    const expected = String(expectedSnapshot).split("|");
+    if (expected[0] === "ABSENT") {
+      if (expectedSnapshot !== "ABSENT|0|0|-|-|-|-|-|-" || before !== undefined) {
+        process.exit(1);
+      }
+    } else if (expected[0] === "PRESENT" || expected[0] === "PENDING") {
+      const canonicalSafeInteger = /^(?:0|[1-9][0-9]*)$/u;
+      if (expected.length !== 9 || before === undefined
+          || !canonicalSafeInteger.test(expected[1])
+          || !canonicalSafeInteger.test(expected[2])
+          || BigInt(expected[1]) > BigInt(Number.MAX_SAFE_INTEGER)
+          || BigInt(expected[2]) > BigInt(Number.MAX_SAFE_INTEGER)
+          || !/^[0-9a-f]{64}$/u.test(expected[8])
+          || before.size > 1048576n
+          || String(before.dev) !== expected[3] || String(before.ino) !== expected[4]
+          || String(before.size) !== expected[5] || String(before.mtimeNs) !== expected[6]
+          || String(before.ctimeNs) !== expected[7]) {
+        process.exit(1);
+      }
+      let sourceDescriptor;
+      try {
+        sourceDescriptor = fs.openSync(
+          file,
+          fs.constants.O_RDONLY | noFollow | nonblock,
+        );
+        const opened = fs.fstatSync(sourceDescriptor, { bigint: true });
+        if (!opened.isFile() || opened.nlink !== 1n || !sameVersion(before, opened)) {
+          process.exit(1);
+        }
+        const capacity = Number(opened.size) + 1;
+        const sourceBuffer = Buffer.alloc(capacity);
+        let sourceLength = 0;
+        while (sourceLength < capacity) {
+          const count = fs.readSync(
+            sourceDescriptor,
+            sourceBuffer,
+            sourceLength,
+            capacity - sourceLength,
+            null,
+          );
+          if (count === 0) break;
+          sourceLength += count;
+        }
+        if (BigInt(sourceLength) !== opened.size) process.exit(1);
+        const sourceBytes = sourceBuffer.subarray(0, sourceLength);
+        const readBack = fs.fstatSync(sourceDescriptor, { bigint: true });
+        const namedBack = fs.lstatSync(file, { bigint: true, throwIfNoEntry: false });
+        const digest = crypto.createHash("sha256").update(sourceBytes).digest("hex");
+        const sourceByHolder = new WeakMap();
+        let root;
+        try {
+          root = JSON.parse(
+            sourceBytes.toString("utf8"),
+            function (property, value, context) {
+              if (context && typeof context.source === "string") {
+                let properties = sourceByHolder.get(this);
+                if (!properties) {
+                  properties = new Map();
+                  sourceByHolder.set(this, properties);
+                }
+                properties.set(property, context.source);
+              }
+              return value;
+            },
+          );
+        } catch {
+          process.exit(1);
+        }
+        if (root === null || typeof root !== "object" || Array.isArray(root)) {
+          process.exit(1);
+        }
+        const exactInteger = (property) => {
+          if (!Object.prototype.hasOwnProperty.call(root, property)) return "0";
+          const value = root[property];
+          const source = sourceByHolder.get(root)?.get(property);
+          if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0
+              || typeof source !== "string"
+              || !canonicalSafeInteger.test(source)
+              || BigInt(value) !== BigInt(source)) {
+            process.exit(1);
+          }
+          return source;
+        };
+        const sourceDataSchema = exactInteger("dataSchema");
+        const sourceRollbackFloor = exactInteger("rollbackFloor");
+        sourceDataSchemaValue = BigInt(sourceDataSchema);
+        sourceRollbackFloorValue = BigInt(sourceRollbackFloor);
+        const sourceCommittedForward =
+          sourceRollbackFloorValue > sourceDataSchemaValue;
+        const sourcePending =
+          root.updatedBy === "deploy.sh.prestart-barrier";
+        sourceState = sourcePending ? "PENDING" : "PRESENT";
+        const sourceKeys =
+          ["dataSchema", "rollbackFloor", "updatedAtUtc", "updatedBy"].sort();
+        const actualSourceKeys = Object.keys(root).sort();
+        const canonicalUtc = (value) => {
+          if (typeof value !== "string"
+              || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u.test(value)) {
+            return false;
+          }
+          const parsed = Date.parse(value);
+          if (!Number.isFinite(parsed)) return false;
+          const normalized = value.length === 20
+            ? `${value.slice(0, -1)}.000Z`
+            : value;
+          return new Date(parsed).toISOString() === normalized;
+        };
+        if (sourcePending !== sourceCommittedForward
+            || (sourcePending
+          ? (sourceRollbackFloor === "0"
+            || actualSourceKeys.length !== sourceKeys.length
+            || actualSourceKeys.some((key, index) => key !== sourceKeys[index])
+            || !canonicalUtc(root.updatedAtUtc))
+          : false)) {
+          process.exit(1);
+        }
+        const reconstructedSnapshot = [
+          sourceState,
+          sourceDataSchema,
+          sourceRollbackFloor,
+          String(before.dev),
+          String(before.ino),
+          String(before.size),
+          String(before.mtimeNs),
+          String(before.ctimeNs),
+          digest,
+        ].join("|");
+        if (!readBack.isFile() || readBack.nlink !== 1n
+            || !sameVersion(opened, readBack)
+            || !namedBack?.isFile() || namedBack.isSymbolicLink()
+            || namedBack.nlink !== 1n || !sameVersion(readBack, namedBack)
+            || reconstructedSnapshot !== expectedSnapshot) {
+          process.exit(1);
+        }
+      } catch {
+        process.exit(1);
+      } finally {
+        if (sourceDescriptor !== undefined) {
+          try { fs.closeSync(sourceDescriptor); } catch { process.exit(1); }
+        }
+      }
+    } else {
+      process.exit(1);
+    }
+    const obj = {};
+    const rawByKey = new Map();
+    for (const pair of process.argv.slice(3)) {
+      const i = pair.indexOf("=");
+      if (i <= 0) process.exit(1);
+      const k = pair.slice(0, i);
+      const raw = pair.slice(i + 1);
+      if (rawByKey.has(k)) process.exit(1);
+      let v;
+      try { v = JSON.parse(raw); } catch { v = raw; }
+      obj[k] = v;
+      rawByKey.set(k, raw);
+    }
+    const generatedInteger = (property) => {
+      const raw = rawByKey.get(property);
+      const value = obj[property];
+      if (typeof raw !== "string" || !/^(?:0|[1-9][0-9]*)$/u.test(raw)
+          || typeof value !== "number" || !Number.isSafeInteger(value)
+          || value < 0 || BigInt(value) !== BigInt(raw)) {
+        process.exit(1);
+      }
+      return BigInt(raw);
+    };
+    const generatedDataSchema = generatedInteger("dataSchema");
+    const generatedRollbackFloor = generatedInteger("rollbackFloor");
+    const generatedCommittedForward =
+      generatedRollbackFloor > generatedDataSchema;
+    const generatedPending =
+      obj.updatedBy === "deploy.sh.prestart-barrier";
+    const generatedKeys =
+      ["dataSchema", "rollbackFloor", "updatedAtUtc", "updatedBy"].sort();
+    const actualGeneratedKeys = Object.keys(obj).sort();
+    const canonicalUtc = (value) => {
+      if (typeof value !== "string"
+          || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u.test(value)) {
+        return false;
+      }
+      const parsed = Date.parse(value);
+      if (!Number.isFinite(parsed)) return false;
+      const normalized = value.length === 20
+        ? `${value.slice(0, -1)}.000Z`
+        : value;
+      return new Date(parsed).toISOString() === normalized;
+    };
+    if (generatedPending !== generatedCommittedForward
+        || (generatedPending
+      ? (generatedRollbackFloor === 0n
+        || actualGeneratedKeys.length !== generatedKeys.length
+        || actualGeneratedKeys.some((key, index) => key !== generatedKeys[index])
+        || !canonicalUtc(obj.updatedAtUtc))
+      : false)) {
+      process.exit(1);
+    }
+    if (generatedDataSchema < sourceDataSchemaValue
+        || generatedRollbackFloor < sourceRollbackFloorValue) {
+      process.exit(1);
+    }
+    if (sourceState === "PENDING") {
+      if (generatedRollbackFloor > sourceRollbackFloorValue) {
+        if (!generatedPending
+            || generatedDataSchema !== sourceDataSchemaValue) {
+          process.exit(1);
+        }
+      } else if (generatedPending
+          || generatedDataSchema < generatedRollbackFloor) {
+        process.exit(1);
+      }
+    } else if (generatedRollbackFloor > sourceRollbackFloorValue) {
+      if (generatedDataSchema !== sourceDataSchemaValue
+          || generatedPending !== (generatedRollbackFloor > generatedDataSchema)) {
+        process.exit(1);
+      }
+    } else if (generatedPending) {
+      process.exit(1);
+    }
+    const bytes = Buffer.from(JSON.stringify(obj, null, 2) + "\n");
+    const stagedPath = path.join(
+      parent,
+      `.${path.basename(file)}.write-${process.pid}-${crypto.randomBytes(16).toString("hex")}`,
+    );
+    let stagedDescriptor;
+    let stagedIdentity;
+    let published = false;
+    const failureCode = () => published ? 2 : 1;
+    try {
+      if (fs.lstatSync(stagedPath, { throwIfNoEntry: false }) !== undefined) {
+        throw new Error("journal staging path is occupied");
+      }
+      if (!descriptorRoot) {
+        parentDescriptor = fs.openSync(
+          parent,
+          fs.constants.O_RDONLY | noFollow | directoryFlag,
+        );
+        closeParent = true;
+      }
+      const openedParent = fs.fstatSync(parentDescriptor, { bigint: true });
+      if (!openedParent.isDirectory() || !sameFile(parentBefore, openedParent)) {
+        throw new Error("journal parent changed");
+      }
+      stagedDescriptor = fs.openSync(
+        stagedPath,
+        fs.constants.O_RDWR | fs.constants.O_CREAT
+          | fs.constants.O_EXCL | noFollow,
+        0o600,
+      );
+      stagedIdentity = fs.fstatSync(stagedDescriptor, { bigint: true });
+      if (!stagedIdentity.isFile() || stagedIdentity.nlink !== 1n) {
+        throw new Error("journal stage is unsafe");
+      }
+      const desiredMode = 0o644;
+      fs.writeFileSync(stagedDescriptor, bytes);
+      fs.fchmodSync(stagedDescriptor, desiredMode);
+      fs.fsyncSync(stagedDescriptor);
+      stagedIdentity = fs.fstatSync(stagedDescriptor, { bigint: true });
+      const stagedNamed = fs.lstatSync(stagedPath, { bigint: true, throwIfNoEntry: false });
+      if (!stagedIdentity.isFile() || stagedIdentity.nlink !== 1n
+          || stagedIdentity.size !== BigInt(bytes.length)
+          || Number(stagedIdentity.mode & 0o7777n) !== desiredMode
+          || !stagedNamed?.isFile() || stagedNamed.isSymbolicLink()
+          || !sameFile(stagedIdentity, stagedNamed)) {
+        throw new Error("journal stage verification failed");
+      }
+      const finalBeforeRename = fs.lstatSync(
+        file,
+        { bigint: true, throwIfNoEntry: false },
+      );
+      if ((before === undefined && finalBeforeRename !== undefined)
+          || (before !== undefined
+            && (finalBeforeRename === undefined
+              || !finalBeforeRename.isFile() || finalBeforeRename.isSymbolicLink()
+              || finalBeforeRename.nlink !== 1n
+              || !sameVersion(before, finalBeforeRename)))) {
+        throw new Error("journal endpoint changed before publication");
+      }
+      fs.renameSync(stagedPath, file);
+      published = true;
+      fs.fsyncSync(stagedDescriptor);
+      fs.fsyncSync(parentDescriptor);
+      const verifiedBytes = Buffer.alloc(bytes.length + 1);
+      let verifiedLength = 0;
+      while (verifiedLength < verifiedBytes.length) {
+        const count = fs.readSync(
+          stagedDescriptor,
+          verifiedBytes,
+          verifiedLength,
+          verifiedBytes.length - verifiedLength,
+          verifiedLength,
+        );
+        if (count === 0) break;
+        verifiedLength += count;
+      }
+      const verifiedDigest = crypto.createHash("sha256")
+        .update(verifiedBytes.subarray(0, verifiedLength))
+        .digest("hex");
+      const expectedDigest = crypto.createHash("sha256").update(bytes).digest("hex");
+      const final = fs.lstatSync(file, { bigint: true, throwIfNoEntry: false });
+      const parentAfter = fs.fstatSync(parentDescriptor, { bigint: true });
+      if (!final?.isFile() || final.isSymbolicLink() || final.nlink !== 1n
+          || !sameFile(stagedIdentity, final) || final.size !== stagedIdentity.size
+          || Number(final.mode & 0o7777n) !== desiredMode
+          || verifiedLength !== bytes.length || verifiedDigest !== expectedDigest
+          || !sameFile(parentBefore, parentAfter)) {
+        throw new Error("journal publication verification failed");
+      }
+    } catch {
+      process.exitCode = failureCode();
+    } finally {
+      if (stagedDescriptor !== undefined) {
+        try { fs.closeSync(stagedDescriptor); } catch {
+          process.exitCode = failureCode();
+        }
+      }
+      try {
+        const leftover = fs.lstatSync(
+          stagedPath,
+          { bigint: true, throwIfNoEntry: false },
+        );
+        if (leftover !== undefined && stagedIdentity !== undefined
+            && sameFile(leftover, stagedIdentity)) {
+          fs.unlinkSync(stagedPath);
+        }
+      } catch {
+        process.exitCode = failureCode();
+      }
+      if (closeParent && parentDescriptor !== undefined) {
+        try { fs.closeSync(parentDescriptor); } catch {
+          process.exitCode = failureCode();
+        }
+      }
+    }
+  ' "$file" "$expected_snapshot" "$@"
 }
 
 # jsonl_append FILE KEY=VALUE... — one structured log line, appended.

@@ -423,10 +423,13 @@ try {
   fail('manifest is not valid JSON');
 }
 exactKeys(manifest, [
-  'backupId', 'createdAtUtc', 'dbFile', 'dbSha256', 'dbBytes', 'eventsCount',
-  'dataSchema', 'integrityCheck', 'evidence',
+  'schemaVersion', 'backupId', 'createdAtUtc', 'dbFile', 'dbSha256',
+  'dbBytes', 'eventsCount',
+  'journalState', 'dataSchema', 'rollbackFloor', 'sourceJournalSha256',
+  'integrityCheck', 'evidence',
 ], 'manifest');
-if (typeof manifest.backupId !== 'string' || manifest.backupId.length === 0
+if (manifest.schemaVersion !== 2
+    || typeof manifest.backupId !== 'string' || manifest.backupId.length === 0
     || manifest.backupId.length > 256 || /[\0-\x1f\x7f]/.test(manifest.backupId)) {
   fail('manifest backupId is invalid');
 }
@@ -438,7 +441,11 @@ if (manifest.dbFile !== 'cosmos.db' || !/^[0-9a-f]{64}$/i.test(manifest.dbSha256
 }
 if (!Number.isSafeInteger(manifest.dbBytes) || manifest.dbBytes <= 0
     || !Number.isSafeInteger(manifest.eventsCount) || manifest.eventsCount < -1
-    || !(manifest.dataSchema === null || Number.isSafeInteger(manifest.dataSchema))
+    || manifest.journalState !== 'PRESENT'
+    || !Number.isSafeInteger(manifest.dataSchema) || manifest.dataSchema < 0
+    || !Number.isSafeInteger(manifest.rollbackFloor) || manifest.rollbackFloor < 0
+    || manifest.rollbackFloor > manifest.dataSchema
+    || !/^[0-9a-f]{64}$/u.test(manifest.sourceJournalSha256)
     || manifest.integrityCheck !== 'ok') {
   fail('manifest database metadata is invalid');
 }
@@ -516,6 +523,10 @@ fs.writeFileSync(path.join(snapshot, 'plan.json'), `${JSON.stringify({
   dbSha256: database.sha256,
   dbBytes: database.bytes,
   eventsCount: manifest.eventsCount,
+  journalState: manifest.journalState,
+  dataSchema: manifest.dataSchema,
+  rollbackFloor: manifest.rollbackFloor,
+  sourceJournalSha256: manifest.sourceJournalSha256,
   archives,
 }, null, 2)}\n`, { mode: 0o600, flag: 'wx' });
 NODE
@@ -538,6 +549,47 @@ DECLARED_EVENTS_COUNT="$(json_get "$SNAPSHOT/plan.json" eventsCount)" \
   || die_code 1 "private restore plan has no eventsCount"
 [ "$DECLARED_EVENTS_COUNT" = -1 ] || [ "$EVENTS_COUNT" = "$DECLARED_EVENTS_COUNT" ] \
   || die_code 1 "backup integrity FAILED: manifest eventsCount=$DECLARED_EVENTS_COUNT, database eventsCount=$EVENTS_COUNT"
+DECLARED_DATA_SCHEMA="$(json_get_nonnegative_safe_integer \
+  "$SNAPSHOT/plan.json" dataSchema)" \
+  || die_code 1 "private restore plan has no valid dataSchema"
+DECLARED_ROLLBACK_FLOOR="$(json_get_nonnegative_safe_integer \
+  "$SNAPSHOT/plan.json" rollbackFloor)" \
+  || die_code 1 "private restore plan has no valid rollbackFloor"
+SOURCE_JOURNAL_SHA256="$(json_get "$SNAPSHOT/plan.json" sourceJournalSha256)" \
+  || die_code 1 "private restore plan has no sourceJournalSha256"
+RESTORE_DB_USER_VERSION="$(
+  "$SQLITE" "$SNAPSHOT/cosmos.db" 'PRAGMA user_version;' 2>/dev/null
+)" || die_code 1 "backup integrity FAILED: database user_version is unreadable"
+RESTORE_DB_COMPATIBILITY_RAW="$(
+  "$SQLITE" "$SNAPSHOT/cosmos.db" \
+    'SELECT typeof(singleton), singleton, typeof(current_schema_version), current_schema_version, typeof(rollback_floor), rollback_floor FROM ledger_schema_compatibility ORDER BY singleton;' \
+    2>/dev/null
+)" || die_code 1 "backup integrity FAILED: database compatibility row is unreadable"
+RESTORE_DB_COMPATIBILITY="$(
+  i00_guard_node -e '
+    const [versionRaw, rowRaw] = process.argv.slice(1);
+    const integer = /^(?:0|[1-9][0-9]*)$/u;
+    if (!integer.test(versionRaw)
+        || BigInt(versionRaw) > BigInt(Number.MAX_SAFE_INTEGER)) process.exit(1);
+    const lines = rowRaw.split("\n");
+    if (lines.length !== 1) process.exit(1);
+    const fields = lines[0].split("|");
+    if (fields.length !== 6
+        || fields[0] !== "integer" || fields[1] !== "1"
+        || fields[2] !== "integer" || fields[4] !== "integer"
+        || !/^[1-9][0-9]*$/u.test(fields[3]) || !integer.test(fields[5])
+        || BigInt(fields[3]) > BigInt(Number.MAX_SAFE_INTEGER)
+        || BigInt(fields[5]) > BigInt(Number.MAX_SAFE_INTEGER)
+        || fields[3] !== versionRaw || BigInt(fields[5]) > BigInt(fields[3])) {
+      process.exit(1);
+    }
+    process.stdout.write(`${fields[3]}|${fields[5]}`);
+  ' "$RESTORE_DB_USER_VERSION" "$RESTORE_DB_COMPATIBILITY_RAW"
+)" || die_code 1 "backup integrity FAILED: database compatibility row is malformed"
+[ "$RESTORE_DB_COMPATIBILITY" = \
+    "$DECLARED_DATA_SCHEMA|$DECLARED_ROLLBACK_FLOOR" ] \
+  || die_code 1 \
+    "backup integrity FAILED: manifest schema/floor disagrees with the database"
 RESTORED_EVIDENCE="$(i00_guard_node -e \
   'process.stdout.write(String(require(process.argv[1]).archives.length))' \
   "$SNAPSHOT/plan.json")"
@@ -823,7 +875,9 @@ PROD_BOOL=false
 if ! i00_guard_node - "$SNAPSHOT" "$TARGET_CANON" "$TARGET_EFFECT_CANON" \
     "$DATA_CANON" "$FORCE" \
     "$IS_PRODUCTION" "$(now_utc)" "$BACKUP_ID" "$WANT_SHA" \
-    "$WANT_BYTES" "$DECLARED_EVENTS_COUNT" "$EVENTS_COUNT" "$RESTORED_EVIDENCE" <<'NODE'
+    "$WANT_BYTES" "$DECLARED_EVENTS_COUNT" "$EVENTS_COUNT" "$RESTORED_EVIDENCE" \
+    "$DECLARED_DATA_SCHEMA" "$DECLARED_ROLLBACK_FLOOR" \
+    "$SOURCE_JOURNAL_SHA256" <<'NODE'
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -831,6 +885,7 @@ const path = require('node:path');
 const [
   snapshot, target, targetEffect, dataDir, forceRaw, productionRaw, timestamp, backupId,
   dbSha256, dbBytesRaw, declaredEventsRaw, eventsRaw, evidenceRaw,
+  dataSchemaRaw, rollbackFloorRaw, sourceJournalSha256,
 ] = process.argv.slice(2);
 const force = forceRaw === '1';
 const production = productionRaw === '1';
@@ -838,7 +893,12 @@ const dbBytes = Number(dbBytesRaw);
 const declaredEventsCount = Number(declaredEventsRaw);
 const eventsCount = Number(eventsRaw);
 const evidenceArchives = Number(evidenceRaw);
-const ownedNames = ['cosmos.db', 'cosmos.db-wal', 'cosmos.db-shm', 'evidence', 'restore-report.json'];
+const dataSchema = Number(dataSchemaRaw);
+const rollbackFloor = Number(rollbackFloorRaw);
+const ownedNames = [
+  'cosmos.db', 'cosmos.db-wal', 'cosmos.db-shm', 'journal-compat.json',
+  'evidence', 'restore-report.json',
+];
 const testMode = process.env.COSMOS_RESTORE_TEST_MODE === '1';
 const failAfterPublish = testMode ? (process.env.RESTORE_TEST_FAIL_AFTER_PUBLISH ?? '') : '';
 const stageReadyMarker = testMode ? (process.env.RESTORE_TEST_STAGE_READY_MARKER ?? '') : '';
@@ -846,7 +906,11 @@ const stageContinueMarker = testMode ? (process.env.RESTORE_TEST_STAGE_CONTINUE_
 const MAX_EVIDENCE_PROOF_ENTRIES = 250001;
 const MAX_EVIDENCE_PROOF_BYTES = 256n * 1024n * 1024n * 1024n;
 
-if (!Number.isSafeInteger(dbBytes) || dbBytes <= 0) {
+if (!Number.isSafeInteger(dbBytes) || dbBytes <= 0
+    || !Number.isSafeInteger(dataSchema) || dataSchema < 0
+    || !Number.isSafeInteger(rollbackFloor) || rollbackFloor < 0
+    || rollbackFloor > dataSchema
+    || !/^[0-9a-f]{64}$/u.test(sourceJournalSha256)) {
   fail('private restore plan database size is invalid');
 }
 
@@ -1261,6 +1325,7 @@ function copyEntry(source, destination) {
 }
 
 const dbStage = `.cosmos.db.restore.${nonce}`;
+const journalStage = `.journal-compat.restore.${nonce}`;
 const evidenceStage = `.evidence.restore.${nonce}`;
 const reportStage = `.restore-report.${nonce}`;
 const rollback = `.restore-rollback.${nonce}`;
@@ -1288,6 +1353,42 @@ try {
   );
   if (soleFileSha256(databaseStageProof, 'staged cosmos.db') !== dbSha256.toLowerCase()) {
     fail('staged cosmos.db content does not match the verified database');
+  }
+  const journal = {
+    dataSchema,
+    rollbackFloor,
+    updatedAtUtc: timestamp,
+    updatedBy: 'restore.sh',
+  };
+  const journalBytes = `${JSON.stringify(journal, null, 2)}\n`;
+  const expectedJournalSha256 =
+    crypto.createHash('sha256').update(journalBytes).digest('hex');
+  const expectedJournalProof = {
+    entries: [{
+      path: '.', type: 'f', permissions: 0o644,
+      size: BigInt(Buffer.byteLength(journalBytes)),
+      sha256: expectedJournalSha256,
+    }],
+  };
+  const journalDescriptor = fs.openSync(
+    journalStage,
+    fs.constants.O_WRONLY | fs.constants.O_CREAT
+      | fs.constants.O_EXCL | fs.constants.O_NOFOLLOW,
+    0o600,
+  );
+  try {
+    fs.writeFileSync(journalDescriptor, journalBytes, { encoding: 'utf8' });
+    fs.fchmodSync(journalDescriptor, 0o644);
+    fs.fsyncSync(journalDescriptor);
+  } finally {
+    fs.closeSync(journalDescriptor);
+  }
+  const journalStageProof = rememberStage(
+    journalStage, expectedJournalProof, 'staged journal-compat.json',
+  );
+  if (soleFileSha256(journalStageProof, 'staged journal compatibility')
+      !== expectedJournalSha256) {
+    fail('staged journal compatibility does not match its verified bytes');
   }
   const snapshotEvidenceProof = contentProof(path.join(snapshot, 'evidence'), {
     maxEntries: MAX_EVIDENCE_PROOF_ENTRIES,
@@ -1321,6 +1422,10 @@ try {
     dbSha256,
     declaredEventsCount,
     eventsCount,
+    journalState: 'PRESENT',
+    dataSchema,
+    rollbackFloor,
+    sourceJournalSha256,
     declaredEvidenceArchives: evidenceArchives,
     evidenceArchives,
     verifiedEvidenceArchives: evidenceArchives,
@@ -1346,7 +1451,10 @@ try {
   assertTargetBound('post-staging target binding');
   waitForTestStageMutation(dbStage, evidenceStage, reportStage);
 
-  const publications = [[dbStage, 'cosmos.db']];
+  const publications = [
+    [journalStage, 'journal-compat.json'],
+    [dbStage, 'cosmos.db'],
+  ];
   if (evidenceArchives > 0) publications.push([evidenceStage, 'evidence']);
   publications.push([reportStage, 'restore-report.json']);
   for (const [stage, name] of publications) {

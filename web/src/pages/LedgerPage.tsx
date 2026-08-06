@@ -1423,8 +1423,9 @@ export function LedgerPage() {
           <PillSelect value={prefs.clockZone} options={TIME_ZONE_OPTIONS.map((option) => ({ ...option }))} onChange={(value) => updatePref('clockZone', value)} ariaLabel="Time Zone" className="lix-select lix-zone-select" />
         </section>
 
+        {dayTotalsError && <p className="logx-day-notice" role="status">Day counts unavailable: {dayTotalsError}</p>}
+
         <section className="calx-week logx-week" aria-label="Log Days" title={dayTotalsError ?? undefined}>
-          {dayTotalsError && <div className="lix-empty" role="status">Day counts unavailable: {dayTotalsError}</div>}
           {dayKeys.map((key) => {
             const counts = renderedDayTotals[key] ?? UNKNOWN_DAY_COUNTS;
             const count = counts.total.count;

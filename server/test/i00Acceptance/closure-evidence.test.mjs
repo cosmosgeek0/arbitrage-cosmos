@@ -196,13 +196,13 @@ test('resource measurement plan computes quantiles breaches and P0-first load sh
 });
 
 test('page capability and control matrices separate historical fixtures from current source closure', () => {
-  assert.equal(catalog.pages.length, 21);
+  assert.equal(catalog.pages.length, 22);
   assert.deepEqual(catalog.pages.map((row) => row.pageId).sort(), discoverOperationalPageIds());
   assert.deepEqual(
     catalog.pages.filter((row) => row.mountState === 'NOT_APPLICABLE').map((row) => row.pageId).sort(),
     ['calendar', 'news'],
   );
-  assert.equal(catalog.pages.filter((row) => row.mountState === 'WIRED').length, 19);
+  assert.equal(catalog.pages.filter((row) => row.mountState === 'WIRED').length, 20);
   assert(catalog.pages.every((row) => row.mountState === 'WIRED' || row.mountState === 'NOT_APPLICABLE'));
   assert.equal(catalog.capabilities.length, 10);
   assert.equal(catalog.controls.length, 14);

@@ -185,6 +185,7 @@ test('§2A consumer inventory generator is deterministic and repairs only derive
     generated.routes.find((row) => row.route === '/api/markets').productionConsumers,
     [
       { path: 'server/src/engine/marketApiProjection.ts', occurrences: 1 },
+      { path: 'web/src/pages/Watchdog.tsx', occurrences: 2 },
       { path: 'web/src/store.tsx', occurrences: 2 },
     ],
   );
@@ -229,9 +230,11 @@ test('§2A consumer inventory generator rejects scan, route, and duplicate ident
 
 test('§2A legacy authority migrations are structurally fail-closed', () => {
   const state = routeBlock('GET', '/api/state');
-  assert.match(state, /const stateSupervisor = await systemIntegration\.supervisor\(\)/);
-  assert.match(state, /res\.json\(buildState\(stateSupervisor\)\)/);
+  assert.match(state, /bodies = await readLegacyStateBodies\(\)/);
+  assert.match(state, /sendJsonBody\(req, res, bodies\[view\]/);
   assert.match(state, /CANONICAL_SUPERVISOR_UNAVAILABLE/);
+  const sharedRead = readFileSync(resolve(ROOT, 'server/src/index.ts'), 'utf8');
+  assert.match(sharedRead, /const stateSupervisor = await systemIntegration\.supervisor\(\);\n\s*const state = buildState\(stateSupervisor\);/);
 
   const system = routeBlock('GET', '/api/system');
   assert.match(system, /systemSupervisor = await systemIntegration\.supervisor\(\)/);

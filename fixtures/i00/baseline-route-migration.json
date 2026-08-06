@@ -61,7 +61,12 @@
         },
         {
           "path": "server/src/index.ts",
-          "needle": "res.json(buildState(stateSupervisor))",
+          "needle": "const state = buildState(stateSupervisor);",
+          "expectedOccurrences": 1
+        },
+        {
+          "path": "server/src/index.ts",
+          "needle": "bodies = await readLegacyStateBodies();",
           "expectedOccurrences": 1
         },
         {
@@ -72,8 +77,12 @@
       ],
       "productionConsumers": [
         {
-          "path": "web/src/store.tsx",
+          "path": "web/src/pages/Watchdog.tsx",
           "occurrences": 2
+        },
+        {
+          "path": "web/src/store.tsx",
+          "occurrences": 3
         }
       ]
     },
@@ -137,18 +146,14 @@
       "sourceFacts": [
         {
           "path": "server/src/index.ts",
-          "needle": "ledger.recentEvents(limit, filters.kind",
+          "needle": "const page = ledger.recentEventsPage(",
           "expectedOccurrences": 1
         }
       ],
       "productionConsumers": [
         {
-          "path": "web/src/lib/notificationFeed.tsx",
-          "occurrences": 3
-        },
-        {
           "path": "web/src/pages/LedgerPage.tsx",
-          "occurrences": 1
+          "occurrences": 2
         }
       ]
     },
@@ -244,6 +249,10 @@
         {
           "path": "web/src/pages/TokenDetail.tsx",
           "occurrences": 1
+        },
+        {
+          "path": "web/src/pages/Watchdog.tsx",
+          "occurrences": 2
         }
       ]
     },
@@ -281,6 +290,10 @@
         {
           "path": "web/src/pages/VolumeScanner.tsx",
           "occurrences": 1
+        },
+        {
+          "path": "web/src/pages/Watchdog.tsx",
+          "occurrences": 2
         }
       ]
     },
@@ -306,7 +319,7 @@
       "sourceFacts": [
         {
           "path": "server/src/index.ts",
-          "needle": "const { spotBookRes, perpBookRes, perp24hRes } = await marketSources()",
+          "needle": "const { spotBookRes, perpBookRes, perp24hRes } = sourceSnapshot;",
           "expectedOccurrences": 1
         }
       ],
@@ -314,6 +327,10 @@
         {
           "path": "server/src/engine/marketApiProjection.ts",
           "occurrences": 1
+        },
+        {
+          "path": "web/src/pages/Watchdog.tsx",
+          "occurrences": 2
         },
         {
           "path": "web/src/store.tsx",

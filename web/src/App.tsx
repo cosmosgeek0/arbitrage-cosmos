@@ -19,6 +19,7 @@ import { SystemHealth } from './pages/SystemHealth';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { News } from './pages/News';
 import { CalendarPage } from './pages/CalendarPage';
+import { ResearchLab } from './pages/ResearchLab';
 import {
   ProductControlRoomProvider,
   ProductControlRoomRoute,
@@ -128,6 +129,7 @@ function Shell() {
                 {page === 'notifications' && <NotificationsPage />}
                 {page === 'news' && <News />}
                 {page === 'calendar' && <CalendarPage />}
+                {page === 'research-lab' && <ResearchLab />}
               </ErrorBoundary>
             </section>
             <footer className="footer">

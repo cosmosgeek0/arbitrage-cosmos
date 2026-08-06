@@ -246,12 +246,13 @@ export type Page =
   | 'system'
   | 'notifications'
   | 'news'
-  | 'calendar';
+  | 'calendar'
+  | 'research-lab';
 
 const PAGE_IDS: Page[] = [
   'dashboard', 'control-room', 'account', 'wallets', 'markets', 'detail', 'loans', 'execution', 'orders',
   'positions', 'fills', 'pnl', 'strategies', 'volume', 'opportunities', 'risk', 'ledger', 'system',
-  'notifications', 'news', 'calendar',
+  'notifications', 'news', 'calendar', 'research-lab',
 ];
 
 export function isPageId(value: unknown): value is Page {
@@ -310,6 +311,7 @@ const PAGE_PATHS: Readonly<Record<Exclude<Page, 'detail'>, string>> = Object.fre
   notifications: '/notifications',
   news: '/news',
   calendar: '/calendar',
+  'research-lab': '/research-lab',
 });
 
 const SINGLE_SEGMENT_PAGES: Readonly<Record<string, Page>> = Object.freeze({
@@ -327,6 +329,7 @@ const SINGLE_SEGMENT_PAGES: Readonly<Record<string, Page>> = Object.freeze({
   notifications: 'notifications',
   news: 'news',
   calendar: 'calendar',
+  'research-lab': 'research-lab',
   // Legacy internal ids remain accepted only as normalized aliases.
   wallets: 'wallets',
   loans: 'loans',

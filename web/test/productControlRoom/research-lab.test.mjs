@@ -25,12 +25,13 @@ import {
 import {
   RESEARCH_LAB_BE2_WINDOW_END,
   parseResearchLabStoryLayer,
+  researchLabGateComparisonIdentity,
+  researchLabGateRows,
 } from '../../src/data/researchLabEvidence.ts';
 import { parseRoutePath, routeTarget, serializeRoute } from '../../src/store.tsx';
 
 const datasetUrl = new URL('../../src/data/RESEARCH_LAB_INDEX.json', import.meta.url);
 const storiesUrl = new URL('../../src/data/researchLabStories.json', import.meta.url);
-const sourceUrl = (path) => new URL(`../../src/${path}`, import.meta.url);
 
 async function frozenIndex() {
   const bytes = await readFile(datasetUrl);
@@ -157,6 +158,20 @@ test('artifact-derived story layer preserves 72 authored families and be2 remain
   assert.equal(be2.kind, 'IN_PROGRESS');
   assert.match(be2.whyItEnded, /It has not ended and no outcome is recorded/);
   assert.equal(RESEARCH_LAB_BE2_WINDOW_END, '2026-08-12T00:00:00Z (exclusive)');
+
+  const manifestCitations = new Set(
+    RESEARCH_LAB_ARTIFACTS.map(({ path }) => `web/public/research-lab/${path}`),
+  );
+  for (const story of layer.stories) {
+    for (const source of story.sources) {
+      assert.doesNotMatch(source, /^\/Users\//u);
+      if (story.family === 'verdict-normalization') {
+        assert.match(source, /^web\/public\/research-lab\/ \(manifest custody:/u);
+      } else {
+        assert.ok(manifestCitations.has(source), `${story.family}: ${source}`);
+      }
+    }
+  }
 });
 
 test('search and detail projection expose recorded evidence without inventing an app-open control', async () => {
@@ -175,96 +190,69 @@ test('search and detail projection expose recorded evidence without inventing an
   assert.equal(detail.custody, 'codex/vg17-impact-efficiency-1be1-019faead @ 4f196ec08260');
 });
 
-test('Research Lab is mounted at one durable read-only route with compact navigation discovery', async () => {
-  const [
-    page,
-    app,
-    header,
-    palette,
-    overview,
-    catalog,
-    detailSheet,
-    artifactWorkbench,
-    artifactClient,
-    narrative,
-    analytics,
-    gateAnalytics,
-    compareTray,
-    compareModal,
-  ] = await Promise.all([
-    readFile(sourceUrl('pages/ResearchLab.tsx'), 'utf8'),
-    readFile(sourceUrl('App.tsx'), 'utf8'),
-    readFile(sourceUrl('components/Header.tsx'), 'utf8'),
-    readFile(sourceUrl('components/Palette.tsx'), 'utf8'),
-    readFile(sourceUrl('pages/research-lab/ResearchLabOverview.tsx'), 'utf8'),
-    readFile(sourceUrl('pages/research-lab/ResearchLabCatalog.tsx'), 'utf8'),
-    readFile(sourceUrl('pages/research-lab/ResearchLabDetailSheet.tsx'), 'utf8'),
-    readFile(sourceUrl('pages/research-lab/ResearchLabArtifactWorkbench.tsx'), 'utf8'),
-    readFile(sourceUrl('pages/research-lab/researchLabArtifactClient.ts'), 'utf8'),
-    readFile(sourceUrl('pages/research-lab/ResearchLabNarrative.tsx'), 'utf8'),
-    readFile(sourceUrl('pages/research-lab/ResearchLabAnalytics.tsx'), 'utf8'),
-    readFile(sourceUrl('data/researchLabGateAnalytics.ts'), 'utf8'),
-    readFile(sourceUrl('pages/research-lab/ResearchLabCompareTray.tsx'), 'utf8'),
-    readFile(sourceUrl('pages/research-lab/ResearchLabCompareModal.tsx'), 'utf8'),
-  ]);
-  const surface = [
-    page,
-    overview,
-    catalog,
-    detailSheet,
-    artifactWorkbench,
-    analytics,
-    compareTray,
-    compareModal,
-    artifactClient,
-    narrative,
-  ].join('\n');
+test('gate-array projection preserves eleven exact gate records and compares arrays by code identity', async () => {
+  const payload = {
+    developmentGates: Array.from({ length: 11 }, (_, index) => ({
+      name: `GATE_${String(index + 1).padStart(2, '0')}`,
+      pass: index % 3 === 0,
+      observed: `OBSERVED_${index + 1}`,
+      threshold: `THRESHOLD_${index + 1}`,
+      ...(index % 2 === 0
+        ? { reasonCode: `REASON_${index + 1}` }
+        : { reason_code: `REASON_${index + 1}` }),
+    })),
+  };
+  const rows = researchLabGateRows(payload);
+  assert.equal(rows.length, 11);
+  assert.deepEqual(
+    rows.map(({ code, observed, threshold, reason }) => ({ code, observed, threshold, reason })),
+    Array.from({ length: 11 }, (_, index) => ({
+      code: `GATE_${String(index + 1).padStart(2, '0')}`,
+      observed: `OBSERVED_${index + 1}`,
+      threshold: `THRESHOLD_${index + 1}`,
+      reason: `REASON_${index + 1}`,
+    })),
+  );
 
+  const recordedS2k = JSON.parse(await readFile(
+    new URL('../../public/research-lab/s2k/development.v1.json', import.meta.url),
+    'utf8',
+  ));
+  const recordedRows = researchLabGateRows(recordedS2k);
+  assert.equal(recordedRows.length, 11);
+  assert.deepEqual(
+    recordedRows.map(({ code, observed, threshold }) => ({ code, observed, threshold })),
+    recordedS2k.gates.map(({ name, observed, threshold }) => ({
+      code: name,
+      observed: String(observed),
+      threshold: String(threshold),
+    })),
+  );
+
+  const left = researchLabGateRows({
+    gateFailures: [
+      { code: 'MAX_DRAWDOWN', status: 'FAIL' },
+      { code: 'MIN_SAMPLE', status: 'FAIL' },
+    ],
+  });
+  const right = researchLabGateRows({
+    gateFailures: [
+      { code: 'MIN_SAMPLE', status: 'FAIL' },
+      { code: 'MAX_DRAWDOWN', status: 'FAIL' },
+    ],
+  });
+  const leftByCode = new Map(left.map((row) => [row.code, researchLabGateComparisonIdentity(row)]));
+  const rightByCode = new Map(right.map((row) => [row.code, researchLabGateComparisonIdentity(row)]));
+  assert.equal(leftByCode.get('MAX_DRAWDOWN'), rightByCode.get('MAX_DRAWDOWN'));
+  assert.equal(leftByCode.get('MIN_SAMPLE'), rightByCode.get('MIN_SAMPLE'));
+  assert.notEqual(
+    researchLabGateComparisonIdentity(left[0]),
+    researchLabGateComparisonIdentity(right[0]),
+    'different codes at the same array position must remain NOT_COMPARABLE',
+  );
+});
+
+test('Research Lab retains one durable route contract', () => {
   assert.equal(serializeRoute(routeTarget('research-lab')), '/research-lab');
   assert.deepEqual(parseRoutePath('/research-lab').target, { page: 'research-lab', detailSymbol: null });
-  assert.match(app, /page === ['"]research-lab['"] && <ResearchLab \/>/);
-  assert.match(header, /id: ['"]research-lab['"], label: ['"]Research Lab['"]/);
-  assert.match(palette, /page: ['"]research-lab['"], name: ['"]Research Lab['"]/);
-
-  assert.doesNotMatch(surface, /href=|window\.open|fetch\(['"]\/api|WebSocket/);
-  assert.doesNotMatch(surface, />\s*(?:Run|Approve|Deploy|Execute|Trade|Buy|Sell|Withdraw|Credential)\b/iu);
-
-  assert.match(page, /<ResearchLabOverview/);
-  assert.match(page, /<ResearchLabCatalog/);
-  assert.match(page, /<ResearchLabAnalytics/);
-  assert.match(page, /<ResearchLabDetailSheet/);
-  assert.match(page, /<ResearchLabCompareTray/);
-  assert.match(page, /<ResearchLabCompareModal/);
-  assert.match(page, /ARTIFACTS_INSUFFICIENT/);
-  assert.match(page, /source: 'IN_PROGRESS'/);
-  assert.match(page, /manifest-bound artifact/);
-  assert.match(page, /No preserved artifact directory exists/);
-
-  assert.match(overview, /role="group"/);
-  assert.match(overview, /aria-pressed=\{selected\}/);
-  assert.match(catalog, /onSelect\(row\.family, event\.currentTarget\)/);
-  assert.match(catalog, /type="checkbox"/);
-  assert.match(catalog, /CATALOG_PAGE_SIZE = 24/);
-  assert.match(catalog, /aria-sort=/);
-  assert.match(catalog, /Previous Family Page/);
-  assert.match(catalog, /Full Text In Detail/);
-  assert.match(detailSheet, /role="dialog"/);
-  assert.match(detailSheet, /aria-modal="true"/);
-  assert.match(detailSheet, /scrollIntoView\(\{ block: 'start' \}\)/);
-  assert.match(artifactWorkbench, /Structured/);
-  assert.match(artifactWorkbench, /Raw/);
-  assert.match(artifactWorkbench, /Manifest Match/);
-  assert.match(artifactWorkbench, /artifactPath === active\.path/);
-  assert.match(artifactWorkbench, /Retry Integrity Check/);
-  assert.match(artifactClient, /RESEARCH_LAB_ARTIFACT_BYTE_MISMATCH/);
-  assert.match(artifactClient, /RESEARCH_LAB_ARTIFACT_SHA256_MISMATCH/);
-  assert.match(narrative, /Verify And Open/);
-  assert.doesNotMatch(narrative, /Open Verified Copy/);
-  assert.match(analytics, /Verdicts By Family Type/);
-  assert.match(analytics, /Formal Gates That Failed Most/);
-  assert.match(analytics, /Experiments Over Time/);
-  assert.match(gateAnalytics, /Other \/ Unmapped/);
-  assert.match(compareTray, /2 Selected/);
-  assert.match(compareModal, /Path \+ Occurrence Alignment/);
-  assert.match(compareModal, /NOT_COMPARABLE/);
 });

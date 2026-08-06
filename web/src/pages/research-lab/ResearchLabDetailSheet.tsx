@@ -203,9 +203,11 @@ export function ResearchLabDetailSheet({
               type="button"
               className="research-detail-sheet__compare"
               aria-pressed={compareSelected}
-              disabled={compareDisabled && !compareSelected}
+              aria-disabled={compareDisabled && !compareSelected}
               title={compareDisabled && !compareSelected ? compareStatus : undefined}
-              onClick={onCompareToggle}
+              onClick={() => {
+                if (!compareDisabled || compareSelected) onCompareToggle();
+              }}
             >
               <GitCompareArrows size={17} strokeWidth={1.7} aria-hidden="true" />
               <span>

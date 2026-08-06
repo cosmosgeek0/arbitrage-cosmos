@@ -23,6 +23,7 @@ import {
 import {
   isResearchLabRecord,
   readableResearchLabBytes,
+  researchLabGateComparisonIdentity,
   researchLabGateRows,
   researchLabParameterRows,
   type ResearchLabGateRow,
@@ -357,17 +358,17 @@ function valueClass(label: string): string {
 }
 
 function verdictTone(value: string): string {
-  if (value === 'NO_GO') return 'negative';
+  if (value === 'NO_GO') return 'terracotta';
   if (value === 'UNMEASURED') return 'uncertain';
   return 'recorded';
 }
 
 function GateCell({ row }: { row: ResearchLabGateRow | null }) {
   if (row === null) return <NotComparable />;
-  const negative = /FAIL|FALSE|NO_GO|REJECT/iu.test(row.status);
+  const failed = /FAIL|FALSE|NO_GO|REJECT/iu.test(row.status);
   return (
     <div className="rlcmp-gate-cell">
-      <div><strong data-tone={negative ? 'negative' : 'recorded'}>{row.status}</strong><code>{row.code}</code></div>
+      <div><strong data-tone={failed ? 'terracotta' : 'recorded'}>{row.status}</strong><code>{row.code}</code></div>
       <small>Observed {row.observed} · Threshold {row.threshold}</small>
       <span>{row.reason}</span>
     </div>
@@ -555,7 +556,7 @@ export function ResearchLabCompareModal({
   const gateRows = alignResearchLabRowsByPathOccurrence(
     loadedFamilies?.[0].gates ?? [],
     loadedFamilies?.[1].gates ?? [],
-    (row) => `${row.sourceName}\u0000${row.path}`,
+    (row) => `${row.sourceName}\u0000${researchLabGateComparisonIdentity(row)}`,
   );
   const sourceStatus = evidenceState.status === 'INVALID' ? 'INVALID' : 'CHECKING';
 
@@ -643,10 +644,10 @@ export function ResearchLabCompareModal({
               {frozenRows.map(([label, left, right]) => (
                 <div className="rlcmp-row" key={label}>
                   <div className="rlcmp-field"><span>{label}</span></div>
-                  <div className={valueClass(label)}>
+                  <div className={valueClass(label)} aria-label={`${leftExperiment.family} · ${label}`}>
                     {label === 'Verdict' ? <strong data-tone={verdictTone(left)}>{left}</strong> : left}
                   </div>
-                  <div className={valueClass(label)}>
+                  <div className={valueClass(label)} aria-label={`${rightExperiment.family} · ${label}`}>
                     {label === 'Verdict' ? <strong data-tone={verdictTone(right)}>{right}</strong> : right}
                   </div>
                 </div>
@@ -684,8 +685,12 @@ export function ResearchLabCompareModal({
                       <code>{row.path}</code>
                       {row.repeated ? <small>Occurrence {row.occurrence}</small> : null}
                     </div>
-                    <div className="rlcmp-value"><ParameterCell row={row.left} /></div>
-                    <div className="rlcmp-value"><ParameterCell row={row.right} /></div>
+                    <div className="rlcmp-value" aria-label={`${leftExperiment.family} · Parameter ${row.path}`}>
+                      <ParameterCell row={row.left} />
+                    </div>
+                    <div className="rlcmp-value" aria-label={`${rightExperiment.family} · Parameter ${row.path}`}>
+                      <ParameterCell row={row.right} />
+                    </div>
                   </div>
                 ))}
               </div>
@@ -700,8 +705,8 @@ export function ResearchLabCompareModal({
 
           <section className="rlcmp-section" aria-labelledby={`${titleId}-gates`}>
             <div className="rlcmp-section-title">
-              <div><span>Source + Path + Occurrence Alignment</span><h3 id={`${titleId}-gates`}>Extracted Gate And Verdict Evidence</h3></div>
-              <small>Every preserved result/development artifact is checked. Raw artifacts remain canonical.</small>
+              <div><span>Source + Code Identity Alignment</span><h3 id={`${titleId}-gates`}>Extracted Gate And Verdict Evidence</h3></div>
+              <small>Array gates align by recorded code identity. Unmatched codes stay NOT_COMPARABLE.</small>
             </div>
             <SourceStrip
               label="Preserved Outcome Artifacts"
@@ -716,17 +721,25 @@ export function ResearchLabCompareModal({
             />
             {gateRows.length > 0 ? (
               <div className="rlcmp-row-list">
-                {gateRows.map((row) => (
-                  <div className="rlcmp-row rlcmp-gate-row" key={row.id}>
-                    <div className="rlcmp-field">
-                      <code>{row.path}</code>
-                      <small>{row.left?.sourceName ?? row.right?.sourceName}</small>
-                      {row.repeated ? <small>Occurrence {row.occurrence}</small> : null}
+                {gateRows.map((row) => {
+                  const gatePath = row.left?.path ?? row.right?.path ?? row.path;
+                  const gateCode = row.left?.code ?? row.right?.code ?? 'UNKNOWN';
+                  return (
+                    <div className="rlcmp-row rlcmp-gate-row" key={row.id}>
+                      <div className="rlcmp-field">
+                        <code>{gatePath}</code>
+                        <small>{row.left?.sourceName ?? row.right?.sourceName}</small>
+                        {row.repeated ? <small>Occurrence {row.occurrence}</small> : null}
+                      </div>
+                      <div className="rlcmp-value" aria-label={`${leftExperiment.family} · Gate ${gateCode}`}>
+                        <GateCell row={row.left} />
+                      </div>
+                      <div className="rlcmp-value" aria-label={`${rightExperiment.family} · Gate ${gateCode}`}>
+                        <GateCell row={row.right} />
+                      </div>
                     </div>
-                    <div className="rlcmp-value"><GateCell row={row.left} /></div>
-                    <div className="rlcmp-value"><GateCell row={row.right} /></div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <div className="rlcmp-empty" role={evidenceState.status === 'LOADING' ? 'status' : undefined}>

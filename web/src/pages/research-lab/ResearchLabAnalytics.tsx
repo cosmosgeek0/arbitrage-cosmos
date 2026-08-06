@@ -159,8 +159,9 @@ function VerdictLens({
         ))}
       </div>
       <p className="rla-footnote">
-        Every family is counted once. The three standard verdict columns are exact; two nonstandard
-        recorded values are grouped for display and preserved verbatim above.
+        Every family is counted once. The three standard verdict columns are exact;{' '}
+        {otherRecordedVerdicts.length} nonstandard recorded {otherRecordedVerdicts.length === 1 ? 'value is' : 'values are'}
+        {' '}grouped for display and preserved verbatim above.
       </p>
     </>
   );
@@ -219,7 +220,7 @@ function GateLens({
           <h3>Formal Gates That Failed Most</h3>
           <p>
             A family enters a category when at least one mapped check failed in any recorded phase or trial.
-            Categories overlap, do not sum to 21, and do not mean every trial failed.
+            Categories overlap, do not sum to {noGoFamilies}, and do not mean every trial failed.
           </p>
         </div>
         <dl className="rla-summary-tape rla-summary-tape-compact" aria-label="Failed Gate Coverage Summary">
@@ -460,6 +461,7 @@ export function ResearchLabAnalytics({ experiments, onOpenArtifact }: ResearchLa
         aria-labelledby={`${instanceId}-tab-verdicts`}
         aria-describedby={`${instanceId}-truth-note`}
         hidden={activeLens !== 'verdicts'}
+        tabIndex={0}
       >
         <VerdictLens rows={verdicts} otherRecordedVerdicts={otherRecordedVerdicts} />
       </div>
@@ -471,6 +473,7 @@ export function ResearchLabAnalytics({ experiments, onOpenArtifact }: ResearchLa
         aria-labelledby={`${instanceId}-tab-gates`}
         aria-describedby={`${instanceId}-truth-note`}
         hidden={activeLens !== 'gates'}
+        tabIndex={0}
       >
         <GateLens
           categories={gates.categories}
@@ -488,6 +491,7 @@ export function ResearchLabAnalytics({ experiments, onOpenArtifact }: ResearchLa
         aria-labelledby={`${instanceId}-tab-hours`}
         aria-describedby={`${instanceId}-truth-note`}
         hidden={activeLens !== 'hours'}
+        tabIndex={0}
       >
         <HoursLens
           totalFamilies={experiments.length}

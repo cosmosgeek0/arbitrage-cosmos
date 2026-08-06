@@ -1,5 +1,5 @@
 export const RESEARCH_LAB_ARTIFACT_PROVENANCE = Object.freeze({
-  sourcePath: '/Users/cosmosgeek/Desktop/RESEARCH_LAB_ARTIFACTS',
+  sourcePath: 'Desktop/RESEARCH_LAB_ARTIFACTS',
   versionedRoot: 'web/public/research-lab',
   publicRoot: '/research-lab',
   expectedFamilies: 83,

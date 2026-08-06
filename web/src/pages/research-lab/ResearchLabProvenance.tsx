@@ -13,7 +13,12 @@ import './ResearchLabProvenance.css';
 
 export type ResearchLabProvenanceDataset =
   | Readonly<{ status: 'LOADING'; counts: null; error: null }>
-  | Readonly<{ status: 'READY'; counts: ResearchLabCounts; error: null }>
+  | Readonly<{
+      status: 'READY';
+      counts: ResearchLabCounts;
+      uniqueBranchTipPairs: number;
+      error: null;
+    }>
   | Readonly<{ status: 'INVALID'; counts: null; error: string }>;
 
 export type ResearchLabDatasetStatus = ResearchLabProvenanceDataset['status'];
@@ -29,7 +34,6 @@ type CustodyStatus = Readonly<{
   state: 'pending' | 'validated' | 'invalid' | 'not-present';
 }>;
 
-const FROZEN_BRANCH_TIP_PAIRS = 82;
 const ARTIFACT_DERIVED_STORIES = 57;
 const OPUS_AUTHORED_STORIES = 71;
 const FABLE_AUTHORED_STORIES = 1;
@@ -71,7 +75,7 @@ function CustodyRow({
 
 function datasetCensus(dataset: ResearchLabProvenanceDataset): string {
   if (dataset.status !== 'READY') {
-    return `UNKNOWN · Frozen Contract Expects ${RESEARCH_LAB_DATASET_PROVENANCE.expectedFamilies} Unique Families`;
+    return 'UNKNOWN · Frozen Dataset Schema And Census Not Admitted';
   }
   const { counts } = dataset;
   return [
@@ -82,7 +86,7 @@ function datasetCensus(dataset: ResearchLabProvenanceDataset): string {
     `${counts.special} Other Recorded Verdicts`,
     `${counts.terminal} Terminal Evidence`,
     `${counts.fileReferences.toLocaleString('en-US')} Family File References`,
-    `${FROZEN_BRANCH_TIP_PAIRS} Unique Branch / Tip Pairs`,
+    `${dataset.uniqueBranchTipPairs} Unique Branch / Tip Pairs`,
   ].join(' · ');
 }
 
@@ -132,7 +136,7 @@ export function ResearchLabProvenance({
         <span className="researchx-prov-summary-copy">
           <strong>Provenance &amp; Custody</strong>
           <small>
-            {RESEARCH_LAB_DATASET_PROVENANCE.expectedFamilies} Index Families ·{' '}
+            {dataset.status === 'READY' ? `${dataset.counts.all} Index Families` : 'UNKNOWN Index Families'} ·{' '}
             {RESEARCH_LAB_ARTIFACT_PROVENANCE.expectedFamilies} Artifact Directories ·{' '}
             {RESEARCH_LAB_STORY_PROVENANCE.expectedStories} Preserved Stories
           </small>

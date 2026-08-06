@@ -118,11 +118,10 @@ function manifestArtifactForSource(
   source: string,
   artifacts: readonly ResearchLabArtifact[],
 ): ResearchLabArtifact | null {
-  const exactRoot = `${RESEARCH_LAB_ARTIFACT_PROVENANCE.sourcePath}/`;
   return artifacts.find((artifact) => {
     if (artifact.family !== family) return false;
     return source === artifact.name
-      || source === `${exactRoot}${artifact.path}`;
+      || source === `${RESEARCH_LAB_ARTIFACT_PROVENANCE.versionedRoot}/${artifact.path}`;
   }) ?? null;
 }
 

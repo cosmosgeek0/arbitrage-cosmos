@@ -799,6 +799,7 @@ export function ResearchLabArtifactWorkbench({
           role="tabpanel"
           aria-labelledby={activeTabId}
           aria-busy={presentedLoadState.status === 'LOADING'}
+          tabIndex={0}
         >
           <header className="rlaw-artifact-head">
             <div className="rlaw-artifact-title">
@@ -814,7 +815,7 @@ export function ResearchLabArtifactWorkbench({
                   type="button"
                   role="tab"
                   id={`${baseId}-view-tab-${tab.id.toLowerCase()}`}
-                  aria-controls={viewPanelId}
+                  aria-controls={presentedLoadState.status === 'READY' ? viewPanelId : undefined}
                   aria-selected={view === tab.id}
                   tabIndex={view === tab.id ? 0 : -1}
                   key={tab.id}
@@ -878,6 +879,7 @@ export function ResearchLabArtifactWorkbench({
                 className="rlaw-view-panel"
                 role="tabpanel"
                 aria-labelledby={`${baseId}-view-tab-${view.toLowerCase()}`}
+                tabIndex={0}
               >
                 {view === 'RAW' ? (
                   <pre className="rlaw-raw-document" tabIndex={0} aria-label={`Exact Raw ${active.format === 'JSON' ? 'JSON' : 'Text'}`}>

@@ -363,9 +363,14 @@
   letter-spacing: .02em;
 }
 
-.rlcmp-value > strong[data-tone="negative"],
-.rlcmp-gate-cell strong[data-tone="negative"] {
-  color: var(--down, #e0414b);
+.rlcmp-value > strong[data-tone="terracotta"],
+.rlcmp-gate-cell strong[data-tone="terracotta"] {
+  color: #a84a42;
+}
+
+[data-theme="dark"] .rlcmp-value > strong[data-tone="terracotta"],
+[data-theme="dark"] .rlcmp-gate-cell strong[data-tone="terracotta"] {
+  color: #db8b83;
 }
 
 .rlcmp-value > strong[data-tone="uncertain"] {

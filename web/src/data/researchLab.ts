@@ -1,5 +1,5 @@
 export const RESEARCH_LAB_DATASET_PROVENANCE = Object.freeze({
-  sourcePath: '/Users/cosmosgeek/Desktop/RESEARCH_LAB_INDEX.json',
+  sourcePath: 'Desktop/RESEARCH_LAB_INDEX.json',
   sourceSha256: 'c26da762445455ded10a1d7c2eb2a01102d5e9caf143730515f5a70678d4a13b',
   sourceBytes: 33_897,
   expectedFamilies: 84,

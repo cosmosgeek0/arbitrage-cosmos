@@ -12,10 +12,24 @@ export type ResearchLabTypeVerdicts = Readonly<{
   special: number;
 }>;
 
-const FUNDING_FAMILIES = new Set([
-  's1g', 's1j', 's1k', 's1m', 's1n', 's1o',
-  's1q', 's1r', 's1s', 's1t', 's1v', 's1w',
+// The frozen index has no family taxonomy. This UI-only Funding group is
+// derived from the preserved protocol records named here, rather than from an
+// uncited family-id list.
+const FUNDING_FAMILY_PROTOCOL_CITATIONS = Object.freeze([
+  'web/public/research-lab/s1g/protocol.v1.json',
+  'web/public/research-lab/s1j/protocol.v1.json',
+  'web/public/research-lab/s1k/protocol.v1.json',
+  'web/public/research-lab/s1m/protocol.v1.json',
+  'web/public/research-lab/s1n/protocol.v1.json',
+  'web/public/research-lab/s1o/protocol.v1.json',
+  'web/public/research-lab/s1q/protocol.v1.json',
+  'web/public/research-lab/s1r/protocol.v1.json',
+  'web/public/research-lab/s1s/protocol.v1.json',
+  'web/public/research-lab/s1t/protocol.v1.json',
+  'web/public/research-lab/s1v/protocol.v1.json',
+  'web/public/research-lab/s1w/protocol.v1.json',
 ]);
+const FUNDING_FAMILIES = new Set(FUNDING_FAMILY_PROTOCOL_CITATIONS.map((path) => path.split('/')[3]));
 const FAMILY_TYPE_ORDER: readonly ResearchLabFamilyType[] = Object.freeze([
   'VOLUME', 'FUNDING', 'GAP', 'DATA_QUALITY', 'OTHER_UNCLASSIFIED',
 ]);

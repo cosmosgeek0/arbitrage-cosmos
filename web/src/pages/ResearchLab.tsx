@@ -62,23 +62,23 @@ const EMPTY_COMPARISON = Object.freeze([null, null]) as ResearchLabComparisonTup
 const WORKSPACES: readonly Readonly<{
   id: ResearchLabWorkspace;
   label: string;
-  count: string;
+  count: string | null;
   heading: string;
   summary: string;
 }>[] = Object.freeze([
   Object.freeze({
     id: 'FAMILIES',
     label: 'Families',
-    count: '84',
+    count: null,
     heading: 'Experiment families',
-    summary: 'Search, sort, compare, and open the exact evidence recorded for every family in the frozen census.',
+    summary: 'Search, sort, compare, and open the exact evidence recorded for every admitted family in the frozen census.',
   }),
   Object.freeze({
     id: 'PATTERNS',
     label: 'Patterns',
     count: '3 Views',
     heading: 'Evidence patterns',
-    summary: 'Read three honest aggregate views derived from the complete 84-family record, never from the active filter.',
+    summary: 'Read three honest aggregate views derived from the validated frozen record, never from the active filter.',
   }),
   Object.freeze({
     id: 'CUSTODY',
@@ -185,6 +185,8 @@ export function ResearchLab() {
   const artifactRequestNonce = useRef(0);
   const detailReturnFocusRef = useRef<HTMLElement | null>(null);
   const compareTriggerRef = useRef<HTMLButtonElement>(null);
+  const catalogFallbackFocusRef = useRef<HTMLButtonElement>(null);
+  const trayRemoveFocusRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -338,16 +340,17 @@ export function ResearchLab() {
   const restoreComparisonFocus = (reason: ResearchLabCompareCloseReason) => {
     if (reason === 'OPEN_ARTIFACT') return;
     if (reason === 'CLEAR') {
-      document.querySelector<HTMLElement>('.research-catalog__family-cell button')?.focus({ preventScroll: true });
+      catalogFallbackFocusRef.current?.focus({ preventScroll: true });
       return;
     }
     if (reason === 'REMOVE') {
-      const trayRemove = document.querySelector<HTMLElement>('.rlcmp-tray-family > button');
-      const familyButton = document.querySelector<HTMLElement>('.research-catalog__family-cell button');
-      (trayRemove ?? familyButton)?.focus({ preventScroll: true });
+      (trayRemoveFocusRef.current ?? catalogFallbackFocusRef.current)?.focus({ preventScroll: true });
       return;
     }
-    if (compareTriggerRef.current?.isConnected && !compareTriggerRef.current.disabled) {
+    if (
+      compareTriggerRef.current?.isConnected
+      && compareTriggerRef.current.getAttribute('aria-disabled') !== 'true'
+    ) {
       compareTriggerRef.current.focus({ preventScroll: true });
     }
   };
@@ -409,7 +412,7 @@ export function ResearchLab() {
                       onClick={() => setWorkspace(item.id)}
                     >
                       <strong>{item.label}</strong>
-                      <small>{item.count}</small>
+                      <small>{item.count ?? counts?.all ?? 'UNKNOWN'}</small>
                     </button>
                   );
                 })}
@@ -429,6 +432,7 @@ export function ResearchLab() {
             onClear={clearComparison}
             onRemove={toggleCompareFamily}
             compareButtonRef={compareTriggerRef}
+            firstRemoveButtonRef={trayRemoveFocusRef}
           />
 
           <section className="research-lab-workspace" data-workspace={workspace.toLowerCase()}>
@@ -438,6 +442,7 @@ export function ResearchLab() {
                 selectedFamily={selectedFamily}
                 comparisonFamilies={comparisonFamilies}
                 state={catalogState}
+                firstFamilyButtonRef={catalogFallbackFocusRef}
                 onSelect={openFamily}
                 onToggleCompare={toggleCompareFamily}
               />
@@ -458,7 +463,14 @@ export function ResearchLab() {
               <div className="research-lab-custody-view">
                 <ResearchLabProvenance
                   dataset={dataset.status === 'READY' && counts
-                    ? { status: 'READY', counts, error: null }
+                    ? {
+                        status: 'READY',
+                        counts,
+                        uniqueBranchTipPairs: new Set(
+                          dataset.experiments.map(({ branch, tip }) => `${branch}\u0000${tip}`),
+                        ).size,
+                        error: null,
+                      }
                     : dataset.status === 'INVALID'
                       ? { status: 'INVALID', counts: null, error: dataset.error }
                       : { status: 'LOADING', counts: null, error: null }}

@@ -204,7 +204,7 @@ export function ResearchLabOverview({
             </div>
           ) : (
             <div className="research-overview__scope" role="note">
-              <strong>{dataset.status === 'READY' ? `All ${dataset.counts.all} Families` : 'Whole Frozen Census'}</strong>
+              <strong>{dataset.status === 'READY' ? `All ${dataset.counts.all} Families` : 'Census UNKNOWN'}</strong>
               <span>Derived views do not inherit catalog filters</span>
             </div>
           )}
@@ -217,7 +217,11 @@ export function ResearchLabOverview({
             <div>
               <span>Recorded Outcome Map</span>
               <h2 id="research-outcome-map-title">What the research actually established</h2>
-              <p>Each count is taken from the frozen 84-family index. Missing evidence stays unresolved.</p>
+              <p>
+                Each count is taken from the {dataset.status === 'READY'
+                  ? `${dataset.counts.all}-family frozen index`
+                  : 'validated frozen index once admitted'}. Missing evidence stays unresolved.
+              </p>
             </div>
             <div className="research-overview__result" role="status" aria-live="polite">
               <strong>{visibleResult.value}</strong>

@@ -14,7 +14,7 @@ export type ResearchLabCompareTrayProps = Readonly<{
   onClear: () => void;
   onRemove: (family: string) => void;
   compareButtonRef?: Ref<HTMLButtonElement>;
-  dialogId?: string;
+  firstRemoveButtonRef?: Ref<HTMLButtonElement>;
 }>;
 
 export function ResearchLabCompareTray({
@@ -23,7 +23,7 @@ export function ResearchLabCompareTray({
   onClear,
   onRemove,
   compareButtonRef,
-  dialogId = 'research-lab-compare-dialog',
+  firstRemoveButtonRef,
 }: ResearchLabCompareTrayProps) {
   if (selection.length === 0) return null;
 
@@ -48,6 +48,7 @@ export function ResearchLabCompareTray({
             <small>{experiment.verdict}</small>
             <button
               type="button"
+              ref={index === 0 ? firstRemoveButtonRef : undefined}
               aria-label={`Remove ${experiment.family} From Comparison`}
               onClick={() => onRemove(experiment.family)}
             >
@@ -70,10 +71,11 @@ export function ResearchLabCompareTray({
           type="button"
           ref={compareButtonRef}
           className="rlcmp-tray-open"
-          disabled={!ready}
+          aria-disabled={!ready}
           aria-haspopup="dialog"
-          aria-controls={dialogId}
-          onClick={onOpen}
+          onClick={() => {
+            if (ready) onOpen();
+          }}
         >
           Compare Families
         </button>

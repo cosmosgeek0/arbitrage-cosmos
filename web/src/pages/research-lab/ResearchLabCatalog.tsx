@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type Ref } from 'react';
 import {
   ArrowDown,
   ArrowUp,
@@ -33,6 +33,7 @@ export type ResearchLabCatalogProps = Readonly<{
   selectedFamily: string | null;
   comparisonFamilies: ResearchLabComparisonTuple;
   state: ResearchLabCatalogState;
+  firstFamilyButtonRef?: Ref<HTMLButtonElement>;
   onSelect: (family: string, opener: HTMLElement) => void;
   onToggleCompare: (family: string) => void;
 }>;
@@ -164,6 +165,7 @@ export function ResearchLabCatalog({
   selectedFamily,
   comparisonFamilies,
   state,
+  firstFamilyButtonRef,
   onSelect,
   onToggleCompare,
 }: ResearchLabCatalogProps) {
@@ -275,7 +277,7 @@ export function ResearchLabCatalog({
         <tbody>
           {renderedState.status !== 'READY' ? (
             <CatalogStateRow state={renderedState} />
-          ) : pageRows.map((row) => {
+          ) : pageRows.map((row, rowIndex) => {
             const slot = comparisonSlot(comparisonFamilies, row.family);
             const compareDisabled = comparisonFull && slot === null;
             const selected = selectedFamily === row.family;
@@ -295,6 +297,7 @@ export function ResearchLabCatalog({
                 <th className="research-catalog__family-cell" scope="row">
                   <button
                     type="button"
+                    ref={rowIndex === 0 ? firstFamilyButtonRef : undefined}
                     aria-current={selected ? 'true' : undefined}
                     onClick={(event) => onSelect(row.family, event.currentTarget)}
                   >
@@ -345,9 +348,11 @@ export function ResearchLabCatalog({
                     <input
                       type="checkbox"
                       checked={slot !== null}
-                      disabled={compareDisabled}
+                      aria-disabled={compareDisabled}
                       aria-label={compareLabel}
-                      onChange={() => onToggleCompare(row.family)}
+                      onChange={() => {
+                        if (!compareDisabled) onToggleCompare(row.family);
+                      }}
                     />
                     <span className="research-catalog__check" aria-hidden="true">
                       {slot ?? ''}

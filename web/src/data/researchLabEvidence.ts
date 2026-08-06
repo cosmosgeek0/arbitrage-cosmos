@@ -1,7 +1,7 @@
 import type { ResearchLabExperiment } from './researchLab';
 
 export const RESEARCH_LAB_STORY_PROVENANCE = Object.freeze({
-  sourcePath: '/Users/cosmosgeek/Desktop/researchLabStories.draft.json',
+  sourcePath: 'Desktop/researchLabStories.draft.json',
   sourceSha256: 'af6334511142c131e5b82e6b1a870221eb30086c562e3dacd1c78e60fcc9b386',
   sourceBytes: 114_029,
   expectedStories: 72,
@@ -10,8 +10,8 @@ export const RESEARCH_LAB_STORY_PROVENANCE = Object.freeze({
   expectedIndexNarratives: 12,
   expectedSources: 246,
   versionedPath: 'web/src/data/researchLabStories.json',
-  versionedSha256: '151886268bc7dec134197e5f619d5c3ba1f261dbb4f05b4f2421d8f1b3d51907',
-  versionedBytes: 114_030,
+  versionedSha256: '3cc8f9d7db6a17c85826d86186c68223306f7875acbc838f187dfa673f873679',
+  versionedBytes: 108_326,
   note: 'stories derived strictly from Desktop/RESEARCH_LAB_ARTIFACTS sealed files; ARTIFACTS_INSUFFICIENT means the family is a tool/incomplete packet whose folder holds no experiment verdict — displayed as-is, never invented',
 });
 
@@ -90,7 +90,8 @@ const STORY_SOURCE_NAMES = new Set([
   'gen_freeze.v1.json',
   'gen_result.v1.json',
 ]);
-const VERDICT_NORMALIZATION_SOURCE = '/Users/cosmosgeek/Desktop/RESEARCH_LAB_ARTIFACTS/ (directory listing only - the verdict-normalization subdirectory is absent; no artifact files were readable)';
+const STORY_PUBLIC_ROOT = 'web/public/research-lab';
+const VERDICT_NORMALIZATION_SOURCE = `${STORY_PUBLIC_ROOT}/ (manifest custody: verdict-normalization directory absent; no artifact file recorded)`;
 const FAILURE_ARRAY_KEYS = new Set(['gateReasons', 'failedGates', 'failedFormalGates', 'gateFailures']);
 const GATE_OBJECT_KEYS = new Set([
   'gates', 'developmentGates', 'holdoutGates', 'primaryGates', 'primary_gates',
@@ -116,8 +117,7 @@ function requiredStoryString(record: Record<string, unknown>, key: string, ident
 }
 
 function validStorySource(family: string, source: string): boolean {
-  if (STORY_SOURCE_NAMES.has(source)) return true;
-  const familyPrefix = `/Users/cosmosgeek/Desktop/RESEARCH_LAB_ARTIFACTS/${family}/`;
+  const familyPrefix = `${STORY_PUBLIC_ROOT}/${family}/`;
   if (source.startsWith(familyPrefix)) return STORY_SOURCE_NAMES.has(source.slice(familyPrefix.length));
   return family === 'verdict-normalization' && source === VERDICT_NORMALIZATION_SOURCE;
 }
@@ -391,11 +391,11 @@ export function researchLabGateRows(value: unknown): readonly ResearchLabGateRow
       path,
       observed: record ? researchLabExactText(record.observed ?? record.value ?? record.actual) : 'NONE_RECORDED',
       threshold: record ? researchLabExactText(record.threshold ?? record.limit ?? record.required) : 'NONE_RECORDED',
-      reason: record ? researchLabExactText(record.reason ?? record.reasonCode) : 'NONE_RECORDED',
+      reason: record ? researchLabExactText(record.reason ?? record.reasonCode ?? record.reason_code) : 'NONE_RECORDED',
     }));
   };
   const visitGateRecord = (record: Record<string, unknown>, path: string, fallbackCode: string) => {
-    const code = researchLabExactText(record.name ?? record.gate ?? record.code ?? record.id ?? fallbackCode);
+    const code = researchLabExactText(record.name ?? record.gate ?? record.code ?? record.gateCode ?? record.id ?? fallbackCode);
     const pass = record.pass ?? record.passed;
     if (typeof pass === 'boolean') add(code, pass ? 'PASS' : 'FAIL', path, record);
     else {
@@ -413,12 +413,12 @@ export function researchLabGateRows(value: unknown): readonly ResearchLabGateRow
           if (typeof item === 'string') add(item, 'FAIL', `${path}[${index}]`);
           else if (isResearchLabRecord(item)) visitGateRecord(item, `${path}[${index}]`, String(index + 1));
         });
-      } else if (GATE_DECISION_KEYS.has(key)) {
+      } else if (GATE_DECISION_KEYS.has(key) || GATE_OBJECT_KEYS.has(key)) {
         node.forEach((item, index) => {
           if (isResearchLabRecord(item)) visitGateRecord(item, `${path}[${index}]`, String(index + 1));
         });
       }
-      node.forEach((item, index) => walk(item, `${path}[${index}]`, key, depth + 1));
+      node.forEach((item, index) => walk(item, `${path}[${index}]`, '', depth + 1));
       return;
     }
     if (GATE_OBJECT_KEYS.has(key)) {
@@ -435,6 +435,13 @@ export function researchLabGateRows(value: unknown): readonly ResearchLabGateRow
   };
   walk(value, '', '', 0);
   return Object.freeze(rows);
+}
+
+export function researchLabGateComparisonIdentity(
+  row: Pick<ResearchLabGateRow, 'code' | 'path'>,
+): string {
+  const normalizedPath = row.path.replace(/\[\d+\]/gu, '[]');
+  return normalizedPath === row.path ? row.path : `${normalizedPath}\u0000${row.code}`;
 }
 
 function collectMatchingScalars(value: unknown, matcher: RegExp): readonly ResearchLabKeyValue[] {

@@ -288,11 +288,11 @@
   outline-offset: 2px;
 }
 
-.research-catalog__compare-control input:disabled {
+.research-catalog__compare-control input[aria-disabled='true'] {
   cursor: not-allowed;
 }
 
-.research-catalog__compare-control:has(input:disabled) {
+.research-catalog__compare-control:has(input[aria-disabled='true']) {
   opacity: .46;
   cursor: not-allowed;
 }

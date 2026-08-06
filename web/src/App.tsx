@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef } from 'react';
+import { Fragment, Suspense, lazy, useEffect, useRef } from 'react';
 import { StoreProvider, resolveReleaseIdentityTruth, useStore } from './store';
 import { IconClock } from './components/Icons';
 import { Sidebar, Topbar, BottomNav, Overlays, RefreshDock } from './components/Header';
@@ -19,7 +19,6 @@ import { SystemHealth } from './pages/SystemHealth';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { News } from './pages/News';
 import { CalendarPage } from './pages/CalendarPage';
-import { ResearchLab } from './pages/ResearchLab';
 import {
   ProductControlRoomProvider,
   ProductControlRoomRoute,
@@ -32,6 +31,11 @@ import {
   type ProductIntegrationEndpoints,
 } from './lib/productIntegration';
 import './pages/MetricTiles.css';
+
+const ResearchLab = lazy(async () => {
+  const module = await import('./pages/ResearchLab');
+  return { default: module.ResearchLab };
+});
 
 const PRODUCT_INTEGRATION_ENDPOINTS: Readonly<ProductIntegrationEndpoints> = Object.freeze({
   supervisor: '/api/product-integration/v1/supervisor',
@@ -129,7 +133,16 @@ function Shell() {
                 {page === 'notifications' && <NotificationsPage />}
                 {page === 'news' && <News />}
                 {page === 'calendar' && <CalendarPage />}
-                {page === 'research-lab' && <ResearchLab />}
+                {page === 'research-lab' && (
+                  <Suspense fallback={(
+                    <div className="container page" role="status" aria-live="polite">
+                      <h1>Research Lab</h1>
+                      <p>Frozen census: UNKNOWN · Loading preserved evidence.</p>
+                    </div>
+                  )}>
+                    <ResearchLab />
+                  </Suspense>
+                )}
               </ErrorBoundary>
             </section>
             <footer className="footer">

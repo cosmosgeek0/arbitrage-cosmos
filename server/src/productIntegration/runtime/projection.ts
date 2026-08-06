@@ -1514,25 +1514,25 @@ function hasSyntheticEvidence(input: Readonly<{
   traces: readonly Readonly<ProductRuntimeCorrelationTrace>[];
 }>): boolean {
   const summaries = input.snapshot.summaries;
-  const systemLabels: SystemTruthLabel[] = [
-    input.snapshot.truthLabel,
-    ...input.snapshot.components.map((component) => component.truthLabel),
-    summaries.sourceCoverage.truthLabel,
-    summaries.strategies.basis.truthLabel,
-    summaries.strategies.volume.truthLabel,
-    summaries.intelligence.truthLabel,
-    summaries.capital.truthLabel,
-    summaries.risk.truthLabel,
-    summaries.execution.truthLabel,
-    summaries.reconciliation.truthLabel,
-    summaries.ledger.truthLabel,
-    ...input.snapshot.recentCorrelatedDecisions.map((event) => event.truthLabel),
-    ...input.snapshot.traceIndex.entries.flatMap((entry) => [
-      ...entry.truthLabels,
-      ...entry.snapshot.events.map((event) => event.truthLabel),
-    ]),
-  ];
-  return systemLabels.includes('SYNTHETIC_ONLY')
+  // Identical disjunction to the previous flat-mapped label array, evaluated in
+  // the same order but without materializing one string per trace event on every
+  // envelope build. `Array.prototype.includes` over a concatenation is exactly a
+  // short-circuiting `some` over its parts, so the boolean is unchanged.
+  const synthetic = (label: SystemTruthLabel): boolean => label === 'SYNTHETIC_ONLY';
+  return synthetic(input.snapshot.truthLabel)
+    || input.snapshot.components.some((component) => synthetic(component.truthLabel))
+    || synthetic(summaries.sourceCoverage.truthLabel)
+    || synthetic(summaries.strategies.basis.truthLabel)
+    || synthetic(summaries.strategies.volume.truthLabel)
+    || synthetic(summaries.intelligence.truthLabel)
+    || synthetic(summaries.capital.truthLabel)
+    || synthetic(summaries.risk.truthLabel)
+    || synthetic(summaries.execution.truthLabel)
+    || synthetic(summaries.reconciliation.truthLabel)
+    || synthetic(summaries.ledger.truthLabel)
+    || input.snapshot.recentCorrelatedDecisions.some((event) => synthetic(event.truthLabel))
+    || input.snapshot.traceIndex.entries.some((entry) => entry.truthLabels.some(synthetic)
+      || entry.snapshot.events.some((event) => synthetic(event.truthLabel)))
     || accountTruth(input.snapshot) === 'SYNTHETIC_ONLY'
     || input.materialEvents.items.some((event) => event.truthLabel === 'SYNTHETIC_ONLY')
     || input.traces.some((trace) => trace.stages.some((stage) => stage.truthLabel === 'SYNTHETIC_ONLY'));

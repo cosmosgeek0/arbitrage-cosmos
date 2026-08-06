@@ -1132,6 +1132,34 @@ function validateOnlyRecord(record: unknown): PersistenceResult<Readonly<Record<
 }
 
 /**
+ * One row of the retained canonical trace scan window, in the same shape the
+ * full rescan derives per row. `record` is null for a row the rescan discards
+ * (not a trace, no correlation, or contract-invalid); the row is still retained
+ * because the rescan counts it toward the scan-truncation bound.
+ */
+type RetainedTraceScanRow = Readonly<{
+  id: number;
+  correlationId: string | null;
+  record: Readonly<PersistedTraceEventRecord> | null;
+}>;
+
+/** Exactly the per-row derivation the full trace rescan performs, done once per row. */
+function retainedTraceScanRow(row: LedgerEventRecord): RetainedTraceScanRow {
+  const discarded = (): RetainedTraceScanRow => Object.freeze({ id: row.id, correlationId: null, record: null });
+  if (!isRecord(row.data) || !isRecord(row.data.trace)) return discarded();
+  const sourceTrace = row.data.trace;
+  if (typeof sourceTrace.correlationId !== 'string') return discarded();
+  if (typeof sourceTrace.occurredAtMs !== 'number') return discarded();
+  const event = { ...sourceTrace, persistedAtMs: row.ts } as unknown as SystemTraceEvent;
+  if (validateSystemTraceEvent(event).length > 0) return discarded();
+  return Object.freeze({
+    id: row.id,
+    correlationId: sourceTrace.correlationId,
+    record: Object.freeze({ ledgerEventId: row.id, persistedAtMs: row.ts, event: Object.freeze(event) }),
+  });
+}
+
+/**
  * One managed adapter over the existing Ledger. Construction and imports are
  * inert; all reads and writes happen only through explicit methods.
  */
@@ -1141,6 +1169,14 @@ export class SystemLedgerPersistenceAdapter {
   private loadFailure: Readonly<{ code: 'PERSISTENCE_CORRUPT' | 'PERSISTENCE_READ_FAILED'; message: string }> | null = null;
   private sealed = false;
   private finalShutdownReceipt: Readonly<PersistedCommitReceipt> | null = null;
+  /** Retained top-`maximumLedgerScan` trace rows, ascending by ledger id. */
+  private traceScanWindow: Readonly<{ rows: readonly RetainedTraceScanRow[]; watermarkId: number }> | null = null;
+  /**
+   * Set once the injected port is observed not to implement the canonical
+   * Ledger's `recentEvents` bounds (limit honoured, newest-first). Structural
+   * doubles that do not are served by the unconditional full rescan.
+   */
+  private traceScanIncrementalUnavailable = false;
 
   constructor(private readonly ledger: LedgerPersistencePort) {
     if (!ledger
@@ -1919,6 +1955,73 @@ export class SystemLedgerPersistenceAdapter {
     };
   }
 
+  /**
+   * The canonical trace scan window: exactly the rows a full
+   * `recentEvents(maximumLedgerScan, SYSTEM_PERSISTENCE_EVENT_KIND)` returns,
+   * kept ascending by ledger id and refreshed incrementally.
+   *
+   * Soundness. Ledger rows are append-only and delete-protected by SQLite
+   * triggers (`events_no_update`, and `events_no_delete_durable`, which
+   * allowlists six recomputable kinds that do not include
+   * `system.integration.trace`), and ids are monotonic. So the row set of this
+   * kind only ever grows at the high end: an unchanged newest id proves an
+   * unchanged window, and appending exactly the rows above the previous
+   * watermark and re-trimming to the last `maximumLedgerScan` reproduces the
+   * rescan's window exactly. The refresh below additionally requires the
+   * incremental result to end at the ledger's own newest id and to be shorter
+   * than one whole window, and falls back to the full rescan otherwise, so a
+   * port that does not honour `afterId` cannot yield a short window.
+   */
+  private readTraceScanWindow(): PersistenceResult<readonly RetainedTraceScanRow[]> {
+    const limit = SYSTEM_PERSISTENCE_LIMITS.maximumLedgerScan;
+    const retained = this.traceScanWindow;
+    if (retained !== null && !this.traceScanIncrementalUnavailable) {
+      let batch: LedgerEventRecord[];
+      try {
+        batch = this.ledger.recentEvents(
+          limit,
+          SYSTEM_PERSISTENCE_EVENT_KIND,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          0,
+          retained.watermarkId,
+        );
+      } catch (error) {
+        return failed('PERSISTENCE_READ_FAILED', errorMessage(error, 'trace query failed'));
+      }
+      // A row at or below the watermark proves this port ignores `afterId`, so
+      // the incremental window can never be trusted to be complete.
+      const ignoresAfterId = batch.some((row) => !Number.isSafeInteger(row.id) || row.id <= retained.watermarkId);
+      const fresh = [...batch].sort((left, right) => left.id - right.id);
+      if (!ignoresAfterId && fresh.length < limit) {
+        if (fresh.length === 0) return { ok: true, value: retained.rows };
+        const appended = [...retained.rows, ...fresh.map(retainedTraceScanRow)];
+        const rows = Object.freeze(appended.slice(Math.max(0, appended.length - limit)));
+        this.traceScanWindow = Object.freeze({ rows, watermarkId: fresh[fresh.length - 1].id });
+        return { ok: true, value: rows };
+      }
+      // Either the port ignores `afterId`, or a whole window arrived at once and
+      // the retained rows cannot bound it. Fall through to the full rescan.
+      if (ignoresAfterId) this.traceScanIncrementalUnavailable = true;
+    }
+    let raw: LedgerEventRecord[];
+    try {
+      raw = this.ledger.recentEvents(limit, SYSTEM_PERSISTENCE_EVENT_KIND);
+    } catch (error) {
+      return failed('PERSISTENCE_READ_FAILED', errorMessage(error, 'trace query failed'));
+    }
+    const rows = Object.freeze([...raw].sort((left, right) => left.id - right.id).map(retainedTraceScanRow));
+    // A port that overruns its own limit is not the canonical Ledger; serve it
+    // the unconditional rescan rather than a trimmed window.
+    this.traceScanWindow = this.traceScanIncrementalUnavailable || raw.length > limit
+      ? null
+      : Object.freeze({ rows, watermarkId: rows.length === 0 ? 0 : rows[rows.length - 1].id });
+    return { ok: true, value: rows };
+  }
+
   queryTraces(
     queries: readonly Readonly<TraceQuery>[],
   ): PersistenceResult<readonly Readonly<PersistedTraceQueryResult>[]> {
@@ -1946,29 +2049,21 @@ export class SystemLedgerPersistenceAdapter {
       }
       normalized.push(Object.freeze({ query, limit }));
     }
-    let raw: LedgerEventRecord[];
-    try {
-      raw = this.ledger.recentEvents(
-        SYSTEM_PERSISTENCE_LIMITS.maximumLedgerScan,
-        SYSTEM_PERSISTENCE_EVENT_KIND,
-      );
-    } catch (error) {
-      return failed('PERSISTENCE_READ_FAILED', errorMessage(error, 'trace query failed'));
-    }
+    const scanned = this.readTraceScanWindow();
+    if (!scanned.ok) return scanned;
+    const window = scanned.value;
     const grouped = new Map<string, PersistedTraceEventRecord[]>(
       [...correlations].map((correlationId) => [correlationId, []]),
     );
-    for (const row of raw) {
-      if (!isRecord(row.data)) continue;
-      if (!isRecord(row.data.trace)) continue;
-      const sourceTrace = row.data.trace;
-      if (typeof sourceTrace.correlationId !== 'string') continue;
-      const matching = grouped.get(sourceTrace.correlationId);
+    // The window is ascending by ledger id where the rescan yielded descending
+    // rows. The group comparator below orders by (sequence, occurredAtMs,
+    // ledgerEventId) and ledgerEventId is a unique primary key, so it is a total
+    // order and the grouped output does not depend on insertion order.
+    for (const row of window) {
+      if (row.record === null || row.correlationId === null) continue;
+      const matching = grouped.get(row.correlationId);
       if (!matching) continue;
-      if (typeof sourceTrace.occurredAtMs !== 'number') continue;
-      const event = { ...sourceTrace, persistedAtMs: row.ts } as unknown as SystemTraceEvent;
-      if (validateSystemTraceEvent(event).length > 0) continue;
-      matching.push(Object.freeze({ ledgerEventId: row.id, persistedAtMs: row.ts, event: Object.freeze(event) }));
+      matching.push(row.record);
     }
     for (const matching of grouped.values()) {
       matching.sort((left, right) => (
@@ -1977,7 +2072,7 @@ export class SystemLedgerPersistenceAdapter {
         || left.ledgerEventId - right.ledgerEventId
       ));
     }
-    const scanTruncated = raw.length >= SYSTEM_PERSISTENCE_LIMITS.maximumLedgerScan;
+    const scanTruncated = window.length >= SYSTEM_PERSISTENCE_LIMITS.maximumLedgerScan;
     const results = normalized.map(({ query, limit }) => {
       const matching = (grouped.get(query.correlationId) ?? []).filter((entry) => (
         (query.sinceMs === undefined || entry.event.occurredAtMs >= query.sinceMs)

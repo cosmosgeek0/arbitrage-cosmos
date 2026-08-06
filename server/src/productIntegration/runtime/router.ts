@@ -56,24 +56,64 @@ function acceptsGzip(req: Request): boolean {
   return false;
 }
 
-async function sendJsonBody(req: Request, res: Response, value: unknown): Promise<void> {
-  const body = JSON.stringify(value);
+// Content-addressed serialization memo. The only body offered here large enough
+// to pay for compression is the supervisor envelope, which carries a SHA-256
+// digest of exactly the bytes being serialized, so the digest is a total key:
+// two envelopes sharing a digest are the same document, and any change to the
+// document changes the digest. Callers without such a digest pass no key and
+// keep the previous per-request behaviour untouched. Two entries are retained so
+// a rebuild in flight cannot evict the cut still being served.
+const SERIALIZATION_MEMO_MAX = 2;
+type SerializedBody = { readonly key: string; readonly body: string; gzip: Buffer | null };
+const serializationMemo: SerializedBody[] = [];
+
+function memoized(key: string | null): SerializedBody | null {
+  if (key === null) return null;
+  return serializationMemo.find((entry) => entry.key === key) ?? null;
+}
+
+function retainSerialized(entry: SerializedBody): void {
+  serializationMemo.unshift(entry);
+  if (serializationMemo.length > SERIALIZATION_MEMO_MAX) serializationMemo.length = SERIALIZATION_MEMO_MAX;
+}
+
+async function sendJsonBody(req: Request, res: Response, value: unknown, cacheKey: string | null = null): Promise<void> {
+  const cached = memoized(cacheKey);
+  const entry = cached ?? { key: cacheKey ?? '', body: JSON.stringify(value), gzip: null };
+  const body = entry.body;
+  if (cached === null && cacheKey !== null) retainSerialized(entry);
   res.type('application/json');
   if (Buffer.byteLength(body) <= GZIP_MIN_BYTES || !acceptsGzip(req)) {
     res.send(body);
     return;
   }
   let compressed: Buffer;
-  try {
-    compressed = await gzipAsync(body);
-  } catch {
-    if (!res.headersSent) res.send(body);
-    return;
+  if (entry.gzip !== null) {
+    compressed = entry.gzip;
+  } else {
+    try {
+      compressed = await gzipAsync(body);
+    } catch {
+      if (!res.headersSent) res.send(body);
+      return;
+    }
+    if (cacheKey !== null) entry.gzip = compressed;
   }
   if (res.headersSent) return;
   res.setHeader('Content-Encoding', 'gzip');
   res.setHeader('Vary', 'Accept-Encoding');
   res.send(compressed);
+}
+
+/**
+ * The supervisor envelope digest is a SHA-256 over exactly the serialized body
+ * (productIntegration/runtime/projection.ts), so it addresses the content and
+ * cannot alias two different documents.
+ */
+function envelopeDigest(envelope: unknown): string | null {
+  if (!envelope || typeof envelope !== 'object') return null;
+  const digest = (envelope as { readonly digest?: unknown }).digest;
+  return typeof digest === 'string' && /^sha256:[a-f0-9]{64}$/.test(digest) ? digest : null;
 }
 
 function exactBody(value: unknown, keys: readonly string[]): value is Record<string, unknown> {
@@ -106,7 +146,8 @@ export function createProductIntegrationRuntimeRouter(service: ProductIntegratio
       res.status(400).json({ ok: false, code: 'INVALID_PRODUCT_QUERY', error: 'Supervisor read accepts no query fields.' });
       return;
     }
-    await sendJsonBody(req, res, await service.readSupervisorShared());
+    const envelope = await service.readSupervisorShared();
+    await sendJsonBody(req, res, envelope, envelopeDigest(envelope));
   }));
 
   router.get('/v1/material-events', asyncRoute(async (req, res) => {

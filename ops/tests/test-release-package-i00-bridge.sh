@@ -5,10 +5,22 @@ set -euo pipefail
 note "assemble one real simulation I00 release for the focused package bridge"
 SHA="$(git -C "$REPO_ROOT" rev-parse HEAD)"
 TREE="$(git -C "$REPO_ROOT" rev-parse HEAD^{tree})"
+TRACKED_INDEX_STATE="$(
+  git -C "$REPO_ROOT" status --porcelain=v1 --untracked-files=no
+)"
 SOURCE="$TEST_TMP/source"
 DEPS="$TEST_TMP/deps"
 TESTED="$TEST_TMP/tested.json"
 I00_OUTPUT="$TEST_TMP/i00-output"
+FROZEN_SOURCE="$TEST_TMP/frozen-source"
+git clone --quiet --shared --no-checkout "$REPO_ROOT" "$FROZEN_SOURCE"
+git -C "$FROZEN_SOURCE" -c advice.detachedHead=false \
+  checkout --quiet --detach "$SHA"
+assert_eq "$(git -C "$FROZEN_SOURCE" rev-parse HEAD)" "$SHA"
+assert_eq "$(git -C "$FROZEN_SOURCE" rev-parse HEAD^{tree})" "$TREE"
+assert_eq "$(
+  git -C "$FROZEN_SOURCE" status --porcelain=v1 --untracked-files=all
+)" ""
 make_release_inputs "$SOURCE" "$DEPS" "$SHA" "$TESTED"
 ASSEMBLY_RECEIPT="$(
   node "$I00_ROOT/bin/assemble-release.mjs" \
@@ -48,7 +60,7 @@ note "build two byte-identical I00 packages from the same assembled release"
 BUILD_A="$(
   umask 077
   node "$BUILD" \
-    --source-root "$REPO_ROOT" \
+    --source-root "$FROZEN_SOURCE" \
     --input-sha "$SHA" \
     --release-root "$RELEASE" \
     --output-root "$OUT_A" \
@@ -60,7 +72,7 @@ BUILD_A="$(
 BUILD_B="$(
   umask 027
   node "$BUILD" \
-    --source-root "$REPO_ROOT" \
+    --source-root "$FROZEN_SOURCE" \
     --input-sha "$SHA" \
     --release-root "$RELEASE" \
     --output-root "$OUT_B" \
@@ -113,7 +125,9 @@ NODE
 assert_eq "$TREE_AFTER" "$TREE_BEFORE"
 assert_eq "$(git -C "$REPO_ROOT" rev-parse HEAD)" "$SHA"
 assert_eq "$(git -C "$REPO_ROOT" rev-parse HEAD^{tree})" "$TREE"
-assert_eq "$(git -C "$REPO_ROOT" status --porcelain=v1 --untracked-files=all)" ""
+assert_eq "$(
+  git -C "$REPO_ROOT" status --porcelain=v1 --untracked-files=no
+)" "$TRACKED_INDEX_STATE"
 
 note "preliminary release-input metadata cannot masquerade as I00"
 PRELIMINARY="$TEST_TMP/preliminary/i00-$SHA"
@@ -127,7 +141,7 @@ printf '%s\n' \
   > "$PRELIMINARY/artifact-manifest.json"
 assert_failure_contains "I00 release.json has an unexpected key set" \
   node "$BUILD" \
-    --source-root "$REPO_ROOT" \
+    --source-root "$FROZEN_SOURCE" \
     --input-sha "$SHA" \
     --release-root "$PRELIMINARY" \
     --output-root "$TEST_TMP" \

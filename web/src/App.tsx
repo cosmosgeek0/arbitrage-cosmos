@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef } from 'react';
 import { StoreProvider, resolveReleaseIdentityTruth, useStore } from './store';
 import { IconClock } from './components/Icons';
-import { Sidebar, Topbar, BottomNav, Overlays, RefreshDock } from './components/Header';
+import { Sidebar, Topbar, BottomNav, Overlays } from './components/Header';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Tape } from './components/Tape';
 import { Palette } from './components/Palette';
@@ -16,6 +16,7 @@ import { Opportunities } from './pages/Opportunities';
 import { Risk } from './pages/Risk';
 import { LedgerPage } from './pages/LedgerPage';
 import { SystemHealth } from './pages/SystemHealth';
+import { Watchdog } from './pages/Watchdog';
 import { NotificationsPage } from './pages/NotificationsPage';
 import { News } from './pages/News';
 import { CalendarPage } from './pages/CalendarPage';
@@ -125,6 +126,7 @@ function Shell() {
                 {page === 'risk' && <Risk />}
                 {page === 'ledger' && <LedgerPage />}
                 {page === 'system' && <SystemHealth />}
+                {page === 'watchdog' && <Watchdog />}
                 {page === 'notifications' && <NotificationsPage />}
                 {page === 'news' && <News />}
                 {page === 'calendar' && <CalendarPage />}
@@ -166,7 +168,6 @@ function Shell() {
       <BottomNav />
       <Palette />
       <Overlays />
-      <RefreshDock />
     </div>
   );
 }

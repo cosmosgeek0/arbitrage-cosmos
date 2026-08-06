@@ -27,7 +27,7 @@ const read = (path) => readFile(new URL(`../../src/${path}`, import.meta.url), '
 const PAGES = [
   'dashboard', 'control-room', 'account', 'wallets', 'markets', 'detail', 'loans', 'execution',
   'orders', 'positions', 'fills', 'pnl', 'strategies', 'volume', 'opportunities', 'risk', 'ledger',
-  'system', 'notifications', 'news', 'calendar',
+  'system', 'watchdog', 'notifications', 'news', 'calendar',
 ];
 
 /** Deterministic, DOM-free stand-in for window.location + window.history. */

@@ -104,9 +104,10 @@ test('decoder returns a frozen success only after the known-envelope validator a
 });
 
 test('store degrades visible socket health and closes the connection at the bounded threshold', async () => {
-  const [source, header] = await Promise.all([
+  const [source, header, watchdog] = await Promise.all([
     readFile(new URL('../../src/store.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../src/components/Header.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../src/pages/Watchdog.tsx', import.meta.url), 'utf8'),
   ]);
 
   assert.match(source, /decodeWebSocketProtocolEnvelope\(msg\.data, isKnownWebSocketEnvelope\)/);
@@ -117,5 +118,7 @@ test('store degrades visible socket health and closes the connection at the boun
   assert.match(source, /applyProtocolObservation\('VALID_ENVELOPE'\)/);
   assert.doesNotMatch(source, /catch\s*\{\s*\/\/ ignore\s*\}/);
   assert.match(header, /!connected \? \{ sev: 'invest', name: 'Cockpit socket offline'/);
-  assert.match(header, /const browserStatus: WatchmanStatus = !connected \|\| appRtt === null\s*\? 'outage'/);
+  // The retired floating launcher owned the browser socket projection; the
+  // Watchdog observatory now renders it, and still never claims LIVE offline.
+  assert.match(watchdog, /connected \? 'SOCKET LIVE' : 'SOCKET OFFLINE'/);
 });

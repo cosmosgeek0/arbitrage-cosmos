@@ -104,14 +104,17 @@ test('all cockpit consumers render canonical supervisor presentation without cli
     readFile(new URL('../../src/pages/Dashboard.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../src/pages/NotificationsPage.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../src/pages/SystemHealth.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../src/pages/Watchdog.tsx', import.meta.url), 'utf8'),
   ]);
   const combined = consumers.join('\n');
   assert.match(consumers[0], /productSnapshot\.canonicalCockpit\.watchmanOverall/);
   assert.match(consumers[0], /productSnapshot\.canonicalCockpit\.marketFeedReadiness/);
-  assert.match(consumers[0], /component\.canonicalPresentation/);
   assert.match(consumers[1], /productSnapshot\.canonicalCockpit\.strategyRuntime/);
   assert.match(consumers[2], /productSnapshot\.canonicalCockpit\.strategyRuntime/);
   assert.match(consumers[3], /snapshot\.canonicalCockpit\.watchmanOverall/);
+  // The retired floating launcher owned the component-presentation render;
+  // Watchdog is now the surface that consumes it.
+  assert.match(consumers[4], /component\.canonicalPresentation/);
   assert.doesNotMatch(combined, /canonical(?:Component|MarketFeedReadiness|StrategyRuntime|WatchmanOverall)Presentation\s*\(/);
 });
 
@@ -311,10 +314,9 @@ test('only exact public-information refresh targets can bypass canonical control
     readFile(new URL('../../src/components/Header.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../src/store.tsx', import.meta.url), 'utf8'),
   ]);
-  const refreshDock = header.slice(header.indexOf('export function RefreshDock()'), header.indexOf('export function Topbar()'));
-  assert.match(refreshDock, /if \(!targetPosture\.actionAllowed\)[\s\S]*return;[\s\S]*fetchJson<\{[\s\S]*\}>\('\/api\/refresh'/);
-  assert.match(refreshDock, /disabled=\{busy\.current \|\| !selectedRecovery\.posture\.actionAllowed\}/);
-  assert.match(refreshDock, /CONTROL_PREVIEW_REQUIRED/);
+  // The floating Watchman launcher was the shell's only direct-refresh caller.
+  // It is retired, so no browser owner may reach /api/refresh at all.
+  assert.doesNotMatch(header, /(?:post|fetch)(?:<[^>]+>)?\('\/api\/refresh'/);
   assert.doesNotMatch(store, /(?:post|fetch)(?:<[^>]+>)?\('\/api\/refresh'/);
 });
 
@@ -332,11 +334,11 @@ test('successful local refresh cannot supersede canonical Watchman outage truth'
     readFile(new URL('../../src/components/Header.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../src/styles.css', import.meta.url), 'utf8'),
   ]);
-  const refreshDock = header.slice(header.indexOf('export function RefreshDock()'), header.indexOf('export function Topbar()'));
-  assert.match(refreshDock, /canonicalWatchmanLauncherPresentation\(\{/);
-  assert.match(refreshDock, /data-action-state=\{st\}/);
-  assert.match(refreshDock, /rdock-control-state status-\$\{launcherPresentation\.healthStatus\}/);
-  assert.doesNotMatch(refreshDock, /Connections Recovered/);
-  assert.doesNotMatch(refreshDock, /st === 'ok' \? 'operational'/);
+  // The launcher is retired: the shell no longer mounts a local action state
+  // that could ever be mistaken for canonical Watchman truth.
+  assert.doesNotMatch(header, /rdock-control-btn/);
+  assert.doesNotMatch(header, /data-action-state=\{st\}/);
+  assert.doesNotMatch(header, /Connections Recovered/);
+  assert.doesNotMatch(header, /st === 'ok' \? 'operational'/);
   assert.doesNotMatch(styles, /\.rdock-(?:control-)?btn\.(?:ok|err)\b/);
 });

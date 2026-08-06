@@ -244,6 +244,7 @@ export type Page =
   | 'risk'
   | 'ledger'
   | 'system'
+  | 'watchdog'
   | 'notifications'
   | 'news'
   | 'calendar';
@@ -251,7 +252,7 @@ export type Page =
 const PAGE_IDS: Page[] = [
   'dashboard', 'control-room', 'account', 'wallets', 'markets', 'detail', 'loans', 'execution', 'orders',
   'positions', 'fills', 'pnl', 'strategies', 'volume', 'opportunities', 'risk', 'ledger', 'system',
-  'notifications', 'news', 'calendar',
+  'watchdog', 'notifications', 'news', 'calendar',
 ];
 
 export function isPageId(value: unknown): value is Page {
@@ -307,6 +308,7 @@ const PAGE_PATHS: Readonly<Record<Exclude<Page, 'detail'>, string>> = Object.fre
   risk: '/risk',
   ledger: '/logs',
   system: '/health',
+  watchdog: '/watchdog',
   notifications: '/notifications',
   news: '/news',
   calendar: '/calendar',
@@ -324,6 +326,7 @@ const SINGLE_SEGMENT_PAGES: Readonly<Record<string, Page>> = Object.freeze({
   risk: 'risk',
   logs: 'ledger',
   health: 'system',
+  watchdog: 'watchdog',
   notifications: 'notifications',
   news: 'news',
   calendar: 'calendar',

@@ -301,9 +301,11 @@ test('legacy liveness and PnL surfaces cannot imply semantic readiness or valida
     read('pages/Account.tsx'),
     read('types.ts'),
   ]);
-  assert.match(header, /fetchJson<unknown>\('\/health\/live'/);
+  // The retired floating launcher owned the only /health/live liveness probe.
+  // The shell now mounts no liveness probe at all, so it cannot imply
+  // semantic readiness from either legacy route.
+  assert.doesNotMatch(header, /'\/health\/live'/);
   assert.doesNotMatch(header, /fetch\('\/api\/health'/);
-  assert.match(header, /direct \/health\/live liveness round trip/);
   assert.match(types, /positions:\s*PositionEntry\[\]\s*\|\s*null/);
   assert.match(types, /openOrders:\s*OpenOrderRow\[\]\s*\|\s*null/);
   assert.match(account, /const openOrders = \[/);

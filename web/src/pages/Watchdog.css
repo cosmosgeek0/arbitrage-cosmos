@@ -44,6 +44,14 @@
 
 /* ---- connection fabric --------------------------------------------------- */
 
+.wdogx-fabric-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border-top: 1px solid var(--line);
+}
+
+.wdogx-fabric-body:has(.wdogx-drawer) { grid-template-columns: minmax(0, 1fr) minmax(300px, 366px); }
+
 .wdogx-fabric-scroll {
   overflow: auto;
   max-height: 440px;
@@ -269,11 +277,33 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(150px, 240px) auto auto auto;
   align-items: center;
-  gap: 14px;
+  gap: 7px 14px;
   min-height: 56px;
   padding: 9px 16px;
   border-bottom: 1px solid var(--line);
 }
+
+.wdogx-control.live { background: color-mix(in srgb, var(--up) 3%, var(--panel)); }
+.wdogx-control.armed { background: color-mix(in srgb, #d6a11d 7%, var(--panel)); }
+
+.wdogx-control-note { grid-column: 1 / -1; min-width: 0; }
+
+.wdogx-control-note em {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  font: 460 10px/14px var(--mono);
+  font-style: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wdogx-control-note code { font: inherit; color: var(--text-2); }
+.wdogx-control-note .wdogx-note-armed { color: #bd781b; font-weight: 560; }
+.wdogx-control-note .wdogx-note-pending { color: var(--text-2); }
+.wdogx-control-note .wdogx-note-healthy { color: var(--up); }
+.wdogx-control-note .wdogx-note-broken { color: var(--down); }
+.wdogx-control-note .wdogx-note-degraded { color: #bd781b; }
 
 .wdogx-control:last-child { border-bottom: 0; }
 
@@ -312,19 +342,31 @@
   white-space: nowrap;
 }
 
-/* A mirror, not a control: no button, no handler, no focus target. */
+/* A span mirror is inert. A button switch is a real canonical control that
+   arms first; both share one shape so the row never changes size. */
 .wdogx-switch {
   display: inline-flex;
   align-items: center;
   flex: none;
   width: 34px;
   height: 19px;
+  margin: 0;
   padding: 2px;
   border: 1px solid var(--line-2);
   border-radius: 10px;
   background: var(--tile);
   opacity: .62;
 }
+
+button.wdogx-switch { cursor: pointer; opacity: 1; transition: border-color .15s ease, background-color .15s ease; }
+button.wdogx-switch:hover:not(:disabled) { border-color: var(--line-strong); background: var(--hover); }
+button.wdogx-switch:disabled { cursor: default; opacity: .5; }
+button.wdogx-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.wdogx-switch.armed {
+  border-color: color-mix(in srgb, #d6a11d 62%, var(--line-2));
+  background: color-mix(in srgb, #d6a11d 16%, var(--panel));
+}
+button.wdogx-switch.armed i { background: #bd781b; }
 
 .wdogx-switch i {
   width: 13px;
@@ -339,7 +381,199 @@
 .wdogx-switch.unknown { justify-content: center; }
 .wdogx-switch.unknown i { width: 9px; height: 9px; }
 
+/* ---- U1 fabric interaction ----------------------------------------------- */
+
+.wdogx-node { cursor: pointer; }
+.wdogx-node rect,
+.wdogx-node text,
+.wdogx-node circle { transition: opacity .16s ease; }
+.wdogx-node:focus { outline: none; }
+.wdogx-node:focus-visible rect { stroke: var(--accent); stroke-width: 2; }
+.wdogx-node.selected rect { stroke: var(--accent); stroke-width: 2; }
+
+/* Pointing at one component isolates its own edges; everything else recedes
+   without moving, so the layout stays deterministic. */
+.wdogx-fabric-svg.focused .wdogx-node { opacity: .3; }
+.wdogx-fabric-svg.focused .wdogx-node.linked { opacity: 1; }
+.wdogx-fabric-svg.focused .wdogx-edge { opacity: .14; }
+.wdogx-fabric-svg.focused .wdogx-edge.linked { opacity: 1; stroke-width: 2.2; }
+.wdogx-fabric-svg .wdogx-node,
+.wdogx-fabric-svg .wdogx-edge { transition: opacity .16s ease, stroke-width .16s ease; }
+
+.wdogx-node-pulse {
+  fill: var(--up);
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wdogxPulse 2.6s ease-in-out infinite;
+}
+
+/* Proven material continuity is the only state that earns a moving edge. */
+.wdogx-fabric-svg.proven .wdogx-edge.state-available:not(.optional) {
+  stroke-dasharray: 5 5;
+  animation: wdogxDash 3.6s linear infinite;
+}
+
+@keyframes wdogxPulse {
+  0%, 100% { opacity: .3; transform: scale(.82); }
+  50% { opacity: 1; transform: scale(1.15); }
+}
+
+@keyframes wdogxDash { to { stroke-dashoffset: -20; } }
+
+/* ---- U1 component drawer -------------------------------------------------- */
+
+.wdogx-drawer {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-height: 440px;
+  overflow-y: auto;
+  border-left: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--tile) 40%, var(--panel));
+}
+
+.wdogx-drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.wdogx-drawer-head > span:first-child { display: grid; gap: 1px; min-width: 0; flex: 1; }
+.wdogx-drawer-head b { color: var(--text); font-size: 12.5px; font-weight: 540; }
+.wdogx-drawer-head code {
+  overflow: hidden;
+  color: var(--muted);
+  font: 500 9.5px/13px var(--mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wdogx-drawer-close {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--muted);
+  font: 500 14px/1 var(--font);
+  cursor: pointer;
+}
+
+.wdogx-drawer-close:hover { border-color: var(--line-strong); color: var(--text); }
+.wdogx-drawer-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.wdogx-drawer-facts { display: grid; margin: 0; }
+.wdogx-drawer-facts > div { padding: 8px 14px; border-bottom: 1px solid var(--line); }
+
+.wdogx-drawer-facts dt {
+  color: var(--muted);
+  font-size: 9.25px;
+  font-weight: 560;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.wdogx-drawer-facts dd {
+  margin: 3px 0 0;
+  color: var(--text-2);
+  font: 480 10.5px/15px var(--mono);
+  overflow-wrap: anywhere;
+}
+
+.wdogx-drawer-deps { display: grid; gap: 5px; padding: 10px 14px 14px; }
+
+.wdogx-drawer-deps > span {
+  color: var(--muted);
+  font-size: 9.25px;
+  font-weight: 560;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.wdogx-drawer-deps > div { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 4px; }
+
+.wdogx-dep-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text-2);
+  font: 500 10px/13px var(--font);
+  cursor: pointer;
+}
+
+.wdogx-dep-chip em { color: var(--muted); font: 560 8.5px/1 var(--mono); font-style: normal; }
+.wdogx-dep-chip:hover { border-color: var(--line-strong); background: var(--hover); }
+.wdogx-dep-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wdogx-dep-chip.state-degraded { border-color: color-mix(in srgb, #d6a11d 46%, var(--line-2)); }
+.wdogx-dep-chip.state-degraded em { color: #bd781b; }
+.wdogx-dep-chip.state-blocked { border-color: color-mix(in srgb, var(--down) 44%, var(--line-2)); }
+.wdogx-dep-chip.state-blocked em { color: var(--down); }
+
+/* ---- U2 actions ----------------------------------------------------------- */
+
+.wdogx-refresh-select .mkx-pill,
+.wdogx-refresh-trigger { min-height: 32px; }
+
+.wdogx-refresh-btn.state-ok { border-color: color-mix(in srgb, var(--up) 44%, var(--line-2)); color: var(--up); }
+.wdogx-refresh-btn.state-err { border-color: color-mix(in srgb, var(--down) 44%, var(--line-2)); color: var(--down); }
+
+.wdogx-probe-btn {
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text-2);
+  font: 520 10px/1 var(--font);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+
+.wdogx-probe-btn:hover:not(:disabled) { border-color: var(--line-strong); background: var(--hover); color: var(--text); }
+.wdogx-probe-btn:disabled { opacity: .55; cursor: default; }
+.wdogx-probe-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wdogx-probe-btn.state-ok { border-color: color-mix(in srgb, var(--up) 42%, var(--line-2)); color: var(--up); }
+.wdogx-probe-btn.state-err { border-color: color-mix(in srgb, var(--down) 42%, var(--line-2)); color: var(--down); }
+
+/* ---- U4 value-change flash ------------------------------------------------ */
+
+.wdogx-flash {
+  display: inline-block;
+  margin: 0 -3px;
+  padding: 0 3px;
+  border-radius: 4px;
+  animation: wdogxFlash 820ms ease-out;
+}
+
+@keyframes wdogxFlash {
+  0% { background: color-mix(in srgb, var(--accent) 24%, transparent); }
+  100% { background: transparent; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wdogx-flash,
+  .wdogx-node-pulse,
+  .wdogx-fabric-svg.proven .wdogx-edge.state-available:not(.optional) { animation: none; }
+  .wdogx-fabric-svg .wdogx-node,
+  .wdogx-fabric-svg .wdogx-edge,
+  .wdogx-node rect,
+  .wdogx-node text,
+  .wdogx-node circle,
+  .wdogx-probe-btn,
+  button.wdogx-switch { transition: none; }
+}
+
 @container (max-width: 1080px) {
+  .wdogx-fabric-body:has(.wdogx-drawer) { grid-template-columns: minmax(0, 1fr); }
+  .wdogx-drawer { max-height: none; border-left: 0; border-top: 1px solid var(--line-2); }
   .wdogx-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .wdogx-fact:nth-child(4n) { border-right: 1px solid var(--line); }
   .wdogx-fact:nth-child(2n) { border-right: 0; }

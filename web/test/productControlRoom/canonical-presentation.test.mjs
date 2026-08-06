@@ -310,12 +310,17 @@ test('only exact public-information refresh targets can bypass canonical control
     assert.equal(posture.statusLabel, 'PUBLIC_REFRESH');
   }
 
-  const [header, store] = await Promise.all([
+  const [header, store, watchdog] = await Promise.all([
     readFile(new URL('../../src/components/Header.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../src/store.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../src/pages/Watchdog.tsx', import.meta.url), 'utf8'),
   ]);
-  // The floating Watchman launcher was the shell's only direct-refresh caller.
-  // It is retired, so no browser owner may reach /api/refresh at all.
+  // The floating Watchman launcher is retired and the Watchdog observatory is
+  // now the browser's only direct-refresh owner. It keeps the same posture gate
+  // ahead of the same POST, and refuses with the canonical status label.
+  assert.match(watchdog, /if \(!posture\.actionAllowed\)[\s\S]*return;[\s\S]*fetchJson<\{[\s\S]*\}>\('\/api\/refresh'/);
+  assert.match(watchdog, /disabled=\{refreshSt === 'spin' \|\| !refreshPosture\.actionAllowed\}/);
+  assert.match(watchdog, /\$\{posture\.statusLabel\} · \$\{posture\.reason\}/);
   assert.doesNotMatch(header, /(?:post|fetch)(?:<[^>]+>)?\('\/api\/refresh'/);
   assert.doesNotMatch(store, /(?:post|fetch)(?:<[^>]+>)?\('\/api\/refresh'/);
 });

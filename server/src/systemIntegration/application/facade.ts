@@ -359,6 +359,15 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
     checkpointRevision: number;
     events: readonly Readonly<SystemTraceEvent>[];
   }> | null = null;
+  private ownerTraceCache: Readonly<{
+    source: readonly Readonly<SystemTraceEvent>[];
+    out: readonly Readonly<SystemTraceEvent>[];
+  }> | null = null;
+  private mergedTraceCache: Readonly<{
+    persisted: readonly Readonly<SystemTraceEvent>[];
+    owner: readonly Readonly<SystemTraceEvent>[];
+    out: readonly Readonly<SystemTraceEvent>[];
+  }> | null = null;
   private startupSucceeded = false;
 
   readonly read: SystemIntegrationReadPort;
@@ -1939,14 +1948,35 @@ export class SystemIntegrationApplication implements SystemIntegrationApplicatio
   private ownerTraceEvents(): readonly Readonly<SystemTraceEvent>[] {
     try {
       const events = this.options.traces?.readTraceEvents() ?? [];
-      return Object.freeze([...events].slice(-MAX_TRACE_EVENTS));
+      // Reference-keyed reuse: the canonical evidence adapter returns the
+      // identical frozen array while its content hash is unchanged. Reusing
+      // the derived copy keeps the array reference stable downstream so the
+      // trace index memo can hit; any new adapter cut misses by reference.
+      if (this.ownerTraceCache !== null && this.ownerTraceCache.source === events) {
+        return this.ownerTraceCache.out;
+      }
+      const out = Object.freeze([...events].slice(-MAX_TRACE_EVENTS));
+      this.ownerTraceCache = Object.freeze({ source: events, out });
+      return out;
     } catch {
       return Object.freeze([]);
     }
   }
 
   private traceEvents(): readonly Readonly<SystemTraceEvent>[] {
-    return uniqueTraceEvents([this.persistedTraceEvents(), this.ownerTraceEvents()]).slice(-MAX_TRACE_EVENTS);
+    const persisted = this.persistedTraceEvents();
+    const owner = this.ownerTraceEvents();
+    // Same reference discipline one level up: both inputs are memoized on
+    // their own sound keys (checkpoint revision; adapter content hash), so an
+    // unchanged pair proves the merge is unchanged.
+    if (this.mergedTraceCache !== null
+        && this.mergedTraceCache.persisted === persisted
+        && this.mergedTraceCache.owner === owner) {
+      return this.mergedTraceCache.out;
+    }
+    const out = Object.freeze(uniqueTraceEvents([persisted, owner]).slice(-MAX_TRACE_EVENTS));
+    this.mergedTraceCache = Object.freeze({ persisted, owner, out });
+    return out;
   }
 
   supervisor(): Readonly<SystemSupervisorReadModel> {

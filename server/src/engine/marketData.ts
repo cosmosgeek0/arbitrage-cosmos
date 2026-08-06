@@ -234,6 +234,14 @@ export class MarketEngine {
   private spotRange = new Map<string, { high: number; low: number }>();
   private features = new Map<string, FeatureEntry>();
   private history = new Map<string, number[]>();
+  // Spark history mutates in exactly two places: the SPARK_MS sampler pass
+  // (one push/shift sweep across all symbols) and the universe prune. A single
+  // generation counter bumped at both sites is therefore a sound memo key for
+  // sparkOf's resample, which is a pure function of history — this removes the
+  // only super-linear per-build cost (symbols × points resampling) from every
+  // market projection. Fresh/stale labels are never memoized anywhere.
+  private sparkGeneration = 0;
+  private sparkMemo = new Map<string, { generation: number; points: number; out: number[] }>();
   private liquidations = new Map<string, LiquidationPrint[]>();
   private spotUpdatedAt = new Map<string, number>();
   private markUpdatedAt = new Map<string, number>();
@@ -421,6 +429,7 @@ export class MarketEngine {
         h.push(p);
         if (h.length > SPARK_CAP) h.shift();
       }
+      this.sparkGeneration += 1;
     }, SPARK_MS);
 
     void this.refreshOpenInterestSlice(OI_SLICE_SIZE * 2, generation).catch((error) => {
@@ -597,11 +606,22 @@ export class MarketEngine {
     const safePoints = Number.isSafeInteger(points) ? Math.max(2, Math.min(points, SPARK_CAP)) : 40;
     const h = this.history.get(symbol);
     if (!h || h.length < 2) return [];
-    if (h.length <= safePoints) return [...h];
-    const out: number[] = [];
-    for (let i = 0; i < safePoints; i++) {
-      out.push(h[Math.round((i / (safePoints - 1)) * (h.length - 1))]);
+    const memoized = this.sparkMemo.get(symbol);
+    if (memoized !== undefined
+        && memoized.generation === this.sparkGeneration
+        && memoized.points === safePoints) {
+      return memoized.out;
     }
+    let out: number[];
+    if (h.length <= safePoints) {
+      out = [...h];
+    } else {
+      out = [];
+      for (let i = 0; i < safePoints; i++) {
+        out.push(h[Math.round((i / (safePoints - 1)) * (h.length - 1))]);
+      }
+    }
+    this.sparkMemo.set(symbol, { generation: this.sparkGeneration, points: safePoints, out });
     return out;
   }
 
@@ -1035,6 +1055,8 @@ export class MarketEngine {
     pruneMap(this.spotVol, spotSymbols);
     pruneMap(this.spotRange, spotSymbols);
     pruneMap(this.history, spotSymbols);
+    pruneMap(this.sparkMemo, spotSymbols);
+    this.sparkGeneration += 1;
     pruneMap(this.spotUpdatedAt, spotSymbols);
     pruneMap(this.liquidations, perpSymbols);
     pruneMap(this.markUpdatedAt, perpSymbols);

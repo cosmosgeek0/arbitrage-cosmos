@@ -664,6 +664,21 @@ export function createCanonicalOwnerEvidenceReadPort(
     snapshot: Readonly<CanonicalOwnerEvidenceSnapshot>;
     events: readonly Readonly<SystemTraceEvent>[];
   }> | null = null;
+  // Content-keyed cut reuse. The evidence material embeds evaluatedAtMs, so
+  // the full projectionRevision hash moves on every read even when nothing an
+  // owner reported has changed — which forces every downstream consumer (trace
+  // dedupe, trace index, correlated decisions) to rebuild from scratch each
+  // supervisor read. The reuse key hashes the material WITHOUT its timestamp:
+  // identical content returns the identical frozen cut (same snapshot and
+  // events references), truthfully keeping the evaluation time at which that
+  // content was actually established. Any content change misses by hash.
+  let lastContentCut: Readonly<{
+    contentKey: string;
+    cut: Readonly<{
+      snapshot: Readonly<CanonicalOwnerEvidenceSnapshot>;
+      events: readonly Readonly<SystemTraceEvent>[];
+    }>;
+  }> | null = null;
   const build = (): Readonly<{
     snapshot: Readonly<CanonicalOwnerEvidenceSnapshot>;
     events: readonly Readonly<SystemTraceEvent>[];
@@ -717,11 +732,27 @@ export function createCanonicalOwnerEvidenceReadPort(
       readinessAuthority: 'NONE' as const,
       externalActionAuthorization: 'NONE' as const,
     });
+    const { evaluatedAtMs: _contentEvaluatedAtMs, ...materialContent } = material;
+    const contentKey = stableHash128Hex(canonicalJson(materialContent));
     const snapshot: Readonly<CanonicalOwnerEvidenceSnapshot> = Object.freeze({
       ...material,
       projectionRevision: `canonical_owner_evidence_${stableHash128Hex(canonicalJson(material))}`,
     });
-    return Object.freeze({ snapshot, events: traceEvents(snapshot) });
+    if (lastContentCut !== null && lastContentCut.contentKey === contentKey) {
+      // Same evidence content: the snapshot is restamped with this read's
+      // evaluatedAtMs (a fresh observation is truthfully a fresh observation
+      // — pinned by the owner-evidence contract test), while the DERIVED
+      // trace events are reused by reference. Their identities were minted
+      // when this content was actually established, and the stable reference
+      // is what lets the facade and trace-index memos skip the dominant
+      // rebuild cost downstream.
+      const cut = Object.freeze({ snapshot, events: lastContentCut.cut.events });
+      lastContentCut = Object.freeze({ contentKey, cut });
+      return cut;
+    }
+    const cut = Object.freeze({ snapshot, events: traceEvents(snapshot) });
+    lastContentCut = Object.freeze({ contentKey, cut });
+    return cut;
   };
   return Object.freeze({
     readCanonicalOwnerEvidence: () => {

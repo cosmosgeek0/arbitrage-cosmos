@@ -35,6 +35,7 @@ import {
 import type {
   SystemComponentSnapshot,
   SystemControlState,
+  SystemTraceEvent,
 } from '../contracts/types.js';
 import { validateSystemComponentSnapshot } from '../contracts/validation.js';
 import { projectRootCauses } from './rootCause.js';
@@ -710,6 +711,46 @@ function deepFreezeReadModel(model: Readonly<SystemSupervisorReadModel>): void {
   }
 }
 
+// Reference-keyed reuse of the two trace-derived projections. The events
+// array reference is a sound key: the facade returns the identical frozen
+// array while its own content-hash and checkpoint-revision memos hold, and
+// any change to owner evidence or persisted traces produces a new array by
+// construction. The reused index truthfully keeps the evaluatedAtMs at which
+// its content was actually built — identical content, identical evaluation.
+// This removes the dominant per-build cost (re-validating, re-cloning, and
+// canonical-JSON-encoding up to MAX_TRACE_INPUT_EVENTS on every read).
+let traceIndexMemo: Readonly<{
+  events: readonly Readonly<SystemTraceEvent>[];
+  index: ReturnType<typeof buildSystemTraceIndex>;
+}> | null = null;
+let correlatedDecisionsMemo: Readonly<{
+  index: ReturnType<typeof buildSystemTraceIndex>;
+  decisions: ReturnType<typeof recentCorrelatedDecisions>;
+}> | null = null;
+
+function memoizedTraceIndex(
+  events: readonly Readonly<SystemTraceEvent>[],
+  nowMs: number,
+): ReturnType<typeof buildSystemTraceIndex> {
+  if (traceIndexMemo !== null && traceIndexMemo.events === events) {
+    return traceIndexMemo.index;
+  }
+  const index = buildSystemTraceIndex(events, nowMs);
+  traceIndexMemo = Object.freeze({ events, index });
+  return index;
+}
+
+function memoizedCorrelatedDecisions(
+  index: ReturnType<typeof buildSystemTraceIndex>,
+): ReturnType<typeof recentCorrelatedDecisions> {
+  if (correlatedDecisionsMemo !== null && correlatedDecisionsMemo.index === index) {
+    return correlatedDecisionsMemo.decisions;
+  }
+  const decisions = recentCorrelatedDecisions(index);
+  correlatedDecisionsMemo = Object.freeze({ index, decisions });
+  return decisions;
+}
+
 export function buildSystemSupervisorProjection(
   input: Readonly<SystemSupervisorProjectionInput>,
 ): ContractResult<Readonly<SystemSupervisorReadModel>> {
@@ -778,7 +819,7 @@ export function buildSystemSupervisorProjection(
     );
     const componentMap = new Map(components.map((component) => [component.componentId, component]));
     const rootProjection = projectRootCauses(components);
-    const traceIndex = buildSystemTraceIndex(input.traceEvents, input.nowMs);
+    const traceIndex = memoizedTraceIndex(input.traceEvents, input.nowMs);
     const summaries = normalizeSummaries(input.summaries, componentMap);
     const control = Object.freeze({ ...input.control });
     const serviceReadinessPolicy: Readonly<SystemReadinessPolicyProjection> = Object.freeze({
@@ -808,7 +849,7 @@ export function buildSystemSupervisorProjection(
       attentionQueue: rootProjection.attentionQueue,
       summaries,
       traceIndex,
-      recentCorrelatedDecisions: recentCorrelatedDecisions(traceIndex),
+      recentCorrelatedDecisions: memoizedCorrelatedDecisions(traceIndex),
     });
     deepFreezeReadModel(result);
     return ok(result);

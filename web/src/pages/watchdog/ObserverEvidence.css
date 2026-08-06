@@ -1,0 +1,374 @@
+/* =============================================================================
+   ObserverEvidence.css — §6 of the Watchdog page.
+
+   SCOPING RULE FOR THIS FILE, AND THE REASON FOR IT
+   Every rule below is scoped under `.obsx`. The CLASS NAMES inside are the
+   bible's canonical ones (`.mx-band`, `.wd-table`, `.wd-field`,
+   `.wdb`) so that hoisting them into a shared stylesheet later
+   is a mechanical delete, not a rewrite. Until that hoist exists, several
+   sections must each ship their own copy of the same pattern, and an unscoped
+   copy would let whichever file happens to be imported last silently restyle a
+   neighbour's section. Scoping makes that impossible in both directions.
+
+   Nothing here declares a size, weight, ink, duration, radius or hue of its
+   own: every value is a token from tokens.css (§1.9).
+   ========================================================================== */
+
+.obsx {
+  container-type: inline-size;
+  container-name: obsx;
+  display: grid;
+  row-gap: var(--sp-5);            /* header -> body (§4.5) */
+}
+
+/* §4.2.1 — a section draws NO container. This is the explicit named reset that
+   covers every property `.card` sets, in both themes, so the section can never
+   acquire an interior right edge. */
+.obsx,
+.obsx .obsx-body {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.obsx .obsx-body {
+  display: grid;
+  row-gap: var(--sp-6);
+}
+
+.obsx .obsx-body[hidden] { display: none; }
+
+/* -----------------------------------------------------------------------------
+   SECTION HEAD — REMOVED AT INTEGRATION.
+   `.wd-sec-head`, `.wd-sec-toggle`, `.wd-sec-caret`, `.wd-sec-title`,
+   `.wd-sec-count`, `.wd-sec-fig`, `.wd-sec-say` and the two `.wd-sec-hb*` tracks
+   all drew a SECOND section head inside WatchdogSurface's: a second disclosure
+   button, a second T2 title, a second §3.14 partition and a second evidence age.
+   §4.1 allows one section here and §3.14 one counter; the shell's are the ones
+   the hook measures.
+   -------------------------------------------------------------------------- */
+
+/* -----------------------------------------------------------------------------
+   SUB-PART LABELS
+   A T3 uppercase label, not a section head: this section contains no section
+   (§4.1 — two tiers and no third).
+   -------------------------------------------------------------------------- */
+
+.obsx .obsx-part { margin: 0; }
+
+.obsx .obsx-part-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  column-gap: var(--sp-5);
+}
+
+.obsx .obsx-prov {
+  max-inline-size: var(--measure);
+  margin: calc(var(--sp-4) * -1) 0 0;
+  text-wrap: pretty;
+}
+
+/* A stated adverse fact at page-body scale. Hueless: the words carry it. */
+.obsx .obsx-alarm {
+  max-inline-size: var(--measure);
+  margin: 0;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+
+.obsx .obsx-alarm[data-kind="complete"] { color: var(--ink-3); }
+
+/* -----------------------------------------------------------------------------
+   THE BAND · §3.10 MetricCell
+   TWO DEPARTURES FROM §3.10's LITERAL CSS, both in service of a higher law:
+
+   1. `padding` moves from the cell to the BAND. §3.10's precondition is only
+      that every cell's `padding-block` be identical (a subgrid's block padding
+      insets its tracks); inline padding is free. Zeroing it is what keeps the
+      first cell's label and the band's right edge on the page axis, so this
+      band, the tables below it and every other section's numeric column
+      terminate on ONE shared right edge (Law 4). A 16px inset on the outer
+      cells is exactly the interior edge that no-cards exists to prevent.
+   2. The interior `border-inline-start` is replaced by the section gap. §4.2.3
+      allows one semantic device plus one reinforcement per level; the subgrid
+      baseline rail already separates the cells, so a rule AND a gap AND a rail
+      is a third device.
+
+   A fourth subgrid row is added for measured facts. The rail is preserved — all
+   four cells' fact lists start on the same y — and the alternative was a chip
+   reason carrying five unrelated numbers, which is a list, not a reason.
+   -------------------------------------------------------------------------- */
+
+/* MetricCell lives in patterns.css now, in exactly this shape — the band pays
+   the block padding, the cell pays zero, the interior rule is dropped for the
+   section gap. That was the right call and it is the shared one; the other copy
+   of it (which filled `--panel`, inset every cell by 16px and drew an interior
+   rule) is gone. This section declares only that its cells carry a fourth row. */
+.obsx .mx { --mx-rows: 4; }
+
+/* -----------------------------------------------------------------------------
+   FACTS · §3.5 FieldPair
+   -------------------------------------------------------------------------- */
+
+.obsx .wd-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--sp-2);
+  margin: 0;
+}
+
+.obsx .wd-field {
+  display: grid;
+  grid-template-columns: minmax(0, 13ch) minmax(0, 1fr);
+  column-gap: var(--sp-4);
+  align-items: baseline;
+  margin: 0;
+}
+
+/* This scope owns its own two-column `.wd-field` grid rather than the shared
+   subgrid, so it must opt OUT of the shared explicit placement. Without this the
+   shared `.wd-field-label{grid-column:1;grid-row:1}` /
+   `.wd-field-body{grid-column:2/-1;grid-row:1}` would force both children onto
+   row 1 here too — and at the `max-width:620px` breakpoint below, where this
+   grid drops to a single track, the body would spill into an implicit second
+   column. Auto flow is what this scope has always used; this states it. */
+.obsx .wd-field > .wd-field-label,
+.obsx .wd-field > .wd-field-body {
+  grid-column: auto;
+  grid-row: auto;
+}
+
+.obsx .wd-field > dt { min-inline-size: 0; }
+
+.obsx .wd-field > dd {
+  min-inline-size: 0;
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.obsx .obsx-field-act { align-items: center; padding-block-start: var(--sp-2); }
+
+.obsx .obsx-inline {
+  display: inline-flex;
+  align-items: baseline;
+  column-gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+.obsx .obsx-inline > .wd-t6 { color: var(--ink-3); }
+
+.obsx .obsx-spark {
+  display: inline-flex;
+  align-items: center;
+  column-gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+
+/* -----------------------------------------------------------------------------
+   TABLES · §3.4 DataRow + §4.3 the column contract
+   Native <table> + <colgroup> + table-layout:fixed. `display:grid` on a <tr>
+   makes every row its own formatting context, which is what destroys a shared
+   numeric edge (D33).
+   -------------------------------------------------------------------------- */
+
+.obsx .wd-table {
+  inline-size: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  font-family: var(--font);
+  /* `ch` in the <colgroup> resolves against THIS font-size, so it is pinned to
+     the same 12px the cells render at; otherwise a 9ch track is sized for the
+     root face and under-reserves at T4. */
+  font-size: var(--fs-4);
+}
+
+.obsx .wd-table :where(th, td) {
+  padding: var(--sp-3) var(--sp-5);
+  vertical-align: top;
+  text-align: left;
+}
+
+.obsx .wd-table :where(th, td):first-child { padding-inline-start: 0; }
+.obsx .wd-table :where(th, td):last-child { padding-inline-end: 0; }
+
+.obsx .wd-table thead th {
+  white-space: nowrap;
+  vertical-align: bottom;
+  border-block-end: 1px solid var(--line-2);
+}
+
+/* MUST come after the base rule. */
+.obsx .wd-table :where(th, td).wd-col-num { text-align: right; }
+
+/* DELETED: `.obsx-th-probe`. No <th> in this table carries it — the probe
+   column's head is a plain cell — so the rule could never match. */
+
+.obsx .obsx-entry + .obsx-entry > tr:first-child > * {
+  border-block-start: 1px solid var(--line);
+}
+
+.obsx .wd-row { min-block-size: var(--row-h); }
+
+@media (hover: hover) and (pointer: fine) {
+  /* No transition: a fade across a dense table leaves a comet trail (D26). */
+  .obsx .obsx-entry:hover > tr > * { background: var(--hover); }
+}
+
+/* THE HONEST-HEIGHT MECHANISM. A row that cannot prove itself is physically
+   taller, because it is carrying its reason. Height is an honesty signal no
+   configuration can suppress. */
+.obsx .wd-table .obsx-why-row > .wd-why {
+  padding-block: 0 var(--sp-3);
+  color: var(--ink-2);
+  font-size: var(--fs-5);
+  font-weight: var(--fw-support);
+  line-height: var(--lh-5);
+  letter-spacing: var(--ls-5);
+  /* the reason starts at the shared text edge, past both gutters (§4.3) */
+  padding-inline-start: calc(var(--gutter-mark) + var(--gutter-icon));
+  text-wrap: pretty;
+}
+
+.obsx .obsx-code { display: block; overflow-wrap: anywhere; }
+.obsx .obsx-code + .obsx-code { margin-block-start: var(--sp-1); }
+
+.obsx .obsx-reason { display: block; max-inline-size: var(--measure); }
+.obsx .obsx-reason + .obsx-reason { margin-block-start: var(--sp-1); }
+.obsx .obsx-reason b { color: var(--ink-1); font-weight: var(--fw-value); }
+
+/* column tracks — the token is the CONTENT track; the cell padding is added on
+   top of it, because with table-layout:fixed the <col> width is the border box */
+.obsx .obsx-c-lane { inline-size: auto; }
+.obsx .obsx-c-req { inline-size: auto; }
+.obsx .obsx-c-num { inline-size: calc(var(--col-num) + var(--sp-5) * 2); }
+.obsx .obsx-c-wire { inline-size: calc(11ch + var(--sp-5) * 2); }
+.obsx .obsx-c-status { inline-size: calc(12ch + var(--sp-5) * 2); }
+.obsx .obsx-c-fuse { inline-size: calc(22ch + var(--sp-5) * 2); }
+.obsx .obsx-c-hist { inline-size: calc(10ch + var(--sp-5) * 2); }
+.obsx .obsx-c-probe { inline-size: calc(14ch + var(--sp-5)); }
+.obsx .obsx-c-age { inline-size: calc(var(--col-age) + var(--sp-5)); }
+
+.obsx .obsx-lanes { min-inline-size: calc(200px + 75ch + var(--sp-5) * 15); }
+
+.obsx .obsx-lane-name,
+.obsx .obsx-req { display: block; }
+
+.obsx .obsx-lane-sub {
+  display: block;
+  margin-block-start: var(--sp-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.obsx .obsx-req {
+  display: flex;
+  align-items: baseline;
+  column-gap: var(--sp-3);
+  min-inline-size: 0;
+}
+
+.obsx .obsx-method { flex: none; color: var(--ink-3); }
+
+.obsx .obsx-path {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* §3.12 COLUMN scale is StatusChip's `AbsenceColumnNote`; it brings its own
+   `.wd-abs-colnote` rule. All this file owes it is a line box of its own inside
+   a head that is otherwise `white-space: nowrap`. */
+.obsx .wd-table thead .wd-abs-colnote { display: block; white-space: normal; }
+
+/* §3.12's SLOT scale is StatusChip's `AbsenceSlot` and §3.3's is `Numeric`'s own
+   void mark. Neither is restated here: re-implementing a neighbour's absence
+   treatment is exactly how a page ends up with two different dotted rules. */
+
+/* -----------------------------------------------------------------------------
+   THE SCROLL CONTAINER
+   The lane table declares 8 real columns and every one of them answers a
+   question, so below its natural measure it scrolls rather than dropping a
+   column or reflowing into a card. It carries no sticky object, so §4.7's
+   one-sticky-per-scroll-container budget is untouched.
+   -------------------------------------------------------------------------- */
+
+.obsx .obsx-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+/* -----------------------------------------------------------------------------
+   PROBE · §3.6 Button
+   Hierarchy from fill alone; geometry and weight identical at every level.
+   -------------------------------------------------------------------------- */
+
+/* §3.6 Button lives in patterns.css, in this file's own logical-property
+   spelling. The scoped copy that used to sit here omitted
+   `.wdb[aria-disabled="true"]` ENTIRELY and its hover rule lacked the
+   `:not([aria-disabled])` guard — so a refused probe rendered identical to a
+   live one and lit up under the pointer. It also used `padding-inline` alone,
+   leaving the UA button's padding-block in place, which made this section's
+   pills taller than every other pill on the page. */
+
+.obsx .obsx-td-probe {
+  display: table-cell;
+}
+
+.obsx .obsx-probe-result {
+  display: block;
+  margin-block-start: var(--sp-2);
+  max-inline-size: 22ch;
+  overflow-wrap: break-word;
+}
+
+.obsx .obsx-probe-line { display: block; }
+.obsx .obsx-probe-line b { color: var(--ink-1); font-weight: var(--fw-value); }
+.obsx .obsx-probe-line + .obsx-probe-line { margin-block-start: var(--sp-1); }
+
+/* -----------------------------------------------------------------------------
+   RESPONSIVE — container queries only. No width or height `@media` appears in
+   this file at all; the only `@media` rules are input-capability (`hover`) and
+   the two accessibility modes, exactly as the bible's own §3.4 and §3.6 ship
+   them. No `vh`/`vw` anywhere either: the page root carries a CSS `zoom`, which
+   viewport units ignore.
+   -------------------------------------------------------------------------- */
+
+@container obsx (max-width: 620px) {
+  .obsx .wd-field { grid-template-columns: minmax(0, 1fr); row-gap: var(--sp-1); }
+}
+
+/* -----------------------------------------------------------------------------
+   ACCESSIBILITY MODES — re-solved, never renamed.
+   -------------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .obsx .wdb { transition: none; }
+  .obsx .wdb:active { transform: none; }
+  /* the rotation is KEPT: it is the only evidence a request is in flight */
+  .obsx .wdb-spin { animation-duration: 1.2s; }
+}
+
+@media (forced-colors: active) {
+  .obsx .st-void { border-block-end-color: CanvasText; }
+  .obsx .wdb { border-color: CanvasText; }
+  /* GrayText is the OS DISABLED colour; a reason is truth and must never
+     render as disabled. */
+  .obsx .obsx-why-row > .wd-why,
+  .obsx .obsx-reason,
+  .obsx .obsx-alarm { color: CanvasText; }
+}
+
+/* The stalest-member line, moved out of this section's deleted duplicate head.
+   No container, no hue: it is a sentence on the page canvas (Law 4). */
+.obsx .obsx-stalest {
+  margin: 0 0 var(--sp-5);
+  color: var(--ink-2);
+}
+.obsx .obsx-stalest b { color: var(--ink-1); font-weight: var(--fw-value); }

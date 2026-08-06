@@ -291,8 +291,32 @@
 .pcr-control-facts { order: 4; width: 100%; }
 .pcr-emergency-control { border-left: 3px solid var(--down); background: color-mix(in srgb, var(--down) 4%, var(--panel)); }
 .pcr-emergency-control:not(.engaged) .pcr-control-action button:not(:disabled) { border-color: var(--down); background: var(--down); color: #fff; font-weight: 650; }
-.pcr-emergency-control.engaged { border-left-color: var(--up); background: color-mix(in srgb, var(--up) 5%, var(--panel)); }
-.pcr-emergency-control.engaged .pcr-control-action button:not(:disabled) { border-color: var(--up); background: var(--up); color: #fff; font-weight: 650; }
+/* An ENGAGED kill switch means the system is HALTED. It was rendered in --up —
+   the price-up green — which is false green on the control where it matters most
+   (BIBLE.md D23, §6 item 6). Severity here is FILL MASS, not hue: armed stays a 4%
+   --down wash (line above), engaged escalates one rung to a real --bad-tint fill.
+   Measured BT.601 luma so the ladder survives a monochrome screenshot:
+   light 253 -> 238, dark 28 -> 50 — engaged is heavier in BOTH themes.
+   The engaged left rule is --bad (5.03:1 light, 6.6:1 dark on --bad-tint); it is
+   NOT --bad-solid, which measures 1.91:1 on its own tint in dark and would vanish. */
+.pcr-emergency-control.engaged { border-left-color: var(--bad); background: var(--bad-tint); }
+/* The engaged reason ("Kill switch is already ENGAGED. Release is unavailable in
+   this candidate.") is the operator's only statement of WHY the system is halted.
+   It inherits --muted from .pcr-control-action > span, which measures APCA Lc 29.2
+   in dark — below the Lc 30 absolute text minimum. Promoted to the T5 reason role.
+   Scoped to this one control; the rest of the registry is untouched. */
+.pcr-emergency-control .pcr-control-action > span {
+  color: var(--ink-2);
+  font-size: var(--fs-5);
+  font-weight: var(--fw-support);
+  line-height: var(--lh-5);
+}
+/* DELETED: .pcr-emergency-control.engaged .pcr-control-action button:not(:disabled)
+   { border-color: var(--up); background: var(--up); color: #fff; font-weight: 650; }
+   Solid green on an engaged kill switch. Dead today (engaged => actionAllowed:false
+   => the button carries `disabled`, so :not(:disabled) never matches) but a landmine:
+   any future engaged-and-actionable path would have painted HALTED in the healthy
+   colour. Named in BIBLE.md §2 "Casualties". */
 .pcr-control-head,
 .pcr-control-action,
 .pcr-confirm,

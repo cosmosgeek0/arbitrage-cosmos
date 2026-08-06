@@ -1,0 +1,533 @@
+/* =============================================================================
+   OwnerEvidence — the expanded region inside an owner's ledger row.
+
+   Every class here is namespaced `wdoe-`. Type, ink, numerals, identifiers and
+   the screen-reader utility come from the installed token layer (`.wd-t1..t6`,
+   `.wd-num`, `.wd-id`, `.sr-only`); this file adds layout and exactly two
+   fills.
+
+   Law 4 — NOTHING INSETS CONTENT. No group in this region draws a border, a
+   radius, a fill or a shadow, so every value in it terminates on the ledger's
+   own shared right edge. The two fills that do exist are (a) the exposure
+   solid, which §3.13 licenses as the one hue an evidence surface may carry,
+   and (b) the neutral `--tile` that materialises doubt — fill mass, not hue,
+   so the distinction survives a monochrome screenshot.
+
+   Geometry follows BIBLE §3.5 (FieldPair), §3.11 (InfoRow), §3.12
+   (UnknownState) and §3.16 (GraphNode), transposed onto `wdoe-` names because
+   FieldPair and InfoRow ship no shared module of their own.
+   ========================================================================== */
+
+.wdoe {
+  container-type: inline-size;
+  container-name: wdoe;
+  display: grid;
+  grid-auto-flow: row;
+  gap: var(--sp-7);
+  padding-block: var(--sp-5) var(--sp-7);
+  padding-inline: 0;
+  font-family: var(--font);
+}
+
+/* --- 1 · guidance (§3.11) --------------------------------------------------
+   [16px inset][16px glyph][12px gap][sentence 1fr][12px gap][prov 12ch][16px]
+   The sentence edge lands at 44px on every row. Severity is carried by
+   grammatical mood and one ink step — zero hue, and it survives translation,
+   greyscale and print. */
+
+.wdoe-guide {
+  display: grid;
+  grid-template-columns:
+    var(--sp-6) var(--gutter-icon) var(--sp-5) minmax(0, 1fr) var(--sp-5) 12ch var(--sp-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--mono);   /* `ch` must resolve in MONO for the prov track */
+}
+
+.wdoe-guide-row {
+  position: relative;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: start;
+  padding-block: var(--sp-3);
+}
+
+.wdoe-guide-row + .wdoe-guide-row::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 44px 0;
+  height: 1px;
+  background: var(--line);
+}
+
+.wdoe-guide-glyph {
+  grid-column: 2;
+  align-self: start;
+  display: grid;
+  place-items: center;
+  width: var(--gutter-icon);
+  height: var(--lh-5);
+  color: var(--ink-3);        /* the icon gutter is --ink-3, always (§1.6 r2) */
+}
+
+.wdoe-guide-body { grid-column: 4; min-width: 0; font-family: var(--font); }
+
+.wdoe-guide-row[data-register="binding"] .wdoe-say { color: var(--ink-1); }
+.wdoe-guide-row[data-register="advisory"] .wdoe-say { color: var(--ink-2); }
+
+.wdoe-guide-prov {
+  grid-column: 6;
+  justify-self: end;
+  direction: ltr;
+  unicode-bidi: isolate;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: var(--fs-6);
+  font-weight: var(--fw-value);
+  line-height: var(--lh-6);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.wdoe-say {
+  display: block;
+  text-wrap: pretty;
+  overflow-wrap: break-word;
+  max-inline-size: var(--measure);
+}
+
+.wdoe-guide-none { margin: 0; }
+.wdoe-note-inline { display: block; margin-block-start: var(--sp-1); }
+
+/* --- group scaffolding ---------------------------------------------------- */
+
+.wdoe-group { display: grid; gap: var(--sp-4); }
+
+.wdoe-eyebrow { margin: 0; }
+.wdoe-eyebrow-unit {
+  font-style: normal;
+  font-size: var(--fs-6);
+  font-weight: var(--fw-support);
+  letter-spacing: var(--ls-6);
+  text-transform: none;
+  color: var(--ink-3);
+}
+
+/* --- 2 · fields (§3.5 FieldPair) -------------------------------------------
+   Label left, value on the shared right edge, and any reason or note pushed
+   onto a second row spanning both columns. That is the honest-height
+   mechanism: a field that cannot prove itself is TALLER, because it is
+   carrying its reason, and no configuration can suppress that. */
+
+.wdoe-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  row-gap: var(--sp-4);
+  margin: 0;
+}
+
+.wdoe-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: var(--sp-6);
+  row-gap: var(--sp-1);
+  min-width: 0;
+  padding-block-start: var(--sp-1);
+  border-block-start: 1px solid var(--line);
+}
+.wdoe-fields > .wdoe-field:first-child { padding-block-start: 0; border-block-start: 0; }
+
+.wdoe-label {
+  grid-column: 1;
+  grid-row: 1;
+  overflow-wrap: break-word;   /* a label is NEVER ellipsised */
+}
+
+.wdoe-cell {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  min-width: 0;
+  margin: 0;                   /* the UA's 40px dd indent would break the edge */
+  text-align: end;
+}
+
+.wdoe-value {
+  display: inline-block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* A real value whose provenance is not clean recedes by ONE ink step and by
+   weight — never by size, radius or hue — and its note is required. */
+.wdoe-field[data-proof="qualified"] .wdoe-value { color: var(--ink-2); }
+
+/* The second <dd>: provenance when the field is proven, the reason when it is
+   not. It always spans both columns on row 2, which is what makes an unproven
+   field physically taller than a proven one. */
+.wdoe-why {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin: 0;
+  overflow-wrap: anywhere;
+  max-inline-size: var(--measure);
+}
+.wdoe-field[data-proof="absent"] > .wdoe-why { min-height: var(--row-h-tight); }
+
+/* Standalone absence, used where a whole column or region has nothing to say.
+   An empty column is never blank; it carries the sentence that says why. */
+.wdoe-absent {
+  margin: 0;
+  min-height: var(--row-h-tight);
+  overflow-wrap: anywhere;
+  max-inline-size: var(--measure);
+  color: var(--ink-2);
+}
+
+/* §3.12 SLOT — the slot exists and is unwritten. 3ch is narrower than any real
+   value, so it can never imply a magnitude, and it is identical in every
+   field, so the region's blindness reads as a countable regular structure
+   instead of noise. It is never the answer; the sentence beneath it is. */
+.wdoe-void {
+  display: inline-block;
+  width: 3ch;
+  height: .7em;
+  vertical-align: baseline;
+  border-block-end: 1px dotted var(--ink-3);
+}
+
+/* The one hue an evidence field may carry (§3.13): proven capital exposure. */
+.wdoe-value[data-exposure="exposed"] {
+  padding-inline: var(--sp-2);
+  border-radius: var(--r-xs);
+  background: var(--bad-solid);
+  color: var(--on-solid);
+}
+
+.wdoe-arrow, .wdoe-of {
+  font-style: normal;
+  font-weight: var(--fw-support);
+  color: var(--ink-3);
+}
+.wdoe-inline-nodata { font-weight: var(--fw-support); color: var(--ink-3); }
+
+.wdoe-codes {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-2) var(--sp-4);
+}
+.wdoe-code { font-size: var(--fs-6); color: inherit; }
+
+/* --- the one duration scale ------------------------------------------------
+   The sign track is 2ch so `-`, `<` and `-<` all cost no digit slot and a
+   below-resolution negative never silently loses its direction. The unit
+   rides the value, because this page exists so an operator can paste evidence
+   into an incident ticket. */
+
+.wdoe-dur {
+  display: inline-grid;
+  grid-template-columns: 2ch max-content max-content;
+  align-items: baseline;
+  white-space: nowrap;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  letter-spacing: 0;
+}
+.wdoe-dur-sign   { grid-column: 1; text-align: right; font-style: normal; color: var(--ink-3); }
+.wdoe-dur-figure { grid-column: 2; font-weight: inherit; }
+.wdoe-dur-unit   {
+  grid-column: 3;
+  padding-inline-start: 1ch;
+  font-style: normal;
+  font-size: var(--fs-6);
+  font-weight: var(--fw-support);
+  font-variant-numeric: normal;
+  color: var(--ink-3);
+}
+
+/* --- identifiers and the blame-walk buttons -------------------------------- */
+
+/* The button declares the T4 value register outright. `font: inherit` looked
+   right inside a field — whose value cell is already T4 — and silently
+   rendered every neighbour in the dependency columns at the browser's 16px
+   default, which is a size this system does not have. */
+.wdoe-idbtn {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--ctl-sm);
+  margin-inline: calc(var(--sp-3) * -1);
+  padding-inline: var(--sp-3);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-1);
+  font-family: var(--font);
+  font-size: var(--fs-4);
+  font-weight: var(--fw-value);
+  line-height: var(--lh-4);
+  letter-spacing: var(--ls-4);
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--mo-fast) var(--mo-out), color var(--mo-fast) var(--mo-out);
+}
+/* The underline is the whole affordance: no hue is spent telling you a walk
+   button is a walk button. */
+.wdoe-idbtn .wd-id {
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 3px;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .wdoe-idbtn:hover { background: var(--tile); color: var(--ink-1); }
+  .wdoe-idbtn:hover .wd-id { text-decoration-color: currentColor; }
+}
+
+.wdoe-idself { color: var(--ink-2); }
+.wdoe-selfmark {
+  font-family: var(--font);
+  font-style: normal;
+  font-size: var(--fs-6);
+  font-weight: var(--fw-support);
+  color: var(--ink-3);
+}
+
+/* Each button already bleeds 6px past its box on both sides, so a bare
+   4px gap let two adjacent monospace ids read as one string. Where no
+   separator glyph is doing the work, the track has to. */
+.wdoe-idlist {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  row-gap: var(--sp-1);
+  column-gap: var(--sp-7);
+}
+.wdoe-idlist[data-sep="true"] { column-gap: var(--sp-4); }
+.wdoe-idlist-item { display: inline-flex; align-items: center; gap: var(--sp-4); }
+.wdoe-idlist-sep { font-style: normal; color: var(--ink-3); }
+
+/* --- 3 · dependency ego view (§3.16) ---------------------------------------
+   Three columns, because direction is the decision. No neighbour draws a node
+   box: this region is not given a neighbour's projection, and in §3.16 a
+   boxless node reads READY. Rather than invent a posture it cannot prove, the
+   region states the CHANNEL on the wire and sends you one hop to the row that
+   owns the posture. */
+
+.wdoe-ego { display: grid; gap: var(--sp-4); }
+
+.wdoe-ego-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sp-6);
+}
+
+@container wdoe (min-width: 620px) {
+  .wdoe-ego-cols {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: start;
+    gap: var(--sp-7);
+  }
+  /* The ego's own degree is a completeness check — it is how you know the two
+     side columns are the whole neighbourhood. It only needs a measure cap
+     while it is a middle column; stacked, the cap forces a silly wrap. */
+  .wdoe-ego-selfnote { max-inline-size: 22ch; }
+}
+
+.wdoe-ego-col { display: grid; align-content: start; gap: var(--sp-3); min-width: 0; }
+.wdoe-ego-head { margin: 0; color: var(--ink-3); }
+
+.wdoe-ego-list { display: grid; gap: var(--sp-4); margin: 0; padding: 0; list-style: none; }
+
+.wdoe-ego-item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--sp-4);
+  min-width: 0;
+}
+
+.wdoe-ego-body { display: grid; justify-items: start; gap: var(--sp-1); min-width: 0; }
+.wdoe-ego-channel { display: block; }
+.wdoe-ego-why { display: block; overflow-wrap: anywhere; max-inline-size: var(--measure); }
+
+.wdoe-ego-self, .wdoe-ego-selfnote { margin: 0; }
+
+/* The wire reports the channel, never the component. No opacity anywhere: a
+   dependency wire is the definitional "graphical object required to understand
+   the content", and dimming --ink-3 below 1.0 puts it under the 3:1 floor. */
+/* Optically centred on the neighbour button's 26px control box, measured —
+   not on its 16px line box, which sits 3.5px high. */
+.wdoe-wire { margin-block-start: var(--sp-3); overflow: visible; }
+.wdoe-wire-line, .wdoe-wire-head {
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-width: 1.5px;
+  stroke-linecap: square;
+}
+.wdoe-ego-item[data-contract="optional"] .wdoe-wire-line,
+.wdoe-ego-item[data-contract="optional"] .wdoe-wire-head { stroke-width: 1px; }
+
+.wdoe-ego-item[data-proof="unproven"] .wdoe-wire-line { stroke-dasharray: 4 4; }
+
+.wdoe-ego-item[data-proof="severed"] .wdoe-wire-line,
+.wdoe-ego-item[data-proof="severed"] .wdoe-wire-head { stroke: var(--bad); }
+
+/* DEGRADED deliberately has no rule. A slow channel is a PROVEN channel; the
+   impairment is a property of the component, which has a chip in its own row.
+   That collapse is what leaves this canvas one hue. */
+
+/* --- 5 · full projection --------------------------------------------------- */
+
+.wdoe-more { display: grid; gap: var(--sp-5); }
+
+.wdoe-more-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-height: var(--row-h-tight);
+  border-radius: var(--r-xs);
+  cursor: pointer;
+  list-style: none;
+}
+.wdoe-more-head::-webkit-details-marker { display: none; }
+.wdoe-more-head::before {
+  content: "";
+  flex: none;
+  width: 0;
+  height: 0;
+  border-block: 4px solid transparent;
+  border-inline-start: 5px solid var(--ink-3);
+  transition: transform var(--mo-fast) var(--mo-out);
+}
+.wdoe-more[open] > .wdoe-more-head::before { transform: rotate(90deg); }
+
+.wdoe-more-body { display: grid; gap: var(--sp-7); }
+
+/* --- 6 · the correlation trace --------------------------------------------- */
+
+.wdoe-trace-region { display: grid; gap: var(--sp-4); justify-items: start; }
+
+/* DELETED: this file's private copy of §3.6's pill (and its hover, which used
+   `--tile` where every other button on the page uses `--hover`, so the same
+   gesture read as a strong highlight here and a whisper elsewhere — and the
+   disparity was far larger in dark, where --tile sits two steps ABOVE --hover
+   rather than one below). The element composes `.wdb` now. */
+
+/* The in-flight loop is licensed (§1.7 `--mo-spin`) and carries a non-motion
+   twin: the label itself reads "Reading trace…", so reduced motion costs zero
+   information. */
+/* The spinner is §3.6's `.wdb-spin`, in patterns.css: 50% (never --r-pill on a
+   square, which §1.3 names as a fourth radius language), a
+   `color-mix(currentColor 24%)` rim rather than `--line-strong`, and the one
+   `@keyframes wdb-spin`. This file keeps only the trigger, because this button
+   drives its spinner from `data-phase` rather than from `.is-pending`. */
+.wdoe-trace-btn[data-phase="READING"] > .wdb-spin {
+  opacity: 1;
+  animation: wdb-spin var(--mo-spin) linear infinite;
+}
+
+.wdoe-trace { display: grid; gap: var(--sp-5); width: 100%; }
+.wdoe-trace[hidden] { display: none; }
+
+/* Standalone provenance line in the trace region. */
+.wdoe-meta { margin: 0; overflow-wrap: anywhere; max-inline-size: var(--measure); }
+
+.wdoe-trace-failed { display: grid; gap: var(--sp-2); }
+.wdoe-trace-failed-code { margin: 0; font-family: var(--mono); }
+
+/* Truncation is retention loss, so it is a banner and not a footnote — and it
+   is hueless, because "we ran out of retention" is an UNKNOWN (§1.6 r4). It
+   separates itself from the stages by FILL MASS, the only hierarchy mechanism
+   that survives a monochrome screenshot and protanopia. */
+.wdoe-trunc {
+  display: grid;
+  gap: var(--sp-2);
+  margin: 0;
+  padding: var(--sp-4) var(--sp-5);
+  border-radius: var(--r-sm);
+  background: var(--tile);
+}
+.wdoe-trunc-head {
+  margin: 0;
+  font-family: var(--mono);
+  letter-spacing: var(--ls-3);
+}
+.wdoe-trunc .wdoe-say { margin: 0; }
+
+.wdoe-stages { display: grid; margin: 0; padding: 0; list-style: none; }
+
+.wdoe-stage {
+  display: grid;
+  grid-template-columns: var(--gutter-icon) minmax(0, 1fr) var(--col-age);
+  column-gap: var(--sp-5);
+  align-items: start;
+  min-height: var(--row-h);
+  padding-block: var(--sp-3);
+  border-block-end: 1px solid var(--line);
+}
+.wdoe-stage:last-child { border-block-end: 0; }
+
+.wdoe-stage-n { justify-self: end; color: var(--ink-3); }
+.wdoe-stage-body { display: grid; gap: var(--sp-1); min-width: 0; }
+.wdoe-stage-name { display: block; }
+.wdoe-stage-owner, .wdoe-stage-out { display: block; overflow-wrap: anywhere; }
+.wdoe-stage-why { display: block; overflow-wrap: anywhere; max-inline-size: var(--measure); }
+.wdoe-stage-age { justify-self: end; text-align: end; white-space: nowrap; }
+
+/* ABSENT and UNKNOWN_DUE_TO_TRUNCATION are different findings, so they get
+   different treatments — and neither takes a hue.
+   ABSENT is a complete answer, so it recedes by weight and one ink step.
+   TRUNCATION is doubt, so it materialises a container (§3.16's thesis
+   generalised from a node to a row). */
+.wdoe-stage[data-evidence="ABSENT"] .wdoe-stage-name {
+  color: var(--ink-3);
+  font-weight: var(--fw-support);
+}
+.wdoe-stage[data-evidence="ABSENT"] .wdoe-stage-why { color: var(--ink-3); }
+
+.wdoe-stage[data-evidence="UNKNOWN_DUE_TO_TRUNCATION"] {
+  margin-inline: calc(var(--sp-4) * -1);
+  padding-inline: var(--sp-4);
+  border-radius: var(--r-xs);
+  background: var(--tile);
+}
+.wdoe-stage[data-evidence="UNKNOWN_DUE_TO_TRUNCATION"] .wdoe-stage-name { color: var(--ink-1); }
+
+/* --- local and absent owners ----------------------------------------------- */
+
+.wdoe-local { display: grid; gap: var(--sp-4); }
+.wdoe-local-say { margin: 0; }
+/* For a component the supervisor never reported, the absence sentence IS the
+   primary finding, so it carries full value ink rather than reason ink. */
+.wdoe[data-mode="absent"] .wdoe-local-say { color: var(--ink-1); }
+
+/* --- accessibility modes: re-solved, never renamed -------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .wdoe-trace-btn[data-phase="READING"] > .wdb-spin { animation-duration: var(--mo-seek); }
+  .wdoe-idbtn,
+  .wdoe-trace-btn,
+  .wdoe-more-head::before { transition: none; }
+}
+
+@media (forced-colors: active) {
+  .wdoe-value[data-exposure="exposed"] { background: Highlight; color: HighlightText; }
+  .wdoe-trunc,
+  .wdoe-stage[data-evidence="UNKNOWN_DUE_TO_TRUNCATION"] {
+    background: Canvas;
+    border: 1px solid CanvasText;
+  }
+  .wdoe-void { border-block-end-color: CanvasText; }
+  .wdoe-wire-line, .wdoe-wire-head { stroke: CanvasText; }
+  .wdoe-ego-item[data-proof="severed"] .wdoe-wire-line,
+  .wdoe-ego-item[data-proof="severed"] .wdoe-wire-head { stroke: LinkText; }
+  .wdoe-trace-btn { border-color: ButtonText; }
+  .wdoe-more-head::before { border-inline-start-color: CanvasText; }
+}

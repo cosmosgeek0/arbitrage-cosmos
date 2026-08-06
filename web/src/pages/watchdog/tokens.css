@@ -1,0 +1,152 @@
+/* =============================================================================
+   web/src/pages/watchdog/tokens.css — THE WATCHDOG TOKEN LAYER
+
+   Source of truth: docs/design/watchdog/BIBLE.md §1 (§1.9 is this file).
+   Verified with ops/tests/design/apca.py on the WORST surface of each theme
+   (light --tile-hover #eff1f4, dark --tile-hover #20252d), not the flattering one.
+
+   PATH NOTE. The bible names this file `web/src/tokens.css`; its own header says
+   "If the intended path differs, move it — nothing links to it by path." The
+   architecture places it under the page folder. Nothing in §1 depends on the path.
+
+   SCOPE NOTE. The custom properties are declared at :root, NOT under .watchdog,
+   and that is deliberate per bible §6 items 1-3: two live call sites outside
+   Watchdog read --warn with no fallback (productControlRoom.css:75,
+   pages/TokenDetail.css:635) and are dropped at computed-value time today, so
+   those states render with no colour at all. --warn must exist at :root or the
+   fix is not a fix. The class rules below are all namespaced (.wd-*, .watchdog).
+
+   IMPORTED BY: web/src/main.tsx, as the first import, before './styles.css'.
+   A token file imported by nothing is the known failure this file exists to avoid.
+
+   Adds exactly ONE new hue (--warn). Everything else is a new name or an alias of
+   an existing house token. Measured against the shipped tree on 2026-08-06:
+   ZERO of the names below already resolve anywhere under web/src, except --r-sm
+   and --r-pill, restated at their existing house values 8px and 999px.
+   ========================================================================== */
+:root, [data-theme="light"] {
+  /* spacing */
+  --sp-1:2px; --sp-2:4px; --sp-3:6px; --sp-4:8px;
+  --sp-5:12px; --sp-6:16px; --sp-7:24px; --sp-8:32px; --sp-9:48px;
+
+  /* derived geometry */
+  --row-h:28px; --row-h-tight:24px; --row-h-head:32px;
+  --gutter-mark:8px; --gutter-icon:16px;
+  --col-num:9ch; --col-age:10ch; --measure:72ch;
+  /* §3.11's provenance track and the inset of the rule between its rows. The
+     inset used to be the raw literal `44px` copied into three sheets; it is the
+     row's left gutter plus the icon column plus the body's own lead, and saying
+     so keeps it correct if any of the three move. */
+  --col-prov:12ch;
+  --inforow-rule-inset:calc(var(--sp-6) + var(--gutter-icon) + var(--sp-5));
+  /* §3.14's five figure tracks, and the section title column beside them.
+     Declared as literals in three component sheets before this line existed. */
+  --sec-track:96px; --wdf-title:224px;
+  /* The ONE glyph square on the page: every spinner, every icon-gutter mark and
+     every inline status glyph. It was the literal `12px` in eight sheets. */
+  --glyph:12px;
+  --ctl-sm:26px; --ctl-md:32px; --ctl-lg:40px;
+  --sticky-top:0px;     /* `.app-main main` IS the scroll container; the app header
+                           is a SIBLING ABOVE it. NEVER use --header-h as an offset. */
+
+  /* radius */
+  --r-xs:4px; --r-sm:8px; --r-pill:999px;
+
+  /* type */
+  --fs-1:20px; --lh-1:26px; --ls-1:-.014em;
+  --fs-2:14px; --lh-2:20px; --ls-2:-.006em;
+  --fs-3:10px; --lh-3:14px; --ls-3:.06em;
+  --fs-4:12px; --lh-4:16px; --ls-4:0;
+  --fs-5:12px; --lh-5:16px; --ls-5:0;
+  --fs-6:11px; --lh-6:16px; --ls-6:.02em;
+  --fw-support:450; --fw-value:500; --fw-head:550; --fw-label:600;
+
+  /* ink */
+  --ink-1:#0b0e14; --ink-2:#353a40; --ink-3:#515459; --ink-mute:#9ba2aa;
+  --ink-display:var(--ink-1);
+
+  /* semantic */
+  --ok:var(--up); --warn:#8a5a00; --bad:#c0271f; --held:var(--accent);
+  --ok-tint:#e6f5f0; --warn-tint:#f3eee6; --bad-tint:#f9e9e9; --held-tint:#eaf0ff;
+  --bad-solid:#c62b39; --on-solid:#ffffff;
+
+  /* motion */
+  --mo-instant:0ms; --mo-fast:90ms; --mo-base:160ms; --mo-decay:320ms;
+  --mo-spin:700ms; --mo-seek:1200ms;
+  --mo-out:cubic-bezier(.22,1,.36,1);
+  --mo-arm:320ms; --mo-warm:480ms; --mo-close:120ms;
+
+  /* focus */
+  --focus-ring:var(--accent); --focus-gap:var(--panel);
+}
+
+[data-theme="dark"] {
+  --ink-1:#eef4f9; --ink-2:#e1e5ed; --ink-3:#d1d5db; --ink-mute:#90959c;
+  --ink-display:var(--ink-2);
+  --ok:var(--up); --warn:#e0b34e; --bad:#ff9f9a; --held:#9fbcfb;
+  --ok-tint:#19322e; --warn-tint:#353125; --bad-tint:#3a2e31; --held-tint:#2b3241;
+  --bad-solid:#c44531; --on-solid:#ffffff;
+}
+
+/* ---- type roles: pick a ROLE, never an individual property ---------------- */
+.wd-t1,.wd-t2,.wd-t3,.wd-t4,.wd-t5,.wd-t6 { margin:0; font-family:var(--font); font-optical-sizing:auto; }
+.wd-t1{font-size:var(--fs-1);line-height:var(--lh-1);letter-spacing:var(--ls-1);font-weight:var(--fw-label);color:var(--ink-display);}
+.wd-t2{font-size:var(--fs-2);line-height:var(--lh-2);letter-spacing:var(--ls-2);font-weight:var(--fw-head);color:var(--ink-2);}
+.wd-t3{font-size:var(--fs-3);line-height:var(--lh-3);letter-spacing:var(--ls-3);font-weight:var(--fw-label);color:var(--ink-3);text-transform:uppercase;}
+.wd-t4{font-size:var(--fs-4);line-height:var(--lh-4);letter-spacing:var(--ls-4);font-weight:var(--fw-value);color:var(--ink-1);}
+.wd-t5{font-size:var(--fs-5);line-height:var(--lh-5);letter-spacing:var(--ls-5);font-weight:var(--fw-support);color:var(--ink-2);}
+.wd-t6{font-size:var(--fs-6);line-height:var(--lh-6);letter-spacing:var(--ls-6);font-weight:var(--fw-support);color:var(--ink-3);}
+:where(.wd-t1,.wd-t2,.wd-t3,.wd-t4,.wd-t5,.wd-t6) :where(strong,b){font-weight:var(--fw-value);color:var(--ink-1);}
+
+/* ---- numeric: TWO orthogonal modifiers ------------------------------------
+   .wd-col-num = ALIGNMENT, belongs to the COLUMN (headers get it too).
+   .wd-num     = FIGURES, applied ONLY to cells containing digits.
+   Fusing them strips tracking from 10px uppercase column heads. */
+.wd-col-num { text-align: right; }
+.wd-num {
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+  letter-spacing: 0;   /* MECHANICAL: CSS `ch` is the advance of "0" and does NOT
+                          include letter-spacing, so tracking silently
+                          under-reserves a ch-sized column and clips. */
+}
+
+/* ---- identifier: takes the SIZE and COLOUR of its host register ----------- */
+.wd-id {
+  display:inline-flex; min-width:0;
+  font-family:var(--mono); font-size:inherit; font-weight:var(--fw-value);
+  color:inherit; font-variant-numeric:tabular-nums; letter-spacing:0;
+}
+.wd-id > b { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:inherit; }
+.wd-id > i { flex:none; font-style:normal; }   /* NO literal ellipsis in the markup */
+
+/* ---- absence -------------------------------------------------------------- */
+.wd-nodata     { color:var(--ink-3); }        /* TRUTH: "no proof", "never"  */
+.wd-placeholder{ color:var(--ink-mute); }     /* NON-TRUTH: empty, disabled  */
+
+/* ---- the ONE screen-reader utility in the codebase ------------------------ */
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;
+  overflow:hidden;clip:rect(0,0,0,0);clip-path:inset(50%);white-space:nowrap;}
+
+/* ---- focus ---------------------------------------------------------------- */
+.watchdog :focus-visible{outline:2px solid var(--focus-ring);outline-offset:2px;
+  border-radius:inherit;transition:none;}
+.watchdog .is-clipped:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--focus-ring);}
+
+/* ---- accessibility modes: RE-SOLVED, never renamed ------------------------ */
+@media (prefers-contrast: more){
+  :root,[data-theme="light"]{
+    --ink-1:#000000;--ink-2:#313438;--ink-3:#464a50;--ink-mute:#797d84;
+    --ok:#00542a;--warn:#664100;--bad:#8a1200;--held:#0037b8;--line:var(--line-2);}
+  [data-theme="dark"]{
+    --ink-1:#ffffff;--ink-2:#e5e8ef;--ink-3:#d6dce1;--ink-mute:#b4b6bb;
+    --ok:#00fa7d;--warn:#ffd48a;--bad:#ffd1c9;--held:#ccdbff;--line:var(--line-2);}
+}
+@media (forced-colors: active){
+  /* GrayText is the OS DISABLED colour. Reasons and labels are TRUTH and must
+     never render as disabled — that is the single worst a11y defect this
+     document fixes, and it was committed INSIDE the query meant to prevent it. */
+  .wd-t1,.wd-t2,.wd-t3,.wd-t4,.wd-t5,.wd-t6{color:CanvasText;}
+  .wd-placeholder,[disabled] .wd-t4,[aria-disabled="true"] .wd-t4{color:GrayText;}
+  .watchdog .is-clipped:focus-visible{outline:2px solid Highlight;outline-offset:-2px;box-shadow:none;}
+}

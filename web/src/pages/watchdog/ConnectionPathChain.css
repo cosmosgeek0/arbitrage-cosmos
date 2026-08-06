@@ -1,0 +1,444 @@
+/* =============================================================================
+   ConnectionPathChain.css — the page's only topology surface.
+
+   Composes BIBLE §3.1 (state ladder, as fill not hue), §3.16 (GraphNode: the
+   node fill ladder, the hueless in-port gutter, the wire's four proof states,
+   promote-never-dim), §3.18 (the section head geometry and the age-format law),
+   §3.19 (motion: hover is --mo-fast on colour only, settled states never move).
+
+   Every value below is a §1 token. No raw size, weight, ink, radius, hue or
+   duration is declared here.
+
+   TWO PRESENTATIONS, ONE DOM (§3.16). Default is the rail ledger: hops stacked,
+   wires running down the 16px in-port gutter, every link fact on the full page
+   measure. At container inline-size >= 1040px the same DOM becomes the six-hop
+   sentence: a fixed six-column grid with the wires lying in the 24px gutters.
+   Container queries only for LAYOUT — @media appears three times and never
+   asks about the viewport: `prefers-reduced-motion`, `forced-colors`, and
+   `(hover: hover) and (pointer: fine)`, which is an input-capability query the
+   bible itself uses in §3.4. The page root carries a CSS `zoom`, so no vh/vw
+   appears anywhere in this file.
+   ========================================================================== */
+
+.wdcpx {
+  container-type: inline-size;
+  container-name: wdcpx;
+  display: block;
+}
+
+/* --------------------------------------------------------------------- head
+   §3.18 head geometry verbatim: 1fr | max-content, --ctl-lg as a FLOOR (not a
+   constant), padding-inline 0 so the right track terminates on the page gutter
+   — the shared right edge Law 4 exists to protect. */
+.wdcpx-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  align-items: center;
+  column-gap: var(--sp-6);
+  min-height: var(--ctl-lg);
+  padding-block: var(--sp-4);
+  padding-inline: 0;
+  border-block-end: 1px solid var(--line-2);
+}
+
+.wdcpx-head-copy {
+  display: grid;
+  gap: var(--sp-1);
+  min-width: 0;
+}
+
+.wdcpx-assessed {
+  justify-self: end;
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* `Connecting` is a stated fact, not a value: it renders in the truth ink, not
+   the placeholder ink, because it is what we know rather than what is empty. */
+.wdcpx-assessed[data-connecting='true'] {
+  font-variant-numeric: normal;
+}
+
+/* ------------------------------------------------------------------ verdict
+   The single decision this element exists to deliver, as a sentence, on the
+   --gutter-mark track so it sits on the same axis as the node break marks. */
+.wdcpx-verdict {
+  display: grid;
+  grid-template-columns: var(--gutter-mark) minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--sp-6);
+  padding-block-start: var(--sp-5);
+  max-width: var(--measure);
+}
+
+.wdcpx-verdict-mark {
+  inline-size: 2px;
+  block-size: var(--lh-5);
+  margin-inline: calc((var(--gutter-mark) - 2px) / 2);
+  border-radius: 1px;
+  background: transparent;
+}
+
+/* D19/D23: the mark is HUELESS. Severity is fill mass elsewhere; this is the
+   one decision pointer and it must survive a monochrome screenshot. */
+.wdcpx-verdict-mark[data-break='true'] {
+  background: var(--ink-1);
+}
+
+/* ------------------------------------------------------------------- chain */
+.wdcpx-chain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  padding-block-start: var(--sp-5);
+  display: grid;
+  gap: var(--sp-5);
+}
+
+.wdcpx-step {
+  position: relative;
+  display: grid;
+  grid-auto-rows: auto;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+/* The identifier register never escapes its column: the full string stays in
+   the DOM and stays selectable, so an operator can paste evidence into a
+   ticket (§3.3 law 6); only the rendering is clipped. */
+.wdcpx .wd-id { max-width: 100%; }
+
+/* Hop-level root cause, aligned to the node's content column (8 + 16 = 24). */
+.wdcpx-step > .wdcpx-root-line { padding-inline-start: var(--sp-7); }
+
+/* -------------------------------------------------------------------- node
+   §3.16: the border is PRESENT in every state so nothing ever reflows, and a
+   proving hop draws NO CONTAINER AT ALL — doubt is what materialises structure.
+   Column contract: [--gutter-mark 8][--gutter-icon 16][body], gap 0, so the
+   body starts at 24px = --sp-7 exactly (D3's arithmetic check), matching every
+   other table on the page. padding-inline-start is 0 so the gutters sit on the
+   page axis. */
+.wdcpx-node {
+  appearance: none;
+  -webkit-appearance: none;
+  inline-size: 100%;
+  display: grid;
+  grid-template-columns: var(--gutter-mark) var(--gutter-icon) minmax(0, 1fr);
+  column-gap: 0;
+  align-items: start;
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4) var(--sp-3) 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: var(--wdcpx-surface, transparent);
+  color: var(--ink-1);
+  font: inherit;
+  font-family: var(--font);
+  text-align: start;
+  cursor: pointer;
+  transition: box-shadow var(--mo-fast) var(--mo-out);
+}
+
+.wdcpx-node[data-state='READY'] { --wdcpx-surface: transparent; }
+
+.wdcpx-node[data-state='UNKNOWN'],
+.wdcpx-node[data-state='UNAVAILABLE'],
+.wdcpx-node[data-state='NOT_CONFIGURED'] { --wdcpx-surface: var(--tile); }
+
+.wdcpx-node[data-state='OWNER_GATED'] {
+  --wdcpx-surface: var(--held-tint);
+  border-color: color-mix(in srgb, var(--held) 26%, transparent);
+}
+
+.wdcpx-node[data-state='DEGRADED'] {
+  --wdcpx-surface: var(--warn-tint);
+  border-color: color-mix(in srgb, var(--warn) 28%, transparent);
+}
+
+.wdcpx-node[data-state='BLOCKED'] {
+  --wdcpx-surface: var(--bad-tint);
+  border-color: color-mix(in srgb, var(--bad) 28%, transparent);
+}
+
+/* Hover is an inset ring, never a background swap: swapping the background
+   would erase the state fill, which is the page's only severity channel.
+   D26: a control may transition colour at --mo-fast; a row may not. */
+@media (hover: hover) and (pointer: fine) {
+  .wdcpx-node:hover { box-shadow: inset 0 0 0 1px var(--line-strong); }
+}
+
+/* The ledger's current owner, marked hueless so it cannot be mistaken for a
+   severity. aria-current carries the same fact non-visually. */
+.wdcpx-node[aria-current='true'] { box-shadow: inset 0 -2px 0 0 var(--ink-1); }
+
+@media (hover: hover) and (pointer: fine) {
+  .wdcpx-node[aria-current='true']:hover {
+    box-shadow: inset 0 -2px 0 0 var(--ink-1), inset 0 0 0 1px var(--line-strong);
+  }
+}
+
+.wdcpx-node-mark {
+  grid-column: 1;
+  inline-size: 2px;
+  block-size: var(--lh-4);
+  margin-inline: calc((var(--gutter-mark) - 2px) / 2);
+  border-radius: 1px;
+  background: transparent;
+}
+
+.wdcpx-node-mark[data-break='true'] { background: var(--ink-1); }
+
+/* D19: the icon gutter is --ink-3, ALWAYS. Hue never enters it — colouring it
+   is what previously put --ok and --warn 0.3 Lc apart in dark. §3.16: this
+   gutter IS the wire's in-port, which is why the wire terminates on its centre
+   (x = 8 + 8 = 16px) in both presentations. */
+.wdcpx-glyph {
+  grid-column: 2;
+  display: grid;
+  place-items: center;
+  block-size: var(--lh-4);
+  color: var(--ink-3);
+}
+
+/* D4: 12px for every semantic glyph. The house icons carry stroke-width 1.8 on
+   a 24 viewBox, which resolves to 0.9px at 12px — re-solved here, not resized. */
+.wdcpx-glyph svg { stroke-width: 2.2; }
+
+/* The node is a control, but its contents are EVIDENCE. This page exists so an
+   operator can paste a blocker code into an incident ticket (§3.3 law 6), and a
+   button that swallows selection would take that away. */
+.wdcpx-node-body {
+  grid-column: 3;
+  display: grid;
+  gap: var(--sp-1);
+  min-width: 0;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.wdcpx-node-name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.wdcpx-ordinal {
+  flex: none;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+
+/* The chip is StatusChip's, untouched. Two local corrections only: it must not
+   claim its own cursor inside a button, and it must be free to wrap in a 1/6
+   column. The honesty signal is the chip's own reason line at T5 — §3.4's
+   thesis applied to a node: a hop that cannot prove itself is PHYSICALLY
+   TALLER, because it is carrying its reason. */
+.wdcpx-node-body .wd-chip-slot { min-width: 0; }
+.wdcpx-node-body .wd-chip { cursor: inherit; }
+.wdcpx-node-body .wd-chip-reason { overflow-wrap: anywhere; }
+
+/* The warrant: the value the server published, and the evidence sentence behind
+   it. A proving hop still has to show what it proved — green is earned. Two
+   tiers inside one cell take --sp-1 (§4.5). */
+.wdcpx-warrant {
+  display: grid;
+  gap: var(--sp-1);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.wdcpx-warrant > b { min-width: 0; }
+.wdcpx-detail { min-width: 0; }
+
+.wdcpx-warrant-key { flex: none; color: var(--ink-3); }
+
+/* -------------------------------------------------------------------- link
+   Rail presentation. The wire runs down the in-port gutter; the facts take the
+   full remaining measure, so no reason code is ever truncated. */
+.wdcpx-link {
+  --wire-w: 1.5px;
+  --wire-style: solid;
+  --wire-ink: var(--ink-3);
+  display: grid;
+  grid-template-columns: var(--gutter-mark) var(--gutter-icon) minmax(0, 1fr);
+  column-gap: 0;
+  align-items: stretch;
+}
+
+/* §3.16's wire semantics, verbatim in meaning:
+     required  = 1.5px      optional = 1px          (contract, never opacity)
+     unproven  = dashed     severed  = --bad
+     DEGRADED stays NEUTRAL — a slow channel is a proven channel, and impairment
+     belongs to the component, which carries its own fill. That collapse is what
+     leaves this canvas one hue.
+   `void` is §3.12's slot treatment (dotted hairline: "the slot exists and is
+   unwritten") so an unpublished edge is visually distinct from a published edge
+   whose state is UNKNOWN. Rendering an unmeasured link as a plain healthy line
+   is the false-green defect in graph form. */
+.wdcpx-link[data-contract='optional'] { --wire-w: 1px; }
+.wdcpx-link[data-proof='unproven'] { --wire-style: dashed; }
+.wdcpx-link[data-proof='void'] { --wire-style: dotted; --wire-w: 1px; }
+.wdcpx-link[data-proof='severed'] { --wire-ink: var(--bad); --wire-w: 2px; }
+/* PROMOTE, never dim. Declared last so emphasis wins the width. */
+.wdcpx-link[data-path='lit'] { --wire-w: 2.5px; }
+
+.wdcpx-wire {
+  grid-column: 2;
+  position: relative;
+  align-self: stretch;
+  min-block-size: var(--row-h-tight);
+}
+
+/* The line is out of flow and centred, so changing --wire-w promotes the path
+   without moving one pixel of content. Nothing moves. */
+.wdcpx-wire::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 50%;
+  translate: calc(var(--wire-w) / -2) 0;
+  inline-size: 0;
+  border-inline-start: var(--wire-w) var(--wire-style) var(--wire-ink);
+}
+
+.wdcpx-link-copy {
+  grid-column: 3;
+  display: grid;
+  gap: var(--sp-2);
+  min-width: 0;
+  padding-block: var(--sp-2);
+  max-width: var(--measure);
+}
+
+.wdcpx-link-copy > p { margin: 0; overflow-wrap: anywhere; }
+
+.wdcpx-link-pair { color: var(--ink-3); }
+
+.wdcpx-link-copy .wd-chip-slot { min-width: 0; }
+.wdcpx-link-copy .wd-chip-reason { overflow-wrap: anywhere; }
+
+.wdcpx-codes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+  min-width: 0;
+}
+
+.wdcpx-codes > li { min-width: 0; overflow-wrap: anywhere; }
+
+.wdcpx-root-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-3);
+  margin: 0;
+  min-width: 0;
+}
+
+/* A blocker component id anywhere on this page is a control that focuses and
+   expands that owner. `--r-xs` because it is an inline identifier under 20px
+   tall carrying its own register, not a text-labelled action (D1). */
+.wdcpx-root {
+  appearance: none;
+  -webkit-appearance: none;
+  margin: 0;
+  padding: 0 var(--sp-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-xs);
+  background: var(--tile);
+  color: var(--ink-1);
+  font: inherit;
+  font-size: var(--fs-6);
+  line-height: var(--lh-6);
+  cursor: pointer;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  transition: background-color var(--mo-fast) var(--mo-out),
+              border-color var(--mo-fast) var(--mo-out);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .wdcpx-root:hover { background: var(--tile-hover); border-color: var(--line-strong); }
+}
+
+/* ======================================================================= 1040
+   THE SENTENCE. Six columns, one row, wires lying in the 24px gutters. Column
+   positions come from `repeat(6, ...)` over a module-constant id set: they
+   cannot be reached by a data value, a hover, an expansion or a poll. */
+@container wdcpx (min-width: 1040px) {
+  .wdcpx-chain {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    column-gap: var(--sp-7);
+    row-gap: 0;
+    align-items: start;
+  }
+
+  .wdcpx-step { gap: var(--sp-3); }
+
+  .wdcpx-link {
+    display: block;
+    padding-inline-start: var(--sp-7);
+  }
+
+  /* The wire leaves the flow entirely and lies in the column gap, terminating
+     on the in-port centre of both neighbouring nodes:
+     1px border + --sp-3 padding + half of --lh-4 = 15px from the node's top. */
+  .wdcpx-wire {
+    position: absolute;
+    inset-inline-start: 100%;
+    inset-block-start: calc(1px + var(--sp-3) + var(--lh-4) / 2);
+    inline-size: var(--sp-7);
+    block-size: 0;
+    min-block-size: 0;
+  }
+
+  .wdcpx-wire::before {
+    inset-block: auto;
+    inset-inline: 0;
+    inset-block-start: 0;
+    translate: 0 calc(var(--wire-w) / -2);
+    inline-size: auto;
+    block-size: 0;
+    border-inline-start: 0;
+    border-block-start: var(--wire-w) var(--wire-style) var(--wire-ink);
+  }
+
+  .wdcpx-link-copy {
+    padding-block: 0;
+    max-width: none;
+  }
+
+  .wdcpx-codes { gap: var(--sp-1) var(--sp-3); }
+}
+
+/* ------------------------------------------------------------------- motion
+   M4: every information-bearing signal here is a state, never a keyframe, so
+   removing the transition removes the fade and keeps the fact. */
+@media (prefers-reduced-motion: reduce) {
+  .wdcpx-node,
+  .wdcpx-root { transition: none; }
+}
+
+/* ------------------------------------------------ forced colours (D24, §1.8)
+   The tints and the box-shadow marks are both dropped by the OS, so every fact
+   they carried is restored as a real border or outline. GrayText is the OS
+   DISABLED colour and never touches a reason or a label here. */
+@media (forced-colors: active) {
+  .wdcpx-node[data-state]:not([data-state='READY']) { border-color: CanvasText; }
+  .wdcpx-node[aria-current='true'] {
+    box-shadow: none;
+    outline: 2px solid Highlight;
+    outline-offset: -2px;
+  }
+  .wdcpx-node-mark[data-break='true'],
+  .wdcpx-verdict-mark[data-break='true'] { background: CanvasText; }
+  /* Hue is gone entirely here, so the four proof states are carried by
+     geometry alone: solid / dashed / dotted / 3px double. */
+  .wdcpx-link { --wire-ink: CanvasText; }
+  .wdcpx-link[data-proof='severed'] { --wire-ink: CanvasText; --wire-style: double; --wire-w: 3px; }
+  .wdcpx-root { border-color: CanvasText; }
+}

@@ -1,0 +1,309 @@
+/* =============================================================================
+   MachineValue.css — Numeric · Identifier · Sparkline
+
+   BIBLE: §3.3 (.numx), §3.2 (.wd-idbtn / .wd-id), §3.15 (.wdspark). The rules
+   below are the bible's own, snapped to the token layer in
+   `web/src/pages/watchdog/tokens.css`. Every length here is a token; the only
+   literals are the declared 1px hairlines and the SVG's own unitless geometry
+   (§5 L12).
+
+   Type roles are never re-declared property-by-property: where a register is
+   needed it is stated as the role it is (T4 value, T5 reason, T6 support), so
+   a change to §1.4 lands here for free.
+   ========================================================================== */
+
+/* =============================================================================
+   1 · Numeric — the character grid (§3.3)
+
+   Five tracks and NOTHING after the unit. That is the mechanism behind §4.3:
+   with `.wdf-body { padding-inline: 0 }`, every `.numx` in every table lands on
+   the same right edge as every evidence age, so "which section has the stalest
+   evidence" is answerable by eye in one scan.
+   ========================================================================== */
+.numx {
+  display: inline-grid;
+  grid-template-columns:
+    1ch
+    minmax(var(--numx-int, var(--numx-int-default, 4ch)), max-content)
+    max-content
+    var(--numx-frac, 0ch)
+    max-content;
+  /* DOCUMENTED DIVERGENCE from §3.3's 5th track `var(--numx-unit, 2ch)`, for
+     the same mechanical reason §3.3 gives for the point track ("the browser
+     measures the glyph: no constant"). `ch` is the advance of "0" IN THIS
+     ELEMENT'S font — 12px (--fs-4) — while the unit renders at 11px (--fs-6) in
+     a proportional face, where `ms` and `MB` are not two `ch` wide and never
+     will be. Any ch-shaped reserve is therefore wrong in one direction or the
+     other, and being wrong to the right is a clipped unit while being wrong to
+     the left is a broken shared edge. `max-content` measures it exactly.
+     Alignment down the column is preserved because Law 1 gives a column ONE
+     unit, and because an unwritten slot renders that same unit element — so
+     every row in the column resolves to the identical track width with no
+     constant anywhere in the system. */
+  align-items: baseline;
+  font-size: var(--fs-4);
+  font-weight: var(--fw-value);
+  line-height: var(--lh-4);
+  /* MECHANICAL, not aesthetic: CSS `ch` is the advance of "0" and does NOT
+     include letter-spacing, so any tracking silently under-reserves every
+     ch-sized track above and clips the last digit. */
+  letter-spacing: 0;
+  color: var(--ink-1);
+  white-space: nowrap;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+/* THE INTEGER RESERVE IS THE COLUMN'S TO DECLARE.
+   Each `.numx` is its own grid, so `max-content` sizes that ROW's integer track
+   and nothing else: a value wider than the reserve grows its own track and
+   drags its decimal anchor left of its neighbours'. The floor below covers the
+   common case; where a column carries wider integers, the column owner sets
+   `--numx-int` on the `<table>` (page-wide budget) or on that column's cells
+   (per-column budget) and every anchor in it is guaranteed by inheritance —
+   which is §4.3's contract, that column widths come from the numeric contract
+   and not from whatever happened to arrive in this poll.
+
+   `<col>` cannot carry it: a `<col>` is not an ancestor in the box tree and
+   passes only border, background, width and visibility to its cells. */
+.numx[data-track="num"]  { --numx-int-default: 4ch; }
+.numx[data-track="age"]  { --numx-int-default: 3ch; }
+/* No reservation: a value set inline in prose, where an empty reserved track
+   reads as a missing digit. */
+.numx[data-track="auto"] { --numx-int-default: 0ch; }
+
+.numx-s { grid-column: 1; text-align: right; }   /* -  >  <  — costs no digit slot */
+.numx-i { grid-column: 2; text-align: right; }
+.numx-p { grid-column: 3; }                      /* the browser measures the glyph */
+.numx-f { grid-column: 4; text-align: left; }
+.numx-u {
+  grid-column: 5;
+  padding-left: 1ch;                             /* a gap, never an injected space */
+  color: var(--ink-3);
+  font-size: var(--fs-6);
+  font-weight: var(--fw-support);
+  letter-spacing: var(--ls-6);
+  font-variant-numeric: normal;
+}
+
+/* A verdict the SERVER published, never one this renderer reached.
+   `is-breach` = a published bound was crossed. */
+.numx.is-breach,
+.numx.is-breach > * { color: var(--bad); }
+/* `is-stale` = the evidence under these digits is old. A rule under the value,
+   not a recolour: the digits are still the digits that were measured. */
+.numx.is-stale > :is(.numx-s, .numx-i, .numx-p, .numx-f) { box-shadow: 0 1px 0 0 var(--warn); }
+
+/* ---- absence at SLOT scale (§5 L2, §3.12, D37) ------------------------------
+   There is no `.numx-dash`. D37 retired the em dash as a sole carrier: NVDA
+   reads it as nothing at all. What renders is §3.12's `.st-void` treatment — a
+   3ch dotted rule on the baseline plus sr-only text — placed ON THE INT TRACK,
+   so an unwritten slot lines up with the digits above and below it.
+
+   3ch is deliberately narrower than any real value, so it can never imply a
+   magnitude, and it is identical in every column, so a page full of dark cells
+   resolves into a countable regular grid rather than noise. That is the whole
+   argument for the mark: the page's blindness becomes legible.
+
+   The reason is NOT printed here. See the long note in MachineValue.tsx — a
+   reason code has no break opportunity of its own and a 9ch track cannot hold
+   one without either shredding it or overrunning the shared right edge. It
+   travels as sr-only text in reading order, plus a `data-reason` attribute; the
+   words appear at the two scales §3.12 assigns them, the row's T5 reason line
+   and the column header. */
+.numx-void {
+  grid-column: 2;             /* the int track: an unwritten slot, exactly where a digit would be */
+  justify-self: end;
+  display: inline-block;
+  width: 3ch;
+  height: .7em;
+  border-bottom: 1px dotted var(--ink-3);   /* declared hairline (§5 L12) */
+}
+
+/* The doctrine as a RUNTIME invariant, shipped in production (§3.1): a Fact
+   that claims to be known while carrying no finite value, or claims to be
+   unknown while carrying no reason, is a PRODUCER defect and is rendered as
+   one. It must be impossible to mistake for a state of the machine. */
+.numx[data-defect="true"] {
+  border: 1px dashed var(--line-strong);
+  background: repeating-linear-gradient(135deg, transparent 0 5px, var(--tile) 5px 10px);
+}
+
+/* =============================================================================
+   2 · Identifier — middle truncation with copy (§3.2)
+   ========================================================================== */
+.wd-idbtn {
+  position: relative;      /* contains the clipped middle; nothing else depends on it */
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-4);
+  height: var(--ctl-sm);
+  /* The control is flush with the text it wraps: the negative margin cancels
+     the padding exactly, so an identifier in a row occupies the same start
+     position as one rendered as plain text. Nothing insets content (§5 L18). */
+  margin: 0 calc(var(--sp-4) * -1);
+  padding: 0 var(--sp-4);
+  border: 0;
+  border-radius: var(--r-sm);   /* icon-adjacent square action, not a pill (D1) */
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+/* A control is not a row: it may transition on hover (D26). Colour and
+   background only — never a size, never a position. */
+@media (hover: hover) and (pointer: fine) {
+  .wd-idbtn:hover { background: var(--tile); color: var(--ink-1); }
+  .wd-idbtn { transition: background-color var(--mo-fast) var(--mo-out), color var(--mo-fast) var(--mo-out); }
+}
+
+/* The elided middle stays in DOM ORDER so a drag-selection traverses it and the
+   clipboard receives the COMPLETE value. Clipped, not `display:none` — a hidden
+   node is not selected and not copied. */
+.wd-id-mid {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Generated, therefore NEVER copied — and absent when nothing was elided, so
+   the mark can never claim a truncation that did not happen (D35). */
+.wd-id > i::before { content: "\2026"; color: var(--ink-3); user-select: none; }
+.wd-id[data-elided="no"] > i::before { content: none; }
+
+/* ONE slot, two stacked glyphs. 12px is D4's single semantic/affordance glyph
+   size, the same literal §3.1 ships for `.wd-chip-glyph`. Reserving the slot
+   from first paint is what stops a copy from reflowing the row (§5 L11);
+   stacking is what stops the reserve costing 12px of permanent emptiness. */
+.wd-id-mark { position: relative; flex: none; width: 12px; height: 12px; }
+.wd-id-ico,
+.wd-id-copied { position: absolute; inset: 0; width: 12px; height: 12px; }
+.wd-id-ico { color: var(--ink-3); }
+.wd-id-copied {
+  opacity: 0;
+  transition: opacity var(--mo-decay) var(--mo-out);
+}
+.wd-idbtn[data-copied="true"] .wd-id-copied {
+  opacity: 1;
+  color: var(--ok);                     /* the ONE green: a <=12px glyph, never a word (D18) */
+  transition-duration: var(--mo-instant);   /* success appears at 0ms, decays on withdrawal */
+}
+.wd-idbtn[data-copied="true"] .wd-id-ico { opacity: 0; }
+/* Never a check on failure. The copy glyph turns bad-toned and stays put; the
+   reason is in the control's description, as real text. */
+.wd-idbtn[data-copy-failed="true"] .wd-id-ico { color: var(--bad); }
+
+/* The description must not join a drag-selection of the row — an operator
+   pasting a row into an incident ticket must get the row, not our prose. */
+.wd-idbtn-note { user-select: none; }
+
+/* =============================================================================
+   3 · Sparkline — commitment-anchored micro history (§3.15)
+   ========================================================================== */
+.wdspark {
+  --col: var(--sp-4);
+  --gap: var(--sp-2);
+  display: block;
+  flex: none;
+  inline-size: calc(var(--n) * (var(--col) + var(--gap)) - var(--gap));   /* n=6 -> 68px */
+  block-size: 20px;
+}
+
+.wdspark-col { fill: var(--ink-3); }
+.wdspark-col.is-latest { fill: var(--ink-2); }   /* ONE ink step: "this is now" */
+.wdspark-col.is-breach { fill: var(--bad); }     /* declared LAST: a breach outranks recency */
+
+/* Expected, NOT received. Half width, so it can never be read as a measured
+   zero — which is full width, because a measured empty set is a complete
+   answer and takes no demotion (§3.12 `.st-none`). */
+.wdspark-slot { fill: var(--ink-3); }
+
+/* Painted last in the DOM, so a breaching column is visibly CUT by the line it
+   broke. Hueless: the fuse is a fact about the budget, not a verdict. */
+.wdspark-fuse { fill: var(--ink-3); }
+
+/* The one place --warn is spent on this mark: the instant after which nothing
+   was measured. */
+.wdspark-evidence-end { fill: var(--warn); }
+
+/* FILL MASS IS PROOF (§1.6, Law 2). §3.15 hangs this on
+   `:not([data-wiring="LIVE"])`; `wiring` is not on this component's props while
+   the server-published `rung` is, so the same mechanism reads the same evidence
+   through the attribute this page actually carries. Solid = the server
+   published a posture for this lane. Hollow = it did not, and the mark says so
+   rather than lending the history an authority nothing granted it.
+
+   An UNSCALED mark is hollow unconditionally. With no declared fuse there is
+   no anchored scale, so its columns are normalised to their own observed max —
+   the most flattering shape in this file, because it fills the box whatever the
+   numbers mean. It must never out-weigh a mark that is measured against a real
+   budget. */
+.wdspark:not([data-rung]) .wdspark-col,
+.wdspark[data-proof="hollow"] .wdspark-col,
+.wdspark[data-scale="unscaled"] .wdspark-col {
+  fill: none;
+  stroke: var(--ink-3);
+  stroke-width: 1;
+}
+.wdspark:not([data-rung]) .wdspark-col.is-latest,
+.wdspark[data-proof="hollow"] .wdspark-col.is-latest,
+.wdspark[data-scale="unscaled"] .wdspark-col.is-latest { stroke: var(--ink-2); }
+.wdspark:not([data-rung]) .wdspark-col.is-breach,
+.wdspark[data-proof="hollow"] .wdspark-col.is-breach { stroke: var(--bad); }
+
+/* =============================================================================
+   4 · Accessibility modes
+   ========================================================================== */
+
+/* Zero information is carried by motion here: the check's opacity is a STATE
+   with a transition, so removing the transition removes nothing (§5 L21). */
+@media (prefers-reduced-motion: reduce) {
+  .wd-idbtn,
+  .wd-id-copied { transition: none; }
+}
+
+@media (forced-colors: active) {
+  /* GrayText is the OS DISABLED colour and must never carry truth (D24). */
+  .numx-void { border-bottom-color: CanvasText; }
+  .numx[data-defect="true"] { border-color: CanvasText; background: Canvas; }
+  .wd-idbtn[data-copy-failed="true"] .wd-id-ico { color: Highlight; }
+  /* SVG fills are not remapped by the OS; state them, or the whole mark
+     disappears into the forced background. */
+  .wdspark-col,
+  .wdspark-slot,
+  .wdspark-fuse,
+  .wdspark-evidence-end { fill: CanvasText; }
+  .wdspark-col.is-breach { fill: Highlight; }
+  .wdspark:not([data-rung]) .wdspark-col,
+  .wdspark[data-proof="hollow"] .wdspark-col { fill: none; stroke: CanvasText; }
+  .wdspark:not([data-rung]) .wdspark-col.is-breach,
+  .wdspark[data-proof="hollow"] .wdspark-col.is-breach { stroke: Highlight; }
+}
+
+/* =============================================================================
+   5 · Age — the page's one duration scale, rendered inline (§5 Law 5)
+
+   Added at integration, when four private age ladders were collapsed into this
+   file. It is deliberately NOT the reserved `--col-age` track: `Age` is used
+   inside sentences ("first 4m ago, last 12s ago"), and a column reservation
+   mid-paragraph would open a gap the sentence has to jump. Where an age belongs
+   on the track, callers wrap it in `.wd-col-num` — which is exactly what
+   ControlLedger's section head does.
+   ========================================================================== */
+.agex {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* The unit recedes so the DIGIT is the thing the eye lands on, which is the
+   same relationship `.numx-u` establishes on the column track. No size change
+   and no hue: hierarchy is weight and ink, never size (Law 2). */
+.agex-u {
+  color: var(--ink-3);
+  font-weight: var(--fw-support);
+  letter-spacing: var(--ls-6);
+  font-variant-numeric: normal;
+}

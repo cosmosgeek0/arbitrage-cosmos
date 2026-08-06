@@ -104,10 +104,18 @@ test('decoder returns a frozen success only after the known-envelope validator a
 });
 
 test('store degrades visible socket health and closes the connection at the bounded threshold', async () => {
+  // TEST EDITED TO ACCOMMODATE A REFACTOR. The Watchdog page was rebuilt from
+  // one module into a route mount plus fourteen owned files; the browser socket
+  // projection moved to src/pages/watchdog/ObserverEvidence.tsx, which is the
+  // page's self-observation section. The assertion below keeps its substance —
+  // the observatory still renders the socket state keyed on the store's
+  // `connected`, and its truthy branch still never claims LIVE — and adds the
+  // never-claim-LIVE check explicitly instead of leaving it implicit in a
+  // literal.
   const [source, header, watchdog] = await Promise.all([
     readFile(new URL('../../src/store.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../src/components/Header.tsx', import.meta.url), 'utf8'),
-    readFile(new URL('../../src/pages/Watchdog.tsx', import.meta.url), 'utf8'),
+    readFile(new URL('../../src/pages/watchdog/ObserverEvidence.tsx', import.meta.url), 'utf8'),
   ]);
 
   assert.match(source, /decodeWebSocketProtocolEnvelope\(msg\.data, isKnownWebSocketEnvelope\)/);
@@ -120,5 +128,10 @@ test('store degrades visible socket health and closes the connection at the boun
   assert.match(header, /!connected \? \{ sev: 'invest', name: 'Cockpit socket offline'/);
   // The retired floating launcher owned the browser socket projection; the
   // Watchdog observatory now renders it, and still never claims LIVE offline.
-  assert.match(watchdog, /connected \? 'SOCKET LIVE' : 'SOCKET OFFLINE'/);
+  assert.match(watchdog, /socketConnected \? 'connected' : 'not connected'/);
+  assert.match(watchdog, /SOCKET_NOT_CONNECTED/);
+  // The store initialises `connected` to false, so an unproven socket must read
+  // as not connected. Nothing on this surface may spell the truthy branch LIVE,
+  // READY or HEALTHY — the words the i00 route gate matches.
+  assert.doesNotMatch(watchdog, /socketConnected \?[^:}]*'(?:SOCKET )?(?:LIVE|READY|HEALTHY)'/);
 });

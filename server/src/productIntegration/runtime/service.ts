@@ -163,6 +163,11 @@ export class ProductIntegrationRuntimeService {
   private sharedSupervisorRead: Readonly<{
     envelope: Readonly<ProductRuntimeSupervisorEnvelope>;
     publishedAtMs: number;
+    // Whether this cut may stand in for a build the caller would otherwise
+    // await. See BOOT_PRIME below: the boot cut is built before the operator
+    // has touched the process, so it is published for warmth but never served
+    // past its TTL in place of fresh truth.
+    staleServable: boolean;
   }> | null = null;
   private sharedSupervisorInFlight: Promise<Readonly<ProductRuntimeSupervisorEnvelope>> | null = null;
   // The last build attempt's outcome. A recorded failure is never masked by a
@@ -232,7 +237,9 @@ export class ProductIntegrationRuntimeService {
    * joins the same build rather than starting a second read graph. Success
    * replaces the published cut; failure is recorded and replayed verbatim.
    */
-  private startSupervisorBuild(): Promise<Readonly<ProductRuntimeSupervisorEnvelope>> {
+  private startSupervisorBuild(
+    origin: 'READER' | 'BOOT_PRIME' = 'READER',
+  ): Promise<Readonly<ProductRuntimeSupervisorEnvelope>> {
     if (this.sharedSupervisorInFlight !== null) return this.sharedSupervisorInFlight;
     this.buildsStarted += 1;
     // Build timing is diagnostic only and never envelope truth, but it still
@@ -245,6 +252,7 @@ export class ProductIntegrationRuntimeService {
         this.sharedSupervisorRead = Object.freeze({
           envelope,
           publishedAtMs: envelope.evaluatedAtMs,
+          staleServable: origin !== 'BOOT_PRIME',
         });
         this.lastBuildError = null;
         this.buildsSucceeded += 1;
@@ -279,22 +287,30 @@ export class ProductIntegrationRuntimeService {
    * response waits on the 6.5-14.1s synchronous read graph. setImmediate keeps
    * even the build's synchronous prefix off the responding request's turn.
    */
-  private startDetachedSupervisorBuild(): void {
+  private startDetachedSupervisorBuild(origin: 'READER' | 'BOOT_PRIME' = 'READER'): void {
     if (this.sharedSupervisorInFlight !== null) return;
     setImmediate(() => {
       if (this.sharedSupervisorInFlight !== null) return;
       // The rejection is recorded on lastBuildError by startSupervisorBuild;
       // a detached build must never surface as an unhandled rejection.
-      void this.startSupervisorBuild().catch(() => undefined);
+      void this.startSupervisorBuild(origin).catch(() => undefined);
     });
   }
 
   /**
-   * Boot-time eager build so the first browser poll usually finds a published
-   * cut instead of paying for the cold build itself. Never awaited by a caller.
+   * Boot-time eager build. Never awaited by a caller: it warms the read graph
+   * and gives socket delivery something to announce before the first poll.
+   *
+   * The cut it publishes is deliberately NOT stale-servable. It is built before
+   * any operator has touched the process — before safe mode is set, before the
+   * managed components have settled — so it warms the single-flight path and
+   * feeds the non-building socket projection source, but a reader is never
+   * handed it in place of a build. Readers await one real build rather than
+   * receiving pre-operator truth; that single await is today's deployed
+   * behaviour and is bounded by the restart window.
    */
   primeSupervisor(): void {
-    this.startDetachedSupervisorBuild();
+    this.startDetachedSupervisorBuild('BOOT_PRIME');
   }
 
   /**
@@ -319,6 +335,7 @@ export class ProductIntegrationRuntimeService {
     const published = this.sharedSupervisorRead;
     const sharedAgeMs = published === null ? null : nowMs - published.publishedAtMs;
     if (published !== null
+        && published.staleServable
         && sharedAgeMs !== null
         && sharedAgeMs >= 0
         && sharedAgeMs < PRODUCT_SUPERVISOR_SHARED_READ_TTL_MS) {
@@ -330,11 +347,13 @@ export class ProductIntegrationRuntimeService {
       this.startDetachedSupervisorBuild();
       return Promise.reject(this.lastBuildError);
     }
-    if (published !== null) {
+    if (published !== null && published.staleServable) {
       this.staleServedCount += 1;
       this.startDetachedSupervisorBuild();
       return Promise.resolve(published.envelope);
     }
+    // No cut, or a cut that may not stand in for fresh truth: await the one
+    // single-flight build, exactly as the deployed path does today.
     return this.startSupervisorBuild();
   }
 

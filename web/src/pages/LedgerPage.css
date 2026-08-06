@@ -55,3 +55,19 @@
 .logx-page .logx-detail-head .logx-provenance {
   max-width: 260px;
 }
+
+/* Day-strip failure notice: a slim full-width line above the seven-day grid.
+   It is a sibling of .calx-week, never a grid child, so the seven day cards
+   keep their exact columns and report truthful em-dashes while counts are
+   unavailable. The reason string wraps rather than truncating so no part of
+   the failure text is ever hidden. */
+.logx-page .logx-day-notice {
+  margin: 0;
+  padding: 2px 16px 6px;
+  color: var(--muted);
+  font-family: var(--ref-mono-font, var(--mono));
+  font-size: 11px;
+  font-weight: 430;
+  line-height: 16px;
+  overflow-wrap: anywhere;
+}

@@ -1,7 +1,7 @@
 import { Fragment, Suspense, lazy, useEffect, useRef } from 'react';
 import { StoreProvider, resolveReleaseIdentityTruth, useStore } from './store';
 import { IconClock } from './components/Icons';
-import { Sidebar, Topbar, BottomNav, Overlays } from './components/Header';
+import { Sidebar, Topbar, BottomNav, Overlays, RefreshDock } from './components/Header';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Tape } from './components/Tape';
 import { Palette } from './components/Palette';
@@ -183,6 +183,7 @@ function Shell() {
       <BottomNav />
       <Palette />
       <Overlays />
+      <RefreshDock />
     </div>
   );
 }

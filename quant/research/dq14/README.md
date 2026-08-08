@@ -41,7 +41,7 @@ Run from `quant/` after the module, command entry point, and tests exist:
 ```bash
 uv run --locked --no-sync python -m research.dq14 --help
 uv run --locked --no-sync python -m research.dq14 --verify-known-answer
-uv run --locked --no-sync pytest research/dq14 -q
+PYTHONPATH=. uv run --locked --no-sync pytest research/dq14 -q
 uv run --locked --no-sync ruff check research/dq14
 MYPYPATH=. uv run --locked --no-sync mypy --strict -p research.dq14
 ```

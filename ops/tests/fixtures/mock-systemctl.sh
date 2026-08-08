@@ -5,6 +5,7 @@
 #   MOCK_SYSTEMCTL_LOG   (required) file receiving one line per invocation
 #   MOCK_ACTIVE_UNITS    (optional) file listing units considered "active"
 #   MOCK_RESTART_HOOK    (optional) command run as: hook <verb> <unit>
+#   MOCK_RESTART_RC      (optional) exact restart exit code (default 0)
 set -u
 log="${MOCK_SYSTEMCTL_LOG:?mock-systemctl needs MOCK_SYSTEMCTL_LOG}"
 printf '%s\n' "$*" >> "$log"
@@ -23,6 +24,9 @@ case "$verb" in
   restart|start|stop)
     if [ -n "${MOCK_RESTART_HOOK:-}" ]; then
       "$MOCK_RESTART_HOOK" "$verb" "$unit"
+    fi
+    if [ "$verb" = restart ] && [ "${MOCK_RESTART_RC:-0}" != 0 ]; then
+      exit "$MOCK_RESTART_RC"
     fi
     exit 0
     ;;

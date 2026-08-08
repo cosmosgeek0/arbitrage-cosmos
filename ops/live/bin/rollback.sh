@@ -175,6 +175,30 @@ log_event() { # RESULT DETAIL
     "releaseId=$TARGET_ID" "result=$1" "detail=$2"
 }
 
+# Refuse an occupied or corrupt safety-state endpoint before publishing or
+# reusing a deploy lock. The authoritative state is read again under that lock.
+set +e
+JOURNAL_PREFLIGHT_SNAPSHOT="$(
+  journal_state_snapshot "$JOURNAL_EFFECT_FILE"
+)"
+JOURNAL_PREFLIGHT_RC=$?
+set -e
+case "$JOURNAL_PREFLIGHT_RC" in
+  0)
+    case "$JOURNAL_PREFLIGHT_SNAPSHOT" in
+      PENDING\|*)
+        die_code 5 \
+          "rollback is refused while a prestart barrier is pending; complete a compatible fix-forward deployment"
+        ;;
+    esac
+    ;;
+  7|8) : ;;
+  5) die_code 1 "journal document or rollbackFloor is invalid" ;;
+  6) die_code 1 "journal path is occupied by a non-regular or linked endpoint, or exceeds the size limit: $JOURNAL_FILE" ;;
+  *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to assume a zero rollback floor" ;;
+esac
+unset JOURNAL_PREFLIGHT_SNAPSHOT
+
 # --- lock (deploy.sh already holds it when it calls us with --auto) -----------
 LOCK_HELD=0
 if [ "$REUSE_DEPLOY_LOCK" != 1 ]; then
@@ -240,18 +264,34 @@ case "$TARGET_SCHEMA_RC" in
 esac
 
 # --- journal/schema compatibility: absolute ------------------------------------
-ROLLBACK_FLOOR=0
-if [ -f "$JOURNAL_EFFECT_FILE" ]; then
-  # Part 4 #6: a corrupt journal must never default the non-rollback barrier
-  # to its most permissive value.
-  set +e; FLOOR_VALUE="$(json_get_nonnegative_safe_integer "$JOURNAL_EFFECT_FILE" rollbackFloor)"; FLOOR_RC=$?; set -e
-  case "$FLOOR_RC" in
-    0) ROLLBACK_FLOOR="$FLOOR_VALUE" ;;
-    3) ROLLBACK_FLOOR=0 ;;
-    5) die_code 1 "journal rollbackFloor is not a nonnegative integer - refusing to evaluate the non-rollback barrier against an uncomparable value" ;;
-    *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to assume a zero rollback floor" ;;
-  esac
-fi
+# Part 4 #6: bind the barrier and exact endpoint version from one under-lock
+# read. Missing fields and true absence default to zero; corrupt or occupied
+# state never defaults to the most permissive value.
+set +e
+JOURNAL_SNAPSHOT="$(
+  journal_state_snapshot "$JOURNAL_EFFECT_FILE"
+)"
+JOURNAL_SNAPSHOT_RC=$?
+set -e
+case "$JOURNAL_SNAPSHOT_RC" in
+  0)
+    case "$JOURNAL_SNAPSHOT" in
+      PENDING\|*)
+        die_code 5 \
+          "rollback is refused while a prestart barrier is pending; complete a compatible fix-forward deployment"
+        ;;
+    esac
+    ;;
+  7) ops_log "journal dataSchema is invalid; rollback is using the independently valid rollbackFloor" ;;
+  8) ops_log "journal rollbackFloor exceeds dataSchema; rollback is enforcing the independently valid rollbackFloor" ;;
+  5) die_code 1 "journal document or rollbackFloor is invalid - refusing to evaluate the non-rollback barrier against an uncomparable value" ;;
+  6) die_code 1 "journal path is occupied by a non-regular or linked endpoint, or exceeds the size limit: $JOURNAL_FILE" ;;
+  *) die_code 1 "journal unreadable: $JOURNAL_FILE - refusing to assume a zero rollback floor" ;;
+esac
+JOURNAL_SNAPSHOT_REST="${JOURNAL_SNAPSHOT#*|}"
+JOURNAL_SNAPSHOT_REST="${JOURNAL_SNAPSHOT_REST#*|}"
+ROLLBACK_FLOOR="${JOURNAL_SNAPSHOT_REST%%|*}"
+unset JOURNAL_SNAPSHOT_REST
 set +e
 [ "$TARGET_SCHEMA" -lt "$ROLLBACK_FLOOR" ]
 BARRIER_COMPARISON_RC=$?
@@ -292,6 +332,15 @@ OLD_TARGET=""
 if [ -L "$CURRENT_EFFECT_LINK" ]; then
   OLD_TARGET="$(read_symlink "$CURRENT_EFFECT_LINK")"
 fi
+set +e
+JOURNAL_SWITCH_SNAPSHOT="$(
+  journal_state_snapshot "$JOURNAL_EFFECT_FILE"
+)"
+JOURNAL_SWITCH_SNAPSHOT_RC=$?
+set -e
+[ "$JOURNAL_SWITCH_SNAPSHOT_RC" -eq "$JOURNAL_SNAPSHOT_RC" ] \
+  && [ "$JOURNAL_SWITCH_SNAPSHOT" = "$JOURNAL_SNAPSHOT" ] \
+  || die_code 1 "journal changed after under-lock validation - refusing to switch releases"
 atomic_symlink "$TARGET_DIR" "$CURRENT_EFFECT_LINK"
 if [ -n "$OLD_TARGET" ]; then
   atomic_symlink "$OLD_TARGET" "$PREVIOUS_EFFECT_LINK"

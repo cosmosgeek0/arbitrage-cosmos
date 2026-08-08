@@ -74,11 +74,11 @@ function basisRuntimePayload() {
       costs: {
         feesPct: 0.2,
         slippagePct: 0.05,
-        fundingDragPct: 0.01,
+        fundingDragPct: 0,
         borrowCostPct: 0,
-        totalPct: 0.26,
+        totalPct: 0.25,
       },
-      netEdgePct: 0.54,
+      netEdgePct: 0.56,
       depthScore: 0.9,
       slippagePct: 0.05,
       ladderBacked: true,
@@ -107,10 +107,10 @@ function basisRuntimePayload() {
       proposal: {
         id: 'basis-one',
         status: 'open',
-        netEdgePct: 0.54,
+        netEdgePct: 0.56,
         confidence: 0.75,
         invalidation: 'Executable gap closes',
-        stagedSizes: [{ stage: 0, fraction: 1, notionalUsd: 1_000 }],
+        stagedSizes: [{ stage: 1, fraction: 1, notionalUsd: 1_000 }],
       },
     }],
   };
@@ -211,6 +211,269 @@ test('Basis runtime decoder is strict, detached, duplicate-safe, and time bounde
   assert.equal(basisRuntimeSnapshotCurrent(decodeBasisRuntimeSnapshot(futureSkew), BASIS_NOW), false);
 });
 
+test('Basis quality claims require coherent leg staleness while honest low-quality rows remain representable', () => {
+  const boundary = basisRuntimePayload();
+  boundary.rows[0].dataQuality.spotStalenessMs = 5_000;
+  boundary.rows[0].dataQuality.perpStalenessMs = 5_000;
+  boundary.rows[0].dataQuality.legSkewMs = 2_500;
+  const decodedBoundary = decodeBasisRuntimeSnapshot(boundary);
+  assert.ok(decodedBoundary);
+  assert.equal(basisRuntimeSnapshotCurrent(decodedBoundary, BASIS_NOW), true);
+
+  const honestLowQuality = basisRuntimePayload();
+  honestLowQuality.rows[0].dataQuality.score = 0.1;
+  honestLowQuality.rows[0].dataQuality.spotStalenessMs = 5_001;
+  honestLowQuality.rows[0].dataQuality.perpStalenessMs = null;
+  honestLowQuality.rows[0].dataQuality.legSkewMs = 2_501;
+  honestLowQuality.rows[0].dataQuality.suspectReasons = ['leg_timestamp_skew'];
+  honestLowQuality.status.dataQualityPassing = 0;
+  const decodedLowQuality = decodeBasisRuntimeSnapshot(honestLowQuality);
+  assert.ok(decodedLowQuality);
+  assert.equal(basisRuntimeSnapshotCurrent(decodedLowQuality, BASIS_NOW), true);
+
+  for (const mutate of [
+    (quality) => { quality.spotStalenessMs = null; },
+    (quality) => { quality.perpStalenessMs = null; },
+    (quality) => { quality.spotStalenessMs = 5_001; },
+    (quality) => { quality.perpStalenessMs = 5_001; },
+    (quality) => { quality.legSkewMs = 2_501; },
+  ]) {
+    const incoherent = basisRuntimePayload();
+    mutate(incoherent.rows[0].dataQuality);
+    assert.equal(decodeBasisRuntimeSnapshot(incoherent), null);
+    assert.equal(basisRuntimeSnapshotCurrent(incoherent, BASIS_NOW), false);
+  }
+
+  for (const threshold of [-0.1, 1.1]) {
+    const malformedThreshold = basisRuntimePayload();
+    malformedThreshold.thresholds.minDataQuality = threshold;
+    assert.equal(decodeBasisRuntimeSnapshot(malformedThreshold), null);
+  }
+});
+
+test('Basis canonical supervisor and expanded row evidence fail closed without inventing history', async (context) => {
+  const cssHooks = registerHooks({
+    load(url, hookContext, nextLoad) {
+      if (!url.endsWith('.css')) return nextLoad(url, hookContext);
+      return { format: 'module', shortCircuit: true, source: '' };
+    },
+  });
+  context.after(() => cssHooks.deregister());
+
+  const {
+    projectBasisProposalDeskGate,
+    resolveBasisRowEvidence,
+    resolveBasisSupervisorTruth,
+  } = await import('../../src/pages/Strategies.tsx');
+  const component = {
+    observedLifecycle: 'READY',
+    capability: 'LIVE_PUBLIC',
+    truthLabel: 'LIVE_PUBLIC',
+    blockerCode: null,
+    canonicalPresentation: { status: 'operational', stateLabel: 'READY · LIVE PUBLIC' },
+  };
+  const summary = {
+    truthLabel: 'LIVE_PUBLIC',
+    candidateCount: 3,
+    proposalCount: 1,
+    rejectionCount: 4,
+    lastDecisionAtMs: BASIS_NOW - 2_000,
+    sourceRevision: null,
+  };
+  assert.deepEqual(resolveBasisSupervisorTruth({
+    continuity: 'PROVEN',
+    loading: false,
+    bindingError: null,
+    component,
+    summary,
+  }), {
+    current: true,
+    state: 'LIVE',
+    label: 'Live',
+    reason: null,
+    candidateCount: 3,
+    proposalCount: 1,
+    rejectionCount: 4,
+    lastDecisionAtMs: BASIS_NOW - 2_000,
+    sourceRevision: null,
+  });
+
+  for (const input of [
+    { continuity: 'BACKFILL', component, summary },
+    {
+      continuity: 'PROVEN',
+      component: {
+        ...component,
+        observedLifecycle: 'DEGRADED',
+        canonicalPresentation: { status: 'degraded', stateLabel: 'DEGRADED' },
+      },
+      summary,
+    },
+    { continuity: 'PROVEN', component: { ...component, capability: 'UNKNOWN' }, summary },
+    { continuity: 'PROVEN', component, summary: { ...summary, truthLabel: 'UNAVAILABLE' } },
+    { continuity: 'PROVEN', component: null, summary },
+  ]) {
+    const unavailable = resolveBasisSupervisorTruth({
+      loading: false,
+      bindingError: null,
+      ...input,
+    });
+    assert.equal(unavailable.current, false);
+    assert.equal(unavailable.state, 'UNAVAILABLE');
+    assert.equal(unavailable.candidateCount, null);
+    assert.equal(unavailable.proposalCount, null);
+  }
+  const warming = resolveBasisSupervisorTruth({
+    continuity: 'PROVEN',
+    loading: false,
+    bindingError: null,
+    component: {
+      ...component,
+      observedLifecycle: 'WARMING',
+      capability: 'UNKNOWN',
+      truthLabel: 'UNKNOWN',
+      canonicalPresentation: { status: 'degraded', stateLabel: 'WARMING' },
+    },
+    summary: { ...summary, truthLabel: 'UNAVAILABLE' },
+  });
+  assert.equal(warming.state, 'STARTING');
+  assert.equal(warming.reason, null);
+
+  const emitted = resolveBasisRowEvidence(basisRuntimePayload().rows[0]);
+  assert.equal(emitted.selectedDirection, 'Buy Spot · Sell Perp');
+  assert.equal(emitted.alternateDirection, 'Sell Spot · Buy Perp');
+  assert.equal(emitted.alternateGapPct, -0.8);
+  assert.equal(emitted.historyBoundary, 'DECISION_OBSERVATION');
+  assert.equal(emitted.proposal?.id, 'basis-one');
+  assert.deepEqual(emitted.proposal?.stagedSizes, [
+    { stage: 1, fraction: 1, notionalUsd: 1_000 },
+  ]);
+
+  const absent = resolveBasisRowEvidence({
+    direction: 'short_spot_long_perp',
+    alternateGapPct: null,
+    decisionTs: null,
+    correlationId: null,
+    priority: null,
+    proposal: null,
+  });
+  assert.equal(absent.historyBoundary, 'NONE');
+  assert.equal(absent.priorityScore, null);
+  assert.equal(absent.proposal, null);
+  assert.deepEqual(projectBasisProposalDeskGate(false, true, 1), {
+    current: false,
+    recordCount: null,
+    emptyState: 'CURRENT PROPOSAL SET UNKNOWN',
+  });
+});
+
+test('Basis proposal economics and row truth preserve measured zero and withhold incomplete or incoherent values', async () => {
+  const {
+    basisProposalObservationCurrent,
+    basisRowEconomicsComplete,
+    buildBasisProposalEconomics,
+    projectBasisRowRenderTruth,
+    proposalBinding,
+  } = await import('../../src/pages/Strategies.tsx');
+  const row = basisRuntimePayload().rows[0];
+  assert.equal(basisProposalObservationCurrent(row, 0.5), true);
+  assert.equal(basisRowEconomicsComplete(row, 0.2, BASIS_NOW), true);
+  assert.equal(proposalBinding(row, true), 'OPEN_RECORD_ALIGNED');
+
+  const coherent = buildBasisProposalEconomics(row, true, 0.2, BASIS_NOW, 1_000, true);
+  assert.equal(coherent.integrityLabel, 'COHERENT_COMPONENTS');
+  assert.equal(coherent.borrowCostPct, 0);
+  assert.equal(coherent.fundingDragPct, 0);
+  assert.equal(coherent.totalCostPct, 0.25);
+  assert.equal(coherent.netEdgePct, 0.56);
+
+  const measuredZero = structuredClone(row);
+  measuredZero.fundingRate = 0;
+  measuredZero.fundingCarryPct = 0;
+  measuredZero.costs.fundingDragPct = 0;
+  measuredZero.costs.totalPct = 0.25;
+  measuredZero.netEdgePct = 0.55;
+  measuredZero.proposal.netEdgePct = 0.55;
+  const zeroEconomics = buildBasisProposalEconomics(measuredZero, true, 0.2, BASIS_NOW, 1_000, true);
+  assert.equal(zeroEconomics.fundingCarryPct, 0);
+  assert.equal(zeroEconomics.borrowCostPct, 0);
+  assert.equal(zeroEconomics.netEdgePct, 0.55);
+
+  const fundingUnknown = structuredClone(row);
+  fundingUnknown.fundingRate = null;
+  fundingUnknown.nextFundingTs = null;
+  fundingUnknown.fundingCarryPct = null;
+  fundingUnknown.netEdgePct = null;
+  const incomplete = buildBasisProposalEconomics(fundingUnknown, true, 0.2, BASIS_NOW, 1_000, true);
+  assert.equal(incomplete.integrityLabel, 'INCOMPLETE_INPUTS');
+  assert.equal(incomplete.fundingDragPct, null);
+  assert.equal(incomplete.totalCostPct, null);
+  assert.equal(incomplete.netEdgePct, null);
+  assert.equal(incomplete.proposalNetEdgePct, 0.56);
+
+  const costMismatch = structuredClone(row);
+  costMismatch.costs.totalPct = 0.26;
+  const mismatched = buildBasisProposalEconomics(costMismatch, true, 0.2, BASIS_NOW, 1_000, true);
+  assert.equal(mismatched.integrityLabel, 'CONTRACT_MISMATCH');
+  assert.equal(mismatched.totalCostPct, null);
+  assert.equal(mismatched.netEdgePct, null);
+
+  const stageMismatch = structuredClone(row);
+  stageMismatch.proposal.stagedSizes[0].stage = 0;
+  const invalidStage = buildBasisProposalEconomics(stageMismatch, true, 0.2, BASIS_NOW, 1_000, true);
+  assert.equal(invalidStage.stagesConsistent, false);
+  assert.equal(invalidStage.netEdgePct, null);
+
+  const staleRow = structuredClone(row);
+  staleRow.dataQuality.spotStalenessMs = 5_001;
+  assert.equal(basisProposalObservationCurrent(staleRow, 0.5), false);
+  const staleEconomics = buildBasisProposalEconomics(staleRow, false, 0.2, BASIS_NOW, 1_000, true);
+  assert.equal(staleEconomics.integrityLabel, 'NOT_CURRENT');
+  assert.equal(staleEconomics.grossGapPct, null);
+  assert.equal(staleEconomics.netEdgePct, null);
+
+  const suspectRow = structuredClone(row);
+  suspectRow.dataQuality.suspectReasons = ['leg_timestamp_contradiction'];
+  assert.equal(basisProposalObservationCurrent(suspectRow, 0.5), false);
+
+  const reconciling = structuredClone(row);
+  reconciling.state = 'WATCHING';
+  assert.equal(proposalBinding(reconciling, true), 'OPEN_RECORD_RECONCILING');
+  assert.equal(
+    buildBasisProposalEconomics(reconciling, true, 0.2, BASIS_NOW, 1_000, true).netEdgePct,
+    null,
+  );
+
+  const absentRenderValues = structuredClone(row);
+  absentRenderValues.quoteVolume24h = null;
+  absentRenderValues.executableGapPct = null;
+  absentRenderValues.spotBid = null;
+  absentRenderValues.spotAsk = null;
+  absentRenderValues.perpBid = null;
+  absentRenderValues.perpAsk = null;
+  absentRenderValues.fundingRate = null;
+  absentRenderValues.nextFundingTs = null;
+  absentRenderValues.fundingCarryPct = null;
+  absentRenderValues.spotSpreadBps = null;
+  absentRenderValues.perpSpreadBps = null;
+  absentRenderValues.alternateGapPct = null;
+  absentRenderValues.gapAgeMs = null;
+  assert.deepEqual(projectBasisRowRenderTruth(absentRenderValues, true), {
+    quoteVolume24h: '24h volume UNKNOWN',
+    executableGapPct: 'UNKNOWN',
+    executionPrices: 'UNKNOWN / UNKNOWN',
+    fundingRate: 'UNKNOWN',
+    fundingSummary: 'Funding unavailable',
+    grossGapPct: 'UNKNOWN',
+    spreadBps: 'UNKNOWN / UNKNOWN',
+    spotBidAsk: 'UNKNOWN / UNKNOWN',
+    perpBidAsk: 'UNKNOWN / UNKNOWN',
+    alternateGapPct: 'UNKNOWN',
+    gapAgeMs: 'UNKNOWN',
+    fundingCarryPct: 'UNKNOWN',
+  });
+});
+
 test('Basis renders only canonically current runtime and exact account facts', async (context) => {
   const cssHooks = registerHooks({
     load(url, hookContext, nextLoad) {
@@ -221,12 +484,15 @@ test('Basis renders only canonically current runtime and exact account facts', a
   context.after(() => cssHooks.deregister());
 
   const { resolveBasisAccountTruth, resolveBasisRuntimeTruth } = await import('../../src/pages/Strategies.tsx');
+  const currentSnapshot = decodeBasisRuntimeSnapshot(basisRuntimePayload());
+  assert.ok(currentSnapshot);
 
   const currentRuntime = resolveBasisRuntimeTruth({
     canonicalState: 'READY',
     canonicalReason: null,
-    snapshotStatus: { running: true, bookState: 'fresh', markState: 'fresh', lastError: null },
+    snapshot: currentSnapshot,
     requestError: null,
+    nowMs: BASIS_NOW,
   });
   assert.deepEqual(currentRuntime, {
     current: true,
@@ -239,26 +505,30 @@ test('Basis renders only canonically current runtime and exact account facts', a
     resolveBasisRuntimeTruth({
       canonicalState: 'UNAVAILABLE',
       canonicalReason: 'BASIS_ENGINE_BLOCKED',
-      snapshotStatus: { running: true, bookState: 'fresh', markState: 'fresh', lastError: null },
+      snapshot: currentSnapshot,
       requestError: null,
+      nowMs: BASIS_NOW,
     }),
     resolveBasisRuntimeTruth({
       canonicalState: 'READY',
       canonicalReason: null,
-      snapshotStatus: { running: true, bookState: 'fresh', markState: 'fresh', lastError: null },
+      snapshot: currentSnapshot,
       requestError: 'Basis read failed',
+      nowMs: BASIS_NOW,
     }),
     resolveBasisRuntimeTruth({
       canonicalState: 'READY',
       canonicalReason: null,
-      snapshotStatus: { running: false, bookState: 'fresh', markState: 'fresh', lastError: null },
+      snapshot: { ...currentSnapshot, status: { ...currentSnapshot.status, running: false } },
       requestError: null,
+      nowMs: BASIS_NOW,
     }),
     resolveBasisRuntimeTruth({
       canonicalState: 'READY',
       canonicalReason: null,
-      snapshotStatus: { running: true, bookState: 'stale', markState: 'fresh', lastError: null },
+      snapshot: { ...currentSnapshot, status: { ...currentSnapshot.status, bookState: 'stale' } },
       requestError: null,
+      nowMs: BASIS_NOW,
     }),
   ]) {
     assert.equal(unavailable.current, false);
@@ -401,6 +671,18 @@ test('Basis source consumes existing owners without new account, market, or exec
   assert.match(source, /spotFreshnessState: spotFreshness\.state/);
   assert.match(source, /liabilityFreshnessState: liabilityFreshness\.state/);
   assert.match(source, /const rows = basisTruth\.current \?/);
+  assert.match(source, /binding\.snapshot\?\.dashboard\.summaries\.strategies\.basis/);
+  assert.match(source, /aria-label="Canonical Basis Supervisor Cut"/);
+  assert.match(source, /aria-label="Truthful Basis Proposal Desk"/);
+  assert.match(source, /basisProposalObservationCurrent\(row, snapshot\.thresholds\.minDataQuality\)/);
+  assert.match(source, /basisRowEconomicsComplete\(/);
+  assert.match(source, /const watchWritable = stateStatus === 'CURRENT' && basisTruth\.current/);
+  assert.match(source, /const rowWatchWritable = watchWritable && rowCurrent/);
+  assert.match(source, /disabled=\{!rowWatchWritable\}/);
+  assert.match(source, /if \(rowWatchWritable\) void toggleWatch\(row\.symbol\)/);
+  assert.match(source, /Gross \{renderTruth\.grossGapPct\}/);
+  assert.match(source, /Cost \{rowEconomicsCurrent/);
+  assert.equal(source.match(/toggleWatch\(row\.symbol\)/g)?.length, 1);
   assert.match(source, /accountTruth\.spotAvailableUsdt \?\? 'UNKNOWN'/);
   assert.match(source, /accountTruth\.marginLiabilityBtc \?\? 'UNKNOWN'/);
   assert.doesNotMatch(source, /\/api\/private-account|\/api\/markets|placeOrder|executeOrder|method:\s*['"]POST['"]/);

@@ -107,6 +107,8 @@ export interface BasisSnapshot {
 
 export const BASIS_RUNTIME_FRESH_MS = 10_000;
 export const BASIS_MAX_FUTURE_SKEW_MS = 5_000;
+const BASIS_MAX_BOOK_STALENESS_MS = 5_000;
+const BASIS_MAX_LEG_SKEW_MS = 2_500;
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -161,6 +163,29 @@ function oneOf(value: unknown, choices: readonly string[]): value is string {
 
 function unitInterval(value: unknown): value is number {
   return nonnegativeNumber(value) && value <= 1;
+}
+
+function basisLegEvidenceCurrent(row: BasisRow): boolean {
+  const { spotStalenessMs, perpStalenessMs, legSkewMs } = row.dataQuality;
+  return spotStalenessMs !== null
+    && spotStalenessMs <= BASIS_MAX_BOOK_STALENESS_MS
+    && perpStalenessMs !== null
+    && perpStalenessMs <= BASIS_MAX_BOOK_STALENESS_MS
+    && legSkewMs !== null
+    && legSkewMs <= BASIS_MAX_LEG_SKEW_MS;
+}
+
+function basisLegEvidenceCoherent(row: BasisRow, minDataQuality: number): boolean {
+  return row.dataQuality.score < minDataQuality || basisLegEvidenceCurrent(row);
+}
+
+export function basisProposalObservationCurrent(
+  row: BasisRow,
+  minDataQuality: number,
+): boolean {
+  return row.dataQuality.score >= minDataQuality
+    && basisLegEvidenceCurrent(row)
+    && row.dataQuality.suspectReasons.length === 0;
 }
 
 function validCosts(value: unknown): value is BasisCostBreakdown {
@@ -331,12 +356,12 @@ function decodeBasisRuntimeSnapshotValue(value: unknown): BasisSnapshot | null {
     'minNetBasisPct',
     'feesPct',
     'maxSpreadBps',
-    'minDepthScore',
-    'minDataQuality',
     'intendedNotionalUsd',
   ] as const;
   if (
     !thresholdKeys.every((key) => nonnegativeNumber(thresholds[key]))
+    || !unitInterval(thresholds.minDepthScore)
+    || !unitInterval(thresholds.minDataQuality)
     || !nonnegativeInteger(thresholds.persistTicks)
     || !(thresholds.minQuoteVolume24hUsd === undefined || nonnegativeNumber(thresholds.minQuoteVolume24hUsd))
   ) return null;
@@ -349,6 +374,7 @@ function decodeBasisRuntimeSnapshotValue(value: unknown): BasisSnapshot | null {
     rows.length !== universeSize
     || boundedCounts.some((key) => (status[key] as number) > universeSize)
     || (status.openProposals as number) !== rows.filter((row) => row.state === 'PROPOSED').length
+    || rows.some((row) => !basisLegEvidenceCoherent(row, thresholds.minDataQuality as number))
     || new Set(rows.map((row) => row.symbol)).size !== rows.length
     || new Set(proposalIds).size !== proposalIds.length
   ) return null;
@@ -375,6 +401,7 @@ export function basisRuntimeSnapshotCurrent(snapshot: BasisSnapshot, nowMs = Dat
       || status.bookState !== 'fresh'
       || status.markState !== 'fresh'
       || status.lastError !== null
+      || snapshot.rows.some((row) => !basisLegEvidenceCoherent(row, snapshot.thresholds.minDataQuality))
     ) return false;
 
     const timestamps = [snapshot.updatedAt, status.lastBookTs, status.lastMarkTs, status.lastTickTs];

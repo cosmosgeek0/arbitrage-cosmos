@@ -453,6 +453,7 @@ test('Opportunities admits only owner-published PROPOSED rows and preserves Basi
   );
   assert.equal(facts.some((fact) => fact.proposalId.includes('watch')), false);
   assert.equal(facts.some((fact) => fact.proposalId.includes('focus')), false);
+  assert.equal(facts.every((fact) => fact.observationCurrent), true);
   assert.equal(facts[0].reportedNetEdgePct, 0, 'known zero must remain distinct from unknown');
   assert.equal(facts[2].reportedNetEdgePct, null, 'Volume net economics are not published');
 });
@@ -649,7 +650,39 @@ test('Opportunities withholds stale, skewed, expired, duplicate, inconsistent, a
 
   const incompleteBasis = basisPayload();
   incompleteBasis.rows[1].proposal.confidence = null;
-  assert.equal(decodeBasisOpportunityRead(incompleteBasis), null);
+  const incompleteBasisRead = decodeBasisOpportunityRead(incompleteBasis);
+  assert.ok(incompleteBasisRead);
+  assert.equal(projectOpportunitySourceTruth(incompleteBasisRead, null, NOW).label, 'DEGRADED');
+  assert.equal(projectOpportunitySourceTruth(incompleteBasisRead, null, NOW).detail, 'BASIS_PROPOSAL_ROW_INCOMPLETE_INPUTS');
+  assert.equal(incompleteBasisRead.facts[0].reportedNetEdgePct, null);
+  assert.equal(incompleteBasisRead.facts[0].grossEdgePct, null);
+  assert.equal(incompleteBasisRead.facts[0].totalCostPct, null);
+
+  const honestLowQuality = basisPayload();
+  honestLowQuality.rows[1].dataQuality.score = 0.1;
+  honestLowQuality.rows[1].dataQuality.spotStalenessMs = 5_001;
+  honestLowQuality.rows[1].dataQuality.perpStalenessMs = null;
+  honestLowQuality.rows[1].dataQuality.legSkewMs = 2_501;
+  honestLowQuality.status.dataQualityPassing = 2;
+  const degradedBasis = decodeBasisOpportunityRead(honestLowQuality);
+  assert.ok(degradedBasis);
+  assert.equal(projectOpportunitySourceTruth(degradedBasis, null, NOW).label, 'DEGRADED');
+  assert.equal(projectOpportunitySourceTruth(degradedBasis, null, NOW).detail, 'BASIS_PROPOSAL_ROW_NOT_CURRENT');
+  const withheld = degradedBasis.facts.find((fact) => fact.proposalId === 'basis-zero');
+  assert.ok(withheld);
+  for (const value of [
+    withheld.reportedNetEdgePct,
+    withheld.grossEdgePct,
+    withheld.totalCostPct,
+    withheld.fundingRate,
+    withheld.spotPrice,
+    withheld.perpPrice,
+    withheld.confidence,
+  ]) assert.equal(value, null);
+
+  const incoherentQualityClaim = basisPayload();
+  incoherentQualityClaim.rows[1].dataQuality.spotStalenessMs = 5_001;
+  assert.equal(decodeBasisOpportunityRead(incoherentQualityClaim), null);
 
   const incompleteVolume = volumePayload();
   incompleteVolume.rows[1].proposal.expiresAtMs = null;

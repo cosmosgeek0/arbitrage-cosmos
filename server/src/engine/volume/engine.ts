@@ -13,8 +13,13 @@ import type {
 } from '../v0/types.js';
 import { newCorrelationId } from '../v0/clock.js';
 import type { VolumeConfig } from './config.js';
-import { volumeConfig } from './config.js';
+import { deriveVolumeConfigVersion, volumeConfig } from './config.js';
 import { VolumeFeatureEngine } from './features.js';
+import {
+  buildVolumeForwardDetectorSourceCut,
+  type VolumeForwardDetectorSourceCut,
+  type VolumeForwardDetectorSourceEvaluationInput,
+} from './forwardMeasurementDetectorSource.js';
 import { WakeupDetector, type VolumeScanContext } from './detector.js';
 import { FocusManager } from './focus.js';
 import { ProposalStore, type IntentResult } from './proposals.js';
@@ -448,9 +453,14 @@ export class VolumeEngine {
   }
 
   // ---- core tick ----
-  tick(): void {
-    if (!this.running) return;
+  tick(
+    emitForwardDetectorSourceCut = false,
+  ): Readonly<VolumeForwardDetectorSourceCut> | null {
+    if (!this.running) return null;
     const now = this.clock.now();
+    const forwardEvaluations:
+      VolumeForwardDetectorSourceEvaluationInput[] | null =
+      emitForwardDetectorSourceCut ? [] : null;
     for (const symbol of this.features.symbols()) {
       // COOLDOWN = temporarily ignored (ENGINE.md §5); protected symbols never cool down
       if (this.focusMgr.inCooldown(symbol)) {
@@ -478,6 +488,7 @@ export class VolumeEngine {
             evidence: { ...evaluated.evidence, intakePaused: true },
           }
         : evaluated;
+      forwardEvaluations?.push(Object.freeze({ decision: d, feature: f }));
       if (d.kind === 'ignore') this.signalCorrelation.delete(symbol);
       this.recordDecision(d);
       this.focusMgr.noteDecision(d, priorityOf(f, this.cfg).score);
@@ -506,6 +517,13 @@ export class VolumeEngine {
       );
     }
     this.lastTickTs = now;
+    if (forwardEvaluations === null) return null;
+    return buildVolumeForwardDetectorSourceCut({
+      tickAtMs: now,
+      configurationRevision: deriveVolumeConfigVersion(this.cfg),
+      configuration: this.cfg,
+      evaluations: forwardEvaluations,
+    });
   }
 
   private correlationFor(symbol: string): string {

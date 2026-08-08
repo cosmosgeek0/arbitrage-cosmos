@@ -86,8 +86,11 @@ EXPECTED_PUBLIC_API = (
     "DecisionState",
     "PacketRole",
     "PinnedDocumentV1",
+    "adapt_smeta1_n3_bridge",
+    "bridge_to_canonical_bytes",
     "decision_to_canonical_bytes",
     "evaluate_intake",
+    "render_bridge_fable5",
     "render_fable5",
 )
 
@@ -161,3 +164,11 @@ def test_n3_public_api_is_exact_and_excludes_constructible_decisions() -> None:
     assert "CandidateAssessmentV1" not in n3_intake.__all__
     assert "aggregate_decision" not in n3_intake.__all__
     assert "_aggregate_results" not in n3_intake.__all__
+
+
+def test_accepted_native_bridge_does_not_call_the_synthetic_evaluator() -> None:
+    source = (SOURCE_ROOT / "bridge.py").read_text(encoding="utf-8")
+
+    assert "adapt_result" not in source
+    assert "evaluate_intake" not in source
+    assert "S1C_N3_RESULT_V1" not in source

@@ -1,5 +1,10 @@
 """Offline, fail-closed N3-I1 edge-verdict intake."""
 
+from quant_edge.n3_intake.bridge import (
+    adapt_smeta1_n3_bridge,
+    bridge_to_canonical_bytes,
+    render_bridge_fable5,
+)
 from quant_edge.n3_intake.contracts import (
     AcceptanceState,
     ArtifactPinV1,
@@ -18,7 +23,10 @@ __all__ = [
     "DecisionState",
     "PacketRole",
     "PinnedDocumentV1",
+    "adapt_smeta1_n3_bridge",
+    "bridge_to_canonical_bytes",
     "decision_to_canonical_bytes",
     "evaluate_intake",
+    "render_bridge_fable5",
     "render_fable5",
 ]

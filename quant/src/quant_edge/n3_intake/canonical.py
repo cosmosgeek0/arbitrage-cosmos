@@ -31,6 +31,7 @@ SEMANTIC_DIGEST_PROFILE: Final = "N3I1_CANONICAL_SHA256_V1"
 SEMANTIC_DIGEST_DOMAINS: Final = frozenset(
     {
         "REGISTRY:S_META1",
+        "BRIDGE:S_META1_TO_N3",
         "RESULT:E1",
         "RESULT:S1C",
         "RESULT:S1D",

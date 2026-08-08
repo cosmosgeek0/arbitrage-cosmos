@@ -36,6 +36,7 @@ import {
   appliedPrivateReadSource,
   decodeM0SpotReadinessTruth,
   decodePrivateReadSnapshot,
+  nextPrivateReadFreshnessExpiry,
   privateReadAccessReasonForStatus,
   readPrivateReadStateField,
   reduceRealDataClientTuple,
@@ -983,6 +984,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [realDataClient, setRealDataClient] = useState<RealDataClientTuple>(
     INITIAL_REAL_DATA_CLIENT_TUPLE,
   );
+  const [privateReadFreshnessTick, bumpPrivateReadFreshness] = useState(0);
   const [markets, setMarkets] = useState<MarketRow[]>([]);
   const [marketTruth, setMarketTruth] = useState<MarketStateTruth>(INITIAL_MARKET_STATE_TRUTH);
   const [marketsUpdatedAt, setMarketsUpdatedAt] = useState<number | null>(null);
@@ -1326,6 +1328,27 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setConnected(false);
     };
   }, [acceptPrivateReadFromState, dispatchRealDataClient, nextPrivateReadRequestId]);
+
+  // A mounted consumer must cross the same freshness boundary even when no
+  // socket delta or transport completion causes another render. This timer
+  // expires evidence only; it performs no request and renews no timestamp.
+  useEffect(() => {
+    const now = Date.now();
+    const nextExpiryAt = nextPrivateReadFreshnessExpiry(
+      realDataClient.privateRead.snapshot,
+      now,
+    );
+    if (nextExpiryAt === null) return;
+    const timer = window.setTimeout(
+      () => bumpPrivateReadFreshness((value) => value + 1),
+      nextExpiryAt - now + 1,
+    );
+    return () => window.clearTimeout(timer);
+  }, [
+    privateReadFreshnessTick,
+    realDataClient.privateRead.snapshot.observedAt,
+    realDataClient.privateRead.snapshot.permissionPosture.observedAt,
+  ]);
 
   // The canonical socket only speaks when supervisor truth changes, so a
   // signed-in account would otherwise age silently behind a delta-free cockpit.

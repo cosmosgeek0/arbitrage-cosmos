@@ -226,6 +226,26 @@ export const PRIVATE_READ_STALE_AFTER_MS = 45_000;
 const MINIMUM_STALE_AFTER_MS = 15_000;
 const MAXIMUM_STALE_AFTER_MS = 600_000;
 
+/**
+ * Returns the earliest future boundary at which an admitted account or
+ * permission observation changes freshness. It schedules no work and never
+ * treats a future-dated observation as current evidence.
+ */
+export function nextPrivateReadFreshnessExpiry(
+  snapshot: Readonly<PrivateReadSnapshot>,
+  now = Date.now(),
+): number | null {
+  if (!Number.isFinite(now)) return null;
+  const nextExpiryAt = [snapshot.observedAt, snapshot.permissionPosture.observedAt]
+    .filter((observedAt): observedAt is number => (
+      observedAt !== null && Number.isFinite(observedAt) && observedAt <= now
+    ))
+    .map((observedAt) => observedAt + PRIVATE_READ_STALE_AFTER_MS)
+    .filter((expiresAt) => expiresAt > now)
+    .sort((left, right) => left - right)[0];
+  return nextExpiryAt ?? null;
+}
+
 const PRIVATE_STATES = new Set<PrivateReadState>(['AVAILABLE', 'PARTIAL', 'UNAVAILABLE', 'NOT_CONFIGURED']);
 const POSTURE_STATES = new Set<PermissionPostureState>(['VERIFIED_READ_ONLY', 'UNSAFE', 'UNKNOWN', 'NOT_CONFIGURED']);
 const COVERAGE_STATES = new Set<CoverageState>(['COMPLETE_CURRENT', 'PARTIAL_SYMBOL_SCOPED', 'UNAVAILABLE', 'NOT_CONFIGURED']);

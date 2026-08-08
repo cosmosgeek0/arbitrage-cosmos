@@ -17,6 +17,7 @@ import {
   hasMarginLiability,
   isZeroDecimal,
   m0SpotGate2ReadyNow,
+  nextPrivateReadFreshnessExpiry,
   permissionPostureTone,
   permissionViolations,
   privateReadAccessReasonForStatus,
@@ -551,18 +552,18 @@ test('RECONCILED is admitted only where the decoder contract can support it', ()
 test('the freshness guard is bounded, explicit, and can only downgrade a claim', () => {
   const decoded = decodePrivateReadSnapshot(availableFixture());
   assert.ok(decoded);
-  assert.equal(PRIVATE_READ_STALE_AFTER_MS, 120_000);
+  assert.equal(PRIVATE_READ_STALE_AFTER_MS, 45_000);
 
   const current = privateReadFreshness(decoded, decoded.observedAt + 5_000);
   assert.equal(current.state, 'CURRENT');
   assert.equal(current.tone, 'ok');
   assert.equal(current.ageMs, 5_000);
-  assert.match(current.reason, /within the 120s account freshness bound/);
+  assert.match(current.reason, /within the 45s account freshness bound/);
 
   const atBound = privateReadFreshness(decoded, decoded.observedAt + PRIVATE_READ_STALE_AFTER_MS);
   assert.equal(atBound.state, 'STALE');
   assert.equal(atBound.tone, 'warn');
-  assert.match(atBound.reason, /beyond the 120s account freshness bound/);
+  assert.match(atBound.reason, /beyond the 45s account freshness bound/);
 
   const future = privateReadFreshness(decoded, decoded.observedAt - 1);
   assert.equal(future.state, 'UNKNOWN');
@@ -593,6 +594,31 @@ test('the freshness guard is bounded, explicit, and can only downgrade a claim',
   const notConfigured = projectPrivateRead(decodePrivateReadSnapshot(notConfiguredFixture()));
   assert.equal(notConfigured.freshness.state, 'NOT_CONFIGURED');
   assert.equal(notConfigured.guardTone, 'idle');
+});
+
+test('freshness expiry schedules the earlier account or permission boundary without transport work', async () => {
+  const fixture = availableFixture();
+  fixture.permissionPosture.observedAt = fixture.observedAt - 10_000;
+  const decoded = decodePrivateReadSnapshot(fixture);
+  assert.ok(decoded);
+
+  const now = fixture.observedAt + 1_000;
+  const permissionExpiry = fixture.permissionPosture.observedAt + PRIVATE_READ_STALE_AFTER_MS;
+  const accountExpiry = fixture.observedAt + PRIVATE_READ_STALE_AFTER_MS;
+  assert.equal(nextPrivateReadFreshnessExpiry(decoded, now), permissionExpiry);
+  assert.equal(nextPrivateReadFreshnessExpiry(decoded, permissionExpiry), accountExpiry);
+  assert.equal(nextPrivateReadFreshnessExpiry(decoded, accountExpiry), null);
+  assert.equal(nextPrivateReadFreshnessExpiry(decoded, Number.NaN), null);
+
+  const store = await read('store.tsx');
+  assert.match(store, /nextPrivateReadFreshnessExpiry\(\s*realDataClient\.privateRead\.snapshot,\s*now,?\s*\)/);
+  assert.match(store, /window\.setTimeout\([\s\S]*bumpPrivateReadFreshness/);
+  assert.match(store, /window\.clearTimeout\(timer\)/);
+  const scheduler = store.slice(
+    store.indexOf('// A mounted consumer must cross the same freshness boundary'),
+    store.indexOf('// The canonical socket only speaks', store.indexOf('// A mounted consumer must cross the same freshness boundary')),
+  );
+  assert.doesNotMatch(scheduler, /fetchJson|createSettledPoll|\.refresh\(/);
 });
 
 test('available exact-empty arrays stay distinguishable from unavailable unknown arrays', () => {

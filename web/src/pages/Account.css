@@ -866,6 +866,7 @@ button.accountx-wallet-row:focus-visible {
 
 @container (max-width: 850px) {
   .accountx-viewbar { align-items: flex-start; min-height: 90px; padding-top: 9px; padding-bottom: 9px; flex-direction: column; }
+  .accountx-viewbar > div { width: 100%; max-width: 100%; }
   .accountx-source-state { padding-left: 4px; }
   .accountx-section-head { align-items: flex-start; flex-direction: column; }
   .accountx-equity-tools { width: 100%; justify-content: space-between; }

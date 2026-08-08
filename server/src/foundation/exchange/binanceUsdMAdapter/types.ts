@@ -57,7 +57,8 @@ export type BinanceUsdMBasisAdapterBlockingCode =
   | 'QUERY_AUTHORITY_INVALID'
   | 'QUERY_OUTCOME_UNRESOLVED'
   | 'QUERY_IDENTITY_MISMATCH'
-  | 'QUERY_STATUS_UNKNOWN';
+  | 'QUERY_STATUS_UNKNOWN'
+  | 'QUERY_STATUS_FILL_INCOHERENT';
 
 export interface BinanceUsdMBasisAdapterConfig {
   /** Exact true is required. Default is false. */
@@ -78,7 +79,8 @@ export interface BinanceUsdMBasisPublicEvidence {
   /**
    * Capabilities copied from the same exchangeInfo symbol snapshot. N-11's
    * result guarantees MARKET but does not project the complete capability
-   * arrays, so LIMIT remains blocked unless these facts are supplied.
+   * arrays, so LIMIT remains blocked unless bounded `revision`, `observedAt`,
+   * `orderTypes`, and `timeInForce` facts are supplied.
    */
   readonly orderCapabilities: unknown;
 }
@@ -124,12 +126,14 @@ export interface BinanceUsdMBasisWireIntent {
   readonly positionMode: 'ONE_WAY';
   readonly positionSide: 'BOTH';
   readonly reduceOnly: boolean;
+  readonly closePosition: false;
   readonly requestFields: Readonly<{
     readonly symbol: string;
     readonly side: BinanceUsdMBasisOrderSide;
     readonly type: BinanceUsdMBasisOrderType;
     readonly positionSide: 'BOTH';
     readonly reduceOnly: boolean;
+    readonly closePosition: false;
     readonly quantity: string;
     readonly price: string | null;
     readonly timeInForce: 'GTC' | null;
@@ -140,16 +144,33 @@ export interface BinanceUsdMBasisWireIntent {
     readonly publicEvidenceSchema:
       'cosmos.foundation.binance-usdm-public-groundwork.v1';
     readonly publicEvidenceSourceId: string;
+    readonly publicEvidenceSourceTimeMs: number | null;
     readonly publicEvidenceReceivedAtMs: number;
+    readonly publicEvidenceMaxAgeMs: number;
+    readonly publicEvidenceAuthority:
+      | 'LIVE_PUBLIC'
+      | 'SYNTHETIC_TEST'
+      | 'RECORDED_REPLAY';
     readonly referenceMarkPrice: string;
+    readonly referenceMarkPriceRevision: string;
+    readonly referenceMarkPriceSourceId: string;
+    readonly referenceMarkPriceSourceTimeMs: number;
+    readonly referenceMarkPriceReceivedAtMs: number;
+    readonly referenceMarkPriceMaxAgeMs: number;
+    readonly referenceMarkPriceAuthority:
+      | 'LIVE_PUBLIC'
+      | 'SYNTHETIC_TEST'
+      | 'RECORDED_REPLAY';
     readonly publicMaxNumOrders: number | null;
     readonly privateOpenOrderCountEvaluated: false;
     readonly matchingEngineAcceptanceProven: false;
     readonly positionModeAuthority:
       | 'SYNTHETIC_TEST'
       | 'RECORDED_REPLAY';
-    readonly positionModeScope: 'ACCOUNT' | 'SYMBOL';
-    readonly positionModeSymbol: string | null;
+    readonly positionModeScope: 'ACCOUNT';
+    readonly positionModeSymbol: null;
+    readonly positionModeSourceId: string;
+    readonly positionModeRevision: string;
     readonly positionModeObservedAtMs: number;
     readonly positionModeReceivedAtMs: number;
     readonly positionModeMaxAgeMs: number;
@@ -260,8 +281,13 @@ export interface BinanceUsdMBasisConfirmedOrder {
   readonly origQty: string;
   readonly executedQty: string;
   readonly price: string;
+  /** Normalized request semantics; MARKET omits timeInForce. */
+  readonly timeInForce: 'GTC' | null;
+  /** Raw venue response enum retained after equivalence validation. */
+  readonly venueTimeInForce: 'GTC';
   readonly positionSide: 'BOTH';
   readonly reduceOnly: boolean;
+  readonly closePosition: false;
   readonly status: BinanceUsdMBasisObservedOrderStatus;
   readonly terminal: boolean;
 }

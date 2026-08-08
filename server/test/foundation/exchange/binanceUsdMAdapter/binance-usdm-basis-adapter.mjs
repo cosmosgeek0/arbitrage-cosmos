@@ -15,8 +15,9 @@ import {
   isBinanceUsdMBasisWireIntent,
 } from '../../../../dist/foundation/exchange/binanceUsdMAdapter/index.js';
 
-const T0 = 1_800_000_000_000;
+export const T0 = 1_900_000_000_000;
 const MAX_AGE_MS = 60_000;
+const FORECAST_MAX_AGE_MS = 15_000;
 
 function observedAt(sourceId, overrides = {}) {
   return Object.freeze({
@@ -87,12 +88,14 @@ function exchangeSymbol(overrides = {}) {
   });
 }
 
-function fundingForecast(overrides = {}) {
+export function fundingForecast(overrides = {}) {
   return Object.freeze({
     revision: overrides.revision ?? 'forecast-revision-1',
     observedAt:
       overrides.observedAt ??
-      observedAt('binance.usdm.mark-price.adapter-fixture'),
+      observedAt('binance.usdm.mark-price.adapter-fixture', {
+        maxAgeMs: FORECAST_MAX_AGE_MS,
+      }),
     value: Object.freeze({
       symbol: overrides.symbol ?? 'BTCUSDT',
       markPrice: overrides.markPrice ?? '50000.1',
@@ -125,13 +128,13 @@ function fundingHistory() {
   });
 }
 
-function publicEvidence(overrides = {}) {
+export function publicEvidence(overrides = {}) {
   const symbolFacts = overrides.exchangeSymbol ?? exchangeSymbol();
   const seam = createBinanceUsdMPublicGroundworkSeam(Object.freeze({
     sourceEnabled: true,
     allowedSymbols: Object.freeze(['BTCUSDT']),
     maximumFilterAgeMs: MAX_AGE_MS,
-    maximumForecastAgeMs: MAX_AGE_MS,
+    maximumForecastAgeMs: FORECAST_MAX_AGE_MS,
     maximumHistoryCaptureAgeMs: MAX_AGE_MS,
   }));
   const groundwork = seam.validate(Object.freeze({
@@ -146,6 +149,7 @@ function publicEvidence(overrides = {}) {
   return Object.freeze({
     groundwork,
     orderCapabilities: Object.freeze({
+      revision: 'exchange-info-capabilities-revision-1',
       observedAt: groundwork.filters.observedAt,
       orderTypes: symbolFacts.orderTypes,
       timeInForce: symbolFacts.timeInForce,
@@ -153,7 +157,53 @@ function publicEvidence(overrides = {}) {
   });
 }
 
-function positionModeEvidence(overrides = {}) {
+function forgedPublicEvidence(overrides = {}) {
+  const valid = publicEvidence();
+  const filterObservedAt = Object.freeze({
+    ...valid.groundwork.filters.observedAt,
+    ...(overrides.filterObservedAt ?? {}),
+  });
+  const capabilityObservedAt = Object.freeze({
+    ...filterObservedAt,
+    ...(overrides.capabilityObservedAt ?? {}),
+  });
+  const forecastObservedAt = Object.freeze({
+    ...valid.groundwork.fundingForecast.observedAt,
+    ...(overrides.forecastObservedAt ?? {}),
+  });
+  const forecastValue = Object.freeze({
+    ...valid.groundwork.fundingForecast.value,
+    ...(overrides.forecastValue ?? {}),
+  });
+  const forecast = Object.freeze({
+    ...valid.groundwork.fundingForecast,
+    observedAt: forecastObservedAt,
+    value: forecastValue,
+    ...(overrides.forecast ?? {}),
+  });
+  const filters = Object.freeze({
+    ...valid.groundwork.filters,
+    observedAt: filterObservedAt,
+    ...(overrides.filters ?? {}),
+  });
+  const groundwork = Object.freeze({
+    ...valid.groundwork,
+    filters,
+    fundingForecast: forecast,
+  });
+  return Object.freeze({
+    groundwork,
+    orderCapabilities: Object.freeze({
+      ...valid.orderCapabilities,
+      revision:
+        overrides.capabilityRevision ??
+        valid.orderCapabilities.revision,
+      observedAt: capabilityObservedAt,
+    }),
+  });
+}
+
+export function positionModeEvidence(overrides = {}) {
   return Object.freeze({
     mode: overrides.mode ?? 'ONE_WAY',
     scope: overrides.scope ?? 'ACCOUNT',
@@ -162,10 +212,14 @@ function positionModeEvidence(overrides = {}) {
     receivedAtMs: overrides.receivedAtMs ?? T0,
     maxAgeMs: overrides.maxAgeMs ?? MAX_AGE_MS,
     authority: overrides.authority ?? 'SYNTHETIC_TEST',
+    sourceId:
+      overrides.sourceId ??
+      'binance.usdm.position-mode.account.fixture',
+    revision: overrides.revision ?? 'position-mode-revision-1',
   });
 }
 
-function intentInput(overrides = {}) {
+export function intentInput(overrides = {}) {
   const base = {
     nowMs: T0,
     leg: 'PERP_OPEN',
@@ -185,7 +239,7 @@ function intentInput(overrides = {}) {
   return Object.freeze(merged);
 }
 
-function enabledAdapter(overrides = {}) {
+export function enabledAdapter(overrides = {}) {
   return createBinanceUsdMBasisValidateOnlyAdapter(Object.freeze({
     enabled: true,
     sourceEnabled: true,
@@ -196,7 +250,7 @@ function enabledAdapter(overrides = {}) {
   }));
 }
 
-function foundEvidence(intent, overrides = {}) {
+export function foundEvidence(intent, overrides = {}) {
   return Object.freeze({
     nowMs: overrides.nowMs ?? T0,
     observedAtMs: overrides.observedAtMs ?? T0 - 1,
@@ -215,8 +269,10 @@ function foundEvidence(intent, overrides = {}) {
             origQty: intent.quantity,
             executedQty: intent.quantity,
             price: intent.price ?? '0',
+            timeInForce: 'GTC',
             positionSide: intent.positionSide,
             reduceOnly: intent.reduceOnly,
+            closePosition: false,
             status: 'FILLED',
             ...(overrides.order ?? {}),
           }),
@@ -273,6 +329,7 @@ test('builds immutable non-callable one-way open and close descriptors', () => {
       positionMode: open.intent.positionMode,
       positionSide: open.intent.positionSide,
       reduceOnly: open.intent.reduceOnly,
+      closePosition: open.intent.closePosition,
       quantity: open.intent.quantity,
       price: open.intent.price,
       timeInForce: open.intent.timeInForce,
@@ -288,6 +345,7 @@ test('builds immutable non-callable one-way open and close descriptors', () => {
       positionMode: 'ONE_WAY',
       positionSide: 'BOTH',
       reduceOnly: false,
+      closePosition: false,
       quantity: '0.01',
       price: '50000.1',
       timeInForce: 'GTC',
@@ -301,6 +359,34 @@ test('builds immutable non-callable one-way open and close descriptors', () => {
   ]);
   assert.equal(open.intent.localValidation.publicMaxNumOrders, 200);
   assert.equal(
+    open.intent.localValidation.publicEvidenceSourceTimeMs,
+    T0 - 1,
+  );
+  assert.equal(
+    open.intent.localValidation.publicEvidenceMaxAgeMs,
+    MAX_AGE_MS,
+  );
+  assert.equal(
+    open.intent.localValidation.publicEvidenceAuthority,
+    'SYNTHETIC_TEST',
+  );
+  assert.equal(
+    open.intent.localValidation.referenceMarkPriceRevision,
+    'forecast-revision-1',
+  );
+  assert.equal(
+    open.intent.localValidation.referenceMarkPriceSourceId,
+    'binance.usdm.mark-price.adapter-fixture',
+  );
+  assert.equal(
+    open.intent.localValidation.referenceMarkPriceSourceTimeMs,
+    T0 - 1,
+  );
+  assert.equal(
+    open.intent.localValidation.referenceMarkPriceMaxAgeMs,
+    FORECAST_MAX_AGE_MS,
+  );
+  assert.equal(
     open.intent.localValidation.privateOpenOrderCountEvaluated,
     false,
   );
@@ -311,6 +397,19 @@ test('builds immutable non-callable one-way open and close descriptors', () => {
   assert.equal(
     open.intent.localValidation.positionModeAuthority,
     'SYNTHETIC_TEST',
+  );
+  assert.equal(
+    open.intent.localValidation.positionModeScope,
+    'ACCOUNT',
+  );
+  assert.equal(open.intent.localValidation.positionModeSymbol, null);
+  assert.equal(
+    open.intent.localValidation.positionModeSourceId,
+    'binance.usdm.position-mode.account.fixture',
+  );
+  assert.equal(
+    open.intent.localValidation.positionModeRevision,
+    'position-mode-revision-1',
   );
 
   const close = adapter.buildOrderIntent(intentInput({
@@ -323,9 +422,10 @@ test('builds immutable non-callable one-way open and close descriptors', () => {
   assert.equal(close.intent.reduceOnly, true);
   assert.equal(close.intent.price, null);
   assert.equal(close.intent.timeInForce, null);
+  assert.equal(close.intent.closePosition, false);
 });
 
-test('rejects unknown/live-private/stale position mode and non-BOTH semantics', () => {
+test('requires fresh account-wide replay/test position-mode provenance', () => {
   const adapter = enabledAdapter();
   const cases = [
     [
@@ -350,6 +450,25 @@ test('rejects unknown/live-private/stale position mode and non-BOTH semantics', 
     [
       positionModeEvidence({ observedAtMs: T0 + 1 }),
       'POSITION_MODE_EVIDENCE_FUTURE',
+    ],
+    [
+      positionModeEvidence({
+        scope: 'SYMBOL',
+        symbol: 'BTCUSDT',
+      }),
+      'POSITION_MODE_EVIDENCE_INVALID',
+    ],
+    [
+      positionModeEvidence({ sourceId: '' }),
+      'POSITION_MODE_EVIDENCE_INVALID',
+    ],
+    [
+      positionModeEvidence({ revision: 'contains whitespace' }),
+      'POSITION_MODE_EVIDENCE_INVALID',
+    ],
+    [
+      positionModeEvidence({ sourceId: `x${'y'.repeat(256)}` }),
+      'POSITION_MODE_EVIDENCE_INVALID',
     ],
   ];
   for (const [evidence, expected] of cases) {
@@ -397,6 +516,197 @@ test('preserves only canonical exact decimals and enforces public alignment', ()
   }));
   assert.equal(lossyPrice.ok, false);
   assert.equal(lossyPrice.blockingCodes.includes('PRICE_INVALID'), true);
+});
+
+test('applies official side-directed PERCENT_PRICE bounds', () => {
+  const adapter = enabledAdapter();
+  const highSell = adapter.buildOrderIntent(intentInput({
+    leg: 'PERP_OPEN',
+    price: '60000.1',
+  }));
+  assert.equal(highSell.ok, true, 'SELL has no upper PERCENT_PRICE block');
+
+  const lowSell = adapter.buildOrderIntent(intentInput({
+    leg: 'PERP_OPEN',
+    price: '40000.1',
+  }));
+  assert.equal(lowSell.ok, false);
+  assert.equal(
+    lowSell.blockingCodes.includes('PERCENT_PRICE_OUT_OF_RANGE'),
+    true,
+  );
+
+  const lowBuy = adapter.buildOrderIntent(intentInput({
+    leg: 'PERP_CLOSE',
+    price: '40000.1',
+  }));
+  assert.equal(lowBuy.ok, true, 'BUY has no lower PERCENT_PRICE block');
+
+  const highBuy = adapter.buildOrderIntent(intentInput({
+    leg: 'PERP_CLOSE',
+    price: '60000.1',
+  }));
+  assert.equal(highBuy.ok, false);
+  assert.equal(
+    highBuy.blockingCodes.includes('PERCENT_PRICE_OUT_OF_RANGE'),
+    true,
+  );
+});
+
+test('independently rejects forged public filter, capability, and mark provenance', () => {
+  const adapter = enabledAdapter();
+  const cases = [
+    [
+      'filter source stale despite fresh receipt',
+      forgedPublicEvidence({
+        filterObservedAt: { sourceTimeMs: T0 - MAX_AGE_MS - 1 },
+      }),
+    ],
+    [
+      'filter private authority',
+      forgedPublicEvidence({
+        filterObservedAt: { authority: 'LIVE_PRIVATE' },
+      }),
+    ],
+    [
+      'filter partial completeness',
+      forgedPublicEvidence({
+        filterObservedAt: { completeness: 'PARTIAL' },
+      }),
+    ],
+    [
+      'filter maxAge exceeds adapter ceiling',
+      forgedPublicEvidence({
+        filterObservedAt: { maxAgeMs: MAX_AGE_MS + 1 },
+      }),
+    ],
+    [
+      'filter source time follows receipt',
+      forgedPublicEvidence({
+        filterObservedAt: {
+          sourceTimeMs: T0,
+          receivedAtMs: T0 - 1,
+        },
+      }),
+    ],
+    [
+      'filter source id is unbounded',
+      forgedPublicEvidence({
+        filterObservedAt: { sourceId: `x${'y'.repeat(256)}` },
+      }),
+    ],
+    [
+      'capability revision is malformed',
+      forgedPublicEvidence({ capabilityRevision: 'bad revision' }),
+    ],
+    [
+      'capability timestamp is stale',
+      forgedPublicEvidence({
+        capabilityObservedAt: {
+          sourceTimeMs: T0 - MAX_AGE_MS - 1,
+        },
+      }),
+    ],
+    [
+      'forecast source stale despite fresh receipt',
+      forgedPublicEvidence({
+        forecastObservedAt: {
+          sourceTimeMs: T0 - FORECAST_MAX_AGE_MS - 1,
+        },
+        forecastValue: {
+          sourceTimeMs: T0 - FORECAST_MAX_AGE_MS - 1,
+        },
+      }),
+    ],
+    [
+      'forecast private authority',
+      forgedPublicEvidence({
+        forecastObservedAt: { authority: 'LIVE_PRIVATE' },
+      }),
+    ],
+    [
+      'forecast partial completeness',
+      forgedPublicEvidence({
+        forecastObservedAt: { completeness: 'PARTIAL' },
+      }),
+    ],
+    [
+      'forecast maxAge exceeds adapter ceiling',
+      forgedPublicEvidence({
+        forecastObservedAt: {
+          maxAgeMs: FORECAST_MAX_AGE_MS + 1,
+        },
+      }),
+    ],
+    [
+      'forecast revision is malformed',
+      forgedPublicEvidence({
+        forecast: { evidenceRevision: 'bad revision' },
+      }),
+    ],
+    [
+      'forecast source time is unavailable',
+      forgedPublicEvidence({
+        forecastObservedAt: { sourceTimeMs: null },
+        forecastValue: { sourceTimeMs: null },
+      }),
+    ],
+    [
+      'forecast value source time conflicts with provenance',
+      forgedPublicEvidence({
+        forecastValue: { sourceTimeMs: T0 - 2 },
+      }),
+    ],
+  ];
+
+  for (const [label, evidence] of cases) {
+    const result = adapter.buildOrderIntent(intentInput({
+      publicEvidence: evidence,
+    }));
+    assert.equal(result.ok, false, label);
+    assert.equal(result.intent, null, label);
+    assert.equal(
+      result.blockingCodes.some((code) =>
+        code.startsWith('PUBLIC_')),
+      true,
+      label,
+    );
+  }
+});
+
+test('independently rejects zero MIN_NOTIONAL and inverted PERCENT_PRICE multipliers', () => {
+  const adapter = enabledAdapter();
+  const cases = [
+    [
+      'zero MIN_NOTIONAL',
+      forgedPublicEvidence({
+        filters: { minNotional: '0' },
+      }),
+    ],
+    [
+      'inverted PERCENT_PRICE multipliers',
+      forgedPublicEvidence({
+        filters: {
+          percentPrice: Object.freeze({
+            multiplierUp: '0.85',
+            multiplierDown: '1.15',
+            multiplierDecimal: 4,
+          }),
+        },
+      }),
+    ],
+  ];
+
+  for (const [label, evidence] of cases) {
+    const result = adapter.buildOrderIntent(intentInput({
+      publicEvidence: evidence,
+    }));
+    assert.equal(result.ok, false, label);
+    assert.equal(result.intent, null, label);
+    assert.deepEqual(result.blockingCodes, [
+      'PUBLIC_FILTER_MALFORMED',
+    ], label);
+  }
 });
 
 test('rejects proxy and accessor input at every parsed boundary without invoking traps', () => {
@@ -449,6 +759,56 @@ test('rejects proxy and accessor input at every parsed boundary without invoking
     true,
   );
   assert.equal(trapCalls, 0);
+
+  const revokedObject = Proxy.revocable({}, {});
+  revokedObject.revoke();
+  let revokedObjectResult;
+  assert.doesNotThrow(() => {
+    revokedObjectResult = adapter.buildOrderIntent(revokedObject.proxy);
+  });
+  assert.deepEqual(revokedObjectResult.blockingCodes, ['INPUT_INVALID']);
+
+  const revokedArray = Proxy.revocable([], {});
+  revokedArray.revoke();
+  let revokedArrayResult;
+  assert.doesNotThrow(() => {
+    revokedArrayResult = adapter.buildOrderIntent(revokedArray.proxy);
+  });
+  assert.deepEqual(revokedArrayResult.blockingCodes, ['INPUT_INVALID']);
+
+  const revokedSymbols = Proxy.revocable([], {});
+  revokedSymbols.revoke();
+  let revokedConfigAdapter;
+  assert.doesNotThrow(() => {
+    revokedConfigAdapter = createBinanceUsdMBasisValidateOnlyAdapter({
+      enabled: true,
+      sourceEnabled: true,
+      killSwitchEngaged: false,
+      authority: 'NONE',
+      allowedSymbols: revokedSymbols.proxy,
+    });
+  });
+  assert.equal(revokedConfigAdapter.enabled, false);
+
+  const overWide = {};
+  for (let index = 0; index < 65; index += 1) {
+    overWide[`field${index}`] = index;
+  }
+  const overWideResult = adapter.buildOrderIntent(overWide);
+  assert.deepEqual(overWideResult.blockingCodes, ['INPUT_INVALID']);
+
+  const oversizedSymbols = Array.from(
+    { length: 501 },
+    (_, index) => `S${index}`,
+  );
+  const oversizedConfig = createBinanceUsdMBasisValidateOnlyAdapter({
+    enabled: true,
+    sourceEnabled: true,
+    killSwitchEngaged: false,
+    authority: 'NONE',
+    allowedSymbols: oversizedSymbols,
+  });
+  assert.equal(oversizedConfig.enabled, false);
 });
 
 test('query descriptor reuses the existing client ID and is never callable', () => {
@@ -490,6 +850,9 @@ test('query normalization confirms only fresh exact full identity', () => {
   assert.equal(resolution.order.status, 'FILLED');
   assert.equal(resolution.order.terminal, true);
   assert.equal(resolution.order.origQty, '0.01');
+  assert.equal(resolution.order.timeInForce, 'GTC');
+  assert.equal(resolution.order.venueTimeInForce, 'GTC');
+  assert.equal(resolution.order.closePosition, false);
   assert.equal(resolution.evaluatedAtMs, T0);
   assert.equal(resolution.observedAtMs, T0 - 1);
   assert.equal(resolution.receivedAtMs, T0);
@@ -499,6 +862,21 @@ test('query normalization confirms only fresh exact full identity', () => {
   assert.equal(resolution.blindResubmitAllowed, false);
   assert.equal(resolution.replacementClientOrderId, null);
   assert.equal(resolution.ordersPerformed, 0);
+
+  const marketBuilt = adapter.buildOrderIntent(intentInput({
+    leg: 'PERP_CLOSE',
+    existingClientOrderId: 'm1i1-perp-close-a1',
+    type: 'MARKET',
+  }));
+  assert.equal(marketBuilt.ok, true);
+  const marketResolution = adapter.normalizeOrderQueryEvidence(
+    marketBuilt.intent,
+    foundEvidence(marketBuilt.intent),
+  );
+  assert.equal(marketResolution.state, 'CONFIRMED');
+  assert.equal(marketResolution.order.timeInForce, null);
+  assert.equal(marketResolution.order.venueTimeInForce, 'GTC');
+  assert.equal(marketResolution.order.closePosition, false);
 });
 
 test('query identity mismatch, unknown status and ambiguous outcomes remain unresolved', () => {
@@ -511,8 +889,10 @@ test('query identity mismatch, unknown status and ambiguous outcomes remain unre
     { side: 'BUY' },
     { type: 'MARKET' },
     { origQty: '0.02' },
+    { timeInForce: 'IOC' },
     { positionSide: 'SHORT' },
     { reduceOnly: true },
+    { closePosition: true },
     { price: '50000.2' },
   ];
   for (const mismatch of mismatches) {
@@ -558,6 +938,128 @@ test('query identity mismatch, unknown status and ambiguous outcomes remain unre
     assert.equal(unresolved.replacementClientOrderId, null);
     assert.equal(unresolved.evidenceAuthority, 'SYNTHETIC_TEST');
   }
+});
+
+test('normalizes valid padded Binance response decimals before identity comparison', () => {
+  const adapter = enabledAdapter();
+  const built = adapter.buildOrderIntent(intentInput());
+  assert.equal(built.ok, true);
+  const padded = adapter.normalizeOrderQueryEvidence(
+    built.intent,
+    foundEvidence(built.intent, {
+      order: {
+        origQty: '0.01000000',
+        executedQty: '0.01000000',
+        price: '50000.10000000',
+      },
+    }),
+  );
+  assert.equal(padded.state, 'CONFIRMED');
+  assert.equal(padded.order.origQty, '0.01');
+  assert.equal(padded.order.executedQty, '0.01');
+  assert.equal(padded.order.price, '50000.1');
+
+  for (const signedZero of ['-0', '-0.00000000', '-00', '-00.000']) {
+    const negativeZero = adapter.normalizeOrderQueryEvidence(
+      built.intent,
+      foundEvidence(built.intent, {
+        order: { executedQty: signedZero },
+      }),
+    );
+    assert.equal(negativeZero.state, 'UNRESOLVED', signedZero);
+    assert.equal(
+      negativeZero.blockingCodes.includes('QUERY_EVIDENCE_INVALID'),
+      true,
+      signedZero,
+    );
+  }
+});
+
+test('query status and cumulative fill must be mutually coherent', () => {
+  const adapter = enabledAdapter();
+  const built = adapter.buildOrderIntent(intentInput());
+  assert.equal(built.ok, true);
+
+  const coherent = [
+    ['NEW', '0.00000000'],
+    ['REJECTED', '0'],
+    ['PARTIALLY_FILLED', '0.00500000'],
+    ['CANCELED', '0.005'],
+    ['EXPIRED', '0'],
+    ['EXPIRED_IN_MATCH', '0.009'],
+    ['FILLED', '0.01000000'],
+  ];
+  for (const [status, executedQty] of coherent) {
+    const resolution = adapter.normalizeOrderQueryEvidence(
+      built.intent,
+      foundEvidence(built.intent, {
+        order: { status, executedQty },
+      }),
+    );
+    assert.equal(resolution.state, 'CONFIRMED', `${status}/${executedQty}`);
+  }
+
+  const incoherent = [
+    ['FILLED', '0'],
+    ['NEW', '0.001'],
+    ['REJECTED', '0.001'],
+    ['PARTIALLY_FILLED', '0'],
+    ['PARTIALLY_FILLED', '0.01'],
+    ['CANCELED', '0.01'],
+    ['EXPIRED', '0.01'],
+    ['EXPIRED_IN_MATCH', '0.01'],
+  ];
+  for (const [status, executedQty] of incoherent) {
+    const resolution = adapter.normalizeOrderQueryEvidence(
+      built.intent,
+      foundEvidence(built.intent, {
+        order: { status, executedQty },
+      }),
+    );
+    assert.equal(
+      resolution.state,
+      'UNRESOLVED',
+      `${status}/${executedQty}`,
+    );
+    assert.equal(
+      resolution.blockingCodes.includes(
+        'QUERY_STATUS_FILL_INCOHERENT',
+      ),
+      true,
+      `${status}/${executedQty}`,
+    );
+  }
+});
+
+test('MARKET query evidence requires the venue zero-price sentinel', () => {
+  const adapter = enabledAdapter();
+  const built = adapter.buildOrderIntent(intentInput({
+    leg: 'PERP_CLOSE',
+    existingClientOrderId: 'm1i1-perp-close-market-a1',
+    type: 'MARKET',
+  }));
+  assert.equal(built.ok, true);
+
+  const zeroPrice = adapter.normalizeOrderQueryEvidence(
+    built.intent,
+    foundEvidence(built.intent, {
+      order: { price: '0.00000000' },
+    }),
+  );
+  assert.equal(zeroPrice.state, 'CONFIRMED');
+  assert.equal(zeroPrice.order.price, '0');
+
+  const nonZeroPrice = adapter.normalizeOrderQueryEvidence(
+    built.intent,
+    foundEvidence(built.intent, {
+      order: { price: '1.00000000' },
+    }),
+  );
+  assert.equal(nonZeroPrice.state, 'UNRESOLVED');
+  assert.equal(
+    nonZeroPrice.blockingCodes.includes('QUERY_IDENTITY_MISMATCH'),
+    true,
+  );
 });
 
 test('stale, future, live-private, malformed, and hostile query evidence stays unresolved', () => {

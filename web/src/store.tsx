@@ -129,11 +129,76 @@ export type MarketSnapshotPayload = Readonly<{
   rows: MarketRow[];
 }>;
 
+export type MarketPublicationStatus = 'CURRENT' | 'STALE LAST-KNOWN' | 'PARTIAL' | 'CONFLICT';
+
+export type DecodedMarketSnapshot = Readonly<{
+  updatedAt: number;
+  streamUpdatedAt: number | null | undefined;
+  dataSources: MarketSourcePublicationTruth;
+  rows: MarketRow[];
+  normalizedReceiptIdentity: string;
+  publicationStatus: Exclude<MarketPublicationStatus, 'CONFLICT'>;
+  publicationError: string | null;
+}>;
+
 const MARKET_SOURCE_PUBLICATION_KEYS = Object.freeze([
   'spotBookTicker',
   'futuresBookTicker',
   'futures24hTicker',
 ] as const);
+
+const UNAVAILABLE_MARKET_FIELDS = Object.freeze({
+  spotBookTicker: Object.freeze([
+    'spotBid', 'spotAsk', 'spotBidQty', 'spotAskQty', 'spotSpreadPct', 'spotTopQuoteUsd',
+  ]),
+  futuresBookTicker: Object.freeze([
+    'perpBid', 'perpAsk', 'perpBidQty', 'perpAskQty', 'perpSpreadPct', 'perpTopQuoteUsd',
+  ]),
+  futures24hTicker: Object.freeze([
+    'perpLast', 'perpChange24hPct', 'perpVolume24h', 'perpHigh24h', 'perpLow24h',
+    'oiToPerpVolume24h',
+  ]),
+} satisfies Record<keyof MarketSourcePublicationTruth, readonly (keyof MarketRow)[]>);
+
+const EXECUTABLE_BASIS_FIELDS = Object.freeze([
+  'executableBasisLongSpotPct',
+  'executableBasisShortSpotPct',
+  'executableBasisBestPct',
+  'executableBasisSide',
+] satisfies readonly (keyof MarketRow)[]);
+
+function decodeMarketSourcePublicationTruth(value: unknown): MarketSourcePublicationTruth {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('Market source truth is missing.');
+  }
+  const source = value as Record<string, unknown>;
+  const ownKeys = Reflect.ownKeys(source);
+  const exactKeys = ownKeys.length === MARKET_SOURCE_PUBLICATION_KEYS.length
+    && ownKeys.every((key) => (
+      typeof key === 'string'
+      && MARKET_SOURCE_PUBLICATION_KEYS.includes(
+        key as typeof MARKET_SOURCE_PUBLICATION_KEYS[number],
+      )
+    ));
+  const invalid = MARKET_SOURCE_PUBLICATION_KEYS.filter((key) => (
+    source[key] !== 'fresh' && source[key] !== 'stale' && source[key] !== 'unavailable'
+  ));
+  if (!exactKeys || invalid.length > 0) {
+    const unexpected = ownKeys.filter((key) => (
+      typeof key !== 'string'
+      || !MARKET_SOURCE_PUBLICATION_KEYS.includes(
+        key as typeof MARKET_SOURCE_PUBLICATION_KEYS[number],
+      )
+    ));
+    const details = [...invalid, ...unexpected.map(String)];
+    throw new TypeError(`Market source truth is invalid: ${details.join(', ') || 'key set'}.`);
+  }
+  return Object.freeze({
+    spotBookTicker: source.spotBookTicker as MarketSourcePublicationState,
+    futuresBookTicker: source.futuresBookTicker as MarketSourcePublicationState,
+    futures24hTicker: source.futures24hTicker as MarketSourcePublicationState,
+  });
+}
 
 /**
  * A 200 response proves only that the publication endpoint answered. It does
@@ -147,22 +212,14 @@ export function marketSnapshotTruthEvent(
   streamUpdatedAt?: unknown,
   staleAfterMs?: number,
 ): MarketStateTruthEvent {
-  if (!dataSources || typeof dataSources !== 'object' || Array.isArray(dataSources)) {
+  let source: MarketSourcePublicationTruth;
+  try {
+    source = decodeMarketSourcePublicationTruth(dataSources);
+  } catch (cause) {
     return Object.freeze({
       kind: 'FAILURE',
       observedAtMs,
-      error: 'Market source truth is missing.',
-    });
-  }
-  const source = dataSources as Record<string, unknown>;
-  const invalid = MARKET_SOURCE_PUBLICATION_KEYS.filter((key) => (
-    !['fresh', 'stale', 'unavailable'].includes(String(source[key]))
-  ));
-  if (invalid.length > 0) {
-    return Object.freeze({
-      kind: 'FAILURE',
-      observedAtMs,
-      error: `Market source truth is invalid: ${invalid.join(', ')}.`,
+      error: cause instanceof Error ? cause.message : 'Market source truth is invalid.',
     });
   }
   const nonFresh = MARKET_SOURCE_PUBLICATION_KEYS.filter((key) => source[key] !== 'fresh');
@@ -192,6 +249,341 @@ export function marketSnapshotTruthEvent(
     });
   }
   return Object.freeze({ kind: 'SUCCESS', observedAtMs });
+}
+
+function canonicalJson(value: unknown, ancestors = new Set<object>()): string | undefined {
+  if (value === null) return 'null';
+  if (typeof value === 'string' || typeof value === 'boolean') return JSON.stringify(value);
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new TypeError('Invalid non-finite market response number');
+    return JSON.stringify(value);
+  }
+  if (typeof value !== 'object') return undefined;
+  if (ancestors.has(value)) throw new TypeError('Invalid cyclic market response');
+  ancestors.add(value);
+  let encoded: string;
+  if (Array.isArray(value)) {
+    encoded = `[${value.map((entry) => canonicalJson(entry, ancestors) ?? 'null').join(',')}]`;
+  } else {
+    const fields = Object.keys(value as Record<string, unknown>)
+      .sort()
+      .flatMap((key) => {
+        const child = canonicalJson((value as Record<string, unknown>)[key], ancestors);
+        return child === undefined ? [] : [`${JSON.stringify(key)}:${child}`];
+      });
+    encoded = `{${fields.join(',')}}`;
+  }
+  ancestors.delete(value);
+  return encoded;
+}
+
+/** Decode and normalize one immutable server-owned market receipt. */
+export function decodeMarketSnapshot(
+  payload: unknown,
+  observedAtMs: number,
+  maximumAgeMs: number,
+): DecodedMarketSnapshot {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new TypeError('Invalid market response');
+  }
+  if (!Number.isFinite(observedAtMs) || observedAtMs <= 0) {
+    throw new TypeError('Invalid market observation time');
+  }
+  if (!Number.isFinite(maximumAgeMs) || maximumAgeMs <= 0) {
+    throw new TypeError('Invalid market maximum age');
+  }
+  const candidate = payload as Partial<MarketSnapshotPayload>;
+  const updatedAt = normalizeMarketSourceTime(candidate.updatedAt);
+  if (updatedAt === null) throw new TypeError('Market updatedAt is missing or invalid.');
+  if (updatedAt > observedAtMs) throw new TypeError('Market updatedAt is in the future.');
+  if (!Array.isArray(candidate.rows)) throw new TypeError('Invalid market response');
+
+  const hasStreamUpdatedAt = Object.hasOwn(candidate, 'streamUpdatedAt');
+  let streamUpdatedAt: number | null | undefined;
+  if (!hasStreamUpdatedAt) {
+    streamUpdatedAt = undefined;
+  } else if (candidate.streamUpdatedAt === null) {
+    streamUpdatedAt = null;
+  } else {
+    streamUpdatedAt = normalizeMarketSourceTime(candidate.streamUpdatedAt);
+    if (streamUpdatedAt === null) throw new TypeError('Market streamUpdatedAt is invalid.');
+  }
+
+  const dataSources = decodeMarketSourcePublicationTruth(candidate.dataSources);
+  const rows = candidate.rows.map((row) => {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) {
+      throw new TypeError('Invalid market row');
+    }
+    const projected: MarketRow = { ...row };
+    for (const sourceKey of MARKET_SOURCE_PUBLICATION_KEYS) {
+      if (dataSources[sourceKey] !== 'unavailable') continue;
+      for (const field of UNAVAILABLE_MARKET_FIELDS[sourceKey]) {
+        (projected as unknown as Record<string, unknown>)[field] = null;
+      }
+    }
+    if (dataSources.spotBookTicker === 'unavailable'
+        || dataSources.futuresBookTicker === 'unavailable') {
+      for (const field of EXECUTABLE_BASIS_FIELDS) {
+        (projected as unknown as Record<string, unknown>)[field] = null;
+      }
+    }
+    return projected;
+  });
+  const freshnessTime = streamUpdatedAt === undefined ? updatedAt : streamUpdatedAt;
+  const sourceTruthEvent = marketSnapshotTruthEvent(
+    dataSources,
+    observedAtMs,
+    freshnessTime,
+    maximumAgeMs,
+  );
+  const unavailableSources = MARKET_SOURCE_PUBLICATION_KEYS.filter((key) => (
+    dataSources[key] === 'unavailable'
+  ));
+  const publicationStatus = unavailableSources.length > 0
+    ? 'PARTIAL'
+    : sourceTruthEvent.kind === 'FAILURE'
+      ? 'STALE LAST-KNOWN'
+      : 'CURRENT';
+  const publicationError = unavailableSources.length > 0
+    ? `Market sources are unavailable: ${unavailableSources.join(', ')}.`
+    : sourceTruthEvent.kind === 'FAILURE'
+      ? sourceTruthEvent.error
+      : null;
+  const normalizedReceiptIdentity = canonicalJson({
+    updatedAt,
+    streamUpdatedAt,
+    dataSources,
+    rows,
+  });
+  if (normalizedReceiptIdentity === undefined) throw new TypeError('Invalid market response');
+
+  return Object.freeze({
+    updatedAt,
+    streamUpdatedAt,
+    dataSources,
+    rows,
+    normalizedReceiptIdentity,
+    publicationStatus,
+    publicationError,
+  });
+}
+
+export type MarketAdmissionErrorKind = 'NONE' | 'TRANSIENT' | 'PUBLICATION' | 'CONFLICT';
+
+export type MarketAdmissionState = Readonly<{
+  rows: MarketRow[];
+  updatedAt: number | null;
+  dataSources: MarketSourcePublicationTruth | null;
+  normalizedReceiptIdentity: string | null;
+  publicationStatus: MarketPublicationStatus;
+  truth: MarketStateTruth;
+  errorKind: MarketAdmissionErrorKind;
+}>;
+
+export type MarketAdmissionObservation =
+  | Readonly<{
+      kind: 'RECEIPT';
+      payload: unknown;
+      observedAtMs: number;
+      maximumAgeMs: number;
+    }>
+  | Readonly<{
+      kind: 'FAILURE';
+      observedAtMs: number;
+      error: string;
+    }>;
+
+export type MarketAdmissionDisposition =
+  | 'FAILURE'
+  | 'OLDER_IGNORED'
+  | 'EQUAL_IDENTICAL_CURRENT'
+  | 'EQUAL_IDENTICAL_NON_CURRENT'
+  | 'CONFLICT'
+  | 'NEWER_CURRENT'
+  | 'NEWER_NON_CURRENT';
+
+export type MarketAdmissionResult = Readonly<{
+  state: MarketAdmissionState;
+  disposition: MarketAdmissionDisposition;
+}>;
+
+export const INITIAL_MARKET_ADMISSION_STATE: MarketAdmissionState = Object.freeze({
+  rows: [] as MarketRow[],
+  updatedAt: null,
+  dataSources: null,
+  normalizedReceiptIdentity: null,
+  publicationStatus: 'PARTIAL',
+  truth: INITIAL_MARKET_STATE_TRUTH,
+  errorKind: 'NONE',
+});
+
+function failedMarketAdmission(
+  current: MarketAdmissionState,
+  observedAtMs: number,
+  error: string,
+): MarketAdmissionResult {
+  if (current.errorKind === 'CONFLICT') {
+    return Object.freeze({ state: current, disposition: 'FAILURE' });
+  }
+  const normalizedError = typeof error === 'string' && error.trim()
+    ? error.trim()
+    : 'Market refresh failed.';
+  const truth = reduceMarketStateTruth(current.truth, {
+    kind: 'FAILURE',
+    observedAtMs,
+    error: normalizedError,
+  });
+  return Object.freeze({
+    state: Object.freeze({
+      ...current,
+      publicationStatus: current.updatedAt === null || current.publicationStatus === 'PARTIAL'
+        ? 'PARTIAL'
+        : 'STALE LAST-KNOWN',
+      truth,
+      errorKind: 'TRANSIENT',
+    }),
+    disposition: 'FAILURE',
+  });
+}
+
+function retainedMarketTruth(
+  current: MarketAdmissionState,
+  receipt: DecodedMarketSnapshot,
+  observedAtMs: number,
+): Pick<MarketAdmissionState, 'truth' | 'errorKind'> {
+  if (receipt.publicationStatus === 'CURRENT') {
+    return {
+      truth: Object.freeze({
+        status: 'CURRENT',
+        lastSuccessAtMs: current.truth.lastSuccessAtMs,
+        error: null,
+      }),
+      errorKind: 'NONE',
+    };
+  }
+  return {
+    truth: reduceMarketStateTruth(current.truth, {
+      kind: 'FAILURE',
+      observedAtMs,
+      error: receipt.publicationError ?? 'Market sources are not current.',
+    }),
+    errorKind: 'PUBLICATION',
+  };
+}
+
+function replacedMarketTruth(
+  current: MarketAdmissionState,
+  receipt: DecodedMarketSnapshot,
+  observedAtMs: number,
+): Pick<MarketAdmissionState, 'truth' | 'errorKind'> {
+  if (receipt.publicationStatus === 'CURRENT') {
+    return {
+      truth: Object.freeze({ status: 'CURRENT', lastSuccessAtMs: observedAtMs, error: null }),
+      errorKind: 'NONE',
+    };
+  }
+  return {
+    truth: reduceMarketStateTruth(current.truth, {
+      kind: 'FAILURE',
+      observedAtMs,
+      error: receipt.publicationError ?? 'Market sources are not current.',
+    }),
+    errorKind: 'PUBLICATION',
+  };
+}
+
+function candidateMarketSourceTime(payload: unknown, observedAtMs: number): number | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  try {
+    const updatedAt = normalizeMarketSourceTime((payload as { updatedAt?: unknown }).updatedAt);
+    return updatedAt !== null && updatedAt <= observedAtMs ? updatedAt : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Sole monotonic transition for polled and manual market completions. */
+export function reduceMarketAdmission(
+  current: MarketAdmissionState,
+  observation: MarketAdmissionObservation,
+): MarketAdmissionResult {
+  if (observation.kind === 'FAILURE') {
+    return failedMarketAdmission(current, observation.observedAtMs, observation.error);
+  }
+
+  const candidateTime = candidateMarketSourceTime(observation.payload, observation.observedAtMs);
+  if (candidateTime !== null && current.updatedAt !== null && candidateTime < current.updatedAt) {
+    return Object.freeze({ state: current, disposition: 'OLDER_IGNORED' });
+  }
+  if (candidateTime !== null && current.updatedAt === candidateTime
+      && current.errorKind === 'CONFLICT') {
+    return Object.freeze({ state: current, disposition: 'CONFLICT' });
+  }
+
+  let receipt: DecodedMarketSnapshot;
+  try {
+    receipt = decodeMarketSnapshot(
+      observation.payload,
+      observation.observedAtMs,
+      observation.maximumAgeMs,
+    );
+  } catch (cause) {
+    return failedMarketAdmission(
+      current,
+      observation.observedAtMs,
+      cause instanceof Error ? cause.message : 'Invalid market response',
+    );
+  }
+
+  if (current.updatedAt !== null && receipt.updatedAt < current.updatedAt) {
+    return Object.freeze({ state: current, disposition: 'OLDER_IGNORED' });
+  }
+  if (current.updatedAt === receipt.updatedAt) {
+    if (current.normalizedReceiptIdentity !== receipt.normalizedReceiptIdentity) {
+      const error = `Market receipt conflict at updatedAt ${receipt.updatedAt}.`;
+      return Object.freeze({
+        state: Object.freeze({
+          ...current,
+          publicationStatus: 'CONFLICT',
+          truth: reduceMarketStateTruth(current.truth, {
+            kind: 'FAILURE',
+            observedAtMs: observation.observedAtMs,
+            error,
+          }),
+          errorKind: 'CONFLICT',
+        }),
+        disposition: 'CONFLICT',
+      });
+    }
+    const retained = retainedMarketTruth(current, receipt, observation.observedAtMs);
+    return Object.freeze({
+      state: Object.freeze({
+        ...current,
+        publicationStatus: receipt.publicationStatus,
+        truth: retained.truth,
+        errorKind: retained.errorKind,
+      }),
+      disposition: receipt.publicationStatus === 'CURRENT'
+        ? 'EQUAL_IDENTICAL_CURRENT'
+        : 'EQUAL_IDENTICAL_NON_CURRENT',
+    });
+  }
+
+  const replaced = replacedMarketTruth(current, receipt, observation.observedAtMs);
+  return Object.freeze({
+    state: Object.freeze({
+      rows: receipt.rows,
+      updatedAt: receipt.updatedAt,
+      dataSources: receipt.dataSources,
+      normalizedReceiptIdentity: receipt.normalizedReceiptIdentity,
+      publicationStatus: receipt.publicationStatus,
+      truth: replaced.truth,
+      errorKind: replaced.errorKind,
+    }),
+    disposition: receipt.publicationStatus === 'CURRENT'
+      ? 'NEWER_CURRENT'
+      : 'NEWER_NON_CURRENT',
+  });
 }
 
 export type MarketFreshnessStatus = 'ERROR' | 'UNKNOWN' | 'DISCONNECTED' | 'LIVE' | 'STALE';
@@ -985,10 +1377,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     INITIAL_REAL_DATA_CLIENT_TUPLE,
   );
   const [privateReadFreshnessTick, bumpPrivateReadFreshness] = useState(0);
-  const [markets, setMarkets] = useState<MarketRow[]>([]);
-  const [marketTruth, setMarketTruth] = useState<MarketStateTruth>(INITIAL_MARKET_STATE_TRUTH);
-  const [marketsUpdatedAt, setMarketsUpdatedAt] = useState<number | null>(null);
-  const [marketsError, setMarketsError] = useState<string | null>(null);
+  const [marketAdmission, setMarketAdmission] = useState<MarketAdmissionState>(
+    INITIAL_MARKET_ADMISSION_STATE,
+  );
+  const markets = marketAdmission.rows;
+  const marketTruth = marketAdmission.truth;
+  const marketsUpdatedAt = marketAdmission.updatedAt;
+  const marketsError = marketAdmission.truth.error;
   const [mutationError, setMutationError] = useState<ApiFailure | null>(null);
   const [fxTruth, setFxTruth] = useState<FxTruth>(INITIAL_FX_TRUTH);
   const [fxBusy, setFxBusy] = useState(false);
@@ -1030,6 +1425,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const reconnectRef = useRef<(() => void) | null>(null);
   const privateReadCadenceRef = useRef<(() => void) | null>(null);
   const watchlistMutationQueueRef = useRef<SerializedWatchlistMutationQueue | null>(null);
+  const marketAdmissionRef = useRef<MarketAdmissionState>(INITIAL_MARKET_ADMISSION_STATE);
+
+  const admitMarketCompletion = useCallback((observation: MarketAdmissionObservation) => {
+    const previous = marketAdmissionRef.current;
+    const result = reduceMarketAdmission(previous, observation);
+    if (result.state !== previous) {
+      marketAdmissionRef.current = result.state;
+      setMarketAdmission(result.state);
+    }
+    return result;
+  }, []);
 
   // Private snapshots are ordered by the id assigned when their request left
   // the browser, so a slow earlier answer can never overwrite newer account
@@ -1473,36 +1879,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // the legacy market value; `dataCadence.market` is the new source map.
   useEffect(() => {
     const marketSec = prefs.dataCadence?.market ?? prefs.refreshSec;
-    const poll = createSettledPoll<MarketSnapshotPayload>({
+    const poll = createSettledPoll<unknown>({
       intervalMs: Math.max(0.5, marketSec) * 1_000,
       request: (signal) => fetchJson('/api/markets', { signal }),
       onSuccess: (payload) => {
-        if (!Array.isArray(payload.rows)) throw new Error('Invalid market response');
         const observedAtMs = Date.now();
-        const truthEvent = marketSnapshotTruthEvent(
-          payload.dataSources,
-          observedAtMs,
-          payload.streamUpdatedAt,
-          Math.max(12_000, marketSec * 2_500),
-        );
-        setMarkets(payload.rows);
-        setMarketsUpdatedAt(normalizeMarketSourceTime(payload.updatedAt));
-        setMarketsError(truthEvent.kind === 'FAILURE' ? truthEvent.error : null);
-        setMarketTruth((current) => reduceMarketStateTruth(current, truthEvent));
+        const maximumAgeMs = Math.max(12_000, marketSec * 2_500);
+        admitMarketCompletion({ kind: 'RECEIPT', payload, observedAtMs, maximumAgeMs });
       },
       onError: (cause) => {
         const error = mutationFailure(cause).message || 'Market refresh failed.';
-        setMarketsError(error);
-        setMarketTruth((current) => reduceMarketStateTruth(current, {
+        admitMarketCompletion({
           kind: 'FAILURE',
           observedAtMs: Date.now(),
           error,
-        }));
+        });
       },
     });
     poll.start();
     return poll.stop;
-  }, [prefs.refreshSec, prefs.dataCadence?.market]);
+  }, [admitMarketCompletion, prefs.refreshSec, prefs.dataCadence?.market]);
 
   const applyRoute = useCallback((target: RouteTarget) => {
     routeRef.current = target;
@@ -1610,30 +2006,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }));
     }
     try {
-      const payload = await fetchJson<MarketSnapshotPayload>('/api/markets');
-      if (!Array.isArray(payload.rows)) throw new Error('Invalid market response');
+      const payload = await fetchJson<unknown>('/api/markets');
       const observedAtMs = Date.now();
       const marketSec = prefs.dataCadence?.market ?? prefs.refreshSec;
-      const truthEvent = marketSnapshotTruthEvent(
-        payload.dataSources,
+      const result = admitMarketCompletion({
+        kind: 'RECEIPT',
+        payload,
         observedAtMs,
-        payload.streamUpdatedAt,
-        Math.max(12_000, marketSec * 2_500),
-      );
-      setMarkets(payload.rows);
-      setMarketsUpdatedAt(normalizeMarketSourceTime(payload.updatedAt));
-      setMarketsError(truthEvent.kind === 'FAILURE' ? truthEvent.error : null);
-      setMarketTruth((current) => reduceMarketStateTruth(current, truthEvent));
-      if (truthEvent.kind === 'FAILURE') issues.push('Market sources are not current');
+        maximumAgeMs: Math.max(12_000, marketSec * 2_500),
+      });
+      if (result.disposition === 'FAILURE') {
+        issues.push('Market refresh failed');
+      } else if (result.disposition === 'CONFLICT'
+          || result.disposition === 'EQUAL_IDENTICAL_NON_CURRENT'
+          || result.disposition === 'NEWER_NON_CURRENT') {
+        issues.push('Market sources are not current');
+      }
     } catch (cause) {
       issues.push('Market refresh failed');
       const error = mutationFailure(cause).message || 'Market refresh failed.';
-      setMarketsError(error);
-      setMarketTruth((current) => reduceMarketStateTruth(current, {
+      admitMarketCompletion({
         kind: 'FAILURE',
         observedAtMs: Date.now(),
         error,
-      }));
+      });
     }
     const refreshM0Readiness = m0ReadinessRefreshRef.current;
     if (!refreshM0Readiness || !await refreshM0Readiness()) {
@@ -1651,8 +2047,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     };
   }, [
     acceptPrivateReadFromState,
+    admitMarketCompletion,
     dispatchRealDataClient,
     nextPrivateReadRequestId,
+    prefs.dataCadence?.market,
+    prefs.refreshSec,
   ]);
 
   const privateReadClient = realDataClient.privateRead;

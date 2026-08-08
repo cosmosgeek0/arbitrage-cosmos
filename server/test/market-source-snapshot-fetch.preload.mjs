@@ -52,7 +52,7 @@ globalThis.fetch = (input, init) => {
 
   if (count > 1) {
     // Intentionally ignore AbortSignal. This hostile transport proves that a
-    // read path releases after its bounded wait even when acquisition cannot settle.
+    // read path never joins even a source promise that cannot settle.
     return new Promise(() => {});
   }
   if (url.pathname === '/api/v3/ticker/bookTicker') return delayedResponse([bookRow]);

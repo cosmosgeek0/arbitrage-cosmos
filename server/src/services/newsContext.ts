@@ -43,7 +43,7 @@ export interface NewsContextSource {
 
 export interface NewsContextPayload {
   source: 'primary+venue+protocol+issuer+tree+rss+lookonchain';
-  fetchedAt: number;
+  fetchedAt: number | null;
   items: NewsContextItem[];
   sources: NewsContextSource[];
 }
@@ -864,6 +864,7 @@ type NewsSourceCacheCheckpoint = {
   venue: Map<string, NewsSourceCacheEntry>;
   protocol: Map<string, NewsSourceCacheEntry>;
   issuer: Map<string, NewsSourceCacheEntry>;
+  bodyFailures: Map<string, { until: number; message: string }>;
 };
 type BodyQueueJob = {
   run: () => Promise<string>;
@@ -890,10 +891,8 @@ const COMMON_SYMBOLS = new Set([
 let archive = loadNewsArchive();
 let cache: NewsContextPayload = {
   source: 'primary+venue+protocol+issuer+tree+rss+lookonchain',
-  // This is publication time, not source observation time. Every bootstrap
-  // source remains explicitly delayed until the lifecycle-owned sweep
-  // observes it, so an empty or retained archive can never render green.
-  fetchedAt: Date.now(),
+  // No source observation exists until a lifecycle-owned sweep publishes.
+  fetchedAt: null,
   items: archive.slice(0, NEWS_ARCHIVE_MAX_ITEMS),
   sources: bootstrapNewsSources(),
 };
@@ -931,12 +930,13 @@ function captureNewsSourceCacheCheckpoint(): NewsSourceCacheCheckpoint {
     venue: new Map(venueSourceCache),
     protocol: new Map(protocolSourceCache),
     issuer: new Map(issuerSourceCache),
+    bodyFailures: new Map(bodyFailures),
   };
 }
 
-function restoreNewsSourceCache(
-  target: Map<string, NewsSourceCacheEntry>,
-  checkpoint: Map<string, NewsSourceCacheEntry>,
+function restoreNewsSourceCache<T>(
+  target: Map<string, T>,
+  checkpoint: Map<string, T>,
 ): void {
   target.clear();
   for (const [key, value] of checkpoint) target.set(key, value);
@@ -951,6 +951,7 @@ function restoreNewsSourceCacheCheckpoint(checkpoint: NewsSourceCacheCheckpoint)
   restoreNewsSourceCache(venueSourceCache, checkpoint.venue);
   restoreNewsSourceCache(protocolSourceCache, checkpoint.protocol);
   restoreNewsSourceCache(issuerSourceCache, checkpoint.issuer);
+  restoreNewsSourceCache(bodyFailures, checkpoint.bodyFailures);
 }
 
 function bootstrapNewsSources(): NewsContextSource[] {
@@ -1077,6 +1078,7 @@ function downgradePublishedNews(
 }
 
 function readPublishedNews(now = Date.now()): NewsContextPayload {
+  if (cache.fetchedAt === null) return cache;
   if (!Number.isFinite(cache.fetchedAt) || cache.fetchedAt <= 0) {
     cache = downgradePublishedNews(cache, 'Published snapshot timestamp invalid; freshness unknown.');
     return cache;
@@ -1258,10 +1260,11 @@ function startRefresh(): Promise<NewsContextPayload> {
         generation.accepted = false;
         throw new Error('News context refresh deadline exceeded');
       }
-      if (!Number.isFinite(payload.fetchedAt)
+      if (payload.fetchedAt === null
+        || !Number.isFinite(payload.fetchedAt)
         || payload.fetchedAt <= 0
         || payload.fetchedAt > publishedNow
-        || payload.fetchedAt < cache.fetchedAt) {
+        || (cache.fetchedAt !== null && payload.fetchedAt < cache.fetchedAt)) {
         throw new Error('News context publication clock is non-monotonic');
       }
       commitNewsArchiveCandidate(candidate.archive);

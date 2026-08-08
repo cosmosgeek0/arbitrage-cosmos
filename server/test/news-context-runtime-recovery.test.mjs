@@ -407,14 +407,14 @@ test('a zero-live sweep cannot restamp bootstrap or replace a retained live publ
   const news = await import(`../src/services/newsContext.ts?zero-live=${startAt}`);
 
   const bootstrap = await news.getNewsContext(false);
+  assert.equal(bootstrap.fetchedAt, null, 'bootstrap has no measured source observation time');
   now = startAt + 1;
   await assert.rejects(
     news.refreshNewsContextNow(),
     /News context refresh observed zero live sources/,
   );
   const retainedBootstrap = await news.getNewsContext(false);
-  assert.equal(retainedBootstrap.fetchedAt, bootstrap.fetchedAt);
-  assert.notEqual(retainedBootstrap.fetchedAt, now);
+  assert.equal(retainedBootstrap.fetchedAt, null, 'zero-live publication keeps source time absent');
   assert.equal(retainedBootstrap.sources.filter((source) => source.status === 'live').length, 0);
 
   upstreamMode = 'live';

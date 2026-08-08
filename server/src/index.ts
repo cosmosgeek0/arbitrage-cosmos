@@ -2606,7 +2606,6 @@ type MarketSourceSnapshot = Readonly<{
 }>;
 type PublishedMarketSourceState = 'fresh' | 'stale' | 'unavailable';
 const MARKET_SOURCE_REFRESH_MS = 2_000;
-const MARKET_SOURCE_READ_WAIT_MS = MARKET_SOURCE_REFRESH_MS / 2;
 const MARKET_SOURCE_ACQUISITION_TIMEOUT_MS = 10_000;
 const MARKET_SOURCE_FAILURE_LOG_MS = 60_000;
 let marketSourceCache: MarketSourceSnapshot | null = null;
@@ -2654,10 +2653,10 @@ const initialMarketSourceSnapshot: MarketSourceSnapshot = (() => {
   });
 })();
 
-function triggerMarketSourceRefresh(now = Date.now()): Promise<MarketSourceSnapshot> | null {
-  if (marketSourceInFlight) return marketSourceInFlight;
+function triggerMarketSourceRefresh(now = Date.now()): void {
+  if (marketSourceInFlight) return;
   const cacheAgeMs = marketSourceCache ? now - marketSourceCache.at : null;
-  if (cacheAgeMs !== null && cacheAgeMs >= 0 && cacheAgeMs < MARKET_SOURCE_REFRESH_MS) return null;
+  if (cacheAgeMs !== null && cacheAgeMs >= 0 && cacheAgeMs < MARKET_SOURCE_REFRESH_MS) return;
 
   const acquisition = Promise.allSettled([
     fetchAllBookTickers('spot'),
@@ -2710,26 +2709,6 @@ function triggerMarketSourceRefresh(now = Date.now()): Promise<MarketSourceSnaps
       );
     },
   );
-  return refresh;
-}
-
-async function awaitMarketSourceRefresh(
-  refresh: Promise<MarketSourceSnapshot> | null,
-): Promise<void> {
-  if (refresh === null) return;
-  let waitTimer: NodeJS.Timeout | null = null;
-  const waitDeadline = new Promise<void>((resolve) => {
-    waitTimer = setTimeout(resolve, MARKET_SOURCE_READ_WAIT_MS);
-    waitTimer.unref();
-  });
-  try {
-    await Promise.race([
-      refresh.then(() => undefined, () => undefined),
-      waitDeadline,
-    ]);
-  } finally {
-    if (waitTimer !== null) clearTimeout(waitTimer);
-  }
 }
 
 function publishedMarketSourceState(
@@ -2806,9 +2785,7 @@ function projectMarketOwnerRows(
   });
 }
 
-async function readMarketOwnerSnapshot() {
-  const refresh = triggerMarketSourceRefresh();
-  await awaitMarketSourceRefresh(refresh);
+function readMarketOwnerSnapshot() {
   const now = Date.now();
   const sourceSnapshot = marketSourceCache ?? initialMarketSourceSnapshot;
   const {
@@ -2816,6 +2793,7 @@ async function readMarketOwnerSnapshot() {
     perpBookRes,
     perp24hRes,
   } = sourceSnapshot;
+  triggerMarketSourceRefresh(now);
   const dataSources: PublishedMarketDataSources = Object.freeze({
     spotBookTicker: publishedMarketSourceState(spotBookRes, now),
     futuresBookTicker: publishedMarketSourceState(perpBookRes, now),
@@ -2840,10 +2818,10 @@ function productMarketSourceState(
   return state === 'fresh' ? 'fresh' : 'unavailable';
 }
 
-async function readProductOwnerTruth(
+function readProductOwnerTruth(
   supervisor: Readonly<SystemSupervisorReadModel>,
 ) {
-  const markets = await readMarketOwnerSnapshot();
+  const markets = readMarketOwnerSnapshot();
   const opportunities = systemIntegrationProduction.opportunities.readSnapshot(
     systemIntegrationClock.nowMs(),
   );
@@ -2868,7 +2846,7 @@ async function readProductOwnerTruth(
 
 app.get('/api/markets', (req, res) => {
   runAsync(res, async () => {
-    const snapshot = await readMarketOwnerSnapshot();
+    const snapshot = readMarketOwnerSnapshot();
     // Serialized here rather than by res.json so the same bytes can be offered
     // identity or gzipped. The document is unchanged in either case.
     await sendJsonBody(req, res, JSON.stringify({
@@ -3564,7 +3542,7 @@ function connectionWatchmanSnapshot(
   const volume = volumeRuntime.connectionStatus();
   const news = currentNewsContextStatus();
   const accountAgeMs = account.lastSyncTs ? now - account.lastSyncTs : null;
-  const newsAgeMs = news.fetchedAt ? now - news.fetchedAt : null;
+  const newsAgeMs = news.fetchedAt !== null ? now - news.fetchedAt : null;
   const calendarAgeMs = calCache?.at ? now - calCache.at : null;
   const fxAgeMs = fxCache?.at ? now - fxCache.at : null;
   const accountStatus: WatchmanStatus = !account.keysPresent
@@ -3579,7 +3557,7 @@ function connectionWatchmanSnapshot(
     : basis.bookState !== 'fresh' || basis.markState !== 'fresh' || volume.bookState !== 'fresh' || volume.streamState !== 'open'
       ? 'degraded'
       : 'operational';
-  const newsStatus: WatchmanStatus = !news.fetchedAt
+  const newsStatus: WatchmanStatus = news.fetchedAt === null
     ? 'planned'
     : news.live === 0 || (newsAgeMs !== null && newsAgeMs > 5 * 60_000)
       ? 'outage'
@@ -3641,7 +3619,7 @@ function connectionWatchmanSnapshot(
     {
       id: 'news-sources', label: 'News Source Network', group: 'sources', status: newsStatus,
       detail: `On-demand/unaccepted · ${news.live} live · ${news.delayed} delayed · ${news.errors} errors · ${news.items} retained`,
-      value: news.fetchedAt ? `${news.live}/${news.sources} live` : 'On demand', required: false, updatedAt: news.fetchedAt, resetTarget: 'news',
+      value: news.fetchedAt !== null ? `${news.live}/${news.sources} live` : 'On demand', required: false, updatedAt: news.fetchedAt, resetTarget: 'news',
     },
     {
       id: 'calendar-source', label: 'Economic Calendar', group: 'sources',

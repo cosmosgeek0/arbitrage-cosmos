@@ -24,7 +24,19 @@ import {
   resolveVolumeRuntimeTruth,
   volumeRowsCurrent,
 } from './VolumeScanner';
+import { OpportunityDiagnosticsLedger } from './opportunities/OpportunityDiagnosticsLedger';
+import {
+  decodeOpportunitiesReadResult,
+  type OpportunitiesReadResult,
+} from './opportunities/model';
 import './Opportunities.css';
+
+/**
+ * Opportunities compares already-published owner facts and canonical merge
+ * diagnostics while retaining the source-order Raw Market Facts view. It
+ * never ranks across strategies, mutates a proposal, reserves capital, or
+ * executes.
+ */
 
 type View = 'active' | 'raw';
 
@@ -97,15 +109,9 @@ export interface OpportunitySourceTruth {
   readonly detail: string;
 }
 
-export interface CanonicalOpportunityRead {
-  readonly state: 'AVAILABLE' | 'DEGRADED' | 'UNAVAILABLE';
-  readonly evaluatedAtMs: number | null;
-  readonly reasonCodes: readonly string[];
+export type CanonicalOpportunityRead = OpportunitiesReadResult & {
   readonly proposalCount: number | null;
-  readonly maximumActionAuthority: 'ADVISORY';
-  readonly capitalReservationAuthority: 'NONE';
-  readonly executionAuthority: 'NONE';
-}
+};
 
 export interface CanonicalOpportunityTruth {
   readonly label: 'AVAILABLE' | 'UNAVAILABLE';
@@ -128,68 +134,15 @@ function nonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-function stringArray(value: unknown): readonly string[] | null {
-  if (!Array.isArray(value) || !value.every(nonEmptyString)) return null;
-  return Object.freeze([...value]);
-}
-
-function canonicalIdBucket(value: unknown): Readonly<{
-  decisions: readonly string[];
-  proposals: readonly string[];
-}> | null {
-  const bucket = record(value);
-  if (bucket === null) return null;
-  const decisions = stringArray(bucket.decisions);
-  const proposals = stringArray(bucket.proposals);
-  if (decisions === null || proposals === null) return null;
-  return Object.freeze({ decisions, proposals });
-}
-
 export function decodeCanonicalOpportunityRead(value: unknown): CanonicalOpportunityRead | null {
-  try {
-    const root = record(value);
-    if (root === null
-      || (root.state !== 'AVAILABLE' && root.state !== 'DEGRADED' && root.state !== 'UNAVAILABLE')
-      || root.maximumActionAuthority !== 'ADVISORY'
-      || root.capitalReservationAuthority !== 'NONE'
-      || root.executionAuthority !== 'NONE') return null;
-
-    const reasonCodes = stringArray(root.reasonCodes);
-    if (reasonCodes === null) return null;
-    const evaluatedAtMs = root.evaluatedAtMs === null
-      ? null
-      : Number.isSafeInteger(root.evaluatedAtMs) && (root.evaluatedAtMs as number) > 0
-        ? root.evaluatedAtMs as number
-        : null;
-    if (root.state !== 'UNAVAILABLE' && evaluatedAtMs === null) return null;
-    if (root.state === 'AVAILABLE' && reasonCodes.length !== 0) return null;
-    if (root.state !== 'AVAILABLE' && reasonCodes.length === 0) return null;
-
-    let proposalCount: number | null = null;
-    if (root.state === 'UNAVAILABLE') {
-      if (root.view !== null || root.ownerOrderedCanonicalIds !== null) return null;
-    } else {
-      if (record(root.view) === null) return null;
-      const ordered = record(root.ownerOrderedCanonicalIds);
-      if (ordered === null) return null;
-      const basis = canonicalIdBucket(ordered.basis);
-      const volume = canonicalIdBucket(ordered.volume);
-      if (basis === null || volume === null) return null;
-      proposalCount = basis.proposals.length + volume.proposals.length;
-    }
-
-    return Object.freeze({
-      state: root.state,
-      evaluatedAtMs,
-      reasonCodes,
-      proposalCount,
-      maximumActionAuthority: 'ADVISORY' as const,
-      capitalReservationAuthority: 'NONE' as const,
-      executionAuthority: 'NONE' as const,
-    });
-  } catch {
-    return null;
-  }
+  const decoded = decodeOpportunitiesReadResult(value);
+  if (!decoded.ok) return null;
+  const result = decoded.value;
+  const proposalCount = result.ownerOrderedCanonicalIds === null
+    ? null
+    : result.ownerOrderedCanonicalIds.basis.proposals.length
+      + result.ownerOrderedCanonicalIds.volume.proposals.length;
+  return Object.freeze({ ...result, proposalCount });
 }
 
 export function projectCanonicalOpportunityTruth(
@@ -558,97 +511,98 @@ export function PublishedOpportunityFacts({
   const currentCoverage = basisTruth.label === 'CURRENT' && volumeTruth.label === 'CURRENT';
   const truthFor = (source: OpportunitySource) => source === 'BASIS' ? basisTruth : volumeTruth;
 
-  return (
-    <div className="opportunityx-table" role="table" aria-label="Published Engine Proposal Facts">
-      <div className="opportunityx-proposal-head" role="row">
-        <span role="columnheader">Source</span>
-        <span role="columnheader">Proposal</span>
-        <span role="columnheader">Reported Net</span>
-        <span role="columnheader">Economics</span>
-        <span role="columnheader">Live Evidence</span>
-        <span role="columnheader">Source Truth</span>
-        <span role="columnheader">Age</span>
-        <span aria-hidden="true" />
+  if (!filtered.length) {
+    return (
+      <div className="opportunityx-empty">
+        <Radar size={18} aria-hidden="true" />
+        <strong>{query
+          ? 'No Published Proposal Matches Search'
+          : coverageKnown
+            ? currentCoverage
+              ? 'No Current Published Engine Proposals'
+              : 'No Retained Published Engine Proposals'
+            : 'Published Proposal Coverage Unavailable'}</strong>
+        <span>{query
+          ? 'No owner-published proposal row matches the query.'
+          : coverageKnown
+            ? currentCoverage
+              ? 'Both engine owners report zero proposal rows.'
+              : 'The retained engine reads contain zero rows; current zero is not asserted.'
+            : 'One or more engine owners has no complete, count-consistent read.'}</span>
       </div>
+    );
+  }
 
-      {filtered.length ? filtered.map((fact) => {
-        const sourceTruth = truthFor(fact.source);
-        const basis = fact.source === 'BASIS';
-        return (
-          <div className="opportunityx-proposal-item" role="rowgroup" key={`${fact.source}:${fact.proposalId}`}>
-            <div className="opportunityx-proposal-row" role="row">
-              <span className="opportunityx-age" role="cell">{fact.source}</span>
-              <span className="opportunityx-asset" role="cell">
-                <TokenIcon symbol={fact.symbol} size={28} />
-                <span>
-                  <strong>{fact.base}</strong>
-                  <small title={fact.proposalId}>{fact.direction} · {fact.proposalId}</small>
-                </span>
-              </span>
-              <span className="opportunityx-evidence-cell" role="cell">
-                <strong>{basis ? rawFact(fact.reportedNetEdgePct, (value) => fmtBasis(value, 2)) : 'UNKNOWN'}</strong>
-                <small>{basis ? 'OWNER-REPORTED · NOT A PROFIT VERDICT' : 'NOT PUBLISHED BY VOLUME'}</small>
-              </span>
-              <span className="opportunityx-evidence-cell" role="cell">
-                <strong>{basis ? `Gross ${rawFact(fact.grossEdgePct, (value) => fmtBasis(value, 2))}` : 'UNKNOWN'}</strong>
-                <small>{basis
-                  ? `Total cost ${rawFact(fact.totalCostPct, (value) => fmtBasis(value, 2))}`
-                  : 'Fees · slippage · funding · borrow NOT PUBLISHED'}</small>
-              </span>
-              <span className="opportunityx-quality" role="cell">
-                <strong>{basis
-                  ? `${rawFact(fact.spotPrice, fmtPrice)} / ${rawFact(fact.perpPrice, fmtPrice)}`
-                  : `${multipleFact(fact.volume1sMultiple)} / ${multipleFact(fact.volume5sMultiple)}`}</strong>
-                <small>{basis
-                  ? `Executable legs · funding ${rawFact(fact.fundingRate, fmtFunding)}`
-                  : `1s / 5s volume · depth ${rawFact(fact.topDepthUsd, fmtMoney)}`}</small>
-              </span>
-              <span className="opportunityx-evidence-cell" role="cell">
-                <strong>{sourceTruth.label}</strong>
-                <small title={sourceTruth.detail}>{sourceTruth.detail}</small>
-              </span>
-              <span className="opportunityx-age" role="cell">
-                {finite(fact.observedAtMs) ? timeAgo(fact.observedAtMs) : 'UNKNOWN'}
-              </span>
-              <span aria-hidden="true" />
-            </div>
-            <div className="opportunityx-proposal-detail">
-              <div className="opportunityx-reason">
-                <span>Source Reason</span>
-                <p>{fact.reason}{fact.invalidation ? ` · Invalidation: ${fact.invalidation}` : ''}</p>
-              </div>
-              <dl className="opportunityx-facts">
-                <div><dt>Proposal ID</dt><dd title={fact.proposalId}>{fact.proposalId}</dd></div>
-                <div><dt>Lifecycle</dt><dd>{fact.lifecycle}</dd></div>
-                <div><dt>Confidence</dt><dd>{confidenceFact(fact.confidence)}</dd></div>
-                <div><dt>{basis ? 'Gross Edge' : '1s Volume'}</dt><dd>{basis ? rawFact(fact.grossEdgePct, (value) => fmtBasis(value, 3)) : multipleFact(fact.volume1sMultiple)}</dd></div>
-                <div><dt>{basis ? 'Fees' : '5s Volume'}</dt><dd>{basis ? rawFact(fact.feesPct, (value) => fmtBasis(value, 3)) : multipleFact(fact.volume5sMultiple)}</dd></div>
-                <div><dt>{basis ? 'Slippage' : '5s Trades'}</dt><dd>{basis ? rawFact(fact.slippagePct, (value) => fmtBasis(value, 3)) : multipleFact(fact.tradeCountMultiple)}</dd></div>
-                <div><dt>{basis ? 'Funding Drag' : 'Spread'}</dt><dd>{basis ? rawFact(fact.fundingDragPct, (value) => fmtBasis(value, 3)) : rawFact(fact.spreadBps, (value) => `${value.toFixed(2)} bps`)}</dd></div>
-                <div><dt>{basis ? 'Borrow Cost' : 'Expiry'}</dt><dd>{basis ? rawFact(fact.borrowCostPct, (value) => fmtBasis(value, 3)) : finite(fact.expiresAtMs) ? countdown(fact.expiresAtMs) : 'UNKNOWN'}</dd></div>
-              </dl>
-            </div>
-          </div>
-        );
-      }) : (
-        <div className="opportunityx-empty">
-          <Radar size={18} />
-          <strong>{query
-            ? 'No Published Proposal Matches Search'
-            : coverageKnown
-              ? currentCoverage
-                ? 'No Current Published Engine Proposals'
-                : 'No Retained Published Engine Proposals'
-              : 'Published Proposal Coverage Unavailable'}</strong>
-          <span>{query
-            ? 'No owner-published proposal row matches the query.'
-            : coverageKnown
-              ? currentCoverage
-                ? 'Both engine owners report zero proposal rows.'
-                : 'The retained engine reads contain zero rows; current zero is not asserted.'
-              : 'One or more engine owners has no complete, count-consistent read.'}</span>
-        </div>
-      )}
+  return (
+    <div className="opportunityx-canvas">
+      <table className="opportunityx-table">
+        <caption>
+          Owner-Published Opportunity Comparison · Basis Then Volume · {filtered.length} Shown ·
+          OWNER-REPORTED · NOT A PROFIT VERDICT
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">Proposal</th>
+            <th scope="col">Owner</th>
+            <th scope="col">Published Instrument</th>
+            <th scope="col">Reported Net</th>
+            <th scope="col">Published Economics</th>
+            <th scope="col">Owner Evidence</th>
+            <th scope="col">Source Truth</th>
+            <th scope="col">Observed</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((fact) => {
+            const basis = fact.source === 'BASIS';
+            const sourceTruth = truthFor(fact.source);
+            return (
+              <tr key={`${fact.source}:${fact.proposalId}`}>
+                <th scope="row">
+                  <strong>{fact.proposalId}</strong>
+                  <small>{fact.reason}{fact.invalidation ? ` · Invalidation: ${fact.invalidation}` : ''}</small>
+                </th>
+                <td className="opportunityx-flag">{fact.source}</td>
+                <td>
+                  <strong>{fact.symbol}</strong>
+                  <small>{fact.direction} · {fact.lifecycle} · confidence {confidenceFact(fact.confidence)}</small>
+                </td>
+                <td className="opportunityx-evidence-cell">
+                  <strong>{basis
+                    ? rawFact(fact.reportedNetEdgePct, (value) => fmtBasis(value, 2))
+                    : 'UNKNOWN'}</strong>
+                  <small>{basis
+                    ? 'OWNER-REPORTED · NOT A PROFIT VERDICT'
+                    : 'NOT PUBLISHED BY VOLUME'}</small>
+                </td>
+                <td className="opportunityx-evidence-cell">
+                  <strong>{basis
+                    ? `Gross ${rawFact(fact.grossEdgePct, (value) => fmtBasis(value, 2))}`
+                    : 'UNKNOWN'}</strong>
+                  <small>{basis
+                    ? `Fees ${rawFact(fact.feesPct, (value) => fmtBasis(value, 3))} · Slippage ${rawFact(fact.slippagePct, (value) => fmtBasis(value, 3))} · Funding ${rawFact(fact.fundingDragPct, (value) => fmtBasis(value, 3))} · Borrow ${rawFact(fact.borrowCostPct, (value) => fmtBasis(value, 3))} · Total ${rawFact(fact.totalCostPct, (value) => fmtBasis(value, 3))}`
+                    : 'Fees · slippage · funding · borrow NOT PUBLISHED'}</small>
+                </td>
+                <td className="opportunityx-evidence-cell">
+                  <strong>{basis
+                    ? `${rawFact(fact.spotPrice, fmtPrice)} / ${rawFact(fact.perpPrice, fmtPrice)}`
+                    : `${multipleFact(fact.volume1sMultiple)} / ${multipleFact(fact.volume5sMultiple)}`}</strong>
+                  <small>{basis
+                    ? `Executable legs · funding ${rawFact(fact.fundingRate, fmtFunding)} · quote volume ${rawFact(fact.quoteVolume24h, fmtMoney)}`
+                    : `1s / 5s volume · 5s trades ${multipleFact(fact.tradeCountMultiple)} · depth ${rawFact(fact.topDepthUsd, fmtMoney)} · spread ${rawFact(fact.spreadBps, (value) => `${value.toFixed(2)} bps`)} · expiry ${finite(fact.expiresAtMs) ? countdown(fact.expiresAtMs) : 'UNKNOWN'}`}</small>
+                </td>
+                <td className="opportunityx-flag">
+                  <strong>{sourceTruth.label}</strong>
+                  <small>{sourceTruth.detail}</small>
+                </td>
+                <td className="opportunityx-age">
+                  {finite(fact.observedAtMs) ? timeAgo(fact.observedAtMs) : 'UNKNOWN'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -805,7 +759,7 @@ export function Opportunities() {
           </label>
         </header>
 
-        <div className="opportunityx-summary" aria-label="Opportunity Summary">
+        <div className="opportunityx-summary" aria-label="Owner-Published Opportunity Summary">
           <div className="opportunityx-summary-cell">
             <span>Published Proposals</span>
             <strong>{publishedProposalCount ?? 'UNKNOWN'}</strong>
@@ -827,7 +781,10 @@ export function Opportunities() {
           </div>
           <div className="opportunityx-summary-cell">
             <span>Raw Market Rows</span>
-            <strong>{marketTruth.factsAvailable ? markets.length : 'UNKNOWN'} {marketTruth.factsAvailable ? <em>{marketTruth.retained ? 'retained rows' : 'rows'}</em> : null}</strong>
+            <strong>
+              {marketTruth.factsAvailable ? markets.length : 'UNKNOWN'}{' '}
+              {marketTruth.factsAvailable ? <em>{marketTruth.retained ? 'retained rows' : 'rows'}</em> : null}
+            </strong>
             <small>{marketTruth.retained
               ? `${updatedLabel} · source order retained after refresh failure`
               : marketTruth.factsAvailable
@@ -868,15 +825,23 @@ export function Opportunities() {
         </div>
 
         {view === 'active' ? (
-          <PublishedOpportunityFacts
-            facts={publishedFacts}
-            query={query}
-            basisTruth={basisTruth}
-            volumeTruth={volumeTruth}
-            coverageKnown={proposalCoverageKnown}
-          />
+          <>
+            <PublishedOpportunityFacts
+              facts={publishedFacts}
+              query={query}
+              basisTruth={basisTruth}
+              volumeTruth={volumeTruth}
+              coverageKnown={proposalCoverageKnown}
+            />
+
+            <OpportunityDiagnosticsLedger
+              result={canonicalRead}
+              query={query}
+              unavailableReason={canonicalError}
+            />
+          </>
         ) : (
-          <div className="opportunityx-table" role="table" aria-label="Raw Market Facts">
+          <div className="opportunityx-radar-table" role="table" aria-label="Raw Market Facts">
             <div className="opportunityx-radar-head" role="row">
               <span role="columnheader">Asset</span>
               <span role="columnheader">Raw Prices</span>
@@ -889,52 +854,57 @@ export function Opportunities() {
             </div>
             {!marketTruth.factsAvailable ? (
               <div className="opportunityx-empty">
-                <Radar size={18} />
+                <Radar size={18} aria-hidden="true" />
                 <strong>Raw Market Facts Unavailable</strong>
                 <span>No successful market read is available. Prices, funding, changes, volumes, and depth remain unknown.</span>
               </div>
             ) : rawRows.length ? rawRows.map((market) => (
-                <div className="opportunityx-radar-row" role="row" key={market.symbol}>
-                  <span className="opportunityx-asset" role="cell">
-                    <TokenIcon symbol={market.symbol} size={26} />
-                    <span>
-                      <strong>{market.base}</strong>
-                      <small>{market.symbol}{marketTruth.retained ? ' · STALE LAST-KNOWN' : ''}</small>
-                    </span>
+              <div className="opportunityx-radar-row" role="row" key={market.symbol}>
+                <span className="opportunityx-asset" role="cell">
+                  <TokenIcon symbol={market.symbol} size={26} />
+                  <span>
+                    <strong>{market.base}</strong>
+                    <small>{market.symbol}{marketTruth.retained ? ' · STALE LAST-KNOWN' : ''}</small>
                   </span>
-                  <span className="opportunityx-radar-value" role="cell">
-                    <strong>Spot {rawFact(market.spot, fmtPrice)}</strong>
-                    <small>Perp mark {rawFact(market.perpMark, fmtPrice)}</small>
-                  </span>
-                  <span className="opportunityx-radar-value" role="cell">
-                    <strong>Executable {rawFact(market.executableBasisBestPct, (value) => fmtBasis(value, 2))}</strong>
-                    <small>{basisSideLabel(market.executableBasisSide)} · reference {rawFact(market.basisPct, (value) => fmtBasis(value, 2))}</small>
-                  </span>
-                  <span className="opportunityx-radar-value" role="cell">
-                    <strong>{rawFact(market.fundingRate, fmtFunding)}</strong>
-                    <small>Annual {rawFact(market.fundingAnnualPct, (value) => fmtPct(value, 2))}</small>
-                  </span>
-                  <span className="opportunityx-radar-value" role="cell">
-                    <strong>Spot {rawFact(market.quoteVolume24h, fmtMoney)}</strong>
-                    <small>Perp {rawFact(market.perpVolume24h, fmtMoney)}</small>
-                  </span>
-                  <span className="opportunityx-radar-value" role="cell">
-                    <strong>Spot {rawFact(market.spotSpreadPct, (value) => fmtPct(value, 3, false))}</strong>
-                    <small>Perp {rawFact(market.perpSpreadPct, (value) => fmtPct(value, 3, false))}</small>
-                  </span>
-                  <span className="opportunityx-radar-value" role="cell">
-                    <strong>Spot {rawFact(market.spotTopQuoteUsd, fmtMoney)}</strong>
-                    <small>Perp {rawFact(market.perpTopQuoteUsd, fmtMoney)}</small>
-                  </span>
-                  <span className="opportunityx-radar-actions" role="cell">
-                    <button type="button" className="opportunityx-icon-button" aria-label={'Open ' + market.symbol} onClick={() => openDetail(market.symbol)}>
-                      <Eye size={14} />
-                    </button>
-                  </span>
-                </div>
-              )) : (
+                </span>
+                <span className="opportunityx-radar-value" role="cell">
+                  <strong>Spot {rawFact(market.spot, fmtPrice)}</strong>
+                  <small>Perp mark {rawFact(market.perpMark, fmtPrice)}</small>
+                </span>
+                <span className="opportunityx-radar-value" role="cell">
+                  <strong>Executable {rawFact(market.executableBasisBestPct, (value) => fmtBasis(value, 2))}</strong>
+                  <small>{basisSideLabel(market.executableBasisSide)} · reference {rawFact(market.basisPct, (value) => fmtBasis(value, 2))}</small>
+                </span>
+                <span className="opportunityx-radar-value" role="cell">
+                  <strong>{rawFact(market.fundingRate, fmtFunding)}</strong>
+                  <small>Annual {rawFact(market.fundingAnnualPct, (value) => fmtPct(value, 2))}</small>
+                </span>
+                <span className="opportunityx-radar-value" role="cell">
+                  <strong>Spot {rawFact(market.quoteVolume24h, fmtMoney)}</strong>
+                  <small>Perp {rawFact(market.perpVolume24h, fmtMoney)}</small>
+                </span>
+                <span className="opportunityx-radar-value" role="cell">
+                  <strong>Spot {rawFact(market.spotSpreadPct, (value) => fmtPct(value, 3, false))}</strong>
+                  <small>Perp {rawFact(market.perpSpreadPct, (value) => fmtPct(value, 3, false))}</small>
+                </span>
+                <span className="opportunityx-radar-value" role="cell">
+                  <strong>Spot {rawFact(market.spotTopQuoteUsd, fmtMoney)}</strong>
+                  <small>Perp {rawFact(market.perpTopQuoteUsd, fmtMoney)}</small>
+                </span>
+                <span className="opportunityx-radar-actions" role="cell">
+                  <button
+                    type="button"
+                    className="opportunityx-icon-button"
+                    aria-label={`Open ${market.symbol}`}
+                    onClick={() => openDetail(market.symbol)}
+                  >
+                    <Eye size={14} />
+                  </button>
+                </span>
+              </div>
+            )) : (
               <div className="opportunityx-empty">
-                <Radar size={18} />
+                <Radar size={18} aria-hidden="true" />
                 <strong>No Raw Market Facts Match Search</strong>
                 <span>No source row matches the symbol query. No fallback value or strategy row is fabricated.</span>
               </div>

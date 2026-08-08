@@ -23,8 +23,195 @@ const {
   projectOpportunitySourceTruth,
   projectPublishedOpportunityFacts,
 } = await import('../../src/pages/Opportunities.tsx');
+const {
+  OpportunityDiagnosticsLedger,
+  collectOpportunityDiagnostics,
+} = await import('../../src/pages/opportunities/OpportunityDiagnosticsLedger.tsx');
 
 const NOW = 1_800_000_000_000;
+
+function canonicalTimestamp(source, sourceTimeMs = NOW - 1_000) {
+  return {
+    sourceTimeMs,
+    receivedAtMs: NOW - 900,
+    maxAgeMs: 5_000,
+    authority: 'DERIVED_LIVE',
+    completeness: 'COMPLETE',
+    sourceId: `test.${source.toLowerCase()}.owner-cut`,
+  };
+}
+
+function canonicalFreshness() {
+  return {
+    state: 'FRESH',
+    ageMs: 1_000,
+    basis: 'SOURCE_TIME',
+    effectiveAuthority: 'DERIVED_LIVE',
+    evaluatedAt: NOW,
+  };
+}
+
+function canonicalSourceReconciliation({
+  inputDecisions = 0,
+  inputProposals = 0,
+  canonicalDecisions = 0,
+  canonicalProposals = 0,
+  duplicateDecisions = 0,
+  duplicateProposals = 0,
+  rejectedDecisions = 0,
+  rejectedProposals = 0,
+  balanced = true,
+} = {}) {
+  return {
+    inputDecisions,
+    inputProposals,
+    canonicalDecisions,
+    canonicalProposals,
+    duplicateDecisions,
+    duplicateProposals,
+    rejectedDecisions,
+    rejectedProposals,
+    balanced,
+  };
+}
+
+function canonicalSection(source, {
+  decisions = [],
+  proposals = [],
+  rejects = [],
+  reconciliation = canonicalSourceReconciliation({
+    inputDecisions: decisions.length,
+    inputProposals: proposals.length,
+    canonicalDecisions: decisions.length,
+    canonicalProposals: proposals.length,
+  }),
+} = {}) {
+  return {
+    source,
+    presence: 'PRESENT',
+    snapshotTimestamp: canonicalTimestamp(source),
+    freshness: canonicalFreshness(),
+    failure: null,
+    decisions,
+    proposals,
+    rejects,
+    reconciliation,
+  };
+}
+
+function canonicalZeroPayload() {
+  return {
+    state: 'AVAILABLE',
+    evaluatedAtMs: NOW,
+    reasonCodes: [],
+    view: {
+      evaluatedAtMs: NOW,
+      correlationId: 'canonical-zero',
+      basis: canonicalSection('BASIS'),
+      volume: canonicalSection('VOLUME'),
+      ordered: [],
+      reconciliation: {
+        inputRecords: 0,
+        canonicalRecords: 0,
+        duplicateRecords: 0,
+        rejectedRecords: 0,
+        balanced: true,
+      },
+    },
+    identities: [],
+    losses: [],
+    ownerOrderedCanonicalIds: {
+      basis: { decisions: [], proposals: [] },
+      volume: { decisions: [], proposals: [] },
+    },
+    maximumActionAuthority: 'ADVISORY',
+    capitalReservationAuthority: 'NONE',
+    executionAuthority: 'NONE',
+  };
+}
+
+function canonicalDiagnosticPayload() {
+  const proposal = {
+    kind: 'PROPOSAL',
+    canonicalId: 'canonical-basis-proposal',
+    source: 'BASIS',
+    sourceId: 'basis-proposal-source-id',
+    symbol: 'BTCUSDT',
+    direction: 'long_spot_short_perp',
+    lifecycle: 'OPEN',
+    sourceLifecycle: 'open',
+    observedAt: canonicalTimestamp('BASIS'),
+    expiresAtMs: NOW - 1,
+    sourceLocalRank: 0,
+    netEdgePct: null,
+    confidence: null,
+    borrowState: 'unknown',
+    evidence: null,
+    rejectionReasons: ['EDGE_BELOW_FEES'],
+    configVersion: null,
+  };
+  const reject = {
+    kind: 'PROPOSAL',
+    source: 'BASIS',
+    sourceKey: 'basis-rejected-source-key',
+    symbol: 'ETHUSDT',
+    code: 'CANONICAL_VALIDATION_FAILED',
+    issues: [{
+      path: '$.basis.proposals[1]',
+      code: 'EVIDENCE_INVALID',
+      message: 'Published evidence did not pass the canonical boundary.',
+    }],
+  };
+  return {
+    state: 'DEGRADED',
+    evaluatedAtMs: NOW,
+    reasonCodes: ['BASIS_RECORDS_REJECTED', 'BASIS_RECONCILIATION_UNBALANCED'],
+    view: {
+      evaluatedAtMs: NOW,
+      correlationId: 'canonical-diagnostic',
+      basis: canonicalSection('BASIS', {
+        proposals: [proposal],
+        rejects: [reject],
+        reconciliation: canonicalSourceReconciliation({
+          inputProposals: 3,
+          canonicalProposals: 1,
+          rejectedProposals: 1,
+          balanced: false,
+        }),
+      }),
+      volume: canonicalSection('VOLUME'),
+      ordered: [proposal],
+      reconciliation: {
+        inputRecords: 3,
+        canonicalRecords: 1,
+        duplicateRecords: 0,
+        rejectedRecords: 1,
+        balanced: false,
+      },
+    },
+    identities: [{
+      systemId: 'canonical:canonical-basis-proposal',
+      owner: 'BASIS_ENGINE',
+      ownerId: 'basis-proposal-source-id',
+      canonicalProjectionId: 'canonical-basis-proposal',
+      correlationId: 'canonical-diagnostic',
+      revisionDigest: null,
+    }],
+    losses: [{
+      code: 'SOURCE_TIME_UNAVAILABLE',
+      detail: 'Source time was not representable at the target boundary.',
+      sourcePath: '$.basis.sourceTimeMs',
+      targetPath: '$.view.basis.snapshotTimestamp.sourceTimeMs',
+    }],
+    ownerOrderedCanonicalIds: {
+      basis: { decisions: [], proposals: ['canonical-basis-proposal'] },
+      volume: { decisions: [], proposals: [] },
+    },
+    maximumActionAuthority: 'ADVISORY',
+    capitalReservationAuthority: 'NONE',
+    executionAuthority: 'NONE',
+  };
+}
 
 function basisProposal({
   id,
@@ -92,7 +279,7 @@ function basisProposal({
     priority: { score: 0.8 },
     proposal: {
       id,
-      status: 'OPEN',
+      status: 'open',
       netEdgePct,
       confidence: 0.75,
       invalidation: 'Executable gap closes',
@@ -292,6 +479,11 @@ test('Opportunities renders exact reported economics without green, profitabilit
   assert.match(html, /NOT PUBLISHED BY VOLUME/);
   assert.match(html, /Fees · slippage · funding · borrow NOT PUBLISHED/);
   assert.match(html, /Published volume proposal reason/);
+  assert.match(html, /<table/);
+  assert.match(html, /<caption>Owner-Published Opportunity Comparison/);
+  assert.match(html, /<thead>/);
+  assert.match(html, /scope="col"/);
+  assert.match(html, /scope="row"/);
   assert.doesNotMatch(html, /class="[^"]*(?:positive|opportunityx-edge|opportunityx-state)/);
   assert.doesNotMatch(html, /<button/);
   assert.doesNotMatch(html, />\s*(?:Approve|Reject|Reserve|Trade|Execute|Watch)\s*</i);
@@ -315,22 +507,8 @@ test('Opportunities source truth fails closed for retained, conflicting, unavail
   assert.equal(decodeVolumeOpportunityRead(malformedVolume), null);
 });
 
-test('Opportunities canonical projection admits trustworthy zero and exposes exact unavailable reasons', () => {
-  const zero = decodeCanonicalOpportunityRead({
-    state: 'AVAILABLE',
-    evaluatedAtMs: NOW,
-    reasonCodes: [],
-    view: {},
-    identities: [],
-    losses: [],
-    ownerOrderedCanonicalIds: {
-      basis: { decisions: [], proposals: [] },
-      volume: { decisions: [], proposals: [] },
-    },
-    maximumActionAuthority: 'ADVISORY',
-    capitalReservationAuthority: 'NONE',
-    executionAuthority: 'NONE',
-  });
+test('Opportunities canonical projection admits zero, exposes unavailability, and enumerates reject taxonomy', () => {
+  const zero = decodeCanonicalOpportunityRead(canonicalZeroPayload());
   assert.ok(zero);
   assert.equal(zero.proposalCount, 0);
   assert.deepEqual(projectCanonicalOpportunityTruth(zero, null), {
@@ -356,9 +534,63 @@ test('Opportunities canonical projection admits trustworthy zero and exposes exa
     detail: 'BASIS_OPPORTUNITY_OWNER_UNAVAILABLE',
   });
   assert.equal(decodeCanonicalOpportunityRead({
-    ...unavailable,
+    state: 'UNAVAILABLE',
+    evaluatedAtMs: NOW,
+    reasonCodes: ['BASIS_OPPORTUNITY_OWNER_UNAVAILABLE'],
+    view: null,
+    identities: [],
+    losses: [],
+    ownerOrderedCanonicalIds: null,
     maximumActionAuthority: 'EXECUTE',
+    capitalReservationAuthority: 'NONE',
+    executionAuthority: 'NONE',
   }), null);
+
+  const diagnostic = decodeCanonicalOpportunityRead(canonicalDiagnosticPayload());
+  assert.ok(diagnostic);
+  assert.equal(diagnostic.state, 'DEGRADED');
+  const diagnostics = collectOpportunityDiagnostics(diagnostic);
+  const diagnosticCodes = diagnostics.map((row) => row.code);
+  assert.ok(diagnosticCodes.includes('BASIS_RECORDS_REJECTED'));
+  assert.ok(diagnosticCodes.includes('CANONICAL_VALIDATION_FAILED'));
+  assert.ok(diagnosticCodes.includes('BASIS_RECONCILIATION_UNBALANCED'));
+  assert.ok(diagnosticCodes.includes('UI_DERIVED_SOURCE_RECONCILIATION_UNBALANCED'));
+  assert.ok(diagnosticCodes.includes('EDGE_BELOW_FEES'));
+  assert.ok(diagnosticCodes.includes('UI_DERIVED_EXPIRY_LIFECYCLE_MISMATCH'));
+  assert.ok(diagnosticCodes.includes('UI_DERIVED_VIEW_RECONCILIATION_UNBALANCED'));
+  assert.ok(diagnosticCodes.includes('SOURCE_TIME_UNAVAILABLE'));
+  assert.equal(
+    diagnostics.find((row) => row.code === 'BASIS_RECONCILIATION_UNBALANCED')?.provenance,
+    'OWNER-PUBLISHED',
+  );
+  assert.equal(
+    diagnostics.find((row) => row.code === 'UI_DERIVED_SOURCE_RECONCILIATION_UNBALANCED')?.provenance,
+    'UI-DERIVED',
+  );
+
+  const diagnosticHtml = renderToStaticMarkup(createElement(OpportunityDiagnosticsLedger, {
+    result: diagnostic,
+    query: '',
+    unavailableReason: null,
+  }));
+  assert.match(diagnosticHtml, /Canonical Reject Taxonomy/);
+  assert.match(diagnosticHtml, /CANONICAL_VALIDATION_FAILED/);
+  assert.match(diagnosticHtml, /basis-proposal-source-id/);
+  assert.match(diagnosticHtml, /OWNER-PUBLISHED/);
+  assert.match(diagnosticHtml, /UI-DERIVED/);
+  assert.match(diagnosticHtml, /Presentation guard derived from the published expiry and lifecycle/);
+  assert.match(diagnosticHtml, /UNBALANCED/);
+  assert.doesNotMatch(diagnosticHtml, /<button/);
+
+  const retainedErrorHtml = renderToStaticMarkup(createElement(OpportunityDiagnosticsLedger, {
+    result: diagnostic,
+    query: '',
+    unavailableReason: 'CANONICAL_OPPORTUNITY_READ_UNAVAILABLE',
+  }));
+  assert.match(retainedErrorHtml, /STALE LAST-KNOWN · WITHHELD/);
+  assert.match(retainedErrorHtml, /Retained Canonical Diagnostics Withheld/);
+  assert.match(retainedErrorHtml, /CANONICAL_OPPORTUNITY_READ_UNAVAILABLE/);
+  assert.doesNotMatch(retainedErrorHtml, /CANONICAL_VALIDATION_FAILED|basis-proposal-source-id/);
 });
 
 test('Opportunities withholds stale, skewed, expired, duplicate, inconsistent, and incomplete facts', () => {
@@ -448,14 +680,24 @@ test('Opportunities uses only existing passive engine reads and shared market tr
   assert.match(source, /canonicalPoll\.stop\(\)/);
   assert.match(source, /row\.state !== 'PROPOSED'/);
   assert.match(source, /projectPublishedOpportunityFacts/);
-  assert.match(source, /executableBasisBestPct/);
-  assert.match(source, /executableBasisSide/);
-  assert.match(source, /fundingAnnualPct/);
-  assert.match(source, /perpVolume24h/);
+  assert.match(source, /decodeOpportunitiesReadResult/);
+  assert.match(source, /OpportunityDiagnosticsLedger/);
+  assert.match(source, /Owner-Published Opportunity Comparison/);
+  assert.match(source, /<table/);
+  assert.match(source, /<caption/);
+  assert.match(source, /scope="col"/);
   assert.match(source, /STALE LAST-KNOWN/);
   assert.match(source, /OWNER-REPORTED · NOT A PROFIT VERDICT/);
 
   assert.doesNotMatch(source, /state\.proposals|NO_ACTIVE_LEGACY_PROPOSALS/);
+  assert.match(source, /executableBasisBestPct/);
+  assert.match(source, /executableBasisSide/);
+  assert.match(source, /fundingAnnualPct/);
+  assert.match(source, /perpVolume24h/);
+  assert.match(source, /Raw Market Facts/);
+  assert.match(source, /role="tablist"/);
+  assert.match(source, /TokenIcon/);
+  assert.match(source, /openDetail/);
   assert.doesNotMatch(source, /\.sort\s*\(|netAfterFees|sideForBasis|Math\.abs|Math\.max|Math\.min/);
   assert.doesNotMatch(source, /method:\s*['"]POST|\/api\/(?:private|orders?|proposals?|trade|live|kill)/);
   assert.doesNotMatch(source, /className=\{?['"][^'"]*(?:positive|opportunityx-edge)/);

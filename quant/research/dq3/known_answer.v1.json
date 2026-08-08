@@ -1,0 +1,184 @@
+{
+  "fixture": {
+    "familyId": "family-a",
+    "masterSeed": "20260730",
+    "observationIds": [
+      "2026-01-01",
+      "2026-01-02",
+      "2026-01-03",
+      "2026-01-04",
+      "2026-01-05",
+      "2026-01-06",
+      "2026-01-07",
+      "2026-01-08"
+    ]
+  },
+  "pbo": {
+    "blockCoordinateDigests": [
+      "afcfa5030e8a8b2feb8ce11b1ec099cc391034a4cc0d93d83223012b47245936",
+      "d125564d6ceb5c6a24c95dab15aecbf02923eea9e82a17e139b480240a597920",
+      "21bab12e790b586edc02c1b4ec0c98e7aa719f5a51d36242a84d41990890616d",
+      "a22c8592e995ad051310cdf4be3923dd3deca21515e942cca2525b13995ad7bd"
+    ],
+    "coordinateDigest": "ca08fd8e57349215f9ed737d39cf19c905d20746989855e7f504c7e510a8efdf",
+    "splitCoordinateDigests": [
+      "5364b9f1e8b2ff7dec7070bbca875cec06c57f573ad33a1047ff90e4004cc61b",
+      "77d079a727494a17a7e8bb561c4228835dce20cdbeafa9e6a120ee016632a1af",
+      "b8a71bd43b2e9ecd90313f7454647e7a6c51d0ca34903b666ed4b9ddb5f29c2b",
+      "0827c3494d77b5848aaf07a6c0883ee28ff7ced38f777d71a100fa1c686a13a0",
+      "d4b9fa0e7af5f9dfa5971cdb0e82eeb2f47a307854cfe1450613b51ef4902d84",
+      "28e9f2b011a3dbd76f2d782bfa51e4d108804c24fa6e01a9177907d7924b82df"
+    ],
+    "splits": [
+      {
+        "inSampleBlocks": [
+          0,
+          1
+        ],
+        "outOfSampleBlocks": [
+          2,
+          3
+        ]
+      },
+      {
+        "inSampleBlocks": [
+          0,
+          2
+        ],
+        "outOfSampleBlocks": [
+          1,
+          3
+        ]
+      },
+      {
+        "inSampleBlocks": [
+          0,
+          3
+        ],
+        "outOfSampleBlocks": [
+          1,
+          2
+        ]
+      },
+      {
+        "inSampleBlocks": [
+          1,
+          2
+        ],
+        "outOfSampleBlocks": [
+          0,
+          3
+        ]
+      },
+      {
+        "inSampleBlocks": [
+          1,
+          3
+        ],
+        "outOfSampleBlocks": [
+          0,
+          2
+        ]
+      },
+      {
+        "inSampleBlocks": [
+          2,
+          3
+        ],
+        "outOfSampleBlocks": [
+          0,
+          1
+        ]
+      }
+    ]
+  },
+  "receipt": {
+    "attemptedTrialIds": [
+      "trial-alpha",
+      "trial-beta",
+      "trial-gamma"
+    ],
+    "authority": "NONE",
+    "completedTrialIds": [
+      "trial-alpha",
+      "trial-beta"
+    ],
+    "effectivePvalueTrialIds": [
+      "trial-alpha",
+      "trial-beta",
+      "trial-gamma"
+    ],
+    "familyId": "family-a",
+    "holdoutFeedbackCount": 0,
+    "holdoutOpened": false,
+    "holdoutPolicy": "SINGLE_CHAMPION_AFTER_DEVELOPMENT_GATE",
+    "multiplicityTrialIds": [
+      "trial-alpha",
+      "trial-beta",
+      "trial-gamma"
+    ],
+    "noncompletedEffectivePvalue": "1",
+    "noncompletedTrialIds": [
+      "trial-gamma"
+    ],
+    "observationGridDigest": "87005447c5107646cbf75c65901572c8e8a2c3ba26d8be37b2494129c54a0221",
+    "pboCoordinateDigest": "ca08fd8e57349215f9ed737d39cf19c905d20746989855e7f504c7e510a8efdf",
+    "pboEvaluationStatus": "UNMEASURED_INCOMPLETE_TRIAL_FAMILY",
+    "pboSplitCount": 6,
+    "pboTiePolicy": "FAIL_CLOSED",
+    "phase": "DEVELOPMENT",
+    "rawPvalueTrialIds": [
+      "trial-alpha",
+      "trial-beta"
+    ],
+    "receiptDigest": "f9a0ace37b954e9f0c6196b52cfe8420177ee8d4dc3121a5f7fec45aff12f195",
+    "schema": "cosmos.dq3.statistical-coordinates.v1",
+    "trialStatuses": [
+      {
+        "status": "COMPLETED",
+        "trialId": "trial-alpha"
+      },
+      {
+        "status": "COMPLETED",
+        "trialId": "trial-beta"
+      },
+      {
+        "status": "FAILED",
+        "trialId": "trial-gamma"
+      }
+    ],
+    "whiteCoordinateDigest": "1a136f0fb79154f12b126e4c3475f49d60f3c816c4b04966095c79e1abca7708",
+    "whiteDerivedSeedHex": "4c103cd64c9bc027965ece219eb66673"
+  },
+  "schema": "cosmos.dq3.known-answer.v1",
+  "seedKat": {
+    "derivedSeedHex": "291f66e4f48ccf99bb69e47d9864df71",
+    "purpose": "WHITE_MAX_T"
+  },
+  "white": {
+    "coordinateDigest": "1a136f0fb79154f12b126e4c3475f49d60f3c816c4b04966095c79e1abca7708",
+    "derivedSeedHex": "4c103cd64c9bc027965ece219eb66673",
+    "firstReplicateBlockStarts": [
+      6,
+      3,
+      3,
+      7
+    ],
+    "firstReplicateIndices": [
+      6,
+      7,
+      3,
+      4,
+      3,
+      4,
+      7,
+      0
+    ],
+    "replicateCoordinateDigests": [
+      "b6db66e87cc16f59a63ce32d1bd5740d6df86d48c27ddf533f8032f7096a8555",
+      "a6cc02d432465a5db3dbea652014837327b8bb3dc2de1ea10ea306f969992016",
+      "058abd6236de22b79df4dd0a90839b922d6d5123715450a3e81741af8aa9ef1d",
+      "edebd0fe3a031b4d20adb6b0ebb86865973563ea1ffa2b7471b2b8a109fec397"
+    ]
+  }
+}

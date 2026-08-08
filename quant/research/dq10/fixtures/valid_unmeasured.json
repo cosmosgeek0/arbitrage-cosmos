@@ -1,0 +1,88 @@
+{
+  "capitalAuthority": "NONE",
+  "capitalVerdict": "NO_GO",
+  "consumer": "N3 successor/final convergence",
+  "crediblePositive": {
+    "evidenceIds": [],
+    "reasonCodes": [
+      "DECISION_INPUT_UNMEASURED"
+    ],
+    "state": "UNKNOWN",
+    "value": null
+  },
+  "economics": {
+    "estimate": {
+      "evidenceIds": [],
+      "reasonCodes": [
+        "ECONOMICS_UNMEASURED"
+      ],
+      "state": "UNKNOWN",
+      "value": null
+    },
+    "lowerBound": {
+      "evidenceIds": [],
+      "reasonCodes": [
+        "ECONOMICS_UNMEASURED"
+      ],
+      "state": "UNKNOWN",
+      "value": null
+    },
+    "unit": null,
+    "upperBound": {
+      "evidenceIds": [],
+      "reasonCodes": [
+        "ECONOMICS_UNMEASURED"
+      ],
+      "state": "UNKNOWN",
+      "value": null
+    }
+  },
+  "executionAuthority": "NONE",
+  "gateSummary": {
+    "mandatoryFailed": 0,
+    "mandatoryPassed": 0,
+    "mandatoryTotal": 1,
+    "mandatoryUnknown": 1,
+    "mandatoryVerified": 0
+  },
+  "gates": [
+    {
+      "evidenceIds": [],
+      "id": "data-integrity",
+      "mandatory": true,
+      "passed": null,
+      "reasonCodes": [
+        "GATE_UNMEASURED"
+      ],
+      "state": "UNKNOWN"
+    },
+    {
+      "evidenceIds": [
+        "gate-optional"
+      ],
+      "id": "reporting-only",
+      "mandatory": false,
+      "passed": false,
+      "reasonCodes": [],
+      "state": "VERIFIED"
+    }
+  ],
+  "limitations": [
+    "CAPITAL_AUTHORITY_NOT_GRANTED"
+  ],
+  "measurementVerdict": "UNMEASURED",
+  "policy": {
+    "id": "dq10-policy-v1",
+    "sha256": "efc3e4cc6c1c2b6d981f1557bb92e051422d6b9551947424bc4e861125d763ff"
+  },
+  "resultId": "unmeasured-fixture",
+  "sampleDenominator": {
+    "count": null,
+    "evidenceIds": [],
+    "reasonCodes": [
+      "SAMPLE_UNMEASURED"
+    ],
+    "state": "UNKNOWN"
+  },
+  "schema": "DQ10ResearchResultV1"
+}

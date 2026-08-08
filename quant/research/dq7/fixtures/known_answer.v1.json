@@ -1,0 +1,276 @@
+{
+  "schema": "cosmos.dq7.known-answer.v1",
+  "validReceipt": {
+    "attemptLedgerDigest": "80f024d5f6629527ffb92d87fe882879aa967d485f3bf54b50e2b65ed7e287ab",
+    "familyComponentIds": [
+      "76d722c7269eb013982b377d313f6a1cb914aa0b99da366838882f2e8fa5e13a",
+      "771699ff90232daf86a88e61334433a2e8d12b3c7099a603511c86c6081ae295",
+      "ee11d17e2f639505345781a749408de2f4485c19bd8ac6769699fbd98aff0aff"
+    ],
+    "familyUniverseDigest": "59dea0caf3d6d5a0eed06a0e847e3f3eeee289b3398d9fe10b35f8011e73c0e1",
+    "manifestDigest": "1cfe643b236f7a3863551d726cfc80cf9f51a8be61a272ba7ea8fbb5cce40a1b",
+    "receiptDigest": "743049e33f5f1d2f5e3b6e204dc1a41bd7caa910c9b78c333cea9ffb391ef7ed"
+  },
+  "hostileReceipts": [
+    {
+      "caseId": "EXACT_RENAME_DUPLICATE",
+      "mutationId": "CLONE_EXACT_RENAME",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "FAMILY_RENAME_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "5663a54723c9b781af98099f47863f8a9a75008ec9d1da264b9703f597b8bd79",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "RENAMED_VENUE_DUPLICATE",
+      "mutationId": "CLONE_VENUE",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "RENAMED_VENUE_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "7c46c78901453a8b7b4940ccea5da143c5a2392035501715ece4c4964aa912c0",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "SIZING_ONLY_DUPLICATE",
+      "mutationId": "CLONE_SIZING",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "SIZING_ONLY_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "f50f4103bdf52dd576a4727aff19a740624392b8dec51a3c2d0864a7e7553a6e",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "BOOKKEEPING_ONLY_DUPLICATE",
+      "mutationId": "CLONE_BOOKKEEPING",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "BOOKKEEPING_ONLY_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "3233309fde8a263e28cf304686b435ebfd780bff36c45f29672142fe709db965",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PARAMETER_ROLE_ALIAS_DUPLICATE",
+      "mutationId": "CLONE_PARAMETER_ROLE_ALIAS",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "FAMILY_RENAME_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "1146107a7f8438cb79eeb53158646ab9675962b84d7e9eaa17ed2eeba7083ebe",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "SOURCE_ROLE_ALIAS_DUPLICATE",
+      "mutationId": "CLONE_SOURCE_ALIAS",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "FAMILY_RENAME_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "db9c8f809e6130c06617d3b32cebf3a3a1d288cee7e6f65a590aa4f06240d56a",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PREDICTION_ALIAS_DUPLICATE",
+      "mutationId": "CLONE_OUTCOME_ALIAS",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "FAMILY_RENAME_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "05bf06ec180de984b164559e5a1176dd87daca0070109173f18bc3653bf96f23",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "NONPREDICTIVE_ONLY_DUPLICATE",
+      "mutationId": "CLONE_NONPREDICTIVE",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "NONPREDICTIVE_ONLY_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "7a1252b13b8f3d6f2ec52fd1e672c89baa04527be49311d6e29fd4e7b7a7d5ed",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "SEMANTIC_COLLISION_IMPLEMENTATION_DIVERGENCE",
+      "mutationId": "CLONE_IMPLEMENTATION_COLLISION",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "NONPREDICTIVE_ONLY_DUPLICATE",
+        "SEMANTIC_COLLISION_IMPLEMENTATION_DIVERGENCE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "receiptDigest": "75b3574e13b24960bc5959fdc2f1d89bf7c0cd16d009409f6b8e407bd4f611fb",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "DECLARED_FAMILY_SPLIT",
+      "mutationId": "CLONE_DECLARED_SPLIT",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "DECLARED_FAMILY_SPLIT",
+        "SHARED_SOURCE_ONLY"
+      ],
+      "receiptDigest": "6915b83c03846e2e7d06564b9cca77743cac22f507deade168930c2104324ec4",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "SHARED_SIGNAL_ACROSS_TARGETS",
+      "mutationId": "CLONE_CROSS_TARGET",
+      "n3IntakeDisposition": "ADMISSIBLE_WITH_DEPENDENCE_DISCLOSURE",
+      "reasonCodes": [
+        "SHARED_SIGNAL_CROSS_TARGET"
+      ],
+      "receiptDigest": "829ef7960918f697b44a4421204cee216a1aed0d46e976003edf2fde1bf21f28",
+      "schedulerDisposition": "ADMIT_WITH_DISCLOSURES"
+    },
+    {
+      "caseId": "PREDICTIVE_FAMILY_OVERLAP",
+      "mutationId": "CLONE_EXTENDED_SIGNAL",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "SHARED_SIGNAL_COMPONENT",
+        "PREDICTIVE_FAMILY_OVERLAP"
+      ],
+      "receiptDigest": "f12d5af16d5df0f532fca25a995aec9947c201142019aa79198459b8b34ffdb0",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "SHARED_SOURCE_ONLY",
+      "mutationId": "CLONE_SHARED_SOURCE_ONLY",
+      "n3IntakeDisposition": "ADMISSIBLE_WITH_DEPENDENCE_DISCLOSURE",
+      "reasonCodes": [
+        "SHARED_SOURCE_ONLY"
+      ],
+      "receiptDigest": "dc9ac43b14b1d901ae68fe177c0f82e4459894098d712027963bc64ea25f2556",
+      "schedulerDisposition": "ADMIT_WITH_DISCLOSURES"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_MISSING",
+      "mutationId": "DROP_MULTIPLICITY_PLAN",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_MULTIPLICITY_PLAN_MISSING"
+      ],
+      "receiptDigest": "d77ffef091b7d10e5fde3e0a3f967730e5b91be1d3723be7080a9fabe3b18fdd",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_ATTEMPT_LEDGER_INCOMPLETE",
+      "mutationId": "DROP_ATTEMPT_MEMBERSHIP",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_ATTEMPT_LEDGER_INCOMPLETE",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "receiptDigest": "9efd76698ac87b88d66279e5bdee64a47a910971ae645a8cd7bd55206bc5ffa4",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_FAMILY_SET_MISMATCH",
+      "mutationId": "DROP_FAMILY_MEMBERSHIP",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_FAMILY_SET_MISMATCH",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "receiptDigest": "d9336642238e2d7a1d1cccb65f01b22b9bc088e66f59118adaf653918bd20a15",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_DIGEST_MISMATCH",
+      "mutationId": "CORRUPT_MULTIPLICITY_DIGEST",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_MULTIPLICITY_DIGEST_MISMATCH",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "receiptDigest": "ad5f12f60bb6a36027b5d809c0435a711286f012ae394e8fa25fd009928f35f8",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_CONSUMER_MISMATCH",
+      "mutationId": "DROP_N3_CONSUMER",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_MULTIPLICITY_CONSUMER_MISMATCH",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "receiptDigest": "d0babeefa4bc6b147e8560f903c947286b50dad58dfb3b30927f6837e6ea2229",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_NOT_PREOUTCOME",
+      "mutationId": "CLEAR_PREOUTCOME_FREEZE",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_MULTIPLICITY_NOT_PREOUTCOME",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "receiptDigest": "75afc837e03f053ac55ffec1abec12d20f3db5c5ba10827214dae6965c826f07",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_METHOD_INVALID",
+      "mutationId": "SET_LOCAL_METHOD",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_MULTIPLICITY_METHOD_INVALID",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "receiptDigest": "c1b0f91fd0cca751cd17a70e9a854d211cd1d81e5a8a648a1ea4c96e8acf4f2e",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_SCOPE_INVALID",
+      "mutationId": "SET_LOCAL_SCOPE",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_MULTIPLICITY_SCOPE_INVALID",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "receiptDigest": "fff83037b6bf33f7b7d789ff607615a3cbca9ad6fb77738ccef1b28009bac90c",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_PROGRAM_MISMATCH",
+      "mutationId": "SET_OTHER_PROGRAM_IN_PLAN",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_MULTIPLICITY_PROGRAM_MISMATCH",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "receiptDigest": "9cd0693fc3cc0f5bb1bc15deb9b3621d00870b5d0ab52e0523daf7c97dd913b3",
+      "schedulerDisposition": "REJECT"
+    },
+    {
+      "caseId": "PROGRAM_SEMANTIC_ONTOLOGY_MISMATCH",
+      "mutationId": "SET_OTHER_ONTOLOGY_IN_PLAN",
+      "n3IntakeDisposition": "INADMISSIBLE",
+      "reasonCodes": [
+        "PROGRAM_SEMANTIC_ONTOLOGY_MISMATCH",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "receiptDigest": "21887516309f8ca8695790e5774b7a0c368cdeceac6017c297f6171df9f74ed9",
+      "schedulerDisposition": "REJECT"
+    }
+  ]
+}

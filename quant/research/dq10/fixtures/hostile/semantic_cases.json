@@ -1,0 +1,146 @@
+[
+  {
+    "base": "valid_go.json",
+    "expectedCode": "KEY_SET_MISMATCH",
+    "expectedPath": "$",
+    "name": "closed_key_drift",
+    "path": [
+      "unexpected"
+    ],
+    "value": true
+  },
+  {
+    "base": "valid_unmeasured.json",
+    "expectedCode": "UNKNOWN_VALUE_NOT_NULL",
+    "expectedPath": "$.economics.estimate.value",
+    "name": "unknown_with_zero",
+    "path": [
+      "economics",
+      "estimate",
+      "value"
+    ],
+    "value": 0
+  },
+  {
+    "base": "valid_go.json",
+    "expectedCode": "VERIFIED_NUMBER_REQUIRED",
+    "expectedPath": "$.economics.estimate.value",
+    "name": "verified_with_null",
+    "path": [
+      "economics",
+      "estimate",
+      "value"
+    ],
+    "value": null
+  },
+  {
+    "base": "valid_go.json",
+    "expectedCode": "VERIFIED_EVIDENCE_REQUIRED",
+    "expectedPath": "$.economics.estimate.evidenceIds",
+    "name": "verified_without_evidence",
+    "path": [
+      "economics",
+      "estimate",
+      "evidenceIds"
+    ],
+    "value": []
+  },
+  {
+    "base": "valid_go.json",
+    "expectedCode": "UNMEASURED_VERDICT_REQUIRED",
+    "expectedPath": "$.measurementVerdict",
+    "name": "zero_sample_denominator_with_go",
+    "path": [
+      "sampleDenominator",
+      "count"
+    ],
+    "value": 0
+  },
+  {
+    "base": "valid_go.json",
+    "expectedCode": "GATE_SUMMARY_MISMATCH",
+    "expectedPath": "$.gateSummary",
+    "name": "gate_summary_drift",
+    "path": [
+      "gateSummary",
+      "mandatoryPassed"
+    ],
+    "value": 0
+  },
+  {
+    "base": "valid_no_go_verified_zero.json",
+    "expectedCode": "MEASUREMENT_VERDICT_MISMATCH",
+    "expectedPath": "$.measurementVerdict",
+    "name": "verdict_escalation",
+    "path": [
+      "measurementVerdict"
+    ],
+    "value": "GO"
+  },
+  {
+    "base": "valid_no_go_verified_zero.json",
+    "expectedCode": "CREDIBLE_POSITIVE_MISMATCH",
+    "expectedPath": "$.crediblePositive.value",
+    "name": "credible_positive_escalation",
+    "path": [
+      "crediblePositive",
+      "value"
+    ],
+    "value": true
+  },
+  {
+    "base": "valid_go.json",
+    "expectedCode": "STRING_VALUE_INVALID",
+    "expectedPath": "$.capitalVerdict",
+    "name": "capital_verdict_escalation",
+    "path": [
+      "capitalVerdict"
+    ],
+    "value": "GO"
+  },
+  {
+    "base": "valid_go.json",
+    "expectedCode": "STRING_VALUE_INVALID",
+    "expectedPath": "$.capitalAuthority",
+    "name": "capital_authority_escalation",
+    "path": [
+      "capitalAuthority"
+    ],
+    "value": "ALLOCATE"
+  },
+  {
+    "base": "valid_go.json",
+    "expectedCode": "STRING_VALUE_INVALID",
+    "expectedPath": "$.executionAuthority",
+    "name": "execution_authority_escalation",
+    "path": [
+      "executionAuthority"
+    ],
+    "value": "TRADE"
+  },
+  {
+    "base": "valid_go.json",
+    "expectedCode": "ECONOMICS_INTERVAL_INVALID",
+    "expectedPath": "$.economics",
+    "name": "interval_contradiction",
+    "path": [
+      "economics",
+      "lowerBound",
+      "value"
+    ],
+    "value": 4
+  },
+  {
+    "base": "valid_go.json",
+    "expectedCode": "CREDIBLE_EVIDENCE_MISMATCH",
+    "expectedPath": "$.crediblePositive.evidenceIds",
+    "name": "evidence_union_contradiction",
+    "path": [
+      "crediblePositive",
+      "evidenceIds"
+    ],
+    "value": [
+      "gate-data"
+    ]
+  }
+]

@@ -1,0 +1,266 @@
+{
+  "schema": "cosmos.dq7.hostile-cases.v1",
+  "validFixture": "valid_program.v1.json",
+  "cases": [
+    {
+      "caseId": "EXACT_RENAME_DUPLICATE",
+      "mutationId": "CLONE_EXACT_RENAME",
+      "acceptedPreOutcomeFreezeDigest": "7b9793cd89e4cdec4ef857ff1374b18ac45e12a312a682e52ba35783798c3b14",
+      "expectedReasonCodes": [
+        "FAMILY_RENAME_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "RENAMED_VENUE_DUPLICATE",
+      "mutationId": "CLONE_VENUE",
+      "acceptedPreOutcomeFreezeDigest": "e6896eea8d55504fb9a87463ba76077a6cfd6ce17a2fd49051079e3e7d18c018",
+      "expectedReasonCodes": [
+        "RENAMED_VENUE_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "SIZING_ONLY_DUPLICATE",
+      "mutationId": "CLONE_SIZING",
+      "acceptedPreOutcomeFreezeDigest": "7b9505a457042247b1b906ae1b5f77032b28e501068bb33d6fc5e1217ac02d71",
+      "expectedReasonCodes": [
+        "SIZING_ONLY_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "BOOKKEEPING_ONLY_DUPLICATE",
+      "mutationId": "CLONE_BOOKKEEPING",
+      "acceptedPreOutcomeFreezeDigest": "281bf1b454d876988956db6e3e8990b3dce4192a58023587d6624946a0df3c04",
+      "expectedReasonCodes": [
+        "BOOKKEEPING_ONLY_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PARAMETER_ROLE_ALIAS_DUPLICATE",
+      "mutationId": "CLONE_PARAMETER_ROLE_ALIAS",
+      "acceptedPreOutcomeFreezeDigest": "16a5c965d0fae6b51b94d17e41b8a01beb526f3c55c3298924725e8269880cd8",
+      "expectedReasonCodes": [
+        "FAMILY_RENAME_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "SOURCE_ROLE_ALIAS_DUPLICATE",
+      "mutationId": "CLONE_SOURCE_ALIAS",
+      "acceptedPreOutcomeFreezeDigest": "4003302347e15d8f0fe53f0c8c099e5546f811facc412caeee68139ea6592f74",
+      "expectedReasonCodes": [
+        "FAMILY_RENAME_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PREDICTION_ALIAS_DUPLICATE",
+      "mutationId": "CLONE_OUTCOME_ALIAS",
+      "acceptedPreOutcomeFreezeDigest": "dbd51248e8b62db394269706d961ebe352c050f2d1e4f29c48c2163747a01019",
+      "expectedReasonCodes": [
+        "FAMILY_RENAME_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "NONPREDICTIVE_ONLY_DUPLICATE",
+      "mutationId": "CLONE_NONPREDICTIVE",
+      "acceptedPreOutcomeFreezeDigest": "9e92600a5830d0cac2cd38064ca6cf10435c5bc388e45bd29e74c12c2eca606a",
+      "expectedReasonCodes": [
+        "NONPREDICTIVE_ONLY_DUPLICATE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "SEMANTIC_COLLISION_IMPLEMENTATION_DIVERGENCE",
+      "mutationId": "CLONE_IMPLEMENTATION_COLLISION",
+      "acceptedPreOutcomeFreezeDigest": "5ddeddd9afb4e2adc2d8b187c2472be99d78ed2ec3fe7d1da1a01fd0f2f8757a",
+      "expectedReasonCodes": [
+        "NONPREDICTIVE_ONLY_DUPLICATE",
+        "SEMANTIC_COLLISION_IMPLEMENTATION_DIVERGENCE",
+        "DECLARED_FAMILY_ALIAS",
+        "SHARED_SIGNAL_COMPONENT"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "DECLARED_FAMILY_SPLIT",
+      "mutationId": "CLONE_DECLARED_SPLIT",
+      "acceptedPreOutcomeFreezeDigest": "3de4af3a3400482a42b4cbc05b51882536806cfb28ed7097cf99514783d938a1",
+      "expectedReasonCodes": [
+        "DECLARED_FAMILY_SPLIT",
+        "SHARED_SOURCE_ONLY"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "SHARED_SIGNAL_ACROSS_TARGETS",
+      "mutationId": "CLONE_CROSS_TARGET",
+      "acceptedPreOutcomeFreezeDigest": "98007e40aa905d3cc81ac510aafda055ed4672edc4498f9afe3e8fb0805a2ad7",
+      "expectedReasonCodes": [
+        "SHARED_SIGNAL_CROSS_TARGET"
+      ],
+      "expectedSchedulerDisposition": "ADMIT_WITH_DISCLOSURES",
+      "expectedN3Disposition": "ADMISSIBLE_WITH_DEPENDENCE_DISCLOSURE"
+    },
+    {
+      "caseId": "PREDICTIVE_FAMILY_OVERLAP",
+      "mutationId": "CLONE_EXTENDED_SIGNAL",
+      "acceptedPreOutcomeFreezeDigest": "113b2f7edc2bc74e085ab28a1db164da9e2d95456eadb58c7220dd7aa2254260",
+      "expectedReasonCodes": [
+        "SHARED_SIGNAL_COMPONENT",
+        "PREDICTIVE_FAMILY_OVERLAP"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "SHARED_SOURCE_ONLY",
+      "mutationId": "CLONE_SHARED_SOURCE_ONLY",
+      "acceptedPreOutcomeFreezeDigest": "ea95292688bcb4fffe8846b1fc695fc2f8fafd31d95ec9be84dd877ea1d94613",
+      "expectedReasonCodes": [
+        "SHARED_SOURCE_ONLY"
+      ],
+      "expectedSchedulerDisposition": "ADMIT_WITH_DISCLOSURES",
+      "expectedN3Disposition": "ADMISSIBLE_WITH_DEPENDENCE_DISCLOSURE"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_MISSING",
+      "mutationId": "DROP_MULTIPLICITY_PLAN",
+      "acceptedPreOutcomeFreezeDigest": "3eba2e6511d6321138aac3bb78c937395c99fae129a64f683282624e918a7c59",
+      "expectedReasonCodes": [
+        "PROGRAM_MULTIPLICITY_PLAN_MISSING"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_ATTEMPT_LEDGER_INCOMPLETE",
+      "mutationId": "DROP_ATTEMPT_MEMBERSHIP",
+      "acceptedPreOutcomeFreezeDigest": "3eba2e6511d6321138aac3bb78c937395c99fae129a64f683282624e918a7c59",
+      "expectedReasonCodes": [
+        "PROGRAM_ATTEMPT_LEDGER_INCOMPLETE",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_FAMILY_SET_MISMATCH",
+      "mutationId": "DROP_FAMILY_MEMBERSHIP",
+      "acceptedPreOutcomeFreezeDigest": "3eba2e6511d6321138aac3bb78c937395c99fae129a64f683282624e918a7c59",
+      "expectedReasonCodes": [
+        "PROGRAM_FAMILY_SET_MISMATCH",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_DIGEST_MISMATCH",
+      "mutationId": "CORRUPT_MULTIPLICITY_DIGEST",
+      "acceptedPreOutcomeFreezeDigest": "3eba2e6511d6321138aac3bb78c937395c99fae129a64f683282624e918a7c59",
+      "expectedReasonCodes": [
+        "PROGRAM_MULTIPLICITY_DIGEST_MISMATCH",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_CONSUMER_MISMATCH",
+      "mutationId": "DROP_N3_CONSUMER",
+      "acceptedPreOutcomeFreezeDigest": "3eba2e6511d6321138aac3bb78c937395c99fae129a64f683282624e918a7c59",
+      "expectedReasonCodes": [
+        "PROGRAM_MULTIPLICITY_CONSUMER_MISMATCH",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_NOT_PREOUTCOME",
+      "mutationId": "CLEAR_PREOUTCOME_FREEZE",
+      "acceptedPreOutcomeFreezeDigest": "3eba2e6511d6321138aac3bb78c937395c99fae129a64f683282624e918a7c59",
+      "expectedReasonCodes": [
+        "PROGRAM_MULTIPLICITY_NOT_PREOUTCOME",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_METHOD_INVALID",
+      "mutationId": "SET_LOCAL_METHOD",
+      "acceptedPreOutcomeFreezeDigest": "3eba2e6511d6321138aac3bb78c937395c99fae129a64f683282624e918a7c59",
+      "expectedReasonCodes": [
+        "PROGRAM_MULTIPLICITY_METHOD_INVALID",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_SCOPE_INVALID",
+      "mutationId": "SET_LOCAL_SCOPE",
+      "acceptedPreOutcomeFreezeDigest": "3eba2e6511d6321138aac3bb78c937395c99fae129a64f683282624e918a7c59",
+      "expectedReasonCodes": [
+        "PROGRAM_MULTIPLICITY_SCOPE_INVALID",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_MULTIPLICITY_PROGRAM_MISMATCH",
+      "mutationId": "SET_OTHER_PROGRAM_IN_PLAN",
+      "acceptedPreOutcomeFreezeDigest": "3eba2e6511d6321138aac3bb78c937395c99fae129a64f683282624e918a7c59",
+      "expectedReasonCodes": [
+        "PROGRAM_MULTIPLICITY_PROGRAM_MISMATCH",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    },
+    {
+      "caseId": "PROGRAM_SEMANTIC_ONTOLOGY_MISMATCH",
+      "mutationId": "SET_OTHER_ONTOLOGY_IN_PLAN",
+      "acceptedPreOutcomeFreezeDigest": "3eba2e6511d6321138aac3bb78c937395c99fae129a64f683282624e918a7c59",
+      "expectedReasonCodes": [
+        "PROGRAM_SEMANTIC_ONTOLOGY_MISMATCH",
+        "PROGRAM_PREOUTCOME_FREEZE_UNTRUSTED"
+      ],
+      "expectedSchedulerDisposition": "REJECT",
+      "expectedN3Disposition": "INADMISSIBLE"
+    }
+  ]
+}

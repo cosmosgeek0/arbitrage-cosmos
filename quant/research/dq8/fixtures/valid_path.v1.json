@@ -1,0 +1,235 @@
+{
+  "schema": "cosmos.dq8.nav-drawdown-coordinates.v1",
+  "startingCash": "1000",
+  "clockPlan": {
+    "pathId": "dq8-synthetic-hourly-path",
+    "clockDigest": "7deeaf5c4d8aecc1f1dc817e185df3e2da8791142076ad8e739aacd51bb50d22",
+    "marks": [
+      {
+        "markId": "clock-00",
+        "timestampUs": 1767225600000000,
+        "timestampLabel": "2026-01-01T00:00:00Z",
+        "dateLabel": "2026-01-01"
+      },
+      {
+        "markId": "clock-06",
+        "timestampUs": 1767247200000000,
+        "timestampLabel": "2026-01-01T06:00:00Z",
+        "dateLabel": "2026-01-01"
+      },
+      {
+        "markId": "clock-12",
+        "timestampUs": 1767268800000000,
+        "timestampLabel": "2026-01-01T12:00:00Z",
+        "dateLabel": "2026-01-01"
+      },
+      {
+        "markId": "clock-18",
+        "timestampUs": 1767290400000000,
+        "timestampLabel": "2026-01-01T18:00:00Z",
+        "dateLabel": "2026-01-01"
+      },
+      {
+        "markId": "clock-20",
+        "timestampUs": 1767297600000000,
+        "timestampLabel": "2026-01-01T20:00:00Z",
+        "dateLabel": "2026-01-01"
+      },
+      {
+        "markId": "clock-24",
+        "timestampUs": 1767312000000000,
+        "timestampLabel": "2026-01-02T00:00:00Z",
+        "dateLabel": "2026-01-02"
+      }
+    ]
+  },
+  "prices": [
+    {
+      "priceId": "price-entry",
+      "lotId": "lot-1",
+      "instrument": "BTCUSDT",
+      "venue": "SYNTHETIC_VENUE",
+      "use": "ENTRY",
+      "sourceField": "OPEN",
+      "sourceArtifactSha256": "9a3f0ca4daf721bb89870ef40b00ede1adad51262905c315689bc69a679d8f41",
+      "sourceRowId": "row-entry",
+      "markId": "clock-06",
+      "timestampUs": 1767247200000000,
+      "timestampLabel": "2026-01-01T06:00:00Z",
+      "dateLabel": "2026-01-01",
+      "price": "100"
+    },
+    {
+      "priceId": "price-mark-entry",
+      "lotId": "lot-1",
+      "instrument": "BTCUSDT",
+      "venue": "SYNTHETIC_VENUE",
+      "use": "VALUATION",
+      "sourceField": "OPEN",
+      "sourceArtifactSha256": "9a3f0ca4daf721bb89870ef40b00ede1adad51262905c315689bc69a679d8f41",
+      "sourceRowId": "row-entry",
+      "markId": "clock-06",
+      "timestampUs": 1767247200000000,
+      "timestampLabel": "2026-01-01T06:00:00Z",
+      "dateLabel": "2026-01-01",
+      "price": "100"
+    },
+    {
+      "priceId": "price-mark-peak",
+      "lotId": "lot-1",
+      "instrument": "BTCUSDT",
+      "venue": "SYNTHETIC_VENUE",
+      "use": "VALUATION",
+      "sourceField": "OPEN",
+      "sourceArtifactSha256": "9a3f0ca4daf721bb89870ef40b00ede1adad51262905c315689bc69a679d8f41",
+      "sourceRowId": "row-peak",
+      "markId": "clock-12",
+      "timestampUs": 1767268800000000,
+      "timestampLabel": "2026-01-01T12:00:00Z",
+      "dateLabel": "2026-01-01",
+      "price": "120"
+    },
+    {
+      "priceId": "price-mark-trough",
+      "lotId": "lot-1",
+      "instrument": "BTCUSDT",
+      "venue": "SYNTHETIC_VENUE",
+      "use": "VALUATION",
+      "sourceField": "OPEN",
+      "sourceArtifactSha256": "9a3f0ca4daf721bb89870ef40b00ede1adad51262905c315689bc69a679d8f41",
+      "sourceRowId": "row-trough",
+      "markId": "clock-18",
+      "timestampUs": 1767290400000000,
+      "timestampLabel": "2026-01-01T18:00:00Z",
+      "dateLabel": "2026-01-01",
+      "price": "90"
+    },
+    {
+      "priceId": "price-exit",
+      "lotId": "lot-1",
+      "instrument": "BTCUSDT",
+      "venue": "SYNTHETIC_VENUE",
+      "use": "EXIT",
+      "sourceField": "OPEN",
+      "sourceArtifactSha256": "9a3f0ca4daf721bb89870ef40b00ede1adad51262905c315689bc69a679d8f41",
+      "sourceRowId": "row-exit",
+      "markId": "clock-20",
+      "timestampUs": 1767297600000000,
+      "timestampLabel": "2026-01-01T20:00:00Z",
+      "dateLabel": "2026-01-01",
+      "price": "95"
+    }
+  ],
+  "trades": [
+    {
+      "eventId": "event-entry",
+      "lotId": "lot-1",
+      "instrument": "BTCUSDT",
+      "role": "ENTRY",
+      "markId": "clock-06",
+      "priceId": "price-entry",
+      "expectedPriceField": "OPEN",
+      "quantityDelta": "10"
+    },
+    {
+      "eventId": "event-exit",
+      "lotId": "lot-1",
+      "instrument": "BTCUSDT",
+      "role": "EXIT",
+      "markId": "clock-20",
+      "priceId": "price-exit",
+      "expectedPriceField": "OPEN",
+      "quantityDelta": "-10"
+    }
+  ],
+  "cashEvents": [],
+  "navMarks": [
+    {
+      "navMarkId": "nav-00",
+      "clockMarkId": "clock-00",
+      "cash": "1000",
+      "positions": [],
+      "nav": "1000"
+    },
+    {
+      "navMarkId": "nav-06",
+      "clockMarkId": "clock-06",
+      "cash": "0",
+      "positions": [
+        {
+          "lotId": "lot-1",
+          "quantity": "10",
+          "priceId": "price-mark-entry",
+          "expectedPriceField": "OPEN",
+          "marketValue": "1000"
+        }
+      ],
+      "nav": "1000"
+    },
+    {
+      "navMarkId": "nav-12",
+      "clockMarkId": "clock-12",
+      "cash": "0",
+      "positions": [
+        {
+          "lotId": "lot-1",
+          "quantity": "10",
+          "priceId": "price-mark-peak",
+          "expectedPriceField": "OPEN",
+          "marketValue": "1200"
+        }
+      ],
+      "nav": "1200"
+    },
+    {
+      "navMarkId": "nav-18",
+      "clockMarkId": "clock-18",
+      "cash": "0",
+      "positions": [
+        {
+          "lotId": "lot-1",
+          "quantity": "10",
+          "priceId": "price-mark-trough",
+          "expectedPriceField": "OPEN",
+          "marketValue": "900"
+        }
+      ],
+      "nav": "900"
+    },
+    {
+      "navMarkId": "nav-20",
+      "clockMarkId": "clock-20",
+      "cash": "950",
+      "positions": [],
+      "nav": "950"
+    },
+    {
+      "navMarkId": "nav-24",
+      "clockMarkId": "clock-24",
+      "cash": "950",
+      "positions": [],
+      "nav": "950"
+    }
+  ],
+  "claim": {
+    "startNavMarkId": "nav-00",
+    "endNavMarkId": "nav-24",
+    "startingNav": "1000",
+    "endingNav": "950",
+    "tradeCashChange": "-50",
+    "economicCashChange": "0",
+    "netResult": "-50",
+    "returnNumerator": "-50",
+    "returnDenominator": "1000",
+    "cashDurationUs": 36000000000,
+    "cashHours": 10,
+    "maximumDrawdownLoss": "300",
+    "maximumDrawdownPeak": "1200",
+    "peakNavMarkId": "nav-12",
+    "troughNavMarkId": "nav-18",
+    "peakTimestampLabel": "2026-01-01T12:00:00Z",
+    "troughTimestampLabel": "2026-01-01T18:00:00Z",
+    "peakDateLabel": "2026-01-01",
+    "troughDateLabel": "2026-01-01"
+  }
+}

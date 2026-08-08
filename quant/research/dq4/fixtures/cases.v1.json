@@ -1,0 +1,161 @@
+{
+  "schema": "cosmos.dq4.origin-proof-fixtures.v1",
+  "cases": [
+    {
+      "id": "valid_relocated_hostile_git_env",
+      "mutation": "relocate_and_poison_inherited_git_environment",
+      "expectedReasonCode": "ORIGIN_PROOF_VALID",
+      "expectedExitCode": 0
+    },
+    {
+      "id": "valid_bare_repository",
+      "mutation": "relocate_to_complete_bare_repository",
+      "expectedReasonCode": "ORIGIN_PROOF_VALID",
+      "expectedExitCode": 0
+    },
+    {
+      "id": "shared_clone_absolute_alternate",
+      "mutation": "relocate_with_shared_object_alternate",
+      "expectedReasonCode": "ORIGIN_PROOF_ABSOLUTE_WORKTREE_DEPENDENCY",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "external_pack_directory_symlink",
+      "mutation": "move_pack_store_behind_absolute_symlink",
+      "expectedReasonCode": "ORIGIN_PROOF_ABSOLUTE_WORKTREE_DEPENDENCY",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "external_common_config_symlink",
+      "mutation": "move_common_config_behind_absolute_symlink",
+      "expectedReasonCode": "ORIGIN_PROOF_ABSOLUTE_WORKTREE_DEPENDENCY",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "external_dot_git_directory_symlink",
+      "mutation": "move_dot_git_directory_behind_absolute_symlink",
+      "expectedReasonCode": "ORIGIN_PROOF_ABSOLUTE_WORKTREE_DEPENDENCY",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "external_absolute_gitfile",
+      "mutation": "move_dot_git_to_absolute_gitfile",
+      "expectedReasonCode": "ORIGIN_PROOF_ABSOLUTE_WORKTREE_DEPENDENCY",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "external_absolute_gitfile_claiming_bare",
+      "mutation": "move_bare_classified_dot_git_to_absolute_gitfile",
+      "expectedReasonCode": "ORIGIN_PROOF_ABSOLUTE_WORKTREE_DEPENDENCY",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "worktree_config_absolute_include",
+      "mutation": "add_worktree_scoped_absolute_include",
+      "expectedReasonCode": "ORIGIN_PROOF_ABSOLUTE_WORKTREE_DEPENDENCY",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "absolute_worktree_dependency",
+      "mutation": "add_absolute_repository_root",
+      "expectedReasonCode": "ORIGIN_PROOF_ABSOLUTE_WORKTREE_DEPENDENCY",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "dangling_pre_run_object",
+      "mutation": "replace_pre_run_with_missing_oid",
+      "expectedReasonCode": "ORIGIN_PROOF_PRE_RUN_OBJECT_MISSING",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "pre_run_object_is_blob",
+      "mutation": "replace_pre_run_with_blob_oid",
+      "expectedReasonCode": "ORIGIN_PROOF_PRE_RUN_OBJECT_NOT_COMMIT",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "amended_pre_run_sibling",
+      "mutation": "replace_pre_run_with_anchored_sibling",
+      "expectedReasonCode": "ORIGIN_PROOF_PRE_RUN_OBJECT_AMENDED",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "divergent_non_ancestor",
+      "mutation": "replace_pre_run_with_divergent_commit",
+      "expectedReasonCode": "ORIGIN_PROOF_PRE_RUN_NOT_ANCESTOR",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "replacement_object_present",
+      "mutation": "install_replace_ref",
+      "expectedReasonCode": "ORIGIN_PROOF_REPLACEMENT_OBJECT_PRESENT",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "pre_run_anchor_missing",
+      "mutation": "delete_pre_run_anchor",
+      "expectedReasonCode": "ORIGIN_PROOF_PRE_RUN_REF_MISSING",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "pre_run_anchor_moved",
+      "mutation": "move_pre_run_anchor",
+      "expectedReasonCode": "ORIGIN_PROOF_PRE_RUN_REF_MOVED",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "origin_ref_unbound",
+      "mutation": "remove_origin_binding",
+      "expectedReasonCode": "ORIGIN_PROOF_ORIGIN_REF_UNBOUND",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "origin_ref_excluded_by_fetch_mapping",
+      "mutation": "exclude_origin_source_ref",
+      "expectedReasonCode": "ORIGIN_PROOF_ORIGIN_REF_UNBOUND",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "origin_ref_from_absolute_config_include",
+      "mutation": "move_origin_mapping_to_absolute_config_include",
+      "expectedReasonCode": "ORIGIN_PROOF_ABSOLUTE_WORKTREE_DEPENDENCY",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "origin_ref_missing",
+      "mutation": "delete_origin_tracking_ref",
+      "expectedReasonCode": "ORIGIN_PROOF_ORIGIN_REF_MISSING",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "origin_ref_moved",
+      "mutation": "move_origin_tracking_ref",
+      "expectedReasonCode": "ORIGIN_PROOF_ORIGIN_REF_MOVED",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "packet_path_escape",
+      "mutation": "escape_packet_path",
+      "expectedReasonCode": "ORIGIN_PROOF_PATH_INVALID",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "symlink_in_sealed_packet",
+      "mutation": "append_symlink_to_sealed_packet",
+      "expectedReasonCode": "ORIGIN_PROOF_SYMLINK_FORBIDDEN",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "unbound_extra_output",
+      "mutation": "append_unlisted_file_to_sealed_packet",
+      "expectedReasonCode": "ORIGIN_PROOF_INPUT_ROSTER_MISMATCH",
+      "expectedExitCode": 1
+    },
+    {
+      "id": "bound_bytes_changed",
+      "mutation": "corrupt_manifest_sha256",
+      "expectedReasonCode": "ORIGIN_PROOF_INPUT_BINDING_MISMATCH",
+      "expectedExitCode": 1
+    }
+  ]
+}

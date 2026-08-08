@@ -1,0 +1,14 @@
+{
+  "consumer": "N3 successor/final convergence",
+  "crediblePositiveRule": "ALL_MANDATORY_PASS_AND_LOWER_BOUND_GT_ZERO",
+  "economicsUnit": "USD_PER_1K",
+  "mandatoryGateIds": [
+    "data-integrity"
+  ],
+  "metric": "NET_ECONOMIC_RETURN",
+  "optionalGateIds": [
+    "reporting-only"
+  ],
+  "policyId": "dq10-policy-v1",
+  "schema": "DQ10ResultPolicyV1"
+}

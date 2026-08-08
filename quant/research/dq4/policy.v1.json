@@ -1,0 +1,118 @@
+{
+  "schema": "cosmos.dq4.origin-proof-policy.v1",
+  "manifestSchema": "cosmos.dq4.origin-proof.v1",
+  "receiptSchema": "cosmos.dq4.origin-proof-receipt.v1",
+  "exitCodes": {
+    "valid": 0,
+    "rejected": 1,
+    "invocationOrEnvironmentError": 2
+  },
+  "reasonCodes": [
+    "ORIGIN_PROOF_VALID",
+    "ORIGIN_PROOF_INVOCATION_INVALID",
+    "ORIGIN_PROOF_ENVIRONMENT_ERROR",
+    "ORIGIN_PROOF_MANIFEST_JSON_INVALID",
+    "ORIGIN_PROOF_SCHEMA_UNSUPPORTED",
+    "ORIGIN_PROOF_FIELD_ROSTER_INVALID",
+    "ORIGIN_PROOF_ABSOLUTE_WORKTREE_DEPENDENCY",
+    "ORIGIN_PROOF_PATH_INVALID",
+    "ORIGIN_PROOF_SYMLINK_FORBIDDEN",
+    "ORIGIN_PROOF_OBJECT_FORMAT_MISMATCH",
+    "ORIGIN_PROOF_OBJECT_ID_INVALID",
+    "ORIGIN_PROOF_BASE_OBJECT_MISSING",
+    "ORIGIN_PROOF_BASE_OBJECT_NOT_COMMIT",
+    "ORIGIN_PROOF_PRE_RUN_OBJECT_MISSING",
+    "ORIGIN_PROOF_PRE_RUN_OBJECT_NOT_COMMIT",
+    "ORIGIN_PROOF_SEALED_OBJECT_MISSING",
+    "ORIGIN_PROOF_SEALED_OBJECT_NOT_COMMIT",
+    "ORIGIN_PROOF_PRE_RUN_TREE_MISMATCH",
+    "ORIGIN_PROOF_SEALED_TREE_MISMATCH",
+    "ORIGIN_PROOF_REPLACEMENT_OBJECT_PRESENT",
+    "ORIGIN_PROOF_SHALLOW_REPOSITORY",
+    "ORIGIN_PROOF_PRE_RUN_REF_UNBOUND",
+    "ORIGIN_PROOF_PRE_RUN_REF_MISSING",
+    "ORIGIN_PROOF_PRE_RUN_REF_MOVED",
+    "ORIGIN_PROOF_ORIGIN_REF_UNBOUND",
+    "ORIGIN_PROOF_ORIGIN_REF_MISSING",
+    "ORIGIN_PROOF_ORIGIN_REF_MOVED",
+    "ORIGIN_PROOF_BASE_NOT_ANCESTOR",
+    "ORIGIN_PROOF_PRE_RUN_OBJECT_AMENDED",
+    "ORIGIN_PROOF_PRE_RUN_NOT_ANCESTOR",
+    "ORIGIN_PROOF_INPUT_ROSTER_MISMATCH",
+    "ORIGIN_PROOF_INPUT_BINDING_MISMATCH"
+  ],
+  "rejectionPrecedence": [
+    {
+      "phase": "manifestRead",
+      "codes": [
+        "ORIGIN_PROOF_SYMLINK_FORBIDDEN",
+        "ORIGIN_PROOF_MANIFEST_JSON_INVALID"
+      ]
+    },
+    {
+      "phase": "manifestContract",
+      "codes": [
+        "ORIGIN_PROOF_ABSOLUTE_WORKTREE_DEPENDENCY",
+        "ORIGIN_PROOF_SCHEMA_UNSUPPORTED",
+        "ORIGIN_PROOF_ORIGIN_REF_UNBOUND",
+        "ORIGIN_PROOF_PRE_RUN_REF_UNBOUND",
+        "ORIGIN_PROOF_FIELD_ROSTER_INVALID",
+        "ORIGIN_PROOF_PATH_INVALID",
+        "ORIGIN_PROOF_OBJECT_FORMAT_MISMATCH",
+        "ORIGIN_PROOF_OBJECT_ID_INVALID"
+      ]
+    },
+    {
+      "phase": "repository",
+      "codes": [
+        "ORIGIN_PROOF_ABSOLUTE_WORKTREE_DEPENDENCY",
+        "ORIGIN_PROOF_OBJECT_FORMAT_MISMATCH",
+        "ORIGIN_PROOF_SHALLOW_REPOSITORY"
+      ]
+    },
+    {
+      "phase": "objects",
+      "codes": [
+        "ORIGIN_PROOF_BASE_OBJECT_MISSING",
+        "ORIGIN_PROOF_BASE_OBJECT_NOT_COMMIT",
+        "ORIGIN_PROOF_PRE_RUN_OBJECT_MISSING",
+        "ORIGIN_PROOF_PRE_RUN_OBJECT_NOT_COMMIT",
+        "ORIGIN_PROOF_SEALED_OBJECT_MISSING",
+        "ORIGIN_PROOF_SEALED_OBJECT_NOT_COMMIT",
+        "ORIGIN_PROOF_PRE_RUN_TREE_MISMATCH",
+        "ORIGIN_PROOF_SEALED_TREE_MISMATCH",
+        "ORIGIN_PROOF_REPLACEMENT_OBJECT_PRESENT"
+      ]
+    },
+    {
+      "phase": "refs",
+      "codes": [
+        "ORIGIN_PROOF_PRE_RUN_REF_UNBOUND",
+        "ORIGIN_PROOF_PRE_RUN_REF_MISSING",
+        "ORIGIN_PROOF_PRE_RUN_REF_MOVED",
+        "ORIGIN_PROOF_ORIGIN_REF_UNBOUND",
+        "ORIGIN_PROOF_ORIGIN_REF_MISSING",
+        "ORIGIN_PROOF_ORIGIN_REF_MOVED"
+      ]
+    },
+    {
+      "phase": "ancestry",
+      "codes": [
+        "ORIGIN_PROOF_BASE_NOT_ANCESTOR",
+        "ORIGIN_PROOF_PRE_RUN_OBJECT_AMENDED",
+        "ORIGIN_PROOF_PRE_RUN_NOT_ANCESTOR"
+      ]
+    },
+    {
+      "phase": "packetFiles",
+      "codes": [
+        "ORIGIN_PROOF_SYMLINK_FORBIDDEN",
+        "ORIGIN_PROOF_INPUT_ROSTER_MISMATCH",
+        "ORIGIN_PROOF_INPUT_BINDING_MISMATCH"
+      ]
+    }
+  ],
+  "networkPolicy": "forbidden",
+  "pathPolicy": "proof values are repository-relative POSIX paths; runtime CLI paths are not proof data",
+  "authority": "research-intake evidence only; no trading or money authority"
+}

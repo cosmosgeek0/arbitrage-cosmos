@@ -12,8 +12,10 @@ import { countdown, fmtBasis, fmtFunding, fmtMoney, fmtPct, fmtPrice, timeAgo } 
 import {
   BASIS_MAX_FUTURE_SKEW_MS,
   BASIS_RUNTIME_FRESH_MS,
+  basisProposalObservationCurrent,
   basisRuntimeSnapshotCurrent,
   decodeBasisRuntimeSnapshot,
+  type BasisRow,
   type BasisSnapshot,
 } from '../lib/basisRuntime';
 import { apiErrorMessage, fetchJson } from '../lib/http';
@@ -54,6 +56,7 @@ export type OpportunitySourceTruthLabel =
 
 export interface PublishedOpportunityFact {
   readonly source: OpportunitySource;
+  readonly observationCurrent: boolean;
   readonly proposalId: string;
   readonly symbol: string;
   readonly base: string;
@@ -213,49 +216,35 @@ export function projectCanonicalOpportunityTruth(
 }
 
 function basisFact(
-  row: Record<string, unknown>,
+  row: BasisRow,
   updatedAt: number,
+  minDataQuality: number,
 ): PublishedOpportunityFact | null {
-  const proposal = record(row.proposal);
-  const costs = record(row.costs);
-  const borrow = record(row.borrow);
+  const proposal = row.proposal;
   if (
     proposal === null
-    || costs === null
-    || borrow === null
-    || !nonEmptyString(row.symbol)
-    || !nonEmptyString(row.base)
-    || (row.direction !== 'long_spot_short_perp' && row.direction !== 'short_spot_long_perp')
     || row.decisionKind !== 'proposal'
-    || !nonEmptyString(row.reason)
-    || !finiteRequired(row.spotBid)
-    || !finiteRequired(row.spotAsk)
-    || !finiteRequired(row.perpBid)
-    || !finiteRequired(row.perpAsk)
-    || !finiteRequired(row.executableGapPct)
-    || !finiteRequired(row.fundingRate)
-    || !finiteRequired(row.quoteVolume24h)
-    || !finiteRequired(row.decisionTs)
-    || !finiteRequired(row.netEdgePct)
-    || !finiteRequired(costs.feesPct)
-    || !finiteRequired(costs.slippagePct)
-    || !finiteRequired(costs.fundingDragPct)
-    || !finiteRequired(costs.borrowCostPct)
-    || !finiteRequired(costs.totalPct)
-    || !nonEmptyString(borrow.status)
-    || !nonEmptyString(borrow.human)
-    || !nonEmptyString(proposal.id)
-    || !nonEmptyString(proposal.status)
-    || String(proposal.status).toUpperCase() !== 'OPEN'
-    || !finiteRequired(proposal.netEdgePct)
-    || proposal.netEdgePct !== row.netEdgePct
-    || !finiteRequired(proposal.confidence)
-    || !nonEmptyString(proposal.invalidation)
+    || (proposal.status !== 'open' && proposal.status !== 'updated')
   ) return null;
 
   const longSpot = row.direction === 'long_spot_short_perp';
+  const observationCurrent = basisProposalObservationCurrent(row, minDataQuality)
+    && [
+      row.spotBid,
+      row.spotAsk,
+      row.perpBid,
+      row.perpAsk,
+      row.executableGapPct,
+      row.fundingRate,
+      row.quoteVolume24h,
+      row.decisionTs,
+      row.netEdgePct,
+      proposal.netEdgePct,
+      proposal.confidence,
+    ].every(finiteRequired);
   return Object.freeze({
     source: 'BASIS',
+    observationCurrent,
     proposalId: proposal.id,
     symbol: row.symbol,
     base: row.base,
@@ -263,18 +252,18 @@ function basisFact(
     direction: longSpot ? 'Buy Spot · Sell Perp' : 'Sell Spot · Buy Perp',
     reason: row.reason,
     invalidation: proposal.invalidation,
-    reportedNetEdgePct: proposal.netEdgePct,
-    grossEdgePct: row.executableGapPct,
-    feesPct: costs.feesPct,
-    slippagePct: costs.slippagePct,
-    fundingDragPct: costs.fundingDragPct,
-    borrowCostPct: costs.borrowCostPct,
-    totalCostPct: costs.totalPct,
-    fundingRate: row.fundingRate,
-    quoteVolume24h: row.quoteVolume24h,
-    spotPrice: longSpot ? row.spotAsk : row.spotBid,
-    perpPrice: longSpot ? row.perpBid : row.perpAsk,
-    confidence: proposal.confidence,
+    reportedNetEdgePct: observationCurrent ? proposal.netEdgePct : null,
+    grossEdgePct: observationCurrent ? row.executableGapPct : null,
+    feesPct: observationCurrent ? row.costs.feesPct : null,
+    slippagePct: observationCurrent ? row.costs.slippagePct : null,
+    fundingDragPct: observationCurrent ? row.costs.fundingDragPct : null,
+    borrowCostPct: observationCurrent ? row.costs.borrowCostPct : null,
+    totalCostPct: observationCurrent ? row.costs.totalPct : null,
+    fundingRate: observationCurrent ? row.fundingRate : null,
+    quoteVolume24h: observationCurrent ? row.quoteVolume24h : null,
+    spotPrice: observationCurrent ? longSpot ? row.spotAsk : row.spotBid : null,
+    perpPrice: observationCurrent ? longSpot ? row.perpBid : row.perpAsk : null,
+    confidence: observationCurrent ? proposal.confidence : null,
     observedAtMs: row.decisionTs ?? updatedAt,
     volume1sMultiple: null,
     volume5sMultiple: null,
@@ -320,6 +309,7 @@ function volumeFact(
 
   return Object.freeze({
     source: 'VOLUME',
+    observationCurrent: true,
     proposalId: proposal.id,
     symbol: row.symbol,
     base: row.base,
@@ -356,10 +346,9 @@ export function decodeBasisOpportunityRead(value: unknown): OpportunitySourceRea
 
     const facts: PublishedOpportunityFact[] = [];
     for (const candidate of source.rows) {
-      const row = record(candidate as unknown);
-      if (row === null) return null;
+      const row = candidate;
       if (row.state !== 'PROPOSED') continue;
-      const fact = basisFact(row, source.updatedAt);
+      const fact = basisFact(row, source.updatedAt, source.thresholds.minDataQuality);
       if (fact === null) return null;
       facts.push(fact);
     }
@@ -495,6 +484,12 @@ export function projectOpportunitySourceTruth(
   const runtime = opportunityReadCurrent(read, nowMs);
   if (!runtime.current) {
     return Object.freeze({ label: 'STALE LAST-KNOWN', detail: runtime.reason ?? read.evidence });
+  }
+  if (read.facts.some((fact) => !fact.observationCurrent)) {
+    return Object.freeze({
+      label: 'DEGRADED',
+      detail: 'BASIS_PROPOSAL_ROW_EVIDENCE_NOT_CURRENT',
+    });
   }
   return Object.freeze({ label: 'CURRENT', detail: read.evidence });
 }

@@ -149,7 +149,8 @@ for (const relative of [
   'server/dist/index.js', 'server/dist/ledger.js', 'web/dist/index.html', 'server/package.json', 'package.json',
   'package-lock.json', 'node_modules', 'ops/live/RECEIPT.md', 'ops/live/bin/deploy.sh',
   'ops/live/bin/rollback.sh', 'ops/i00/donor-contract.json', 'ops/i00/l15-amendment-contract.json',
-  'ops/i00/l15-amendment.mjs', 'ops/i00/lib.mjs', 'ops/i00/bin/install-ops-bundle.sh',
+  'ops/i00/l15-amendment.mjs', 'ops/i00/lib.mjs', 'ops/i00/ops-helper-root.mjs',
+  'ops/i00/bin/install-ops-bundle.sh',
   'ops/i00/bin/verify-donor.mjs', 'ops/i00/bin/verify-donor-root.mjs',
 ]) {
   if (!existsSync(resolve(root, relative))) fail(`release payload missing ${relative}`);

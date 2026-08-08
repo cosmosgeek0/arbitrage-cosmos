@@ -8,5 +8,5 @@ ExecStart=
 # dropping the env prefix arms DATA_DIR_LOGICAL_LEASE_ROOT_REQUIRED at boot.
 # Never move this key into cosmos-i00.env: EnvironmentFile overriding
 # Environment is the exact hazard test-systemd-units.sh:46 exists to prevent.
-ExecStart=/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node /usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs
+ExecStart=/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node REPLACE_ME_OPS_HELPER_ROOT/bin/app-entrypoint.mjs
 EnvironmentFile=/etc/cosmos/cosmos-i00.env

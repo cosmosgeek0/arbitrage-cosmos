@@ -55,13 +55,13 @@ if (unit === 'cosmos-app.service') {
       config.env,
       'DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases',
       config.node,
-      '/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs',
+      config.opsHelperAppEntrypoint,
     ]),
     ExecStartEx: execRecord(config.env, [
       config.env,
       'DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases',
       config.node,
-      '/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs',
+      config.opsHelperAppEntrypoint,
     ], true),
   });
   if (config.mode === 'app-missing-requires') values.Requires = '';
@@ -77,7 +77,7 @@ if (unit === 'cosmos-app.service') {
 } else if (unit === 'cosmos-secrets-provider.service') {
   const providerArgv = [
     '/usr/bin/node',
-    '/usr/local/lib/cosmos-ops/i00/bin/secret-materialization.mjs',
+    config.opsHelperSecretMaterialization,
     '--authorization',
     '/etc/cosmos/external-authorization.json',
     '--deployment-risk',
@@ -157,7 +157,7 @@ if (unit === 'cosmos-app.service') {
   }
   if (config.mode === 'provider-manager-exec-drift') {
     const drifted = [...providerArgv];
-    drifted[1] = '/usr/local/lib/cosmos-ops/i00/bin/secrets-provider.mjs';
+    drifted[1] = `${config.opsHelperRoot}/bin/secrets-provider.mjs`;
     values.ExecStart = execRecord('/usr/bin/node', drifted);
     values.ExecStartEx = execRecord('/usr/bin/node', drifted, true);
   }

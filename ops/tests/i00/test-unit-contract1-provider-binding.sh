@@ -11,6 +11,7 @@ AUTHORIZATION_FIXTURE="$TEST_DIR/fixtures/make-deployment-authorization-fixture.
 CONTRACT="$I00_ROOT/deployment-authorization-contract.mjs"
 FAKE_MANAGER="$TEST_DIR/fixtures/unit-contract1-systemctl.mjs"
 ROOT="$TEST_TMP/ip-ops-i00-sim-unit-contract1"
+OPS_HELPER_TESTED_SHA='0123456789abcdef0123456789abcdef01234567'
 NODE_BIN="$(node -e 'const fs=require("fs");process.stdout.write(fs.realpathSync(process.execPath))')"
 ENV_BIN="$(node -e 'const fs=require("fs");process.stdout.write(fs.realpathSync("/usr/bin/env"))')"
 SYSTEMCTL="$ROOT/bin/systemctl"
@@ -36,6 +37,40 @@ APP_RUNTIME_TEMPLATE="$REPO_ROOT/ops/templates/i00/systemd/cosmos-app-runtime.co
 APP_LOGGING_TEMPLATE="$REPO_ROOT/ops/templates/logging/systemd/95-cosmos-app-logging.conf.template"
 UNSET_ENVIRONMENT='NODE_OPTIONS NODE_PATH NODE_REPL_EXTERNAL_MODULE NODE_EXTRA_CA_CERTS NODE_V8_COVERAGE NODE_ICU_DATA NODE_DEBUG NODE_DEBUG_NATIVE NODE_REDIRECT_WARNINGS NODE_COMPILE_CACHE NODE_DISABLE_COMPILE_CACHE NODE_PRESERVE_SYMLINKS NODE_PRESERVE_SYMLINKS_MAIN LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT LD_PROFILE LD_ORIGIN_PATH DYLD_INSERT_LIBRARIES DYLD_LIBRARY_PATH DYLD_FRAMEWORK_PATH OPENSSL_CONF OPENSSL_MODULES SSL_CERT_FILE SSL_CERT_DIR NODE_TLS_REJECT_UNAUTHORIZED NODE_USE_ENV_PROXY NODE_USE_SYSTEM_CA HTTP_PROXY HTTPS_PROXY NO_PROXY ALL_PROXY http_proxy https_proxy no_proxy all_proxy'
 
+OPS_HELPER_TREE_SHA256="$(node --input-type=module - "$I00_ROOT/lib.mjs" "$I00_ROOT" <<'NODE'
+import { pathToFileURL } from 'node:url';
+const [libraryPath, root] = process.argv.slice(2);
+const { typedTreeDigest } = await import(pathToFileURL(libraryPath).href);
+process.stdout.write(typedTreeDigest(root, {
+  excludeTopLevel: ['accepted-ops-live', 'install-receipt.json'],
+}));
+NODE
+)"
+OPS_HELPER_ROOT="$(node --input-type=module - "$I00_ROOT/ops-helper-root.mjs" \
+  "$OPS_HELPER_TREE_SHA256" "$OPS_HELPER_TESTED_SHA" <<'NODE'
+import assert from 'node:assert/strict';
+import { pathToFileURL } from 'node:url';
+const [modulePath, digest, testedSha] = process.argv.slice(2);
+const { deriveOpsHelperBinding } = await import(pathToFileURL(modulePath).href);
+assert.throws(
+  () => deriveOpsHelperBinding({
+    testedSha: '0'.repeat(40),
+    i00EnforcementTreeDigestSha256: digest,
+    rootMode: 'SYSTEM',
+  }),
+  /requires one resolved full lowercase tested SHA/u,
+  'all-zero tested SHA must be rejected by the canonical ops helper binding',
+);
+process.stdout.write(deriveOpsHelperBinding({
+  testedSha,
+  i00EnforcementTreeDigestSha256: digest,
+  rootMode: 'SYSTEM',
+}).root);
+NODE
+)"
+OPS_HELPER_APP_ENTRYPOINT="$OPS_HELPER_ROOT/bin/app-entrypoint.mjs"
+OPS_HELPER_SECRET_MATERIALIZATION="$OPS_HELPER_ROOT/bin/secret-materialization.mjs"
+
 node --input-type=module - "$I00_ROOT/simulation-safety.mjs" "$ROOT" <<'NODE'
 import { pathToFileURL } from 'node:url';
 const [modulePath, root] = process.argv.slice(2);
@@ -54,6 +89,7 @@ mkdir -p \
   "$DROP_IN_ROOT" \
   "$ROOT/effects" \
   "$ROOT/receipts" \
+  "$ROOT/usr/local/lib/cosmos-ops" \
   "$ROOT/var/lib/cosmos-deployment-authorization"
 chmod 700 \
   "$ROOT/bin" \
@@ -76,24 +112,27 @@ chmod 700 \
   "$ROOT/var/lib/cosmos-deployment-authorization"
 
 cp "$REPO_ROOT/ops/live/systemd/cosmos-app.service" "$APP_SOURCE"
+cp -R "$I00_ROOT" "$ROOT$OPS_HELPER_ROOT"
 cp "$APP_SOURCE" "$APP_FRAGMENT"
 cp "$APP_PROVIDER_TEMPLATE" "$PROVIDER_DROP_IN"
 cp "$APP_RUNTIME_TEMPLATE" "$RUNTIME_DROP_IN"
-node --input-type=module - "$RUNTIME_DROP_IN" "$ENV_BIN" "$NODE_BIN" "$I00_ENV" <<'NODE'
+node --input-type=module - "$RUNTIME_DROP_IN" "$ENV_BIN" "$NODE_BIN" "$I00_ENV" \
+  "$OPS_HELPER_ROOT" <<'NODE'
 import { readFileSync, writeFileSync } from 'node:fs';
-const [path, env, node, i00Env] = process.argv.slice(2);
+const [path, env, node, i00Env, opsHelperRoot] = process.argv.slice(2);
 writeFileSync(
   path,
   readFileSync(path, 'utf8')
     .replace('/usr/bin/env', env)
     .replace('/usr/bin/node', node)
+    .replace('REPLACE_ME_OPS_HELPER_ROOT', opsHelperRoot)
     .replace('/etc/cosmos/cosmos-i00.env', i00Env),
 );
 NODE
 cp "$APP_LOGGING_TEMPLATE" "$LOGGING_DROP_IN"
 printf '%s\n' '[Service]' 'Environment=UNIT_CONTRACT1_EXTRA=1' >"$EXTRA_DROP_IN"
 printf '%s\n' 'HOST=127.0.0.1' 'PORT=8080' >"$RUNTIME_ENV"
-printf '%s\n' 'I00_DEPLOYED_SHA=0000000000000000000000000000000000000000' >"$I00_ENV"
+printf '%s\n' "I00_DEPLOYED_SHA=$OPS_HELPER_TESTED_SHA" >"$I00_ENV"
 
 cp "$NODE_BIN" "$ROOT/commands/node"
 cp "$TEST_DIR/fixtures/fake-aws.sh" "$ROOT/commands/aws"
@@ -189,10 +228,11 @@ done < <(node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(proc
   "${AUTHORIZATION_ARGS[@]}" >/dev/null
 
 node --input-type=module - \
-  "$PROVIDER_TEMPLATE" "$PROVIDER_FRAGMENT" "$ROOT" <<'NODE'
+  "$PROVIDER_TEMPLATE" "$PROVIDER_FRAGMENT" "$ROOT" "$OPS_HELPER_ROOT" <<'NODE'
 import { readFileSync, writeFileSync } from 'node:fs';
-const [source, output, root] = process.argv.slice(2);
+const [source, output, root, opsHelperRoot] = process.argv.slice(2);
 const replacements = new Map([
+  ['REPLACE_ME_OPS_HELPER_ROOT', opsHelperRoot],
   ['REPLACE_ME_DEPLOYMENT_RISK_DOCUMENT', 'SECRET_MATERIALIZATION.risk'],
   ['REPLACE_ME_ACTION_PREVIEW_DOCUMENT', 'SECRET_MATERIALIZATION.preview'],
   ['/REPLACE_ME_EXACT_AUTHORIZATION_CONSUMPTION_PARENT', `${root}/consumption`],
@@ -201,6 +241,7 @@ const replacements = new Map([
 ]);
 let text = readFileSync(source, 'utf8');
 for (const [placeholder, value] of replacements) {
+  if (typeof value !== 'string') throw new Error(`missing value for ${placeholder}`);
   if (text.split(placeholder).length !== 2) throw new Error(`bad placeholder ${placeholder}`);
   text = text.replace(placeholder, value);
 }
@@ -221,12 +262,14 @@ node --input-type=module - \
   "$CONFIG" "$APP_FRAGMENT" "$RUNTIME_DROP_IN" "$PROVIDER_DROP_IN" "$LOGGING_DROP_IN" \
   "$EXTRA_DROP_IN" \
   "$PROVIDER_FRAGMENT" "$RUNTIME_ENV" "$I00_ENV" "$NODE_BIN" "$ENV_BIN" \
-  "$UNSET_ENVIRONMENT" <<'NODE'
+  "$UNSET_ENVIRONMENT" "$OPS_HELPER_ROOT" "$OPS_HELPER_APP_ENTRYPOINT" \
+  "$OPS_HELPER_SECRET_MATERIALIZATION" <<'NODE'
 import { writeFileSync } from 'node:fs';
 const [
   output, appFragment, runtimeDropIn, providerDropIn, loggingDropIn, extraDropIn,
   providerFragment,
-  runtimeEnv, i00Env, node, env, unsetEnvironment,
+  runtimeEnv, i00Env, node, env, unsetEnvironment, opsHelperRoot,
+  opsHelperAppEntrypoint, opsHelperSecretMaterialization,
 ] = process.argv.slice(2);
 writeFileSync(output, `${JSON.stringify({
   mode: 'normal',
@@ -241,6 +284,9 @@ writeFileSync(output, `${JSON.stringify({
   node,
   env,
   unsetEnvironment,
+  opsHelperRoot,
+  opsHelperAppEntrypoint,
+  opsHelperSecretMaterialization,
   deploymentRisk:
     '/var/lib/cosmos-deployment-authorization/SECRET_MATERIALIZATION.risk.json',
   actionPreview:
@@ -283,6 +329,9 @@ inspect() {
     --expected-fragment-path "$APP_FRAGMENT" \
     --expected-fragment-source "$APP_SOURCE" \
     --test-provider-bound-root "$ROOT" \
+    --ops-helper-root "$OPS_HELPER_ROOT" \
+    --ops-helper-tree-sha256 "$OPS_HELPER_TREE_SHA256" \
+    --ops-helper-app-entrypoint "$OPS_HELPER_APP_ENTRYPOINT" \
     "$@"
 }
 
@@ -535,9 +584,12 @@ BASELINE_BINDING="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).bi
 assert_success inspect --expected-binding-sha256 "$BASELINE_BINDING"
 
 note "UNIT-CONTRACT1: action preview app endpoints must come from independent inspection"
-node --input-type=module - "$BASELINE" "$PENDING_PREVIEW" <<'NODE'
+node --input-type=module - "$BASELINE" "$PENDING_PREVIEW" \
+  "$OPS_HELPER_ROOT" "$OPS_HELPER_TREE_SHA256" "$OPS_HELPER_APP_ENTRYPOINT" \
+  "$OPS_HELPER_TESTED_SHA" <<'NODE'
 import { writeFileSync } from 'node:fs';
-const [raw, output] = process.argv.slice(2);
+const [raw, output, opsHelperRoot, opsHelperTreeSha256, opsHelperAppEntrypoint, testedSha]
+  = process.argv.slice(2);
 const value = JSON.parse(raw);
 const endpoints = [
   `app-unit-authority-closure-sha256:${value.authorityClosureSha256}`,
@@ -584,7 +636,10 @@ const endpoints = [
   `app-unit-provider-fragment-sha256:${value.providerFragmentSha256}`,
   `app-unit-provider-state:${value.providerState}`,
   `app-unit-provider-unit:${value.providerUnit}`,
-  'release-sha:0000000000000000000000000000000000000000',
+  `ops-helper-app-entrypoint-path:${opsHelperAppEntrypoint}`,
+  `ops-helper-root:${opsHelperRoot}`,
+  `ops-helper-tree-sha256:${opsHelperTreeSha256}`,
+  `release-sha:${testedSha}`,
 ].sort();
 writeFileSync(output, `${JSON.stringify({ action: { allowedEndpoints: endpoints } })}\n`);
 NODE
@@ -595,9 +650,13 @@ for prior in "$PROVIDER_RISK" "$PROVIDER_PREVIEW"; do
   assert_failure_contains 'reuses prior provider provenance' bash -c \
     'printf "%s\n" "$1" | node "$2" --deployment-risk "$3" --action-preview "$4" --test-provider-bound-root "$5"' \
     bash "$BASELINE" "$PREVIEW_VERIFIER" "$prior" "$PENDING_PREVIEW" "$ROOT"
+  prior_original="$prior.card3r-original"
+  cp "$prior" "$prior_original"
+  cp "$PENDING_PREVIEW" "$prior"
   assert_failure_contains 'reuses prior provider provenance' bash -c \
     'printf "%s\n" "$1" | node "$2" --deployment-risk "$3" --action-preview "$4" --test-provider-bound-root "$5"' \
     bash "$BASELINE" "$PREVIEW_VERIFIER" "$PENDING_RISK" "$prior" "$ROOT"
+  mv "$prior_original" "$prior"
 done
 node --input-type=module - "$PENDING_PREVIEW" <<'NODE'
 import { readFileSync, writeFileSync } from 'node:fs';

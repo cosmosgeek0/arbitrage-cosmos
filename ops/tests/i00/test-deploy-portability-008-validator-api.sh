@@ -5,7 +5,9 @@ set -euo pipefail
 VALIDATOR="$I00_ROOT/bin/validate-authorization.mjs"
 
 ASSERTIONS="$(
-node --input-type=module - "$VALIDATOR" "$TEST_TMP" <<'NODE'
+node --input-type=module - "$VALIDATOR" "$TEST_TMP" \
+  "$I00_ROOT/deployment-authorization-contract.mjs" <<'NODE'
+import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
   chmodSync,
@@ -19,8 +21,28 @@ import {
 } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
-const [validatorSource, testRoot] = process.argv.slice(2);
+const [validatorSource, testRoot, contractSource] = process.argv.slice(2);
+const { DEPLOYMENT_ENDPOINT_BUDGETS } = await import(
+  pathToFileURL(contractSource).href
+);
+const countedEndpointBudgets = Object.freeze({
+  OPS_BUNDLE_INSTALL: 47,
+  SERVICE_RELEASE_SWITCH: 138,
+  SERVICE_ROLLBACK: 131,
+  BACKUP_CREATE: 68,
+  ISOLATED_RESTORE: 79,
+});
+assert.deepEqual(
+  DEPLOYMENT_ENDPOINT_BUDGETS,
+  countedEndpointBudgets,
+  'validator API fixture endpoint budgets must equal real DEPLOYMENT_ENDPOINT_BUDGETS',
+);
+const fixtureEndpointBudgets = Object.freeze({
+  ...countedEndpointBudgets,
+  SECRET_MATERIALIZATION: 47,
+});
 const fixtureRoot = resolve(testRoot, 'validator-api');
 const fixtureBin = resolve(fixtureRoot, 'bin');
 mkdirSync(fixtureBin, { recursive: true, mode: 0o700 });
@@ -96,6 +118,11 @@ const canonicalValue = (value) => {
 const canonicalBytes = (value) => Buffer.from(\`\${JSON.stringify(canonicalValue(value))}\\n\`);
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 export const canonicalJson = (value) => JSON.stringify(canonicalValue(value));
+export function deploymentEndpointBudget(actionClass) {
+  const budgets = ${JSON.stringify(fixtureEndpointBudgets)};
+  if (!Number.isSafeInteger(budgets[actionClass])) throw new Error('class budget unavailable');
+  return budgets[actionClass];
+}
 const exactPath = (path, label) => {
   if (typeof path !== 'string' || !isAbsolute(path) || resolve(path) !== path) {
     throw new Error(\`\${label} path must be one raw canonical absolute path\`);
@@ -262,6 +289,8 @@ const writeDocument = (path, document) => {
 const utc = (milliseconds) => new Date(milliseconds).toISOString().replace(/\.\d{3}Z$/u, 'Z');
 
 function fixture(mode, name, {
+  actionClass = 'OPS_BUNDLE_INSTALL',
+  endpointCount = null,
   provenanceMode = {
     SYSTEM: 'SYSTEM_CLOCK_CRYPTOGRAPHIC_NONCE',
     STAGING: 'STAGING_SYSTEM_CLOCK_CRYPTOGRAPHIC_NONCE',
@@ -299,22 +328,31 @@ function fixture(mode, name, {
   };
   const result = resolve(receiptRoot, 'result.json');
   const reconciliation = resolve(receiptRoot, 'reconciliation.json');
+  const allowedEndpoints = [
+    'completion-reserve-seconds:300',
+    `effect-finish-evidence:${resolve(effectRoot, 'terminal.json')}`,
+    'effect-gid:0',
+    `effect-program-path:${nodePath}`,
+    `effect-script-path:${validator}`,
+    `effect-start-evidence:${resolve(effectRoot, 'start.json')}`,
+    'effect-uid:0',
+    `node-identity:${nodeIdentity}`,
+    `node-path:${nodePath}`,
+    `node-sha256:${nodeSha256}`,
+    'receipt-publication-reserve-seconds:60',
+  ];
+  if (endpointCount !== null) {
+    if (!Number.isSafeInteger(endpointCount) || endpointCount < allowedEndpoints.length) {
+      throw new Error('endpointCount must preserve the executable validator bindings');
+    }
+    for (let index = allowedEndpoints.length; index < endpointCount; index += 1) {
+      allowedEndpoints.push(`validator-budget-slot-${String(index + 1).padStart(3, '0')}:bound`);
+    }
+  }
   const action = {
     command: 'validator-api-proof',
     scope: 'validator-api-proof-scope',
-    allowedEndpoints: [
-      'completion-reserve-seconds:300',
-      `effect-finish-evidence:${resolve(effectRoot, 'terminal.json')}`,
-      'effect-gid:0',
-      `effect-program-path:${nodePath}`,
-      `effect-script-path:${validator}`,
-      `effect-start-evidence:${resolve(effectRoot, 'start.json')}`,
-      'effect-uid:0',
-      `node-identity:${nodeIdentity}`,
-      `node-path:${nodePath}`,
-      `node-sha256:${nodeSha256}`,
-      'receipt-publication-reserve-seconds:60',
-    ].sort(),
+    allowedEndpoints: allowedEndpoints.sort(),
     allowedProducts: ['Validator API proof'],
     allowedCredentials: {
       types: ['ROOT_LOCAL_OPERATOR_SESSION'],
@@ -337,7 +375,7 @@ function fixture(mode, name, {
   };
   const binding = {
     authorizationId: `validator-api-${name}`,
-    actionClass: 'OPS_BUNDLE_INSTALL',
+    actionClass,
     operator: 'validator-api-operator',
     approver: 'validator-api-owner',
     approvalReference: `validator-api-${name}`,
@@ -536,6 +574,20 @@ for (const mode of ['SYSTEM', 'STAGING', 'TEST']) {
     && output.receiptPublicationReserveSeconds === 60,
   `${mode} reserve output`);
 }
+
+const releaseSwitchBudget = fixture('TEST', 'release-switch-budget', {
+  actionClass: 'SERVICE_RELEASE_SWITCH',
+  endpointCount: 138,
+});
+expect(releaseSwitchBudget.action.allowedEndpoints.length === 138,
+  'release-switch fixture must carry the exact 138 endpoint budget');
+expectPass(
+  run(releaseSwitchBudget, {
+    simulationClock: true,
+    now: releaseSwitchBudget.nowUtc,
+  }),
+  'real validator accepts the exact release-switch endpoint budget',
+);
 
 const reuse = fixture('TEST', 'single-use');
 expectPass(run(reuse, { simulationClock: true, now: reuse.nowUtc }), 'single-use first');

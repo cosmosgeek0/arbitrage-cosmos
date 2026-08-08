@@ -680,6 +680,7 @@ const required = [
   'ops/i00/l15-amendment-contract.json',
   'ops/i00/l15-amendment.mjs',
   'ops/i00/lib.mjs',
+  'ops/i00/ops-helper-root.mjs',
   'ops/i00/bin/install-ops-bundle.sh',
   'ops/i00/bin/publish-install-tree.mjs',
   'ops/i00/bin/verify-donor.mjs',

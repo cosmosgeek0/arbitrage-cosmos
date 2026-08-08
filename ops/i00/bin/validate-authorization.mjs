@@ -10,6 +10,7 @@ import {
   buildAuthorizationConsumption,
   canonicalJson,
   consumeAuthorization,
+  deploymentEndpointBudget,
   inspectPrivateDirectoryEvidence,
   privateDirectoryIdentityEndpoint,
   readCanonicalDeploymentDocument,
@@ -249,7 +250,11 @@ function exactText(value, label, { forbidBroad = false } = {}) {
 
 function exactList(value, label, options = {}) {
   if (!Array.isArray(value) || value.length === 0) fail(`${label} must be a non-empty array`);
-  if (value.length > 128) fail(`${label} exceeds the bounded authorization size`);
+  const maximum = options.maximum ?? 128;
+  if (!Number.isSafeInteger(maximum) || maximum <= 0) {
+    fail(`${label} has an invalid authorization size bound`);
+  }
+  if (value.length > maximum) fail(`${label} exceeds the bounded authorization size ${maximum}`);
   const normalized = value.map((item, index) => exactText(item, `${label}[${index}]`, options));
   if (new Set(normalized).size !== normalized.length) fail(`${label} contains duplicate values`);
   return normalized;
@@ -265,8 +270,11 @@ function bindExactSingleton(name, actual, label) {
   if (actual.length !== 1 || actual[0] !== expected) fail(`${label} is not the complete exact --${name} set`);
 }
 
-function bindExactSet(expected, actual, label) {
-  const expectedSet = exactList(expected, `independent ${label} expectations`, { forbidBroad: true });
+function bindExactSet(expected, actual, label, options = {}) {
+  const expectedSet = exactList(expected, `independent ${label} expectations`, {
+    forbidBroad: true,
+    ...options,
+  });
   if (expectedSet.length !== actual.length
       || [...expectedSet].sort().some((value, index) => value !== [...actual].sort()[index])) {
     fail(`${label} does not equal the complete independent expectation set`);
@@ -419,6 +427,7 @@ const operator = exactText(authorization.operator, 'operator', { forbidBroad: tr
 const actionClasses = exactList(authorization.actionClasses, 'actionClasses', { forbidBroad: true });
 if (actionClasses.length !== 1) fail('authorization must grant exactly one separate action class');
 if (actionClasses[0] !== args.class) fail(`authorization does not grant exact action class ${args.class}`);
+const allowedEndpointBudget = deploymentEndpointBudget(actionClasses[0]);
 
 const scope = exactText(authorization.scope, 'scope', { forbidBroad: true });
 const deployedSha = exactText(authorization.deployedSha, 'deployedSha', { forbidBroad: true });
@@ -454,7 +463,10 @@ if (Date.parse(initialEvaluationTime) >= expiresAt) {
 }
 
 const allowedCommands = exactList(authorization.allowedCommands, 'allowedCommands', { forbidBroad: true });
-const allowedEndpoints = exactList(authorization.allowedEndpoints, 'allowedEndpoints', { forbidBroad: true });
+const allowedEndpoints = exactList(authorization.allowedEndpoints, 'allowedEndpoints', {
+  forbidBroad: true,
+  maximum: allowedEndpointBudget,
+});
 const allowedProducts = exactList(authorization.allowedProducts, 'allowedProducts', { forbidBroad: true });
 if (allowedCommands.length !== 1 || allowedCommands[0] !== args.command) {
   fail(`authorization does not grant only exact command ${args.command}`);
@@ -548,7 +560,9 @@ bindExact('expected-deployed-sha', deployedSha, 'deployed SHA');
 bindExact('expected-config-version', configVersion, 'configuration version');
 bindExact('expected-scope', scope, 'authorization scope');
 bindExact('expected-account', account, 'authorization account');
-bindExactSet(expectedEndpoints, allowedEndpoints, 'allowedEndpoints');
+bindExactSet(expectedEndpoints, allowedEndpoints, 'allowedEndpoints', {
+  maximum: allowedEndpointBudget,
+});
 bindExactSingleton('expected-product', allowedProducts, 'allowedProducts');
 bindExactSingleton('expected-credential-type', credentialTypes, 'allowedCredentials.types');
 bindExactSet(expectedPermissions, credentialPermissions, 'allowedCredentials.permissions');

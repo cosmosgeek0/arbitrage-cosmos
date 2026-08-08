@@ -85,6 +85,9 @@ const { typedTreeDigest } = await import(pathToFileURL(
 const { validateSimulationRoot } = await import(pathToFileURL(
   resolve(dirname(contractPath), 'simulation-safety.mjs'),
 ).href);
+const { deriveOpsHelperBinding } = await import(pathToFileURL(
+  resolve(dirname(contractPath), 'ops-helper-root.mjs'),
+).href);
 
 validateSimulationRoot(root);
 const rootStat = lstatSync(root);
@@ -393,6 +396,15 @@ if (!releaseStat.isDirectory() || releaseStat.isSymbolicLink()
     || realpathSync(release) !== release) process.exit(2);
 const releaseIdentity = endpointIdentity(releaseStat);
 const releaseTreeSha256 = typedTreeDigest(release);
+const releaseDocument = JSON.parse(readFileSync(resolve(release, 'release.json'), 'utf8'));
+if (releaseDocument.testedSha !== testedSha) process.exit(2);
+const opsHelperBinding = deriveOpsHelperBinding({
+  testedSha,
+  i00EnforcementTreeDigestSha256:
+    releaseDocument.l15OpsProvenance.i00EnforcementTreeDigestSha256,
+  rootMode: 'TEST',
+  proofRoot: root,
+});
 const donorRoot = directoryBinding(paths.donor);
 const donorTreeSha256 = typedTreeDigest(paths.donor);
 const startEvidencePath = resolve(root, 'effects', `${fixtureId}.start.json`);
@@ -487,6 +499,9 @@ const endpoints = [
   'ops-readback-url:http://127.0.0.1:8080/api/system-integration/ops/readback',
   `l15-amendment-contract-sha256:${l15Contract.sha256}`,
   ...executableEndpoints('node', nodeBinding),
+  `ops-helper-app-entrypoint-path:${opsHelperBinding.appEntrypoint}`,
+  `ops-helper-root:${opsHelperBinding.root}`,
+  `ops-helper-tree-sha256:${opsHelperBinding.i00EnforcementTreeDigestSha256}`,
   `ops-state-dir-identity:${opsStateDir.identity}`,
   `ops-state-dir-path:${opsStateDir.path}`,
   `previous-link-parent-identity:${previousLinkParent.identity}`,

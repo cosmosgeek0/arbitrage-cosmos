@@ -29,6 +29,7 @@ import {
   snapshotTrustedFile,
   typedTreeDigest,
 } from '../lib/release-package.mjs';
+import { validateOpsHelperBinding } from '../../i00/ops-helper-root.mjs';
 
 function fail(message) {
   process.stderr.write(`i00-release-package-preflight: ${message}\n`);
@@ -176,14 +177,19 @@ try {
     'schemaVersion', 'rollbackFloor', 'rollbackBarrier', 'testedReceiptSha256',
     'browserReceiptSha256', 'performanceReceiptSha256', 'attestationSha256',
     'signatureSha256', 'publicKeySha256', 'i00EnforcementTreeDigestSha256',
-    'validatorCohortMode', 'releaseTreeDigestSha256',
+    'opsHelperBinding', 'validatorCohortMode', 'releaseTreeDigestSha256',
   ], 'I00 release descriptor');
   const i00 = manifest.i00Release;
+  const opsHelperBinding = validateOpsHelperBinding(i00.opsHelperBinding);
   if (i00.releaseId !== manifest.packageRoot
       || i00.testedSha !== manifest.inputSha
       || i00.activationState !== 'NOT_DEPLOYED'
       || i00.runtimeDependencies !== 'BUNDLED_PREBUILT'
       || i00.validatorCohortMode !== 'EXACT_TRUSTED_COHORT'
+      || opsHelperBinding.rootMode !== 'SYSTEM'
+      || opsHelperBinding.testedSha !== i00.testedSha
+      || opsHelperBinding.i00EnforcementTreeDigestSha256
+        !== i00.i00EnforcementTreeDigestSha256
       || !Number.isSafeInteger(i00.schemaVersion)
       || !Number.isSafeInteger(i00.rollbackFloor)
       || typeof i00.rollbackBarrier !== 'boolean'
@@ -317,6 +323,10 @@ try {
     if (releaseInspection.releaseJsonSha256 !== i00.releaseJsonSha256
         || releaseInspection.artifactManifestSha256 !== i00.artifactManifestSha256
         || validation.artifactManifestSha256 !== i00.artifactManifestSha256
+        || releaseInspection.release.testedSha !== opsHelperBinding.testedSha
+        || releaseInspection.release.l15OpsProvenance
+          .i00EnforcementTreeDigestSha256
+          !== opsHelperBinding.i00EnforcementTreeDigestSha256
         || typedTreeDigest(releaseInspection.entries) !== i00.releaseTreeDigestSha256
         || sha256File(resolve(extracted.extractedReleaseRoot, unit.unitPath)) !== unit.sha256) {
       throw new Error('privately reconstructed I00 release differs from its package binding');

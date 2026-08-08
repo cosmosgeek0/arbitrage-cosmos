@@ -19,7 +19,10 @@ import {
   validateDeploymentActionPreview,
   validateDeploymentRiskVersion,
 } from '../deployment-authorization-contract.mjs';
-import { fail, parseArgs, requireExactKeys } from '../lib.mjs';
+import {
+  fail, parseArgs, requireExactKeys, typedTreeDigest,
+} from '../lib.mjs';
+import { SYSTEM_OPS_HELPER_PARENT } from '../ops-helper-root.mjs';
 import { validateSimulationRoot } from '../simulation-safety.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -160,7 +163,6 @@ const PROVIDER_SHOW_PROPERTIES = Object.freeze([
 ]);
 const EXPECTED_LEASE = 'DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases';
 const EXPECTED_OFFLINE_ENTRYPOINT = 'server/dist/index.js';
-const EXPECTED_SYSTEM_ENTRYPOINT = '/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs';
 const EXPECTED_USER = 'cosmos';
 const EXPECTED_GROUP = 'cosmos';
 const EXPECTED_WORKING_DIRECTORY = '/opt/cosmos/current';
@@ -266,7 +268,7 @@ function runtimeDropInBytes() {
     '# dropping the env prefix arms DATA_DIR_LOGICAL_LEASE_ROOT_REQUIRED at boot.',
     '# Never move this key into cosmos-i00.env: EnvironmentFile overriding',
     '# Environment is the exact hazard test-systemd-units.sh:46 exists to prevent.',
-    `ExecStart=${args.env} ${EXPECTED_LEASE} ${args.node} ${EXPECTED_SYSTEM_ENTRYPOINT}`,
+    `ExecStart=${args.env} ${EXPECTED_LEASE} ${args.node} ${opsHelperAppEntrypoint}`,
     `EnvironmentFile=${boundSystemPath(PRODUCTION_I00_ENV)}`,
     '',
   ].join('\n'));
@@ -279,6 +281,7 @@ const allowedArguments = new Set([
   'expected-fragment-path', 'expected-fragment-source', 'staging-root',
   'proof-drop-in', 'proof-drop-in-runtime-link', 'proof-absent-sentinel',
   'expected-binding-sha256', 'test-provider-bound-root',
+  'ops-helper-root', 'ops-helper-tree-sha256', 'ops-helper-app-entrypoint',
 ]);
 for (const name of Object.keys(args)) {
   if (!allowedArguments.has(name)) fail(`unsupported argument --${name}`);
@@ -292,6 +295,53 @@ for (const name of [
 if (args['expected-binding-sha256'] !== undefined
     && !DIGEST.test(args['expected-binding-sha256'])) {
   fail('--expected-binding-sha256 must be lowercase SHA-256');
+}
+const helperArgumentNames = [
+  'ops-helper-root', 'ops-helper-tree-sha256', 'ops-helper-app-entrypoint',
+];
+const helperArgumentCount = helperArgumentNames
+  .filter((name) => args[name] !== undefined).length;
+if (helperArgumentCount !== 0 && helperArgumentCount !== helperArgumentNames.length) {
+  fail('ops helper binding arguments must be complete or absent');
+}
+if ((args['provenance-mode'] === 'SYSTEM'
+      || args['test-provider-bound-root'] !== undefined)
+    && helperArgumentCount !== helperArgumentNames.length) {
+  fail('provider-bound inspection requires the exact ops helper binding');
+}
+if (helperArgumentCount === 0) {
+  const isolatedRoot = exactLexicalAbsolute(
+    args['staging-root'],
+    '--staging-root',
+  );
+  args['ops-helper-tree-sha256'] = '0'.repeat(64);
+  args['ops-helper-root'] = resolve(
+    isolatedRoot,
+    'install',
+    `i00-${'0'.repeat(40)}-${args['ops-helper-tree-sha256']}`,
+  );
+  args['ops-helper-app-entrypoint'] = resolve(
+    args['ops-helper-root'],
+    'bin/app-entrypoint.mjs',
+  );
+}
+if (!DIGEST.test(args['ops-helper-tree-sha256'])) {
+  fail('--ops-helper-tree-sha256 must be lowercase SHA-256');
+}
+const opsHelperRoot = exactLexicalAbsolute(
+  args['ops-helper-root'],
+  '--ops-helper-root',
+);
+const opsHelperAppEntrypoint = exactLexicalAbsolute(
+  args['ops-helper-app-entrypoint'],
+  '--ops-helper-app-entrypoint',
+);
+const opsHelperSecretMaterialization = resolve(
+  opsHelperRoot,
+  'bin/secret-materialization.mjs',
+);
+if (opsHelperAppEntrypoint !== resolve(opsHelperRoot, 'bin/app-entrypoint.mjs')) {
+  fail('ops helper app entrypoint escaped the exact helper root');
 }
 if (!/^[A-Za-z0-9][A-Za-z0-9_.@-]{0,254}\.service$/u.test(args.unit)
     || args.unit !== args.unit.trim()) {
@@ -505,6 +555,15 @@ if (args['test-provider-bound-root'] !== undefined) {
   fail('production app-unit inspection forbids staging proof inputs');
 } else {
   providerBoundMode = true;
+}
+
+if (providerBoundMode) {
+  if (dirname(opsHelperRoot) !== SYSTEM_OPS_HELPER_PARENT) {
+    fail('provider-bound ops helper root must use the canonical production parent');
+  }
+} else if (stagingRoot === null
+    || dirname(opsHelperRoot) !== resolve(stagingRoot, 'install')) {
+  fail('isolated ops helper root must use the proof-root install parent');
 }
 
 function boundSystemPath(path) {
@@ -873,7 +932,7 @@ function parseShowOutput(stdout) {
     args.env,
     EXPECTED_LEASE,
     args.node,
-    providerBoundMode ? EXPECTED_SYSTEM_ENTRYPOINT : EXPECTED_OFFLINE_ENTRYPOINT,
+    providerBoundMode ? opsHelperAppEntrypoint : EXPECTED_OFFLINE_ENTRYPOINT,
   ];
   if (expectedArgv.some((entry) => /[\s;{}]/u.test(entry))) {
     fail('app unit expected ExecStart tokens are not unambiguous');
@@ -1604,7 +1663,7 @@ function validateProviderFragment(fragment) {
   const argv = service.ExecStart[0].split(' ');
   if (argv.length !== 10
       || argv[0] !== '/usr/bin/node'
-      || argv[1] !== '/usr/local/lib/cosmos-ops/i00/bin/secret-materialization.mjs'
+      || argv[1] !== opsHelperSecretMaterialization
       || argv[2] !== '--authorization'
       || argv[3] !== '/etc/cosmos/external-authorization.json'
       || argv[4] !== '--deployment-risk'
@@ -1954,6 +2013,30 @@ if (strictProofOwnership) {
 }
 const nodeBefore = inspectExecutable(args.node, '--node');
 const envBefore = inspectExecutable(args.env, '--env');
+const physicalOpsHelperRoot = providerBoundMode
+  ? boundSystemPath(opsHelperRoot)
+  : null;
+const opsHelperTreeBefore = providerBoundMode
+  ? typedTreeDigest(physicalOpsHelperRoot, {
+    excludeTopLevel: ['accepted-ops-live', 'install-receipt.json'],
+  })
+  : null;
+if (opsHelperTreeBefore !== null
+    && opsHelperTreeBefore !== args['ops-helper-tree-sha256']) {
+  fail('loaded ops helper root differs from the release-bound tree digest');
+}
+const opsHelperAppBefore = providerBoundMode
+  ? inspectExecutable(
+    boundSystemPath(opsHelperAppEntrypoint),
+    'ops helper app entrypoint',
+  )
+  : null;
+const opsHelperSecretBefore = providerBoundMode
+  ? inspectExecutable(
+    boundSystemPath(opsHelperSecretMaterialization),
+    'ops helper secret materialization entrypoint',
+  )
+  : null;
 const fragmentSourceBefore = inspectBoundFile(
   args['expected-fragment-source'],
   'accepted donor app unit fragment source',
@@ -2142,9 +2225,29 @@ if (strictProofOwnership) {
 }
 const nodeAfter = inspectExecutable(args.node, '--node');
 const envAfter = inspectExecutable(args.env, '--env');
+const opsHelperTreeAfter = providerBoundMode
+  ? typedTreeDigest(physicalOpsHelperRoot, {
+    excludeTopLevel: ['accepted-ops-live', 'install-receipt.json'],
+  })
+  : null;
+const opsHelperAppAfter = providerBoundMode
+  ? inspectExecutable(
+    boundSystemPath(opsHelperAppEntrypoint),
+    'ops helper app entrypoint',
+  )
+  : null;
+const opsHelperSecretAfter = providerBoundMode
+  ? inspectExecutable(
+    boundSystemPath(opsHelperSecretMaterialization),
+    'ops helper secret materialization entrypoint',
+  )
+  : null;
 if (canonicalJson(systemctlAfter) !== canonicalJson(systemctlBefore)
     || canonicalJson(nodeAfter) !== canonicalJson(nodeBefore)
-    || canonicalJson(envAfter) !== canonicalJson(envBefore)) {
+    || canonicalJson(envAfter) !== canonicalJson(envBefore)
+    || opsHelperTreeAfter !== opsHelperTreeBefore
+    || canonicalJson(opsHelperAppAfter) !== canonicalJson(opsHelperAppBefore)
+    || canonicalJson(opsHelperSecretAfter) !== canonicalJson(opsHelperSecretBefore)) {
   fail('app unit executable binding changed during inspection');
 }
 

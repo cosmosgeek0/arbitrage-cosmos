@@ -307,6 +307,16 @@ preview_endpoint() {
   ' "$1" "$2"
 }
 
+ops_helper_field() {
+  local proof_root="$1" release_root="$2" root_mode="$3" field="$4" binding
+  binding="$(node "$I00_ROOT/ops-helper-root.mjs" \
+    --release-json "$release_root/release.json" \
+    --root-mode "$root_mode" --proof-root "$proof_root")" || return 1
+  node -e \
+    'const value=JSON.parse(process.argv[1]);process.stdout.write(String(value[process.argv[2]]))' \
+    "$binding" "$field"
+}
+
 set_validator_args() {
   local root action_class validation_mode auth risk preview claims
   root="$1"
@@ -361,6 +371,7 @@ set_actual_validator_args() {
   local root action_class request auth risk preview claims
   local command scope product credential_type permission maximum_effect expected_sha config_version
   local release_root trust_key manifest_sha trust_sha donor_env_sha first_host_evidence_sha
+  local ops_helper_root ops_helper_tree ops_helper_app
   local endpoint_inventory endpoint
   local -a expected_endpoints donor_endpoints
   root="$1"
@@ -378,6 +389,10 @@ set_actual_validator_args() {
   manifest_sha="$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$release_root/artifact-manifest.json")"
   trust_sha="$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$trust_key")"
   first_host_evidence_sha="$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$FIRST_HOST_DIR/collected-evidence.json")"
+  ops_helper_root="$(ops_helper_field "$root" "$DF32_RELEASE" STAGING root)"
+  ops_helper_tree="$(ops_helper_field \
+    "$root" "$DF32_RELEASE" STAGING i00EnforcementTreeDigestSha256)"
+  ops_helper_app="$(ops_helper_field "$root" "$DF32_RELEASE" STAGING appEntrypoint)"
   donor_endpoints=(
     "donor-contract-sha256:$DONOR_CONTRACT_SHA256"
     "effective-donor-identity:$EFFECTIVE_DONOR_IDENTITY"
@@ -404,7 +419,7 @@ set_actual_validator_args() {
         "cp-identity:$CP_IDENTITY"
         "cp-path:$CP_BIN"
         "cp-sha256:$CP_SHA256"
-        "destination:$root/install/i00"
+        "destination:$ops_helper_root"
         "mkdir-identity:$MKDIR_IDENTITY"
         "mkdir-path:$MKDIR_BIN"
         "mkdir-sha256:$MKDIR_SHA256"
@@ -414,6 +429,8 @@ set_actual_validator_args() {
         "node-identity:$NODE_IDENTITY"
         "node-path:$NODE_BIN"
         "node-sha256:$NODE_SHA256"
+        "ops-helper-root:$ops_helper_root"
+        "ops-helper-tree-sha256:$ops_helper_tree"
         "release-sha:$expected_sha"
         "rm-identity:$RM_IDENTITY"
         "rm-path:$RM_BIN"
@@ -472,6 +489,9 @@ set_actual_validator_args() {
         "node-identity:$NODE_IDENTITY"
         "node-path:$NODE_BIN"
         "node-sha256:$NODE_SHA256"
+        "ops-helper-app-entrypoint-path:$ops_helper_app"
+        "ops-helper-root:$ops_helper_root"
+        "ops-helper-tree-sha256:$ops_helper_tree"
         "recovery-target:NO_PRIOR_RELEASE_FIRST_HOST"
         "release-path:$release_root"
         "release-sha:$expected_sha"
@@ -936,6 +956,7 @@ const expected = {
     effect-script-identity effect-script-path effect-script-sha256
     effect-start-evidence effect-uid mkdir-identity mkdir-path mkdir-sha256
     mv-identity mv-path mv-sha256 node-identity node-path node-sha256
+    ops-helper-root ops-helper-tree-sha256
     receipt-publication-reserve-seconds release-identity release-path
     release-sha release-tree-sha256 rm-identity rm-path rm-sha256
     trusted-builder-public-key-sha256
@@ -974,6 +995,7 @@ const expected = {
     exposure-helper-path exposure-helper-sha256 exposure-helper-timeout-ms
     gate-timeout-sec http-timeout-sec l15-amendment-contract-sha256
     lock-timeout-sec node-identity node-path node-sha256
+    ops-helper-app-entrypoint-path ops-helper-root ops-helper-tree-sha256
     ops-readback-timeout-ms ops-readback-url ops-state-dir-identity
     ops-state-dir-path previous-link-parent-identity previous-link-parent-path
     receipt-publication-reserve-seconds release-identity release-path
@@ -1104,7 +1126,8 @@ produce_class() {
       risk_args+=(--release "$FIXTURE_TARGET_RELEASE" \
         --trusted-build-public-key "$FIXTURE_TRUST_KEY" \
         --host-readback "$root/host.json" --host-evidence "$root/host-evidence.json" \
-        --destination "$root/install/i00")
+        --destination "$(ops_helper_field \
+          "$root" "$FIXTURE_TARGET_RELEASE" TEST root)")
       ;;
     SERVICE_RELEASE_SWITCH)
       write_fixture_app_drop_in "$root" "$root/runtime.env"
@@ -1870,6 +1893,8 @@ assert_failure_contains 'missing or unsafe' node "$PREVIEW_PRODUCER" \
 rm "$PROOF_ROOT/hardlinked-risk.json"
 
 note "producer outputs are immutable and malformed or raw authority inputs fail closed"
+FIXTURE_OPS_HELPER_ROOT="$(ops_helper_field \
+  "$PROOF_ROOT" "$FIXTURE_TARGET_RELEASE" TEST root)"
 OPS_RISK_INPUTS=(
   --class OPS_BUNDLE_INSTALL
   --simulation-clock --now 2026-07-23T00:00:00Z
@@ -1881,7 +1906,7 @@ OPS_RISK_INPUTS=(
   --trusted-build-public-key "$FIXTURE_TRUST_KEY"
   --host-readback "$PROOF_ROOT/host.json"
   --host-evidence "$PROOF_ROOT/host-evidence.json"
-  --destination "$PROOF_ROOT/install/i00"
+  --destination "$FIXTURE_OPS_HELPER_ROOT"
 )
 node - "$PROOF_ROOT/host.json" "$PROOF_ROOT" <<'NODE'
 const fs = require('node:fs');
@@ -1937,7 +1962,7 @@ assert_failure_contains 'must not be group/world writable' node "$RISK_PRODUCER"
   --trusted-build-public-key "$FIXTURE_TRUST_KEY" \
   --host-readback "$PROOF_ROOT/host.json" \
   --host-evidence "$PROOF_ROOT/group-writable-host-evidence.json" \
-  --destination "$PROOF_ROOT/install/i00" \
+  --destination "$FIXTURE_OPS_HELPER_ROOT" \
   --output "$PROOF_ROOT/authorization/group-writable-evidence-risk.json"
 assert_failure node "$RISK_PRODUCER" \
   --request "$PROOF_ROOT/authorization/OPS_BUNDLE_INSTALL.request.json" \
@@ -2183,7 +2208,10 @@ const value = JSON.parse(readFileSync(process.argv[3], 'utf8'));
 value.authorizationId = 'forged-consumption-identity';
 writeFileSync(process.argv[3], canonicalJsonBytes(value), { mode: 0o600 });
 NODE
-materialize_fixture_installed_ops "$HOSTILE_OUTCOME_ROOT/install/i00"
+HOSTILE_OPS_HELPER_ROOT="$(preview_endpoint \
+  "$HOSTILE_OUTCOME_ROOT/authorization/OPS_BUNDLE_INSTALL.preview.json" \
+  ops-helper-root)"
+materialize_fixture_installed_ops "$HOSTILE_OPS_HELPER_ROOT"
 HOSTILE_EFFECT_START="$(preview_endpoint \
   "$HOSTILE_OUTCOME_ROOT/authorization/OPS_BUNDLE_INSTALL.preview.json" \
   effect-start-evidence)"
@@ -2200,8 +2228,8 @@ assert_failure_contains \
   --authorization-consumption "$HOSTILE_CONSUMPTION" \
   --result-receipt "$HOSTILE_OUTCOME_ROOT/receipts/OPS_BUNDLE_INSTALL.result.json" \
   --reconciliation-receipt "$HOSTILE_OUTCOME_ROOT/receipts/OPS_BUNDLE_INSTALL.reconciliation.json" \
-  --primary-path "$HOSTILE_OUTCOME_ROOT/install/i00" \
-  --evidence-file "$HOSTILE_OUTCOME_ROOT/install/i00/install-receipt.json" \
+  --primary-path "$HOSTILE_OPS_HELPER_ROOT" \
+  --evidence-file "$HOSTILE_OPS_HELPER_ROOT/install-receipt.json" \
   --effect-start-evidence "$HOSTILE_EFFECT_START" \
   --effect-finish-evidence "$HOSTILE_EFFECT_FINISH" \
   --simulation-clock --now 2026-07-23T00:16:00Z
@@ -2501,6 +2529,8 @@ NODE
   STAGING_FIRST_HOST_EVIDENCE_ROOT="$PROOF_ROOT/first-host-evidence"
   STAGING_FIRST_HOST_OFFLINE_ROOT="$PROOF_ROOT/first-host-offline-systemd"
   STAGING_INSTALL_ROOT="$PROOF_ROOT/install"
+  STAGING_OPS_HELPER_ROOT="$(ops_helper_field \
+    "$PROOF_ROOT" "$DF32_RELEASE" STAGING root)"
   mkdir -p "$STAGING_BACKUP_ROOT/exact" "$STAGING_DATA_ROOT" "$STAGING_RUNTIME_ROOT" \
     "$STAGING_EVIDENCE_DATA_ROOT" "$STAGING_MODEL_ROOT" "$STAGING_OPS_STATE_ROOT" \
     "$STAGING_COSMOS_ROOT/releases" "$STAGING_SANITIZED_ROOT" \
@@ -2878,7 +2908,7 @@ NODE
           --trusted-build-public-key "$DF32_TRUST_KEY"
           --host-readback "$FIRST_HOST_DIR/host.json"
           --host-evidence "$FIRST_HOST_DIR/collected-evidence.json"
-          --destination "$STAGING_INSTALL_ROOT/i00"
+          --destination "$STAGING_OPS_HELPER_ROOT"
         )
         ;;
       SERVICE_RELEASE_SWITCH)
@@ -3046,7 +3076,7 @@ NODE
   assert_failure_contains 'running Bash differs from the risk-bound Bash endpoint' \
     "$ALTERNATE_CALLER_BASH" -p "$I00_ROOT/bin/install-ops-bundle.sh" \
     --release "$DF32_RELEASE" \
-    --destination "$STAGING_INSTALL_ROOT/i00" \
+    --destination "$STAGING_OPS_HELPER_ROOT" \
     --authorization "$PROOF_ROOT/authorization/OPS_BUNDLE_INSTALL.authorization.json" \
     --operator "$(json_value "$PROOF_ROOT/authorization/OPS_BUNDLE_INSTALL.authorization.json" operator)" \
     --config-version "$(json_value "$PROOF_ROOT/authorization/OPS_BUNDLE_INSTALL.authorization.json" configVersion)" \

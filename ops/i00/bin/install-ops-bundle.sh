@@ -46,7 +46,7 @@ import { createHash } from 'node:crypto';
 import {
   closeSync, constants, fstatSync, lstatSync, openSync, readFileSync, readdirSync, statSync,
 } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 const [kind, root, excludedText, capabilityText] = process.argv.slice(2);
 const excluded = new Set(excludedText === '' ? [] : excludedText.split(','));
@@ -307,13 +307,14 @@ NODE
   expected_i00_digest="$(tree_digest typed "$release_cap/ops/i00" \
     "accepted-ops-live,install-receipt.json" 0)" \
     || blocked "release I00 enforcement tree validation failed"
-  release_snapshot="$(/proc/self/fd/16 - \
+  release_snapshot="$(/proc/self/fd/16 --input-type=module - \
     "$release_cap" "$release_requested" "$release_tree_before" \
-    "$expected_i00_digest" <<'NODE'
-const { createHash } = require('node:crypto');
-const { readFileSync } = require('node:fs');
-const { resolve } = require('node:path');
-const [root, requested, treeSha256, i00Digest] = process.argv.slice(2);
+    "$expected_i00_digest" "$destination" <<'NODE'
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+const [root, requested, treeSha256, i00Digest, destination] = process.argv.slice(2);
 const fail = () => process.exit(1);
 const risk = JSON.parse(readFileSync('/proc/self/fd/6', 'utf8'));
 const endpoint = (prefix) => {
@@ -327,13 +328,27 @@ const endpoint = (prefix) => {
 const releaseBytes = readFileSync(resolve(root, 'release.json'));
 const manifestBytes = readFileSync(resolve(root, 'artifact-manifest.json'));
 const release = JSON.parse(releaseBytes);
+const { deriveOpsHelperBinding } = await import(pathToFileURL(
+  resolve(root, 'ops/i00/ops-helper-root.mjs'),
+).href);
+const expectedHelperBinding = deriveOpsHelperBinding({
+  testedSha: release.testedSha,
+  i00EnforcementTreeDigestSha256: i00Digest,
+  rootMode: 'SYSTEM',
+});
 if (endpoint('release-path') !== requested
     || endpoint('release-tree-sha256') !== treeSha256
     || endpoint('release-sha') !== release.testedSha
+    || endpoint('ops-helper-tree-sha256') !== i00Digest
+    || endpoint('ops-helper-root') !== expectedHelperBinding.root
+    || endpoint('destination') !== expectedHelperBinding.root
+    || destination !== expectedHelperBinding.root
+    || dirname(destination) !== expectedHelperBinding.parent
     || endpoint('artifact-manifest-sha256')
       !== createHash('sha256').update(manifestBytes).digest('hex')
     || !/^[0-9a-f]{40}$/.test(release.testedSha)
     || release.releaseId !== `i00-${release.testedSha}`
+    || release.l15OpsProvenance?.i00EnforcementTreeDigestSha256 !== i00Digest
     || !/^[0-9a-f]{64}$/.test(i00Digest)) fail();
 process.stdout.write(JSON.stringify({
   testedSha: release.testedSha,

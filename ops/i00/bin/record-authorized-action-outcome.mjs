@@ -1956,6 +1956,12 @@ function requireBoundAppUnit(action, env, systemctlPath, risk) {
     ),
     '--provenance-mode', risk.artifactPolicy.rootMode,
     '--expected-binding-sha256', bindingSha256,
+    '--ops-helper-root', endpoint(action, 'ops-helper-root'),
+    '--ops-helper-tree-sha256', endpoint(action, 'ops-helper-tree-sha256'),
+    '--ops-helper-app-entrypoint', endpoint(
+      action,
+      'ops-helper-app-entrypoint-path',
+    ),
   ];
   if (stagingRoot !== 'NONE') {
     inspectionArguments.push(
@@ -2167,7 +2173,7 @@ function requireBoundAppUnit(action, env, systemctlPath, risk) {
       === endpoint(action, 'app-unit-exec-start-node-path')
     && inspected.execStart?.argv?.[2] === nodePath
     && inspected.execStart?.argv?.[3] === (systemProviderBound
-      ? '/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs'
+      ? endpoint(action, 'ops-helper-app-entrypoint-path')
       : 'server/dist/index.js')
     && inspected.execStartSha256
       === endpoint(action, 'app-unit-exec-start-sha256')

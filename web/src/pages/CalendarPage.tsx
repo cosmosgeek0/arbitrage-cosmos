@@ -5,7 +5,7 @@ import { CALENDAR_COUNTRIES, calVal, categoryName, countryName, flag, type CalIt
 import { liveAge } from '../format';
 import { fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
-import { TIME_ZONE_OPTIONS, addDays, dayKey, formatKey, mondayFor } from '../lib/time';
+import { TIME_ZONE_OPTIONS, addDays, dayBounds, dayKey, formatKey, mondayFor } from '../lib/time';
 import { useStore } from '../store';
 import './LiveIntelligence.css';
 import './CalendarPage.css';
@@ -38,6 +38,17 @@ type CalendarFeedTruth =
 export type CalendarFeedPresentation = Readonly<{
   status: 'LOADING' | 'CURRENT' | 'STALE' | 'UNAVAILABLE';
   detail: string;
+}>;
+
+export type CalendarWeekBounds = Readonly<{
+  earliestWeekStart: string;
+  latestWeekStart: string;
+}>;
+
+export type CalendarRangeTruth = Readonly<{
+  requestedCovered: boolean;
+  weekStart: string;
+  selectedDay: string;
 }>;
 
 const INITIAL_CALENDAR_FEED: CalendarFeedTruth = Object.freeze({
@@ -168,6 +179,88 @@ export function calendarFeedPresentation(
   return Object.freeze({ status: 'CURRENT', detail: 'Current calendar snapshot.' });
 }
 
+/**
+ * The fetched server envelope runs from one week before its current UTC Monday
+ * through the UTC Monday three weeks after it. Operator-zone weeks whose local
+ * Monday-to-Monday instants cross either envelope edge are intentionally
+ * hidden because they are not complete seven-day calendar views.
+ */
+export function calendarSupportedWeekBounds(fetchedAtMs: number, zone?: string): CalendarWeekBounds {
+  const currentUtcWeekStart = mondayFor(dayKey(new Date(fetchedAtMs), 'UTC'));
+  const envelopeStartMs = Date.parse(`${addDays(currentUtcWeekStart, -7)}T00:00:00Z`);
+  const envelopeEndMs = Date.parse(`${addDays(currentUtcWeekStart, 21)}T00:00:00Z`);
+
+  const firstLocalWeek = mondayFor(dayKey(new Date(envelopeStartMs), zone));
+  const earliestWeekStart = dayBounds(firstLocalWeek, zone).since < envelopeStartMs
+    ? addDays(firstLocalWeek, 7)
+    : firstLocalWeek;
+
+  const lastLocalWeek = mondayFor(dayKey(new Date(envelopeEndMs - 1), zone));
+  const latestWeekStart = dayBounds(addDays(lastLocalWeek, 7), zone).since > envelopeEndMs
+    ? addDays(lastLocalWeek, -7)
+    : lastLocalWeek;
+
+  if (earliestWeekStart > latestWeekStart) {
+    throw new RangeError('Calendar server envelope has no complete operator-zone weeks.');
+  }
+  return Object.freeze({ earliestWeekStart, latestWeekStart });
+}
+
+export function calendarWeekNavigation(weekStart: string, bounds: CalendarWeekBounds) {
+  return Object.freeze({
+    previousDisabled: weekStart <= bounds.earliestWeekStart,
+    nextDisabled: weekStart >= bounds.latestWeekStart,
+  });
+}
+
+export function moveCalendarWeekWithinBounds(
+  weekStart: string,
+  delta: number,
+  bounds: CalendarWeekBounds,
+): string {
+  const requested = addDays(weekStart, delta * 7);
+  if (requested < bounds.earliestWeekStart) return bounds.earliestWeekStart;
+  if (requested > bounds.latestWeekStart) return bounds.latestWeekStart;
+  return requested;
+}
+
+export function calendarRangeTruth(
+  weekStart: string,
+  selectedDay: string,
+  bounds: CalendarWeekBounds,
+): CalendarRangeTruth {
+  const boundedWeekStart = moveCalendarWeekWithinBounds(weekStart, 0, bounds);
+  const requestedWeekCovered = boundedWeekStart === weekStart;
+  const selectedDayCovered = selectedDay >= boundedWeekStart && selectedDay < addDays(boundedWeekStart, 7);
+  const requestedCovered = requestedWeekCovered && selectedDayCovered;
+  return Object.freeze({
+    requestedCovered,
+    weekStart: boundedWeekStart,
+    selectedDay: requestedCovered ? selectedDay : boundedWeekStart,
+  });
+}
+
+export function calendarRangePresentation(
+  presentation: CalendarFeedPresentation,
+  rangeCovered: boolean,
+): CalendarFeedPresentation {
+  if (rangeCovered || presentation.status !== 'CURRENT') return presentation;
+  return Object.freeze({
+    status: 'UNAVAILABLE',
+    detail: 'Selected week is outside the fetched calendar envelope. Adjusting to a supported range.',
+  });
+}
+
+export function calendarEmptyState(
+  hasSnapshot: boolean,
+  visibleCount: number,
+  rangeCovered: boolean,
+): 'RANGE_UNAVAILABLE' | 'NO_EVENTS' | null {
+  if (!hasSnapshot) return null;
+  if (!rangeCovered) return 'RANGE_UNAVAILABLE';
+  return visibleCount === 0 ? 'NO_EVENTS' : null;
+}
+
 function eventFingerprint(item: CalItem): string {
   return `${item.actual ?? ''}|${item.forecast ?? ''}|${item.previous ?? ''}|${item.date}`;
 }
@@ -267,7 +360,21 @@ export function CalendarPage() {
     };
   }, [prefs.dataCadence?.calendar]);
 
-  const weekKeys = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)), [weekStart]);
+  const envelopeUtcDay = dayKey(new Date(feed.fetchedAt ?? clock), 'UTC');
+  const supportedWeeks = useMemo(
+    () => calendarSupportedWeekBounds(Date.parse(`${envelopeUtcDay}T12:00:00Z`), zone),
+    [envelopeUtcDay, zone],
+  );
+  const rangeTruth = useMemo(
+    () => calendarRangeTruth(weekStart, selectedDay, supportedWeeks),
+    [selectedDay, supportedWeeks, weekStart],
+  );
+  const rangeCovered = feed.fetchedAt === null || rangeTruth.requestedCovered;
+  const weekNavigation = calendarWeekNavigation(rangeTruth.weekStart, supportedWeeks);
+  const weekKeys = useMemo(
+    () => Array.from({ length: 7 }, (_, index) => addDays(rangeTruth.weekStart, index)),
+    [rangeTruth.weekStart],
+  );
   const items = feed.items;
   const allItems = items ?? [];
   const itemsByDay = useMemo(() => {
@@ -282,26 +389,34 @@ export function CalendarPage() {
   }, [allItems, zone]);
 
   const visible = useMemo(() => {
+    if (!rangeCovered) return [];
     const text = query.trim().toLowerCase();
-    return (itemsByDay.get(selectedDay) ?? []).filter((item) => {
+    return (itemsByDay.get(rangeTruth.selectedDay) ?? []).filter((item) => {
       const level = item.importance >= 1 ? 'high' : item.importance === 0 ? 'medium' : 'low';
       if (impact !== 'all' && level !== impact) return false;
       if (country !== 'all' && item.country !== country) return false;
       const haystack = `${item.title} ${item.indicator} ${item.period} ${item.country} ${countryName(item.country)} ${item.source ?? ''} ${item.currency ?? ''}`.toLowerCase();
       return !text || text.split(/\s+/).every((token) => haystack.includes(token));
     });
-  }, [country, impact, itemsByDay, query, selectedDay]);
+  }, [country, impact, itemsByDay, query, rangeCovered, rangeTruth.selectedDay]);
 
   const nextEventId = useMemo(() => allItems.find((item) => item.actual === null && Date.parse(item.date) >= clock)?.id ?? null, [allItems, clock]);
   const availableCountries = useMemo(() => {
     const present = new Set(allItems.map((item) => item.country));
     return CALENDAR_COUNTRIES.filter((code) => present.has(code));
   }, [allItems]);
-  const feedPresentation = calendarFeedPresentation(feed, clock);
-  const rangeLabel = `${formatKey(weekStart, { month: 'short', day: 'numeric' })} — ${formatKey(addDays(weekStart, 6), { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  useEffect(() => {
+    if (weekStart !== rangeTruth.weekStart) setWeekStart(rangeTruth.weekStart);
+    if (selectedDay !== rangeTruth.selectedDay) setSelectedDay(rangeTruth.selectedDay);
+  }, [rangeTruth.selectedDay, rangeTruth.weekStart, selectedDay, weekStart]);
+
+  const feedPresentation = calendarRangePresentation(calendarFeedPresentation(feed, clock), rangeCovered);
+  const emptyState = calendarEmptyState(items !== null, visible.length, rangeCovered);
+  const rangeLabel = `${formatKey(rangeTruth.weekStart, { month: 'short', day: 'numeric' })} — ${formatKey(addDays(rangeTruth.weekStart, 6), { month: 'short', day: 'numeric', year: 'numeric' })}`;
 
   const moveWeek = (delta: number) => {
-    const next = addDays(weekStart, delta * 7);
+    const next = moveCalendarWeekWithinBounds(rangeTruth.weekStart, delta, supportedWeeks);
+    if (next === rangeTruth.weekStart) return;
     setWeekStart(next);
     setSelectedDay(next);
   };
@@ -330,8 +445,8 @@ export function CalendarPage() {
       <section className="calx-navigation" aria-label="Calendar Navigation">
         <div className="calx-range-controls">
           <button type="button" className="calx-today" onClick={returnToday}>Today</button>
-          <button type="button" className="calx-arrow" onClick={() => moveWeek(-1)} aria-label="Previous Week">‹</button>
-          <button type="button" className="calx-arrow" onClick={() => moveWeek(1)} aria-label="Next Week">›</button>
+          <button type="button" className="calx-arrow" disabled={weekNavigation.previousDisabled} onClick={() => moveWeek(-1)} aria-label="Previous Week">‹</button>
+          <button type="button" className="calx-arrow" disabled={weekNavigation.nextDisabled} onClick={() => moveWeek(1)} aria-label="Next Week">›</button>
           <strong>{rangeLabel}</strong>
         </div>
         <PillSelect value={prefs.clockZone} options={TIME_ZONE_OPTIONS.map((option) => ({ ...option }))} onChange={(value) => updatePref('clockZone', value)} ariaLabel="Time Zone" className="lix-select lix-zone-select" />
@@ -341,7 +456,7 @@ export function CalendarPage() {
         {weekKeys.map((key) => {
           const rows = itemsByDay.get(key) ?? [];
           const high = rows.filter((item) => item.importance >= 1).length;
-          return <button type="button" key={key} className={`${key === selectedDay ? 'selected' : ''} ${key === initialToday ? 'today' : ''}`} onClick={() => setSelectedDay(key)}>
+          return <button type="button" key={key} className={`${key === rangeTruth.selectedDay ? 'selected' : ''} ${key === initialToday ? 'today' : ''}`} onClick={() => setSelectedDay(key)}>
             <span className="calx-day-name">{formatKey(key, { weekday: 'short' })} <b>{formatKey(key, { day: 'numeric' })}</b></span>
             <span><em>Economic</em><b>{rows.length}</b></span>
             <span><em>High Impact</em><b>{high}</b></span>
@@ -367,7 +482,7 @@ export function CalendarPage() {
           </div>
         )}
         <div className="calx-day-header">
-          <strong>{formatKey(selectedDay, { weekday: 'long', month: 'long', day: 'numeric' })}</strong>
+          <strong>{formatKey(rangeTruth.selectedDay, { weekday: 'long', month: 'long', day: 'numeric' })}</strong>
           <span className="calx-col-actual">Actual</span><span>Forecast</span><span>Prior</span>
         </div>
         <div className="calx-scroll">
@@ -390,7 +505,8 @@ export function CalendarPage() {
           })}
           {items === null && feedPresentation.status === 'LOADING' && <div className="lix-empty">Loading Economic Events…</div>}
           {items === null && feedPresentation.status === 'UNAVAILABLE' && <div className="lix-empty">The Calendar Feed Is Currently Unavailable.</div>}
-          {items !== null && visible.length === 0 && <div className="lix-empty">No Events Match These Filters.</div>}
+          {emptyState === 'RANGE_UNAVAILABLE' && <div className="lix-empty">Adjusting To The Fetched Calendar Range…</div>}
+          {emptyState === 'NO_EVENTS' && <div className="lix-empty">No Events Match These Filters.</div>}
         </div>
       </section>
       </div>

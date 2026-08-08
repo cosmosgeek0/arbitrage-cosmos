@@ -875,6 +875,11 @@ export function VolumeScanner() {
   const volumeUnassertedDetail = volumeTruth.state === 'STARTING'
     ? 'Runtime starting'
     : 'Canonical runtime unavailable';
+  const volumeViewNote = volumeTruth.current && snapshot
+    ? `${snapshot.status.openConnections}/${snapshot.status.streamConnections} trade streams · book ${snapshot.status.bookState}`
+    : volumeEngineRowsVisible && snapshot
+      ? `${volumeEngineFeedNote} · ${snapshot.status.openConnections}/${snapshot.status.streamConnections} trade streams`
+      : volumeTruth.reason ?? 'Runtime starting';
 
   return (
     <div className="container page volx-page">
@@ -1005,39 +1010,42 @@ export function VolumeScanner() {
               </button>
             ))}
           </div>
-          <span className="volx-view-note">
-            {volumeTruth.current && snapshot
-              ? snapshot.status.openConnections + '/' + snapshot.status.streamConnections + ' trade streams · book ' + snapshot.status.bookState
-              : volumeEngineRowsVisible && snapshot
-                ? volumeEngineFeedNote + ' · ' + snapshot.status.openConnections + '/' + snapshot.status.streamConnections + ' trade streams'
-                : volumeTruth.reason ?? 'Runtime starting'}
+          <span className="volx-view-note" title={volumeViewNote}>
+            {volumeViewNote}
           </span>
         </div>
 
-        <div className="volx-table" role="region" aria-label="Volume Scanner Decisions">
-          <div className="volx-head" aria-hidden="true">
-            <span>State</span>
-            <span>Asset</span>
-            <span>Price</span>
-            <span>Volume Vs Baseline</span>
-            <span>Trade Flow</span>
-            <span>Market Quality</span>
-            <span>Price Move</span>
-            <span>Decision</span>
-            <span aria-hidden="true" />
+        <div className="volx-table" role="table" aria-label="Volume Scanner Decisions" aria-colcount={8}>
+          <div className="volx-head" role="row">
+            <span role="columnheader">State</span>
+            <span role="columnheader">Asset</span>
+            <span role="columnheader">Price</span>
+            <span role="columnheader">Volume Vs Baseline</span>
+            <span role="columnheader">Trade Flow</span>
+            <span role="columnheader">Market Quality</span>
+            <span role="columnheader">Price Move</span>
+            <span role="columnheader">Decision</span>
           </div>
 
           {volumeTruth.state === 'UNAVAILABLE' && !volumeEngineRowsVisible ? (
-            <div className="volx-empty">
-              <Activity size={18} />
-              <strong>Volume Runtime Unavailable</strong>
-              <span>{volumeTruth.reason}</span>
+            <div className="volx-item" role="rowgroup">
+              <div className="volx-empty" role="row">
+                <div className="volx-empty-cell" role="cell" aria-colspan={8}>
+                  <Activity size={18} />
+                  <strong>Volume Runtime Unavailable</strong>
+                  <span>{volumeTruth.reason}</span>
+                </div>
+              </div>
             </div>
           ) : volumeTruth.state === 'STARTING' || !snapshot ? (
-            <div className="volx-empty">
-              <Radio size={18} />
-              <strong>Connecting To Volume Runtime</strong>
-              <span>Waiting for public Binance trade and book sources.</span>
+            <div className="volx-item" role="rowgroup">
+              <div className="volx-empty" role="row">
+                <div className="volx-empty-cell" role="cell" aria-colspan={8}>
+                  <Radio size={18} />
+                  <strong>Connecting To Volume Runtime</strong>
+                  <span>Waiting for public Binance trade and book sources.</span>
+                </div>
+              </div>
             </div>
           ) : filteredRows.length ? filteredRows.map((row) => {
             const one = row.windows['1s'];
@@ -1051,52 +1059,58 @@ export function VolumeScanner() {
               row.symbol,
             );
             return (
-              <div className="volx-item" key={row.symbol}>
-                <button
-                  type="button"
-                  className="volx-row"
-                  aria-expanded={isExpanded}
-                  aria-controls={detailId}
-                  onClick={() => setExpanded(isExpanded ? null : row.symbol)}
-                >
-                  <span className={'volx-state ' + stateTone(row)}>
+              <div className="volx-item" role="rowgroup" key={row.symbol}>
+                <div className="volx-row" role="row">
+                  <span className={'volx-state ' + stateTone(row)} role="cell">
                     <i aria-hidden="true" />
                     {stateLabel(row)}
                   </span>
-                  <span className="volx-asset">
+                  <span className="volx-asset" role="cell">
                     <TokenIcon symbol={row.symbol} size={28} />
                     <span><strong>{row.base}</strong><small>{row.symbol}</small></span>
                   </span>
-                  <span className="volx-number">
+                  <span className="volx-number" role="cell">
                     <strong>{fmtPrice(row.price)}</strong>
                     <small>{row.lastTradeTs ? timeAgo(row.lastTradeTs) : 'No recent trade'}</small>
                   </span>
-                  <span className="volx-window-stack">
+                  <span className="volx-window-stack" role="cell">
                     <span><em>1s</em><strong>{multiple(row.volumeMultiple['1s'])}</strong><small>{fmtMoney(one?.quoteVolume ?? null)}</small></span>
                     <span><em>5s</em><strong>{multiple(row.volumeMultiple['5s'])}</strong><small>{fmtMoney(five?.quoteVolume ?? null)}</small></span>
                     <span><em>1m</em><strong>{multiple(row.volumeMultiple['60s'])}</strong><small>{fmtMoney(minute?.quoteVolume ?? null)}</small></span>
                   </span>
-                  <span className="volx-tape">
+                  <span className="volx-tape" role="cell">
                     <strong>{windowCountLabel(five, 'tradeCount', ' Trades')}</strong>
                     <small>{ratioLabel(row.takerBuyRatio)} · {fmtMoney(five?.avgTradeSize ?? null)} Avg</small>
                   </span>
-                  <span className="volx-quality">
+                  <span className="volx-quality" role="cell">
                     <strong>{row.spreadBps === null ? '—' : row.spreadBps.toFixed(1) + ' bps'}</strong>
                     <small>{fmtMoney(row.topDepthUsd)} Top Depth</small>
                   </span>
-                  <span className="volx-move">
+                  <span className="volx-move" role="cell">
                     <strong>{fmtPct(five?.priceMovePct ?? null, 3)}</strong>
                     <small>{row.accelerationPctPerMin === null ? '—' : fmtPct(row.accelerationPctPerMin, 2) + '/min'}</small>
                   </span>
-                  <span className="volx-decision">
-                    <strong>{row.rejectCode ? titleCase(row.rejectCode) : titleCase(row.decisionKind)}</strong>
-                    <small>{row.reason}</small>
+                  <span className="volx-decision" role="cell">
+                    <button
+                      type="button"
+                      className="volx-row-toggle"
+                      aria-expanded={isExpanded}
+                      aria-controls={detailId}
+                      aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${row.symbol} decision details: ${row.rejectCode ? titleCase(row.rejectCode) : titleCase(row.decisionKind)}. ${row.reason}`}
+                      onClick={() => setExpanded(isExpanded ? null : row.symbol)}
+                    >
+                      <span>
+                        <strong>{row.rejectCode ? titleCase(row.rejectCode) : titleCase(row.decisionKind)}</strong>
+                        <small>{row.reason}</small>
+                      </span>
+                      <ChevronDown className={isExpanded ? 'expanded' : ''} size={15} aria-hidden="true" />
+                    </button>
                   </span>
-                  <ChevronDown className={isExpanded ? 'expanded' : ''} size={15} aria-hidden="true" />
-                </button>
+                </div>
 
                 {isExpanded ? (
-                  <div className="volx-detail" id={detailId}>
+                  <div className="volx-detail-row" role="row">
+                    <div className="volx-detail" id={detailId} role="cell" aria-colspan={8}>
                     <div className="volx-reason">
                       <span>Scanner Decision</span>
                       <p>{row.reason}</p>
@@ -1205,14 +1219,19 @@ export function VolumeScanner() {
                       )}
                     </section>
                   </div>
+                  </div>
                 ) : null}
               </div>
             );
           }) : (
-            <div className="volx-empty">
-              <Activity size={18} />
-              <strong>No Volume Rows Match</strong>
-              <span>Change the filter or search term. No rows are simulated.</span>
+            <div className="volx-item" role="rowgroup">
+              <div className="volx-empty" role="row">
+                <div className="volx-empty-cell" role="cell" aria-colspan={8}>
+                  <Activity size={18} />
+                  <strong>No Volume Rows Match</strong>
+                  <span>Change the filter or search term. No rows are simulated.</span>
+                </div>
+              </div>
             </div>
           )}
         </div>

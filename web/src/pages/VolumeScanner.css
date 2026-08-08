@@ -207,14 +207,16 @@
 
 .volx-filters {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   min-height: 53px;
   padding: 0 16px;
   border-bottom: 1px solid var(--line-2);
 }
 
-.volx-segments { display: flex; align-items: center; gap: 7px; }
+.volx-segments { display: flex; flex: 0 0 auto; align-items: center; gap: 7px; }
 
 .volx-segments button {
   display: inline-flex;
@@ -247,9 +249,15 @@
 .volx-segments button.selected span { color: color-mix(in srgb, var(--panel) 74%, transparent); }
 
 .volx-view-note {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   color: var(--muted-2);
   font-size: 10.5px;
   font-weight: 450;
+  text-align: right;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -264,7 +272,7 @@
 .volx-head,
 .volx-row {
   display: grid;
-  grid-template-columns: 78px minmax(145px, 1fr) minmax(116px, .75fr) minmax(245px, 1.55fr) minmax(185px, 1.1fr) minmax(165px, 1fr) minmax(128px, .75fr) minmax(300px, 1.9fr) 20px;
+  grid-template-columns: 78px minmax(145px, 1fr) minmax(116px, .75fr) minmax(245px, 1.55fr) minmax(185px, 1.1fr) minmax(165px, 1fr) minmax(128px, .75fr) minmax(320px, 1.9fr);
   min-width: 1450px;
   align-items: center;
 }
@@ -301,14 +309,31 @@
 }
 
 .volx-row:hover { background: color-mix(in srgb, var(--text) 2.3%, transparent); }
-.volx-row:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent); outline-offset: -2px; }
+.volx-row:focus-within { outline: 2px solid color-mix(in srgb, var(--accent) 58%, transparent); outline-offset: -2px; }
 
-.volx-row svg:last-child {
+.volx-row-toggle {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) 20px;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+.volx-row-toggle:focus-visible { outline: 0; }
+.volx-row-toggle > span { min-width: 0; }
+
+.volx-row-toggle svg {
   color: var(--muted-2);
   transition: transform 180ms ease;
 }
 
-.volx-row svg:last-child.expanded { transform: rotate(180deg); }
+.volx-row-toggle svg.expanded { transform: rotate(180deg); }
 
 .volx-state {
   display: inline-flex;
@@ -623,6 +648,7 @@
   color: var(--muted-2);
   text-align: center;
 }
+.volx-empty-cell { display: flex; align-items: center; flex-direction: column; gap: 8px; }
 .volx-empty strong { color: var(--text); font-size: 13px; font-weight: 540; }
 .volx-empty span { max-width: 420px; font-size: 11px; line-height: 17px; }
 
@@ -655,7 +681,7 @@
   .volx-summary-cell:last-child { border-bottom: 0; }
   .volx-filters { align-items: flex-start; padding: 10px 12px; flex-direction: column; gap: 9px; }
   .volx-segments { overflow-x: auto; width: 100%; }
-  .volx-view-note { padding-left: 2px; }
+  .volx-view-note { width: 100%; padding-left: 2px; text-align: left; }
   .volx-table { max-height: none; }
   .volx-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .volx-capabilities { grid-template-columns: 1fr; }
@@ -667,5 +693,5 @@
 @media (prefers-reduced-motion: reduce) {
   .volx-live.active i::after,
   .volx-detail { animation: none; }
-  .volx-row svg:last-child { transition: none; }
+  .volx-row-toggle svg { transition: none; }
 }

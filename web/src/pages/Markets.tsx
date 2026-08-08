@@ -19,7 +19,7 @@ import type { MarketRow } from '../types';
 import './Markets.css';
 
 type View = 'overview' | 'derivatives' | 'basis' | 'liquidity';
-type Filter = 'all' | 'watchlist' | 'paired' | 'books' | 'spotOnly';
+type Filter = 'all' | 'watchlist' | 'paired' | 'books' | 'spotOnly' | 'movers';
 type SortKey =
   | 'base'
   | 'spot'
@@ -54,6 +54,7 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'paired', label: 'Spot + Perp' },
   { id: 'books', label: 'Executable Books' },
   { id: 'spotOnly', label: 'Spot Only' },
+  { id: 'movers', label: 'Liquid Movers' },
 ];
 
 function readMarketView(): View {
@@ -373,6 +374,7 @@ export function Markets() {
       case 'paired': filtered = filtered.filter((market) => market.hasSpot && market.hasPerp); break;
       case 'books': filtered = filtered.filter(hasExecutableBooks); break;
       case 'spotOnly': filtered = filtered.filter((market) => market.hasSpot && !market.hasPerp); break;
+      case 'movers': filtered = filtered.filter((market) => finite(market.change24hPct) && Math.abs(market.change24hPct) >= 2 && finite(market.quoteVolume24h) && market.quoteVolume24h >= 1_000_000); break;
       case 'all': break;
     }
     const direction = sortDesc ? -1 : 1;

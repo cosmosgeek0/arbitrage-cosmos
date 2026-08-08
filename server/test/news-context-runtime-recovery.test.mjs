@@ -244,6 +244,52 @@ test('work settling after its generation deadline is rejected even before the de
   assert.ok((await news.getNewsContext(false)).sources.every((source) => source.status !== 'live'));
 });
 
+test('a zero-live sweep cannot restamp bootstrap or replace a retained live publication', { concurrency: false }, async (t) => {
+  const startAt = 1_940_000_000_000;
+  let now = startAt;
+  let upstreamMode = 'error';
+  t.mock.method(Date, 'now', () => now);
+  globalThis.fetch = async (_input, init = {}) => upstreamMode === 'live'
+    ? emptyUpstreamResponse(init)
+    : new Response('', { status: 400 });
+  const news = await import(`../src/services/newsContext.ts?zero-live=${startAt}`);
+
+  const bootstrap = await news.getNewsContext(false);
+  now = startAt + 1;
+  await assert.rejects(
+    news.refreshNewsContextNow(),
+    /News context refresh observed zero live sources/,
+  );
+  const retainedBootstrap = await news.getNewsContext(false);
+  assert.equal(retainedBootstrap.fetchedAt, bootstrap.fetchedAt);
+  assert.notEqual(retainedBootstrap.fetchedAt, now);
+  assert.equal(retainedBootstrap.sources.filter((source) => source.status === 'live').length, 0);
+
+  upstreamMode = 'live';
+  now = startAt + 20_000;
+  const live = await news.refreshNewsContextNow();
+  assert.ok(live.sources.some((source) => source.status === 'live'));
+  const liveFetchedAt = live.fetchedAt;
+  const observed = [];
+  const unsubscribe = news.subscribeNewsContext((payload) => observed.push(payload));
+
+  upstreamMode = 'error';
+  now = liveFetchedAt + 300_000;
+  await assert.rejects(
+    news.refreshNewsContextNow(),
+    /News context refresh observed zero live sources/,
+  );
+  const retainedFailure = await news.getNewsContext(false);
+  unsubscribe();
+
+  assert.equal(retainedFailure.fetchedAt, liveFetchedAt, 'failed sweep must retain the prior publication time');
+  assert.notEqual(retainedFailure.fetchedAt, now, 'failed sweep must not mint a current envelope');
+  assert.equal(retainedFailure.sources.filter((source) => source.status === 'live').length, 0);
+  assert.ok(retainedFailure.sources.some((source) => source.status === 'delayed'));
+  assert.equal(observed.at(-1).fetchedAt, liveFetchedAt);
+  assert.equal(observed.at(-1).sources.filter((source) => source.status === 'live').length, 0);
+});
+
 test('aged retained live source facts downgrade to delayed without a GET refresh', { concurrency: false }, async (t) => {
   let fetchCalls = 0;
   globalThis.fetch = async (_input, init = {}) => {

@@ -1216,6 +1216,21 @@ async function refreshNewsContext(generation: NewsRefreshGeneration): Promise<Ne
     fetchRssBundle(),
     fetchLookonchain(),
   ]);
+  if (!generation.accepted || activeRefreshGeneration !== generation) {
+    throw new Error('News context refresh deadline exceeded');
+  }
+  const sources = [
+    ...primary.sources,
+    ...venue.sources,
+    ...protocol.sources,
+    ...issuer.sources,
+    tree.source,
+    ...rss.sources,
+    lookonchain.source,
+  ];
+  if (!sources.some((source) => source.status === 'live')) {
+    throw new Error('News context refresh observed zero live sources');
+  }
   const seen = new Set<string>();
   // First-party and original-publisher rows win over relay copies.
   const currentItems = [...primary.items, ...venue.items, ...protocol.items, ...issuer.items, ...rss.items, ...lookonchain.items, ...tree.items]
@@ -1228,7 +1243,9 @@ async function refreshNewsContext(generation: NewsRefreshGeneration): Promise<Ne
     })
     .sort(compareContextItems)
     .slice(0, NEWS_ARCHIVE_MAX_ITEMS);
-  if (!generation.accepted || activeRefreshGeneration !== generation) {
+  if (!generation.accepted
+    || activeRefreshGeneration !== generation
+    || Date.now() > generation.deadlineAt) {
     throw new Error('News context refresh deadline exceeded');
   }
   const items = commitNewsArchive(currentItems);
@@ -1237,7 +1254,7 @@ async function refreshNewsContext(generation: NewsRefreshGeneration): Promise<Ne
     source: 'primary+venue+protocol+issuer+tree+rss+lookonchain',
     fetchedAt: Date.now(),
     items,
-    sources: [...primary.sources, ...venue.sources, ...protocol.sources, ...issuer.sources, tree.source, ...rss.sources, lookonchain.source],
+    sources,
   };
 }
 

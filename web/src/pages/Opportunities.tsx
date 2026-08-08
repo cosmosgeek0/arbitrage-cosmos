@@ -57,6 +57,7 @@ export type OpportunitySourceTruthLabel =
 export interface PublishedOpportunityFact {
   readonly source: OpportunitySource;
   readonly observationCurrent: boolean;
+  readonly observationIntegrity: 'CURRENT' | 'INCOMPLETE_INPUTS' | 'NOT_CURRENT';
   readonly proposalId: string;
   readonly symbol: string;
   readonly base: string;
@@ -228,23 +229,30 @@ function basisFact(
   ) return null;
 
   const longSpot = row.direction === 'long_spot_short_perp';
-  const observationCurrent = basisProposalObservationCurrent(row, minDataQuality)
-    && [
-      row.spotBid,
-      row.spotAsk,
-      row.perpBid,
-      row.perpAsk,
-      row.executableGapPct,
-      row.fundingRate,
-      row.quoteVolume24h,
-      row.decisionTs,
-      row.netEdgePct,
-      proposal.netEdgePct,
-      proposal.confidence,
-    ].every(finiteRequired);
+  const evidenceCurrent = basisProposalObservationCurrent(row, minDataQuality);
+  const inputsComplete = [
+    row.spotBid,
+    row.spotAsk,
+    row.perpBid,
+    row.perpAsk,
+    row.executableGapPct,
+    row.fundingRate,
+    row.quoteVolume24h,
+    row.decisionTs,
+    row.netEdgePct,
+    proposal.netEdgePct,
+    proposal.confidence,
+  ].every(finiteRequired);
+  const observationIntegrity = !evidenceCurrent
+    ? 'NOT_CURRENT'
+    : inputsComplete
+      ? 'CURRENT'
+      : 'INCOMPLETE_INPUTS';
+  const observationCurrent = observationIntegrity === 'CURRENT';
   return Object.freeze({
     source: 'BASIS',
     observationCurrent,
+    observationIntegrity,
     proposalId: proposal.id,
     symbol: row.symbol,
     base: row.base,
@@ -310,6 +318,7 @@ function volumeFact(
   return Object.freeze({
     source: 'VOLUME',
     observationCurrent: true,
+    observationIntegrity: 'CURRENT',
     proposalId: proposal.id,
     symbol: row.symbol,
     base: row.base,
@@ -485,10 +494,11 @@ export function projectOpportunitySourceTruth(
   if (!runtime.current) {
     return Object.freeze({ label: 'STALE LAST-KNOWN', detail: runtime.reason ?? read.evidence });
   }
-  if (read.facts.some((fact) => !fact.observationCurrent)) {
+  const degradedFact = read.facts.find((fact) => fact.observationIntegrity !== 'CURRENT');
+  if (degradedFact) {
     return Object.freeze({
       label: 'DEGRADED',
-      detail: 'BASIS_PROPOSAL_ROW_EVIDENCE_NOT_CURRENT',
+      detail: `${degradedFact.source}_PROPOSAL_ROW_${degradedFact.observationIntegrity}`,
     });
   }
   return Object.freeze({ label: 'CURRENT', detail: read.evidence });

@@ -261,6 +261,7 @@ test('Basis canonical supervisor and expanded row evidence fail closed without i
   context.after(() => cssHooks.deregister());
 
   const {
+    projectBasisProposalDeskGate,
     resolveBasisRowEvidence,
     resolveBasisSupervisorTruth,
   } = await import('../../src/pages/Strategies.tsx');
@@ -359,6 +360,11 @@ test('Basis canonical supervisor and expanded row evidence fail closed without i
   assert.equal(absent.historyBoundary, 'NONE');
   assert.equal(absent.priorityScore, null);
   assert.equal(absent.proposal, null);
+  assert.deepEqual(projectBasisProposalDeskGate(false, true, 1), {
+    current: false,
+    recordCount: null,
+    emptyState: 'CURRENT PROPOSAL SET UNKNOWN',
+  });
 });
 
 test('Basis proposal economics and row truth preserve measured zero and withhold incomplete or incoherent values', async () => {
@@ -366,6 +372,7 @@ test('Basis proposal economics and row truth preserve measured zero and withhold
     basisProposalObservationCurrent,
     basisRowEconomicsComplete,
     buildBasisProposalEconomics,
+    projectBasisRowRenderTruth,
     proposalBinding,
   } = await import('../../src/pages/Strategies.tsx');
   const row = basisRuntimePayload().rows[0];
@@ -436,6 +443,35 @@ test('Basis proposal economics and row truth preserve measured zero and withhold
     buildBasisProposalEconomics(reconciling, true, 0.2, BASIS_NOW, 1_000, true).netEdgePct,
     null,
   );
+
+  const absentRenderValues = structuredClone(row);
+  absentRenderValues.quoteVolume24h = null;
+  absentRenderValues.executableGapPct = null;
+  absentRenderValues.spotBid = null;
+  absentRenderValues.spotAsk = null;
+  absentRenderValues.perpBid = null;
+  absentRenderValues.perpAsk = null;
+  absentRenderValues.fundingRate = null;
+  absentRenderValues.nextFundingTs = null;
+  absentRenderValues.fundingCarryPct = null;
+  absentRenderValues.spotSpreadBps = null;
+  absentRenderValues.perpSpreadBps = null;
+  absentRenderValues.alternateGapPct = null;
+  absentRenderValues.gapAgeMs = null;
+  assert.deepEqual(projectBasisRowRenderTruth(absentRenderValues, true), {
+    quoteVolume24h: '24h volume UNKNOWN',
+    executableGapPct: 'UNKNOWN',
+    executionPrices: 'UNKNOWN / UNKNOWN',
+    fundingRate: 'UNKNOWN',
+    fundingSummary: 'Funding unavailable',
+    grossGapPct: 'UNKNOWN',
+    spreadBps: 'UNKNOWN / UNKNOWN',
+    spotBidAsk: 'UNKNOWN / UNKNOWN',
+    perpBidAsk: 'UNKNOWN / UNKNOWN',
+    alternateGapPct: 'UNKNOWN',
+    gapAgeMs: 'UNKNOWN',
+    fundingCarryPct: 'UNKNOWN',
+  });
 });
 
 test('Basis renders only canonically current runtime and exact account facts', async (context) => {
@@ -644,7 +680,7 @@ test('Basis source consumes existing owners without new account, market, or exec
   assert.match(source, /const rowWatchWritable = watchWritable && rowCurrent/);
   assert.match(source, /disabled=\{!rowWatchWritable\}/);
   assert.match(source, /if \(rowWatchWritable\) void toggleWatch\(row\.symbol\)/);
-  assert.match(source, /Gross \{rowCurrent \? fmtBasis\(row\.executableGapPct\) : 'UNKNOWN'\}/);
+  assert.match(source, /Gross \{renderTruth\.grossGapPct\}/);
   assert.match(source, /Cost \{rowEconomicsCurrent/);
   assert.equal(source.match(/toggleWatch\(row\.symbol\)/g)?.length, 1);
   assert.match(source, /accountTruth\.spotAvailableUsdt \?\? 'UNKNOWN'/);

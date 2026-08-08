@@ -150,6 +150,71 @@ function executionPrices(row: BasisRow): { primary: string; secondary: string } 
   };
 }
 
+export type BasisRowRenderTruth = Readonly<{
+  quoteVolume24h: string;
+  executableGapPct: string;
+  executionPrices: string;
+  fundingRate: string;
+  fundingSummary: string;
+  grossGapPct: string;
+  spreadBps: string;
+  spotBidAsk: string;
+  perpBidAsk: string;
+  alternateGapPct: string;
+  gapAgeMs: string;
+  fundingCarryPct: string;
+}>;
+
+/** Formats optional row values only after their published measurements are proven finite. */
+export function projectBasisRowRenderTruth(
+  row: BasisRow,
+  rowCurrent: boolean,
+): BasisRowRenderTruth {
+  const executionPriceValuesKnown = row.direction === 'long_spot_short_perp'
+    ? finite(row.spotAsk) && finite(row.perpBid)
+    : finite(row.spotBid) && finite(row.perpAsk);
+  return Object.freeze({
+    quoteVolume24h: rowCurrent && finite(row.quoteVolume24h)
+      ? `${fmtMoney(row.quoteVolume24h)} 24h`
+      : '24h volume UNKNOWN',
+    executableGapPct: rowCurrent && finite(row.executableGapPct)
+      ? fmtBasis(row.executableGapPct)
+      : 'UNKNOWN',
+    executionPrices: rowCurrent && executionPriceValuesKnown
+      ? executionPrices(row).primary
+      : 'UNKNOWN / UNKNOWN',
+    fundingRate: rowCurrent && finite(row.fundingRate)
+      ? fmtFunding(row.fundingRate)
+      : 'UNKNOWN',
+    fundingSummary: rowCurrent && finite(row.nextFundingTs) && finite(row.fundingCarryPct)
+      ? countdown(row.nextFundingTs) + ' · Carry ' + fmtBasis(row.fundingCarryPct)
+      : 'Funding unavailable',
+    grossGapPct: rowCurrent && finite(row.executableGapPct)
+      ? fmtBasis(row.executableGapPct)
+      : 'UNKNOWN',
+    spreadBps: rowCurrent && finite(row.spotSpreadBps) && finite(row.perpSpreadBps)
+      ? `${bps(row.spotSpreadBps)} / ${bps(row.perpSpreadBps)}`
+      : rowCurrent
+        ? 'UNKNOWN / UNKNOWN'
+        : 'Row evidence not current',
+    spotBidAsk: rowCurrent && finite(row.spotBid) && finite(row.spotAsk)
+      ? `${fmtPrice(row.spotBid)} / ${fmtPrice(row.spotAsk)}`
+      : 'UNKNOWN / UNKNOWN',
+    perpBidAsk: rowCurrent && finite(row.perpBid) && finite(row.perpAsk)
+      ? `${fmtPrice(row.perpBid)} / ${fmtPrice(row.perpAsk)}`
+      : 'UNKNOWN / UNKNOWN',
+    alternateGapPct: rowCurrent && finite(row.alternateGapPct)
+      ? fmtBasis(row.alternateGapPct)
+      : 'UNKNOWN',
+    gapAgeMs: rowCurrent && finite(row.gapAgeMs)
+      ? durationCompact(row.gapAgeMs)
+      : 'UNKNOWN',
+    fundingCarryPct: rowCurrent && finite(row.fundingCarryPct)
+      ? fmtBasis(row.fundingCarryPct)
+      : 'UNKNOWN',
+  });
+}
+
 function decisionTitle(row: BasisRow): string {
   if (row.rejectCode) return titleCase(row.rejectCode);
   if (row.decisionKind === 'ignore') return 'Below Watch Gate';
@@ -264,6 +329,23 @@ export type BasisProposalBinding =
   | 'OPEN_RECORD_RECONCILING'
   | 'NO_CURRENT_OPEN_PROPOSAL'
   | 'CURRENT_TRUTH_UNAVAILABLE';
+
+export function projectBasisProposalDeskGate(
+  canonicalRowsCurrent: boolean,
+  snapshotAvailable: boolean,
+  proposalRecordCount: number,
+): Readonly<{
+  current: boolean;
+  recordCount: number | null;
+  emptyState: 'NO CURRENT OPEN PROPOSAL' | 'CURRENT PROPOSAL SET UNKNOWN';
+}> {
+  const current = canonicalRowsCurrent && snapshotAvailable;
+  return Object.freeze({
+    current,
+    recordCount: current ? proposalRecordCount : null,
+    emptyState: current ? 'NO CURRENT OPEN PROPOSAL' : 'CURRENT PROPOSAL SET UNKNOWN',
+  });
+}
 
 export type BasisProposalEconomics = Readonly<{
   binding: BasisProposalBinding;
@@ -765,7 +847,12 @@ export function Strategies() {
     (row) => row.state === 'PROPOSED' || hasAttachedOpenProposal(row),
   );
   const proposalDeskRow = proposalRows[0] ?? null;
-  const proposalDeskRuntimeCurrent = basisEngineFeedTruth.current && snapshot !== null;
+  const proposalDeskGate = projectBasisProposalDeskGate(
+    basisTruth.current || basisEngineRowsVisible,
+    snapshot !== null,
+    proposalRows.length,
+  );
+  const proposalDeskRuntimeCurrent = proposalDeskGate.current;
   const proposalDeskObservationCurrent = Boolean(
     proposalDeskRuntimeCurrent
     && proposalDeskRow
@@ -890,11 +977,9 @@ export function Strategies() {
               ? `CURRENT OBSERVATION · ${proposalDeskRow.symbol}`
               : proposalDeskRecordCurrent && proposalDeskRow
                 ? `CURRENT PROPOSAL RECORD · ${proposalDeskRow.symbol} · OBSERVATION ECONOMICS WITHHELD`
-                : proposalDeskRuntimeCurrent
-                  ? 'NO CURRENT OPEN PROPOSAL'
-                  : 'CURRENT PROPOSAL SET UNKNOWN'}</p>
-            <small>{proposalDeskRuntimeCurrent
-              ? `${proposalRows.length} owner-published proposal ${proposalRows.length === 1 ? 'record' : 'records'} · first record shown in engine order`
+                : proposalDeskGate.emptyState}</p>
+            <small>{proposalDeskGate.recordCount !== null
+              ? `${proposalDeskGate.recordCount} owner-published proposal ${proposalDeskGate.recordCount === 1 ? 'record' : 'records'} · first record shown in engine order`
               : basisEngineFeedTruth.reason ?? 'Current Basis runtime truth unavailable'}</small>
           </div>
           <dl className="volx-facts basx-facts">
@@ -1041,6 +1126,7 @@ export function Strategies() {
             const isExpanded = expanded === row.symbol;
             const watching = watchlist.includes(row.symbol);
             const prices = executionPrices(row);
+            const renderTruth = projectBasisRowRenderTruth(row, rowCurrent);
             const evidence = resolveBasisRowEvidence(row);
             const watchReasonId = `basis-watch-reason-${row.symbol}`;
             return (
@@ -1057,33 +1143,29 @@ export function Strategies() {
                   </span>
                   <span className="volx-asset" role="cell">
                     <TokenIcon symbol={row.symbol} size={28} />
-                    <span><strong>{row.base}</strong><small>{rowCurrent ? `${fmtMoney(row.quoteVolume24h)} 24h` : '24h volume UNKNOWN'}</small></span>
+                    <span><strong>{row.base}</strong><small>{renderTruth.quoteVolume24h}</small></span>
                   </span>
                   <span className="basx-gap" role="cell">
-                    <strong>{rowCurrent ? fmtBasis(row.executableGapPct) : 'UNKNOWN'}</strong>
+                    <strong>{renderTruth.executableGapPct}</strong>
                     <small>{directionLabel(row.direction)}</small>
                   </span>
                   <span className="basx-prices" role="cell">
-                    <strong>{rowCurrent ? prices.primary : 'UNKNOWN / UNKNOWN'}</strong>
+                    <strong>{renderTruth.executionPrices}</strong>
                     <small>{prices.secondary}</small>
                   </span>
                   <span className="basx-funding" role="cell">
-                    <strong>{rowCurrent ? fmtFunding(row.fundingRate) : 'UNKNOWN'}</strong>
-                    <small>{rowCurrent && row.nextFundingTs && finite(row.fundingCarryPct)
-                      ? countdown(row.nextFundingTs) + ' · Carry ' + fmtBasis(row.fundingCarryPct)
-                      : 'Funding unavailable'}</small>
+                    <strong>{renderTruth.fundingRate}</strong>
+                    <small>{renderTruth.fundingSummary}</small>
                   </span>
                   <span className="basx-edge" role="cell">
                     <strong>{rowEconomicsCurrent ? fmtBasis(row.netEdgePct) : 'UNKNOWN'}</strong>
-                    <small>Gross {rowCurrent ? fmtBasis(row.executableGapPct) : 'UNKNOWN'} · Cost {rowEconomicsCurrent
+                    <small>Gross {renderTruth.grossGapPct} · Cost {rowEconomicsCurrent
                       ? fmtBasis(row.costs.totalPct)
                       : 'UNKNOWN'}</small>
                   </span>
                   <span className="volx-quality basx-quality" role="cell">
                     <strong>{Math.round(row.dataQuality.score * 100) + '% Trust'}</strong>
-                    <small>{rowCurrent
-                      ? `${bps(row.spotSpreadBps)} / ${bps(row.perpSpreadBps)}`
-                      : 'Row evidence not current'}</small>
+                    <small>{renderTruth.spreadBps}</small>
                   </span>
                   <span className="volx-decision" role="cell">
                     <strong>{decisionTitle(row)}</strong>
@@ -1100,14 +1182,10 @@ export function Strategies() {
                       <small><Radio size={13} />{snapshot.status.bookSource} · {snapshot.status.markSource}</small>
                     </div>
                     <dl className="volx-facts basx-facts">
-                      <div><dt>Spot Bid / Ask</dt><dd>{rowCurrent
-                        ? `${fmtPrice(row.spotBid)} / ${fmtPrice(row.spotAsk)}`
-                        : 'UNKNOWN / UNKNOWN'}</dd></div>
-                      <div><dt>Perp Bid / Ask</dt><dd>{rowCurrent
-                        ? `${fmtPrice(row.perpBid)} / ${fmtPrice(row.perpAsk)}`
-                        : 'UNKNOWN / UNKNOWN'}</dd></div>
-                      <div><dt>Alternate Gap</dt><dd>{rowCurrent ? fmtBasis(row.alternateGapPct) : 'UNKNOWN'}</dd></div>
-                      <div><dt>Gap Age</dt><dd>{rowCurrent ? durationCompact(row.gapAgeMs) : 'UNKNOWN'}</dd></div>
+                      <div><dt>Spot Bid / Ask</dt><dd>{renderTruth.spotBidAsk}</dd></div>
+                      <div><dt>Perp Bid / Ask</dt><dd>{renderTruth.perpBidAsk}</dd></div>
+                      <div><dt>Alternate Gap</dt><dd>{renderTruth.alternateGapPct}</dd></div>
+                      <div><dt>Gap Age</dt><dd>{renderTruth.gapAgeMs}</dd></div>
                       <div><dt>Gap Slope</dt><dd>{rowCurrent && finite(row.gapSlopePctPerMin)
                         ? fmtBasis(row.gapSlopePctPerMin) + '/min'
                         : 'UNKNOWN'}</dd></div>
@@ -1116,7 +1194,7 @@ export function Strategies() {
                       <div><dt>Slippage At {fmtMoney(snapshot.thresholds.intendedNotionalUsd)}</dt><dd>{rowEconomicsCurrent
                         ? fmtBasis(row.slippagePct)
                         : 'UNKNOWN'}</dd></div>
-                      <div><dt>Funding Carry</dt><dd>{rowCurrent ? fmtBasis(row.fundingCarryPct) : 'UNKNOWN'}</dd></div>
+                      <div><dt>Funding Carry</dt><dd>{renderTruth.fundingCarryPct}</dd></div>
                       <div><dt>Expected Hold</dt><dd>{durationCompact(row.expectedHoldMs)}</dd></div>
                       <div><dt>Depth Score</dt><dd>{rowCurrent && finite(row.depthScore)
                         ? `${row.depthScore.toFixed(2)} · ${row.ladderBacked ? 'Ladder' : 'Top Book'}`

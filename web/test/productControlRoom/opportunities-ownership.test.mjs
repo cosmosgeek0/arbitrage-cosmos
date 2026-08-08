@@ -421,6 +421,7 @@ test('Opportunities withholds stale, skewed, expired, duplicate, inconsistent, a
   const incompleteBasisRead = decodeBasisOpportunityRead(incompleteBasis);
   assert.ok(incompleteBasisRead);
   assert.equal(projectOpportunitySourceTruth(incompleteBasisRead, null, NOW).label, 'DEGRADED');
+  assert.equal(projectOpportunitySourceTruth(incompleteBasisRead, null, NOW).detail, 'BASIS_PROPOSAL_ROW_INCOMPLETE_INPUTS');
   assert.equal(incompleteBasisRead.facts[0].reportedNetEdgePct, null);
   assert.equal(incompleteBasisRead.facts[0].grossEdgePct, null);
   assert.equal(incompleteBasisRead.facts[0].totalCostPct, null);
@@ -434,6 +435,7 @@ test('Opportunities withholds stale, skewed, expired, duplicate, inconsistent, a
   const degradedBasis = decodeBasisOpportunityRead(honestLowQuality);
   assert.ok(degradedBasis);
   assert.equal(projectOpportunitySourceTruth(degradedBasis, null, NOW).label, 'DEGRADED');
+  assert.equal(projectOpportunitySourceTruth(degradedBasis, null, NOW).detail, 'BASIS_PROPOSAL_ROW_NOT_CURRENT');
   const withheld = degradedBasis.facts.find((fact) => fact.proposalId === 'basis-zero');
   assert.ok(withheld);
   for (const value of [

@@ -43,7 +43,7 @@ export interface NewsContextSource {
 
 export interface NewsContextPayload {
   source: 'primary+venue+protocol+issuer+tree+rss+lookonchain';
-  fetchedAt: number;
+  fetchedAt: number | null;
   items: NewsContextItem[];
   sources: NewsContextSource[];
 }
@@ -51,11 +51,16 @@ export interface NewsContextPayload {
 const TREE_URL = 'https://news.treeofalpha.com/api/news?limit=200';
 const TREE_HISTORY_URL = 'https://news.treeofalpha.com/api/news?limit=5000';
 const LOOKONCHAIN_URL = 'https://www.lookonchain.com/ashx/index.ashx?type=1&page=1&pageSize=24';
-const CACHE_MS = 5_000;
 const FETCH_TIMEOUT_MS = 8_000;
+const FETCH_RETRY_BACKOFF_MS = 350;
+const FETCH_OPERATION_DEADLINE_MS = (FETCH_TIMEOUT_MS * 2) + FETCH_RETRY_BACKOFF_MS;
 const NEWS_BODY_LIMIT_BYTES = 8 * 1024 * 1024;
 const FETCH_FAILURE_TTL_MS = 15_000;
 const MAX_FETCH_STATE_ENTRIES = 1_024;
+const NEWS_REFRESH_INTERVAL_MS = 60_000;
+const NEWS_REFRESH_DEADLINE_MS = 20_000;
+const NEWS_PUBLISHED_STALE_MS = 2 * NEWS_REFRESH_INTERVAL_MS;
+const NEWS_UPSTREAM_CONCURRENCY = 6;
 const TREE_MIN_FETCH_MS = 15_000;
 const TREE_HISTORY_FETCH_MS = 10 * 60_000;
 const LOOKONCHAIN_MIN_FETCH_MS = 15_000;
@@ -832,6 +837,50 @@ const RSS_FEEDS: FeedConfig[] = [
 ] as const satisfies FeedConfig[];
 type RssFeed = FeedConfig;
 type RssFetchResult = { items: NewsContextItem[]; source: NewsContextSource };
+type NewsRefreshGeneration = {
+  id: number;
+  deadlineAt: number;
+  accepted: boolean;
+};
+type NewsArchiveCandidate = {
+  archive: NewsContextItem[];
+  items: NewsContextItem[];
+  persistence: {
+    persistedAt: number;
+    payload: string;
+  } | null;
+};
+type NewsRefreshCandidate = {
+  archive: NewsArchiveCandidate;
+  payload: NewsContextPayload;
+};
+type NewsSourceCacheEntry = RssFetchResult & { fetchedAt: number };
+type NewsSourceCacheCheckpoint = {
+  tree: NewsSourceCacheEntry | null;
+  treeHistoryFetchedAt: number;
+  lookonchain: NewsSourceCacheEntry | null;
+  rss: Map<string, NewsSourceCacheEntry>;
+  primary: Map<string, NewsSourceCacheEntry>;
+  venue: Map<string, NewsSourceCacheEntry>;
+  protocol: Map<string, NewsSourceCacheEntry>;
+  issuer: Map<string, NewsSourceCacheEntry>;
+  bodyFailures: Map<string, { until: number; message: string }>;
+};
+type BodyQueueJob = {
+  run: () => Promise<string>;
+  quarantine: (work: Promise<string>) => void;
+  resolve: (value: string) => void;
+  reject: (reason: Error) => void;
+  deadlineAt: number;
+  timer: NodeJS.Timeout | null;
+  queued: boolean;
+};
+type BodyWorkEntry = {
+  generationId: number;
+  work: Promise<string>;
+  logicalSettled: boolean;
+  quarantinedWork: Promise<string> | null;
+};
 
 const COMMON_SYMBOLS = new Set([
   'BTC', 'ETH', 'BNB', 'SOL', 'XRP', 'DOGE', 'ADA', 'TRX', 'AVAX', 'LINK',
@@ -840,15 +889,19 @@ const COMMON_SYMBOLS = new Set([
 ]);
 
 let archive = loadNewsArchive();
-let cache: NewsContextPayload | null = archive.length ? {
+let cache: NewsContextPayload = {
   source: 'primary+venue+protocol+issuer+tree+rss+lookonchain',
-  // Mark the bootstrap snapshot stale so the first caller starts a background
-  // live sweep while still receiving the persisted tape immediately.
-  fetchedAt: Date.now() - CACHE_MS,
+  // No source observation exists until a lifecycle-owned sweep publishes.
+  fetchedAt: null,
   items: archive.slice(0, NEWS_ARCHIVE_MAX_ITEMS),
   sources: bootstrapNewsSources(),
-} : null;
+};
 let inFlight: Promise<NewsContextPayload> | null = null;
+let refreshWork: Promise<NewsRefreshCandidate> | null = null;
+let refreshGenerationSequence = 0;
+let activeRefreshGeneration: NewsRefreshGeneration | null = null;
+let newsRuntimeStarted = false;
+let newsRefreshTimer: NodeJS.Timeout | null = null;
 let treeSourceCache: (RssFetchResult & { fetchedAt: number }) | null = null;
 let treeHistoryFetchedAt = 0;
 let lookonchainSourceCache: (RssFetchResult & { fetchedAt: number }) | null = null;
@@ -860,9 +913,46 @@ const protocolSourceCache = new Map<string, RssFetchResult & { fetchedAt: number
 const issuerSourceCache = new Map<string, RssFetchResult & { fetchedAt: number }>();
 let archivePersistedAt = 0;
 let archivePersistTail: Promise<void> = Promise.resolve();
-const bodyInFlight = new Map<string, Promise<string>>();
+const bodyInFlight = new Map<string, BodyWorkEntry>();
 const bodyFailures = new Map<string, { until: number; message: string }>();
+const bodyQueue: BodyQueueJob[] = [];
+const bodyAbortControllers = new Set<AbortController>();
+let activeBodyRequests = 0;
 let configuredFetchHosts: Set<string> | null = null;
+
+function captureNewsSourceCacheCheckpoint(): NewsSourceCacheCheckpoint {
+  return {
+    tree: treeSourceCache,
+    treeHistoryFetchedAt,
+    lookonchain: lookonchainSourceCache,
+    rss: new Map(rssSourceCache),
+    primary: new Map(primarySourceCache),
+    venue: new Map(venueSourceCache),
+    protocol: new Map(protocolSourceCache),
+    issuer: new Map(issuerSourceCache),
+    bodyFailures: new Map(bodyFailures),
+  };
+}
+
+function restoreNewsSourceCache<T>(
+  target: Map<string, T>,
+  checkpoint: Map<string, T>,
+): void {
+  target.clear();
+  for (const [key, value] of checkpoint) target.set(key, value);
+}
+
+function restoreNewsSourceCacheCheckpoint(checkpoint: NewsSourceCacheCheckpoint): void {
+  treeSourceCache = checkpoint.tree;
+  treeHistoryFetchedAt = checkpoint.treeHistoryFetchedAt;
+  lookonchainSourceCache = checkpoint.lookonchain;
+  restoreNewsSourceCache(rssSourceCache, checkpoint.rss);
+  restoreNewsSourceCache(primarySourceCache, checkpoint.primary);
+  restoreNewsSourceCache(venueSourceCache, checkpoint.venue);
+  restoreNewsSourceCache(protocolSourceCache, checkpoint.protocol);
+  restoreNewsSourceCache(issuerSourceCache, checkpoint.issuer);
+  restoreNewsSourceCache(bodyFailures, checkpoint.bodyFailures);
+}
 
 function bootstrapNewsSources(): NewsContextSource[] {
   const configured = [
@@ -910,8 +1000,7 @@ function loadNewsArchive(): NewsContextItem[] {
   }
 }
 
-function persistNewsArchive(snapshot: NewsContextItem[]): void {
-  const payload = JSON.stringify(snapshot.slice(0, NEWS_ARCHIVE_MAX_ITEMS));
+function enqueueNewsArchivePersistence(payload: string): void {
   archivePersistTail = archivePersistTail
     .catch(() => undefined)
     .then(async () => {
@@ -930,11 +1019,16 @@ function persistNewsArchive(snapshot: NewsContextItem[]): void {
     .catch(() => undefined);
 }
 
-function commitNewsArchive(currentItems: NewsContextItem[]): NewsContextItem[] {
-  const cutoff = Date.now() - NEWS_ARCHIVE_RETENTION_MS;
+function buildNewsArchiveCandidate(
+  currentItems: NewsContextItem[],
+  previousArchive: NewsContextItem[],
+  now: number,
+  previousPersistedAt: number,
+): NewsArchiveCandidate {
+  const cutoff = now - NEWS_ARCHIVE_RETENTION_MS;
   const seen = new Set<string>();
-  archive = [...currentItems, ...archive]
-    .filter((item) => item.ts !== null && item.ts >= cutoff && item.ts <= Date.now())
+  const nextArchive = [...currentItems, ...previousArchive]
+    .filter((item) => item.ts !== null && item.ts >= cutoff && item.ts <= now)
     .filter(isUsefulNewsItem)
     .map(refreshItemSignals)
     .sort(compareContextItems)
@@ -946,26 +1040,77 @@ function commitNewsArchive(currentItems: NewsContextItem[]): NewsContextItem[] {
     })
     .slice(0, NEWS_ARCHIVE_MAX_ITEMS);
 
-  if (Date.now() - archivePersistedAt >= 60_000) {
-    archivePersistedAt = Date.now();
-    persistNewsArchive(archive);
-  }
-
   const undated = currentItems.filter((item) => item.ts === null);
-  return [...archive, ...undated].sort(compareContextItems).slice(0, NEWS_ARCHIVE_MAX_ITEMS);
+  const items = [...nextArchive, ...undated].sort(compareContextItems).slice(0, NEWS_ARCHIVE_MAX_ITEMS);
+  const persistence = now - previousPersistedAt >= 60_000
+    ? {
+      persistedAt: now,
+      // Serialization is intentionally part of the pure candidate build. A
+      // large archive may starve the deadline timer, so no global or disk
+      // state can change until the wall clock is checked again afterward.
+      payload: JSON.stringify(nextArchive.slice(0, NEWS_ARCHIVE_MAX_ITEMS)),
+    }
+    : null;
+  return { archive: nextArchive, items, persistence };
 }
 
-export async function getNewsContext(force = false): Promise<NewsContextPayload> {
-  if (cache) {
-    if (force || Date.now() - cache.fetchedAt >= CACHE_MS) void startRefresh().catch(() => undefined);
+function commitNewsArchiveCandidate(candidate: NewsArchiveCandidate): void {
+  archive = candidate.archive;
+  if (candidate.persistence) {
+    archivePersistedAt = candidate.persistence.persistedAt;
+    enqueueNewsArchivePersistence(candidate.persistence.payload);
+  }
+}
+
+function downgradePublishedNews(
+  payload: NewsContextPayload,
+  reason: string,
+): NewsContextPayload {
+  const sources = payload.sources.map((source) => source.status === 'live'
+    ? {
+      ...source,
+      status: 'delayed' as const,
+      detail: `${reason} ${source.detail}`,
+    }
+    : source);
+  if (sources.every((source, index) => source === payload.sources[index])) return payload;
+  return { ...payload, sources };
+}
+
+function readPublishedNews(now = Date.now()): NewsContextPayload {
+  if (cache.fetchedAt === null) return cache;
+  if (!Number.isFinite(cache.fetchedAt) || cache.fetchedAt <= 0) {
+    cache = downgradePublishedNews(cache, 'Published snapshot timestamp invalid; freshness unknown.');
     return cache;
   }
-  return startRefresh();
+  if (cache.fetchedAt > now) {
+    cache = downgradePublishedNews(cache, 'Published snapshot is ahead of the runtime clock; freshness unknown.');
+    return cache;
+  }
+  const ageMs = now - cache.fetchedAt;
+  if (ageMs >= NEWS_PUBLISHED_STALE_MS) {
+    cache = downgradePublishedNews(cache, `Published snapshot stale (${sourceAgeLabel(cache.fetchedAt)}).`);
+  }
+  return cache;
+}
+
+function publishToSubscribers(payload: NewsContextPayload): void {
+  subscribers.forEach((listener) => {
+    try { listener(payload); } catch { /* stream disconnected */ }
+  });
+}
+
+/**
+ * Browser and compatibility reads are publication-only. They neither start
+ * nor join upstream acquisition, even when the retained publication is stale.
+ */
+export async function getNewsContext(_force = false): Promise<NewsContextPayload> {
+  return readPublishedNews();
 }
 
 export function subscribeNewsContext(listener: (payload: NewsContextPayload) => void): () => void {
   subscribers.add(listener);
-  if (cache) listener(cache);
+  listener(readPublishedNews());
   return () => subscribers.delete(listener);
 }
 
@@ -978,14 +1123,15 @@ export function newsContextStatus(): {
   items: number;
   refreshing: boolean;
 } {
-  const sources = cache?.sources ?? [];
+  const published = readPublishedNews();
+  const sources = published.sources;
   return {
-    fetchedAt: cache?.fetchedAt ?? null,
+    fetchedAt: published.fetchedAt,
     sources: sources.length,
     live: sources.filter((source) => source.status === 'live').length,
     delayed: sources.filter((source) => source.status === 'delayed').length,
     errors: sources.filter((source) => source.status === 'error').length,
-    items: cache?.items.length ?? archive.length,
+    items: published.items.length,
     refreshing: inFlight !== null,
   };
 }
@@ -994,31 +1140,158 @@ export function refreshNewsContextNow(): Promise<NewsContextPayload> {
   return startRefresh();
 }
 
-function startRefresh(): Promise<NewsContextPayload> {
-  if (!inFlight) {
-    const refresh = refreshNewsContext()
-      .then((payload) => {
-        cache = payload;
-        subscribers.forEach((listener) => {
-          try { listener(payload); } catch { /* stream disconnected */ }
-        });
-        return payload;
-      });
-    inFlight = refresh;
-    // Attach a rejection handler immediately, before any detached caller can
-    // abandon the promise. Explicit callers still receive the original
-    // rejection, while the internal cleanup branch can never become an
-    // unhandled secondary rejection (the common `.finally()` footgun).
+function scheduleNewsContextRefresh(delayMs = NEWS_REFRESH_INTERVAL_MS): void {
+  if (!newsRuntimeStarted || newsRefreshTimer !== null) return;
+  newsRefreshTimer = setTimeout(() => {
+    newsRefreshTimer = null;
+    const refresh = startRefresh();
     void refresh.catch(() => undefined);
     void refresh.then(
-      () => { if (inFlight === refresh) inFlight = null; },
-      () => { if (inFlight === refresh) inFlight = null; },
+      () => scheduleNewsContextRefresh(),
+      () => scheduleNewsContextRefresh(),
     );
-  }
-  return inFlight;
+  }, delayMs);
+  newsRefreshTimer.unref();
 }
 
-async function refreshNewsContext(): Promise<NewsContextPayload> {
+/**
+ * Explicit lifecycle owner for zero-browser acquisition. The next sweep is
+ * scheduled only after the current bounded publication attempt settles.
+ */
+export function startNewsContextRuntime(): void {
+  if (newsRuntimeStarted) return;
+  newsRuntimeStarted = true;
+  const refresh = startRefresh();
+  void refresh.catch(() => undefined);
+  void refresh.then(
+    () => scheduleNewsContextRefresh(),
+    () => scheduleNewsContextRefresh(),
+  );
+}
+
+export function stopNewsContextRuntime(): void {
+  newsRuntimeStarted = false;
+  if (newsRefreshTimer !== null) clearTimeout(newsRefreshTimer);
+  newsRefreshTimer = null;
+  if (activeRefreshGeneration) activeRefreshGeneration.accepted = false;
+  for (const controller of bodyAbortControllers) controller.abort();
+  for (const job of bodyQueue.splice(0)) {
+    job.queued = false;
+    if (job.timer !== null) clearTimeout(job.timer);
+    job.reject(new Error('Upstream timeout'));
+  }
+}
+
+function markPublishedRefreshFailure(): void {
+  const retained = downgradePublishedNews(
+    cache,
+    'Latest background refresh did not publish; retained observation.',
+  );
+  if (retained === cache) return;
+  cache = retained;
+  publishToSubscribers(retained);
+}
+
+function boundRefreshWork(
+  work: Promise<NewsRefreshCandidate>,
+  generation: NewsRefreshGeneration,
+): Promise<NewsRefreshCandidate> {
+  return new Promise((resolve, reject) => {
+    const timeoutMs = Math.max(0, generation.deadlineAt - Date.now());
+    const timer = setTimeout(() => {
+      generation.accepted = false;
+      reject(new Error('News context refresh deadline exceeded'));
+    }, timeoutMs);
+    void work.then(
+      (candidate) => {
+        clearTimeout(timer);
+        if (!generation.accepted || Date.now() > generation.deadlineAt) {
+          generation.accepted = false;
+          reject(new Error('News context refresh deadline exceeded'));
+          return;
+        }
+        resolve(candidate);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function startRefresh(): Promise<NewsContextPayload> {
+  if (inFlight) return inFlight;
+  if (refreshWork) {
+    markPublishedRefreshFailure();
+    return Promise.reject(new Error('Previous news context refresh transport has not settled'));
+  }
+
+  const generation: NewsRefreshGeneration = {
+    id: refreshGenerationSequence + 1,
+    deadlineAt: Date.now() + NEWS_REFRESH_DEADLINE_MS,
+    accepted: true,
+  };
+  refreshGenerationSequence = generation.id;
+  activeRefreshGeneration = generation;
+
+  const sourceCacheCheckpoint = captureNewsSourceCacheCheckpoint();
+  const work = refreshNewsContext(generation);
+  refreshWork = work;
+  void work.catch(() => undefined);
+  void work.then(
+    () => {
+      if (!generation.accepted) restoreNewsSourceCacheCheckpoint(sourceCacheCheckpoint);
+      if (refreshWork === work) refreshWork = null;
+      if (activeRefreshGeneration === generation) activeRefreshGeneration = null;
+    },
+    () => {
+      if (!generation.accepted) restoreNewsSourceCacheCheckpoint(sourceCacheCheckpoint);
+      if (refreshWork === work) refreshWork = null;
+      if (activeRefreshGeneration === generation) activeRefreshGeneration = null;
+    },
+  );
+
+  const refresh = boundRefreshWork(work, generation)
+    .then((candidate) => {
+      const publishedNow = Date.now();
+      const { payload } = candidate;
+      if (!generation.accepted || publishedNow > generation.deadlineAt) {
+        generation.accepted = false;
+        throw new Error('News context refresh deadline exceeded');
+      }
+      if (payload.fetchedAt === null
+        || !Number.isFinite(payload.fetchedAt)
+        || payload.fetchedAt <= 0
+        || payload.fetchedAt > publishedNow
+        || (cache.fetchedAt !== null && payload.fetchedAt < cache.fetchedAt)) {
+        throw new Error('News context publication clock is non-monotonic');
+      }
+      commitNewsArchiveCandidate(candidate.archive);
+      cache = payload;
+      publishToSubscribers(payload);
+      return payload;
+    })
+    .catch((error) => {
+      generation.accepted = false;
+      restoreNewsSourceCacheCheckpoint(sourceCacheCheckpoint);
+      markPublishedRefreshFailure();
+      throw error;
+    });
+  inFlight = refresh;
+  // Attach a rejection handler immediately, before any detached caller can
+  // abandon the promise. Explicit callers still receive the original
+  // rejection, while the internal cleanup branch can never become an
+  // unhandled secondary rejection (the common `.finally()` footgun).
+  void refresh.catch(() => undefined);
+  void refresh.then(
+    () => { if (inFlight === refresh) inFlight = null; },
+    () => { if (inFlight === refresh) inFlight = null; },
+  );
+  return refresh;
+}
+
+async function refreshNewsContext(generation: NewsRefreshGeneration): Promise<NewsRefreshCandidate> {
   const [primary, venue, protocol, issuer, tree, rss, lookonchain] = await Promise.all([
     fetchPrimarySources(),
     fetchVenueSources(),
@@ -1028,6 +1301,21 @@ async function refreshNewsContext(): Promise<NewsContextPayload> {
     fetchRssBundle(),
     fetchLookonchain(),
   ]);
+  if (!generation.accepted || activeRefreshGeneration !== generation) {
+    throw new Error('News context refresh deadline exceeded');
+  }
+  const sources = [
+    ...primary.sources,
+    ...venue.sources,
+    ...protocol.sources,
+    ...issuer.sources,
+    tree.source,
+    ...rss.sources,
+    lookonchain.source,
+  ];
+  if (!sources.some((source) => source.status === 'live')) {
+    throw new Error('News context refresh observed zero live sources');
+  }
   const seen = new Set<string>();
   // First-party and original-publisher rows win over relay copies.
   const currentItems = [...primary.items, ...venue.items, ...protocol.items, ...issuer.items, ...rss.items, ...lookonchain.items, ...tree.items]
@@ -1040,13 +1328,29 @@ async function refreshNewsContext(): Promise<NewsContextPayload> {
     })
     .sort(compareContextItems)
     .slice(0, NEWS_ARCHIVE_MAX_ITEMS);
-  const items = commitNewsArchive(currentItems);
-
+  if (!generation.accepted || activeRefreshGeneration !== generation) {
+    throw new Error('News context refresh deadline exceeded');
+  }
+  const candidate = buildNewsArchiveCandidate(
+    currentItems,
+    archive,
+    Date.now(),
+    archivePersistedAt,
+  );
+  const acceptedAt = Date.now();
+  if (!generation.accepted
+    || activeRefreshGeneration !== generation
+    || acceptedAt > generation.deadlineAt) {
+    throw new Error('News context refresh deadline exceeded');
+  }
   return {
-    source: 'primary+venue+protocol+issuer+tree+rss+lookonchain',
-    fetchedAt: Date.now(),
-    items,
-    sources: [...primary.sources, ...venue.sources, ...protocol.sources, ...issuer.sources, tree.source, ...rss.sources, lookonchain.source],
+    archive: candidate,
+    payload: {
+      source: 'primary+venue+protocol+issuer+tree+rss+lookonchain',
+      fetchedAt: acceptedAt,
+      items: candidate.items,
+      sources,
+    },
   };
 }
 
@@ -2307,10 +2611,134 @@ async function readBoundedText(res: Response): Promise<string> {
   return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
 }
 
-async function fetchBodyOnce(urlValue: string, init: RequestInit | undefined, expected: ExpectedBody): Promise<string> {
+function drainBodyQueue(): void {
+  while (activeBodyRequests < NEWS_UPSTREAM_CONCURRENCY && bodyQueue.length > 0) {
+    const job = bodyQueue.shift()!;
+    if (!job.queued) continue;
+    if (Date.now() >= job.deadlineAt) {
+      job.queued = false;
+      if (job.timer !== null) clearTimeout(job.timer);
+      job.reject(new Error('Upstream timeout'));
+      continue;
+    }
+    job.queued = false;
+    if (job.timer !== null) clearTimeout(job.timer);
+    activeBodyRequests += 1;
+    const work = job.run();
+    let permitHeld = true;
+    const releasePermit = (): boolean => {
+      if (!permitHeld) return false;
+      permitHeld = false;
+      activeBodyRequests -= 1;
+      drainBodyQueue();
+      return true;
+    };
+    const activeTimer = setTimeout(() => {
+      if (!releasePermit()) return;
+      job.quarantine(work);
+      job.reject(new Error('Upstream timeout'));
+    }, Math.max(0, job.deadlineAt - Date.now()));
+    void work.catch(() => undefined);
+    void work.then(
+      (value) => {
+        if (!releasePermit()) return;
+        clearTimeout(activeTimer);
+        job.resolve(value);
+      },
+      (error) => {
+        if (!releasePermit()) return;
+        clearTimeout(activeTimer);
+        job.reject(error instanceof Error ? error : new Error('Upstream unavailable'));
+      },
+    );
+  }
+}
+
+function runWithBodyPermit(
+  run: () => Promise<string>,
+  deadlineAt: number,
+  quarantine: (work: Promise<string>) => void,
+): Promise<string> {
+  if (Date.now() >= deadlineAt) return Promise.reject(new Error('Upstream timeout'));
+  return new Promise((resolve, reject) => {
+    const job: BodyQueueJob = {
+      run,
+      quarantine,
+      resolve,
+      reject,
+      deadlineAt,
+      timer: null,
+      queued: true,
+    };
+    job.timer = setTimeout(() => {
+      if (!job.queued) return;
+      job.queued = false;
+      const queuedIndex = bodyQueue.indexOf(job);
+      if (queuedIndex >= 0) bodyQueue.splice(queuedIndex, 1);
+      reject(new Error('Upstream timeout'));
+    }, Math.max(0, deadlineAt - Date.now()));
+    bodyQueue.push(job);
+    drainBodyQueue();
+  });
+}
+
+function waitForBodyWork(work: Promise<string>, deadlineAt: number): Promise<string> {
+  if (Date.now() >= deadlineAt) return Promise.reject(new Error('Upstream timeout'));
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error('Upstream timeout')),
+      Math.max(0, deadlineAt - Date.now()),
+    );
+    void work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+function maybeReleaseBodyEntry(key: string, entry: BodyWorkEntry): void {
+  if (!entry.logicalSettled || entry.quarantinedWork !== null) return;
+  if (bodyInFlight.get(key) === entry) bodyInFlight.delete(key);
+}
+
+function quarantineBodyWork(
+  key: string,
+  entry: BodyWorkEntry,
+  work: Promise<string>,
+): void {
+  entry.quarantinedWork = work;
+  void work.catch(() => undefined);
+  void work.then(
+    () => {
+      if (entry.quarantinedWork === work) entry.quarantinedWork = null;
+      maybeReleaseBodyEntry(key, entry);
+    },
+    () => {
+      if (entry.quarantinedWork === work) entry.quarantinedWork = null;
+      maybeReleaseBodyEntry(key, entry);
+    },
+  );
+}
+
+async function fetchBodyOnce(
+  urlValue: string,
+  init: RequestInit | undefined,
+  expected: ExpectedBody,
+  deadlineAt: number,
+): Promise<string> {
   const method = normalizeNewsContextRequestMethod((init as { method?: unknown } | undefined)?.method);
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  bodyAbortControllers.add(ctrl);
+  const timer = setTimeout(
+    () => ctrl.abort(),
+    Math.max(0, Math.min(FETCH_TIMEOUT_MS, deadlineAt - Date.now())),
+  );
   const onCallerAbort = (): void => ctrl.abort();
   init?.signal?.addEventListener('abort', onCallerAbort, { once: true });
   try {
@@ -2327,6 +2755,10 @@ async function fetchBodyOnce(urlValue: string, init: RequestInit | undefined, ex
         redirect: 'manual',
         signal: ctrl.signal,
       });
+      if (ctrl.signal.aborted || Date.now() > deadlineAt) {
+        void res.body?.cancel().catch(() => undefined);
+        throw new Error('Upstream timeout');
+      }
       if (res.status >= 300 && res.status < 400) {
         const location = res.headers.get('location');
         await res.body?.cancel().catch(() => undefined);
@@ -2342,11 +2774,15 @@ async function fetchBodyOnce(urlValue: string, init: RequestInit | undefined, ex
         await res.body?.cancel().catch(() => undefined);
         throw new Error('Unexpected upstream content type');
       }
-      return await readBoundedText(res);
+      const body = await readBoundedText(res);
+      if (ctrl.signal.aborted || Date.now() > deadlineAt) {
+        throw new Error('Upstream timeout');
+      }
+      return body;
     }
     throw new Error('Disallowed upstream redirect');
   } catch (err) {
-    if (ctrl.signal.aborted) throw new Error('Upstream timeout');
+    if (ctrl.signal.aborted || Date.now() > deadlineAt) throw new Error('Upstream timeout');
     if (err instanceof Error && (/^Upstream HTTP \d{3}$/.test(err.message)
       || err.message === 'Upstream response too large'
       || err.message === 'Unexpected upstream content type'
@@ -2354,6 +2790,7 @@ async function fetchBodyOnce(urlValue: string, init: RequestInit | undefined, ex
     throw new Error('Upstream unavailable');
   } finally {
     clearTimeout(timer);
+    bodyAbortControllers.delete(ctrl);
     init?.signal?.removeEventListener('abort', onCallerAbort);
   }
 }
@@ -2375,31 +2812,71 @@ async function fetchBodyWithRetry(urlValue: string, init: RequestInit | undefine
   const failure = bodyFailures.get(key);
   if (failure && failure.until > Date.now()) throw new Error(failure.message);
   if (failure) bodyFailures.delete(key);
+  const generation = activeRefreshGeneration;
+  if (!generation || !generation.accepted) throw new Error('Upstream timeout');
+  const deadlineAt = Math.min(
+    Date.now() + FETCH_OPERATION_DEADLINE_MS,
+    generation.deadlineAt,
+  );
   const existing = bodyInFlight.get(key);
-  if (existing) return existing;
+  if (existing) {
+    if (existing.generationId !== generation.id) throw new Error('Upstream timeout');
+    return waitForBodyWork(existing.work, deadlineAt);
+  }
+  if (bodyInFlight.size >= MAX_FETCH_STATE_ENTRIES) throw new Error('Upstream unavailable');
 
-  const work = (async (): Promise<string> => {
+  const entry: BodyWorkEntry = {
+    generationId: generation.id,
+    work: Promise.resolve(''),
+    logicalSettled: false,
+    quarantinedWork: null,
+  };
+  entry.work = (async (): Promise<string> => {
     let lastErr: unknown;
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (!generation.accepted || activeRefreshGeneration !== generation) {
+        lastErr = new Error('Upstream timeout');
+        break;
+      }
       try {
-        const body = await fetchBodyOnce(url.toString(), init, expected);
+        const body = await runWithBodyPermit(
+          () => fetchBodyOnce(url.toString(), init, expected, deadlineAt),
+          deadlineAt,
+          (work) => quarantineBodyWork(key, entry, work),
+        );
         bodyFailures.delete(key);
         return body;
       } catch (err) {
         lastErr = err;
         if (!retryableFetchError(err) || attempt === 1) break;
-        await sleep(350 * (attempt + 1));
+        await sleep(FETCH_RETRY_BACKOFF_MS * (attempt + 1));
       }
     }
     const message = errorMessage(lastErr);
     boundedStateSet(bodyFailures, key, { until: Date.now() + FETCH_FAILURE_TTL_MS, message });
     throw new Error(message);
   })();
-  boundedStateSet(bodyInFlight, key, work);
+  bodyInFlight.set(key, entry);
+  void entry.work.catch(() => undefined);
+  void entry.work.then(
+    () => {
+      entry.logicalSettled = true;
+      maybeReleaseBodyEntry(key, entry);
+    },
+    () => {
+      entry.logicalSettled = true;
+      maybeReleaseBodyEntry(key, entry);
+    },
+  );
   try {
-    return await work;
-  } finally {
-    bodyInFlight.delete(key);
+    return await waitForBodyWork(entry.work, deadlineAt);
+  } catch (error) {
+    const message = errorMessage(error);
+    boundedStateSet(bodyFailures, key, {
+      until: Date.now() + FETCH_FAILURE_TTL_MS,
+      message,
+    });
+    throw new Error(message);
   }
 }
 

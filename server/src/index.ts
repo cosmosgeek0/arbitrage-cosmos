@@ -155,7 +155,15 @@ import {
   createProductIncidentOwner,
   createProductIncidentRouter,
 } from './productIntegration/incidents/index.js';
-import { getNewsContext, newsContextStatus, refreshNewsContextNow, scoreNewsImpact, subscribeNewsContext } from './services/newsContext.js';
+import {
+  getNewsContext,
+  newsContextStatus,
+  refreshNewsContextNow,
+  scoreNewsImpact,
+  startNewsContextRuntime,
+  stopNewsContextRuntime,
+  subscribeNewsContext,
+} from './services/newsContext.js';
 import { disambiguateNewsItemIds } from './services/newsIdentity.js';
 import { OperatorAccess } from './security/access.js';
 import type { AppConfig } from './types.js';
@@ -3534,7 +3542,7 @@ function connectionWatchmanSnapshot(
   const volume = volumeRuntime.connectionStatus();
   const news = currentNewsContextStatus();
   const accountAgeMs = account.lastSyncTs ? now - account.lastSyncTs : null;
-  const newsAgeMs = news.fetchedAt ? now - news.fetchedAt : null;
+  const newsAgeMs = news.fetchedAt !== null ? now - news.fetchedAt : null;
   const calendarAgeMs = calCache?.at ? now - calCache.at : null;
   const fxAgeMs = fxCache?.at ? now - fxCache.at : null;
   const accountStatus: WatchmanStatus = !account.keysPresent
@@ -3549,7 +3557,7 @@ function connectionWatchmanSnapshot(
     : basis.bookState !== 'fresh' || basis.markState !== 'fresh' || volume.bookState !== 'fresh' || volume.streamState !== 'open'
       ? 'degraded'
       : 'operational';
-  const newsStatus: WatchmanStatus = !news.fetchedAt
+  const newsStatus: WatchmanStatus = news.fetchedAt === null
     ? 'planned'
     : news.live === 0 || (newsAgeMs !== null && newsAgeMs > 5 * 60_000)
       ? 'outage'
@@ -3611,7 +3619,7 @@ function connectionWatchmanSnapshot(
     {
       id: 'news-sources', label: 'News Source Network', group: 'sources', status: newsStatus,
       detail: `On-demand/unaccepted · ${news.live} live · ${news.delayed} delayed · ${news.errors} errors · ${news.items} retained`,
-      value: news.fetchedAt ? `${news.live}/${news.sources} live` : 'On demand', required: false, updatedAt: news.fetchedAt, resetTarget: 'news',
+      value: news.fetchedAt !== null ? `${news.live}/${news.sources} live` : 'On demand', required: false, updatedAt: news.fetchedAt, resetTarget: 'news',
     },
     {
       id: 'calendar-source', label: 'Economic Calendar', group: 'sources',
@@ -4762,6 +4770,7 @@ function startServerTimers(): void {
   // operator events remain dedicated-cursor truth; raw Ledger events and
   // metrics are never exposed on the application WebSocket.
   if (privateReadTransportAdmitted) privateRead.start();
+  if (startupPublicSourceEgressAdmitted) startNewsContextRuntime();
   pruneEphemeralLedgerEvents(5);
   eventRetentionTimer = setInterval(() => {
     pruneEphemeralLedgerEvents(5);
@@ -4900,6 +4909,7 @@ function gracefulShutdown(signal: NodeJS.Signals): Promise<GracefulShutdownOutco
     websocketHeartbeatTimer = null;
     canonicalDeliveryTimer = null;
     loopLagTimer = null;
+    stopNewsContextRuntime();
     privateRead.stop();
     bookHub.stop();
     for (const socket of pendingWsUpgradeSockets) {

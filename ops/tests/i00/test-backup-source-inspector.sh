@@ -326,4 +326,108 @@ assert_failure_contains 'does not declare the published manifest key sets' \
   "$I00_ROOT/bin/run-bound-effect.mjs" \
   "$RESTORE"
 
+# The version-2 value bounds cannot be covered for the bound-effect runner the
+# way they are for the inspector above. The runner reaches its manifest check
+# only after a full authorized-effect chain has been raised, which this host
+# cannot do, so writing a fixture and invoking the binary would never arrive at
+# the predicate at all. The predicate is therefore lifted out of the source and
+# evaluated against the same fixtures, the same way this suite already reads
+# declarations it cannot execute.
+#
+# What is lifted is the runner's own statement, not a restatement of it: the
+# version-2 check and the digest pattern it uses are read from the file by
+# anchor, and each must appear exactly once and be terminated by its own text.
+# A renamed, duplicated or restructured check is an error here rather than a
+# lift that quietly evaluates nothing. Takes the consumer to lift from and the
+# expected outcome as arguments, so the lift itself can be proven against a
+# known-drifted copy of the runner.
+assert_bound_effect_v2_predicate() {
+  node - "$@" <<'NODE'
+const fs = require('fs');
+const [consumer, manifestPath, expected] = process.argv.slice(2);
+const source = fs.readFileSync(consumer, 'utf8');
+const REFUSAL = 'backup output manifest does not describe one database-only v2 artifact';
+const statement = (anchor, tail) => {
+  const at = source.indexOf(anchor);
+  if (at === -1) throw new Error(`${consumer} does not declare ${anchor}`);
+  if (source.indexOf(anchor, at + anchor.length) !== -1) {
+    throw new Error(`${consumer} declares ${anchor} more than once`);
+  }
+  const end = source.indexOf(tail, at + anchor.length);
+  if (end === -1) throw new Error(`${consumer} does not bound ${anchor}`);
+  return source.slice(at, end + tail.length);
+};
+const lifted = new Function(
+  'manifest',
+  'manifestVersion',
+  'outputRequire',
+  [
+    statement('const DIGEST = ', ';'),
+    statement('outputRequire(manifestVersion !== 2', `'${REFUSAL}');`),
+    'return true;',
+  ].join('\n'),
+);
+// The runner reads the version exactly as the inspector does, so the fixture is
+// versioned the same way rather than told which version it is.
+const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+const manifestVersion = Object.hasOwn(manifest, 'schemaVersion')
+  ? manifest.schemaVersion : 1;
+let refusal = null;
+try {
+  lifted(manifest, manifestVersion, (condition, message) => {
+    if (!condition) throw new Error(message);
+  });
+} catch (error) {
+  refusal = error.message;
+}
+if (expected === 'accept' && refusal !== null) {
+  throw new Error(`${consumer} refused a version 2 manifest the publisher writes: ${refusal}`);
+}
+if (expected === 'refuse' && refusal === null) {
+  throw new Error(`${consumer} accepted a version 2 dataSchema of 0`);
+}
+// A refusal only counts as coverage of this bound if it is the version-2
+// refusal, not some unrelated error raised on the way to it.
+if (expected === 'refuse' && refusal !== REFUSAL) {
+  throw new Error(`${consumer} refused for the wrong reason: ${refusal}`);
+}
+NODE
+}
+
+# Rewrites the runner's version-2 schema floor back to the version-1 bound, so
+# the assertion above is proven to be decided by that floor. Throws rather than
+# emitting an unchanged copy if the floor is absent or not unique, so the
+# negative control below can never pass vacuously.
+drift_schema_floor() {
+  node - "$@" <<'NODE'
+const fs = require('fs');
+const [source, destination] = process.argv.slice(2);
+const text = fs.readFileSync(source, 'utf8');
+const floor = 'manifest.dataSchema >= 1';
+const at = text.indexOf(floor);
+if (at === -1) throw new Error(`${source} does not declare ${floor}`);
+if (text.indexOf(floor, at + floor.length) !== -1) {
+  throw new Error(`${source} declares ${floor} more than once`);
+}
+fs.writeFileSync(destination, text.replace(floor, 'manifest.dataSchema >= 0'));
+NODE
+}
+
+# The same floor the inspector is held to above, on the reader that cannot be
+# invoked here. The accepted edge is asserted alongside the rejected one, so the
+# bound is proven to be a floor rather than a blanket refusal.
+note "the bound-effect runner holds version 2 to the schema floor the publisher writes"
+write_manifest 1 v2
+assert_success assert_bound_effect_v2_predicate \
+  "$I00_ROOT/bin/run-bound-effect.mjs" "$MANIFEST" accept
+write_manifest 1 v2ZeroSchema
+assert_success assert_bound_effect_v2_predicate \
+  "$I00_ROOT/bin/run-bound-effect.mjs" "$MANIFEST" refuse
+
+note "the lifted predicate rejects a runner drifted back to the version 1 bound"
+DRIFTED_FLOOR="$TEST_TMP/drifted-floor.mjs"
+assert_success drift_schema_floor "$I00_ROOT/bin/run-bound-effect.mjs" "$DRIFTED_FLOOR"
+assert_failure_contains 'accepted a version 2 dataSchema of 0' \
+  assert_bound_effect_v2_predicate "$DRIFTED_FLOOR" "$MANIFEST" refuse
+
 finish

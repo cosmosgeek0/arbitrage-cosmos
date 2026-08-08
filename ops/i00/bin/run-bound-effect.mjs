@@ -1648,12 +1648,13 @@ function inspectBoundBackupOutput({
     // is only publishable from a steady PRESENT journal - the publisher refuses
     // to write anything else - so PRESENT is the only value a real backup
     // carries. rollbackFloor must be a concrete non-negative schema number no
-    // higher than the schema the backup was taken at, which also means
-    // dataSchema can no longer be the version-1 null.
+    // higher than the schema the backup was taken at, and that schema is a real
+    // applied migration, so dataSchema can be neither the version-1 null nor
+    // zero.
     outputRequire(manifestVersion !== 2
       || (manifest.schemaVersion === 2
         && manifest.journalState === 'PRESENT'
-        && Number.isSafeInteger(manifest.dataSchema) && manifest.dataSchema >= 0
+        && Number.isSafeInteger(manifest.dataSchema) && manifest.dataSchema >= 1
         && Number.isSafeInteger(manifest.rollbackFloor) && manifest.rollbackFloor >= 0
         && manifest.rollbackFloor <= manifest.dataSchema
         && DIGEST.test(manifest.sourceJournalSha256)),

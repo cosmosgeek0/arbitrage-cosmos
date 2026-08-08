@@ -96,6 +96,19 @@ const MAX_OPEN_FILE_BYTES = 128n * 1024n * 1024n * 1024n;
 const BACKUP_OUTPUT_MAX_BYTES = 4_096;
 const BACKUP_OUTPUT_FD = 53;
 const BACKUP_NAME = /^[0-9]{8}T[0-9]{6}Z(?:-[1-9][0-9]*)?$/u;
+// Backup manifests are versioned. Manifests written before the publisher began
+// recording recovery state carry no schemaVersion and are read as version 1;
+// current publications carry schemaVersion 2 and the four added fields. No
+// other version is understood, so no other version is accepted.
+const BACKUP_MANIFEST_V1_KEYS = Object.freeze([
+  'backupId', 'createdAtUtc', 'dbFile', 'dbSha256', 'dbBytes', 'eventsCount',
+  'dataSchema', 'integrityCheck', 'evidence',
+]);
+const BACKUP_MANIFEST_V2_KEYS = Object.freeze([
+  'schemaVersion', 'backupId', 'createdAtUtc', 'dbFile', 'dbSha256', 'dbBytes',
+  'eventsCount', 'journalState', 'dataSchema', 'rollbackFloor',
+  'sourceJournalSha256', 'integrityCheck', 'evidence',
+]);
 const EXECUTABLE_SLOTS = Object.freeze({
   node: 16,
   bash: 17,
@@ -1607,10 +1620,17 @@ function inspectBoundBackupOutput({
     }
     outputRequire(manifestEvidence.content.equals(canonicalJsonBytes(manifest)),
       'backup output manifest is not canonical JSON');
-    outputExactKeys(manifest, [
-      'backupId', 'createdAtUtc', 'dbFile', 'dbSha256', 'dbBytes',
-      'eventsCount', 'dataSchema', 'integrityCheck', 'evidence',
-    ], 'backup output manifest');
+    outputRequire(manifest !== null && typeof manifest === 'object'
+      && !Array.isArray(manifest), 'backup output manifest is not an object');
+    const manifestVersion = Object.hasOwn(manifest, 'schemaVersion')
+      ? manifest.schemaVersion : 1;
+    outputRequire(manifestVersion === 1 || manifestVersion === 2,
+      'backup output manifest schema version is not supported');
+    outputExactKeys(
+      manifest,
+      manifestVersion === 2 ? BACKUP_MANIFEST_V2_KEYS : BACKUP_MANIFEST_V1_KEYS,
+      'backup output manifest',
+    );
     outputRequire(manifest.backupId === outputName
       && typeof manifest.createdAtUtc === 'string'
       && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u.test(manifest.createdAtUtc)
@@ -1624,6 +1644,21 @@ function inspectBoundBackupOutput({
       && manifest.integrityCheck === 'ok'
       && sameJson(manifest.evidence, []),
     'backup output manifest does not describe one database-only artifact');
+    // Version 2 adds the recovery fields the publisher now records. A manifest
+    // is only publishable from a steady PRESENT journal - the publisher refuses
+    // to write anything else - so PRESENT is the only value a real backup
+    // carries. rollbackFloor must be a concrete non-negative schema number no
+    // higher than the schema the backup was taken at, and that schema is a real
+    // applied migration, so dataSchema can be neither the version-1 null nor
+    // zero.
+    outputRequire(manifestVersion !== 2
+      || (manifest.schemaVersion === 2
+        && manifest.journalState === 'PRESENT'
+        && Number.isSafeInteger(manifest.dataSchema) && manifest.dataSchema >= 1
+        && Number.isSafeInteger(manifest.rollbackFloor) && manifest.rollbackFloor >= 0
+        && manifest.rollbackFloor <= manifest.dataSchema
+        && DIGEST.test(manifest.sourceJournalSha256)),
+    'backup output manifest does not describe one database-only v2 artifact');
     const database = readBackupOutputFile(
       directoryDescriptor,
       named,

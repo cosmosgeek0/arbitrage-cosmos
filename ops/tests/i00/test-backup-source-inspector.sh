@@ -145,15 +145,15 @@ write_manifest 1 badJournalState
 assert_failure_contains 'does not describe one complete verified v2 backup' \
   node "$INSPECTOR" --path "$BACKUP"
 
-# The outcome recorder validates the same published manifest, but only behind a
-# full authorized-effect chain that cannot be raised here. Its key sets are
-# therefore bound to this inspector's directly: the defect this suite exists to
-# catch is a consumer drifting away from what the publisher writes, and that
-# drift is visible in the declared sets whether or not the privileged path can
-# be exercised on this host.
+# The outcome recorder and the bound-effect runner validate the same published
+# manifest, but only behind a full authorized-effect chain that cannot be raised
+# here. Their key sets are therefore bound to this inspector's directly: the
+# defect this suite exists to catch is a consumer drifting away from what the
+# publisher writes, and that drift is visible in the declared sets whether or not
+# the privileged path can be exercised on this host. Takes the consumers to check
+# as arguments so the guard itself can be proven against a known-drifted copy.
 assert_consumer_key_sets() {
-  node - "$I00_ROOT/bin/inspect-backup-source.mjs" \
-    "$I00_ROOT/bin/record-authorized-action-outcome.mjs" <<'NODE'
+  node - "$@" <<'NODE'
 const fs = require('fs');
 // The exact field set ops/live/bin/backup.sh writes at schemaVersion 2.
 const PUBLISHED_V2 = [
@@ -186,7 +186,42 @@ for (const file of process.argv.slice(2)) {
 NODE
 }
 
+# Rewrites one consumer with a V2 key set that no longer matches the publisher,
+# by dropping a single key from the declared literal. It throws rather than
+# emitting an unchanged copy if it cannot actually introduce that drift, so the
+# negative control below can never pass vacuously against a file it failed to
+# edit.
+drift_consumer() {
+  node - "$1" "$2" <<'NODE'
+const fs = require('fs');
+const [source, destination] = process.argv.slice(2);
+const text = fs.readFileSync(source, 'utf8');
+const anchor = text.indexOf('const BACKUP_MANIFEST_V2_KEYS = Object.freeze([');
+if (anchor === -1) throw new Error(`${source} does not declare BACKUP_MANIFEST_V2_KEYS`);
+const open = text.indexOf('[', anchor);
+const close = text.indexOf(']', open);
+if (close === -1) throw new Error(`${source} does not bound BACKUP_MANIFEST_V2_KEYS`);
+const block = text.slice(open, close);
+if (!block.includes("'rollbackFloor',")) {
+  throw new Error(`${source} does not declare rollbackFloor in its V2 key set`);
+}
+fs.writeFileSync(
+  destination,
+  text.slice(0, open) + block.replace("'rollbackFloor',", '') + text.slice(close),
+);
+NODE
+}
+
 note "every backup manifest consumer declares the same versioned key sets"
-assert_success assert_consumer_key_sets
+assert_success assert_consumer_key_sets \
+  "$I00_ROOT/bin/inspect-backup-source.mjs" \
+  "$I00_ROOT/bin/record-authorized-action-outcome.mjs" \
+  "$I00_ROOT/bin/run-bound-effect.mjs"
+
+note "the consumer key-set guard rejects a consumer drifted from the publisher"
+DRIFTED="$TEST_TMP/drifted-consumer.mjs"
+assert_success drift_consumer "$I00_ROOT/bin/run-bound-effect.mjs" "$DRIFTED"
+assert_failure_contains 'does not declare the published manifest key sets' \
+  assert_consumer_key_sets "$DRIFTED"
 
 finish

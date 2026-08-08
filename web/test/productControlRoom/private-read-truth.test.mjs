@@ -9,6 +9,7 @@ import {
   PRIVATE_READ_ACCESS_DENIED_REASON,
   PRIVATE_READ_AUTH_REQUIRED_REASON,
   PRIVATE_READ_STALE_AFTER_MS,
+  appliedPrivateReadSource,
   decodeApiPermissionsEnvelope,
   decodeM0SpotReadinessTruth,
   decodePrivateReadSnapshot,
@@ -735,6 +736,9 @@ test('display provenance cannot be relabelled by an older state response', () =>
     observedAtMs: 10,
     field: { presence: 'MISSING' },
   });
+  assert.equal(tuple.privateRead.transport, 'FALLBACK');
+  assert.equal(tuple.privateRead.source, null);
+  assert.equal(appliedPrivateReadSource(tuple.privateRead), 'PENDING');
   const fallback = availableFixture();
   fallback.spot.balances[0].free = '88.00000000';
   tuple = reduceRealDataClientTuple(tuple, {
@@ -751,6 +755,7 @@ test('display provenance cannot be relabelled by an older state response', () =>
   });
   assert.equal(tuple.privateRead.transport, 'STATE');
   assert.equal(tuple.privateRead.source, 'FALLBACK');
+  assert.equal(appliedPrivateReadSource(tuple.privateRead), 'FALLBACK');
   assert.equal(tuple.privateRead.snapshot.spot.balances[0].free, '88.00000000');
   assert.equal(tuple.privateRead.appliedRequestId, 3);
   assert.equal(tuple.privateRead.stateDecisionRequestId, 2);

@@ -33,6 +33,7 @@ import {
 } from './lib/reconnectBackoff';
 import {
   INITIAL_REAL_DATA_CLIENT_TUPLE,
+  appliedPrivateReadSource,
   decodeM0SpotReadinessTruth,
   decodePrivateReadSnapshot,
   privateReadAccessReasonForStatus,
@@ -1632,10 +1633,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   ]);
 
   const privateReadClient = realDataClient.privateRead;
-  const privateReadSource = privateReadClient.source
-    ?? (privateReadClient.status === 'PENDING'
-      ? 'PENDING'
-      : privateReadClient.transport);
+  const privateReadSource = appliedPrivateReadSource(privateReadClient);
   const store: Store = {
     state,
     stateStatus: stateTruth.status,

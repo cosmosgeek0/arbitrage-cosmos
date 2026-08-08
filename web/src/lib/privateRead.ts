@@ -830,6 +830,17 @@ export interface PrivateReadClientTruth {
   readonly stateDecisionRequestId: number;
 }
 
+/**
+ * Projects only the provenance of the snapshot currently on screen. An active
+ * fallback transport is not displayed as a source until it supplies an
+ * admitted snapshot of its own.
+ */
+export function appliedPrivateReadSource(
+  client: Readonly<Pick<PrivateReadClientTruth, 'source'>>,
+): PrivateReadSourceId {
+  return client.source ?? 'PENDING';
+}
+
 export type M0SpotReadinessDisposition =
   | 'SOURCE_READY_NOT_RUNTIME_VERIFIED'
   | 'M0_BLOCKED_PERMISSION'

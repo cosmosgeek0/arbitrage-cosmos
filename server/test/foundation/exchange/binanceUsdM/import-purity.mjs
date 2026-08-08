@@ -93,10 +93,27 @@ section('3. compiled modules contain no implicit I/O or authority expansion');
   const { readdirSync, readFileSync } = await import('node:fs');
   const { join, dirname } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
-  const distDir = join(dirname(fileURLToPath(import.meta.url)), '../../../../dist/foundation/exchange/binanceUsdM');
-  const files = readdirSync(distDir).filter((file) => file.endsWith('.js')).sort();
-  const source = files.map((file) => readFileSync(join(distDir, file), 'utf8')).join('\n');
-  check('compiled module set is non-trivial', files.length >= 8, files.join(','));
+  const distRoots = [
+    ['binanceUsdM', join(dirname(fileURLToPath(import.meta.url)), '../../../../dist/foundation/exchange/binanceUsdM')],
+    ['binanceUsdMAdapter', join(dirname(fileURLToPath(import.meta.url)), '../../../../dist/foundation/exchange/binanceUsdMAdapter')],
+  ];
+  const compiledModules = distRoots.flatMap(([root, distDir]) => (
+    readdirSync(distDir)
+      .filter((file) => file.endsWith('.js'))
+      .sort()
+      .map((file) => ({
+        root,
+        file,
+        source: readFileSync(join(distDir, file), 'utf8'),
+      }))
+  ));
+  const source = compiledModules.map((module) => module.source).join('\n');
+  const files = compiledModules.map((module) => `${module.root}/${module.file}`);
+  check(
+    'compiled module set covers public groundwork and validate-only adapter',
+    distRoots.every(([root]) => compiledModules.some((module) => module.root === root)),
+    files.join(','),
+  );
   const forbidden = [
     ['environment access', /process\.env/],
     ['wall clock', /Date\.now\s*\(/],
@@ -115,11 +132,15 @@ section('3. compiled modules contain no implicit I/O or authority expansion');
     ['capital movement path', /\/(?:borrow|repay|transfer|withdraw)/],
   ];
   for (const [name, pattern] of forbidden) check(`no ${name}`, !pattern.test(source));
-  const postDeclarations = source.match(/method:\s*'POST'/g) ?? [];
+  const publicGroundworkSource = compiledModules
+    .filter((module) => module.root === 'binanceUsdM')
+    .map((module) => module.source)
+    .join('\n');
+  const postDeclarations = publicGroundworkSource.match(/method:\s*'POST'/g) ?? [];
   check('exactly one compiled POST declaration', postDeclarations.length === 1, `${postDeclarations.length}`);
-  check('compiled POST declaration is test-only', /TEST_ORDER:[^\n]+method:\s*'POST'[^\n]+\/fapi\/v1\/order\/test/.test(source));
+  check('compiled POST declaration is test-only', /TEST_ORDER:[^\n]+method:\s*'POST'[^\n]+\/fapi\/v1\/order\/test/.test(publicGroundworkSource));
   for (const endpoint of Object.values(mod.BINANCE_USDM_ENDPOINTS)) {
-    check(`compiled endpoint present ${endpoint.path}`, source.includes(endpoint.path));
+    check(`compiled endpoint present ${endpoint.path}`, publicGroundworkSource.includes(endpoint.path));
   }
 }
 

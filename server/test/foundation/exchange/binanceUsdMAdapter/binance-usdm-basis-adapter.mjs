@@ -1,6 +1,13 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import nodeTest from 'node:test';
+import { pathToFileURL } from 'node:url';
+
+const test =
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+    ? nodeTest
+    : () => {};
 
 import {
   createBinanceUsdMPublicGroundworkSeam,

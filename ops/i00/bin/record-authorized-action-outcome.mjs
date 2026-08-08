@@ -60,10 +60,20 @@ const INSTALL_RECEIPT_KEYS = Object.freeze([
   'effectiveRootDigestSha256', 'i00EnforcementTreeDigestSha256',
   'authorizedCorrectionFindingIds', 'serviceMutationPerformed',
 ]);
-const BACKUP_MANIFEST_KEYS = Object.freeze([
+// Backup manifests are versioned. Manifests written before the publisher began
+// recording recovery state carry no schemaVersion and are read as version 1;
+// current publications carry schemaVersion 2 and the four added fields. No
+// other version is understood, so no other version is accepted.
+const BACKUP_MANIFEST_V1_KEYS = Object.freeze([
   'backupId', 'createdAtUtc', 'dbFile', 'dbSha256', 'dbBytes', 'eventsCount',
   'dataSchema', 'integrityCheck', 'evidence',
 ]);
+const BACKUP_MANIFEST_V2_KEYS = Object.freeze([
+  'schemaVersion', 'backupId', 'createdAtUtc', 'dbFile', 'dbSha256', 'dbBytes',
+  'eventsCount', 'journalState', 'dataSchema', 'rollbackFloor',
+  'sourceJournalSha256', 'integrityCheck', 'evidence',
+]);
+const BACKUP_JOURNAL_STATES = Object.freeze(['PRESENT', 'PENDING', 'ABSENT']);
 const RESTORE_REPORT_KEYS = Object.freeze([
   'ts', 'backupId', 'target', 'production', 'dbSha256',
   'declaredEventsCount', 'eventsCount', 'declaredEvidenceArchives',
@@ -896,7 +906,16 @@ function validateConsumedClaim(consumption, evidence, authorization, risk, previ
 }
 
 function validateBackupManifest(manifest, backup, label) {
-  exactObjectKeys(manifest, BACKUP_MANIFEST_KEYS, `${label} manifest`);
+  assert(manifest !== null && typeof manifest === 'object' && !Array.isArray(manifest),
+    `${label} manifest must be an object`);
+  const version = Object.hasOwn(manifest, 'schemaVersion') ? manifest.schemaVersion : 1;
+  assert(version === 1 || version === 2,
+    `${label} manifest schema version is not supported`);
+  exactObjectKeys(
+    manifest,
+    version === 2 ? BACKUP_MANIFEST_V2_KEYS : BACKUP_MANIFEST_V1_KEYS,
+    `${label} manifest`,
+  );
   assert(typeof manifest.backupId === 'string' && manifest.backupId === basename(backup)
     && manifest.backupId.length <= 256
     && !/[\u0000-\u001f\u007f]/u.test(manifest.backupId),
@@ -914,6 +933,20 @@ function validateBackupManifest(manifest, backup, label) {
     && manifest.integrityCheck === 'ok'
     && Array.isArray(manifest.evidence) && manifest.evidence.length <= 10_000,
   `${label} manifest database metadata is invalid`);
+  if (version !== 2) return;
+  // journalState is one of the three states the journal snapshot reports, but a
+  // manifest is only publishable from a steady PRESENT journal, so PRESENT is
+  // the only value a real backup carries. rollbackFloor must be a concrete
+  // non-negative schema number no higher than the schema the backup was taken
+  // at, which also means dataSchema cannot be the version-1 null.
+  assert(manifest.schemaVersion === 2
+    && BACKUP_JOURNAL_STATES.includes(manifest.journalState)
+    && manifest.journalState === 'PRESENT'
+    && Number.isSafeInteger(manifest.dataSchema) && manifest.dataSchema >= 0
+    && Number.isSafeInteger(manifest.rollbackFloor) && manifest.rollbackFloor >= 0
+    && manifest.rollbackFloor <= manifest.dataSchema
+    && /^[0-9a-f]{64}$/u.test(manifest.sourceJournalSha256),
+  `${label} manifest recovery metadata is invalid`);
 }
 
 function backupRootEntryIdentity(stat) {

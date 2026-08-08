@@ -178,10 +178,32 @@ try {
 if (!manifestEvidence.bytes.equals(Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`))) {
   fail('backup manifest bytes are not canonical');
 }
-requireExactKeys(manifest, [
+// Backup manifests are versioned. Publications carry schemaVersion 2 and four
+// additional recovery fields; manifests written before that change carry no
+// schemaVersion at all and are read as version 1. Any other declared version -
+// and any key outside the set that version owns - is refused rather than
+// half-understood, so an unrecognised manifest can never be treated as a
+// verified backup source.
+const BACKUP_MANIFEST_V1_KEYS = Object.freeze([
   'backupId', 'createdAtUtc', 'dbFile', 'dbSha256', 'dbBytes', 'eventsCount',
   'dataSchema', 'integrityCheck', 'evidence',
-], 'backup manifest');
+]);
+const BACKUP_MANIFEST_V2_KEYS = Object.freeze([
+  'schemaVersion', 'backupId', 'createdAtUtc', 'dbFile', 'dbSha256', 'dbBytes',
+  'eventsCount', 'journalState', 'dataSchema', 'rollbackFloor',
+  'sourceJournalSha256', 'integrityCheck', 'evidence',
+]);
+const BACKUP_JOURNAL_STATES = Object.freeze(['PRESENT', 'PENDING', 'ABSENT']);
+const manifestVersion = Object.hasOwn(manifest, 'schemaVersion')
+  ? manifest.schemaVersion : 1;
+if (manifestVersion !== 1 && manifestVersion !== 2) {
+  fail('backup manifest schema version is not supported');
+}
+requireExactKeys(
+  manifest,
+  manifestVersion === 2 ? BACKUP_MANIFEST_V2_KEYS : BACKUP_MANIFEST_V1_KEYS,
+  'backup manifest',
+);
 const createdAtMs = typeof manifest.createdAtUtc === 'string'
   ? Date.parse(manifest.createdAtUtc) : Number.NaN;
 if (manifest.backupId !== basename(requested)
@@ -197,6 +219,23 @@ if (manifest.backupId !== basename(requested)
       || (Number.isSafeInteger(manifest.dataSchema) && manifest.dataSchema >= 0))
     || !Array.isArray(manifest.evidence) || manifest.evidence.length > 10_000) {
   fail('backup manifest does not describe one complete verified backup');
+}
+// Version 2 adds the recovery fields the publisher now records. journalState is
+// one of the three states the journal snapshot can report, but a manifest is
+// only publishable from a steady PRESENT journal - the publisher refuses to
+// write anything else and the restore path accepts nothing else - so PRESENT is
+// the only value a real backup can carry here. rollbackFloor must be a concrete
+// non-negative schema number no higher than the schema the backup was taken at,
+// which also means dataSchema can no longer be the version-1 null.
+if (manifestVersion === 2
+    && (manifest.schemaVersion !== 2
+      || !BACKUP_JOURNAL_STATES.includes(manifest.journalState)
+      || manifest.journalState !== 'PRESENT'
+      || !Number.isSafeInteger(manifest.dataSchema) || manifest.dataSchema < 0
+      || !Number.isSafeInteger(manifest.rollbackFloor) || manifest.rollbackFloor < 0
+      || manifest.rollbackFloor > manifest.dataSchema
+      || !/^[0-9a-f]{64}$/u.test(manifest.sourceJournalSha256))) {
+  fail('backup manifest does not describe one complete verified v2 backup');
 }
 const databaseEvidence = stableFile(
   'cosmos.db',

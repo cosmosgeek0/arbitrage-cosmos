@@ -186,7 +186,7 @@ export function projectBasisRowRenderTruth(
     fundingRate: rowCurrent && finite(row.fundingRate)
       ? fmtFunding(row.fundingRate)
       : 'UNKNOWN',
-    fundingSummary: rowCurrent && finite(row.nextFundingTs) && finite(row.fundingCarryPct)
+    fundingSummary: rowCurrent && finite(row.nextFundingTs) && row.nextFundingTs > 0 && finite(row.fundingCarryPct)
       ? countdown(row.nextFundingTs) + ' · Carry ' + fmtBasis(row.fundingCarryPct)
       : 'Funding unavailable',
     grossGapPct: rowCurrent && finite(row.executableGapPct)

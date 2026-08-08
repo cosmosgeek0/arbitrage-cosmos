@@ -472,6 +472,13 @@ test('Basis proposal economics and row truth preserve measured zero and withhold
     gapAgeMs: 'UNKNOWN',
     fundingCarryPct: 'UNKNOWN',
   });
+
+  const zeroFundingTime = structuredClone(row);
+  zeroFundingTime.nextFundingTs = 0;
+  assert.equal(
+    projectBasisRowRenderTruth(zeroFundingTime, true).fundingSummary,
+    'Funding unavailable',
+  );
 });
 
 test('Basis renders only canonically current runtime and exact account facts', async (context) => {

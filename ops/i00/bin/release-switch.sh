@@ -286,6 +286,12 @@ if [ "$SIMULATION" = 1 ]; then
 else
   node "$SCRIPT_DIR/validate-release.mjs" --release "$RELEASE" --require-exact-cohort \
     --trusted-build-public-key "${I00_TRUSTED_BUILD_PUBLIC_KEY:?trusted build public key is required}" >/dev/null
+  OPS_HELPER_BINDING="$("$NODE_PATH" "$I00_ROOT/ops-helper-root.mjs" \
+    --release-json "$RELEASE/release.json" --root-mode SYSTEM)" \
+    || blocked "release-bound ops helper root derivation failed"
+  OPS_HELPER_ROOT="$("$NODE_PATH" -e 'process.stdout.write(JSON.parse(process.argv[1]).root)' "$OPS_HELPER_BINDING")"
+  OPS_HELPER_TREE_SHA256="$("$NODE_PATH" -e 'process.stdout.write(JSON.parse(process.argv[1]).i00EnforcementTreeDigestSha256)' "$OPS_HELPER_BINDING")"
+  OPS_HELPER_APP_ENTRYPOINT="$("$NODE_PATH" -e 'process.stdout.write(JSON.parse(process.argv[1]).appEntrypoint)' "$OPS_HELPER_BINDING")"
 fi
 
 # Inspect one explicitly pinned SQLite executable without a shell or ambient
@@ -395,6 +401,9 @@ require_app_unit_binding() {
       --provenance-mode SYSTEM \
       --expected-fragment-path /etc/systemd/system/cosmos-app.service \
       --expected-fragment-source "$EFFECTIVE_DONOR_ROOT/systemd/cosmos-app.service" \
+      --ops-helper-root "$OPS_HELPER_ROOT" \
+      --ops-helper-tree-sha256 "$OPS_HELPER_TREE_SHA256" \
+      --ops-helper-app-entrypoint "$OPS_HELPER_APP_ENTRYPOINT" \
       --expected-binding-sha256 "$APP_UNIT_BINDING_SHA256")" = "$APP_UNIT_INITIAL" ] \
     || blocked "application unit binding changed around release-switch effect"
 }
@@ -653,7 +662,10 @@ if [ "$SIMULATION" != 1 ]; then
     --runtime-env "$RUNTIME_ENV" \
     --provenance-mode SYSTEM \
     --expected-fragment-path /etc/systemd/system/cosmos-app.service \
-    --expected-fragment-source "$EFFECTIVE_DONOR_ROOT/systemd/cosmos-app.service")"
+    --expected-fragment-source "$EFFECTIVE_DONOR_ROOT/systemd/cosmos-app.service" \
+    --ops-helper-root "$OPS_HELPER_ROOT" \
+    --ops-helper-tree-sha256 "$OPS_HELPER_TREE_SHA256" \
+    --ops-helper-app-entrypoint "$OPS_HELPER_APP_ENTRYPOINT")"
   app_unit_value() {
     "$NODE_PATH" -e '
       const value=JSON.parse(process.argv[1]);
@@ -727,7 +739,7 @@ if [ "$SIMULATION" != 1 ]; then
       || value.environmentFiles?.[1]?.path!=="/etc/cosmos/cosmos-i00.env"
       || value.environmentFiles?.[1]?.optional!==false
       || value.environmentAuthorityState!=="EXACT_PROVIDER_CREDENTIAL"
-      || value.execStart?.argv?.[3]!=="/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs"
+      || value.execStart?.argv?.[3]!==process.argv[2]
       || value.proofDropInPath!==null
       || value.proofDropInSha256!==null
       || value.proofDropInEndpointIdentity!==null
@@ -735,7 +747,7 @@ if [ "$SIMULATION" != 1 ]; then
       || value.proofDropInRuntimeLinkPath!==null
       || value.proofDropInRuntimeLinkEndpointIdentity!==null
       || value.proofAbsentSentinel!==null)process.exit(1);
-  ' "$APP_UNIT_INITIAL" \
+  ' "$APP_UNIT_INITIAL" "$OPS_HELPER_APP_ENTRYPOINT" \
     || blocked "production application unit unexpectedly retains staging proof authority"
 fi
 

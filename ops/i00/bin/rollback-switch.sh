@@ -235,6 +235,12 @@ else
   node "$SCRIPT_DIR/validate-release.mjs" --release "$RELEASE" --installed-immutable \
     --require-recovery-target-cohort \
     --trusted-build-public-key "${I00_TRUSTED_BUILD_PUBLIC_KEY:?trusted build public key is required}" >/dev/null
+  OPS_HELPER_BINDING="$("$NODE_PATH" "$I00_ROOT/ops-helper-root.mjs" \
+    --release-json "$RELEASE/release.json" --root-mode SYSTEM)" \
+    || blocked "rollback release-bound ops helper root derivation failed"
+  OPS_HELPER_ROOT="$("$NODE_PATH" -e 'process.stdout.write(JSON.parse(process.argv[1]).root)' "$OPS_HELPER_BINDING")"
+  OPS_HELPER_TREE_SHA256="$("$NODE_PATH" -e 'process.stdout.write(JSON.parse(process.argv[1]).i00EnforcementTreeDigestSha256)' "$OPS_HELPER_BINDING")"
+  OPS_HELPER_APP_ENTRYPOINT="$("$NODE_PATH" -e 'process.stdout.write(JSON.parse(process.argv[1]).appEntrypoint)' "$OPS_HELPER_BINDING")"
 fi
 if [ "$FINALIZE_ONLY" != 1 ]; then
   node "$SCRIPT_DIR/verify-sqlite-version.mjs" --version "$(node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(v.sqliteVersion)' "$HOST")" >/dev/null
@@ -267,6 +273,9 @@ require_app_unit_binding() {
       --provenance-mode SYSTEM \
       --expected-fragment-path /etc/systemd/system/cosmos-app.service \
       --expected-fragment-source "$EFFECTIVE_DONOR_ROOT/systemd/cosmos-app.service" \
+      --ops-helper-root "$OPS_HELPER_ROOT" \
+      --ops-helper-tree-sha256 "$OPS_HELPER_TREE_SHA256" \
+      --ops-helper-app-entrypoint "$OPS_HELPER_APP_ENTRYPOINT" \
       --expected-binding-sha256 "$APP_UNIT_BINDING_SHA256")" = "$APP_UNIT_INITIAL" ] \
     || blocked "application unit binding changed around rollback effect"
 }
@@ -440,7 +449,10 @@ else
     --runtime-env "$RUNTIME_ENV" \
     --provenance-mode SYSTEM \
     --expected-fragment-path /etc/systemd/system/cosmos-app.service \
-    --expected-fragment-source "$EFFECTIVE_DONOR_ROOT/systemd/cosmos-app.service")"
+    --expected-fragment-source "$EFFECTIVE_DONOR_ROOT/systemd/cosmos-app.service" \
+    --ops-helper-root "$OPS_HELPER_ROOT" \
+    --ops-helper-tree-sha256 "$OPS_HELPER_TREE_SHA256" \
+    --ops-helper-app-entrypoint "$OPS_HELPER_APP_ENTRYPOINT")"
   app_unit_value() {
     "$NODE_PATH" -e '
       const value=JSON.parse(process.argv[1]);
@@ -534,7 +546,7 @@ else
       || value.environmentFiles?.[1]?.path!=="/etc/cosmos/cosmos-i00.env"
       || value.environmentFiles?.[1]?.optional!==false
       || value.environmentAuthorityState!=="EXACT_PROVIDER_CREDENTIAL"
-      || value.execStart?.argv?.[3]!=="/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs"
+      || value.execStart?.argv?.[3]!==process.argv[2]
       || value.proofDropInPath!==null
       || value.proofDropInSha256!==null
       || value.proofDropInEndpointIdentity!==null
@@ -542,7 +554,7 @@ else
       || value.proofDropInRuntimeLinkPath!==null
       || value.proofDropInRuntimeLinkEndpointIdentity!==null
       || value.proofAbsentSentinel!==null)process.exit(1);
-  ' "$APP_UNIT_INITIAL" \
+  ' "$APP_UNIT_INITIAL" "$OPS_HELPER_APP_ENTRYPOINT" \
     || blocked "production application unit unexpectedly retains staging proof authority"
   DELEGATE_ENV_SHA="$(node -e 'const fs=require("fs"),c=require("crypto");process.stdout.write(c.createHash("sha256").update(fs.readFileSync(process.argv[1])).digest("hex"))' "$DELEGATE_ENV")"
   TARGET_ID="$(node -e 'const fs=require("fs");const v=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));process.stdout.write(v.releaseId)' "$RELEASE/release.json")"

@@ -105,6 +105,12 @@ function appUnitEvidence(risk) {
     ),
     '--provenance-mode', provenanceMode,
     '--expected-binding-sha256', actionEndpoint(action, 'app-unit-binding-sha256'),
+    '--ops-helper-root', actionEndpoint(action, 'ops-helper-root'),
+    '--ops-helper-tree-sha256', actionEndpoint(action, 'ops-helper-tree-sha256'),
+    '--ops-helper-app-entrypoint', actionEndpoint(
+      action,
+      'ops-helper-app-entrypoint-path',
+    ),
   ];
   if (stagingRoot !== 'NONE') {
     inspectionArguments.push(
@@ -311,7 +317,7 @@ function appUnitEvidence(risk) {
         'app-unit-exec-start-node-path',
       )
       || inspected.execStart?.argv?.[3] !== (stagingRoot === 'NONE'
-        ? '/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs'
+        ? actionEndpoint(action, 'ops-helper-app-entrypoint-path')
         : 'server/dist/index.js')
       || inspected.execStartSha256 !== actionEndpoint(
         action,

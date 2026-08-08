@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 import { compileJsonSchemaFile } from './json-schema.mjs';
 import { typedTreeDigest } from './lib.mjs';
+import { deriveOpsHelperBinding } from './ops-helper-root.mjs';
 import { validateSimulationRoot } from './simulation-safety.mjs';
 
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
@@ -143,6 +144,25 @@ const PROVIDER_APP_UNIT_ENDPOINT_PREFIXES = Object.freeze([
   'app-unit-provider-state',
   'app-unit-provider-unit',
 ]);
+const RELEASE_SWITCH_FIRST_HOST_ENDPOINT_PREFIXES = Object.freeze([
+  'first-host-account',
+  'first-host-environment',
+  'first-host-evidence-sha256',
+  'first-host-target-host',
+  'recovery-target',
+]);
+const RELEASE_SWITCH_AUTOMATIC_ROLLBACK_ENDPOINT_PREFIXES = Object.freeze([
+  'automatic-rollback-script-identity',
+  'automatic-rollback-script-path',
+  'automatic-rollback-script-sha256',
+  'current-artifact-manifest-sha256',
+  'current-release-identity',
+  'current-release-path',
+  'current-release-sha',
+  'current-release-tree-sha256',
+  'rollback-evidence-root',
+  'rollback-evidence-root-identity',
+]);
 
 const ACTION_CLASSES = Object.freeze({
   OPS_BUNDLE_INSTALL: Object.freeze({
@@ -185,6 +205,8 @@ const ACTION_CLASSES = Object.freeze({
       'node-identity',
       'node-path',
       'node-sha256',
+      'ops-helper-root',
+      'ops-helper-tree-sha256',
       'release-identity',
       'release-path',
       'release-sha',
@@ -305,6 +327,9 @@ const ACTION_CLASSES = Object.freeze({
       'node-identity',
       'node-path',
       'node-sha256',
+      'ops-helper-app-entrypoint-path',
+      'ops-helper-root',
+      'ops-helper-tree-sha256',
       'release-path',
       'release-identity',
       'release-sha',
@@ -324,25 +349,8 @@ const ACTION_CLASSES = Object.freeze({
     ]),
     optionalEndpointGroups: Object.freeze([
       PROVIDER_APP_UNIT_ENDPOINT_PREFIXES,
-      Object.freeze([
-        'first-host-account',
-        'first-host-environment',
-        'first-host-evidence-sha256',
-        'first-host-target-host',
-        'recovery-target',
-      ]),
-      Object.freeze([
-        'automatic-rollback-script-identity',
-        'automatic-rollback-script-path',
-        'automatic-rollback-script-sha256',
-        'current-artifact-manifest-sha256',
-        'current-release-identity',
-        'current-release-path',
-        'current-release-sha',
-        'current-release-tree-sha256',
-        'rollback-evidence-root',
-        'rollback-evidence-root-identity',
-      ]),
+      RELEASE_SWITCH_FIRST_HOST_ENDPOINT_PREFIXES,
+      RELEASE_SWITCH_AUTOMATIC_ROLLBACK_ENDPOINT_PREFIXES,
     ]),
   }),
   SERVICE_ROLLBACK: Object.freeze({
@@ -457,6 +465,9 @@ const ACTION_CLASSES = Object.freeze({
       'node-identity',
       'node-path',
       'node-sha256',
+      'ops-helper-app-entrypoint-path',
+      'ops-helper-root',
+      'ops-helper-tree-sha256',
       'release-path',
       'release-identity',
       'release-id',
@@ -630,6 +641,56 @@ const ACTION_CLASSES = Object.freeze({
 });
 
 export const DEPLOYMENT_ACTION_CLASSES = Object.freeze(Object.keys(ACTION_CLASSES));
+
+// Each ceiling is derived from the canonical inventory that validateEndpoints
+// accepts. Release-switch always admits the provider group and then exactly one
+// of the mutually exclusive first-host or automatic-rollback groups. This is
+// why its legal maximum uses max(5, 10), not the sum of both branches. Counted
+// derivation: install 47; release 121 + 7 + max(5, 10) = 138; rollback
+// 124 + 7 = 131; backup 68; isolated restore 79.
+export const DEPLOYMENT_ENDPOINT_BUDGETS = Object.freeze({
+  OPS_BUNDLE_INSTALL: ACTION_CLASSES.OPS_BUNDLE_INSTALL.endpointPrefixes.length,
+  SERVICE_RELEASE_SWITCH:
+    ACTION_CLASSES.SERVICE_RELEASE_SWITCH.endpointPrefixes.length
+    + PROVIDER_APP_UNIT_ENDPOINT_PREFIXES.length
+    + Math.max(
+      RELEASE_SWITCH_FIRST_HOST_ENDPOINT_PREFIXES.length,
+      RELEASE_SWITCH_AUTOMATIC_ROLLBACK_ENDPOINT_PREFIXES.length,
+    ),
+  SERVICE_ROLLBACK:
+    ACTION_CLASSES.SERVICE_ROLLBACK.endpointPrefixes.length
+    + PROVIDER_APP_UNIT_ENDPOINT_PREFIXES.length,
+  BACKUP_CREATE: ACTION_CLASSES.BACKUP_CREATE.endpointPrefixes.length,
+  ISOLATED_RESTORE: ACTION_CLASSES.ISOLATED_RESTORE.endpointPrefixes.length,
+});
+
+const SECRET_REQUIRED_KEY_BUDGET = 12;
+// SECRET_MATERIALIZATION is variable rather than one of the five counted
+// fixed inventories: 35 canonical fixed endpoints plus at most 12 required
+// keys, matching the executable provider's own required-key contract.
+const SECRET_MATERIALIZATION_ENDPOINT_BUDGET =
+  COMMON_EFFECT_ENDPOINT_PREFIXES.length + 20 + SECRET_REQUIRED_KEY_BUDGET;
+
+export const DEPLOYMENT_ENDPOINT_PREFIX_INVENTORIES = Object.freeze({
+  OPS_BUNDLE_INSTALL: Object.freeze([
+    ...ACTION_CLASSES.OPS_BUNDLE_INSTALL.endpointPrefixes,
+  ]),
+  SERVICE_RELEASE_SWITCH: Object.freeze([
+    ...ACTION_CLASSES.SERVICE_RELEASE_SWITCH.endpointPrefixes,
+    ...PROVIDER_APP_UNIT_ENDPOINT_PREFIXES,
+    ...RELEASE_SWITCH_AUTOMATIC_ROLLBACK_ENDPOINT_PREFIXES,
+  ]),
+  SERVICE_ROLLBACK: Object.freeze([
+    ...ACTION_CLASSES.SERVICE_ROLLBACK.endpointPrefixes,
+    ...PROVIDER_APP_UNIT_ENDPOINT_PREFIXES,
+  ]),
+  BACKUP_CREATE: Object.freeze([
+    ...ACTION_CLASSES.BACKUP_CREATE.endpointPrefixes,
+  ]),
+  ISOLATED_RESTORE: Object.freeze([
+    ...ACTION_CLASSES.ISOLATED_RESTORE.endpointPrefixes,
+  ]),
+});
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -819,6 +880,7 @@ function endpointValueValid(prefix, value) {
     'donor-contract-sha256', 'donor-env-sha256', 'env-sha256',
     'effective-donor-tree-sha256', 'first-host-evidence-sha256', 'hash-sha256',
     'l15-amendment-contract-sha256', 'mkdir-sha256', 'mv-sha256', 'node-sha256',
+    'ops-helper-tree-sha256',
     'rm-sha256', 'sqlite-sha256', 'provider-config-sha256', 'systemctl-sha256',
     'tar-sha256', 'release-tree-sha256',
     'backup-tree-sha256', 'effect-environment-sha256',
@@ -987,6 +1049,7 @@ function endpointValueValid(prefix, value) {
     'destination-parent-path', 'cosmos-root-path', 'releases-dir-path',
     'current-link-parent-path', 'previous-link-parent-path', 'ops-state-dir-path',
     'isolated-target-parent-path', 'data-dir-path',
+    'ops-helper-app-entrypoint-path', 'ops-helper-root',
     'exposure-helper-path', 'alert-helper-path',
     'release-path', 'rm-path', 'rollback-evidence-root', 'sqlite-path', 'systemctl-path',
     'systemd-analyze-path',
@@ -1002,10 +1065,24 @@ function endpointValueValid(prefix, value) {
   return value.length > 0;
 }
 
+function endpointBudget(actionClass) {
+  return actionClass === 'SECRET_MATERIALIZATION'
+    ? SECRET_MATERIALIZATION_ENDPOINT_BUDGET
+    : DEPLOYMENT_ENDPOINT_BUDGETS[actionClass];
+}
+
+export function deploymentEndpointBudget(actionClass) {
+  const budget = endpointBudget(actionClass);
+  assert(Number.isSafeInteger(budget) && budget > 0,
+    'action class endpoint budget is unavailable');
+  return budget;
+}
+
 function validateEndpoints(actionClass, endpoints) {
   const contract = ACTION_CLASSES[actionClass];
-  assert(Array.isArray(endpoints) && endpoints.length > 0 && endpoints.length <= 160,
-    'allowedEndpoints must contain 1 to 160 exact values');
+  const maximum = deploymentEndpointBudget(actionClass);
+  assert(Array.isArray(endpoints) && endpoints.length > 0 && endpoints.length <= maximum,
+    `allowedEndpoints must contain 1 to ${maximum} exact values for ${actionClass}`);
   const values = endpoints.map((entry, index) => exactText(entry, `allowedEndpoints[${index}]`));
   assert(new Set(values).size === values.length, 'allowedEndpoints contains a duplicate');
   assert(values.every((value, index) => value === [...values].sort()[index]),
@@ -1059,6 +1136,7 @@ function validateEndpoints(actionClass, endpoints) {
       && secretVersionIds.length === 1
       && Object.values(commonEffect).every((entries) => entries.length === 1)
       && requiredKeys.length > 0
+      && requiredKeys.length <= SECRET_REQUIRED_KEY_BUDGET
       && secretArns.length + outputPaths.length + regions.length + cliPaths.length
         + cliDigests.length + cliIdentities.length + roleArns.length
         + nodePaths.length + nodeDigests.length
@@ -1181,6 +1259,10 @@ function validateEndpoints(actionClass, endpoints) {
       'app unit ExecStart env path differs from the bound env executable');
     assert(endpointValue('app-unit-exec-start-node-path') === endpointValue('node-path'),
       'app unit ExecStart Node path differs from the bound Node executable');
+    if (endpointValue('current-release-sha') !== undefined) {
+      assert(endpointValue('current-release-sha') !== endpointValue('release-sha'),
+        'current and target release SHAs must remain distinct');
+    }
     assert(endpointValue('app-unit-environment-file-optional') === 'no'
       && endpointValue('app-unit-user') === 'cosmos'
       && endpointValue('app-unit-group') === 'cosmos'
@@ -1265,10 +1347,78 @@ function validateEndpoints(actionClass, endpoints) {
   return Object.freeze(values);
 }
 
-function classAction(actionClass, endpoints, receiptTargets) {
+function validateOpsHelperEndpointBinding(
+  actionClass,
+  endpoints,
+  artifactPolicy,
+  deployedSha,
+) {
+  if (![
+    'OPS_BUNDLE_INSTALL',
+    'SERVICE_RELEASE_SWITCH',
+    'SERVICE_ROLLBACK',
+  ].includes(actionClass)) return;
+  const endpointValue = (prefix) => endpoints
+    .find((entry) => entry.startsWith(`${prefix}:`))
+    ?.slice(prefix.length + 1);
+  const releaseSha = endpointValue('release-sha');
+  assert(releaseSha === deployedSha,
+    'ops helper release SHA differs from the deployment binding');
+  const binding = deriveOpsHelperBinding({
+    testedSha: releaseSha,
+    i00EnforcementTreeDigestSha256: endpointValue('ops-helper-tree-sha256'),
+    rootMode: artifactPolicy.rootMode,
+    proofRoot: artifactPolicy.rootMode === 'SYSTEM'
+      ? null
+      : artifactPolicy.proofRoot,
+  });
+  assert(endpointValue('ops-helper-root') === binding.root,
+    'ops helper root differs from the release SHA and I00 tree binding');
+  if (actionClass === 'OPS_BUNDLE_INSTALL') {
+    assert(endpointValue('destination') === binding.root,
+      'ops helper install destination differs from the canonical helper root');
+  } else {
+    assert(endpointValue('ops-helper-app-entrypoint-path') === binding.appEntrypoint,
+      'ops helper app entrypoint differs from the canonical helper root');
+  }
+}
+
+export function validateDeploymentAuthorizationEndpoints(
+  actionClass,
+  endpoints,
+  { artifactPolicy, deployedSha },
+) {
+  assert(ACTION_CLASSES[actionClass] !== undefined,
+    'actionClass is not supported');
+  assert(/^[0-9a-f]{40}$/u.test(deployedSha) && !/^0{40}$/u.test(deployedSha),
+    'endpoint validation requires one resolved deployed SHA');
+  const boundArtifactPolicy = validateDeploymentArtifactPolicy(
+    artifactPolicy,
+    actionClass,
+  );
+  const values = validateEndpoints(actionClass, endpoints);
+  validateOpsHelperEndpointBinding(
+    actionClass,
+    values,
+    boundArtifactPolicy,
+    deployedSha,
+  );
+  return values;
+}
+
+function classAction(
+  actionClass,
+  endpoints,
+  receiptTargets,
+  { artifactPolicy, deployedSha },
+) {
   const contract = ACTION_CLASSES[actionClass];
   assert(contract !== undefined, 'actionClass is not supported');
-  const allowedEndpoints = validateEndpoints(actionClass, endpoints);
+  const allowedEndpoints = validateDeploymentAuthorizationEndpoints(
+    actionClass,
+    endpoints,
+    { artifactPolicy, deployedSha },
+  );
   const endpointValue = (prefix) => allowedEndpoints
     .find((entry) => entry.startsWith(`${prefix}:`))
     ?.slice(prefix.length + 1);
@@ -1471,10 +1621,15 @@ function buildDeploymentRiskVersionInternal(requestInput, derivedEvidenceInput, 
   assert(Date.parse(request.startsAtUtc) < Date.parse(evidenceValidUntil)
     && Date.parse(evidenceValidUntil) <= Date.parse(request.expiresAtUtc),
   'mutable evidence horizon must remain active after start and not exceed authorization expiry');
-  const action = classAction(evidence.actionClass, evidence.allowedEndpoints, request.receiptTargets);
   const boundArtifactPolicy = validateDeploymentArtifactPolicy(
     artifactPolicy,
     evidence.actionClass,
+  );
+  const action = classAction(
+    evidence.actionClass,
+    evidence.allowedEndpoints,
+    request.receiptTargets,
+    { artifactPolicy: boundArtifactPolicy, deployedSha: evidence.deployedSha },
   );
   if (['SERVICE_RELEASE_SWITCH', 'SERVICE_ROLLBACK'].includes(evidence.actionClass)) {
     const endpointValue = (prefix) => action.allowedEndpoints

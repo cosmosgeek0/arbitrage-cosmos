@@ -26,7 +26,7 @@ EFFECTIVE="$(printf '%s\n%s\n%s\n' \
   | awk '/^ExecStart=$/{last=""; next} /^ExecStart=/{last=$0} END{print last}')"
 
 assert_contains "$EFFECTIVE" 'DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases'
-assert_contains "$EFFECTIVE" '/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs'
+assert_contains "$EFFECTIVE" 'REPLACE_ME_OPS_HELPER_ROOT/bin/app-entrypoint.mjs'
 assert_contains "$EFFECTIVE" '/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT='
 assert_contains "$(grep '^EnvironmentFile=' "$RUNTIME_DROPIN")" \
   '/etc/cosmos/cosmos-i00.env'

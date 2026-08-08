@@ -63,7 +63,7 @@ pass_assertion
 assert_eq "$(printf '%s\n' "$APP_DROPIN" | grep -Ec '^(Requires|After|LoadCredential)=')" 3
 assert_eq "$(printf '%s\n' "$APP_RUNTIME_DROPIN" | grep -c '^ExecStart=$')" 1
 assert_contains "$APP_RUNTIME_DROPIN" \
-  'ExecStart=/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node /usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs'
+  'ExecStart=/usr/bin/env DATA_DIR_LOGICAL_LEASE_ROOT=/run/cosmos-app/data-dir-leases /usr/bin/node REPLACE_ME_OPS_HELPER_ROOT/bin/app-entrypoint.mjs'
 assert_contains "$APP_RUNTIME_DROPIN" \
   'EnvironmentFile=/etc/cosmos/cosmos-i00.env'
 if printf '%s' "$APP_RUNTIME_DROPIN" | grep -E '^(Requires|After|LoadCredential)=' >/dev/null; then
@@ -78,7 +78,7 @@ fi
 pass_assertion
 assert_contains "$PROVIDER_UNIT" 'ReadOnlyPaths=/var/lib/cosmos-deployment-authorization'
 assert_contains "$PROVIDER_UNIT" 'UnsetEnvironment=NODE_OPTIONS NODE_PATH NODE_REPL_EXTERNAL_MODULE'
-assert_contains "$PROVIDER_UNIT" 'ExecStart=/usr/bin/node /usr/local/lib/cosmos-ops/i00/bin/secret-materialization.mjs'
+assert_contains "$PROVIDER_UNIT" 'ExecStart=/usr/bin/node REPLACE_ME_OPS_HELPER_ROOT/bin/secret-materialization.mjs'
 assert_contains "$PROVIDER_UNIT" '--authorization /etc/cosmos/external-authorization.json'
 assert_contains "$PROVIDER_UNIT" '--deployment-risk /var/lib/cosmos-deployment-authorization/REPLACE_ME_DEPLOYMENT_RISK_DOCUMENT.json'
 assert_contains "$PROVIDER_UNIT" '--action-preview /var/lib/cosmos-deployment-authorization/REPLACE_ME_ACTION_PREVIEW_DOCUMENT.json'

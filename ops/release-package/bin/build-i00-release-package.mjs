@@ -28,6 +28,7 @@ import {
   verifyFrozenSource,
   writeDeterministicTar,
 } from '../lib/release-package.mjs';
+import { deriveOpsHelperBinding } from '../../i00/ops-helper-root.mjs';
 
 function fail(message) {
   process.stderr.write(`i00-release-package: ${message}\n`);
@@ -182,6 +183,12 @@ try {
     const archiveSha256 = sha256File(stagedPaths.archive);
     const archiveSize = statSync(stagedPaths.archive).size;
     const release = inspected.release;
+    const opsHelperBinding = deriveOpsHelperBinding({
+      testedSha: release.testedSha,
+      i00EnforcementTreeDigestSha256:
+        release.l15OpsProvenance.i00EnforcementTreeDigestSha256,
+      rootMode: 'SYSTEM',
+    });
     const packageClass = allowSimulation
       ? 'SIMULATION_I00_RELEASE'
       : 'OFFHOST_I00_RELEASE';
@@ -217,6 +224,7 @@ try {
         publicKeySha256: release.buildAttestation.publicKeySha256 ?? null,
         i00EnforcementTreeDigestSha256:
           release.l15OpsProvenance.i00EnforcementTreeDigestSha256,
+        opsHelperBinding,
         validatorCohortMode: validation.validatorCohortMode,
         releaseTreeDigestSha256: typedTreeDigest(inspected.entries),
       },

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { isAbsolute, resolve } from 'node:path';
 
 import { fail, parseArgs } from '../lib.mjs';
+import { deriveOpsHelperBinding } from '../ops-helper-root.mjs';
 import { validateSimulationRoot } from '../simulation-safety.mjs';
 
 const DIGEST = /^[0-9a-f]{64}$/u;
@@ -34,6 +35,40 @@ if (args['test-provider-bound-root'] !== undefined) {
     fail('--test-provider-bound-root requires one exact marked simulation root');
   }
   expectedI00Environment = resolve(root, 'etc/cosmos/cosmos-i00.env');
+}
+
+let preview;
+try {
+  preview = JSON.parse(readFileSync(args['action-preview'], 'utf8'));
+} catch {
+  fail('action preview is not valid JSON');
+}
+const previewEndpoint = (prefix) => {
+  const marker = `${prefix}:`;
+  const matches = preview?.action?.allowedEndpoints
+    ?.filter((entry) => entry.startsWith(marker)) ?? [];
+  if (matches.length !== 1) fail(`action preview lacks one exact ${prefix}`);
+  return matches[0].slice(marker.length);
+};
+const expectedOpsHelperRoot = previewEndpoint('ops-helper-root');
+const expectedOpsHelperTreeSha256 = previewEndpoint('ops-helper-tree-sha256');
+const expectedOpsHelperAppEntrypoint = previewEndpoint(
+  'ops-helper-app-entrypoint-path',
+);
+let expectedOpsHelperBinding;
+try {
+  expectedOpsHelperBinding = deriveOpsHelperBinding({
+    testedSha: previewEndpoint('release-sha'),
+    i00EnforcementTreeDigestSha256: expectedOpsHelperTreeSha256,
+    rootMode: 'SYSTEM',
+  });
+} catch {
+  fail('action preview ops helper binding is invalid');
+}
+if (!DIGEST.test(expectedOpsHelperTreeSha256)
+    || expectedOpsHelperRoot !== expectedOpsHelperBinding.root
+    || expectedOpsHelperAppEntrypoint !== expectedOpsHelperBinding.appEntrypoint) {
+  fail('action preview ops helper binding is invalid');
 }
 
 function canonicalJson(value) {
@@ -86,7 +121,7 @@ if (inspected?.schemaVersion !== 4
     || inspected.environmentFiles[1]?.optional !== false
     || inspected?.environmentAuthorityState !== 'EXACT_PROVIDER_CREDENTIAL'
     || inspected?.execStart?.argv?.[3]
-      !== '/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs'
+      !== expectedOpsHelperAppEntrypoint
     || !DIGEST.test(inspected?.authorityClosureSha256)
     || !DIGEST.test(inspected?.bindingSha256)) {
   fail('app unit inspection is not the exact provider-bound SYSTEM contract');
@@ -114,13 +149,6 @@ for (const path of [
       || path === inspected.providerActionPreviewPath) {
     fail('pending release/rollback document reuses prior provider provenance');
   }
-}
-
-let preview;
-try {
-  preview = JSON.parse(readFileSync(args['action-preview'], 'utf8'));
-} catch {
-  fail('action preview is not valid JSON');
 }
 
 const expected = [

@@ -787,6 +787,12 @@ function requireBoundAppUnit(action, {
       'app-unit-fragment-source-path',
     ),
     '--expected-binding-sha256', bindingSha256,
+    '--ops-helper-root', actionEndpoint(action, 'ops-helper-root'),
+    '--ops-helper-tree-sha256', actionEndpoint(action, 'ops-helper-tree-sha256'),
+    '--ops-helper-app-entrypoint', actionEndpoint(
+      action,
+      'ops-helper-app-entrypoint-path',
+    ),
   ];
   if (stagingRoot !== 'NONE') fail('Gate-5 SYSTEM publication rejects staging app authority');
   const result = spawnSync(process.execPath, inspectionArguments, {
@@ -986,7 +992,7 @@ function requireBoundAppUnit(action, {
         'app-unit-exec-start-node-path',
       )
       || inspected.execStart?.argv?.[3]
-        !== '/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs'
+        !== actionEndpoint(action, 'ops-helper-app-entrypoint-path')
       || inspected.execStartSha256 !== actionEndpoint(
         action,
         'app-unit-exec-start-sha256',

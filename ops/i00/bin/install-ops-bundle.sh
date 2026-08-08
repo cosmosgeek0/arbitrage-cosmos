@@ -309,11 +309,11 @@ NODE
     || blocked "release I00 enforcement tree validation failed"
   release_snapshot="$(/proc/self/fd/16 - \
     "$release_cap" "$release_requested" "$release_tree_before" \
-    "$expected_i00_digest" <<'NODE'
+    "$expected_i00_digest" "$destination" <<'NODE'
 const { createHash } = require('node:crypto');
 const { readFileSync } = require('node:fs');
-const { resolve } = require('node:path');
-const [root, requested, treeSha256, i00Digest] = process.argv.slice(2);
+const { dirname, resolve } = require('node:path');
+const [root, requested, treeSha256, i00Digest, destination] = process.argv.slice(2);
 const fail = () => process.exit(1);
 const risk = JSON.parse(readFileSync('/proc/self/fd/6', 'utf8'));
 const endpoint = (prefix) => {
@@ -327,13 +327,20 @@ const endpoint = (prefix) => {
 const releaseBytes = readFileSync(resolve(root, 'release.json'));
 const manifestBytes = readFileSync(resolve(root, 'artifact-manifest.json'));
 const release = JSON.parse(releaseBytes);
+const expectedHelperRoot = `/usr/local/lib/cosmos-ops/i00-${release.testedSha}-${i00Digest}`;
 if (endpoint('release-path') !== requested
     || endpoint('release-tree-sha256') !== treeSha256
     || endpoint('release-sha') !== release.testedSha
+    || endpoint('ops-helper-tree-sha256') !== i00Digest
+    || endpoint('ops-helper-root') !== expectedHelperRoot
+    || endpoint('destination') !== expectedHelperRoot
+    || destination !== expectedHelperRoot
+    || dirname(destination) !== '/usr/local/lib/cosmos-ops'
     || endpoint('artifact-manifest-sha256')
       !== createHash('sha256').update(manifestBytes).digest('hex')
     || !/^[0-9a-f]{40}$/.test(release.testedSha)
     || release.releaseId !== `i00-${release.testedSha}`
+    || release.l15OpsProvenance?.i00EnforcementTreeDigestSha256 !== i00Digest
     || !/^[0-9a-f]{64}$/.test(i00Digest)) fail();
 process.stdout.write(JSON.stringify({
   testedSha: release.testedSha,

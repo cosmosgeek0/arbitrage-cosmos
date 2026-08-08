@@ -24,6 +24,7 @@ import {
 import {
   fail, parseArgs, typedTreeDigest, verifyArtifactManifest,
 } from '../lib.mjs';
+import { deriveOpsHelperBinding } from '../ops-helper-root.mjs';
 import { validateSimulationRoot } from '../simulation-safety.mjs';
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
@@ -842,7 +843,15 @@ function appUnitLocation(simulationRoot, unit, runtime, environment, donor) {
   });
 }
 
-function appUnitBinding(commands, unit, runtime, environment, simulationRoot, donor) {
+function appUnitBinding(
+  commands,
+  unit,
+  runtime,
+  environment,
+  simulationRoot,
+  donor,
+  opsHelper,
+) {
   const location = appUnitLocation(
     simulationRoot,
     exactText(unit, 'deploy env APP_UNIT'),
@@ -859,6 +868,9 @@ function appUnitBinding(commands, unit, runtime, environment, simulationRoot, do
     '--expected-fragment-path', location.expectedFragment,
     '--expected-fragment-source', location.fragmentSource,
     '--provenance-mode', location.provenanceMode,
+    '--ops-helper-root', opsHelper.root,
+    '--ops-helper-tree-sha256', opsHelper.i00EnforcementTreeDigestSha256,
+    '--ops-helper-app-entrypoint', opsHelper.appEntrypoint,
   ];
   if (location.stagingRoot !== null) {
     commandArguments.push(
@@ -1004,7 +1016,7 @@ function appUnitBinding(commands, unit, runtime, environment, simulationRoot, do
     && inspected.execStart.argv[2] === commands.node.path
     && inspected.execStart.argv[3] === (staging
       ? 'server/dist/index.js'
-      : '/usr/local/lib/cosmos-ops/i00/bin/app-entrypoint.mjs')
+      : opsHelper.appEntrypoint)
     && Array.isArray(inspected.execStart.flags)
     && inspected.execStart.flags.length === 0
     && typeof inspected.effectReachability === 'string'
@@ -1179,6 +1191,18 @@ function releaseBinding(path, trustedKeyPath, label = 'release', {
     manifestSha256: manifest.sha256,
     endpointIdentity,
     treeSha256,
+  });
+}
+
+function releaseOpsHelperBinding(release) {
+  return deriveOpsHelperBinding({
+    testedSha: release.release.testedSha,
+    i00EnforcementTreeDigestSha256:
+      release.release.l15OpsProvenance.i00EnforcementTreeDigestSha256,
+    rootMode: artifactPolicy.rootMode,
+    proofRoot: artifactPolicy.rootMode === 'SYSTEM'
+      ? null
+      : artifactPolicy.proofRoot,
   });
 }
 
@@ -1770,6 +1794,7 @@ function evidenceDocument(binding, endpoints, sources) {
 function deriveOpsInstall(request, simulationRoot) {
   const host = hostBinding(args['host-readback'], args['host-evidence']);
   const release = releaseBinding(args.release, args['trusted-build-public-key']);
+  const opsHelper = releaseOpsHelperBinding(release);
   const trust = trustedBuildKey(args['trusted-build-public-key']);
   const commands = commandSet([
     'node', 'bash', 'mkdir', 'cp', 'chmod', 'mv', 'rm',
@@ -1779,11 +1804,8 @@ function deriveOpsInstall(request, simulationRoot) {
     'ops-bundle destination',
   );
   const destination = destinationBinding.target;
-  assert(destination === exactClassTarget(
-    '/usr/local/lib/cosmos-ops/i00',
-    'install/i00',
-    'ops-bundle destination',
-  ), 'ops-bundle destination differs from its class-specific target');
+  assert(destination === opsHelper.root,
+    'ops-bundle destination differs from its release-bound helper root');
   return evidenceDocument({
     deployedSha: release.release.testedSha,
     configVersion: exactText(release.release.configRevision, 'release configRevision'),
@@ -1801,6 +1823,8 @@ function deriveOpsInstall(request, simulationRoot) {
     ...executableEndpoints('mkdir', commands.mkdir),
     ...executableEndpoints('mv', commands.mv),
     ...executableEndpoints('node', commands.node),
+    `ops-helper-root:${opsHelper.root}`,
+    `ops-helper-tree-sha256:${opsHelper.i00EnforcementTreeDigestSha256}`,
     `release-identity:${release.endpointIdentity}`,
     `release-path:${release.root}`,
     `release-sha:${release.release.testedSha}`,
@@ -1826,6 +1850,7 @@ function deriveReleaseSwitch(request, simulationRoot) {
       )
     : hostBinding(args['host-readback'], args['host-evidence']);
   const release = releaseBinding(args.release, args['trusted-build-public-key']);
+  const opsHelper = releaseOpsHelperBinding(release);
   const runtime = runtimeBinding(
     args['runtime-env'],
     release.release.testedSha,
@@ -1880,6 +1905,7 @@ function deriveReleaseSwitch(request, simulationRoot) {
     firstHost.environment,
     simulationRoot,
     donor,
+    opsHelper,
   );
   const sqliteVersionOutput = spawnSync(commands.sqlite.path, ['--version'], {
     encoding: 'utf8',
@@ -1905,6 +1931,9 @@ function deriveReleaseSwitch(request, simulationRoot) {
     ...deployHelperPolicyEndpoints(deploy, donor),
     ...executableEndpoints('env', commands.env),
     ...executableEndpoints('node', commands.node),
+    `ops-helper-app-entrypoint-path:${opsHelper.appEntrypoint}`,
+    `ops-helper-root:${opsHelper.root}`,
+    `ops-helper-tree-sha256:${opsHelper.i00EnforcementTreeDigestSha256}`,
     `release-path:${release.root}`,
     `release-identity:${release.endpointIdentity}`,
     `release-sha:${release.release.testedSha}`,
@@ -1960,6 +1989,7 @@ function deriveRollback(request, simulationRoot) {
     'rollback release',
     { installedImmutable: true },
   );
+  const opsHelper = releaseOpsHelperBinding(release);
   const runtime = runtimeBinding(args['runtime-env'], release.release.testedSha);
   const trust = trustedBuildKey(args['trusted-build-public-key']);
   const donor = effectiveDonorBinding(simulationRoot);
@@ -1972,6 +2002,7 @@ function deriveRollback(request, simulationRoot) {
     host.environment,
     simulationRoot,
     donor,
+    opsHelper,
   );
   const currentLink = exactText(deploy.values.CURRENT_LINK, 'deploy env CURRENT_LINK');
   assert(lstatSync(currentLink).isSymbolicLink(), 'deploy env CURRENT_LINK must be one symlink');
@@ -2011,6 +2042,9 @@ function deriveRollback(request, simulationRoot) {
     ...deployHelperPolicyEndpoints(deploy, donor),
     ...executableEndpoints('env', commands.env),
     ...executableEndpoints('node', commands.node),
+    `ops-helper-app-entrypoint-path:${opsHelper.appEntrypoint}`,
+    `ops-helper-root:${opsHelper.root}`,
+    `ops-helper-tree-sha256:${opsHelper.i00EnforcementTreeDigestSha256}`,
     `release-path:${release.root}`,
     `release-identity:${release.endpointIdentity}`,
     `release-id:${release.release.releaseId}`,

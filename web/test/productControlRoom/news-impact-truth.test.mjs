@@ -103,7 +103,7 @@ test('News rejects and removes invalid cached payloads before they reach feed st
   }
 });
 
-test('News merge keeps the freshest same-ID row regardless of payload arrival order', async () => {
+test('News merge keeps the later publication and deterministic item order', async () => {
   const server = await createServer({
     root: new URL('../..', import.meta.url).pathname,
     server: { middlewareMode: true },
@@ -139,7 +139,7 @@ test('News merge keeps the freshest same-ID row regardless of payload arrival or
     const equalVersion = newsPayload(200, [newsItem('shared', 'Ambiguous equal-version row', 250, 3)]);
     assert.equal(
       news.mergeContextPayload(equalVersion, current).items.find((item) => item.id === 'shared').title,
-      'Newer row content',
+      'Ambiguous equal-version row',
     );
   } finally {
     await server.close();

@@ -1,12 +1,12 @@
 import { memo, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { IconExternal, IconNewspaper, IconSearch } from '../components/Icons';
 import { PillSelect } from '../components/PillSelect';
-import { liveAge } from '../format';
 import { fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
 import { TIME_ZONE_OPTIONS, addDays, dayKey, formatKey, resolvedZoneLabel } from '../lib/time';
 import { useStore } from '../store';
 import './LiveIntelligence.css';
+import './News.css';
 
 type NewsTone = 'ok' | 'warn' | 'bad' | 'idle';
 type FeedChannel = 'primary' | 'venue' | 'protocol' | 'issuer' | 'tree' | 'rss' | 'lookonchain' | 'binance';
@@ -14,6 +14,19 @@ type NewsCategory = 'Crypto' | 'Macro' | 'Markets' | 'Regulation' | 'Exchange' |
 type NewsBucket = 'all' | 'crypto' | 'macro' | 'markets' | 'regulation' | 'exchange' | 'onchain-security';
 type ImpactFilter = 'all' | 'high' | 'medium' | 'low';
 export type NewsImpact = 1 | 2 | 3 | null;
+export type NewsOwnerReportedState = 'STREAMING' | 'POLLING' | 'LIVE' | 'DELAYED' | 'ERROR' | 'LOADING' | 'UNAVAILABLE';
+export type NewsOwnerFreshness = 'CURRENT' | 'STALE' | 'UNMEASURED';
+export type NewsOwnerTruth = Readonly<{
+  reportedState: NewsOwnerReportedState;
+  freshness: NewsOwnerFreshness;
+  fetchedAt: number | null;
+  ageMs: number | null;
+  tone: 'current' | 'stale' | 'delayed' | 'error' | 'loading';
+}>;
+export type NewsContextOwnerObservation = Readonly<{
+  reportedState: NewsOwnerReportedState;
+  fetchedAt: number | null;
+}>;
 
 export type NewsImpactSummary = Readonly<{
   high: number;
@@ -86,6 +99,8 @@ const FEED_CACHE_KEY = 'cosmos-news-feed-cache-v4';
 const CONTEXT_LIMIT = 600;
 const FALLBACK_CONTEXT_LIMIT = 220;
 const LOCAL_CACHE_LIMIT = 700;
+export const NEWS_OWNER_MAX_AGE_MS = 5 * 60_000;
+const NEWS_OWNER_CLOCK_MS = 30_000;
 const BUCKETS: { id: NewsBucket; label: string }[] = [
   { id: 'all', label: 'All News' },
   { id: 'crypto', label: 'Crypto' },
@@ -108,6 +123,111 @@ const MACRO_SOURCE_KEYS = new Set([
   'fed', 'bls', 'bea', 'sec', 'cftc', 'treasury', 'ofac', 'ecb', 'boe', 'boj', 'japan-mof',
   'japan-fsa', 'china-nbs', 'pboc', 'safe', 'uk-fca', 'esma', 'bis-press', 'bis-speeches', 'bis-statistics',
 ]);
+
+export function projectNewsOwnerTruth({
+  fetchedAt,
+  reportedState,
+  now,
+}: Readonly<{
+  fetchedAt: number | null | undefined;
+  reportedState: NewsOwnerReportedState;
+  now: number;
+}>): NewsOwnerTruth {
+  const validNow = Number.isFinite(now) && now > 0;
+  const validFetchedAt = validNow
+    && Number.isFinite(fetchedAt)
+    && (fetchedAt ?? 0) > 0
+    && (fetchedAt ?? 0) <= now;
+  const observedAt = validFetchedAt ? fetchedAt as number : null;
+  const ageMs = observedAt === null ? null : now - observedAt;
+  const freshness: NewsOwnerFreshness = ageMs === null
+    ? 'UNMEASURED'
+    : ageMs <= NEWS_OWNER_MAX_AGE_MS
+      ? 'CURRENT'
+      : 'STALE';
+  const resolvedState = reportedState !== 'LOADING'
+    && reportedState !== 'DELAYED'
+    && reportedState !== 'ERROR'
+    && observedAt === null
+    ? 'UNAVAILABLE'
+    : reportedState;
+  const tone: NewsOwnerTruth['tone'] = resolvedState === 'ERROR' || resolvedState === 'UNAVAILABLE'
+    ? 'error'
+    : freshness === 'STALE'
+      ? 'stale'
+      : resolvedState === 'DELAYED'
+        ? 'delayed'
+        : freshness === 'UNMEASURED' || resolvedState === 'LOADING'
+          ? 'loading'
+          : 'current';
+  return { reportedState: resolvedState, freshness, fetchedAt: observedAt, ageMs, tone };
+}
+
+export function newsOwnerAgeLabel(truth: NewsOwnerTruth): string {
+  if (truth.ageMs === null) return 'No Readback';
+  const seconds = Math.floor(truth.ageMs / 1_000);
+  if (seconds < 5) return 'Now';
+  if (seconds < 60) return `${seconds}s Ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m Ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h Ago`;
+  return `${Math.floor(hours / 24)}d Ago`;
+}
+
+function newsOwnerLabel(owner: string, truth: NewsOwnerTruth): string {
+  return `${owner} · ${truth.reportedState} / ${truth.freshness} · ${newsOwnerAgeLabel(truth)}`;
+}
+
+export function newsOwnerHeadlineClass(
+  truth: NewsOwnerTruth,
+  streamConnected: boolean,
+): '' | 'error' | 'reconnecting' | 'neutral' | 'streaming' {
+  if (truth.tone === 'error') return 'error';
+  if (truth.tone === 'stale' || truth.tone === 'delayed') return 'reconnecting';
+  if (truth.tone === 'loading') return 'neutral';
+  return truth.tone === 'current' && streamConnected ? 'streaming' : '';
+}
+
+export function newsContextOwnerObservation(
+  context: NewsPayload | null,
+  contextFailed: boolean,
+  streamConnected: boolean,
+  now: number,
+): NewsContextOwnerObservation {
+  if (!context) {
+    return { reportedState: contextFailed ? 'ERROR' : 'LOADING', fetchedAt: null };
+  }
+  const liveObservedAt = context.sources
+    .filter((source) => source.status === 'live')
+    .map((source) => source.fetchedAt)
+    .filter((fetchedAt): fetchedAt is number => (
+      typeof fetchedAt === 'number'
+      && Number.isFinite(fetchedAt)
+      && fetchedAt > 0
+      && fetchedAt <= now
+    ));
+  const fetchedAt = liveObservedAt.length ? Math.max(...liveObservedAt) : null;
+  if (contextFailed) return { reportedState: 'ERROR', fetchedAt };
+  if (fetchedAt !== null) {
+    return { reportedState: streamConnected ? 'STREAMING' : 'POLLING', fetchedAt };
+  }
+  if (context.sources.some((source) => source.status === 'error')) {
+    return { reportedState: 'ERROR', fetchedAt: null };
+  }
+  if (context.sources.some((source) => source.status === 'delayed')) {
+    return { reportedState: 'DELAYED', fetchedAt: null };
+  }
+  return { reportedState: 'UNAVAILABLE', fetchedAt: null };
+}
+
+function sourceOwnerTruth(source: NewsSource, now: number): NewsOwnerTruth {
+  return projectNewsOwnerTruth({
+    fetchedAt: source.fetchedAt,
+    reportedState: source.status === 'live' ? 'LIVE' : source.status === 'delayed' ? 'DELAYED' : 'ERROR',
+    now,
+  });
+}
 
 function discardFeedCache(storage: Pick<Storage, 'removeItem'>): void {
   try { storage.removeItem(FEED_CACHE_KEY); } catch { /* cache is optional */ }
@@ -224,20 +344,47 @@ function mergeItems(context: NewsPayload | null, binance: BinancePayload | null)
 
 export function mergeContextPayload(incoming: NewsPayload, current: NewsPayload | null): NewsPayload {
   if (!current) return incoming;
-  const incomingIsNewer = incoming.fetchedAt > current.fetchedAt;
-  const olderPayload = incomingIsNewer ? current : incoming;
-  const newerPayload = incomingIsNewer ? incoming : current;
+  const incomingIsLaterPublication = incoming.fetchedAt >= current.fetchedAt;
+  const olderPayload = incomingIsLaterPublication ? current : incoming;
+  const newerPayload = incomingIsLaterPublication ? incoming : current;
   const byId = new Map<string, NewsItem>();
   for (const item of olderPayload.items) byId.set(item.id, item);
   for (const item of newerPayload.items) byId.set(item.id, item);
   return { ...newerPayload, items: [...byId.values()].sort(compareItems).slice(0, CONTEXT_LIMIT) };
 }
 
+function validContextSource(source: unknown): source is NewsSource {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return false;
+  const candidate = source as Partial<NewsSource>;
+  const validStatus = candidate.status === 'live' || candidate.status === 'delayed' || candidate.status === 'error';
+  const validFetchedAt = candidate.fetchedAt === null
+    || (Number.isFinite(candidate.fetchedAt) && (candidate.fetchedAt ?? 0) > 0);
+  return Boolean(
+    typeof candidate.key === 'string' &&
+    candidate.key.trim().length > 0 &&
+    typeof candidate.label === 'string' &&
+    candidate.label.trim().length > 0 &&
+    validStatus &&
+    typeof candidate.detail === 'string' &&
+    validFetchedAt &&
+    (candidate.status !== 'live' || candidate.fetchedAt !== null) &&
+    Number.isSafeInteger(candidate.count) &&
+    (candidate.count ?? -1) >= 0 &&
+    (candidate.url === undefined || candidate.url === null || typeof candidate.url === 'string') &&
+    (candidate.domain === undefined || candidate.domain === null || typeof candidate.domain === 'string')
+  );
+}
+
 function validContextPayload(payload: unknown): payload is NewsPayload {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false;
   const candidate = payload as Partial<NewsPayload>;
+  if (!Array.isArray(candidate.sources) || candidate.sources.length > 512) return false;
+  if (!candidate.sources.every(validContextSource)) return false;
+  if (new Set(candidate.sources.map((source) => source.key)).size !== candidate.sources.length) return false;
+  if (candidate.sources.some((source) => source.fetchedAt !== null && source.fetchedAt > (candidate.fetchedAt ?? 0))) return false;
   return Boolean(
     typeof candidate.source === 'string' &&
+    candidate.source.trim().length > 0 &&
     Number.isFinite(candidate.fetchedAt) &&
     (candidate.fetchedAt ?? 0) > 0 &&
     Array.isArray(candidate.items) &&
@@ -250,9 +397,7 @@ function validContextPayload(payload: unknown): payload is NewsPayload {
       Array.isArray(item.tags) &&
       (item.ts === null || Number.isFinite(item.ts)) &&
       authoritativeNewsImpact(item) === (item.impact ?? null)
-    )) &&
-    Array.isArray(candidate.sources) &&
-    candidate.sources.every((source) => source && typeof source.key === 'string' && typeof source.label === 'string')
+    ))
   );
 }
 
@@ -354,10 +499,11 @@ const NewsRow = memo(function NewsRow({ item, fresh, zone }: { item: NewsItem; f
   </div>;
 });
 
-function SourcePicker({ value, sources, counts, onChange }: {
+function SourcePicker({ value, sources, counts, now, onChange }: {
   value: string;
   sources: NewsSource[];
   counts: Map<string, number>;
+  now: number;
   onChange: (value: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -373,23 +519,37 @@ function SourcePicker({ value, sources, counts, onChange }: {
   }, [open]);
   const selected = sources.find((source) => source.key === value);
   const visible = sources.filter((source) => source.label.toLowerCase().includes(query.trim().toLowerCase()));
-  const live = sources.filter((source) => source.status === 'live').length;
+  const { sourceTruth, current, stale } = useMemo(() => {
+    const truthByKey = new Map(sources.map((source) => [source.key, sourceOwnerTruth(source, now)]));
+    return {
+      sourceTruth: truthByKey,
+      current: [...truthByKey.values()].filter((truth) => truth.freshness === 'CURRENT' && truth.tone === 'current').length,
+      stale: [...truthByKey.values()].filter((truth) => truth.freshness === 'STALE').length,
+    };
+  }, [now, sources]);
   return <div className="newsx-source-picker" ref={ref}>
     <button type="button" className="newsx-source-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((current) => !current)}>
       <span>{selected?.label || 'Sources'}</span><em>{sources.length}</em><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden><path d="M4 6l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" /></svg>
     </button>
     {open && <div className="newsx-source-menu" role="listbox" aria-label="Sources">
-      <div className="newsx-source-menu-head"><strong>Sources</strong><span>{sources.length} Available · {live} Live</span></div>
+      <div className="newsx-source-menu-head"><strong>Source Owners</strong><span>{sources.length} Owners · {current} Current · {stale} Stale</span></div>
       <label className="newsx-source-search"><IconSearch size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search Sources" spellCheck={false} /></label>
       <div className="newsx-source-options">
         <button type="button" role="option" aria-selected={value === 'all'} className={value === 'all' ? 'selected' : ''} onClick={() => { onChange('all'); setOpen(false); }}>
           <span className="newsx-source-all"><IconNewspaper size={14} /></span><b>All Sources</b><em>{[...counts.values()].reduce((sum, count) => sum + count, 0)}</em>
         </button>
-        {visible.map((source) => <button type="button" key={source.key} role="option" aria-selected={value === source.key} className={value === source.key ? 'selected' : ''} onClick={() => { onChange(source.key); setOpen(false); }}>
-          <SourceLogo domain={source.domain || cleanDomain(source.url)} label={source.label} size={22} />
-          <b>{source.label}</b>
-          <span className={`newsx-source-status ${source.status}`}><i />{counts.get(source.key) ?? 0}</span>
-        </button>)}
+        {visible.map((source) => {
+          const truth = sourceTruth.get(source.key)!;
+          return <button type="button" key={source.key} role="option" aria-selected={value === source.key} className={value === source.key ? 'selected' : ''} onClick={() => { onChange(source.key); setOpen(false); }} title={`${source.detail} · ${newsOwnerLabel(source.label, truth)}`}>
+            <SourceLogo domain={source.domain || cleanDomain(source.url)} label={source.label} size={22} />
+            <b>{source.label}</b>
+            <span className={`newsx-source-status ${truth.tone}`}>
+              <span><i />{truth.reportedState} / {truth.freshness}</span>
+              <em>{newsOwnerAgeLabel(truth)}</em>
+              <strong>{counts.get(source.key) ?? 0}</strong>
+            </span>
+          </button>;
+        })}
       </div>
     </div>}
   </div>;
@@ -402,7 +562,7 @@ export function News() {
   const [initial] = useState(readFeedCache);
   const [context, setContext] = useState<NewsPayload | null>(initial.context);
   const [binance, setBinance] = useState<BinancePayload | null>(initial.binance);
-  const [lastCheckedAt, setLastCheckedAt] = useState(() => Math.max(initial.context?.fetchedAt ?? 0, initial.binance?.fetchedAt ?? 0));
+  const [now, setNow] = useState(() => Date.now());
   const [contextFailed, setContextFailed] = useState(false);
   const [binanceFailed, setBinanceFailed] = useState(false);
   const [streamConnected, setStreamConnected] = useState(false);
@@ -421,6 +581,10 @@ export function News() {
   useEffect(() => { binanceRef.current = binance; }, [binance]);
   useEffect(() => { contextRef.current = context; }, [context]);
   useEffect(() => { setSelectedDay(today); }, [today]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), NEWS_OWNER_CLOCK_MS);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const applyContext = useCallback((payload: NewsPayload, animate = true, mergeExisting = false) => {
     if (!validContextPayload(payload)) {
@@ -434,7 +598,7 @@ export function News() {
     if (knownIdsRef.current.size > 2_400) knownIdsRef.current = new Set(next.slice(0, 2_000).map((item) => item.id));
     setContext(committed);
     contextRef.current = committed;
-    setLastCheckedAt((current) => Math.max(current, committed.fetchedAt));
+    setNow(Date.now());
     setContextFailed(false);
     persistFeedCache(committed, binanceRef.current);
     if (incoming.length) {
@@ -459,7 +623,7 @@ export function News() {
     setBinance(payload);
     binanceRef.current = payload;
     setBinanceFailed(false);
-    setLastCheckedAt((checkedAt) => Math.max(checkedAt, incomingAt || Date.now()));
+    setNow(Date.now());
     persistFeedCache(contextRef.current, payload);
   }, []);
 
@@ -531,16 +695,22 @@ export function News() {
     (provider === 'all' || itemSourceKey(item) === provider) &&
     matchesQuery(item, deferredQuery)
   ), [bucket, deferredQuery, provider, selectedImpact, selectedItems]);
+  const contextObservation = newsContextOwnerObservation(context, contextFailed, streamConnected, now);
+  const contextTruth = projectNewsOwnerTruth({ ...contextObservation, now });
+  const binanceTruth = projectNewsOwnerTruth({
+    fetchedAt: binance?.fetchedAt,
+    reportedState: binanceFailed ? 'ERROR' : binance ? 'POLLING' : 'LOADING',
+    now,
+  });
   const hasData = items.length > 0;
   const failed = contextFailed && binanceFailed && !hasData;
-  const reconnecting = contextFailed && binanceFailed && hasData;
-  const status = failed
-    ? 'Feed Unavailable'
-    : reconnecting
-      ? `Reconnecting · ${liveAge(lastCheckedAt)}`
-      : lastCheckedAt
-        ? `${streamConnected ? 'Live' : 'Updating'} · ${liveAge(lastCheckedAt)}`
-        : 'Loading';
+  // Context owns the headline: a fresh secondary Binance read must never
+  // promote stale or unavailable context. Both owners remain explicit below.
+  const status = newsOwnerLabel('Context', contextTruth);
+  const ownerTruths: ReadonlyArray<readonly [string, NewsOwnerTruth]> = [
+    ['Context', contextTruth],
+    ['Binance', binanceTruth],
+  ];
   const selectedImpactSummary = summarizeNewsImpacts(selectedItems);
   const rangeLabel = `${formatKey(dayKeys[0], { month: 'short', day: 'numeric' })} — ${formatKey(dayKeys[6], { month: 'short', day: 'numeric', year: 'numeric' })}`;
   const returnToday = () => setSelectedDay(today);
@@ -551,7 +721,7 @@ export function News() {
         <div className="lix-title newsx-title">
           <img className="newsx-page-mark" src="/news-mark.png" alt="" aria-hidden="true" />
           <h1>News</h1>
-          <span className={`lix-live ${failed ? 'error' : reconnecting ? 'reconnecting' : streamConnected ? 'streaming' : ''}`}><i />{status}</span>
+          <span className={`lix-live ${newsOwnerHeadlineClass(contextTruth, streamConnected)}`}><i />{status}</span>
         </div>
         <label className="lix-search">
           <IconSearch size={15} />
@@ -559,6 +729,12 @@ export function News() {
           {query && <button type="button" aria-label="Clear Search" onClick={() => setQuery('')}>×</button>}
         </label>
       </header>
+
+      <section className="newsx-owner-rail" aria-label="News Owner Freshness">
+        {ownerTruths.map(([owner, truth]) => <span key={owner} className={`newsx-owner-state ${truth.tone}`} title={newsOwnerLabel(owner, truth)}>
+          <i /><b>{owner}</b><em>{truth.reportedState} / {truth.freshness}</em><strong>{newsOwnerAgeLabel(truth)}</strong>
+        </span>)}
+      </section>
 
       <section className="calx-navigation newsx-navigation" aria-label="News Navigation">
         <div className="calx-range-controls">
@@ -585,7 +761,7 @@ export function News() {
           <div className="lix-segments newsx-category-tabs" role="group" aria-label="Category">
             {BUCKETS.map((option) => <button type="button" key={option.id} className={bucket === option.id ? 'selected' : ''} onClick={() => setBucket(option.id)}>{option.label}</button>)}
           </div>
-          <SourcePicker value={provider} sources={sourceDirectory} counts={providerCounts} onChange={setProvider} />
+          <SourcePicker value={provider} sources={sourceDirectory} counts={providerCounts} now={now} onChange={setProvider} />
         </div>
         <div className="newsx-filter-line impact">
           <div className="lix-segments newsx-impact-tabs" role="group" aria-label="Impact">

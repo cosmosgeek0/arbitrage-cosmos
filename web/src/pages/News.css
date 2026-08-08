@@ -1,0 +1,135 @@
+/* News-owned freshness presentation. Keep these overrides page-local so the
+   shared News/Calendar/Logs layout remains under COMMON ownership. */
+
+.newsx-owner-rail {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 6px 16px;
+  overflow-x: auto;
+  border-top: 1px solid var(--line-2);
+  scrollbar-width: thin;
+}
+
+.newsx-owner-state {
+  display: inline-grid;
+  grid-template-columns: 6px auto auto auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 25px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.newsx-owner-state i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.newsx-owner-state b {
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 520;
+}
+
+.newsx-owner-state em,
+.newsx-owner-state strong {
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 440;
+}
+
+.newsx-owner-state strong { color: var(--text-2); }
+.newsx-owner-state.current i { background: var(--up); }
+.newsx-owner-state.stale i,
+.newsx-owner-state.delayed i { background: #d6a11d; }
+.newsx-owner-state.error i { background: var(--down); }
+
+.newsx-page .lix-live.neutral i { background: var(--faint); }
+
+.newsx-page .newsx-source-options > button {
+  grid-template-columns: 26px minmax(90px, 1fr) minmax(196px, auto);
+}
+
+.newsx-page .newsx-source-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 9px;
+  font-weight: 450;
+  white-space: nowrap;
+}
+
+.newsx-page .newsx-source-status > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.newsx-page .newsx-source-status em {
+  color: var(--muted);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 430;
+}
+
+.newsx-page .newsx-source-status strong {
+  min-width: 22px;
+  color: var(--text-2);
+  font-size: 10px;
+  font-weight: 500;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.newsx-page .newsx-source-status.current i { background: var(--up); }
+.newsx-page .newsx-source-status.stale i,
+.newsx-page .newsx-source-status.delayed i { background: #d6a11d; }
+.newsx-page .newsx-source-status.error i { background: var(--down); }
+
+@container (max-width: 440px) {
+  .newsx-page .newsx-source-options > button {
+    grid-template-columns: 24px minmax(0, 1fr) minmax(0, 150px);
+    gap: 7px;
+    padding-right: 6px;
+    padding-left: 6px;
+  }
+
+  .newsx-page .newsx-source-status {
+    grid-template-areas:
+      "state count"
+      "age count";
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 1px 6px;
+    line-height: 11px;
+  }
+
+  .newsx-page .newsx-source-status > span {
+    grid-area: state;
+    overflow: visible;
+    font-size: 8.5px;
+    white-space: nowrap;
+  }
+
+  .newsx-page .newsx-source-status em {
+    grid-area: age;
+    font-size: 8.5px;
+    white-space: nowrap;
+  }
+
+  .newsx-page .newsx-source-status strong {
+    grid-area: count;
+    align-self: center;
+  }
+}

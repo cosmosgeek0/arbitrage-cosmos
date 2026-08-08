@@ -99,7 +99,7 @@ test('market publication treats future cache and observation timestamps as non-f
   );
 });
 
-test('Markets and Product GETs publish unavailable/stale snapshots without awaiting a never-settling refresh', {
+test('Markets and Product boundedly await refresh before falling back to retained stale snapshots', {
   timeout: 30_000,
 }, async () => {
   const dataDir = mkdtempSync(path.join(tmpdir(), 'cosmos-market-published-snapshot-'));
@@ -112,7 +112,13 @@ test('Markets and Product GETs publish unavailable/stale snapshots without await
   const base = `http://${HOST}:${port}`;
   const child = spawn(
     process.execPath,
-    ['--import', './server/test/market-source-snapshot-fetch.preload.mjs', 'server/dist/index.js'],
+    [
+      '--import',
+      'tsx',
+      '--import',
+      './server/test/market-source-snapshot-fetch.preload.mjs',
+      'server/src/index.ts',
+    ],
     {
       cwd: process.cwd(),
       env: {
@@ -155,22 +161,11 @@ test('Markets and Product GETs publish unavailable/stale snapshots without await
     );
 
     const initialMarkets = await boundedJson(base, '/api/markets');
-    allSourceStates(initialMarkets.body, 'unavailable');
+    allSourceStates(initialMarkets.body, 'fresh');
     assert.equal(Number.isSafeInteger(initialMarkets.body.updatedAt), true);
     assert.equal(Array.isArray(initialMarkets.body.rows), true);
 
-    let freshMarkets = null;
-    for (let attempt = 0; attempt < 40; attempt += 1) {
-      const current = await boundedJson(base, '/api/markets');
-      if (current.body.dataSources.spotBookTicker === 'fresh') {
-        freshMarkets = current;
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 25));
-    }
-    assert.ok(freshMarkets, `market refresh did not publish\n${logs()}`);
-    allSourceStates(freshMarkets.body, 'fresh');
-    assert.ok(freshMarkets.body.updatedAt >= initialMarkets.body.updatedAt);
+    const freshMarkets = initialMarkets;
 
     const staleAtMs = freshMarkets.body.updatedAt + 2_700;
     const remainingMs = staleAtMs - Date.now();
@@ -180,6 +175,10 @@ test('Markets and Product GETs publish unavailable/stale snapshots without await
 
     const staleMarkets = await boundedJson(base, '/api/markets');
     allSourceStates(staleMarkets.body, 'stale');
+    assert.ok(
+      staleMarkets.elapsedMs >= 750,
+      `stale fallback returned before the bounded refresh wait: ${staleMarkets.elapsedMs.toFixed(1)}ms`,
+    );
     assert.equal(
       staleMarkets.body.updatedAt,
       freshMarkets.body.updatedAt,
@@ -234,7 +233,7 @@ test('Markets and Product GETs publish unavailable/stale snapshots without await
       ])),
       {
         'api.binance.com/api/v3/ticker/bookTicker': 3,
-        'fapi.binance.com/fapi/v1/ticker/24hr': 1,
+        'fapi.binance.com/fapi/v1/ticker/24hr': 2,
         'fapi.binance.com/fapi/v1/ticker/bookTicker': 3,
       },
       'a never-settling refresh must release its busy owner and admit one later retry',

@@ -2606,6 +2606,7 @@ type MarketSourceSnapshot = Readonly<{
 }>;
 type PublishedMarketSourceState = 'fresh' | 'stale' | 'unavailable';
 const MARKET_SOURCE_REFRESH_MS = 2_000;
+const MARKET_SOURCE_READ_WAIT_MS = MARKET_SOURCE_REFRESH_MS / 2;
 const MARKET_SOURCE_ACQUISITION_TIMEOUT_MS = 10_000;
 const MARKET_SOURCE_FAILURE_LOG_MS = 60_000;
 let marketSourceCache: MarketSourceSnapshot | null = null;
@@ -2653,10 +2654,10 @@ const initialMarketSourceSnapshot: MarketSourceSnapshot = (() => {
   });
 })();
 
-function triggerMarketSourceRefresh(now = Date.now()): void {
-  if (marketSourceInFlight) return;
+function triggerMarketSourceRefresh(now = Date.now()): Promise<MarketSourceSnapshot> | null {
+  if (marketSourceInFlight) return marketSourceInFlight;
   const cacheAgeMs = marketSourceCache ? now - marketSourceCache.at : null;
-  if (cacheAgeMs !== null && cacheAgeMs >= 0 && cacheAgeMs < MARKET_SOURCE_REFRESH_MS) return;
+  if (cacheAgeMs !== null && cacheAgeMs >= 0 && cacheAgeMs < MARKET_SOURCE_REFRESH_MS) return null;
 
   const acquisition = Promise.allSettled([
     fetchAllBookTickers('spot'),
@@ -2709,6 +2710,26 @@ function triggerMarketSourceRefresh(now = Date.now()): void {
       );
     },
   );
+  return refresh;
+}
+
+async function awaitMarketSourceRefresh(
+  refresh: Promise<MarketSourceSnapshot> | null,
+): Promise<void> {
+  if (refresh === null) return;
+  let waitTimer: NodeJS.Timeout | null = null;
+  const waitDeadline = new Promise<void>((resolve) => {
+    waitTimer = setTimeout(resolve, MARKET_SOURCE_READ_WAIT_MS);
+    waitTimer.unref();
+  });
+  try {
+    await Promise.race([
+      refresh.then(() => undefined, () => undefined),
+      waitDeadline,
+    ]);
+  } finally {
+    if (waitTimer !== null) clearTimeout(waitTimer);
+  }
 }
 
 function publishedMarketSourceState(
@@ -2785,7 +2806,9 @@ function projectMarketOwnerRows(
   });
 }
 
-function readMarketOwnerSnapshot() {
+async function readMarketOwnerSnapshot() {
+  const refresh = triggerMarketSourceRefresh();
+  await awaitMarketSourceRefresh(refresh);
   const now = Date.now();
   const sourceSnapshot = marketSourceCache ?? initialMarketSourceSnapshot;
   const {
@@ -2793,7 +2816,6 @@ function readMarketOwnerSnapshot() {
     perpBookRes,
     perp24hRes,
   } = sourceSnapshot;
-  triggerMarketSourceRefresh(now);
   const dataSources: PublishedMarketDataSources = Object.freeze({
     spotBookTicker: publishedMarketSourceState(spotBookRes, now),
     futuresBookTicker: publishedMarketSourceState(perpBookRes, now),
@@ -2818,10 +2840,10 @@ function productMarketSourceState(
   return state === 'fresh' ? 'fresh' : 'unavailable';
 }
 
-function readProductOwnerTruth(
+async function readProductOwnerTruth(
   supervisor: Readonly<SystemSupervisorReadModel>,
 ) {
-  const markets = readMarketOwnerSnapshot();
+  const markets = await readMarketOwnerSnapshot();
   const opportunities = systemIntegrationProduction.opportunities.readSnapshot(
     systemIntegrationClock.nowMs(),
   );
@@ -2846,7 +2868,7 @@ function readProductOwnerTruth(
 
 app.get('/api/markets', (req, res) => {
   runAsync(res, async () => {
-    const snapshot = readMarketOwnerSnapshot();
+    const snapshot = await readMarketOwnerSnapshot();
     // Serialized here rather than by res.json so the same bytes can be offered
     // identity or gzipped. The document is unchanged in either case.
     await sendJsonBody(req, res, JSON.stringify({

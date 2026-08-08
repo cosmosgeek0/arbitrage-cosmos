@@ -152,7 +152,26 @@ function useMenu<T extends HTMLElement>(hover = true) {
   return { open, setOpen: setOpenExclusive, ref };
 }
 
-export type QuickViewLoadStatus = 'LOADING' | 'CURRENT' | 'UNAVAILABLE';
+export interface CalendarFeedPayload {
+  items: CalItem[];
+  fetchedAt: number;
+  state: string;
+  maxAgeMs: number;
+}
+
+export type CalendarFeedReceipt = Pick<CalendarFeedPayload, 'fetchedAt' | 'state' | 'maxAgeMs'>;
+
+export function calendarFeedIsCurrent(receipt: Readonly<CalendarFeedReceipt>, now = Date.now()): boolean {
+  const ageMs = now - receipt.fetchedAt;
+  return receipt.state === 'fresh'
+    && Number.isFinite(receipt.fetchedAt)
+    && Number.isFinite(receipt.maxAgeMs)
+    && receipt.maxAgeMs > 0
+    && ageMs >= 0
+    && ageMs < receipt.maxAgeMs;
+}
+
+export type QuickViewLoadStatus = 'LOADING' | 'CURRENT' | 'STALE' | 'UNAVAILABLE';
 
 export function parseQuickViewItems<T>(payload: unknown): T[] {
   if (!payload || typeof payload !== 'object' || !Array.isArray((payload as { items?: unknown }).items)) {
@@ -163,6 +182,7 @@ export function parseQuickViewItems<T>(payload: unknown): T[] {
 
 export function quickViewLivePresentation(status: QuickViewLoadStatus): { ok: boolean; title: string } {
   if (status === 'CURRENT') return { ok: true, title: 'Live — current response' };
+  if (status === 'STALE') return { ok: false, title: 'Stale — response exceeded declared freshness' };
   if (status === 'UNAVAILABLE') return { ok: false, title: 'Unavailable — current response failed' };
   return { ok: false, title: 'Loading — awaiting current response' };
 }
@@ -2466,25 +2486,36 @@ function CalendarModal({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     const controller = new AbortController();
+    let staleTimer: number | null = null;
     setItems(null);
     setLoadStatus('LOADING');
-    void fetchJson<unknown>(
+    void fetchJson<CalendarFeedPayload>(
       '/api/calendar',
       { cache: 'no-store', signal: controller.signal },
       6_000,
     )
-      .then((payload: unknown) => {
+      .then((payload) => {
         const nextItems = parseQuickViewItems<CalItem>(payload);
         if (controller.signal.aborted) return;
         setItems(nextItems);
-        setLoadStatus('CURRENT');
+        const current = calendarFeedIsCurrent(payload);
+        setLoadStatus(current ? 'CURRENT' : 'STALE');
+        if (current) {
+          const expiresInMs = payload.fetchedAt + payload.maxAgeMs - Date.now();
+          staleTimer = window.setTimeout(() => {
+            if (!controller.signal.aborted) setLoadStatus('STALE');
+          }, expiresInMs);
+        }
       })
       .catch(() => {
         if (controller.signal.aborted) return;
         setItems(null);
         setLoadStatus('UNAVAILABLE');
       });
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      if (staleTimer !== null) window.clearTimeout(staleTimer);
+    };
   }, []);
 
   const days: { key: string; label: string; rows: CalItem[] }[] = [];

@@ -8,6 +8,7 @@ globalThis.React = { createElement: (...args) => args };
 
 const {
   LiveDot,
+  calendarFeedIsCurrent,
   parseQuickViewItems,
   quickViewLivePresentation,
 } = await import('../../src/components/Header.tsx');
@@ -15,6 +16,7 @@ const {
 test('LiveDot defaults off and quick views prove CURRENT only after a valid response', async () => {
   const defaultDot = LiveDot({});
   assert.equal(defaultDot[1].className, 'live-dot off');
+  assert.equal(typeof calendarFeedIsCurrent, 'function');
   assert.equal(typeof parseQuickViewItems, 'function');
   assert.equal(typeof quickViewLivePresentation, 'function');
 
@@ -26,10 +28,21 @@ test('LiveDot defaults off and quick views prove CURRENT only after a valid resp
     ok: false,
     title: 'Unavailable — current response failed',
   });
+  assert.deepEqual(quickViewLivePresentation('STALE'), {
+    ok: false,
+    title: 'Stale — response exceeded declared freshness',
+  });
   assert.deepEqual(quickViewLivePresentation('CURRENT'), {
     ok: true,
     title: 'Live — current response',
   });
+
+  assert.equal(calendarFeedIsCurrent({ fetchedAt: 900, state: 'fresh', maxAgeMs: 200 }, 1_000), true);
+  assert.equal(calendarFeedIsCurrent({ fetchedAt: 800, state: 'fresh', maxAgeMs: 200 }, 1_000), false, 'expiry boundary is stale');
+  assert.equal(calendarFeedIsCurrent({ fetchedAt: 900, state: 'stale', maxAgeMs: 200 }, 1_000), false, 'producer stale state fails closed');
+  assert.equal(calendarFeedIsCurrent({ fetchedAt: 1_001, state: 'fresh', maxAgeMs: 200 }, 1_000), false, 'future receipt fails closed');
+  assert.equal(calendarFeedIsCurrent({ fetchedAt: 900, state: 'fresh', maxAgeMs: 0 }, 1_000), false, 'non-positive freshness budget fails closed');
+  assert.equal(calendarFeedIsCurrent({ fetchedAt: Number.NaN, state: 'fresh', maxAgeMs: 200 }, 1_000), false, 'non-finite receipt fails closed');
 
   assert.deepEqual(parseQuickViewItems({ items: [] }), [], 'a successful empty response is current');
   assert.deepEqual(parseQuickViewItems({ items: [{ id: 1 }] }), [{ id: 1 }]);

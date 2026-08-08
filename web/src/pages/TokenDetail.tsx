@@ -21,11 +21,14 @@ import { BoundedTtlCache } from '../lib/boundedTtlCache';
 import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
 import {
-  parseSymbolAccountContext,
+  projectPrivateReadGuard,
+  type PrivateReadGuardProjection,
+  type PrivateReadSnapshot,
+  type PrivateReadSourceId,
+} from '../lib/privateRead';
+import {
   parseTokenIntelligence,
   parseTokenNewsContext,
-  type BorrowTruthState,
-  type SymbolAccountContext,
   type TokenIntelligenceRead,
   type TokenNewsContext,
 } from '../lib/tokenIntelligence';
@@ -1203,27 +1206,36 @@ const TOKEN_CAPABILITY_LABELS = [
   ['SOURCE_QUALITY', 'Source Quality'],
 ] as const;
 
+function symbolOpenOrderCount(snapshot: PrivateReadSnapshot, symbol: string): number | null {
+  if (snapshot.spot.openOrders === null
+      || snapshot.margin.openOrders === null
+      || snapshot.usdm.openOrders === null) return null;
+  return snapshot.spot.openOrders.filter((order) => order.symbol === symbol).length
+    + snapshot.margin.openOrders.filter((order) => order.symbol === symbol).length
+    + snapshot.usdm.openOrders.filter((order) => order.symbol === symbol).length;
+}
+
 function TokenEvidenceWorkspace({
   symbol,
   base,
   intelligence,
   intelligenceError,
-  account,
-  accountError,
+  privateRead,
+  privateReadGuard,
+  privateReadSource,
   news,
   newsError,
-  borrowTruth,
   marketCurrent,
 }: {
   symbol: string;
   base: string;
   intelligence: TokenIntelligenceRead | null;
   intelligenceError: string | null;
-  account: SymbolAccountContext | null;
-  accountError: string | null;
+  privateRead: PrivateReadSnapshot;
+  privateReadGuard: PrivateReadGuardProjection;
+  privateReadSource: PrivateReadSourceId;
   news: TokenNewsContext | null;
   newsError: string | null;
-  borrowTruth: BorrowTruthState;
   marketCurrent: boolean;
 }) {
   const thesis = intelligence?.bridge.thesis ?? null;
@@ -1263,8 +1275,14 @@ function TokenEvidenceWorkspace({
         : liveNewsSources > 0
           ? 'PARTIAL'
           : news.sources.some((source) => source.status === 'delayed') ? 'DELAYED' : 'UNAVAILABLE';
-  const accountState = account?.accountTruthState ?? (accountError ? 'UNAVAILABLE' : 'UNKNOWN');
-  const orderState = account?.orderTruthState ?? (accountError ? 'UNAVAILABLE' : 'UNKNOWN');
+  const baseBalance = privateRead.spot.balances?.find((balance) => balance.asset === base) ?? null;
+  const usdtBalance = privateRead.spot.balances?.find((balance) => balance.asset === 'USDT') ?? null;
+  const openOrders = symbolOpenOrderCount(privateRead, symbol);
+  const privateObservationLabel = privateReadGuard.presentation.freshness.state === 'CURRENT'
+    ? 'CURRENT'
+    : privateReadGuard.presentation.freshness.state === 'STALE'
+      ? 'STALE LAST-KNOWN'
+      : `FRESHNESS ${privateReadGuard.presentation.freshness.state}`;
   const ownerReasons = intelligence
     ? [...intelligence.bridge.reasonCodes, ...(thesis?.reasonCodes ?? [])].slice(0, 8)
     : [];
@@ -1324,25 +1342,27 @@ function TokenEvidenceWorkspace({
           })}
         </div>
 
-        <div className="tkx-context-truth" aria-label="Token account and context truth">
+        <div className="tkx-context-truth" aria-label="Token private-read and context truth">
           <div>
             <span>Account Context</span>
-            <strong>{accountState}</strong>
-            <small>{account?.balances
-              ? `${fmtCompact(account.balances.base)} ${base} · ${fmtMoney(account.balances.usdtFree)} free · age unavailable`
-              : 'Balances unavailable; no zero substitute'}</small>
+            <strong>{privateReadGuard.statusLabel}</strong>
+            <small>{baseBalance
+              ? `${baseBalance.free} ${base} free · ${baseBalance.locked} locked · ${privateObservationLabel}`
+              : `Base balance row unavailable; no zero substitute · ${privateReadGuard.statusLabel}`}</small>
           </div>
           <div>
             <span>Open Orders</span>
-            <strong>{orderState}</strong>
-            <small>{account?.openOrders === null || account?.openOrders === undefined
-              ? 'Order truth unavailable'
-              : `${account.openOrders.length} owner rows · age unavailable`}</small>
+            <strong>{openOrders === null ? 'UNKNOWN' : `${openOrders} OBSERVED`}</strong>
+            <small>{openOrders === null
+              ? `Order truth unavailable · ${privateReadGuard.statusLabel}`
+              : `${symbol} rows · ${privateObservationLabel} · ${privateRead.reconciliation.orders.state} · ${privateReadGuard.statusLabel}`}</small>
           </div>
           <div>
-            <span>Borrow Context</span>
-            <strong>{borrowTruth}</strong>
-            <small>Private owner boundary; no browser inference.</small>
+            <span>USDT Available</span>
+            <strong>{usdtBalance?.free ?? 'UNKNOWN'}</strong>
+            <small>{usdtBalance
+              ? `Observed fixed-scale value · ${privateRead.reconciliation.balances.state} · ${privateObservationLabel}`
+              : `Balance row unavailable; no zero substitute · ${privateReadGuard.statusLabel}`}</small>
           </div>
           <div>
             <span>Evidence History</span>
@@ -1354,7 +1374,7 @@ function TokenEvidenceWorkspace({
             <strong>{newsState}</strong>
             <small>{news
               ? `${liveNewsSources}/${news.sources.length} sources live · owner read ${timeAgo(news.fetchedAt)}`
-              : newsError ?? 'Awaiting public-news owner'}</small>
+              : newsError ?? `Awaiting public-news owner · private source ${privateReadSource}`}</small>
           </div>
         </div>
       </div>
@@ -1418,6 +1438,9 @@ export function TokenDetail({ symbol }: { symbol: string }) {
     connected,
     state,
     prefs,
+    privateRead,
+    privateReadError,
+    privateReadSource,
     toggleWatch,
     setPage,
     openDetail,
@@ -1437,8 +1460,6 @@ export function TokenDetail({ symbol }: { symbol: string }) {
   const [basisError, setBasisError] = useState<string | null>(null);
   const [intelligence, setIntelligence] = useState<TokenIntelligenceRead | null>(null);
   const [intelligenceError, setIntelligenceError] = useState<string | null>(null);
-  const [accountContext, setAccountContext] = useState<SymbolAccountContext | null>(null);
-  const [accountContextError, setAccountContextError] = useState<string | null>(null);
   const [newsContext, setNewsContext] = useState<TokenNewsContext | null>(null);
   const [newsContextError, setNewsContextError] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -1475,6 +1496,11 @@ export function TokenDetail({ symbol }: { symbol: string }) {
       ? false
       : null;
   const tokenMarketCurrent = marketCurrent && marketPresence !== 'UNKNOWN';
+  const privateReadGuard = projectPrivateReadGuard({
+    snapshot: privateRead,
+    source: privateReadSource,
+    error: privateReadError,
+  });
 
   useEffect(() => {
     const timer = window.setInterval(() => setNowMs(Date.now()), 1_000);
@@ -1613,32 +1639,6 @@ export function TokenDetail({ symbol }: { symbol: string }) {
       onError: (error) => {
         setIntelligence(null);
         setIntelligenceError(apiErrorMessage(error, 'Canonical token evidence unavailable'));
-      },
-    });
-    poll.start();
-    return poll.stop;
-  }, [symbol]);
-
-  // Account and order truth remain on their existing private-read owner. The
-  // endpoint returns nulls when unavailable; this surface never substitutes 0.
-  useEffect(() => {
-    setAccountContext(null);
-    setAccountContextError(null);
-    const poll = createSettledPoll<SymbolAccountContext>({
-      intervalMs: 5_000,
-      request: async (signal) => {
-        const raw = await fetchJson<unknown>(`/api/symbol/context?symbol=${symbol}`, { cache: 'no-store', signal });
-        const parsed = parseSymbolAccountContext(raw);
-        if (!parsed) throw new Error('Account context contract mismatch');
-        return parsed;
-      },
-      onSuccess: (next) => {
-        setAccountContext(next);
-        setAccountContextError(null);
-      },
-      onError: (error) => {
-        setAccountContext(null);
-        setAccountContextError(apiErrorMessage(error, 'Account context unavailable'));
       },
     });
     poll.start();
@@ -1858,11 +1858,11 @@ export function TokenDetail({ symbol }: { symbol: string }) {
           base={base}
           intelligence={intelligence}
           intelligenceError={intelligenceError}
-          account={accountContext}
-          accountError={accountContextError}
+          privateRead={privateRead}
+          privateReadGuard={privateReadGuard}
+          privateReadSource={privateReadSource}
           news={newsContext}
           newsError={newsContextError}
-          borrowTruth={accountContext?.borrowTruthState ?? (accountContextError ? 'UNAVAILABLE' : 'UNKNOWN')}
           marketCurrent={tokenMarketCurrent}
         />
 

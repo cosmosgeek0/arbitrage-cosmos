@@ -30,8 +30,8 @@ export function deriveOpsHelperBinding({
   rootMode,
   proofRoot = null,
 }) {
-  assert(FULL_SHA.test(testedSha),
-    'ops helper binding requires one full lowercase tested SHA');
+  assert(FULL_SHA.test(testedSha) && !/^0{40}$/u.test(testedSha),
+    'ops helper binding requires one resolved full lowercase tested SHA');
   assert(SHA256.test(i00EnforcementTreeDigestSha256),
     'ops helper binding requires one lowercase I00 enforcement tree digest');
   assert(['SYSTEM', 'STAGING', 'TEST'].includes(rootMode),

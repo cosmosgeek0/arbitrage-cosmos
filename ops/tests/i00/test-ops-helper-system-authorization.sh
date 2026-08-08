@@ -2,14 +2,16 @@
 set -euo pipefail
 . "$(dirname "$0")/helpers.sh"
 
-note "helper-root SYSTEM authorization uses the full counted release and rollback inventories"
+note "helper-root SYSTEM authorization uses the counted install, release, and rollback inventories"
 node --input-type=module - \
   "$I00_ROOT/deployment-authorization-contract.mjs" \
-  "$I00_ROOT/ops-helper-root.mjs" <<'NODE'
+  "$I00_ROOT/ops-helper-root.mjs" \
+  "$I00_ROOT/bin/install-ops-bundle.sh" <<'NODE'
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-const [contractPath, helperPath] = process.argv.slice(2);
+const [contractPath, helperPath, installerPath] = process.argv.slice(2);
 const {
   DEPLOYMENT_ENDPOINT_BUDGETS,
   DEPLOYMENT_ENDPOINT_PREFIX_INVENTORIES,
@@ -17,10 +19,7 @@ const {
   systemEffectEvidenceRoot,
   validateDeploymentAuthorizationEndpoints,
 } = await import(pathToFileURL(contractPath).href);
-const {
-  SYSTEM_OPS_HELPER_PARENT,
-  deriveOpsHelperBinding,
-} = await import(pathToFileURL(helperPath).href);
+const { deriveOpsHelperBinding } = await import(pathToFileURL(helperPath).href);
 
 const TARGET_SHA = '1'.repeat(40);
 const CURRENT_SHA = '2'.repeat(40);
@@ -30,6 +29,7 @@ const SHA256 = 'b'.repeat(64);
 const FILE_IDENTITY =
   'device=1,inode=2,mode=100555,size=1,mtimeNs=1,ctimeNs=1';
 const DIRECTORY_IDENTITY = 'device=1,inode=2,mode=40700,uid=0,gid=0';
+const EXPECTED_SYSTEM_OPS_HELPER_PARENT = '/usr/local/lib/cosmos-ops';
 const helper = deriveOpsHelperBinding({
   testedSha: TARGET_SHA,
   i00EnforcementTreeDigestSha256: I00_DIGEST,
@@ -43,7 +43,32 @@ assert.deepEqual(DEPLOYMENT_ENDPOINT_BUDGETS, {
   BACKUP_CREATE: 68,
   ISOLATED_RESTORE: 79,
 });
-assert.equal(helper.parent, SYSTEM_OPS_HELPER_PARENT);
+assert.equal(
+  helper.parent,
+  EXPECTED_SYSTEM_OPS_HELPER_PARENT,
+  'M2 SYSTEM helper parent must remain independently pinned to /usr/local/lib/cosmos-ops',
+);
+const installerSource = readFileSync(installerPath, 'utf8');
+assert.doesNotMatch(
+  installerSource,
+  /\/usr\/local\/lib\/cosmos-ops/u,
+  'installer must not restate the canonical SYSTEM helper parent',
+);
+assert.match(
+  installerSource,
+  /deriveOpsHelperBinding/u,
+  'installer must consume deriveOpsHelperBinding from the canonical helper module',
+);
+assert.match(
+  installerSource,
+  /destination !== expectedHelperBinding\.root/u,
+  'installer must reject a destination that disagrees with the canonical helper root',
+);
+assert.match(
+  installerSource,
+  /dirname\(destination\) !== expectedHelperBinding\.parent/u,
+  'installer must reject a destination parent that disagrees with the canonical helper parent',
+);
 
 const dropInSet = JSON.stringify([
   {
@@ -107,6 +132,8 @@ const exactValues = new Map(Object.entries({
   'ops-readback-url': 'http://127.0.0.1:8080/api/system-integration/ops/readback',
   'env-path': '/usr/bin/env',
   'node-path': '/usr/bin/node',
+  'destination': helper.root,
+  'destination-parent-path': EXPECTED_SYSTEM_OPS_HELPER_PARENT,
   'ops-helper-app-entrypoint-path': helper.appEntrypoint,
   'ops-helper-root': helper.root,
   'ops-helper-tree-sha256': I00_DIGEST,
@@ -125,6 +152,7 @@ const exactValues = new Map(Object.entries({
 }));
 
 const directoryIdentityPrefixes = new Set([
+  'destination-parent-identity',
   'data-dir-identity',
   'cosmos-root-identity',
   'releases-dir-identity',
@@ -133,7 +161,10 @@ const directoryIdentityPrefixes = new Set([
   'ops-state-dir-identity',
 ]);
 
-function valueFor(prefix) {
+function valueFor(prefix, actionClass) {
+  if (actionClass === 'OPS_BUNDLE_INSTALL'
+      && ['effect-common-identity', 'effect-common-path', 'effect-common-sha256']
+        .includes(prefix)) return 'NONE';
   if (exactValues.has(prefix)) return exactValues.get(prefix);
   if (directoryIdentityPrefixes.has(prefix)) return DIRECTORY_IDENTITY;
   if (prefix.endsWith('-identity')) return FILE_IDENTITY;
@@ -149,7 +180,9 @@ function valueFor(prefix) {
 
 function endpoints(actionClass) {
   const inventory = DEPLOYMENT_ENDPOINT_PREFIX_INVENTORIES[actionClass];
-  const values = inventory.map((prefix) => `${prefix}:${valueFor(prefix)}`).sort();
+  const values = inventory
+    .map((prefix) => `${prefix}:${valueFor(prefix, actionClass)}`)
+    .sort();
   assert.equal(values.length, DEPLOYMENT_ENDPOINT_BUDGETS[actionClass]);
   return values;
 }
@@ -172,8 +205,10 @@ function systemPolicy(actionClass) {
 
 const releaseEndpoints = endpoints('SERVICE_RELEASE_SWITCH');
 const rollbackEndpoints = endpoints('SERVICE_ROLLBACK');
+const installEndpoints = endpoints('OPS_BUNDLE_INSTALL');
 assert.equal(releaseEndpoints.length, 138);
 assert.equal(rollbackEndpoints.length, 131);
+assert.equal(installEndpoints.length, 47);
 validateDeploymentAuthorizationEndpoints(
   'SERVICE_RELEASE_SWITCH',
   releaseEndpoints,
@@ -184,12 +219,48 @@ validateDeploymentAuthorizationEndpoints(
   rollbackEndpoints,
   { artifactPolicy: systemPolicy('SERVICE_ROLLBACK'), deployedSha: TARGET_SHA },
 );
+validateDeploymentAuthorizationEndpoints(
+  'OPS_BUNDLE_INSTALL',
+  installEndpoints,
+  { artifactPolicy: systemPolicy('OPS_BUNDLE_INSTALL'), deployedSha: TARGET_SHA },
+);
 
 const replaceEndpoint = (values, prefix, replacement) => values
   .map((entry) => entry.startsWith(`${prefix}:`)
     ? `${prefix}:${replacement}`
     : entry)
   .sort();
+assert.throws(
+  () => validateDeploymentAuthorizationEndpoints(
+    'SERVICE_RELEASE_SWITCH',
+    replaceEndpoint(releaseEndpoints, 'ops-helper-root', `${helper.root}-mismatch`),
+    { artifactPolicy: systemPolicy('SERVICE_RELEASE_SWITCH'), deployedSha: TARGET_SHA },
+  ),
+  /ops helper root differs from the release SHA and I00 tree binding/u,
+  'M1 helper-root equality assertion must reject a non-derived root',
+);
+assert.throws(
+  () => validateDeploymentAuthorizationEndpoints(
+    'OPS_BUNDLE_INSTALL',
+    replaceEndpoint(installEndpoints, 'destination', `${helper.root}-mismatch`),
+    { artifactPolicy: systemPolicy('OPS_BUNDLE_INSTALL'), deployedSha: TARGET_SHA },
+  ),
+  /ops helper install destination differs from the canonical helper root/u,
+  'M3 install-destination equality assertion must reject a non-derived destination',
+);
+assert.throws(
+  () => validateDeploymentAuthorizationEndpoints(
+    'SERVICE_RELEASE_SWITCH',
+    replaceEndpoint(
+      releaseEndpoints,
+      'ops-helper-app-entrypoint-path',
+      `${helper.root}/bin/not-app-entrypoint.mjs`,
+    ),
+    { artifactPolicy: systemPolicy('SERVICE_RELEASE_SWITCH'), deployedSha: TARGET_SHA },
+  ),
+  /ops helper app entrypoint differs from the canonical helper root/u,
+  'M3 app-entrypoint equality assertion must reject a non-derived entrypoint',
+);
 assert.throws(
   () => validateDeploymentAuthorizationEndpoints(
     'SERVICE_RELEASE_SWITCH',
@@ -224,7 +295,7 @@ assert.throws(
   /current and target release SHAs must remain distinct/u,
 );
 
-process.stdout.write('SYSTEM helper-root endpoint authorization accepted 138/131 exact endpoints\n');
+process.stdout.write('SYSTEM helper-root endpoint authorization accepted 47/138/131 exact endpoints\n');
 NODE
 pass_assertion
 

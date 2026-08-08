@@ -5,7 +5,9 @@ set -euo pipefail
 VALIDATOR="$I00_ROOT/bin/validate-authorization.mjs"
 
 ASSERTIONS="$(
-node --input-type=module - "$VALIDATOR" "$TEST_TMP" <<'NODE'
+node --input-type=module - "$VALIDATOR" "$TEST_TMP" \
+  "$I00_ROOT/deployment-authorization-contract.mjs" <<'NODE'
+import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import {
   chmodSync,
@@ -19,8 +21,28 @@ import {
 } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 
-const [validatorSource, testRoot] = process.argv.slice(2);
+const [validatorSource, testRoot, contractSource] = process.argv.slice(2);
+const { DEPLOYMENT_ENDPOINT_BUDGETS } = await import(
+  pathToFileURL(contractSource).href
+);
+const countedEndpointBudgets = Object.freeze({
+  OPS_BUNDLE_INSTALL: 47,
+  SERVICE_RELEASE_SWITCH: 138,
+  SERVICE_ROLLBACK: 131,
+  BACKUP_CREATE: 68,
+  ISOLATED_RESTORE: 79,
+});
+assert.deepEqual(
+  DEPLOYMENT_ENDPOINT_BUDGETS,
+  countedEndpointBudgets,
+  'validator API fixture endpoint budgets must equal real DEPLOYMENT_ENDPOINT_BUDGETS',
+);
+const fixtureEndpointBudgets = Object.freeze({
+  ...countedEndpointBudgets,
+  SECRET_MATERIALIZATION: 47,
+});
 const fixtureRoot = resolve(testRoot, 'validator-api');
 const fixtureBin = resolve(fixtureRoot, 'bin');
 mkdirSync(fixtureBin, { recursive: true, mode: 0o700 });
@@ -97,14 +119,7 @@ const canonicalBytes = (value) => Buffer.from(\`\${JSON.stringify(canonicalValue
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex');
 export const canonicalJson = (value) => JSON.stringify(canonicalValue(value));
 export function deploymentEndpointBudget(actionClass) {
-  const budgets = {
-    OPS_BUNDLE_INSTALL: 47,
-    SERVICE_RELEASE_SWITCH: 138,
-    SERVICE_ROLLBACK: 131,
-    BACKUP_CREATE: 68,
-    ISOLATED_RESTORE: 79,
-    SECRET_MATERIALIZATION: 47,
-  };
+  const budgets = ${JSON.stringify(fixtureEndpointBudgets)};
   if (!Number.isSafeInteger(budgets[actionClass])) throw new Error('class budget unavailable');
   return budgets[actionClass];
 }

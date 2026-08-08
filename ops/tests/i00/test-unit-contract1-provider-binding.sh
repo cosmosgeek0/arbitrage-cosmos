@@ -11,6 +11,7 @@ AUTHORIZATION_FIXTURE="$TEST_DIR/fixtures/make-deployment-authorization-fixture.
 CONTRACT="$I00_ROOT/deployment-authorization-contract.mjs"
 FAKE_MANAGER="$TEST_DIR/fixtures/unit-contract1-systemctl.mjs"
 ROOT="$TEST_TMP/ip-ops-i00-sim-unit-contract1"
+OPS_HELPER_TESTED_SHA='0123456789abcdef0123456789abcdef01234567'
 NODE_BIN="$(node -e 'const fs=require("fs");process.stdout.write(fs.realpathSync(process.execPath))')"
 ENV_BIN="$(node -e 'const fs=require("fs");process.stdout.write(fs.realpathSync("/usr/bin/env"))')"
 SYSTEMCTL="$ROOT/bin/systemctl"
@@ -45,12 +46,23 @@ process.stdout.write(typedTreeDigest(root, {
 }));
 NODE
 )"
-OPS_HELPER_ROOT="$(node --input-type=module - "$I00_ROOT/ops-helper-root.mjs" "$OPS_HELPER_TREE_SHA256" <<'NODE'
+OPS_HELPER_ROOT="$(node --input-type=module - "$I00_ROOT/ops-helper-root.mjs" \
+  "$OPS_HELPER_TREE_SHA256" "$OPS_HELPER_TESTED_SHA" <<'NODE'
+import assert from 'node:assert/strict';
 import { pathToFileURL } from 'node:url';
-const [modulePath, digest] = process.argv.slice(2);
+const [modulePath, digest, testedSha] = process.argv.slice(2);
 const { deriveOpsHelperBinding } = await import(pathToFileURL(modulePath).href);
+assert.throws(
+  () => deriveOpsHelperBinding({
+    testedSha: '0'.repeat(40),
+    i00EnforcementTreeDigestSha256: digest,
+    rootMode: 'SYSTEM',
+  }),
+  /requires one resolved full lowercase tested SHA/u,
+  'all-zero tested SHA must be rejected by the canonical ops helper binding',
+);
 process.stdout.write(deriveOpsHelperBinding({
-  testedSha: '0'.repeat(40),
+  testedSha,
   i00EnforcementTreeDigestSha256: digest,
   rootMode: 'SYSTEM',
 }).root);
@@ -120,7 +132,7 @@ NODE
 cp "$APP_LOGGING_TEMPLATE" "$LOGGING_DROP_IN"
 printf '%s\n' '[Service]' 'Environment=UNIT_CONTRACT1_EXTRA=1' >"$EXTRA_DROP_IN"
 printf '%s\n' 'HOST=127.0.0.1' 'PORT=8080' >"$RUNTIME_ENV"
-printf '%s\n' 'I00_DEPLOYED_SHA=0000000000000000000000000000000000000000' >"$I00_ENV"
+printf '%s\n' "I00_DEPLOYED_SHA=$OPS_HELPER_TESTED_SHA" >"$I00_ENV"
 
 cp "$NODE_BIN" "$ROOT/commands/node"
 cp "$TEST_DIR/fixtures/fake-aws.sh" "$ROOT/commands/aws"
@@ -573,9 +585,10 @@ assert_success inspect --expected-binding-sha256 "$BASELINE_BINDING"
 
 note "UNIT-CONTRACT1: action preview app endpoints must come from independent inspection"
 node --input-type=module - "$BASELINE" "$PENDING_PREVIEW" \
-  "$OPS_HELPER_ROOT" "$OPS_HELPER_TREE_SHA256" "$OPS_HELPER_APP_ENTRYPOINT" <<'NODE'
+  "$OPS_HELPER_ROOT" "$OPS_HELPER_TREE_SHA256" "$OPS_HELPER_APP_ENTRYPOINT" \
+  "$OPS_HELPER_TESTED_SHA" <<'NODE'
 import { writeFileSync } from 'node:fs';
-const [raw, output, opsHelperRoot, opsHelperTreeSha256, opsHelperAppEntrypoint]
+const [raw, output, opsHelperRoot, opsHelperTreeSha256, opsHelperAppEntrypoint, testedSha]
   = process.argv.slice(2);
 const value = JSON.parse(raw);
 const endpoints = [
@@ -626,7 +639,7 @@ const endpoints = [
   `ops-helper-app-entrypoint-path:${opsHelperAppEntrypoint}`,
   `ops-helper-root:${opsHelperRoot}`,
   `ops-helper-tree-sha256:${opsHelperTreeSha256}`,
-  'release-sha:0000000000000000000000000000000000000000',
+  `release-sha:${testedSha}`,
 ].sort();
 writeFileSync(output, `${JSON.stringify({ action: { allowedEndpoints: endpoints } })}\n`);
 NODE
@@ -637,9 +650,13 @@ for prior in "$PROVIDER_RISK" "$PROVIDER_PREVIEW"; do
   assert_failure_contains 'reuses prior provider provenance' bash -c \
     'printf "%s\n" "$1" | node "$2" --deployment-risk "$3" --action-preview "$4" --test-provider-bound-root "$5"' \
     bash "$BASELINE" "$PREVIEW_VERIFIER" "$prior" "$PENDING_PREVIEW" "$ROOT"
-  assert_failure_contains 'action preview lacks one exact ops-helper-root' bash -c \
+  prior_original="$prior.card3r-original"
+  cp "$prior" "$prior_original"
+  cp "$PENDING_PREVIEW" "$prior"
+  assert_failure_contains 'reuses prior provider provenance' bash -c \
     'printf "%s\n" "$1" | node "$2" --deployment-risk "$3" --action-preview "$4" --test-provider-bound-root "$5"' \
     bash "$BASELINE" "$PREVIEW_VERIFIER" "$PENDING_RISK" "$prior" "$ROOT"
+  mv "$prior_original" "$prior"
 done
 node --input-type=module - "$PENDING_PREVIEW" <<'NODE'
 import { readFileSync, writeFileSync } from 'node:fs';

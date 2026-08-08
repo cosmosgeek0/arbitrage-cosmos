@@ -646,8 +646,8 @@ export const DEPLOYMENT_ACTION_CLASSES = Object.freeze(Object.keys(ACTION_CLASSE
 // accepts. Release-switch always admits the provider group and then exactly one
 // of the mutually exclusive first-host or automatic-rollback groups. This is
 // why its legal maximum uses max(5, 10), not the sum of both branches. Counted
-// derivation: install 47; release 121 + 7 + max(5, 10) = 138; rollback
-// 124 + 7 = 131; backup 68; isolated restore 79.
+// derivation: install 47; release 118+10+10=138; rollback 121+10=131;
+// backup 68; isolated restore 79.
 export const DEPLOYMENT_ENDPOINT_BUDGETS = Object.freeze({
   OPS_BUNDLE_INSTALL: ACTION_CLASSES.OPS_BUNDLE_INSTALL.endpointPrefixes.length,
   SERVICE_RELEASE_SWITCH:

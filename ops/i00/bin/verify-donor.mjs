@@ -13,7 +13,7 @@ import {
 import { loadL15AmendmentContract } from '../l15-amendment.mjs';
 
 const EXPECTED_DONOR_CONTRACT_SHA256 = '078cc2a3d8bc79026f1de6985284856794e53ba34ffd7fda5d1140e46e31a1b3';
-const EXPECTED_AMENDMENT_CONTRACT_SHA256 = '2d69f31b9b688269ddd0613a6719ab6e56b4060c084421bc7bc5a40cb2675975';
+const EXPECTED_AMENDMENT_CONTRACT_SHA256 = 'c43a356c4179f5f37da017b704b4ac67a2dc46dfb81f6e1bf48829f64ac3ab8f';
 const GIT_SAFE_PATH = '/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/bin';
 const GIT_CANDIDATES = Object.freeze(GIT_SAFE_PATH.split(':').map((directory) => resolve(directory, 'git')));
 const XCODE_SELECT_PATH = '/usr/bin/xcode-select';

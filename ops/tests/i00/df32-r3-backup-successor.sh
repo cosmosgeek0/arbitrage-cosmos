@@ -144,6 +144,8 @@ fs.writeFileSync(output, zlib.gzipSync(Buffer.concat([...entries, Buffer.alloc(1
 NODE
 }
 
+json_write "$DATA_DIR/journal-compat.json" "dataSchema=3" "rollbackFloor=3" \
+  "updatedAtUtc=2026-07-12T00:00:00Z" "updatedBy=test"
 assert_success run_backup
 BASE_BACKUP="$BACKUP_DIR/$(ls -1 "$BACKUP_DIR" | grep -E '^[0-9]{8}T[0-9]{6}Z' | sort | tail -1)"
 assert_file "$BASE_BACKUP/manifest.json"

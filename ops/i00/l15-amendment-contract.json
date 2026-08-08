@@ -425,7 +425,7 @@
       "baseLiveTree": "a90d108fe7614a00de87e6280089fe0201c8dc3d",
       "effectiveLiveTree": "d5ba9239f244816c1759f0665a781a1fe584e096",
       "baseRootDigestSha256": "c37e5a80b9591a31ff41af7e07f66bb75a99d13f2d6e6edbcb8726dae7243cc0",
-      "effectiveRootDigestSha256": "b46dd583f90f494815ccfff4d8ff69bd217f9fa42dea8685f272b93ed289f21b",
+      "effectiveRootDigestSha256": "e4dcf3bbc70aed92610fb2129c142d7689038d87497797b9c7e798c96f29668f",
       "changedFiles": [
         {
           "path": "ops/live/README.md",
@@ -448,24 +448,24 @@
           "mode": "100755",
           "beforeGitBlob": "9de219e48e0df15f4a3e0ee812ec907863389111",
           "beforeSha256": "6d2c693251be5782ba8c3abb38714bee6580450dafa8e13b79606c17e48b5890",
-          "afterGitBlob": "d72bfffec8d3a4918f3ea0b8135334aa2af18565",
-          "afterSha256": "480662be633b64de538b3183e93ef848a82f9d497b40f2e1712b967558c64b94"
+          "afterGitBlob": "24816f7977dc7a79f8cc00eec0365d69eb4dfb79",
+          "afterSha256": "eb2e7b8e5acdb18f0219544b2acc251c714352bee7e2d28c0f5cdf9cfb2d7b33"
         },
         {
           "path": "ops/live/bin/common.sh",
           "mode": "100755",
           "beforeGitBlob": "73f5b58317b56b662c0488ae7cfee793f71e027c",
           "beforeSha256": "2da2ffd952daf2480bde91280f422e5d86d45c471515c390f0592923c52c09b6",
-          "afterGitBlob": "01537660489dd8a646f3b47cd0058f95326913e0",
-          "afterSha256": "7e68e81dd902f0c6a434cc777d1aba49f6140227a355b86ad1c39c56ce946d2d"
+          "afterGitBlob": "a7caeb6f2d192b5a8a9f10a349af3a5252e52cab",
+          "afterSha256": "9770ee72e2f4d290af315ea1d76cb6435951130f7829847ea0287b0221dfa23d"
         },
         {
           "path": "ops/live/bin/deploy.sh",
           "mode": "100755",
           "beforeGitBlob": "3c4eaf5c445ffd716216e9c27815d0cffee3ef8b",
           "beforeSha256": "9424f10b73fab8b0fa98eb135b758b80282d6c529831b7e7fba3002f3014c02a",
-          "afterGitBlob": "0893ea430861c7bf184cd07b9ff3d82b068ef957",
-          "afterSha256": "c75a51a9a09b1ab97b947c1ae86599c95e287ae4f4c0fa33b163d5a39c0bc959"
+          "afterGitBlob": "2a1366bcd7468476cd609da4543013e73d2a1a5f",
+          "afterSha256": "5a8bc5088ae3903911d66e291152d1d37c28bb8eb54f42a74f9db89ff2170d90"
         },
         {
           "path": "ops/live/bin/restore-drill.sh",
@@ -480,16 +480,16 @@
           "mode": "100755",
           "beforeGitBlob": "ad03af0ed0759a61ff56f3a6de7660423bd8df03",
           "beforeSha256": "a2e6f29fa59a6ad0d0c0e15912348c4326eee83c61f203a08e7af2242327b332",
-          "afterGitBlob": "f2bc71ee46c508f44abeb542967bb4c56d977001",
-          "afterSha256": "c5820af2271f68cb101410189fb646a3d9fa0030fb3578c4a742301473d0c0e0"
+          "afterGitBlob": "b34bd2cdb5fe3bf8ca100037b710b395b9a37c95",
+          "afterSha256": "f6ac243c40ff8cd6a00875747aeeb836c603ff1724d68bcfc41d23381a6fb42e"
         },
         {
           "path": "ops/live/bin/rollback.sh",
           "mode": "100755",
           "beforeGitBlob": "5a0d289c35ed3cb51d7e217e477bd671a409071b",
           "beforeSha256": "c594a483b810073c11a8ec65bdc716ab5e36010146b386a854df601e4cfd1728",
-          "afterGitBlob": "6d7183a1048cf79f65858a01e00857aa5fd2145d",
-          "afterSha256": "484bd7cf62fdcea26ee36c3c9982e3a5c2a7bce9ef832ed143f4c5a7c092a723"
+          "afterGitBlob": "c0925c156af2a10e6f2b6389039fa0c4f5d6e4aa",
+          "afterSha256": "e982deb63f64ef492c52ceeebc416630d93eada348408d89f239a054f37884c8"
         },
         {
           "path": "ops/live/bin/watchdog.sh",
@@ -684,8 +684,8 @@
         {
           "path": "ops/tests/i00/df32-r3-backup-successor.sh",
           "mode": "100755",
-          "gitBlob": "be3c772dc48cc2be480d8a827852a0942f5778bb",
-          "sha256": "05e3466348c78d9f59f842dc542b27bad0afcc353400fe328c531e04d53890b0"
+          "gitBlob": "026899ebe7cb69ce53ae5019c926405f7daa0fb4",
+          "sha256": "3d8ba07691f246a0e928b9afcac6b4edb424bed702b4ed12d43a8a29a1f4cb5c"
         },
         {
           "path": "ops/tests/i00/test-deploy-portability-008-bash-canonicality.sh",
@@ -698,20 +698,32 @@
   ],
   "effectiveLive": {
     "tree": "d5ba9239f244816c1759f0665a781a1fe584e096",
-    "rootDigestSha256": "b46dd583f90f494815ccfff4d8ff69bd217f9fa42dea8685f272b93ed289f21b",
+    "rootDigestSha256": "e4dcf3bbc70aed92610fb2129c142d7689038d87497797b9c7e798c96f29668f",
     "fileCount": 31,
     "files": [
       {
-        "path": "aws/iam-secrets-policy.json.template",
+        "path": "README.md",
         "mode": "100644",
-        "gitBlob": "45ac7a4399e7cc869bf36a6a77f9fd86e3ee4f03",
-        "sha256": "cc7594a978ceae53083f3d6a4375c04fb99faf1e740abc6c0458bc8095946fd2"
+        "gitBlob": "c3ef2f6040584321bbbd7d236f853bc2f23505e2",
+        "sha256": "7b67ad9c3e8649cd4add24ea424ebbad212db74fe13365b455096c2643b81080"
+      },
+      {
+        "path": "RECEIPT.md",
+        "mode": "100644",
+        "gitBlob": "7fc3520d4fede577937c6dd48c191b1e5d212061",
+        "sha256": "d5159d60419faf11b153557ce830a0d563c723a1b6d74bf7af8fd0517edc7293"
       },
       {
         "path": "aws/README.md",
         "mode": "100644",
         "gitBlob": "1110a217e56dde8ef30d4b993c1c31f678644025",
         "sha256": "5321cdb892760012b989ed8b7230f86d3906c7833c3c1f3377c73fdc720aaf8c"
+      },
+      {
+        "path": "aws/iam-secrets-policy.json.template",
+        "mode": "100644",
+        "gitBlob": "45ac7a4399e7cc869bf36a6a77f9fd86e3ee4f03",
+        "sha256": "cc7594a978ceae53083f3d6a4375c04fb99faf1e740abc6c0458bc8095946fd2"
       },
       {
         "path": "bench/README.md",
@@ -780,6 +792,12 @@
         "sha256": "5652e9296c324f2b8efc25463093b5affc9b133b73cf37e7f989dc976dd33beb"
       },
       {
+        "path": "cloudflare/README.md",
+        "mode": "100644",
+        "gitBlob": "29be2ba07a5c694fdb246b6da015498a9ca2fd5f",
+        "sha256": "80097cec3555f9805dae4f65e0b2dd25a2e4fa04d0ae1f2a66bfcfcade4a04b1"
+      },
+      {
         "path": "cloudflare/access-app.json.template",
         "mode": "100644",
         "gitBlob": "d39c0cdf84707f73983996db40d341e9bac9aaba",
@@ -790,12 +808,6 @@
         "mode": "100644",
         "gitBlob": "eb21cf2e44f6ede176abc786e454191031553a9e",
         "sha256": "d8a58ce2aa9ba5afdd44497ba4018c4fcf36d30062bf63de33ee0aca6eeb0250"
-      },
-      {
-        "path": "cloudflare/README.md",
-        "mode": "100644",
-        "gitBlob": "29be2ba07a5c694fdb246b6da015498a9ca2fd5f",
-        "sha256": "80097cec3555f9805dae4f65e0b2dd25a2e4fa04d0ae1f2a66bfcfcade4a04b1"
       },
       {
         "path": "env/cosmos-app.env.template",
@@ -820,18 +832,6 @@
         "mode": "100644",
         "gitBlob": "ec0dbb65bd447061d6c58430c7e112b0ad250a8b",
         "sha256": "a83e1c98e5421977e3f9e08e84d06f10633f55afd558166442f1576adb0c2f31"
-      },
-      {
-        "path": "README.md",
-        "mode": "100644",
-        "gitBlob": "c3ef2f6040584321bbbd7d236f853bc2f23505e2",
-        "sha256": "7b67ad9c3e8649cd4add24ea424ebbad212db74fe13365b455096c2643b81080"
-      },
-      {
-        "path": "RECEIPT.md",
-        "mode": "100644",
-        "gitBlob": "7fc3520d4fede577937c6dd48c191b1e5d212061",
-        "sha256": "d5159d60419faf11b153557ce830a0d563c723a1b6d74bf7af8fd0517edc7293"
       },
       {
         "path": "systemd/cloudflared.service",

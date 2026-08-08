@@ -38,6 +38,7 @@ import {
   decodePrivateReadSnapshot,
   nextPrivateReadFreshnessExpiry,
   privateReadAccessReasonForStatus,
+  projectPrivateReadGuard,
   readPrivateReadStateField,
   reduceRealDataClientTuple,
   type M0SpotReadinessClientTruth,
@@ -129,15 +130,12 @@ export type MarketSnapshotPayload = Readonly<{
   rows: MarketRow[];
 }>;
 
-export type MarketPublicationStatus = 'CURRENT' | 'STALE LAST-KNOWN' | 'PARTIAL' | 'CONFLICT';
-
 export type DecodedMarketSnapshot = Readonly<{
   updatedAt: number;
   streamUpdatedAt: number | null | undefined;
   dataSources: MarketSourcePublicationTruth;
   rows: MarketRow[];
   normalizedReceiptIdentity: string;
-  publicationStatus: Exclude<MarketPublicationStatus, 'CONFLICT'>;
   publicationError: string | null;
 }>;
 
@@ -329,21 +327,15 @@ export function decodeMarketSnapshot(
     }
     return projected;
   });
-  const freshnessTime = streamUpdatedAt === undefined ? updatedAt : streamUpdatedAt;
   const sourceTruthEvent = marketSnapshotTruthEvent(
     dataSources,
     observedAtMs,
-    freshnessTime,
+    streamUpdatedAt,
     maximumAgeMs,
   );
   const unavailableSources = MARKET_SOURCE_PUBLICATION_KEYS.filter((key) => (
     dataSources[key] === 'unavailable'
   ));
-  const publicationStatus = unavailableSources.length > 0
-    ? 'PARTIAL'
-    : sourceTruthEvent.kind === 'FAILURE'
-      ? 'STALE LAST-KNOWN'
-      : 'CURRENT';
   const publicationError = unavailableSources.length > 0
     ? `Market sources are unavailable: ${unavailableSources.join(', ')}.`
     : sourceTruthEvent.kind === 'FAILURE'
@@ -363,7 +355,6 @@ export function decodeMarketSnapshot(
     dataSources,
     rows,
     normalizedReceiptIdentity,
-    publicationStatus,
     publicationError,
   });
 }
@@ -375,7 +366,6 @@ export type MarketAdmissionState = Readonly<{
   updatedAt: number | null;
   dataSources: MarketSourcePublicationTruth | null;
   normalizedReceiptIdentity: string | null;
-  publicationStatus: MarketPublicationStatus;
   truth: MarketStateTruth;
   errorKind: MarketAdmissionErrorKind;
 }>;
@@ -412,7 +402,6 @@ export const INITIAL_MARKET_ADMISSION_STATE: MarketAdmissionState = Object.freez
   updatedAt: null,
   dataSources: null,
   normalizedReceiptIdentity: null,
-  publicationStatus: 'PARTIAL',
   truth: INITIAL_MARKET_STATE_TRUTH,
   errorKind: 'NONE',
 });
@@ -436,9 +425,6 @@ function failedMarketAdmission(
   return Object.freeze({
     state: Object.freeze({
       ...current,
-      publicationStatus: current.updatedAt === null || current.publicationStatus === 'PARTIAL'
-        ? 'PARTIAL'
-        : 'STALE LAST-KNOWN',
       truth,
       errorKind: 'TRANSIENT',
     }),
@@ -451,7 +437,7 @@ function retainedMarketTruth(
   receipt: DecodedMarketSnapshot,
   observedAtMs: number,
 ): Pick<MarketAdmissionState, 'truth' | 'errorKind'> {
-  if (receipt.publicationStatus === 'CURRENT') {
+  if (receipt.publicationError === null && current.truth.lastSuccessAtMs !== null) {
     return {
       truth: Object.freeze({
         status: 'CURRENT',
@@ -465,7 +451,7 @@ function retainedMarketTruth(
     truth: reduceMarketStateTruth(current.truth, {
       kind: 'FAILURE',
       observedAtMs,
-      error: receipt.publicationError ?? 'Market sources are not current.',
+      error: receipt.publicationError ?? 'Market receipt has no admitted success timestamp.',
     }),
     errorKind: 'PUBLICATION',
   };
@@ -476,7 +462,7 @@ function replacedMarketTruth(
   receipt: DecodedMarketSnapshot,
   observedAtMs: number,
 ): Pick<MarketAdmissionState, 'truth' | 'errorKind'> {
-  if (receipt.publicationStatus === 'CURRENT') {
+  if (receipt.publicationError === null) {
     return {
       truth: Object.freeze({ status: 'CURRENT', lastSuccessAtMs: observedAtMs, error: null }),
       errorKind: 'NONE',
@@ -544,7 +530,6 @@ export function reduceMarketAdmission(
       return Object.freeze({
         state: Object.freeze({
           ...current,
-          publicationStatus: 'CONFLICT',
           truth: reduceMarketStateTruth(current.truth, {
             kind: 'FAILURE',
             observedAtMs: observation.observedAtMs,
@@ -559,11 +544,11 @@ export function reduceMarketAdmission(
     return Object.freeze({
       state: Object.freeze({
         ...current,
-        publicationStatus: receipt.publicationStatus,
         truth: retained.truth,
         errorKind: retained.errorKind,
       }),
-      disposition: receipt.publicationStatus === 'CURRENT'
+      disposition: retained.truth.status === 'CURRENT'
+          && retained.truth.lastSuccessAtMs !== null
         ? 'EQUAL_IDENTICAL_CURRENT'
         : 'EQUAL_IDENTICAL_NON_CURRENT',
     });
@@ -576,11 +561,10 @@ export function reduceMarketAdmission(
       updatedAt: receipt.updatedAt,
       dataSources: receipt.dataSources,
       normalizedReceiptIdentity: receipt.normalizedReceiptIdentity,
-      publicationStatus: receipt.publicationStatus,
       truth: replaced.truth,
       errorKind: replaced.errorKind,
     }),
-    disposition: receipt.publicationStatus === 'CURRENT'
+    disposition: receipt.publicationError === null
       ? 'NEWER_CURRENT'
       : 'NEWER_NON_CURRENT',
   });
@@ -642,12 +626,13 @@ export type Page =
   | 'watchdog'
   | 'notifications'
   | 'news'
-  | 'calendar';
+  | 'calendar'
+  | 'research-lab';
 
 const PAGE_IDS: Page[] = [
   'dashboard', 'control-room', 'account', 'wallets', 'markets', 'detail', 'loans', 'execution', 'orders',
   'positions', 'fills', 'pnl', 'strategies', 'volume', 'opportunities', 'risk', 'ledger', 'system',
-  'watchdog', 'notifications', 'news', 'calendar',
+  'watchdog', 'notifications', 'news', 'calendar', 'research-lab',
 ];
 
 export function isPageId(value: unknown): value is Page {
@@ -707,6 +692,7 @@ const PAGE_PATHS: Readonly<Record<Exclude<Page, 'detail'>, string>> = Object.fre
   notifications: '/notifications',
   news: '/news',
   calendar: '/calendar',
+  'research-lab': '/research-lab',
 });
 
 const SINGLE_SEGMENT_PAGES: Readonly<Record<string, Page>> = Object.freeze({
@@ -725,6 +711,7 @@ const SINGLE_SEGMENT_PAGES: Readonly<Record<string, Page>> = Object.freeze({
   notifications: 'notifications',
   news: 'news',
   calendar: 'calendar',
+  'research-lab': 'research-lab',
   // Legacy internal ids remain accepted only as normalized aliases.
   wallets: 'wallets',
   loans: 'loans',
@@ -2017,9 +2004,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       });
       if (result.disposition === 'FAILURE') {
         issues.push('Market refresh failed');
+      } else if (result.disposition === 'OLDER_IGNORED') {
+        issues.push('Older market snapshot ignored');
       } else if (result.disposition === 'CONFLICT'
           || result.disposition === 'EQUAL_IDENTICAL_NON_CURRENT'
-          || result.disposition === 'NEWER_NON_CURRENT') {
+          || result.disposition === 'NEWER_NON_CURRENT'
+          || result.state.truth.status !== 'CURRENT'
+          || result.state.truth.lastSuccessAtMs === null) {
         issues.push('Market sources are not current');
       }
     } catch (cause) {
@@ -2056,14 +2047,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const privateReadClient = realDataClient.privateRead;
   const privateReadSource = appliedPrivateReadSource(privateReadClient);
+  const privateReadError = privateReadClient.failure?.code ?? null;
+  const privateReadGuard = projectPrivateReadGuard({
+    snapshot: privateReadClient.snapshot,
+    source: privateReadSource,
+    error: privateReadError,
+  });
   const store: Store = {
     state,
     stateStatus: stateTruth.status,
     stateLastSuccessAtMs: stateTruth.lastSuccessAtMs,
     stateError: stateTruth.error,
-    privateRead: privateReadClient.snapshot,
+    privateRead: privateReadGuard.renderSnapshot,
     privateReadSource,
-    privateReadError: privateReadClient.failure?.code ?? null,
+    privateReadError,
     privateReadClient,
     m0SpotReadiness: realDataClient.m0SpotReadiness,
     realDataClient,

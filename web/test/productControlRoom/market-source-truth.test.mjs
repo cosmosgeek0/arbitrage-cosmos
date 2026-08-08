@@ -112,7 +112,7 @@ test('market receipts require valid non-future source time and expire at the str
     OBSERVED_AT_MS,
     MAXIMUM_AGE_MS,
   );
-  assert.equal(current.publicationStatus, 'CURRENT');
+  assert.equal(current.publicationError, null);
 
   const atBoundary = decodeMarketSnapshot(
     marketReceipt({
@@ -122,7 +122,7 @@ test('market receipts require valid non-future source time and expire at the str
     OBSERVED_AT_MS,
     MAXIMUM_AGE_MS,
   );
-  assert.equal(atBoundary.publicationStatus, 'STALE LAST-KNOWN');
+  assert.match(atBoundary.publicationError, /not current/);
 
   const olderServer = decodeMarketSnapshot(
     marketReceipt({
@@ -133,14 +133,25 @@ test('market receipts require valid non-future source time and expire at the str
     MAXIMUM_AGE_MS,
   );
   assert.equal(olderServer.streamUpdatedAt, undefined);
-  assert.equal(olderServer.publicationStatus, 'CURRENT');
+  assert.equal(olderServer.publicationError, null);
+
+  const declaredStaleWithoutStream = decodeMarketSnapshot(
+    marketReceipt({
+      includeStreamUpdatedAt: false,
+      dataSources: sourceTruth({ futuresBookTicker: 'stale' }),
+    }),
+    OBSERVED_AT_MS,
+    MAXIMUM_AGE_MS,
+  );
+  assert.equal(declaredStaleWithoutStream.streamUpdatedAt, undefined);
+  assert.match(declaredStaleWithoutStream.publicationError, /futuresBookTicker=stale/);
 
   const missingStreamTime = decodeMarketSnapshot(
     marketReceipt({ streamUpdatedAt: null }),
     OBSERVED_AT_MS,
     MAXIMUM_AGE_MS,
   );
-  assert.equal(missingStreamTime.publicationStatus, 'STALE LAST-KNOWN');
+  assert.match(missingStreamTime.publicationError, /not current/);
 });
 
 test('market source truth uses exactly three own keys without coercion', () => {
@@ -180,7 +191,7 @@ test('unavailable source fields are nulled without mutating the server row', () 
     dataSources: sourceTruth({ spotBookTicker: 'unavailable' }),
     rows: [input],
   }), OBSERVED_AT_MS, MAXIMUM_AGE_MS);
-  assert.equal(decoded.publicationStatus, 'PARTIAL');
+  assert.match(decoded.publicationError, /spotBookTicker/);
   assert.equal(decoded.rows[0].spotBid, null);
   assert.equal(decoded.rows[0].spotAsk, null);
   assert.equal(decoded.rows[0].spotTopQuoteUsd, null);
@@ -228,6 +239,15 @@ test('market admission ignores older completions and deterministically admits ne
   assert.equal(equalIdentical.disposition, 'EQUAL_IDENTICAL_CURRENT');
   assert.equal(equalIdentical.state.truth.lastSuccessAtMs, firstSuccessAt);
 
+  const inconsistentRetained = {
+    ...first.state,
+    truth: { status: 'UNAVAILABLE', lastSuccessAtMs: null, error: 'No measured success.' },
+  };
+  const refusedPromotion = admit(inconsistentRetained, firstPayload);
+  assert.equal(refusedPromotion.disposition, 'EQUAL_IDENTICAL_NON_CURRENT');
+  assert.equal(refusedPromotion.state.truth.status, 'UNAVAILABLE');
+  assert.equal(refusedPromotion.state.truth.lastSuccessAtMs, null);
+
   const newer = admit(equalIdentical.state, marketReceipt({
     updatedAt: OBSERVED_AT_MS - 500,
     rows: [marketRow({ spot: 63_000 })],
@@ -269,7 +289,6 @@ test('canonical equality ignores key order but same-time divergence latches conf
   }));
   assert.equal(conflict.disposition, 'CONFLICT');
   assert.equal(conflict.state.errorKind, 'CONFLICT');
-  assert.equal(conflict.state.publicationStatus, 'CONFLICT');
   assert.equal(conflict.state.truth.status, 'STALE');
   assert.equal(conflict.state.rows[0].spot, 62_000);
   const conflictIdentity = conflict.state.normalizedReceiptIdentity;
@@ -296,7 +315,6 @@ test('canonical equality ignores key order but same-time divergence latches conf
   }));
   assert.equal(recovered.disposition, 'NEWER_CURRENT');
   assert.equal(recovered.state.errorKind, 'NONE');
-  assert.equal(recovered.state.publicationStatus, 'CURRENT');
   assert.equal(recovered.state.rows[0].spot, 62_002);
 });
 
@@ -312,7 +330,6 @@ test('invalid, stale, and partial market receipts never advance current truth', 
     streamUpdatedAt: OBSERVED_AT_MS - MAXIMUM_AGE_MS,
   }));
   assert.equal(stale.disposition, 'NEWER_NON_CURRENT');
-  assert.equal(stale.state.publicationStatus, 'STALE LAST-KNOWN');
   assert.equal(stale.state.truth.lastSuccessAtMs, null);
 
   const current = admit(INITIAL_MARKET_ADMISSION_STATE, marketReceipt());
@@ -323,7 +340,6 @@ test('invalid, stale, and partial market receipts never advance current truth', 
     dataSources: sourceTruth({ futures24hTicker: 'unavailable' }),
   }));
   assert.equal(partial.disposition, 'NEWER_NON_CURRENT');
-  assert.equal(partial.state.publicationStatus, 'PARTIAL');
   assert.equal(partial.state.truth.status, 'STALE');
   assert.equal(partial.state.truth.lastSuccessAtMs, lastSuccessAtMs);
 });
@@ -370,6 +386,9 @@ test('market freshness requires an exact source timestamp, not socket connectivi
   assert.equal((store.match(/admitMarketCompletion\(\{[\s\S]{0,120}?kind: 'FAILURE'/g) ?? []).length, 2);
   assert.doesNotMatch(store, /setMarkets\(|setMarketTruth\(|setMarketsUpdatedAt\(|setMarketsError\(/);
   assert.match(store, /const result = reduceMarketAdmission\(previous, observation\)/);
+  assert.match(store, /result\.disposition === 'OLDER_IGNORED'/);
+  assert.match(store, /result\.state\.truth\.status !== 'CURRENT'/);
+  assert.doesNotMatch(store, /MarketPublicationStatus|publicationStatus/);
   assert.match(markets, /resolveMarketFreshness\(/);
   assert.match(markets, /marketFreshnessStatus !== 'LIVE'/);
   assert.match(markets, /`MARKET_SOURCE_\$\{input\.marketFreshnessStatus\}`/);

@@ -667,18 +667,26 @@ test('exact zero claims require current preferred complete reconciled truth', ()
   assert.ok(decoded);
   const currentNow = decoded.observedAt + 1_000;
 
-  const current = projectPrivateReadGuard({
+  const currentGuard = projectPrivateReadGuard({
     snapshot: decoded,
     source: 'STATE',
     error: null,
     now: currentNow,
-  }).presentation;
+  });
+  const current = currentGuard.presentation;
   assert.equal(current.counts.openOrders, null, 'order absence stays unknown without reconciled order truth');
   assert.equal(current.counts.fills, null, 'fill absence stays unknown without reconciled fill truth');
   assert.equal(current.counts.positions, null, 'position absence stays unknown without reconciled position truth');
   assert.equal(current.counts.liabilities, 0);
   assert.equal(current.spotAvailableUsdt, null, 'a zero balance stays unknown without reconciled balance truth');
   assert.equal(current.marginLiabilityBtc, '0.00000000');
+  assert.equal(currentGuard.renderSnapshot.spot.balances, null);
+  assert.equal(currentGuard.renderSnapshot.spot.openOrders, null);
+  assert.equal(currentGuard.renderSnapshot.margin.openOrders, null);
+  assert.equal(currentGuard.renderSnapshot.usdm.openOrders, null);
+  assert.equal(currentGuard.renderSnapshot.usdm.positions, null);
+  assert.ok(currentGuard.renderSnapshot.margin.assets);
+  assert.equal(currentGuard.renderSnapshot.margin.totalLiabilityBtc, '0.00000000');
   assert.equal(privateReadExactZeroAdmitted({
     snapshot: decoded,
     source: 'STATE',
@@ -723,6 +731,11 @@ test('exact zero claims require current preferred complete reconciled truth', ()
     assert.equal(guard.presentation.counts.liabilities, null);
     assert.equal(guard.presentation.spotAvailableUsdt, null);
     assert.equal(guard.presentation.marginLiabilityBtc, null);
+    assert.equal(guard.renderSnapshot.spot.balances, null);
+    assert.equal(guard.renderSnapshot.spot.openOrders, null);
+    assert.equal(guard.renderSnapshot.margin.assets, null);
+    assert.equal(guard.renderSnapshot.usdm.positions, null);
+    assert.equal(guard.renderSnapshot.margin.totalLiabilityBtc, null);
   }
 
   const positive = availableFixture();
@@ -1074,6 +1087,9 @@ test('mounted private-read surfaces consume one projection and retain no money-a
     assert.match(source, /projectPrivateRead/);
   }
   assert.match(store, /readPrivateReadStateField\(snapshot\)/);
+  assert.match(store, /const privateReadGuard = projectPrivateReadGuard\(\{/);
+  assert.match(store, /snapshot: privateReadClient\.snapshot/);
+  assert.match(store, /privateRead: privateReadGuard\.renderSnapshot/);
   assert.match(store, /realDataClient\.privateRead\.transport !== 'FALLBACK'/);
   assert.match(store, /createSettledPoll<unknown>/);
   assert.match(owner, /'Reading'/);

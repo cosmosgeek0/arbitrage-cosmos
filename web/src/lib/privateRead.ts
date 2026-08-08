@@ -2031,6 +2031,8 @@ export function projectPrivateRead(
 }
 
 export interface PrivateReadGuardProjection {
+  /** Snapshot safe for mounted consumers that still project their own rows. */
+  readonly renderSnapshot: PrivateReadSnapshot;
   readonly presentation: PrivateReadPresentation;
   readonly errorFact: PrivateReadErrorFact;
   readonly commonTone: PrivateReadTone;
@@ -2079,6 +2081,60 @@ export function projectPrivateReadGuard({
   const redactDecimal = (value: string | null, fact: PrivateReadExactZeroFact) => (
     isZeroDecimal(value) && !zeroAdmitted(fact) ? null : value
   );
+  const renderSnapshot: PrivateReadSnapshot = {
+    ...snapshot,
+    spot: {
+      ...snapshot.spot,
+      balances: snapshot.spot.balances !== null
+          && (
+            snapshot.spot.balances.length === 0 && !zeroAdmitted('SPOT_BALANCES')
+            || snapshot.spot.balances.some((balance) => (
+              balance.asset === 'USDT' && isZeroDecimal(balance.free)
+            )) && !zeroAdmitted('SPOT_AVAILABLE_USDT')
+          )
+        ? null
+        : snapshot.spot.balances,
+      openOrders: snapshot.spot.openOrders?.length === 0 && !zeroAdmitted('OPEN_ORDERS')
+        ? null
+        : snapshot.spot.openOrders,
+      fills: snapshot.spot.fills?.length === 0 && !zeroAdmitted('FILLS')
+        ? null
+        : snapshot.spot.fills,
+    },
+    margin: {
+      ...snapshot.margin,
+      totalLiabilityBtc: redactDecimal(snapshot.margin.totalLiabilityBtc, 'MARGIN_LIABILITY_BTC'),
+      assets: snapshot.margin.assets !== null
+          && (
+            snapshot.margin.assets.length === 0 && !zeroAdmitted('MARGIN_ASSETS')
+            || snapshot.margin.assets.every((asset) => !hasMarginLiability(asset))
+              && !zeroAdmitted('LIABILITIES')
+          )
+        ? null
+        : snapshot.margin.assets,
+      openOrders: snapshot.margin.openOrders?.length === 0 && !zeroAdmitted('OPEN_ORDERS')
+        ? null
+        : snapshot.margin.openOrders,
+      fills: snapshot.margin.fills?.length === 0 && !zeroAdmitted('FILLS')
+        ? null
+        : snapshot.margin.fills,
+    },
+    usdm: {
+      ...snapshot.usdm,
+      balances: snapshot.usdm.balances?.length === 0 && !zeroAdmitted('USDM_BALANCES')
+        ? null
+        : snapshot.usdm.balances,
+      positions: snapshot.usdm.positions?.length === 0 && !zeroAdmitted('POSITIONS')
+        ? null
+        : snapshot.usdm.positions,
+      openOrders: snapshot.usdm.openOrders?.length === 0 && !zeroAdmitted('OPEN_ORDERS')
+        ? null
+        : snapshot.usdm.openOrders,
+      fills: snapshot.usdm.fills?.length === 0 && !zeroAdmitted('FILLS')
+        ? null
+        : snapshot.usdm.fills,
+    },
+  };
   const presentation: PrivateReadPresentation = {
     ...decodedPresentation,
     spotAvailableUsdt: redactDecimal(
@@ -2177,6 +2233,7 @@ export function projectPrivateReadGuard({
     ? presentation.state
     : `${presentation.state} · ${statusReason.label}`;
   return Object.freeze({
+    renderSnapshot,
     presentation,
     errorFact,
     commonTone,

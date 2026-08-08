@@ -54,6 +54,16 @@ test('Epoch 5R Notifications projects only available canonical Product incident 
   assert.equal(available[0].kind, 'product_incident');
 });
 
+test('Epoch 5R Notifications withholds non-current incident counts when executed', async () => {
+  const page = await readFile(pageUrl, 'utf8');
+  const declaration = page.match(
+    /function truthfulIncidentCount\(available: boolean, value: number\): number \| '—' \{\s*([\s\S]*?)\n\}/,
+  );
+  assert.ok(declaration, 'truthfulIncidentCount declaration must remain executable');
+  const truthfulIncidentCount = Function('available', 'value', declaration[1]);
+  assert.equal(truthfulIncidentCount(false, 7), '—');
+});
+
 test('Epoch 5R Notifications fails closed without inventing zero incidents or routing state', async () => {
   const [page, styles] = await Promise.all([
     readFile(pageUrl, 'utf8'),

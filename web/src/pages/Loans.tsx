@@ -10,22 +10,20 @@ import { exactOrDash, hasMarginLiability, projectPrivateRead } from '../lib/priv
 import {
   basisRuntimeSnapshotCurrent,
   decodeBasisRuntimeSnapshot,
-  type BasisRow,
   type BasisSnapshot,
 } from '../lib/basisRuntime';
+import {
+  borrowStatusLabel,
+  borrowStatusTone,
+  hasObservedBorrowCost,
+  selectBorrowPreflightRows,
+} from './borrowPreflightTruth';
 import './Markets.css';
 import './Loans.css';
 
 type LoanView = 'overview' | 'assets' | 'preflight' | 'activity';
 
-function borrowStatusLabel(row: BasisRow): string {
-  if (row.borrow.status === 'available') return 'Available';
-  if (row.borrow.status === 'unavailable') return 'Unavailable';
-  if (row.borrow.status === 'unknown') return 'Unknown';
-  return 'Not Required';
-}
-
-function decisionLabel(row: BasisRow): string {
+function decisionLabel(row: BasisSnapshot['rows'][number]): string {
   if (row.rejectCode) return row.rejectCode.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
   if (row.decisionKind === 'ignore') return 'Below Watch Gate';
   return row.decisionKind.replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -35,7 +33,7 @@ export function Loans() {
   const { privateRead, privateReadError, openDetail, setPage } = useStore();
   const [basis, setBasis] = useState<BasisSnapshot | null>(null);
   const [basisError, setBasisError] = useState<string | null>(null);
-  const [view, setView] = useState<LoanView>('overview');
+  const [view, setView] = useState<LoanView>('preflight');
   const [search, setSearch] = useState('');
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -77,16 +75,17 @@ export function Loans() {
           ? `BASIS_SOURCE_NOT_CURRENT: books=${basis.status.bookState}; marks=${basis.status.markState}`
           : 'BASIS_SOURCE_TIMESTAMPS_NOT_CURRENT');
 
+  const reverseRows = useMemo(
+    () => selectBorrowPreflightRows(basis, basisCurrent),
+    [basis, basisCurrent],
+  );
   const preflightRows = useMemo(() => {
     const query = search.trim().toUpperCase();
-    return (basisCurrent && basis ? basis.rows : [])
-      .filter((row) => row.direction === 'short_spot_long_perp')
-      .filter((row) => !query || row.base.includes(query) || row.symbol.includes(query))
-      .sort((a, b) => (b.executableGapPct ?? Number.NEGATIVE_INFINITY) - (a.executableGapPct ?? Number.NEGATIVE_INFINITY));
-  }, [basis, basisCurrent, search]);
+    return reverseRows.filter((row) => !query || row.base.includes(query) || row.symbol.includes(query));
+  }, [reverseRows, search]);
 
   const privatePresentation = projectPrivateRead(privateRead);
-  // Server-normalized fixed-scale zeros stay zeros: `0.00000000` borrowed and
+  // Server-normalized fixed-scale zeros stay zeros: 0.00000000 borrowed and
   // interest is an observed no-liability row, not an outstanding loan.
   const liabilityRows = privateRead.margin.assets?.filter(hasMarginLiability) ?? null;
   const sourceTone = view === 'preflight'
@@ -109,6 +108,11 @@ export function Loans() {
     preflight: basisCurrent ? String(preflightRows.length) : '—',
     activity: '—',
   };
+  const preflightEmptyText = !basisCurrent
+    ? basisRuntimeReason
+    : search.trim()
+      ? 'No Reverse-Basis Rows Match Search'
+      : 'No Reverse-Basis Rows In The Current Eligible Universe';
 
   return (
     <div className="container page borrowx-page">
@@ -127,12 +131,21 @@ export function Loans() {
           </div>
         </header>
 
-        <div className="borrowx-summary" aria-label="Borrow Summary">
-          <article><span>Margin Liability</span><strong>{exactOrDash(privateRead.margin.totalLiabilityBtc)}</strong><small>{privateRead.margin.totalLiabilityBtc === null ? '— · provider aggregate unavailable' : 'BTC-denominated provider aggregate'}</small></article>
-          <article><span>Liability Assets</span><strong>{liabilityRows === null ? '—' : String(liabilityRows.length)}</strong><small>{privateRead.reconciliation.liabilities.state} · {privateRead.reconciliation.liabilities.reason ?? privatePresentation.observedLabel}</small></article>
-          <article><span>Total Margin Assets</span><strong>{exactOrDash(privateRead.margin.totalAssetBtc)}</strong><small>{privateRead.margin.totalAssetBtc === null ? '— · aggregate unavailable' : 'BTC-denominated provider aggregate'}</small></article>
-          <article><span>Net Margin Assets</span><strong>{exactOrDash(privateRead.margin.totalNetAssetBtc)}</strong><small>{privateRead.margin.state} · {privateRead.margin.coverage.state.replaceAll('_', ' ')}</small></article>
-        </div>
+        {view === 'preflight' ? (
+          <div className="borrowx-summary" aria-label="Borrow Preflight Summary">
+            <article><span>Reverse Preflight Rows</span><strong>{basisCurrent ? reverseRows.length : '—'}</strong><small>{basisCurrent ? 'Current Eligible Universe' : 'Source Unavailable'}</small></article>
+            <article><span>Verified Borrow</span><strong>{basisCurrent && basis ? basis.status.verifiedBorrow : '—'}</strong><small>{basisCurrent ? 'Engine-Verified Capacity And Rate' : 'UNKNOWN'}</small></article>
+            <article><span>Borrow Blocked</span><strong>{basisCurrent && basis ? basis.status.borrowBlocked : '—'}</strong><small>{basisCurrent ? 'Named Borrow Rejection' : 'UNKNOWN'}</small></article>
+            <article><span>Intended Size</span><strong>{basisCurrent && basis ? fmtMoney(basis.thresholds.intendedNotionalUsd) : '—'}</strong><small>{basisCurrent ? 'Engine Target Per Row' : 'UNKNOWN'}</small></article>
+          </div>
+        ) : (
+          <div className="borrowx-summary" aria-label="Borrow Summary">
+            <article><span>Margin Liability</span><strong>{exactOrDash(privateRead.margin.totalLiabilityBtc)}</strong><small>{privateRead.margin.totalLiabilityBtc === null ? '— · provider aggregate unavailable' : 'BTC-denominated provider aggregate'}</small></article>
+            <article><span>Liability Assets</span><strong>{liabilityRows === null ? '—' : String(liabilityRows.length)}</strong><small>{privateRead.reconciliation.liabilities.state} · {privateRead.reconciliation.liabilities.reason ?? privatePresentation.observedLabel}</small></article>
+            <article><span>Total Margin Assets</span><strong>{exactOrDash(privateRead.margin.totalAssetBtc)}</strong><small>{privateRead.margin.totalAssetBtc === null ? '— · aggregate unavailable' : 'BTC-denominated provider aggregate'}</small></article>
+            <article><span>Net Margin Assets</span><strong>{exactOrDash(privateRead.margin.totalNetAssetBtc)}</strong><small>{privateRead.margin.state} · {privateRead.margin.coverage.state.replaceAll('_', ' ')}</small></article>
+          </div>
+        )}
 
         <ProductSurfaceAdapter surfaceId="borrow" />
 
@@ -223,18 +236,22 @@ export function Loans() {
               <table className="borrowx-table preflight">
                 <thead><tr><th className="l">Asset</th><th>Executable Gap</th><th>Intended Size</th><th>Borrow Status</th><th>Borrow Cost</th><th className="l">Decision</th><th>Age</th></tr></thead>
                 <tbody>{preflightRows.map((row) => (
-                  <tr key={row.symbol} tabIndex={0} className="link" onClick={() => openDetail(row.symbol)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openDetail(row.symbol); } }}>
-                    <td className="l borrowx-asset"><TokenIcon symbol={row.symbol} size={32} /><span><b>{row.base}</b><small>Sell Spot · Buy Perp</small></span></td>
+                  <tr key={row.symbol}>
+                    <td className="l">
+                      <button type="button" className="borrowx-asset borrowx-row-link" aria-label={`Open ${row.symbol} details`} onClick={() => openDetail(row.symbol)}>
+                        <TokenIcon symbol={row.symbol} size={32} /><span><b>{row.base}</b><small>Sell Spot · Buy Perp</small></span>
+                      </button>
+                    </td>
                     <td><b>{fmtBasis(row.executableGapPct)}</b><small>Crossed Books</small></td>
                     <td><b>{fmtMoney(basis?.thresholds.intendedNotionalUsd)}</b><small>Engine Target</small></td>
-                    <td><b className={`borrow-${row.borrow.status}`}>{borrowStatusLabel(row)}</b><small>{row.borrow.human}</small></td>
-                    <td><b>{row.borrow.status === 'available' ? fmtBasis(row.borrow.costPctOverHold) : '—'}</b><small>{row.borrow.status === 'available' ? 'Canonical Engine Evidence' : 'Private Rate Not Assumed'}</small></td>
+                    <td><b className={`borrow-${borrowStatusTone(row)}`}>{borrowStatusLabel(row)}</b><small>{row.borrow.human}</small></td>
+                    <td><b>{hasObservedBorrowCost(row) ? fmtBasis(row.borrow.costPctOverHold) : '—'}</b><small>{hasObservedBorrowCost(row) ? 'Engine Borrow Evidence' : 'Private Rate Not Assumed'}</small></td>
                     <td className="l"><b>{decisionLabel(row)}</b><small>{row.reason}</small></td>
                     <td><b>{row.decisionTs ? timeAgo(row.decisionTs) : '—'}</b><small>{Math.round(row.dataQuality.score * 100)}% Trust</small></td>
                   </tr>
                 ))}</tbody>
               </table>
-              {preflightRows.length === 0 && <div className="borrowx-empty">{basisCurrent ? 'No Reverse-Basis Rows In The Current Eligible Universe' : basisRuntimeReason}</div>}
+              {preflightRows.length === 0 && <div className="borrowx-empty">{preflightEmptyText}</div>}
             </div>
           )}
 
@@ -245,7 +262,7 @@ export function Loans() {
 
         <footer className="borrowx-footer">
           <span>{view === 'preflight' ? basisCurrent && basis ? `Public Borrow Source: ${basis.status.borrowSource}` : `Public Borrow Source Unavailable: ${basisRuntimeReason}` : `Private Liability Truth: ${privateRead.reconciliation.liabilities.state} · Money Actions Blocked`}</span>
-          <span>{view === 'preflight' ? basisCurrent ? `${preflightRows.length} Public Rows` : 'Public Rows Unknown' : liabilityRows === null ? 'Private Counts Unknown' : `${liabilityRows.length} Liability Assets`}</span>
+          <span>{view === 'preflight' ? basisCurrent ? `${preflightRows.length} Of ${reverseRows.length} Reverse-Direction Rows` : 'Public Rows Unknown' : liabilityRows === null ? 'Private Counts Unknown' : `${liabilityRows.length} Liability Assets`}</span>
           {view === 'preflight' && <button type="button" onClick={() => setPage('strategies')}>Open Basis</button>}
         </footer>
       </section>

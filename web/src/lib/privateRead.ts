@@ -226,6 +226,26 @@ export const PRIVATE_READ_STALE_AFTER_MS = 45_000;
 const MINIMUM_STALE_AFTER_MS = 15_000;
 const MAXIMUM_STALE_AFTER_MS = 600_000;
 
+/**
+ * Returns the earliest future boundary at which an admitted account or
+ * permission observation changes freshness. It schedules no work and never
+ * treats a future-dated observation as current evidence.
+ */
+export function nextPrivateReadFreshnessExpiry(
+  snapshot: Readonly<PrivateReadSnapshot>,
+  now = Date.now(),
+): number | null {
+  if (!Number.isFinite(now)) return null;
+  const nextExpiryAt = [snapshot.observedAt, snapshot.permissionPosture.observedAt]
+    .filter((observedAt): observedAt is number => (
+      observedAt !== null && Number.isFinite(observedAt) && observedAt <= now
+    ))
+    .map((observedAt) => observedAt + PRIVATE_READ_STALE_AFTER_MS)
+    .filter((expiresAt) => expiresAt > now)
+    .sort((left, right) => left - right)[0];
+  return nextExpiryAt ?? null;
+}
+
 const PRIVATE_STATES = new Set<PrivateReadState>(['AVAILABLE', 'PARTIAL', 'UNAVAILABLE', 'NOT_CONFIGURED']);
 const POSTURE_STATES = new Set<PermissionPostureState>(['VERIFIED_READ_ONLY', 'UNSAFE', 'UNKNOWN', 'NOT_CONFIGURED']);
 const COVERAGE_STATES = new Set<CoverageState>(['COMPLETE_CURRENT', 'PARTIAL_SYMBOL_SCOPED', 'UNAVAILABLE', 'NOT_CONFIGURED']);
@@ -828,6 +848,17 @@ export interface PrivateReadClientTruth {
   readonly lastSuccessAtMs: number | null;
   readonly appliedRequestId: number;
   readonly stateDecisionRequestId: number;
+}
+
+/**
+ * Projects only the provenance of the snapshot currently on screen. An active
+ * fallback transport is not displayed as a source until it supplies an
+ * admitted snapshot of its own.
+ */
+export function appliedPrivateReadSource(
+  client: Readonly<Pick<PrivateReadClientTruth, 'source'>>,
+): PrivateReadSourceId {
+  return client.source ?? 'PENDING';
 }
 
 export type M0SpotReadinessDisposition =
@@ -1442,6 +1473,23 @@ export const PRIVATE_READ_AUTH_REQUIRED_REASON = 'PRIVATE_READ_AUTH_REQUIRED';
 export const PRIVATE_READ_ACCESS_DENIED_REASON = 'PRIVATE_READ_ACCESS_DENIED';
 export const PRIVATE_READ_GENERIC_ERROR_REASON = 'PRIVATE_READ_ERROR';
 
+export type PrivateReadAccessReason =
+  | typeof PRIVATE_READ_AUTH_REQUIRED_REASON
+  | typeof PRIVATE_READ_ACCESS_DENIED_REASON;
+
+/**
+ * Classifies only the browser-to-application HTTP boundary. Response-body
+ * codes cannot relabel a proven 401/403, and neither status implies anything
+ * about the upstream provider permission posture.
+ */
+export function privateReadAccessReasonForStatus(
+  status: unknown,
+): PrivateReadAccessReason | null {
+  if (status === 401) return PRIVATE_READ_AUTH_REQUIRED_REASON;
+  if (status === 403) return PRIVATE_READ_ACCESS_DENIED_REASON;
+  return null;
+}
+
 export type PrivateReadErrorId =
   | 'NONE'
   | 'AUTH_REQUIRED'
@@ -1724,6 +1772,90 @@ export function privateReadReconciliationTone(snapshot: PrivateReadSnapshot): Pr
     .reduce(worstTone, 'ok' as PrivateReadTone);
 }
 
+export type PrivateReadExactZeroFact =
+  | 'SPOT_BALANCES'
+  | 'MARGIN_ASSETS'
+  | 'USDM_BALANCES'
+  | 'OPEN_ORDERS'
+  | 'FILLS'
+  | 'POSITIONS'
+  | 'LIABILITIES'
+  | 'SPOT_AVAILABLE_USDT'
+  | 'MARGIN_LIABILITY_BTC';
+
+/**
+ * An exact zero is a current absence claim, not merely a retained value. Admit
+ * it only from the preferred source with the matching complete coverage and
+ * reconciliation fact; every missing guard leaves the zero unknown.
+ */
+export function privateReadExactZeroAdmitted({
+  snapshot,
+  source,
+  error,
+  fact,
+  now = Date.now(),
+  staleAfterMs = PRIVATE_READ_STALE_AFTER_MS,
+}: {
+  readonly snapshot: PrivateReadSnapshot;
+  readonly source: PrivateReadSourceId;
+  readonly error: string | null | undefined;
+  readonly fact: PrivateReadExactZeroFact;
+  readonly now?: number;
+  readonly staleAfterMs?: number;
+}): boolean {
+  let coverageStates: readonly CoverageState[];
+  let reconciliationState: ReconciliationState;
+  switch (fact) {
+    case 'SPOT_BALANCES':
+    case 'SPOT_AVAILABLE_USDT':
+      coverageStates = [snapshot.spot.coverage.state];
+      reconciliationState = snapshot.reconciliation.balances.state;
+      break;
+    case 'MARGIN_ASSETS':
+    case 'LIABILITIES':
+    case 'MARGIN_LIABILITY_BTC':
+      coverageStates = [snapshot.margin.coverage.state];
+      reconciliationState = snapshot.reconciliation.liabilities.state;
+      break;
+    case 'USDM_BALANCES':
+      coverageStates = [snapshot.usdm.coverage.state];
+      reconciliationState = snapshot.reconciliation.balances.state;
+      break;
+    case 'POSITIONS':
+      coverageStates = [snapshot.usdm.coverage.state];
+      reconciliationState = snapshot.reconciliation.positions.state;
+      break;
+    case 'OPEN_ORDERS':
+      coverageStates = [
+        snapshot.spot.coverage.state,
+        snapshot.margin.coverage.state,
+        snapshot.usdm.coverage.state,
+      ];
+      reconciliationState = snapshot.reconciliation.orders.state;
+      break;
+    case 'FILLS':
+      coverageStates = [
+        snapshot.spot.coverage.state,
+        snapshot.margin.coverage.state,
+        snapshot.usdm.coverage.state,
+      ];
+      reconciliationState = snapshot.reconciliation.fills.state;
+      break;
+    default: {
+      const exhaustive: never = fact;
+      return exhaustive;
+    }
+  }
+  return snapshot.state === 'AVAILABLE'
+    && snapshot.permissionPosture.state === 'VERIFIED_READ_ONLY'
+    && source === 'STATE'
+    && privateReadErrorFact(error).id === 'NONE'
+    && privateReadFreshness(snapshot, now, staleAfterMs).state === 'CURRENT'
+    && privateReadPermissionFreshness(snapshot, now, staleAfterMs).state === 'CURRENT'
+    && coverageStates.every((state) => state === 'COMPLETE_CURRENT')
+    && reconciliationState === 'RECONCILED';
+}
+
 export interface PermissionPresentationRow {
   id: string;
   label: string;
@@ -1899,6 +2031,8 @@ export function projectPrivateRead(
 }
 
 export interface PrivateReadGuardProjection {
+  /** Snapshot safe for mounted consumers that still project their own rows. */
+  readonly renderSnapshot: PrivateReadSnapshot;
   readonly presentation: PrivateReadPresentation;
   readonly errorFact: PrivateReadErrorFact;
   readonly commonTone: PrivateReadTone;
@@ -1930,9 +2064,97 @@ export function projectPrivateReadGuard({
   readonly now?: number;
   readonly staleAfterMs?: number;
 }): PrivateReadGuardProjection {
-  const presentation = projectPrivateRead(snapshot, now, staleAfterMs);
+  const decodedPresentation = projectPrivateRead(snapshot, now, staleAfterMs);
   const permissionFreshness = privateReadPermissionFreshness(snapshot, now, staleAfterMs);
   const errorFact = privateReadErrorFact(error);
+  const zeroAdmitted = (fact: PrivateReadExactZeroFact) => privateReadExactZeroAdmitted({
+    snapshot,
+    source,
+    error,
+    fact,
+    now,
+    staleAfterMs,
+  });
+  const redactCount = (value: number | null, fact: PrivateReadExactZeroFact) => (
+    value === 0 && !zeroAdmitted(fact) ? null : value
+  );
+  const redactDecimal = (value: string | null, fact: PrivateReadExactZeroFact) => (
+    isZeroDecimal(value) && !zeroAdmitted(fact) ? null : value
+  );
+  const renderSnapshot: PrivateReadSnapshot = {
+    ...snapshot,
+    spot: {
+      ...snapshot.spot,
+      balances: snapshot.spot.balances !== null
+          && (
+            snapshot.spot.balances.length === 0 && !zeroAdmitted('SPOT_BALANCES')
+            || snapshot.spot.balances.some((balance) => (
+              balance.asset === 'USDT' && isZeroDecimal(balance.free)
+            )) && !zeroAdmitted('SPOT_AVAILABLE_USDT')
+          )
+        ? null
+        : snapshot.spot.balances,
+      openOrders: snapshot.spot.openOrders?.length === 0 && !zeroAdmitted('OPEN_ORDERS')
+        ? null
+        : snapshot.spot.openOrders,
+      fills: snapshot.spot.fills?.length === 0 && !zeroAdmitted('FILLS')
+        ? null
+        : snapshot.spot.fills,
+    },
+    margin: {
+      ...snapshot.margin,
+      totalLiabilityBtc: redactDecimal(snapshot.margin.totalLiabilityBtc, 'MARGIN_LIABILITY_BTC'),
+      assets: snapshot.margin.assets !== null
+          && (
+            snapshot.margin.assets.length === 0 && !zeroAdmitted('MARGIN_ASSETS')
+            || snapshot.margin.assets.every((asset) => !hasMarginLiability(asset))
+              && !zeroAdmitted('LIABILITIES')
+          )
+        ? null
+        : snapshot.margin.assets,
+      openOrders: snapshot.margin.openOrders?.length === 0 && !zeroAdmitted('OPEN_ORDERS')
+        ? null
+        : snapshot.margin.openOrders,
+      fills: snapshot.margin.fills?.length === 0 && !zeroAdmitted('FILLS')
+        ? null
+        : snapshot.margin.fills,
+    },
+    usdm: {
+      ...snapshot.usdm,
+      balances: snapshot.usdm.balances?.length === 0 && !zeroAdmitted('USDM_BALANCES')
+        ? null
+        : snapshot.usdm.balances,
+      positions: snapshot.usdm.positions?.length === 0 && !zeroAdmitted('POSITIONS')
+        ? null
+        : snapshot.usdm.positions,
+      openOrders: snapshot.usdm.openOrders?.length === 0 && !zeroAdmitted('OPEN_ORDERS')
+        ? null
+        : snapshot.usdm.openOrders,
+      fills: snapshot.usdm.fills?.length === 0 && !zeroAdmitted('FILLS')
+        ? null
+        : snapshot.usdm.fills,
+    },
+  };
+  const presentation: PrivateReadPresentation = {
+    ...decodedPresentation,
+    spotAvailableUsdt: redactDecimal(
+      decodedPresentation.spotAvailableUsdt,
+      'SPOT_AVAILABLE_USDT',
+    ),
+    marginLiabilityBtc: redactDecimal(
+      decodedPresentation.marginLiabilityBtc,
+      'MARGIN_LIABILITY_BTC',
+    ),
+    counts: {
+      spotBalances: redactCount(decodedPresentation.counts.spotBalances, 'SPOT_BALANCES'),
+      marginAssets: redactCount(decodedPresentation.counts.marginAssets, 'MARGIN_ASSETS'),
+      usdmBalances: redactCount(decodedPresentation.counts.usdmBalances, 'USDM_BALANCES'),
+      openOrders: redactCount(decodedPresentation.counts.openOrders, 'OPEN_ORDERS'),
+      fills: redactCount(decodedPresentation.counts.fills, 'FILLS'),
+      positions: redactCount(decodedPresentation.counts.positions, 'POSITIONS'),
+      liabilities: redactCount(decodedPresentation.counts.liabilities, 'LIABILITIES'),
+    },
+  };
   const commonTone = [presentation.postureTone, permissionFreshness.tone, errorFact.guardTone]
     .reduce(worstTone, presentation.guardTone);
   const coverageTone = privateReadCoverageTone(snapshot);
@@ -2011,6 +2233,7 @@ export function projectPrivateReadGuard({
     ? presentation.state
     : `${presentation.state} · ${statusReason.label}`;
   return Object.freeze({
+    renderSnapshot,
     presentation,
     errorFact,
     commonTone,

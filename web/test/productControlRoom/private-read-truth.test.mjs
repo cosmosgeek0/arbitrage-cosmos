@@ -6,7 +6,10 @@ import test from 'node:test';
 
 import {
   INITIAL_REAL_DATA_CLIENT_TUPLE,
+  PRIVATE_READ_ACCESS_DENIED_REASON,
+  PRIVATE_READ_AUTH_REQUIRED_REASON,
   PRIVATE_READ_STALE_AFTER_MS,
+  appliedPrivateReadSource,
   decodeApiPermissionsEnvelope,
   decodeM0SpotReadinessTruth,
   decodePrivateReadSnapshot,
@@ -14,8 +17,12 @@ import {
   hasMarginLiability,
   isZeroDecimal,
   m0SpotGate2ReadyNow,
+  nextPrivateReadFreshnessExpiry,
   permissionPostureTone,
   permissionViolations,
+  privateReadAccessReasonForStatus,
+  privateReadErrorFact,
+  privateReadExactZeroAdmitted,
   privateReadFreshness,
   projectPrivateRead,
   projectPrivateReadGuard,
@@ -591,6 +598,31 @@ test('the freshness guard is bounded, explicit, and can only downgrade a claim',
   assert.equal(notConfigured.guardTone, 'idle');
 });
 
+test('freshness expiry schedules the earlier account or permission boundary without transport work', async () => {
+  const fixture = availableFixture();
+  fixture.permissionPosture.observedAt = fixture.observedAt - 10_000;
+  const decoded = decodePrivateReadSnapshot(fixture);
+  assert.ok(decoded);
+
+  const now = fixture.observedAt + 1_000;
+  const permissionExpiry = fixture.permissionPosture.observedAt + PRIVATE_READ_STALE_AFTER_MS;
+  const accountExpiry = fixture.observedAt + PRIVATE_READ_STALE_AFTER_MS;
+  assert.equal(nextPrivateReadFreshnessExpiry(decoded, now), permissionExpiry);
+  assert.equal(nextPrivateReadFreshnessExpiry(decoded, permissionExpiry), accountExpiry);
+  assert.equal(nextPrivateReadFreshnessExpiry(decoded, accountExpiry), null);
+  assert.equal(nextPrivateReadFreshnessExpiry(decoded, Number.NaN), null);
+
+  const store = await read('store.tsx');
+  assert.match(store, /nextPrivateReadFreshnessExpiry\(\s*realDataClient\.privateRead\.snapshot,\s*now,?\s*\)/);
+  assert.match(store, /window\.setTimeout\([\s\S]*bumpPrivateReadFreshness/);
+  assert.match(store, /window\.clearTimeout\(timer\)/);
+  const scheduler = store.slice(
+    store.indexOf('// A mounted consumer must cross the same freshness boundary'),
+    store.indexOf('// The canonical socket only speaks', store.indexOf('// A mounted consumer must cross the same freshness boundary')),
+  );
+  assert.doesNotMatch(scheduler, /fetchJson|createSettledPoll|\.refresh\(/);
+});
+
 test('available exact-empty arrays stay distinguishable from unavailable unknown arrays', () => {
   const exactEmpty = availableFixture();
   exactEmpty.spot.balances = [];
@@ -618,6 +650,129 @@ test('available exact-empty arrays stay distinguishable from unavailable unknown
   assert.equal(unavailableProjection.counts.positions, null);
   assert.equal(unavailableProjection.counts.liabilities, null);
   assert.equal(exactOrDash(null), '—');
+});
+
+test('exact zero claims require current preferred complete reconciled truth', () => {
+  const exactEmpty = flatMarginFixture();
+  exactEmpty.spot.balances = [{ asset: 'USDT', free: '0.00000000', locked: '0.00000000' }];
+  exactEmpty.spot.openOrders = [];
+  exactEmpty.spot.fills = [];
+  exactEmpty.margin.openOrders = [];
+  exactEmpty.margin.fills = [];
+  exactEmpty.usdm.balances = [];
+  exactEmpty.usdm.positions = [];
+  exactEmpty.usdm.openOrders = [];
+  exactEmpty.usdm.fills = [];
+  const decoded = decodePrivateReadSnapshot(exactEmpty);
+  assert.ok(decoded);
+  const currentNow = decoded.observedAt + 1_000;
+
+  const currentGuard = projectPrivateReadGuard({
+    snapshot: decoded,
+    source: 'STATE',
+    error: null,
+    now: currentNow,
+  });
+  const current = currentGuard.presentation;
+  assert.equal(current.counts.openOrders, null, 'order absence stays unknown without reconciled order truth');
+  assert.equal(current.counts.fills, null, 'fill absence stays unknown without reconciled fill truth');
+  assert.equal(current.counts.positions, null, 'position absence stays unknown without reconciled position truth');
+  assert.equal(current.counts.liabilities, 0);
+  assert.equal(current.spotAvailableUsdt, null, 'a zero balance stays unknown without reconciled balance truth');
+  assert.equal(current.marginLiabilityBtc, '0.00000000');
+  assert.equal(currentGuard.renderSnapshot.spot.balances, null);
+  assert.equal(currentGuard.renderSnapshot.spot.openOrders, null);
+  assert.equal(currentGuard.renderSnapshot.margin.openOrders, null);
+  assert.equal(currentGuard.renderSnapshot.usdm.openOrders, null);
+  assert.equal(currentGuard.renderSnapshot.usdm.positions, null);
+  assert.ok(currentGuard.renderSnapshot.margin.assets);
+  assert.equal(currentGuard.renderSnapshot.margin.totalLiabilityBtc, '0.00000000');
+  assert.equal(privateReadExactZeroAdmitted({
+    snapshot: decoded,
+    source: 'STATE',
+    error: null,
+    fact: 'LIABILITIES',
+    now: currentNow,
+  }), true);
+  assert.equal(privateReadExactZeroAdmitted({
+    snapshot: decoded,
+    source: 'STATE',
+    error: null,
+    fact: 'OPEN_ORDERS',
+    now: currentNow,
+  }), false);
+
+  const partialCoverage = {
+    ...decoded,
+    margin: {
+      ...decoded.margin,
+      coverage: {
+        state: 'PARTIAL_SYMBOL_SCOPED',
+        symbols: ['USDT'],
+        limitation: 'SYMBOL_SCOPED_HISTORY',
+      },
+    },
+  };
+
+  for (const guard of [
+    projectPrivateReadGuard({ snapshot: decoded, source: 'FALLBACK', error: null, now: currentNow }),
+    projectPrivateReadGuard({ snapshot: decoded, source: 'STATE', error: 'HTTP_503', now: currentNow }),
+    projectPrivateReadGuard({ snapshot: partialCoverage, source: 'STATE', error: null, now: currentNow }),
+    projectPrivateReadGuard({
+      snapshot: decoded,
+      source: 'STATE',
+      error: null,
+      now: decoded.observedAt + PRIVATE_READ_STALE_AFTER_MS,
+    }),
+  ]) {
+    assert.equal(guard.presentation.counts.openOrders, null);
+    assert.equal(guard.presentation.counts.fills, null);
+    assert.equal(guard.presentation.counts.positions, null);
+    assert.equal(guard.presentation.counts.liabilities, null);
+    assert.equal(guard.presentation.spotAvailableUsdt, null);
+    assert.equal(guard.presentation.marginLiabilityBtc, null);
+    assert.equal(guard.renderSnapshot.spot.balances, null);
+    assert.equal(guard.renderSnapshot.spot.openOrders, null);
+    assert.equal(guard.renderSnapshot.margin.assets, null);
+    assert.equal(guard.renderSnapshot.usdm.positions, null);
+    assert.equal(guard.renderSnapshot.margin.totalLiabilityBtc, null);
+  }
+
+  const positive = availableFixture();
+  const positiveDecoded = decodePrivateReadSnapshot(positive);
+  assert.ok(positiveDecoded);
+  const retained = projectPrivateReadGuard({
+    snapshot: positiveDecoded,
+    source: 'FALLBACK',
+    error: 'HTTP_503',
+    now: positiveDecoded.observedAt + PRIVATE_READ_STALE_AFTER_MS,
+  }).presentation;
+  assert.equal(retained.counts.openOrders, 1, 'nonzero retained observations are not fabricated absence');
+  assert.equal(retained.counts.liabilities, 1);
+  assert.equal(retained.spotAvailableUsdt, '12.50000000');
+});
+
+test('private-read HTTP admission is status-authoritative for 401 and 403', async () => {
+  assert.equal(privateReadAccessReasonForStatus(401), PRIVATE_READ_AUTH_REQUIRED_REASON);
+  assert.equal(privateReadAccessReasonForStatus(403), PRIVATE_READ_ACCESS_DENIED_REASON);
+  assert.equal(privateReadAccessReasonForStatus(400), null);
+  assert.equal(privateReadAccessReasonForStatus(500), null);
+  assert.equal(privateReadAccessReasonForStatus('401'), null);
+
+  const authentication = privateReadErrorFact(PRIVATE_READ_AUTH_REQUIRED_REASON);
+  assert.equal(authentication.id, 'AUTH_REQUIRED');
+  assert.equal(authentication.label, 'AUTH REQUIRED');
+  assert.match(authentication.detail, /provider state is UNKNOWN/);
+
+  const access = privateReadErrorFact(PRIVATE_READ_ACCESS_DENIED_REASON);
+  assert.equal(access.id, 'ACCESS_DENIED');
+  assert.equal(access.label, 'ACCESS DENIED');
+  assert.match(access.detail, /provider state is UNKNOWN/);
+
+  const store = await read('store.tsx');
+  assert.match(store, /error instanceof ApiRequestError\s*\? privateReadAccessReasonForStatus\(error\.status\)/);
+  assert.equal((store.match(/const failure = privateReadFailure\(cause\);/g) ?? []).length, 3);
+  assert.doesNotMatch(store, /privateReadAccessReasonForStatus\([^)]*\.code/);
 });
 
 test('one ordered client tuple distinguishes missing, invalid, exact-empty, and retained failure', () => {
@@ -709,6 +864,9 @@ test('display provenance cannot be relabelled by an older state response', () =>
     observedAtMs: 10,
     field: { presence: 'MISSING' },
   });
+  assert.equal(tuple.privateRead.transport, 'FALLBACK');
+  assert.equal(tuple.privateRead.source, null);
+  assert.equal(appliedPrivateReadSource(tuple.privateRead), 'PENDING');
   const fallback = availableFixture();
   fallback.spot.balances[0].free = '88.00000000';
   tuple = reduceRealDataClientTuple(tuple, {
@@ -725,6 +883,7 @@ test('display provenance cannot be relabelled by an older state response', () =>
   });
   assert.equal(tuple.privateRead.transport, 'STATE');
   assert.equal(tuple.privateRead.source, 'FALLBACK');
+  assert.equal(appliedPrivateReadSource(tuple.privateRead), 'FALLBACK');
   assert.equal(tuple.privateRead.snapshot.spot.balances[0].free, '88.00000000');
   assert.equal(tuple.privateRead.appliedRequestId, 3);
   assert.equal(tuple.privateRead.stateDecisionRequestId, 2);
@@ -981,6 +1140,9 @@ test('mounted private-read surfaces consume one projection and retain no money-a
     assert.match(source, /projectPrivateRead/);
   }
   assert.match(store, /readPrivateReadStateField\(snapshot\)/);
+  assert.match(store, /const privateReadGuard = projectPrivateReadGuard\(\{/);
+  assert.match(store, /snapshot: privateReadClient\.snapshot/);
+  assert.match(store, /privateRead: privateReadGuard\.renderSnapshot/);
   assert.match(store, /realDataClient\.privateRead\.transport !== 'FALLBACK'/);
   assert.match(store, /createSettledPoll<unknown>/);
   assert.match(owner, /'Reading'/);

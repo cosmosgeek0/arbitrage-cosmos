@@ -216,6 +216,103 @@
   font-weight: 450;
 }
 
+.healthx-recovery {
+  border-bottom: 1px solid var(--line-2);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 46%),
+    var(--panel);
+}
+
+.healthx-recovery-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 17px 16px 15px;
+  border-bottom: 1px solid var(--line-2);
+}
+
+.healthx-recovery-head > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.healthx-recovery-head span {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 560;
+  line-height: 14px;
+  letter-spacing: .055em;
+  text-transform: uppercase;
+}
+
+.healthx-recovery-head h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 540;
+  line-height: 21px;
+  letter-spacing: -.008em;
+}
+
+.healthx-recovery-head p {
+  max-width: 820px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 420;
+  line-height: 17px;
+}
+
+.healthx-recovery-head > strong {
+  flex: none;
+  margin-top: 2px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 5px;
+  color: var(--muted);
+  font: 560 9.5px/13px var(--mono);
+  letter-spacing: .035em;
+}
+
+.healthx-recovery-head > strong.ready {
+  border-color: color-mix(in srgb, #d98a25 46%, var(--line-2));
+  background: color-mix(in srgb, #d98a25 10%, var(--panel));
+  color: #9b610e;
+}
+
+[data-theme="dark"] .healthx-recovery-head > strong.ready { color: #f0b45d; }
+
+.healthx-recovery-control .pcr-section { border-top: 0; }
+.healthx-recovery-control .pcr-band,
+.healthx-recovery-control .pcr-control-filters { display: none; }
+.healthx-recovery-control .pcr-control { padding-top: 14px; padding-bottom: 14px; }
+.healthx-recovery-control .pcr-control-action > button::before { content: 'Preview '; }
+.healthx-recovery-control .pcr-control-facts { background: color-mix(in srgb, var(--tile) 34%, transparent); }
+
+.healthx-recovery-unavailable {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: 12px 16px;
+  color: var(--muted);
+}
+
+.healthx-recovery-unavailable > span {
+  display: grid;
+  gap: 2px;
+  font-size: 11px;
+  line-height: 15px;
+}
+
+.healthx-recovery-unavailable strong {
+  color: var(--text-2);
+  font-size: 11.5px;
+  font-weight: 520;
+}
+
 .healthx-filters {
   display: flex;
   align-items: center;
@@ -464,6 +561,11 @@
   .healthx-summary-cell:nth-child(-n + 2) { border-bottom: 1px solid var(--line-2); }
   .healthx-filters { align-items: flex-start; flex-direction: column; }
   .healthx-filter-actions { width: 100%; justify-content: space-between; }
+  .healthx-recovery-control .pcr-control-facts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .healthx-recovery-control .pcr-control-facts div:nth-child(3n) { border-right: 1px solid var(--line); }
+  .healthx-recovery-control .pcr-control-facts div:nth-child(2n) { border-right: 0; }
+  .healthx-recovery-control .pcr-control-facts div:nth-last-child(-n + 3) { border-bottom: 1px solid var(--line); }
+  .healthx-recovery-control .pcr-control-facts div:nth-last-child(-n + 2) { border-bottom: 0; }
 }
 
 @container (max-width: 620px) {
@@ -473,6 +575,21 @@
   .healthx-summary { grid-template-columns: 1fr; }
   .healthx-summary-cell { border-right: 0; border-bottom: 1px solid var(--line-2); }
   .healthx-summary-cell:last-child { border-bottom: 0; }
+  .healthx-recovery-head { flex-direction: column; gap: 10px; }
+  .healthx-recovery-control .pcr-control-head,
+  .healthx-recovery-control .pcr-control-action,
+  .healthx-recovery-control .pcr-confirm,
+  .healthx-recovery-control .pcr-result { align-items: flex-start; flex-direction: column; }
+  .healthx-recovery-control .pcr-control-action > button,
+  .healthx-recovery-control .pcr-confirm button { width: 100%; }
+  .healthx-recovery-control .pcr-control-facts { grid-template-columns: 1fr; }
+  .healthx-recovery-control .pcr-control-facts div,
+  .healthx-recovery-control .pcr-control-facts div:nth-child(2n),
+  .healthx-recovery-control .pcr-control-facts div:nth-child(3n) {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .healthx-recovery-control .pcr-control-facts div:last-child { border-bottom: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {

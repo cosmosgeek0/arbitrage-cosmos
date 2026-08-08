@@ -842,6 +842,29 @@ type NewsRefreshGeneration = {
   deadlineAt: number;
   accepted: boolean;
 };
+type NewsArchiveCandidate = {
+  archive: NewsContextItem[];
+  items: NewsContextItem[];
+  persistence: {
+    persistedAt: number;
+    payload: string;
+  } | null;
+};
+type NewsRefreshCandidate = {
+  archive: NewsArchiveCandidate;
+  payload: NewsContextPayload;
+};
+type NewsSourceCacheEntry = RssFetchResult & { fetchedAt: number };
+type NewsSourceCacheCheckpoint = {
+  tree: NewsSourceCacheEntry | null;
+  treeHistoryFetchedAt: number;
+  lookonchain: NewsSourceCacheEntry | null;
+  rss: Map<string, NewsSourceCacheEntry>;
+  primary: Map<string, NewsSourceCacheEntry>;
+  venue: Map<string, NewsSourceCacheEntry>;
+  protocol: Map<string, NewsSourceCacheEntry>;
+  issuer: Map<string, NewsSourceCacheEntry>;
+};
 type BodyQueueJob = {
   run: () => Promise<string>;
   quarantine: (work: Promise<string>) => void;
@@ -875,7 +898,7 @@ let cache: NewsContextPayload = {
   sources: bootstrapNewsSources(),
 };
 let inFlight: Promise<NewsContextPayload> | null = null;
-let refreshWork: Promise<NewsContextPayload> | null = null;
+let refreshWork: Promise<NewsRefreshCandidate> | null = null;
 let refreshGenerationSequence = 0;
 let activeRefreshGeneration: NewsRefreshGeneration | null = null;
 let newsRuntimeStarted = false;
@@ -897,6 +920,38 @@ const bodyQueue: BodyQueueJob[] = [];
 const bodyAbortControllers = new Set<AbortController>();
 let activeBodyRequests = 0;
 let configuredFetchHosts: Set<string> | null = null;
+
+function captureNewsSourceCacheCheckpoint(): NewsSourceCacheCheckpoint {
+  return {
+    tree: treeSourceCache,
+    treeHistoryFetchedAt,
+    lookonchain: lookonchainSourceCache,
+    rss: new Map(rssSourceCache),
+    primary: new Map(primarySourceCache),
+    venue: new Map(venueSourceCache),
+    protocol: new Map(protocolSourceCache),
+    issuer: new Map(issuerSourceCache),
+  };
+}
+
+function restoreNewsSourceCache(
+  target: Map<string, NewsSourceCacheEntry>,
+  checkpoint: Map<string, NewsSourceCacheEntry>,
+): void {
+  target.clear();
+  for (const [key, value] of checkpoint) target.set(key, value);
+}
+
+function restoreNewsSourceCacheCheckpoint(checkpoint: NewsSourceCacheCheckpoint): void {
+  treeSourceCache = checkpoint.tree;
+  treeHistoryFetchedAt = checkpoint.treeHistoryFetchedAt;
+  lookonchainSourceCache = checkpoint.lookonchain;
+  restoreNewsSourceCache(rssSourceCache, checkpoint.rss);
+  restoreNewsSourceCache(primarySourceCache, checkpoint.primary);
+  restoreNewsSourceCache(venueSourceCache, checkpoint.venue);
+  restoreNewsSourceCache(protocolSourceCache, checkpoint.protocol);
+  restoreNewsSourceCache(issuerSourceCache, checkpoint.issuer);
+}
 
 function bootstrapNewsSources(): NewsContextSource[] {
   const configured = [
@@ -944,8 +999,7 @@ function loadNewsArchive(): NewsContextItem[] {
   }
 }
 
-function persistNewsArchive(snapshot: NewsContextItem[]): void {
-  const payload = JSON.stringify(snapshot.slice(0, NEWS_ARCHIVE_MAX_ITEMS));
+function enqueueNewsArchivePersistence(payload: string): void {
   archivePersistTail = archivePersistTail
     .catch(() => undefined)
     .then(async () => {
@@ -964,11 +1018,16 @@ function persistNewsArchive(snapshot: NewsContextItem[]): void {
     .catch(() => undefined);
 }
 
-function commitNewsArchive(currentItems: NewsContextItem[]): NewsContextItem[] {
-  const cutoff = Date.now() - NEWS_ARCHIVE_RETENTION_MS;
+function buildNewsArchiveCandidate(
+  currentItems: NewsContextItem[],
+  previousArchive: NewsContextItem[],
+  now: number,
+  previousPersistedAt: number,
+): NewsArchiveCandidate {
+  const cutoff = now - NEWS_ARCHIVE_RETENTION_MS;
   const seen = new Set<string>();
-  archive = [...currentItems, ...archive]
-    .filter((item) => item.ts !== null && item.ts >= cutoff && item.ts <= Date.now())
+  const nextArchive = [...currentItems, ...previousArchive]
+    .filter((item) => item.ts !== null && item.ts >= cutoff && item.ts <= now)
     .filter(isUsefulNewsItem)
     .map(refreshItemSignals)
     .sort(compareContextItems)
@@ -980,13 +1039,26 @@ function commitNewsArchive(currentItems: NewsContextItem[]): NewsContextItem[] {
     })
     .slice(0, NEWS_ARCHIVE_MAX_ITEMS);
 
-  if (Date.now() - archivePersistedAt >= 60_000) {
-    archivePersistedAt = Date.now();
-    persistNewsArchive(archive);
-  }
-
   const undated = currentItems.filter((item) => item.ts === null);
-  return [...archive, ...undated].sort(compareContextItems).slice(0, NEWS_ARCHIVE_MAX_ITEMS);
+  const items = [...nextArchive, ...undated].sort(compareContextItems).slice(0, NEWS_ARCHIVE_MAX_ITEMS);
+  const persistence = now - previousPersistedAt >= 60_000
+    ? {
+      persistedAt: now,
+      // Serialization is intentionally part of the pure candidate build. A
+      // large archive may starve the deadline timer, so no global or disk
+      // state can change until the wall clock is checked again afterward.
+      payload: JSON.stringify(nextArchive.slice(0, NEWS_ARCHIVE_MAX_ITEMS)),
+    }
+    : null;
+  return { archive: nextArchive, items, persistence };
+}
+
+function commitNewsArchiveCandidate(candidate: NewsArchiveCandidate): void {
+  archive = candidate.archive;
+  if (candidate.persistence) {
+    archivePersistedAt = candidate.persistence.persistedAt;
+    enqueueNewsArchivePersistence(candidate.persistence.payload);
+  }
 }
 
 function downgradePublishedNews(
@@ -1119,9 +1191,9 @@ function markPublishedRefreshFailure(): void {
 }
 
 function boundRefreshWork(
-  work: Promise<NewsContextPayload>,
+  work: Promise<NewsRefreshCandidate>,
   generation: NewsRefreshGeneration,
-): Promise<NewsContextPayload> {
+): Promise<NewsRefreshCandidate> {
   return new Promise((resolve, reject) => {
     const timeoutMs = Math.max(0, generation.deadlineAt - Date.now());
     const timer = setTimeout(() => {
@@ -1129,14 +1201,14 @@ function boundRefreshWork(
       reject(new Error('News context refresh deadline exceeded'));
     }, timeoutMs);
     void work.then(
-      (payload) => {
+      (candidate) => {
         clearTimeout(timer);
         if (!generation.accepted || Date.now() > generation.deadlineAt) {
           generation.accepted = false;
           reject(new Error('News context refresh deadline exceeded'));
           return;
         }
-        resolve(payload);
+        resolve(candidate);
       },
       (error) => {
         clearTimeout(timer);
@@ -1161,35 +1233,45 @@ function startRefresh(): Promise<NewsContextPayload> {
   refreshGenerationSequence = generation.id;
   activeRefreshGeneration = generation;
 
+  const sourceCacheCheckpoint = captureNewsSourceCacheCheckpoint();
   const work = refreshNewsContext(generation);
   refreshWork = work;
   void work.catch(() => undefined);
   void work.then(
     () => {
+      if (!generation.accepted) restoreNewsSourceCacheCheckpoint(sourceCacheCheckpoint);
       if (refreshWork === work) refreshWork = null;
       if (activeRefreshGeneration === generation) activeRefreshGeneration = null;
     },
     () => {
+      if (!generation.accepted) restoreNewsSourceCacheCheckpoint(sourceCacheCheckpoint);
       if (refreshWork === work) refreshWork = null;
       if (activeRefreshGeneration === generation) activeRefreshGeneration = null;
     },
   );
 
   const refresh = boundRefreshWork(work, generation)
-    .then((payload) => {
+    .then((candidate) => {
       const publishedNow = Date.now();
+      const { payload } = candidate;
+      if (!generation.accepted || publishedNow > generation.deadlineAt) {
+        generation.accepted = false;
+        throw new Error('News context refresh deadline exceeded');
+      }
       if (!Number.isFinite(payload.fetchedAt)
         || payload.fetchedAt <= 0
         || payload.fetchedAt > publishedNow
         || payload.fetchedAt < cache.fetchedAt) {
         throw new Error('News context publication clock is non-monotonic');
       }
+      commitNewsArchiveCandidate(candidate.archive);
       cache = payload;
       publishToSubscribers(payload);
       return payload;
     })
     .catch((error) => {
       generation.accepted = false;
+      restoreNewsSourceCacheCheckpoint(sourceCacheCheckpoint);
       markPublishedRefreshFailure();
       throw error;
     });
@@ -1206,7 +1288,7 @@ function startRefresh(): Promise<NewsContextPayload> {
   return refresh;
 }
 
-async function refreshNewsContext(generation: NewsRefreshGeneration): Promise<NewsContextPayload> {
+async function refreshNewsContext(generation: NewsRefreshGeneration): Promise<NewsRefreshCandidate> {
   const [primary, venue, protocol, issuer, tree, rss, lookonchain] = await Promise.all([
     fetchPrimarySources(),
     fetchVenueSources(),
@@ -1243,18 +1325,29 @@ async function refreshNewsContext(generation: NewsRefreshGeneration): Promise<Ne
     })
     .sort(compareContextItems)
     .slice(0, NEWS_ARCHIVE_MAX_ITEMS);
-  if (!generation.accepted
-    || activeRefreshGeneration !== generation
-    || Date.now() > generation.deadlineAt) {
+  if (!generation.accepted || activeRefreshGeneration !== generation) {
     throw new Error('News context refresh deadline exceeded');
   }
-  const items = commitNewsArchive(currentItems);
-
+  const candidate = buildNewsArchiveCandidate(
+    currentItems,
+    archive,
+    Date.now(),
+    archivePersistedAt,
+  );
+  const acceptedAt = Date.now();
+  if (!generation.accepted
+    || activeRefreshGeneration !== generation
+    || acceptedAt > generation.deadlineAt) {
+    throw new Error('News context refresh deadline exceeded');
+  }
   return {
-    source: 'primary+venue+protocol+issuer+tree+rss+lookonchain',
-    fetchedAt: Date.now(),
-    items,
-    sources,
+    archive: candidate,
+    payload: {
+      source: 'primary+venue+protocol+issuer+tree+rss+lookonchain',
+      fetchedAt: acceptedAt,
+      items: candidate.items,
+      sources,
+    },
   };
 }
 

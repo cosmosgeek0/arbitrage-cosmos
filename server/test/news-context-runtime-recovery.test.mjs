@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -50,7 +50,19 @@ test.after(async () => {
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;
     }
-    await rm(suiteRoot, { recursive: true, force: true });
+    let cleanupError = null;
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      try {
+        await rm(suiteRoot, { recursive: true, force: true });
+        cleanupError = null;
+        break;
+      } catch (error) {
+        cleanupError = error;
+        if (error?.code !== 'ENOTEMPTY' && error?.code !== 'EBUSY') throw error;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    }
+    if (cleanupError) throw cleanupError;
   }
 });
 
@@ -74,6 +86,146 @@ test('browser reads return only the retained publication and never start upstrea
   assert.deepEqual(subscribed, first);
   assert.ok(first.sources.length > 50);
   assert.ok(first.sources.every((source) => source.status !== 'live'));
+});
+
+test('archive work crossing a starved deadline cannot leak rejected rows into later publication or disk', { concurrency: false }, async (t) => {
+  const startAt = 1_935_000_000_000;
+  const expiredTitle = 'Bitcoin market EXPIRED ARCHIVE ROW MUST NOT LEAK';
+  const validTitle = 'Bitcoin market VALID LATER ARCHIVE PUBLICATION';
+  const archivePath = path.join(suiteDataDir, 'news-archive.json');
+  const originalStringify = JSON.stringify;
+  const expiredPublishedAt = new Date(startAt - 1_000).toISOString();
+  const validPublishedAt = new Date(startAt + 300_000).toISOString();
+  let now = startAt;
+  let title = expiredTitle;
+  let publishedAt = expiredPublishedAt;
+  let crossedDeadlineDuringArchiveWork = false;
+
+  await rm(archivePath, { force: true });
+  t.after(() => rm(archivePath, { force: true }));
+  t.mock.method(Date, 'now', () => now);
+  t.mock.method(JSON, 'stringify', function stringifyWithStarvedDeadline(value, ...rest) {
+    if (!crossedDeadlineDuringArchiveWork
+      && Array.isArray(value)
+      && value.some((item) => item?.title === expiredTitle)) {
+      crossedDeadlineDuringArchiveWork = true;
+      queueMicrotask(() => {
+        now = startAt + 20_001;
+      });
+    }
+    return Reflect.apply(originalStringify, JSON, [value, ...rest]);
+  });
+  globalThis.fetch = async (input, init = {}) => {
+    if (String(input) !== 'https://www.federalreserve.gov/feeds/press_all.xml') {
+      return emptyUpstreamResponse(init);
+    }
+    return new Response(
+      `<rss><channel><item><title>${title}</title><link>https://www.federalreserve.gov/newsevents/pressreleases/cosmos.htm</link><guid>${title}</guid><pubDate>${publishedAt}</pubDate><description>Bitcoin market fixture</description></item></channel></rss>`,
+      { headers: { 'content-type': 'application/rss+xml' } },
+    );
+  };
+  const news = await import(`../src/services/newsContext.ts?archive-deadline=${startAt}`);
+
+  await assert.rejects(
+    news.refreshNewsContextNow(),
+    /News context refresh deadline exceeded/,
+  );
+  assert.equal(crossedDeadlineDuringArchiveWork, true, 'archive serialization queues work ahead of the starved deadline timer');
+  assert.equal(now, startAt + 20_001);
+  assert.equal(
+    (await news.getNewsContext(false)).items.some((item) => item.title === expiredTitle),
+    false,
+    'the rejected row never reaches the retained publication',
+  );
+
+  title = validTitle;
+  publishedAt = validPublishedAt;
+  now = startAt + 300_001;
+  const later = await news.refreshNewsContextNow();
+  assert.ok(later.items.some((item) => item.title === validTitle));
+  assert.equal(
+    later.items.some((item) => item.title === expiredTitle),
+    false,
+    'the rejected generation does not contaminate a later publication',
+  );
+  assert.equal(
+    (await news.getNewsContext(false)).items.some((item) => item.title === expiredTitle),
+    false,
+  );
+
+  let persisted = null;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    try {
+      const candidate = JSON.parse(await readFile(archivePath, 'utf8'));
+      if (Array.isArray(candidate) && candidate.some((item) => item.title === validTitle)) {
+        persisted = candidate;
+        break;
+      }
+    } catch {
+      // The accepted persistence job has not renamed its temporary file yet.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.ok(Array.isArray(persisted), 'the accepted later archive reaches disk');
+  assert.ok(persisted.some((item) => item.title === validTitle));
+  assert.equal(
+    persisted.some((item) => item.title === expiredTitle),
+    false,
+    'the rejected generation never contaminates the persisted archive',
+  );
+});
+
+test('deadline-rejected source caches roll back before the immediate next generation', { concurrency: false }, async (t) => {
+  const startAt = 1_936_000_000_000;
+  const rejectedTitle = 'Bitcoin market REJECTED SOURCE CACHE ROW';
+  const validTitle = 'Bitcoin market VALID NEXT GENERATION ROW';
+  let now = startAt;
+  let title = rejectedTitle;
+  let publishedAt = new Date(startAt - 1_000).toISOString();
+  let fedCalls = 0;
+  let treeAttempts = 0;
+  let resolveTree = null;
+
+  t.mock.method(Date, 'now', () => now);
+  globalThis.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    if (url.toString() === 'https://www.federalreserve.gov/feeds/press_all.xml') {
+      fedCalls += 1;
+      return new Response(
+        `<rss><channel><item><title>${title}</title><link>https://www.federalreserve.gov/newsevents/pressreleases/cache-rollback.htm</link><guid>${title}</guid><pubDate>${publishedAt}</pubDate><description>Bitcoin market fixture</description></item></channel></rss>`,
+        { headers: { 'content-type': 'application/rss+xml' } },
+      );
+    }
+    if (url.hostname === 'news.treeofalpha.com') {
+      treeAttempts += 1;
+      if (treeAttempts === 1) {
+        return new Promise((resolve) => { resolveTree = resolve; });
+      }
+    }
+    return emptyUpstreamResponse(init);
+  };
+  const news = await import(`../src/services/newsContext.ts?source-cache-rollback=${startAt}`);
+
+  const rejectedRefresh = news.refreshNewsContextNow();
+  await flushMicrotasks(512);
+  assert.equal(fedCalls, 1);
+  assert.ok(resolveTree, 'the first generation remains open after caching the Fed row');
+  now = startAt + 20_001;
+  resolveTree(new Response('[]', { headers: { 'content-type': 'application/json' } }));
+  await assert.rejects(rejectedRefresh, /News context refresh deadline exceeded/);
+
+  title = validTitle;
+  publishedAt = new Date(startAt + 20_001).toISOString();
+  now = startAt + 20_002;
+  const later = await news.refreshNewsContextNow();
+
+  assert.equal(fedCalls, 2, 'the rejected TTL cache cannot suppress the next source request');
+  assert.ok(later.items.some((item) => item.title === validTitle));
+  assert.equal(
+    later.items.some((item) => item.title === rejectedTitle),
+    false,
+    'the rejected source row cannot contaminate the next accepted publication',
+  );
 });
 
 test('poisoned URLs relinquish permits while retaining identity and healthy sources continue', { concurrency: false }, async (t) => {

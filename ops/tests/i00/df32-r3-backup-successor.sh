@@ -30,7 +30,11 @@ sqlite3 "$DATA_DIR/cosmos.db" '
   PRAGMA journal_mode=WAL;
   CREATE TABLE events(id INTEGER PRIMARY KEY, kind TEXT NOT NULL);
   INSERT INTO events VALUES (1, "fixture");
+  CREATE TABLE ledger_schema_compatibility(singleton INTEGER PRIMARY KEY, current_schema_version INTEGER NOT NULL, rollback_floor INTEGER NOT NULL);
+  INSERT INTO ledger_schema_compatibility VALUES (1, 3, 3);
+  PRAGMA user_version=3;
 ' >/dev/null
+node -e 'const fs=require("fs");fs.writeFileSync(process.argv[1],`${JSON.stringify({dataSchema:3,rollbackFloor:3,updatedAtUtc:"2026-07-12T00:00:00Z",updatedBy:"test"},null,2)}\n`);' "$DATA_DIR/journal-compat.json"
 printf 'original-evidence\n' > "$SOURCE_EVIDENCE/proof.txt"
 printf 'original-model\n' > "$MODEL_EVIDENCE/model.txt"
 printf 'original-single-file\n' > "$FILE_EVIDENCE"
@@ -144,8 +148,6 @@ fs.writeFileSync(output, zlib.gzipSync(Buffer.concat([...entries, Buffer.alloc(1
 NODE
 }
 
-json_write "$DATA_DIR/journal-compat.json" "dataSchema=3" "rollbackFloor=3" \
-  "updatedAtUtc=2026-07-12T00:00:00Z" "updatedBy=test"
 assert_success run_backup
 BASE_BACKUP="$BACKUP_DIR/$(ls -1 "$BACKUP_DIR" | grep -E '^[0-9]{8}T[0-9]{6}Z' | sort | tail -1)"
 assert_file "$BASE_BACKUP/manifest.json"

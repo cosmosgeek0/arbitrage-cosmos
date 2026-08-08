@@ -684,8 +684,8 @@
         {
           "path": "ops/tests/i00/df32-r3-backup-successor.sh",
           "mode": "100755",
-          "gitBlob": "026899ebe7cb69ce53ae5019c926405f7daa0fb4",
-          "sha256": "3d8ba07691f246a0e928b9afcac6b4edb424bed702b4ed12d43a8a29a1f4cb5c"
+          "gitBlob": "a9766f96d94ed31a0ed9228408df59851a150dec",
+          "sha256": "0803154413db7839755d7d3c78f1dd9655eefda0c2d4ff35c10d4363d91e3093"
         },
         {
           "path": "ops/tests/i00/test-deploy-portability-008-bash-canonicality.sh",

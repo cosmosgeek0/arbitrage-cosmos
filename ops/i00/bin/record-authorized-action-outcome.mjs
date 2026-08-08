@@ -52,7 +52,7 @@ const I00_ROOT = resolve(SCRIPT_DIR, '..');
 const EXPECTED_DONOR_CONTRACT_SHA256 =
   '078cc2a3d8bc79026f1de6985284856794e53ba34ffd7fda5d1140e46e31a1b3';
 const EXPECTED_AMENDMENT_CONTRACT_SHA256 =
-  'c43a356c4179f5f37da017b704b4ac67a2dc46dfb81f6e1bf48829f64ac3ab8f';
+  'e0ccba46211e770bd3d5a45d4c41911a6110b87047cc706e3024b0139297ac67';
 const INSTALL_RECEIPT_KEYS = Object.freeze([
   'schemaVersion', 'testedSha', 'sourceReleaseId', 'installedTreeDigestSha256',
   'effectiveOpsRoot', 'immutableDonorCommit', 'immutableDonorLiveTree',

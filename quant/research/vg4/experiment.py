@@ -20,6 +20,8 @@ from typing import Any
 
 SOURCE_ROOT = Path("/private/tmp/cosmos-s1f-weekly-momentum-cash-v1")
 CHECKSUM_RE = re.compile(r"^([0-9a-f]{64})[ \t]+\*?([^\r\n]+)[\r\n]*$")
+DECIMAL_RE = re.compile(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?")
+INTEGER_RE = re.compile(r"(?:0|[1-9][0-9]*)")
 KLINE_HEADER = (
     "open_time",
     "open",
@@ -66,9 +68,22 @@ def decimal_from_text(value: str, *, field: str, nonnegative: bool = False) -> D
         parsed = Decimal(value)
     except InvalidOperation as error:
         raise VG4Error(f"{field} is not a decimal") from error
-    if not parsed.is_finite() or (nonnegative and parsed < 0):
-        raise VG4Error(f"{field} is outside its declared decimal domain")
+    if (
+        DECIMAL_RE.fullmatch(value) is None
+        or not parsed.is_finite()
+        or (nonnegative and (value.startswith("-") or parsed < 0))
+    ):
+        raise VG4Error(f"{field} is outside archive decimal grammar or its domain")
     return parsed
+
+
+def integer_from_text(value: str, *, field: str) -> int:
+    if INTEGER_RE.fullmatch(value) is None:
+        raise VG4Error(f"{field} is outside archive integer grammar")
+    try:
+        return int(value)
+    except ValueError as error:
+        raise VG4Error(f"{field} is not a bounded integer") from error
 
 
 def verify_checksum_text(checksum_bytes: bytes, zip_name: str, zip_sha: str) -> None:
@@ -87,22 +102,39 @@ def verify_checksum_text(checksum_bytes: bytes, zip_name: str, zip_sha: str) -> 
 
 
 def parse_timestamp_us(raw: str, *, field: str) -> tuple[int, datetime]:
-    try:
-        value = int(raw)
-    except ValueError as error:
-        raise VG4Error(f"{field} is not an integer timestamp") from error
+    value = integer_from_text(raw, field=field)
     if value < 1_000_000_000_000_000:
         raise VG4Error(f"{field} is not a post-2025 microsecond timestamp")
     seconds, micros = divmod(value, 1_000_000)
-    parsed = datetime.fromtimestamp(seconds, tz=UTC) + timedelta(microseconds=micros)
+    try:
+        parsed = datetime.fromtimestamp(seconds, tz=UTC) + timedelta(microseconds=micros)
+    except (OverflowError, OSError, ValueError) as error:
+        raise VG4Error(f"{field} is outside the supported timestamp range") from error
     return value, parsed
 
 
-def parse_archive(artifact: Mapping[str, Any]) -> tuple[Bar, ...]:
+def resolve_source_path(value: Any, *, field: str) -> Path:
+    root = SOURCE_ROOT.resolve()
+    candidate = Path(str(value))
+    if candidate.is_absolute():
+        raise VG4Error(f"{field} must be relative to SOURCE_ROOT")
+    resolved = (root / candidate).resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as error:
+        raise VG4Error(f"{field} resolves outside SOURCE_ROOT") from error
+    return resolved
+
+
+def _parse_archive(artifact: Mapping[str, Any]) -> tuple[Bar, ...]:
     symbol = str(artifact["symbol"])
     month = str(artifact["month"])
-    zip_path = SOURCE_ROOT / str(artifact["zipPath"])
-    checksum_path = SOURCE_ROOT / str(artifact["checksumPath"])
+    zip_path = resolve_source_path(artifact["zipPath"], field="zipPath")
+    checksum_path = resolve_source_path(artifact["checksumPath"], field="checksumPath")
+    archive_suffix = f"-1d-{month}.zip"
+    archive_symbol = zip_path.name.removesuffix(archive_suffix)
+    if archive_symbol == zip_path.name or not archive_symbol or archive_symbol != symbol:
+        raise VG4Error(f"{zip_path} does not bind symbol {symbol} and month {month}")
     if sha256_path(zip_path) != artifact["zipSha256"]:
         raise VG4Error(f"{zip_path} changed after freeze")
     if sha256_path(checksum_path) != artifact["checksumSha256"]:
@@ -149,12 +181,7 @@ def parse_archive(artifact: Mapping[str, Any]) -> tuple[Bar, ...]:
                     row[10], field="takerBuyQuoteVolume", nonnegative=True
                 )
                 decimal_from_text(row[11], field="ignore", nonnegative=True)
-                try:
-                    trade_count = int(row[8])
-                except ValueError as error:
-                    raise VG4Error(
-                        f"{zip_path}:{row_number} trade count is not an integer"
-                    ) from error
+                trade_count = integer_from_text(row[8], field="tradeCount")
                 if (
                     trade_count < 0
                     or taker_buy_base > base_volume
@@ -169,7 +196,7 @@ def parse_archive(artifact: Mapping[str, Any]) -> tuple[Bar, ...]:
                     raise VG4Error(f"{zip_path}:{row_number} violates OHLC geometry")
                 bars.append(
                     Bar(
-                        symbol=symbol,
+                        symbol=archive_symbol,
                         day=open_dt.date(),
                         open=open_price,
                         high=high,
@@ -185,3 +212,12 @@ def parse_archive(artifact: Mapping[str, Any]) -> tuple[Bar, ...]:
     if tuple(item.day for item in bars) != tuple(sorted({item.day for item in bars})):
         raise VG4Error(f"{zip_path} daily rows are duplicate or unsorted")
     return tuple(bars)
+
+
+def parse_archive(artifact: Mapping[str, Any]) -> tuple[Bar, ...]:
+    try:
+        return _parse_archive(artifact)
+    except VG4Error:
+        raise
+    except Exception as error:
+        raise VG4Error("V-G4 archive ingestion failed") from error

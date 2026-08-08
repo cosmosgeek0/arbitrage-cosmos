@@ -6,12 +6,16 @@ note "helper-root SYSTEM authorization uses the counted install, release, and ro
 node --input-type=module - \
   "$I00_ROOT/deployment-authorization-contract.mjs" \
   "$I00_ROOT/ops-helper-root.mjs" \
-  "$I00_ROOT/bin/install-ops-bundle.sh" <<'NODE'
+  "$I00_ROOT/bin/install-ops-bundle.sh" \
+  "$TEST_TMP" <<'NODE'
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const [contractPath, helperPath, installerPath] = process.argv.slice(2);
+const [contractPath, helperPath, installerPath, testTmp] = process.argv.slice(2);
 const {
   DEPLOYMENT_ENDPOINT_BUDGETS,
   DEPLOYMENT_ENDPOINT_PREFIX_INVENTORIES,
@@ -268,6 +272,85 @@ assert.throws(
     { artifactPolicy: systemPolicy('SERVICE_RELEASE_SWITCH'), deployedSha: TARGET_SHA },
   ),
   /release SHA differs from the deployment binding/u,
+);
+
+const releaseSnapshotMatch = installerSource.match(
+  /release_snapshot="\$\([\s\S]*?<<'NODE'\n(?<body>[\s\S]*?)\nNODE\n  \)" \|\| blocked "release read capability metadata validation failed"/u,
+);
+assert.ok(
+  releaseSnapshotMatch?.groups?.body,
+  'installer release_snapshot heredoc body must remain extractable',
+);
+const riskRead = "readFileSync('/proc/self/fd/6', 'utf8')";
+assert.equal(
+  releaseSnapshotMatch.groups.body.split(riskRead).length,
+  2,
+  'installer release_snapshot must contain exactly one risk-document descriptor read',
+);
+const releaseSnapshotBody = releaseSnapshotMatch.groups.body.replace(
+  riskRead,
+  "readFileSync(process.argv[7], 'utf8')",
+);
+
+const snapshotRoot = join(testTmp, 'release-snapshot-accept');
+mkdirSync(join(snapshotRoot, 'ops/i00'), { recursive: true });
+copyFileSync(helperPath, join(snapshotRoot, 'ops/i00/ops-helper-root.mjs'));
+const snapshotRelease = {
+  testedSha: TARGET_SHA,
+  releaseId: `i00-${TARGET_SHA}`,
+  l15OpsProvenance: {
+    i00EnforcementTreeDigestSha256: I00_DIGEST,
+  },
+};
+writeFileSync(
+  join(snapshotRoot, 'release.json'),
+  `${JSON.stringify(snapshotRelease)}\n`,
+);
+const manifestBytes = Buffer.from('{"fixture":"SYSTEM_ACCEPT_PATH"}\n');
+writeFileSync(join(snapshotRoot, 'artifact-manifest.json'), manifestBytes);
+const manifestSha256 = createHash('sha256').update(manifestBytes).digest('hex');
+const snapshotRiskPath = join(snapshotRoot, 'deployment-risk.json');
+const snapshotEndpoints = replaceEndpoint(
+  replaceEndpoint(installEndpoints, 'release-path', snapshotRoot),
+  'artifact-manifest-sha256',
+  manifestSha256,
+);
+writeFileSync(snapshotRiskPath, `${JSON.stringify({
+  action: { allowedEndpoints: snapshotEndpoints },
+})}\n`);
+
+const snapshotRun = spawnSync(
+  process.execPath,
+  [
+    '--input-type=module',
+    '-',
+    snapshotRoot,
+    snapshotRoot,
+    SHA256,
+    I00_DIGEST,
+    helper.root,
+    snapshotRiskPath,
+  ],
+  { encoding: 'utf8', input: releaseSnapshotBody },
+);
+assert.equal(
+  snapshotRun.status,
+  0,
+  `installer release_snapshot accept path must exit 0 without ReferenceError: ${snapshotRun.stderr}`,
+);
+assert.doesNotMatch(
+  snapshotRun.stderr,
+  /ReferenceError/u,
+  'installer release_snapshot accept path must not raise ReferenceError',
+);
+assert.equal(
+  snapshotRun.stdout,
+  JSON.stringify({
+    testedSha: TARGET_SHA,
+    releaseId: `i00-${TARGET_SHA}`,
+    i00EnforcementTreeDigestSha256: I00_DIGEST,
+  }),
+  'installer release_snapshot accept path must write the exact release snapshot',
 );
 
 const reboundHelper = deriveOpsHelperBinding({

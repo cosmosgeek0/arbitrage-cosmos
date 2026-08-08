@@ -312,7 +312,7 @@ NODE
     "$expected_i00_digest" "$destination" <<'NODE'
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 const [root, requested, treeSha256, i00Digest, destination] = process.argv.slice(2);
 const fail = () => process.exit(1);

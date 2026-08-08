@@ -6,6 +6,8 @@ import test from 'node:test';
 
 import {
   INITIAL_REAL_DATA_CLIENT_TUPLE,
+  PRIVATE_READ_ACCESS_DENIED_REASON,
+  PRIVATE_READ_AUTH_REQUIRED_REASON,
   PRIVATE_READ_STALE_AFTER_MS,
   decodeApiPermissionsEnvelope,
   decodeM0SpotReadinessTruth,
@@ -16,6 +18,8 @@ import {
   m0SpotGate2ReadyNow,
   permissionPostureTone,
   permissionViolations,
+  privateReadAccessReasonForStatus,
+  privateReadErrorFact,
   privateReadFreshness,
   projectPrivateRead,
   readPrivateReadStateField,
@@ -617,6 +621,29 @@ test('available exact-empty arrays stay distinguishable from unavailable unknown
   assert.equal(unavailableProjection.counts.positions, null);
   assert.equal(unavailableProjection.counts.liabilities, null);
   assert.equal(exactOrDash(null), '—');
+});
+
+test('private-read HTTP admission is status-authoritative for 401 and 403', async () => {
+  assert.equal(privateReadAccessReasonForStatus(401), PRIVATE_READ_AUTH_REQUIRED_REASON);
+  assert.equal(privateReadAccessReasonForStatus(403), PRIVATE_READ_ACCESS_DENIED_REASON);
+  assert.equal(privateReadAccessReasonForStatus(400), null);
+  assert.equal(privateReadAccessReasonForStatus(500), null);
+  assert.equal(privateReadAccessReasonForStatus('401'), null);
+
+  const authentication = privateReadErrorFact(PRIVATE_READ_AUTH_REQUIRED_REASON);
+  assert.equal(authentication.id, 'AUTH_REQUIRED');
+  assert.equal(authentication.label, 'AUTH REQUIRED');
+  assert.match(authentication.detail, /provider state is UNKNOWN/);
+
+  const access = privateReadErrorFact(PRIVATE_READ_ACCESS_DENIED_REASON);
+  assert.equal(access.id, 'ACCESS_DENIED');
+  assert.equal(access.label, 'ACCESS DENIED');
+  assert.match(access.detail, /provider state is UNKNOWN/);
+
+  const store = await read('store.tsx');
+  assert.match(store, /error instanceof ApiRequestError\s*\? privateReadAccessReasonForStatus\(error\.status\)/);
+  assert.equal((store.match(/const failure = privateReadFailure\(cause\);/g) ?? []).length, 3);
+  assert.doesNotMatch(store, /privateReadAccessReasonForStatus\([^)]*\.code/);
 });
 
 test('one ordered client tuple distinguishes missing, invalid, exact-empty, and retained failure', () => {

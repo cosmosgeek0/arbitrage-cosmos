@@ -1442,6 +1442,23 @@ export const PRIVATE_READ_AUTH_REQUIRED_REASON = 'PRIVATE_READ_AUTH_REQUIRED';
 export const PRIVATE_READ_ACCESS_DENIED_REASON = 'PRIVATE_READ_ACCESS_DENIED';
 export const PRIVATE_READ_GENERIC_ERROR_REASON = 'PRIVATE_READ_ERROR';
 
+export type PrivateReadAccessReason =
+  | typeof PRIVATE_READ_AUTH_REQUIRED_REASON
+  | typeof PRIVATE_READ_ACCESS_DENIED_REASON;
+
+/**
+ * Classifies only the browser-to-application HTTP boundary. Response-body
+ * codes cannot relabel a proven 401/403, and neither status implies anything
+ * about the upstream provider permission posture.
+ */
+export function privateReadAccessReasonForStatus(
+  status: unknown,
+): PrivateReadAccessReason | null {
+  if (status === 401) return PRIVATE_READ_AUTH_REQUIRED_REASON;
+  if (status === 403) return PRIVATE_READ_ACCESS_DENIED_REASON;
+  return null;
+}
+
 export type PrivateReadErrorId =
   | 'NONE'
   | 'AUTH_REQUIRED'

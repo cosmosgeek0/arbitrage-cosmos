@@ -35,6 +35,7 @@ import {
   INITIAL_REAL_DATA_CLIENT_TUPLE,
   decodeM0SpotReadinessTruth,
   decodePrivateReadSnapshot,
+  privateReadAccessReasonForStatus,
   readPrivateReadStateField,
   reduceRealDataClientTuple,
   type M0SpotReadinessClientTruth,
@@ -724,6 +725,15 @@ function mutationFailure(error: unknown): ApiFailure {
   };
 }
 
+/** HTTP admission outranks an arbitrary response-body error code. */
+function privateReadFailure(error: unknown): ApiFailure {
+  const failure = mutationFailure(error);
+  const accessReason = error instanceof ApiRequestError
+    ? privateReadAccessReasonForStatus(error.status)
+    : null;
+  return accessReason === null ? failure : { ...failure, code: accessReason };
+}
+
 function acknowledgementFailure(message: string): ApiFailure {
   return { status: 502, code: 'INVALID_ACKNOWLEDGEMENT', message };
 }
@@ -1155,7 +1165,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         })
         .catch((cause) => {
           if (!closed && !controller.signal.aborted) {
-            const failure = mutationFailure(cause);
+            const failure = privateReadFailure(cause);
             dispatchRealDataClient({
               kind: 'PRIVATE_STATE_FAILURE',
               requestId,
@@ -1353,7 +1363,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         });
       },
       onError: (cause) => {
-        const failure = mutationFailure(cause);
+        const failure = privateReadFailure(cause);
         dispatchRealDataClient({
           kind: 'PRIVATE_FALLBACK_FAILURE',
           requestId: fallbackRequestId,
@@ -1561,7 +1571,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         observedAtMs: Date.now(),
       }));
     } catch (cause) {
-      const failure = mutationFailure(cause);
+      const failure = privateReadFailure(cause);
       issues.push('State snapshot failed');
       dispatchRealDataClient({
         kind: 'PRIVATE_STATE_FAILURE',

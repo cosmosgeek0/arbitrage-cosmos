@@ -250,6 +250,24 @@ test('gate-array projection preserves eleven exact gate records and compares arr
     researchLabGateComparisonIdentity(right[0]),
     'different codes at the same array position must remain NOT_COMPARABLE',
   );
+
+  const nested = researchLabGateRows({
+    cohorts: [
+      { gateFailures: [{ code: 'MIN_SAMPLE', status: 'FAIL' }] },
+      { gateFailures: [{ code: 'MIN_SAMPLE', status: 'FAIL' }] },
+    ],
+  });
+  assert.notEqual(
+    researchLabGateComparisonIdentity(nested[0]),
+    researchLabGateComparisonIdentity(nested[1]),
+    'only the terminal array index may normalize; parent cohort indexes stay distinct',
+  );
+
+  const compareModalSource = await readFile(
+    new URL('../../src/pages/research-lab/ResearchLabCompareModal.tsx', import.meta.url),
+    'utf8',
+  );
+  assert.match(compareModalSource, /<small>Path <code>\{row\.path\}<\/code><\/small>/u);
 });
 
 test('Research Lab retains one durable route contract', () => {

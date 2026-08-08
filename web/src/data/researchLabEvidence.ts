@@ -440,7 +440,7 @@ export function researchLabGateRows(value: unknown): readonly ResearchLabGateRow
 export function researchLabGateComparisonIdentity(
   row: Pick<ResearchLabGateRow, 'code' | 'path'>,
 ): string {
-  const normalizedPath = row.path.replace(/\[\d+\]/gu, '[]');
+  const normalizedPath = row.path.replace(/\[\d+\]$/u, '[]');
   return normalizedPath === row.path ? row.path : `${normalizedPath}\u0000${row.code}`;
 }
 

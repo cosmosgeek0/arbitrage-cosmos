@@ -369,6 +369,7 @@ function GateCell({ row }: { row: ResearchLabGateRow | null }) {
   return (
     <div className="rlcmp-gate-cell">
       <div><strong data-tone={failed ? 'terracotta' : 'recorded'}>{row.status}</strong><code>{row.code}</code></div>
+      <small>Path <code>{row.path}</code></small>
       <small>Observed {row.observed} · Threshold {row.threshold}</small>
       <span>{row.reason}</span>
     </div>
@@ -722,19 +723,16 @@ export function ResearchLabCompareModal({
             {gateRows.length > 0 ? (
               <div className="rlcmp-row-list">
                 {gateRows.map((row) => {
-                  const gatePath = row.left?.path ?? row.right?.path ?? row.path;
-                  const gateCode = row.left?.code ?? row.right?.code ?? 'UNKNOWN';
                   return (
                     <div className="rlcmp-row rlcmp-gate-row" key={row.id}>
                       <div className="rlcmp-field">
-                        <code>{gatePath}</code>
                         <small>{row.left?.sourceName ?? row.right?.sourceName}</small>
                         {row.repeated ? <small>Occurrence {row.occurrence}</small> : null}
                       </div>
-                      <div className="rlcmp-value" aria-label={`${leftExperiment.family} · Gate ${gateCode}`}>
+                      <div className="rlcmp-value" aria-label={`${leftExperiment.family} · Gate ${row.left?.code ?? 'NOT_COMPARABLE'}`}>
                         <GateCell row={row.left} />
                       </div>
-                      <div className="rlcmp-value" aria-label={`${rightExperiment.family} · Gate ${gateCode}`}>
+                      <div className="rlcmp-value" aria-label={`${rightExperiment.family} · Gate ${row.right?.code ?? 'NOT_COMPARABLE'}`}>
                         <GateCell row={row.right} />
                       </div>
                     </div>

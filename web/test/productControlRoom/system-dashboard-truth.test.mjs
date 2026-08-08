@@ -16,8 +16,66 @@ import {
   exposureVerdict,
   reconciliationVerdict,
 } from '../../src/features/systemDashboard/lib/presentation.ts';
+import {
+  DASHBOARD_TABS,
+  dashboardTabIndexForKey,
+} from '../../src/features/systemDashboard/lib/tabs.ts';
 
 globalThis.React = React;
+
+test('control-room subtabs keep the exact IA and WAI-ARIA keyboard order', () => {
+  assert.deepEqual(
+    DASHBOARD_TABS.map(({ id, label }) => ({ id, label })),
+    [
+      { id: 'overview', label: 'Overview' },
+      { id: 'engines', label: 'Engines' },
+      { id: 'connections', label: 'Connections Watchman' },
+      { id: 'transitions', label: 'Reboot/Transitions' },
+      { id: 'risk', label: 'Risk/Controls' },
+    ],
+  );
+
+  assert.equal(dashboardTabIndexForKey(0, 'ArrowUp', 'vertical'), 4);
+  assert.equal(dashboardTabIndexForKey(4, 'ArrowDown', 'vertical'), 0);
+  assert.equal(dashboardTabIndexForKey(0, 'ArrowLeft', 'horizontal'), 4);
+  assert.equal(dashboardTabIndexForKey(4, 'ArrowRight', 'horizontal'), 0);
+  assert.equal(dashboardTabIndexForKey(3, 'Home', 'vertical'), 0);
+  assert.equal(dashboardTabIndexForKey(1, 'End', 'horizontal'), 4);
+  assert.equal(dashboardTabIndexForKey(2, 'ArrowRight', 'vertical'), null);
+  assert.equal(dashboardTabIndexForKey(2, 'ArrowDown', 'horizontal'), null);
+
+  const source = readFileSync(new URL(
+    '../../src/features/systemDashboard/SystemDashboard.tsx',
+    import.meta.url,
+  ), 'utf8');
+  assert.match(source, /role="tablist"/);
+  assert.match(source, /aria-label="Control Room Views"/);
+  assert.match(source, /aria-orientation=\{tabOrientation\}/);
+  assert.match(source, /role="tab"/);
+  assert.match(source, /aria-controls=/);
+  assert.match(source, /aria-selected=\{selected\}/);
+  assert.match(source, /tabIndex=\{selected \? 0 : -1\}/);
+  assert.equal((source.match(/role="tabpanel"/g) ?? []).length, DASHBOARD_TABS.length);
+  assert.equal((source.match(/hidden=\{activeTab !==/g) ?? []).length, DASHBOARD_TABS.length);
+  assert.match(source, /data-sdx-view="transitions"/);
+  assert.ok(
+    source.indexOf('<ExposureBanner') < source.indexOf('<div className="sdx-workspace"'),
+    'capital exposure must stay globally visible above every tab panel',
+  );
+  assert.match(source, /Browser recovery and polling controls remain in the single bottom-right Connection Watchman\./);
+  assert.match(source, /Host restart authority is not exposed in this dashboard\./);
+  assert.match(source, /Canonical command preview and commit controls remain in the Product Control Registry above\./);
+  assert.match(source, /\}, \[snapshotAvailable\]\);/);
+
+  const css = readFileSync(new URL(
+    '../../src/features/systemDashboard/styles/systemDashboard.css',
+    import.meta.url,
+  ), 'utf8');
+  const transitionOverride = css.match(
+    /\.pcr-donor \.sdx-tabpanel\[data-sdx-view="transitions"\] > \.sdx-section\[aria-label="Machine graph"\],[\s\S]*?\{([^}]*)\}/,
+  )?.[1] ?? '';
+  assert.match(transitionOverride, /display:\s*block/);
+});
 
 test('unknown exposure never becomes no exposure, hidden truth, or a zero count', () => {
   assert.deepEqual(exposureVerdict(null, null), { kind: 'UNKNOWN', count: null, amount: null });

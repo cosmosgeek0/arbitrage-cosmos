@@ -26,6 +26,7 @@ import { PillSelect } from '../../../components/PillSelect';
 export interface ControlRegistryPanelProps {
   readonly controls: readonly Readonly<ProductControlRegistryEntry>[];
   readonly busy: boolean;
+  readonly availabilityBlocker?: string | null;
   readonly allowFixtureControls?: boolean;
   readonly onPreview: (
     control: Readonly<ProductControlRegistryEntry>,
@@ -73,6 +74,7 @@ export function controlResultTruthLabel(result: Readonly<ProductControlResult> |
 export function ControlRegistryPanel({
   controls,
   busy,
+  availabilityBlocker = null,
   allowFixtureControls = false,
   onPreview,
   onSubmit,
@@ -442,10 +444,11 @@ export function ControlRegistryPanel({
           const emergencyPosture = emergency ? canonicalKillSwitchEngagePosture(control) : null;
           const emergencyEngaged = emergencyPosture?.engaged === true;
           const actionable = functional
+            && availabilityBlocker === null
             && control.disabledReason === null
             && !resultReadBlocked
             && (emergencyPosture?.actionAllowed ?? true);
-          const disabledReason = workingMessage ?? resultReadReason ?? emergencyPosture?.disabledReason ?? control.disabledReason ?? (!functional
+          const disabledReason = workingMessage ?? availabilityBlocker ?? resultReadReason ?? emergencyPosture?.disabledReason ?? control.disabledReason ?? (!functional
             ? (control.wiringState === 'WIRED_LIVE' && !safeLiveCommand ? 'COMMAND_OUTSIDE_IP_CONTROL_NON_MONEY_ALLOWLIST' : `${control.wiringState} is not functional in this route.`)
             : control.confirmationText);
           const buttonLabel = emergencyPosture?.buttonLabel ?? `Preview ${control.label}`;
@@ -484,7 +487,7 @@ export function ControlRegistryPanel({
                   aria-label={buttonLabel}
                   aria-describedby={`reason-${control.controlId}`}
                   onClick={(event) => void preview(control, event.currentTarget)}
-                >{buttonLabel.replace('Preview ', '')}</button>
+                >{buttonLabel}</button>
               </div>
               {pending?.controlId === control.controlId && controlPreviewMatchesCurrentRevision(pending, controls) && (
                 <div className="pcr-confirm" role="group" aria-labelledby={`pcr-confirm-title-${control.controlId}`} aria-describedby={`pcr-confirm-consequence-${control.controlId}`}>

@@ -1,0 +1,251 @@
+/* Donor-bounded PnL chart styling. The chart remains self-contained so it can
+   be integrated without importing the unrelated Strategy Dashboard shell. */
+
+.strd-chart-figure {
+  --strd-muted: #596271;
+  --strd-focus: #245eea;
+  --strd-positive: #137333;
+  --strd-negative: #b3261e;
+  --strd-warning: #7d4804;
+  container-type: inline-size;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  border-bottom: 1px solid var(--line-2);
+  background: var(--panel);
+  color: var(--text);
+  font-family: var(--font);
+}
+
+[data-theme="dark"] .strd-chart-figure {
+  --strd-muted: #aab2bf;
+  --strd-focus: #8ba9ff;
+  --strd-positive: #75d49b;
+  --strd-negative: #ff8b82;
+  --strd-warning: #f0b15d;
+}
+
+.strd-truth {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 2px 7px;
+  border: 1px solid var(--line-2);
+  border-radius: 5px;
+  color: var(--strd-muted);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  line-height: 14px;
+  letter-spacing: .035em;
+  white-space: nowrap;
+}
+
+.strd-truth.ok {
+  border-color: color-mix(in srgb, var(--strd-positive) 46%, var(--line-2));
+  color: var(--strd-positive);
+}
+
+.strd-truth.warn {
+  border-color: color-mix(in srgb, #d08a24 42%, var(--line-2));
+  background: color-mix(in srgb, #d08a24 8%, var(--panel));
+  color: var(--strd-warning);
+}
+
+.strd-truth.bad {
+  border-color: color-mix(in srgb, var(--strd-negative) 46%, var(--line-2));
+  color: var(--strd-negative);
+}
+
+.strd-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 52px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--tile) 44%, var(--panel));
+}
+
+.strd-section-head > span:first-child { display: grid; min-width: 0; }
+.strd-section-head > .strd-truth {
+  flex: 0 1 auto;
+  text-align: right;
+  white-space: normal;
+}
+
+.strd-section-head h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 12.75px;
+  font-weight: 510;
+  line-height: 17px;
+}
+
+.strd-section-head p {
+  overflow: hidden;
+  margin: 1px 0 0;
+  color: var(--strd-muted);
+  font-size: 10.5px;
+  font-weight: 420;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.strd-chart {
+  display: grid;
+  grid-template-columns: minmax(64px, max-content) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) 22px;
+  column-gap: 10px;
+  height: 270px;
+  padding: 12px 14px 6px;
+}
+
+.strd-chart svg {
+  display: block;
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.strd-grid-line { stroke: var(--line-2); stroke-width: 1; }
+.strd-grid-line.zero {
+  stroke: var(--strd-muted);
+  stroke-width: 1.35;
+}
+
+.strd-series {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.strd-series.account { stroke: #3658d4; }
+.strd-marker.account {
+  stroke: #3658d4;
+  stroke-linecap: round;
+  stroke-width: 3;
+}
+
+[data-theme="dark"] .strd-series.account,
+[data-theme="dark"] .strd-marker.account { stroke: #8ba0ff; }
+
+.strd-chart-y-axis {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 64px;
+  pointer-events: none;
+}
+
+.strd-chart-y-axis span {
+  position: absolute;
+  right: 0;
+  max-width: 100%;
+  transform: translateY(-50%);
+  text-align: right;
+}
+
+.strd-chart-y-axis span.zero { color: var(--text-2); font-weight: 650; }
+
+.strd-chart-y-axis span,
+.strd-chart-x-axis span {
+  color: var(--strd-muted);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  line-height: 13px;
+  white-space: nowrap;
+}
+
+.strd-chart-x-axis {
+  display: flex;
+  grid-column: 2;
+  grid-row: 2;
+  align-items: end;
+  justify-content: space-between;
+  min-width: 0;
+  pointer-events: none;
+}
+
+.strd-empty {
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  min-height: 150px;
+  padding: 22px 16px;
+  text-align: center;
+}
+
+.strd-empty strong { color: var(--text); font-size: 12.5px; font-weight: 510; }
+.strd-empty span { color: var(--strd-muted); font-size: 10.5px; font-weight: 420; }
+
+.strd-table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  border-top: 1px solid var(--line-2);
+  scrollbar-width: thin;
+}
+
+.strd-table-scroll:focus-visible {
+  outline: 3px solid var(--strd-focus);
+  outline-offset: -3px;
+}
+
+.strd-data-table {
+  width: 100%;
+  min-width: 560px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: var(--text-2);
+}
+
+.strd-data-table caption {
+  padding: 7px 16px;
+  color: var(--strd-muted);
+  font-size: 10px;
+  font-weight: 420;
+  text-align: left;
+}
+
+.strd-data-table th,
+.strd-data-table td {
+  height: 36px;
+  padding: 7px 12px;
+  border-top: 1px solid var(--line);
+  font-size: 10.5px;
+  font-weight: 430;
+  line-height: 15px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.strd-data-table thead th {
+  color: var(--strd-muted);
+  font-size: 9.75px;
+  font-weight: 560;
+  letter-spacing: .045em;
+  text-transform: uppercase;
+}
+
+.strd-data-table tbody th {
+  color: var(--text-2);
+  font-weight: 450;
+}
+
+.strd-data-table td:not(:first-child) { font-variant-numeric: tabular-nums; }
+.strd-data-table tbody tr:hover { background: var(--hover); }
+.strd-data-table code { color: var(--text-2); font-family: var(--mono); font-size: 9.75px; font-weight: 500; }
+.strd-data-table strong { color: var(--text); font-weight: 510; }
+
+@container (max-width: 620px) {
+  .strd-chart { height: 200px; padding-inline: 5px; }
+  .strd-section-head { align-items: flex-start; }
+  .strd-section-head p { white-space: normal; }
+}

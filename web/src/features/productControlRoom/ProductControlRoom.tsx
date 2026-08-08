@@ -28,11 +28,76 @@ import { SurfaceBindingPanel } from './components/SurfaceBindingPanel';
 import { buildProductControlRoomFixture } from './fixtureBinding';
 import './styles/productControlRoom.css';
 
+export type OwnerCommandTruth = 'CURRENT' | 'STALE' | 'UNAVAILABLE';
+export const OWNER_COMMAND_SNAPSHOT_STALE_AFTER_MS = 15_000;
+const OWNER_COMMAND_CLOCK_SKEW_TOLERANCE_MS = 5_000;
+const OWNER_COMMAND_MAX_PUBLIC_SOURCE_AGE_MS = 5 * 60_000;
 const SYSTEM_WALL_CLOCK = () => Date.now();
 // Ages rendered from the donor dashboard are minutes-scale; tick at the
 // provider's 5s poll cadence rather than 1s so the correctness fix does not
 // buy a per-second re-render of every panel.
 const AGE_TICK_INTERVAL_MS = 5_000;
+const PUBLIC_SOURCE_COMPONENT_IDS = Object.freeze(['public-spot-source', 'public-usdm-source']);
+const PRODUCTION_DATA_FRESHNESS = /^(0|[1-9][0-9]{0,15})ms max public-source age$/;
+const FIXTURE_CURRENT_FRESHNESS = /^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?s$/;
+const STALE_FRESHNESS = /\b(?:stale|degraded|expired)\b/i;
+const UNAVAILABLE_FRESHNESS = /\b(?:unknown|unavailable|missing|clock[-_\s]?skewed)\b/i;
+
+function projectPublicSourceTruth(
+  candidate: Readonly<ProductSupervisorEnvelope<unknown>>,
+  freshness: string,
+): OwnerCommandTruth {
+  const sources = PUBLIC_SOURCE_COMPONENT_IDS.map((componentId) => (
+    candidate.components.filter((component) => component.componentId === componentId)
+  ));
+  if (sources.some((matches) => matches.length !== 1)) return 'UNAVAILABLE';
+
+  const exactSources = sources.map(([component]) => component!);
+  if (exactSources.some((component) => (
+    component.freshnessState === 'CLOCK_SKEWED' || component.freshnessState === 'UNAVAILABLE'
+  ))) return 'UNAVAILABLE';
+  if (exactSources.some((component) => component.freshnessState === 'STALE')) return 'STALE';
+  if (!exactSources.every((component) => component.freshnessState === 'FRESH')) return 'UNAVAILABLE';
+
+  const productionAge = PRODUCTION_DATA_FRESHNESS.exec(freshness);
+  if (productionAge) {
+    const ownerAgeMs = Number(productionAge[1]);
+    if (!Number.isSafeInteger(ownerAgeMs) || ownerAgeMs < 0) return 'UNAVAILABLE';
+    if (ownerAgeMs > OWNER_COMMAND_MAX_PUBLIC_SOURCE_AGE_MS) return 'STALE';
+
+    const componentAges = exactSources.map((component) => component.sourceAgeMs);
+    if (componentAges.some((age) => age === null || !Number.isSafeInteger(age) || age < 0)) {
+      return 'UNAVAILABLE';
+    }
+    if (componentAges.some((age) => age! > OWNER_COMMAND_MAX_PUBLIC_SOURCE_AGE_MS)) return 'STALE';
+    return 'CURRENT';
+  }
+
+  if (UNAVAILABLE_FRESHNESS.test(freshness)) return 'UNAVAILABLE';
+  if (STALE_FRESHNESS.test(freshness)) return 'STALE';
+  return FIXTURE_CURRENT_FRESHNESS.test(freshness) ? 'CURRENT' : 'UNAVAILABLE';
+}
+
+export function projectOwnerCommandTruth(
+  snapshot: Readonly<ProductSupervisorEnvelope<unknown>> | null,
+  staleSnapshot: Readonly<ProductSupervisorEnvelope<unknown>> | null,
+  nowMs: number,
+): OwnerCommandTruth {
+  const candidate = snapshot ?? staleSnapshot;
+  if (!candidate) return 'UNAVAILABLE';
+  if (!snapshot) return 'STALE';
+  if (!Number.isFinite(nowMs)
+    || !Number.isFinite(candidate.evaluatedAtMs)
+    || candidate.evaluatedAtMs <= 0
+    || candidate.evaluatedAtMs - nowMs > OWNER_COMMAND_CLOCK_SKEW_TOLERANCE_MS) return 'UNAVAILABLE';
+  const freshness = candidate.ownerView.dataFreshness?.trim() ?? '';
+  if (!freshness) return 'UNAVAILABLE';
+  const sourceTruth = projectPublicSourceTruth(candidate, freshness);
+  if (sourceTruth !== 'CURRENT') return sourceTruth;
+  return nowMs - candidate.evaluatedAtMs >= OWNER_COMMAND_SNAPSHOT_STALE_AFTER_MS
+    ? 'STALE'
+    : 'CURRENT';
+}
 
 export interface ProductControlRoomProps {
   readonly snapshot: ProductSupervisorEnvelope<SystemSupervisorSnapshot> | null;
@@ -86,6 +151,20 @@ export function ProductControlRoom({
     return () => window.clearInterval(timer);
   }, [clock]);
 
+  const commandTruth = projectOwnerCommandTruth(snapshot, staleSnapshot, nowMs);
+  const commandMaterialEvents = materialEvents ?? snapshot?.materialEvents ?? staleSnapshot?.materialEvents ?? null;
+  const commandContinuityProven = snapshot !== null
+    && staleSnapshot === null
+    && bindingBlocker === null
+    && commandMaterialEvents?.continuity === 'PROVEN';
+  const commandAuthorityReady = commandTruth === 'CURRENT' && commandContinuityProven;
+  const commandAvailabilityBlocker = commandAuthorityReady
+    ? null
+    : !commandContinuityProven
+      ? `COMMAND_CONTINUITY_NOT_PROVEN · ${bindingBlocker ?? `MATERIAL_EVENT_CONTINUITY_${commandMaterialEvents?.continuity ?? 'UNPROVEN'}`}`
+      : commandTruth === 'STALE'
+        ? 'COMMAND_POSTURE_STALE'
+        : 'COMMAND_POSTURE_UNAVAILABLE';
   const readTrace = (correlationId: string) => {
     const exactId = correlationId.trim();
     if (!exactId) return;
@@ -119,9 +198,14 @@ export function ProductControlRoom({
           SYNTHETIC EVIDENCE · NO LIVE AUTHORITY · NO EXCHANGE MUTATION
         </div>
       )}
-      <div className="pcr-frame">
+      <div className="pcr-frame" data-owner-command-truth={commandTruth.toLowerCase()}>
         {(snapshot || staleSnapshot) && <div className="pcr-execution-barrier">LIVE_EXECUTION_NOT_IMPLEMENTED · NO LIVE ORDER, BORROW, TRANSFER, OR WITHDRAWAL AUTHORITY</div>}
         {bindingBlocker && snapshot && <div className="pcr-binding-blocker" role="alert">BINDING BLOCKED · {bindingBlocker}</div>}
+        {snapshot && commandTruth !== 'CURRENT' && (
+          <div className="pcr-binding-blocker" role="alert">
+            {commandTruth === 'STALE' ? 'STALE CANONICAL POSTURE' : 'CANONICAL POSTURE UNAVAILABLE'} · {snapshot.ownerView.dataFreshness ?? 'DATA FRESHNESS UNKNOWN'}
+          </div>
+        )}
         {!snapshot && staleSnapshot ? (
           <>
             <div className="pcr-binding-blocker" role="alert">STALE LAST-KNOWN TRUTH · CONTROLS DISABLED · {bindingBlocker ?? unavailableReason ?? 'Continuity is not proven.'}</div>
@@ -136,7 +220,8 @@ export function ProductControlRoom({
             <OwnerViewPanel view={snapshot.ownerView} />
             <ControlRegistryPanel
               controls={snapshot.controls}
-              busy={busy}
+              busy={busy || !commandAuthorityReady}
+              availabilityBlocker={commandAvailabilityBlocker}
               allowFixtureControls={allowFixtureControls}
               onPreview={onPreview}
               onSubmit={onSubmit}

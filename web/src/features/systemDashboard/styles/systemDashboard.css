@@ -74,6 +74,127 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* -------------------------------------------------------- workspace subtabs */
+/* One continuous frame with the Logs-derived hairline, type, and quiet-wash
+   language. The requested left IA is Control Room-specific, not Logs geometry. */
+
+.sdx-workspace {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  align-items: stretch;
+  min-width: 0;
+  border-top: 1px solid var(--line-2);
+}
+
+.sdx-exposure + .sdx-workspace { border-top: 0; }
+
+.sdx-subtabs {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-right: 1px solid var(--line-2);
+  background: color-mix(in srgb, var(--tile) 24%, var(--panel));
+}
+
+.sdx-subtabs button {
+  display: grid;
+  gap: 2px;
+  align-content: center;
+  width: 100%;
+  min-height: 54px;
+  padding: 8px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color .15s ease, color .15s ease;
+}
+
+.sdx-subtabs button:hover { background: var(--hover); color: var(--text); }
+.sdx-subtabs button.selected { background: var(--tile); color: var(--text); }
+.sdx-subtabs button:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 1px solid var(--line-strong);
+  outline-offset: -1px;
+}
+
+.sdx-subtabs button span {
+  overflow: hidden;
+  font-size: 13.25px;
+  font-weight: 470;
+  line-height: 19px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sdx-subtabs button small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 420;
+  line-height: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sdx-subtabs button.selected span { font-weight: 510; }
+
+.sdx-tabpanels,
+.sdx-tabpanel {
+  min-width: 0;
+}
+
+.sdx-tabpanel[hidden] { display: none; }
+
+.sdx-tabpanel:focus-visible {
+  outline: 1px solid var(--line-strong);
+  outline-offset: -1px;
+}
+
+.sdx-view-boundary {
+  display: grid;
+  gap: 2px;
+  min-height: 48px;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--line);
+  background: color-mix(in srgb, var(--tile) 24%, var(--panel));
+}
+
+.sdx-view-boundary strong {
+  color: var(--text);
+  font-size: 12.5px;
+  font-weight: 510;
+  line-height: 17px;
+}
+
+.sdx-view-boundary span {
+  color: var(--muted);
+  font-size: 10.5px;
+  font-weight: 420;
+  line-height: 15px;
+}
+
+.sdx-view-boundary + .sdx-section > .sdx-band { border-top: 0; }
+
+.sdx-tabpanel > .sdx-summary:first-child { border-top: 0; }
+.sdx-tabpanel > .sdx-section:first-child > .sdx-band,
+.sdx-tabpanel > .sdx-duo:first-child > .sdx-section:first-child > .sdx-band,
+.sdx-tabpanel.overview > .sdx-section:first-of-type > .sdx-band {
+  border-top: 0;
+}
+
+/* Product Control Room historically suppressed these two donor sections.
+   The new, explicit transitions view owns them, and this narrow selector
+   restores only that tab without reopening either section elsewhere. */
+.pcr-donor .sdx-tabpanel[data-sdx-view="transitions"] > .sdx-section[aria-label="Machine graph"],
+.pcr-donor .sdx-tabpanel[data-sdx-view="transitions"] > .sdx-section[aria-label="Trace drill-down"] {
+  display: block;
+}
+
 /* ------------------------------------------------------------- state chip */
 
 .sdx-chip {
@@ -263,8 +384,6 @@
   background: color-mix(in srgb, var(--tile) 44%, var(--panel));
 }
 
-.sdx-frame > .sdx-section:first-of-type .sdx-band { border-top: 0; }
-
 .sdx-band h2 {
   margin: 0;
   color: var(--muted);
@@ -303,6 +422,7 @@
 @container (min-width: 1020px) {
   .sdx-duo { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .sdx-duo > .sdx-section:nth-child(2n) { border-left: 1px solid var(--line-2); }
+  .sdx-tabpanel > .sdx-duo:first-child > .sdx-section:nth-child(2) > .sdx-band { border-top: 0; }
 }
 
 /* ------------------------------------------------------------ machine graph */
@@ -1000,8 +1120,57 @@
 
 @container (max-width: 660px) {
   .sdx-toolbar { flex-direction: column; align-items: flex-start; }
+  .sdx-toolbar-meta {
+    flex-wrap: wrap;
+    gap: 4px 12px;
+    white-space: normal;
+  }
+  .sdx-workspace { display: block; }
+  .sdx-subtabs {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line-2);
+    background: var(--panel);
+  }
+  .sdx-subtabs button {
+    flex: 0 0 auto;
+    width: auto;
+    min-width: max-content;
+    min-height: 44px;
+    padding: 0 13px;
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+  }
+  .sdx-subtabs button small { display: none; }
   .sdx-summary { grid-template-columns: 1fr; }
   .sdx-summary-cell { border-right: 0; }
+  .sdx-band,
+  .sdx-exposure,
+  .sdx-row,
+  .sdx-attn-row,
+  .sdx-not-published,
+  .sdx-barrier,
+  .sdx-receipt {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .sdx-band-meta,
+  .sdx-row-end,
+  .sdx-control-end,
+  .sdx-receipt {
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+  .sdx-exposure strong,
+  .sdx-exposure span,
+  .sdx-row-main strong,
+  .sdx-row-main small {
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+  }
   .sdx-control-row { flex-direction: column; align-items: flex-start; }
   .sdx-chain-row { grid-template-columns: 84px minmax(0, 1fr); }
   .sdx-chain-end {
@@ -1014,5 +1183,6 @@
 @media (prefers-reduced-motion: reduce) {
   .sdx-button,
   .sdx-seg button,
-  .sdx-trace-head { transition: none; }
+  .sdx-trace-head,
+  .sdx-subtabs button { transition: none; }
 }

@@ -26,6 +26,7 @@ const PAGES: { page: Page; name: string; sub: string }[] = [
   { page: 'notifications', name: 'Notifications', sub: 'Curated interventions and routing' },
   { page: 'news', name: 'Market News', sub: 'Tree · RSS · Lookonchain · Binance' },
   { page: 'calendar', name: 'Economic Calendar', sub: 'Macro events' },
+  { page: 'research-lab', name: 'Research Lab', sub: 'Read-only historical experiment evidence' },
 ];
 
 export function Palette() {

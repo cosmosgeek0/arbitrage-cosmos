@@ -1,0 +1,164 @@
+{
+  "baseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "capacity": {
+    "gateUsd": "1000",
+    "portfolioProxy": "at every cohort entry or exit, cohort size times the minimum constituent 1bp participation amount from that constituent's lagged 30-complete-day median quote volume",
+    "truthBoundary": "PUBLIC_DAILY_QUOTE_VOLUME_PARTICIPATION_PROXY_ONLY; HISTORICAL_BOOK_DEPTH_FILL_PROBABILITY_IMPACT_AND_EXECUTABLE_CAPACITY_UNMEASURED"
+  },
+  "costs": {
+    "accountEffectiveFeeTruth": "UNKNOWN",
+    "baseAdversePriceBpsPerExecutedSide": 10,
+    "baseTotalBpsPerExecutedSide": 20,
+    "bnbDiscountAssumed": false,
+    "publicRegularTakerFeeBpsPerExecutedSide": 10,
+    "specialCommissionTaxVipOrPromotionAssumed": false,
+    "stressAdversePriceBpsPerExecutedSide": 25,
+    "stressTotalBpsPerExecutedSide": 35
+  },
+  "data": {
+    "archiveInterval": "1d",
+    "archiveSource": "https://data.binance.vision/data/spot/monthly/klines/",
+    "boundaryPurge": "DEVELOPMENT_LIQUIDATES_AT_2026-02-28_OPEN; THE_2026-02-28_SIGNAL_AND_2026-03-01_OPEN_ARE_NOT_SCORED; HOLDOUT_FIRST_ENTRY_IS_2026-03-02_OPEN_FROM_THE_COMPLETED_2026-03-01_SIGNAL; FINAL_LIQUIDATION_IS_2026-06-30_OPEN_AND_THE_2026-06-30_SIGNAL_IS_NOT_TRADED",
+    "checksumLaw": "EVERY_ZIP_AND_CHECKSUM_SIDECAR_BYTE_IS_HASHED; SIDECAR_BASENAME_AND_OFFICIAL_SHA256_MUST_MATCH_THE_COMPRESSED_ZIP_BEFORE_ANY_MEMBER_IS_OPENED",
+    "developmentEndExclusiveUtc": "2026-03-01T00:00:00Z",
+    "developmentStartUtc": "2025-07-01T00:00:00Z",
+    "holdoutEndExclusiveUtc": "2026-07-01T00:00:00Z",
+    "holdoutStartUtc": "2026-03-01T00:00:00Z",
+    "sourceCorpusRoot": "/private/tmp/cosmos-s1f-weekly-momentum-cash-v1",
+    "sourceMonths": [
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ],
+    "timestampUnitFrom2025": "MICROSECOND",
+    "warmupStartUtc": "2025-05-01T00:00:00Z"
+  },
+  "developmentGates": {
+    "baseNetOneSided95LcbMustExceedUsdPerDayPer1000": "0",
+    "holmFamilywiseAlphaPerMyriad": 500,
+    "maximumDrawdownFraction": "0.10",
+    "minimumOffDays": 20,
+    "minimumOnDays": 20,
+    "minimumPositiveTwoMonthFolds": 3,
+    "publicCapacityProxyMinimumUsd": "1000",
+    "stressNetMeanMustExceedUsdPerDayPer1000": "0"
+  },
+  "execution": {
+    "cashYield": "0",
+    "entry": "AFTER_COMPLETED_UTC_SIGNAL_DAY_T_ENTER_AT_DAY_T_PLUS_1_OPEN",
+    "exit": "WHEN_THE_COMPLETED_PRIOR_DAY_SIGNAL_IS_OFF_EXIT_AT_THE_NEXT_OPEN; EVERY_ENTRY_REQUIRES_AN_AUTHENTICATED_EXIT",
+    "fractionalResearchQuantities": true,
+    "internalRebalancing": "NONE; ON_ENTRY_SPLIT_NOTIONAL_EQUALLY_ACROSS_ALL_TWELVE_MEMBERS_AND_HOLD_FIXED_UNITS_UNTIL_THE_COHORT_EXIT",
+    "leverage": false,
+    "missingConstituentPolicy": "TERMINAL_UNMEASURED; NEVER_PARTIAL_COHORT_NEVER_BACKFILL",
+    "positionNotionalUsd": "CURRENT_PORTFOLIO_VALUE_CAPPED_TO_THE_SINGLE_UNLEVERED_RESEARCH_ACCOUNT",
+    "shorting": false,
+    "startingCashUsd": "1000"
+  },
+  "holdoutGates": {
+    "baseNetMeanMustExceedUsdPerDayPer1000": "0",
+    "baseNetOneSided95LcbMustExceedUsdPerDayPer1000": "0",
+    "maximumDrawdownFraction": "0.10",
+    "minimumOffDays": 20,
+    "minimumOnDays": 20,
+    "minimumPositiveCalendarMonths": 3,
+    "oneSidedBootstrapPValueMustBeBelow": "0.05",
+    "publicCapacityProxyMinimumUsd": "1000",
+    "stressNetMeanMustExceedUsdPerDayPer1000": "0"
+  },
+  "inference": {
+    "bootstrapBlockLengthDays": 7,
+    "bootstrapReplicates": 4096,
+    "bootstrapSeed": "202607291515",
+    "candidateSelection": "HIGHEST_BASE_NET_ONE_SIDED_95_PERCENT_LCB_THEN_LOWER_TURNOVER_THEN_HIGHER_THRESHOLD_THEN_LONGER_LOOKBACK_THEN_LEXICOGRAPHIC_TRIAL_ID",
+    "cscvBlocks": "EIGHT_DEVELOPMENT_CALENDAR_MONTHS",
+    "cscvPboRole": "REPORT_ONLY_WITHIN_FAMILY_SELECTION_OVERFITTING_DIAGNOSTIC; NEVER_SELECTS_RESCUES_OR_VETOES_AND_NEVER_ESTABLISHES_CAUSALITY",
+    "dailyObservation": "POST_COST_CHANGE_IN_THE_SINGLE_COHORT_OR_CASH_PORTFOLIO_PER_UTC_DAY",
+    "familyResampling": "ALL_TWELVE_ALIGNED_CANDIDATE_PATHS_SHARE_EACH_CIRCULAR_BLOCK_DRAW; ONE_SIDED P VALUES USE THE CENTERED NULL PATH",
+    "holdoutMultiplicity": "ONE_PRESELECTED_CHAMPION_OPENED_AT_MOST_ONCE; NO_RETUNING_RUNNER_UP_OR_RERUN",
+    "interval": "90_PERCENT_TWO_SIDED_CIRCULAR_BLOCK_PERCENTILE_INTERVAL; LOWER_ENDPOINT_IS_THE_ONE_SIDED_95_PERCENT_LCB",
+    "multiplicity": "CANONICAL_Q14_HOLM_BONFERRONI_OVER_ALL_TWELVE_ATTEMPTED_TRIALS",
+    "programWideMultiplicity": "UNRESOLVED; THIS PACKET CONTROLS_ONLY_ITS_FROZEN_TWELVE_TRIAL_FAMILY",
+    "twoMonthDevelopmentFolds": [
+      "2025-07/2025-08",
+      "2025-09/2025-10",
+      "2025-11/2025-12",
+      "2026-01/2026-02"
+    ]
+  },
+  "question": "Does the share of a frozen Binance Spot USDT benchmark cohort trading above each member's own lagged quote-volume baseline identify a cohort-on regime with positive post-cost returns versus cash?",
+  "schema": "VG15VolumeBreadthRegimeProtocolV1",
+  "signal": {
+    "baseline": "FOR_SIGNAL_DAY_T_AND_LOOKBACK_L, MEDIAN_QUOTE_VOLUME_OVER_DAYS_T-L_THROUGH_T-1; SIGNAL_DAY_T_IS_STRICTLY_EXCLUDED_FROM_ITS_BASELINE",
+    "breadth": "COUNT_OF_COHORT_MEMBERS_WITH_SIGNAL_DAY_T_QUOTE_VOLUME_STRICTLY_ABOVE_THEIR_OWN_BASELINE_DIVIDED_BY_TWELVE",
+    "candidateGrid": {
+      "lookbackCompleteDays": [
+        20,
+        40,
+        60
+      ],
+      "threshold": [
+        "0.50",
+        "0.60",
+        "0.70",
+        "0.80"
+      ],
+      "trialCount": 12
+    },
+    "cohortOrCash": "IF_BREADTH_IS_AT_LEAST_THE_TRIAL_THRESHOLD HOLD_THE_ENTIRE_FROZEN_COHORT; OTHERWISE_HOLD_100_PERCENT_USDT_CASH",
+    "forbiddenInputs": [
+      "PRICE_DIRECTION_OR_RETURN_IN_THE_SIGNAL",
+      "PRICE_BREAKOUT_OR_REVERSAL",
+      "VOLUME_SHOCK_MAGNITUDE_RANKING",
+      "CROSS_SECTIONAL_VOLUME_SHARE_RANKING_OR_ROTATION",
+      "VOLUME_ENTROPY_OR_CONCENTRATION",
+      "SEASONAL_RESIDUAL",
+      "TAKER_SIDE",
+      "TRADE_COUNT",
+      "VOLATILITY",
+      "FUNDING_DERIVATIVES_OR_CROSS_VENUE_DATA"
+    ],
+    "priceUse": "OPEN_PRICES_ARE_OUTCOME_VALUATION_AND_EXECUTION_PROXY_ONLY; NO_PRICE_FIELD_MAY_CHANGE_THE SIGNAL",
+    "trialIdentity": "vg15-l{lookback}-b{threshold-bps}"
+  },
+  "universe": {
+    "cohort": [
+      "BTCUSDT",
+      "ETHUSDT",
+      "BNBUSDT",
+      "XRPUSDT",
+      "ADAUSDT",
+      "DOGEUSDT",
+      "SOLUSDT",
+      "TRXUSDT",
+      "LTCUSDT",
+      "BCHUSDT",
+      "LINKUSDT",
+      "AVAXUSDT"
+    ],
+    "cohortLaw": "STATIC_PREDECLARED_LARGE_LIQUID_BENCHMARK_COHORT; NO_RANKING_ADDITION_REMOVAL_BACKFILL_OR_CURRENT_EXCHANGEINFO_FILTER",
+    "historicalUniverseLimitation": "THE_STATIC_RETROSPECTIVE_BENCHMARK_DOES_NOT_PROVE_POINT_IN_TIME_MARKET-WIDE_MEMBERSHIP AND MAY HAVE SURVIVOR_SELECTION_BIAS",
+    "quoteAsset": "USDT",
+    "requiredCoverage": "EVERY_MEMBER_REQUIRES_ONE_UNIQUE_VALID_CONTIGUOUS_DAILY_BAR_FOR_EVERY_DECLARED DAY"
+  },
+  "verdictLaw": {
+    "GO": "ALL_CUSTODY_CAUSALITY_DEVELOPMENT_MULTIPLICITY_ECONOMIC_STRESS_DRAWDOWN_ACTIVITY_AND_PUBLIC_CAPACITY_PROXY_GATES_PASS_AND_THE_SINGLE_OPENED_HOLDOUT_PASSES_ALL_FROZEN GATES",
+    "NO_GO": "PUBLIC_MEASUREMENT_IS_VALID_BUT_ANY_DECLARED_ECONOMIC_STATISTICAL_ACTIVITY_RISK_OR_PROXY_GATE_FAILS; DEVELOPMENT_FAILURE_LEAVES_HOLDOUT_UNOPENED",
+    "UNMEASURED": "REQUIRED_SOURCE_HASH_SCHEMA_TIMESTAMP_DAILY_BOUNDARY_UNIQUENESS_CONTINUITY_CAUSALITY_RUN_CONTROL_OR_EXIT_PROOF_IS_INVALID_OR_MISSING",
+    "capitalAuthority": "NONE",
+    "consumer": "N3_SUCCESSOR_FINAL_CONVERGENCE",
+    "goScope": "PUBLIC_RETROSPECTIVE_SHADOW_RESEARCH_SCENARIO_ONLY; NEVER_ACCOUNT_TRUTH_OR_CAPITAL_AUTHORITY",
+    "widerProfitability": "UNKNOWN_UNLESS_ACCEPTED_BY_THE_GLOBAL_ATTEMPT_LEDGER_AND_N3_SUCCESSOR_FINAL_CONVERGENCE"
+  }
+}

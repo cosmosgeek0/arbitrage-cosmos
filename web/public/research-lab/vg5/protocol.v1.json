@@ -1,0 +1,308 @@
+{
+  "schema": "VG5AbnormalVolumeBreakoutProtocolV1",
+  "protocolId": "vg5-binance-spot-abnormal-volume-breakout-v1",
+  "frozenForDateUtc": "2026-07-29",
+  "canonicalBaseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "consumer": {
+    "task": "N3_SUCCESSOR_ORCHESTRATOR_SCOREBOARD",
+    "productAuthority": "NONE",
+    "capitalAuthority": "NONE"
+  },
+  "distinctness": {
+    "family": "SPOT_FRESH_STRUCTURAL_HIGH_BREAKOUT_WITH_VOLUME_TREND_VOLATILITY_CONDITIONING",
+    "notVG1": "MULTI_ASSET_DAILY_STRUCTURAL_BREAKOUT_NOT_SINGLE_BTC_HOURLY_BUYER_PRESSURE_COMPRESSION",
+    "notVG2": "ABSOLUTE_FRESH_HIGH_TRIGGER_NOT_POSITIVE_RETURN_VOLUME_SHOCK_CROSS_SECTIONAL_RANKING",
+    "notVG3": "CONTINUATION_NOT_NEGATIVE_RESIDUAL_HIGH_VOLATILITY_MEAN_REVERSION",
+    "notVG4": "ABNORMAL_HIGH_VOLUME_BREAKOUT_NOT_LOW_VOLUME_DOWNSIDE_DIVERGENCE_REVERSAL"
+  },
+  "data": {
+    "authority": "https://data.binance.vision",
+    "officialArchiveSpecification": "https://github.com/binance/binance-public-data/blob/master/README.md",
+    "sharedCorpusRootDefault": "/private/tmp/cosmos-s1f-weekly-momentum-cash-v1",
+    "sharedCorpusPolicy": "READ_ONLY_NEVER_WRITE_COPY_HARDLINK_CHMOD_RENAME_OR_OPEN_HOLDOUT_BEFORE_SEAL",
+    "discoverySha256": "b4a8f7abd36df19eff0510dfcc3c61fd0df9fdcab5f4d248892ee10010fb21c3",
+    "acquisitionManifestSha256": "01f58272602e43bfb914b649adc00d8273b2d423492220a55f86443bb6441176",
+    "artifactRowsSha256": "4209d02f1917a29f63bfcdc472004c08058f287972cc369cd9c7d247899fa2af",
+    "absentRowsSha256": "c8f062c921850197afd492784ef4c743fe82f33557768816303c807d7f874924",
+    "universeSha256": "a597d8339aafb74c40b8899cade9445150c3f431f4c2e7fe2bfac37d8d1b0592",
+    "universeCount": 605,
+    "interval": "1d",
+    "requiredMonthsInclusive": [
+      "2025-01",
+      "2026-06"
+    ],
+    "checksumRequired": true,
+    "archiveBodiesMayOpenOnlyAfterCommittedFreezeAndRunMarker": true,
+    "holdoutArchiveMonthsMayOpenOnlyAfterCandidateSealAndHoldoutMarker": true,
+    "holdoutArchiveMonths": [
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ],
+    "spotTimestampUnitTransitionUtc": "DOCUMENTED_2025-01-01",
+    "timestampValidation": "ALL_REQUIRED_2025_PLUS_ROWS_USE_MICROSECONDS_DAILY_OPEN_EXACT_MIDNIGHT_CLOSE_EXACT_23_59_59_999999",
+    "historicalExchangeInfoSnapshots": "UNAVAILABLE",
+    "currentExchangeInfoMaySelectUniverse": false,
+    "currentExchangeInfoMayProveHistoricalEligibility": false
+  },
+  "universe": {
+    "source": "FROZEN_COMPLETE_PAGINATED_ARCHIVE_PREFIX_DISCOVERY",
+    "preserveUtf8Symbols": true,
+    "sourceUniverseLimitation": "REUSES_DONOR_605_SYMBOL_FROZEN_UNIVERSE_WITHOUT_REDISCOVERY_NON_ASCII_COMPLETENESS_NOT_REASSERTED",
+    "futureCompleteCoverageMaySelectUniverse": false,
+    "pointInTimeLiquidityCohort": {
+      "minimumPriorContiguousDays": 160,
+      "trailingLiquidityDays": 30,
+      "minimumMedianDailyQuoteVolumeUsd": "5000000",
+      "rankMetric": "TRAILING_30_COMPLETE_DAYS_MEDIAN_QUOTE_VOLUME_THROUGH_T_MINUS_1",
+      "rankDirection": "DESC_THEN_UTF8_SYMBOL_BYTES_ASC",
+      "cohortSize": 50,
+      "minimumCohortSize": 30
+    }
+  },
+  "calendar": {
+    "timezone": "UTC",
+    "twelveMonthSignalWindow": {
+      "startInclusive": "2025-07-01",
+      "endExclusive": "2026-07-01"
+    },
+    "warmupAndObservation": {
+      "startInclusive": "2025-01-01",
+      "endExclusive": "2026-07-01"
+    },
+    "development": {
+      "signalStartInclusive": "2025-07-01",
+      "signalEndInclusive": "2026-02-19",
+      "entryStartInclusive": "2025-07-02",
+      "firstPotentialEntryInclusive": "2025-07-03",
+      "lastExitInclusive": "2026-02-28",
+      "calendarMonthBlocks": 8,
+      "archiveMonthsThatMayOpenBeforeCandidateSeal": [
+        "2025-01",
+        "2026-02"
+      ]
+    },
+    "purge": {
+      "startInclusive": "2026-02-20",
+      "endExclusive": "2026-03-01",
+      "reason": "ONE_FULL_STAGING_DAY_PLUS_MAXIMUM_SEVEN_DAY_HOLD_NO_POSITION_CROSSES_PARTITION"
+    },
+    "holdout": {
+      "signalStartInclusive": "2026-03-01",
+      "signalEndInclusive": "2026-06-21",
+      "entryStartInclusive": "2026-03-02",
+      "firstPotentialEntryInclusive": "2026-03-03",
+      "lastExitInclusive": "2026-06-30",
+      "allowedOpenCount": 1,
+      "archiveMonthsThatRemainUnopenedUntilCandidateSeal": [
+        "2026-03",
+        "2026-06"
+      ]
+    }
+  },
+  "signal": {
+    "decisionTime": "AFTER_COMPLETE_SIGNAL_DAY_T_DAILY_BAR",
+    "entry": "SECOND_COMPLETE_UTC_DAY_OPEN_AFTER_ONE_FULL_STAGING_DAY_TIMES_ONE_PLUS_ADVERSE_EXECUTION",
+    "exit": "ENTRY_DAY_PLUS_H_CALENDAR_DAYS_OPEN_TIMES_ONE_MINUS_ADVERSE_EXECUTION",
+    "freshBreakout": "CLOSE_T_STRICTLY_ABOVE_MAX_HIGH_PRIOR_L_DAYS_AND_SAME_PREDICATE_FALSE_AT_T_MINUS_1",
+    "abnormalVolume": "QUOTE_VOLUME_T_DIV_MEDIAN_PRIOR_20_COMPLETE_DAYS_EXCLUDING_T",
+    "trend": "CLOSE_T_MINUS_1_ABOVE_SMA_M_THROUGH_T_MINUS_1_AND_SMA_M_T_MINUS_1_ABOVE_SMA_M_T_MINUS_21",
+    "volatilityProxy": "ATR20_THROUGH_T_MINUS_1_DIV_CLOSE_T_MINUS_1",
+    "volatilityReference": "MEDIAN_PRIOR_120_MATURED_ATR20_RATIOS_ENDING_T_MINUS_2",
+    "volatilityLowRule": "CURRENT_PROXY_LESS_THAN_OR_EQUAL_TO_REFERENCE",
+    "volatilityHighRule": "CURRENT_PROXY_STRICTLY_ABOVE_REFERENCE",
+    "ranking": [
+      "ABNORMAL_VOLUME_MULTIPLE_DESC",
+      "TRIAL_LOOKBACK_BREAKOUT_EXCESS_DIV_LAGGED_ATR20_DESC",
+      "UTF8_SYMBOL_BYTES_ASC"
+    ],
+    "ties": "EXACT_DECLARED_RANK_ORDER_NO_RANDOMNESS",
+    "selection": "TOP_ONE_ELIGIBLE_CANDIDATE_FOR_THE_DAYS_ROTATING_SLEEVE",
+    "overlap": "SYMBOL_ALREADY_HELD_BY_ANY_OTHER_SLEEVE_IS_INELIGIBLE",
+    "replacement": "NONE_AFTER_TOP_CANDIDATE_SELECTION",
+    "shorting": false,
+    "leverage": false,
+    "borrowing": false
+  },
+  "trials": {
+    "familySize": 32,
+    "breakoutLookbackDays": [
+      20,
+      55
+    ],
+    "abnormalVolumeThresholds": [
+      "1.5",
+      "2.0"
+    ],
+    "trendSmaDays": [
+      50,
+      100
+    ],
+    "volatilityRegimes": [
+      "LOW",
+      "HIGH"
+    ],
+    "holdDays": [
+      3,
+      7
+    ],
+    "allocation": "H_ROTATING_EQUAL_CAPITAL_SLEEVES_ONE_SLEEVE_SCHEDULED_PER_UTC_DAY",
+    "initialSleeveNotional": "1000_DIV_H",
+    "emptyFailedOrAbandonedAttemptCounts": true,
+    "championSelection": "HIGHEST_STRESS_SUM_DAILY_LOG_RETURN_OVER_FIRST_240_EQUAL_BLOCK_PBO_ROWS_THEN_TRIAL_ID_LAST_TWO_PURGED_TAIL_ROWS_NOT_USED_FOR_SELECTION",
+    "championIsSealedBeforeHoldoutOpen": true,
+    "holdoutEvaluatesChampionOnly": true,
+    "runnerUpOrSubgroupRescue": false
+  },
+  "costs": {
+    "officialFeePage": "https://www.binance.com/en/fee/trading",
+    "reportingDenomination": "USDT_TREATED_AS_USD_AT_FROZEN_1_TO_1",
+    "initialCapitalUsd": "1000",
+    "cashYieldAnnualPct": "0",
+    "orderStyle": "SECOND_DAILY_OPEN_AFTER_ONE_FULL_STAGING_DAY_MARKET_TAKER_PROXY",
+    "regularUserFeeBpsPerFill": "10",
+    "bnbDiscountAssumed": false,
+    "vipAssumed": false,
+    "promotionAssumed": false,
+    "specialCommissionAssumed": false,
+    "taxCommissionAssumed": false,
+    "scenarios": {
+      "base": {
+        "feeBpsPerFill": "10",
+        "adverseExecutionBpsPerFill": "5",
+        "capacityParticipationBps": "1"
+      },
+      "stress": {
+        "feeBpsPerFill": "10",
+        "adverseExecutionBpsPerFill": "10",
+        "capacityParticipationBps": "0.5"
+      },
+      "severe": {
+        "feeBpsPerFill": "10",
+        "adverseExecutionBpsPerFill": "25",
+        "capacityParticipationBps": "0.25"
+      }
+    },
+    "decomposition": [
+      "REFERENCE_GROSS_PRICE_MOVE",
+      "ENTRY_ADVERSE_EXECUTION",
+      "BUY_FEE",
+      "EXIT_ADVERSE_EXECUTION",
+      "SELL_FEE",
+      "STRESS_INCREMENT_VERSUS_BASE",
+      "SEVERE_INCREMENT_VERSUS_BASE",
+      "NET"
+    ],
+    "accountEffectiveCommission": "UNKNOWN_PUBLIC_ONLY",
+    "historicalSpreadImpactAndTaxState": "UNKNOWN_PUBLIC_ONLY"
+  },
+  "missingness": {
+    "listedArtifactWithoutFrozenChecksumOrValidSchema": "TERMINAL_UNMEASURED",
+    "absentPriorBar": "SYMBOL_CAUSALLY_INELIGIBLE",
+    "fewerThanMinimumCohort": "DAY_CASH_NOT_COMPRESSED",
+    "selectedMissingSecondOpenAfterFullStagingDay": "TERMINAL_UNMEASURED_NO_REPLACEMENT",
+    "selectedMissingScheduledExit": "TERMINAL_UNMEASURED_NO_FALLBACK",
+    "heldMissingDailyMark": "TERMINAL_UNMEASURED",
+    "emptyOrPartialSumMayBeEconomicZero": false,
+    "goRequiresInvalidSelectedEntriesOrExits": 0
+  },
+  "capacity": {
+    "authority": "PUBLIC_QUOTE_VOLUME_PARTICIPATION_PROXY_ONLY",
+    "perTradeBasis": "MIN_SIGNAL_DAY_QUOTE_VOLUME_TRAILING_7_COMPLETE_DAY_MEDIAN_AND_PRE_EXIT_DAY_QUOTE_VOLUME",
+    "requiredNotional": "MAX_PER_TRADE_ENTRY_CASH_AND_PRE_FEE_EXIT_REFERENCE_NOTIONAL_WITH_SAME_SYMBOL_SAME_OPEN_ENTRY_AND_EXIT_NOTIONAL_AGGREGATED",
+    "baseParticipationBps": "1",
+    "stressParticipationBps": "0.5",
+    "report": [
+      "MINIMUM",
+      "P05",
+      "MEDIAN",
+      "SHARE_BELOW_AGGREGATED_SAME_SYMBOL_SAME_OPEN_REQUIRED_NOTIONAL"
+    ],
+    "quantileConvention": "P05_NEAREST_RANK_CEIL_P_TIMES_N_MINUS_ONE_ZERO_BASED_MEDIAN_IS_AVERAGE_OF_TWO_CENTRAL_VALUES_WHEN_EVEN",
+    "selectedNamesMayBeDroppedOrResizedForCapacity": false,
+    "historicalBookDepthSpreadQueueFiltersAndImpact": "UNKNOWN",
+    "executableCapacity": "UNKNOWN"
+  },
+  "statistics": {
+    "dailyMatrix": "SYNCHRONOUS_UTC_ROWS_INCLUDING_ZERO_TRADE_CASH_DAYS",
+    "bootstrap": {
+      "method": "SEEDED_SYNCHRONOUS_CIRCULAR_BLOCK_PERCENTILE",
+      "replicates": 65536,
+      "seed": 2026072905,
+      "blockLengthDays": 7,
+      "intervalCoveragePct": "90",
+      "lowerTailProbability": "0.05",
+      "upperTailProbability": "0.95",
+      "oneSidedLcbConfidencePct": "95",
+      "bonferroniLowerTailProbability": "0.0015625",
+      "estimand": "TERMINAL_NET_USD_PER_INITIAL_1000_FROM_COMPOUNDED_DAILY_LIQUIDATION_RETURNS"
+    },
+    "drawdown": {
+      "mark": "DAILY_LOW_HYPOTHETICAL_IMMEDIATE_LIQUIDATION_AFTER_EXIT_ADVERSITY_AND_SELL_FEE",
+      "highWaterAndTroughConvention": "PRIOR_CLOSE_HIGH_WATER_TO_SYNCHRONOUS_ALL_HELD_NAMES_DAILY_LOW_CONSERVATIVE_PROXY_NOT_UNRESTRICTED_INTRADAY_MDD",
+      "maximumPct": "40",
+      "exactlyMaximumPasses": true
+    },
+    "multiplicity": {
+      "family": "ALL_32_FROZEN_TRIALS_INCLUDING_EMPTY_OR_FAILED_ATTEMPTS",
+      "oneSidedAlpha": "0.05",
+      "bonferroniLcbRequired": true,
+      "holmFwerRequired": true,
+      "synchronizedWhiteRealityCheckRequired": true,
+      "siblingFamilyCorrectionOwner": "N3_SUCCESSOR_ORCHESTRATOR"
+    },
+    "pbo": {
+      "method": "REPOSITORY_Q14_CSCV_PBO",
+      "developmentChronologicalBlocks": 8,
+      "rowsPerBlock": 30,
+      "developmentRowsUsed": 240,
+      "excludedPurgedTailRows": 2,
+      "inSampleBlocks": 4,
+      "splits": 70,
+      "allTrialsIncluded": 32,
+      "zeroTradeDaysIncluded": true,
+      "selectionStatistic": "STRESS_SUM_DAILY_LOG_RETURN",
+      "tieBreak": "LOWEST_TRIAL_ID",
+      "underperformanceRule": "SELECTED_OOS_SCORE_LESS_THAN_OR_EQUAL_TO_ALL_TRIAL_OOS_MEDIAN",
+      "tieConvention": "REPOSITORY_Q14_IDENTICAL_CLONES_PBO_EQUALS_ONE",
+      "holdoutIncluded": false,
+      "role": "DIAGNOSTIC_ONLY_NOT_RANK_GATE_OR_VERDICT_OVERRIDE"
+    }
+  },
+  "gates": {
+    "development": {
+      "minimumRoundTrips": 40,
+      "minimumFills": 80,
+      "minimumDistinctSymbols": 12,
+      "minimumActiveCalendarMonths": 6,
+      "maximumDrawdownPct": "40",
+      "requireBaseNetPositive": true,
+      "requireStressNetPositive": true,
+      "requireBaseOneSided95LcbPositive": true,
+      "requireStressOneSided95LcbPositive": true,
+      "requireStressBonferroniLcbPositive": true,
+      "requireChampionHolmPass": true,
+      "requireWhiteRealityCheckPass": true,
+      "requireStressCapacityProxyAtOrAboveMaxEntryAndExitNotional": true
+    },
+    "holdout": {
+      "minimumRoundTrips": 20,
+      "minimumFills": 40,
+      "minimumDistinctSymbols": 8,
+      "minimumActiveCalendarMonths": 3,
+      "maximumDrawdownPct": "40",
+      "requireBaseNetPositive": true,
+      "requireStressNetPositive": true,
+      "requireBaseOneSided95LcbPositive": true,
+      "requireStressOneSided95LcbPositive": true,
+      "requireStressCapacityProxyAtOrAboveMaxEntryAndExitNotional": true
+    }
+  },
+  "verdict": {
+    "GO": "VALID_DEVELOPMENT_AND_SINGLE_HOLDOUT_BOTH_PASS_ALL_FROZEN_GATES",
+    "NO_GO": "VALID_MEASUREMENT_WITH_ANY_FROZEN_GATE_FAILURE_DEVELOPMENT_FAILURE_LEAVES_HOLDOUT_UNOPENED",
+    "UNMEASURED": "PROVENANCE_SCHEMA_TIMESTAMP_CAUSALITY_MATRIX_MARKER_OR_SELECTED_ENTRY_EXIT_PROOF_INVALID",
+    "capitalAuthorityAlways": "NONE"
+  }
+}

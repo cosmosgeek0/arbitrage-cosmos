@@ -1,0 +1,269 @@
+{
+  "schema": "VG9SpotUsdMVolumeShareLeadershipProtocolV1",
+  "protocolId": "vg9-binance-cross-venue-volume-share-level-spot-return-v1",
+  "taskId": "V-G9",
+  "frozenForDateUtc": "2026-07-29",
+  "canonicalBaseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "authority": {
+    "scope": "PUBLIC_PROXY_RESEARCH_ONLY",
+    "capitalAuthority": "NONE",
+    "executionAuthority": "NONE",
+    "privateApi": "FORBIDDEN",
+    "currentExchangeInfo": "FORBIDDEN",
+    "ordersTransfersWithdrawals": "FORBIDDEN",
+    "hostProviderUiDeployment": "FORBIDDEN",
+    "sharedArchiveMutation": "FORBIDDEN"
+  },
+  "hypothesis": "A high completed trailing Spot-share versus USD-M-share log level predicts higher next-week Spot-only return and contributes positive stress-net holdout excess over a matched Spot-share-only portfolio.",
+  "distinctness": {
+    "family": "CROSS_VENUE_QUOTE_VOLUME_SHARE_LEVEL_TO_FUTURE_SPOT_RETURN",
+    "signalInputs": [
+      "COMPLETED_SPOT_QUOTE_ASSET_VOLUME",
+      "COMPLETED_USD_M_QUOTE_ASSET_VOLUME",
+      "VENUE_IDENTITY",
+      "SYMBOL",
+      "UTC_OPEN_TIME"
+    ],
+    "forbiddenSignalInputs": [
+      "PRICE",
+      "RETURN",
+      "DIRECTION",
+      "VOLUME_SHOCK",
+      "SHARE_ACCELERATION",
+      "RECENT_VERSUS_PRIOR_WINDOW",
+      "BREAKOUT",
+      "TREND",
+      "VOLATILITY",
+      "BASIS",
+      "PREMIUM",
+      "FUNDING",
+      "OPEN_INTEREST",
+      "LIQUIDATION",
+      "TAKER_SIDE_IMBALANCE",
+      "TRADE_COUNT",
+      "FUTURE_ARCHIVE_COMPLETENESS"
+    ],
+    "notS1P": "NO_OWN_SYMBOL_TEMPORAL_SEQUENCE_NO_BASIS_EVENT_NO_PAIRED_TRADE",
+    "notVG8": "NO_FIVE_DAY_VERSUS_PRIOR_SIXTY_DAY_SPOT_SHARE_ACCELERATION",
+    "collisionLaw": "SAME_SIGNAL_SCHEDULE_PAYOFF_AND_MATCHED_INCREMENTAL_TEST_DISCOVERED_ELSEWHERE_MAKES_VG9_UNMEASURED_WITH_NO_REOPEN"
+  },
+  "data": {
+    "authority": "https://data.binance.vision",
+    "spotRoot": "/private/tmp/cosmos-s1f-weekly-momentum-cash-v1/archives",
+    "usdMRoot": "/private/tmp/cosmos-s1d-funding-dispersion-v1/raw/data/futures/um/monthly/klines",
+    "mode": "READ_ONLY",
+    "monthsInclusive": [
+      "2025-07",
+      "2026-06"
+    ],
+    "developmentMonthsInclusive": [
+      "2025-07",
+      "2026-02"
+    ],
+    "holdoutMonthsInclusive": [
+      "2026-03",
+      "2026-06"
+    ],
+    "spotInterval": "1d",
+    "usdMInterval": "1h",
+    "spotTimestampUnit": "MICROSECONDS",
+    "usdMTimestampUnit": "MILLISECONDS",
+    "checksumSidecarRequired": true,
+    "sourceManifestUses": "PATH_SIDECAR_CONTENT_AND_FILE_METADATA_ONLY",
+    "zipBodyBeforeDevelopmentMarker": "FORBIDDEN",
+    "holdoutZipBodyBeforeCandidateSealAndHoldoutMarker": "FORBIDDEN",
+    "networkDuringEvaluation": false
+  },
+  "universe": {
+    "symbolPattern": "^[A-Z0-9]+USDT$",
+    "membership": "POINT_IN_TIME_EXACT_COMMON_SPOT_AND_USD_M_ARCHIVE_PRESENCE_BY_MONTH",
+    "futureCompleteCoverageFilter": false,
+    "currentExchangeInfoBackfill": false,
+    "eligibility": "STRICTLY_CAUSAL_COMPLETE_POSITIVE_TRAILING_DAILY_QUOTE_VOLUME_IN_BOTH_VENUES",
+    "minimumEligibleSymbols": 20,
+    "missingSignalHistory": "INELIGIBLE_FOR_THAT_FORMATION",
+    "selectedMissingEntryOrExit": "UNMEASURED_NO_REPLACEMENT"
+  },
+  "calendar": {
+    "timezone": "UTC",
+    "publicWindow": {
+      "startInclusive": "2025-07-01",
+      "endExclusive": "2026-07-01"
+    },
+    "development": {
+      "startInclusive": "2025-07-01",
+      "endExclusive": "2026-03-01",
+      "firstCommonFormation": "2025-08-25",
+      "lastFormation": "2026-02-16",
+      "lastExit": "2026-02-24"
+    },
+    "embargo": {
+      "startInclusive": "2026-02-24",
+      "endExclusive": "2026-03-03",
+      "crossBoundaryPositionAllowed": false
+    },
+    "holdout": {
+      "startInclusive": "2026-03-01",
+      "endExclusive": "2026-07-01",
+      "firstFormation": "2026-03-02",
+      "firstEntry": "2026-03-03",
+      "lastFormation": "2026-06-22",
+      "lastExit": "2026-06-30",
+      "allowedOpenCount": 1,
+      "championOnly": true
+    },
+    "formation": "MONDAY_00_00_USING_COMPLETED_BARS_THROUGH_PRIOR_SUNDAY",
+    "entry": "TUESDAY_00_00_SPOT_OPEN_AFTER_FULL_24_HOUR_DELAY",
+    "exit": "NEXT_TUESDAY_00_00_SPOT_OPEN",
+    "holdingCalendarDays": 7
+  },
+  "signal": {
+    "trailingWindowDays": [
+      14,
+      28,
+      56
+    ],
+    "spotShare": "SYMBOL_SPOT_QUOTE_VOLUME_SUM_DIV_ELIGIBLE_UNIVERSE_SPOT_QUOTE_VOLUME_SUM_OVER_SAME_COMPLETED_WINDOW",
+    "usdMShare": "SYMBOL_USD_M_QUOTE_VOLUME_SUM_DIV_ELIGIBLE_UNIVERSE_USD_M_QUOTE_VOLUME_SUM_OVER_SAME_COMPLETED_WINDOW",
+    "score": "NATURAL_LOG_SPOT_SHARE_DIV_USD_M_SHARE",
+    "rank": "SCORE_DESC_SYMBOL_ASC",
+    "priceFree": true,
+    "usdMUse": "SIGNAL_ONLY"
+  },
+  "trials": {
+    "attemptedCount": 6,
+    "topFractions": [
+      "0.10",
+      "0.20"
+    ],
+    "trialIds": [
+      "W14_F10",
+      "W14_F20",
+      "W28_F10",
+      "W28_F20",
+      "W56_F10",
+      "W56_F20"
+    ],
+    "portfolioCount": "MAX_1_FLOOR_TOP_FRACTION_TIMES_ELIGIBLE_COUNT",
+    "weighting": "EQUAL_WEIGHT_LONG_SPOT_ONLY",
+    "rebalance": "FULL_WEEKLY_EXIT_AND_REENTRY_WITH_ROUND_TRIP_COST_PER_SELECTED_HOLDING",
+    "matchedComparator": "SAME_SCHEDULE_ELIGIBILITY_COUNT_WEIGHTING_AND_COSTS_RANKED_BY_TRAILING_SPOT_SHARE_LEVEL_ONLY",
+    "selection": "HIGHEST_DEVELOPMENT_STRESS_ONE_SIDED_95_LCB_THEN_STRESS_NET_THEN_SHORTER_WINDOW_THEN_SMALLER_FRACTION_THEN_TRIAL_ID",
+    "candidateSealedBeforeHoldout": true,
+    "holdoutFallback": "FORBIDDEN"
+  },
+  "portfolio": {
+    "initialResearchCapitalUsd": "1000",
+    "denomination": "USDT_TREATED_AS_USD_AT_FROZEN_1_TO_1",
+    "spotSide": "LONG",
+    "usdMPosition": "NONE_SIGNAL_ONLY",
+    "shorting": false,
+    "borrowing": false,
+    "leverage": false,
+    "cashYield": "0",
+    "futureSpotPriceUse": "REALIZED_PAYOFF_AFTER_SELECTION_ONLY"
+  },
+  "costs": {
+    "BASE": {
+      "spotFeeBpsPerFill": "10",
+      "adverseExecutionBpsPerFill": "10",
+      "roundTripBps": "40"
+    },
+    "STRESS": {
+      "spotFeeBpsPerFill": "10",
+      "adverseExecutionBpsPerFill": "25",
+      "roundTripBps": "70"
+    },
+    "accountEffectiveFees": "UNKNOWN",
+    "bnbVipPromotionAssumption": false,
+    "capacity": "UNKNOWN",
+    "quoteVolumeParticipation": "PUBLIC_PROXY_ONLY"
+  },
+  "validation": {
+    "canonicalPrimitives": [
+      "WalkForwardSpecV1",
+      "build_walk_forward_plan",
+      "open_holdout",
+      "block_bootstrap_interval",
+      "holm_bonferroni",
+      "pbo_cscv"
+    ],
+    "packetLocalReason": "quant_edge.derivatives.cross_market requires order-flow imbalance and equal product IDs",
+    "walkForward": {
+      "role": "SCHEDULE_MEMBERSHIP_AND_GRANT_GUARD_ONLY_NOT_SCORED_FOLD_SELECTION",
+      "folds": 1,
+      "maximumFeatureLookbackDays": 56,
+      "labelHorizonDaysFromFormation": 8,
+      "embargoDays": 64
+    }
+  },
+  "statistics": {
+    "seed": 2026072909,
+    "bootstrap": {
+      "method": "CANONICAL_SEEDED_CIRCULAR_BLOCK",
+      "replicates": 4096,
+      "blockLengthWeeks": 4,
+      "coveragePerMyriad": 9000,
+      "lowerEndpoint": "ONE_SIDED_95_PERCENT_LOWER_BOUND"
+    },
+    "multiplicity": {
+      "family": "ALL_SIX_FROZEN_TRIALS",
+      "holmFamilywiseAlpha": "0.05",
+      "whiteRealityCheck": "SYNCHRONOUS_CENTERED_CIRCULAR_BLOCK_MAX_MEAN",
+      "matchedExcessIncludedInCandidateGate": true
+    },
+    "pbo": {
+      "method": "CANONICAL_CSCV",
+      "blocks": 8,
+      "blockDefinition": "FIRST_24_COMMON_DEVELOPMENT_WEEKS_AS_EIGHT_CONTIGUOUS_THREE_WEEK_BLOCKS",
+      "splits": 70,
+      "maximum": "0.50"
+    }
+  },
+  "gates": {
+    "development": {
+      "minimumValidWeeks": 20,
+      "minimumRoundTrips": 40,
+      "minimumDistinctSymbols": 8,
+      "stressNetPositive": true,
+      "stressLowerBoundPositive": true,
+      "stressMatchedExcessPositive": true,
+      "stressMatchedExcessLowerBoundPositive": true,
+      "holmPass": true,
+      "whiteRealityCheckPass": true,
+      "maximumPbo": "0.50",
+      "maximumScheduledExitDrawdownPct": "25"
+    },
+    "holdout": {
+      "minimumValidWeeks": 14,
+      "minimumRoundTrips": 28,
+      "minimumDistinctSymbols": 8,
+      "baseNetPositive": true,
+      "stressNetPositive": true,
+      "stressLowerBoundPositive": true,
+      "stressMatchedExcessPositive": true,
+      "stressMatchedExcessLowerBoundPositive": true,
+      "maximumScheduledExitDrawdownPct": "25"
+    }
+  },
+  "verdictLaw": {
+    "GO": "VALID_COMPLETE_EVIDENCE_AND_ALL_DEVELOPMENT_MULTIPLICITY_PBO_SAMPLE_DRAWDOWN_GATES_AND_ALL_CHAMPION_HOLDOUT_BASE_STRESS_LOWER_BOUND_SAMPLE_DRAWDOWN_AND_MATCHED_EXCESS_GATES_PASS",
+    "NO_GO": "VALID_MEASURED_EVIDENCE_WITH_ONE_OR_MORE_FROZEN_GATES_FAILED",
+    "UNMEASURED": "CUSTODY_CHECKSUM_SCHEMA_COMPLETENESS_TIMESTAMP_DUPLICATE_CAUSAL_PARTITION_OR_RUN_CONTROL_FAILURE_PREVENTED_THE_FROZEN_ESTIMATE",
+    "goMeaning": "PUBLIC_PROXY_RESEARCH_ONLY",
+    "capitalAuthority": "NONE",
+    "executionAuthority": "NONE"
+  },
+  "runControl": {
+    "stateRoot": "/private/tmp/cosmos-vg9-spot-usdm-volume-leadership-v1",
+    "developmentMarker": "development_opened.v1.json",
+    "developmentResult": "development_result.v1.json",
+    "candidateSeal": "candidate_seal.v1.json",
+    "holdoutMarker": "holdout_opened.v1.json",
+    "terminalResult": "result.v1.json",
+    "trackedEvidenceDirectory": "quant/research/vg9/evidence",
+    "developmentOpenCount": 1,
+    "holdoutOpenCount": 1,
+    "postMarkerRepairRerunOrRetune": "FORBIDDEN"
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "accountEffectiveFee": "UNKNOWN",
+  "authority": {
+    "capital": "NONE",
+    "consumer": "N3 profitability verdict",
+    "effectUsd": "0",
+    "execution": "NONE",
+    "orders": "NONE",
+    "scope": "PUBLIC_RESEARCH_ONLY"
+  },
+  "capacity": {
+    "executableCapacityUsd": null,
+    "publicQuoteVolumeParticipationProxyUsd": null,
+    "status": "NOT_ESTIMABLE"
+  },
+  "completedAtUtc": "2026-07-29T15:56:59.000Z",
+  "costScenario": {
+    "accountEffectiveFee": "UNKNOWN",
+    "baseAdverseExecutionBasisPointsPerSide": 10,
+    "currentPublicRegularTakerFeeBasisPointsPerSide": 10,
+    "historicalSpreadImpact": "UNKNOWN",
+    "stressAdverseExecutionBasisPointsPerSide": 25
+  },
+  "development": {
+    "archiveBodyOpenCount": 1,
+    "completedTrialCount": 0,
+    "frozenTrialCount": 12,
+    "selectionStatus": "NOT_PERFORMED",
+    "status": "TERMINAL_SOURCE_SEMANTIC_FAILURE"
+  },
+  "drawdown": {
+    "maximumDrawdown": null,
+    "status": "NOT_ESTIMABLE"
+  },
+  "freezeSha256": "18dc3a015ec2fbbfec15dd0f26bcdc2552dc166a4dd6a24d024636868321f9e9",
+  "holdout": {
+    "endUtcDate": "2026-06-30",
+    "maximumOpenCount": 1,
+    "openCount": 0,
+    "startUtcDate": "2026-03-01",
+    "status": "UNTOUCHED_NOT_OPENED"
+  },
+  "inference": {
+    "holm": {
+      "status": "NOT_ESTIMABLE",
+      "testedCount": 0
+    },
+    "pbo": {
+      "diagnosticOnly": true,
+      "status": "NOT_ESTIMABLE"
+    },
+    "whiteRealityCheck": {
+      "status": "NOT_ESTIMABLE",
+      "testedCount": 0
+    }
+  },
+  "netEdge": {
+    "baseNetUsdPer1000": null,
+    "exactness": "NOT_ESTIMABLE",
+    "grossUsdPer1000": null,
+    "stressNetUsdPer1000": null
+  },
+  "reason": {
+    "code": "DUPLICATE_FULL_DAILY_BAR",
+    "detail": "AXSUSDT 2026-02 contains byte-identical full daily rows at CSV lines 10 and 11 for openTimeUs 1770681600000000.",
+    "phase": "DEVELOPMENT_SOURCE_SEMANTIC_VALIDATION",
+    "protocolDisposition": "UNMEASURED"
+  },
+  "repairOrRerunPerformed": false,
+  "schema": "VG2ResultV1",
+  "sourceManifestSha256": "641ca6b37987aca8efd051cd0a517d3bf0fdff4a6afd4f36f8238c14c401a9d6",
+  "terminalEvidenceBytes": 1333,
+  "terminalEvidenceSha256": "ae67d93f614fa0ebb0e8ba324df42d65cd73490349836ca0dea578b245473a57",
+  "verdict": "UNMEASURED"
+}

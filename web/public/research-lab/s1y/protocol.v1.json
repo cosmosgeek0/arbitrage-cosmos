@@ -1,0 +1,192 @@
+{
+  "base_commit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "calendar": {
+    "development": "[2025-07-01T00:00:00Z,2026-03-01T00:00:00Z)",
+    "embargo": "[2026-03-01T00:00:00Z,2026-03-08T00:00:00Z)",
+    "holdout": "[2026-03-08T00:00:00Z,2026-07-01T00:00:00Z)",
+    "planned_economic_window": "[2025-07-01T00:00:00Z,2026-07-01T00:00:00Z)",
+    "timezone": "UTC",
+    "warmup": "[2025-05-01T00:00:00Z,2025-07-01T00:00:00Z)"
+  },
+  "consumer": {
+    "product_authority": "NONE",
+    "purpose": "PROFITABILITY_SCOREBOARD_INPUT",
+    "task": "N3_SUCCESSOR_OR_ORCHESTRATOR"
+  },
+  "development_gates": {
+    "base_total_gt_usd": "0",
+    "capacity_proxy_p05_gte_usd": "1000",
+    "holm_adjusted_primary_p_lte": "0.05",
+    "maximum_drawdown_lte_fraction_of_capital": "0.10",
+    "minimum_active_iso_weeks": 12,
+    "minimum_distinct_pairs": 3,
+    "minimum_primary_trades": 20,
+    "reality_check_p_lte": "0.05",
+    "stress_bootstrap_90pct_lower_gt_usd": "0",
+    "stress_total_gt_usd": "0",
+    "trade_directions": "BOTH_REQUIRED"
+  },
+  "distinctness": {
+    "family": "FIXED_PAIR_TWO_USDM_PERPETUAL_LOG_PRICE_RESIDUAL_MEAN_REVERSION",
+    "forbidden_signal_inputs": [
+      "Spot price or Spot leg",
+      "basis",
+      "Premium Index or mark-index dislocation",
+      "funding level, change, cadence, or rank",
+      "volume or taker metadata",
+      "open interest",
+      "cross-sectional residual cohorts",
+      "residual momentum",
+      "outcome-ranked pair selection"
+    ],
+    "funding_role": "PNL_ONLY_NEVER_SIGNAL",
+    "not_s1z": "Pairwise fixed-topology residual contrarian entry; never a cross-sectional residual-momentum cohort."
+  },
+  "economics": {
+    "capital_usd": "1000",
+    "compounding": false,
+    "gross_usd": "1000",
+    "leverage_claim": "NONE",
+    "scenarios": {
+      "base": {
+        "adverse_execution_bps_per_fill": "2",
+        "illustrative_taker_fee_bps_per_fill": "5"
+      },
+      "severe": {
+        "adverse_execution_bps_per_fill": "10",
+        "illustrative_taker_fee_bps_per_fill": "10"
+      },
+      "stress": {
+        "adverse_execution_bps_per_fill": "5",
+        "illustrative_taker_fee_bps_per_fill": "8"
+      }
+    },
+    "account_effective_commission": "UNKNOWN",
+    "capacity_proxy": {
+      "executable_capacity": "UNKNOWN",
+      "participation_bps": "1",
+      "source": "Each leg's prior complete UTC-day contract quote volume",
+      "strategy_capacity": "Minimum leg capacity divided by its frozen gross-weight fraction"
+    },
+    "execution_proxy": "Signal on complete hourly close; enter or exit at the next hourly contract open.",
+    "funding_cadence_custody": "Treat each current row's funding_interval_hours as the elapsed cadence since the prior settlement; adjacent timestamps and leading/trailing segment coverage must match within 59999 ms, including after development/deferred merge.",
+    "funding_proxy": "Actual settled funding rate multiplied by entry quantity and the mark-price hourly open containing fundingTime; fundingTime may be 0 through 59999 ms after the hour and only events strictly inside the position are booked."
+  },
+  "holdout_gates": {
+    "capacity_proxy_p05_gte_usd": "1000",
+    "maximum_drawdown_lte_fraction_of_capital": "0.10",
+    "minimum_active_iso_weeks": 6,
+    "minimum_distinct_pairs": 2,
+    "minimum_primary_trades": 8,
+    "stress_bootstrap_90pct_lower_gt_usd": "0",
+    "stress_total_gt_usd": "0",
+    "trade_directions": "BOTH_REQUIRED"
+  },
+  "milestone": "S-1Y",
+  "pairs": [
+    ["BTCUSDT", "ETHUSDT"],
+    ["SOLUSDT", "AVAXUSDT"],
+    ["XRPUSDT", "ADAUSDT"],
+    ["DOGEUSDT", "1000SHIBUSDT"],
+    ["LTCUSDT", "BCHUSDT"],
+    ["LINKUSDT", "DOTUSDT"]
+  ],
+  "schema": "cosmos.s1y.protocol.v1",
+  "scope": {
+    "capital_authority": "NONE",
+    "execution_authority": "NONE",
+    "host": false,
+    "money": false,
+    "orders": false,
+    "private_api": false,
+    "provider": false,
+    "public_only": true,
+    "shared_archive": "/private/tmp/cosmos-s1d-funding-dispersion-v1/raw",
+    "shared_archive_policy": "READ_ONLY",
+    "test_orders": false,
+    "transfers": false,
+    "ui": false,
+    "withdrawals": false
+  },
+  "sealing": {
+    "candidate_seal_before_holdout": true,
+    "failure_policy": "RUN_REMAINS_CONSUMED",
+    "freeze_before_outcomes": true,
+    "holdout_archive_bodies_before_admission": "UNREAD_UNHASHED",
+    "holdout_marker_before_first_holdout_zip_hash": true,
+    "run_marker_before_first_development_member_open": true,
+    "run_marker_create_once": true,
+    "run_once": true
+  },
+  "signal": {
+    "entry": "At complete hour t, use an OLS model estimated only on closes strictly before t; trade residual at close t at open t+1h.",
+    "exit_z_abs_lte": "0.5",
+    "gross_weighting": "A weight=1/(1+beta), B weight=beta/(1+beta), gross scaled to $1000",
+    "maximum_one_position": "One global $1000 pair position at a time per trial; choose greatest absolute eligible z, tie by frozen pair order.",
+    "model": "log(P_A)=alpha+beta*log(P_B)+residual",
+    "model_admission": {
+      "beta": "[0.25,4.0]",
+      "engle_granger_residual_df_t_lte": "-3.34",
+      "maximum_ar1_half_life_hours": "168",
+      "minimum_r_squared": "0.60",
+      "residual_ar1_phi": "(0,1)"
+    },
+    "model_schedule": "Refit alpha, beta, sigma, residual AR(1), and residual DF statistic once at 00:00 UTC from closes strictly before that timestamp; use that fixed model for the UTC day.",
+    "position": "Positive residual short A/long beta-weighted B; negative residual long A/short beta-weighted B. Entry alpha, beta, and sigma stay fixed for exit/stop tests and quantities; there is no rebalance.",
+    "stop_z_abs_gte": "4.0"
+  },
+  "sources": {
+    "checksum": "SHA-256 adjacent publisher sidecar required",
+    "datasets": [
+      "monthly USD-M contract klines 1h",
+      "monthly USD-M mark-price klines 1h",
+      "monthly USD-M fundingRate"
+    ],
+    "months": [
+      "2025-05",
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03",
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ],
+    "official_source_note": "OFFICIAL_SOURCE_RESEARCH.md"
+  },
+  "statistics": {
+    "bootstrap": {
+      "confidence": "0.90",
+      "method": "Common-seeded circular seven-day block bootstrap over synchronous UTC days including zero days",
+      "replicates": 4096,
+      "seed": 2026073005
+    },
+    "drawdown": "Maximum peak-to-trough loss in hourly marked stress equity using contract hourly opens, entry and exit costs at their event hours, and funding at settlement.",
+    "holm": "One-sided centered block-bootstrap p-values, Holm-adjusted across all 12 trials",
+    "pbo": {
+      "chronological_blocks": 8,
+      "method": "Complete CSCV across 4-of-8 development blocks",
+      "role": "DIAGNOSTIC_ONLY"
+    },
+    "reality_check": "Common-seeded centered maximum-mean block-bootstrap test across all 12 trials"
+  },
+  "trial_family": {
+    "entry_z_abs": ["1.5", "2.0", "2.5"],
+    "lookback_hours": [720, 1440],
+    "maximum_hold_hours": [72, 168],
+    "primary_trial_id": "lb1440_entry2p0_hold168",
+    "trial_count": 12
+  },
+  "verdict_law": {
+    "custody_schema_seal_or_required_metric_failure": "UNMEASURED",
+    "development_or_holdout_economic_gate_failure": "NO_GO",
+    "go": "STRUCTURALLY_UNAVAILABLE_PUBLIC_ONLY",
+    "positive_public_proxy_with_execution_or_account_truth_unknown": "UNMEASURED"
+  }
+}

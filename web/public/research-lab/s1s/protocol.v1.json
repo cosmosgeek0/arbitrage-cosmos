@@ -1,0 +1,192 @@
+{
+  "schema": "S1SProtocolV1",
+  "protocolId": "s1s-binance-usdm-pre-settlement-funding-squeeze-v1",
+  "canonicalBaseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "consumer": "N3 successor/orchestrator scoreboard",
+  "hypothesis": "A causally observed extreme positive funding-pressure state can precede compression of positive Spot-to-USD-M basis before the advertised settlement.",
+  "distinctFromS1R": {
+    "s1sDecision": "strictly before advertised settlement",
+    "s1sOutcome": "entry through five minutes before advertised settlement",
+    "s1sAllowedFundingInput": "prior settled rates only",
+    "s1sForbiddenInputs": [
+      "target-event realized funding rate",
+      "target-event settlement mark",
+      "post-settlement price",
+      "S1R outcome bytes"
+    ],
+    "s1rBoundary": "post-settlement reversion"
+  },
+  "universe": {
+    "symbols": [
+      "BTCUSDT",
+      "ETHUSDT"
+    ],
+    "venues": [
+      "Binance Spot",
+      "Binance USD-M perpetual"
+    ],
+    "selection": "fixed before outcomes; no replacement or current-exchangeInfo filter"
+  },
+  "partitions": {
+    "development": {
+      "startInclusive": "2025-07-01T00:00:00Z",
+      "endExclusive": "2026-04-01T00:00:00Z"
+    },
+    "holdout": {
+      "startInclusive": "2026-04-01T00:00:00Z",
+      "endExclusive": "2026-07-01T00:00:00Z"
+    },
+    "holdoutPolicy": "open only after every development promotion gate passes"
+  },
+  "requiredCausalScheduleEvidence": {
+    "required": true,
+    "acceptedForms": [
+      "timestamped historical premiumIndex snapshot containing nextFundingTime before entry",
+      "timestamped historical fundingInfo plus nextFundingTime state before entry",
+      "complete historical schedule-change ledger with publication timestamps"
+    ],
+    "forbiddenSubstitutions": [
+      "eventual funding calc_time",
+      "backward alignment from a realized funding row",
+      "hard-coded 00:00/08:00/16:00 UTC grid",
+      "current fundingInfo applied historically"
+    ],
+    "missingEvidenceDisposition": "UNMEASURED"
+  },
+  "signal": {
+    "rateSemantics": "PRIOR_SETTLED",
+    "rateZScore": "prior settled rate versus the preceding frozen lookback",
+    "basisProxy": "last complete 5m USD-M contract close divided by Spot close minus one",
+    "basisRequiredPositive": true,
+    "signalCutoffMinutesBeforeEntry": 5,
+    "targetEventRealizedRateAllowed": false,
+    "postSettlementObservationAllowed": false
+  },
+  "position": {
+    "direction": "long Spot, short USD-M perpetual",
+    "baseQuantity": "equal across legs",
+    "grossReferenceUsd": 1000,
+    "perSymbolAllocation": "equal across simultaneously active fixed-universe signals",
+    "compounding": false,
+    "leverageClaim": false,
+    "fundingCashflow": "must be structurally zero only when advertised settlement chronology is proven"
+  },
+  "execution": {
+    "barInterval": "5m",
+    "entry": "exact contract and Spot bar open at advertised settlement minus entryLeadMinutes",
+    "exit": "exact contract and Spot bar open five minutes before advertised settlement",
+    "minimumExitBufferSeconds": 300,
+    "makerAssumption": false,
+    "missingSelectedFillDisposition": "UNMEASURED"
+  },
+  "trialFamily": {
+    "count": 12,
+    "lookbackEvents": [
+      6,
+      12
+    ],
+    "zThresholds": [
+      1.5,
+      2.5
+    ],
+    "entryLeadMinutes": [
+      30,
+      60,
+      120
+    ],
+    "primaryTrialId": "lb12_z2p5_lead60",
+    "extraTrialDisposition": "FAMILY_CONTAMINATED"
+  },
+  "costScenarios": {
+    "PUBLIC_TAKER_PROXY": {
+      "spotFeeBpsPerFill": 10,
+      "usdmFeeBpsPerFill": 5,
+      "adverseExecutionBpsPerFillPerLeg": 2,
+      "authority": false
+    },
+    "TAKER_STRESS": {
+      "spotFeeBpsPerFill": 10,
+      "usdmFeeBpsPerFill": 10,
+      "adverseExecutionBpsPerFillPerLeg": 5,
+      "authority": false
+    },
+    "TAKER_SEVERE_DIAGNOSTIC": {
+      "spotFeeBpsPerFill": 10,
+      "usdmFeeBpsPerFill": 10,
+      "adverseExecutionBpsPerFillPerLeg": 10,
+      "authority": false
+    },
+    "accountEffectiveFees": "UNKNOWN"
+  },
+  "capacity": {
+    "label": "PUBLIC_COARSE_VOLUME_PARTICIPATION_PROXY",
+    "volumeInput": "strictly prior complete UTC-day Spot and USD-M quote volume",
+    "reference": "minimum of previous complete day and trailing-seven-complete-day median",
+    "participationBps": {
+      "proxy": 0.5,
+      "stress": 0.25,
+      "severe": 0.1
+    },
+    "minimumStressGrossUsd": 1000,
+    "executableCapacityUsd": "UNKNOWN"
+  },
+  "inference": {
+    "dailyAggregation": "synchronous UTC daily portfolio observations including zero days",
+    "bootstrap": {
+      "replicates": 4096,
+      "blockLengthDays": 7,
+      "seed": 20260729,
+      "plusOnePValues": true
+    },
+    "multiplicity": {
+      "holmFamilywiseAlpha": 0.05,
+      "whiteRealityCheck": true,
+      "simultaneousLowerBoundAlpha": 0.004166666666666667,
+      "globalRegistryRequired": true
+    },
+    "pbo": {
+      "blocks": 12,
+      "trainBlocks": 6,
+      "splits": 924,
+      "diagnosticOnly": true,
+      "warningThreshold": 0.5
+    }
+  },
+  "gates": {
+    "developmentMinimumTrades": 24,
+    "developmentMinimumActiveWeeks": 12,
+    "developmentMinimumSymbols": 2,
+    "holdoutMinimumTrades": 8,
+    "holdoutMinimumActiveWeeks": 6,
+    "holdoutMinimumSymbols": 2,
+    "baseAndStressNetPositive": true,
+    "familywiseLowerBoundPositive": true,
+    "holdoutLowerBoundPositive": true,
+    "stressMaxDrawdownFraction": 0.1,
+    "stressCapacityAtLeastUsd": 1000
+  },
+  "verdictLaw": {
+    "validMeasuredFailure": "NO_GO",
+    "missingCausalScheduleEvidence": "UNMEASURED",
+    "publicProxyPassWithUnknownAccountFeesOrExecutableCapacity": "UNMEASURED_WITH_CAPITAL_NO_GO",
+    "goRequires": [
+      "causal schedule proof",
+      "development and untouched holdout pass",
+      "multiplicity and PBO available",
+      "account-effective costs known",
+      "executable capacity known"
+    ]
+  },
+  "authority": {
+    "execution": "NONE",
+    "privateRead": "NONE",
+    "orders": "NONE",
+    "transfers": "NONE",
+    "withdrawals": "NONE",
+    "provider": "NONE",
+    "host": "NONE",
+    "deployment": "NONE",
+    "ui": "NONE",
+    "moneyMovedUsd": 0
+  }
+}

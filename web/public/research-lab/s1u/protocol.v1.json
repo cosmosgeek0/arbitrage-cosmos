@@ -1,0 +1,233 @@
+{
+  "schema": "s1u.protocol.v1",
+  "strategy_id": "S-1U",
+  "strategy_family": "USD_M_SETTLEMENT_ANCHORED_LAGGED_TAKER_BUY_IMBALANCE_CONTRARIAN_RESPONSE",
+  "canonical_base": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "distinctness": {
+    "directional_conditioner": "lagged USD-M taker-buy quote imbalance only",
+    "funding_role": "observed settlement timestamp only",
+    "explicitly_not_s1t": "funding-interval level, transition, or change never conditions selection, direction, horizon, allocation, or validity",
+    "comparison_record": "DISTINCTNESS.md"
+  },
+  "freeze_rule": "The committed protocol, evaluator, verifier, tests, source note, universe, windows, trial family, costs, statistics, gates, and custody rules are immutable before any study body is requested.",
+  "sources": {
+    "root": "https://data.binance.vision/data/futures/um/monthly",
+    "kline_path": "klines/{symbol}/5m/{symbol}-5m-{month}.zip",
+    "funding_path": "fundingRate/{symbol}/{symbol}-fundingRate-{month}.zip",
+    "checksum_suffix": ".CHECKSUM",
+    "kline_csv_header": [
+      "open_time",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "close_time",
+      "quote_volume",
+      "count",
+      "taker_buy_volume",
+      "taker_buy_quote_volume",
+      "ignore"
+    ],
+    "funding_csv_header": [
+      "calc_time",
+      "funding_interval_hours",
+      "last_funding_rate"
+    ],
+    "transport_retries_within_single_invocation": 3,
+    "publisher": "Binance",
+    "market": "USD-M Futures",
+    "public_only": true
+  },
+  "clock": {
+    "bar_interval_ms": 300000,
+    "settlement_bucket_ms": 60000,
+    "maximum_bucket_deviation_ms": 30000,
+    "minimum_signal_lag_ms": 300000,
+    "entry_grid_offset_ms": 300000,
+    "minimum_entry_delay_ms": 240000,
+    "funding_clock": "observed_archive_calc_time_only",
+    "candidate_denominator": "union of observed per-member settlement buckets; missing, duplicate, or over-deviation members make the full candidate cash",
+    "nominal_schedule_forbidden": true,
+    "event_funding_cashflow_booked": false,
+    "next_observed_settlement_must_be_after_exit": true
+  },
+  "window": {
+    "prehistory_start": "2025-06-01T00:00:00Z",
+    "study_start": "2025-07-01T00:00:00Z",
+    "development_end": "2026-04-01T00:00:00Z",
+    "holdout_end": "2026-07-01T00:00:00Z",
+    "development_months": [
+      "2025-06",
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03"
+    ],
+    "holdout_months": [
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ],
+    "holdout_body_policy": "NOT_REQUESTED_NOT_HASHED_NOT_DECOMPRESSED_NOT_PARSED_UNLESS_ALL_DEVELOPMENT_GATES_PASS"
+  },
+  "universe": {
+    "selection": "fixed_predeclared_no_replacement",
+    "symbols": [
+      "BTCUSDT",
+      "ETHUSDT",
+      "BNBUSDT",
+      "SOLUSDT",
+      "XRPUSDT",
+      "DOGEUSDT"
+    ],
+    "instrument": "USD-M perpetual contract archive",
+    "historical_membership_substitution": false
+  },
+  "signal": {
+    "field": "quote_notional_taker_buy_imbalance",
+    "formula": "(2*taker_buy_quote_volume-quote_volume)/quote_volume",
+    "range": [
+      -1.0,
+      1.0
+    ],
+    "lookback_minutes": [
+      30,
+      60,
+      180
+    ],
+    "direction": "contrarian",
+    "long": "two lowest lagged imbalances",
+    "short": "two highest lagged imbalances",
+    "tail_size": 2,
+    "atomic_boundary_ties": "cash",
+    "fully_closed_consecutive_bars_only": true
+  },
+  "response": {
+    "horizon_minutes": [
+      15,
+      30,
+      45
+    ],
+    "entry_price": "exact frozen UTC grid open after settlement",
+    "exit_price": "exact frozen UTC grid open at response horizon",
+    "return": "signed linear-contract price return",
+    "trials": 9
+  },
+  "allocation": {
+    "cohort_notional_usd": 1000.0,
+    "long_notional_usd": 500.0,
+    "short_notional_usd": 500.0,
+    "member_notional_usd": 250.0,
+    "rule": "every common-settlement trial is either the complete four-position cohort or exactly 1000 USD cash with zero PnL",
+    "partial_cohort": false,
+    "renormalization": false
+  },
+  "costs": {
+    "all_fills": "taker",
+    "charged_on_entry_and_exit_notional": true,
+    "scenarios": {
+      "base": {
+        "public_fee_bp_per_fill": 5.0,
+        "adverse_execution_bp_per_fill": 2.0
+      },
+      "stress": {
+        "public_fee_bp_per_fill": 8.0,
+        "adverse_execution_bp_per_fill": 5.0
+      },
+      "severe": {
+        "public_fee_bp_per_fill": 10.0,
+        "adverse_execution_bp_per_fill": 10.0
+      }
+    },
+    "account_effective_fee": "UNKNOWN",
+    "spread_depth_queue_latency_impact_fill_probability": "UNKNOWN"
+  },
+  "capacity": {
+    "measure": "prior_complete_UTC_day_contract_quote_volume",
+    "participation_rate": 0.0001,
+    "cohort_formula": "2*tail_size*participation_rate*minimum_selected_member_prior_day_quote_volume",
+    "development_gate_p05_usd": 10000.0,
+    "executable_capacity": "UNKNOWN"
+  },
+  "statistics": {
+    "selection_metric": "development_base_net_usd_per_1000",
+    "selection_tie_break": "lexicographic_trial_id",
+    "daily_calendar": "complete_UTC_days_with_zero_cash_days",
+    "bootstrap": {
+      "replicates": 4096,
+      "seed": 20260729,
+      "circular_block_days": 7,
+      "pointwise_interval": 0.95,
+      "familywise_method": "Bonferroni lower quantile across nine trials"
+    },
+    "multiplicity": {
+      "one_sided_centered_block_p": true,
+      "holm": true,
+      "white_reality_check": true
+    },
+    "pbo": {
+      "method": "CSCV",
+      "chronological_blocks": 12,
+      "train_blocks": 6,
+      "splits": 924,
+      "role": "predeclared development research gate; never capital authority"
+    },
+    "drawdown": "maximum peak-to-trough loss on complete daily cumulative base PnL divided by fixed 1000 USD"
+  },
+  "development_gates": {
+    "candidate_common_settlements_min": 500,
+    "active_cohorts_min": 450,
+    "active_weeks_min": 34,
+    "each_symbol_long_min": 20,
+    "each_symbol_short_min": 20,
+    "base_net_usd_per_1000_gt": 0.0,
+    "stress_net_usd_per_1000_gt": 0.0,
+    "pointwise_lower_bound_gt": 0.0,
+    "familywise_lower_bound_gt": 0.0,
+    "champion_holm_p_lte": 0.05,
+    "white_reality_check_p_lte": 0.05,
+    "pbo_lte": 0.5,
+    "max_drawdown_lte": 0.1,
+    "capacity_p05_usd_gte": 10000.0
+  },
+  "holdout_gates_if_opened": {
+    "active_cohorts_min": 140,
+    "base_net_usd_per_1000_gt": 0.0,
+    "stress_net_usd_per_1000_gt": 0.0,
+    "pointwise_lower_bound_gt": 0.0,
+    "max_drawdown_lte": 0.1
+  },
+  "verdict_law": {
+    "development_gate_failure": "NO_GO_DEVELOPMENT_HOLDOUT_UNOPENED",
+    "measurement_failure_after_run_marker": "UNMEASURED_RUN_CONSUMED_NO_RERUN",
+    "public_proxy_pass": "PUBLIC_PROXY_PASS_CAPITAL_NO_GO",
+    "capital_authority": "NO_GO_WHILE_ACCOUNT_EFFECTIVE_FEES_AND_EXECUTABLE_CAPACITY_ARE_UNKNOWN"
+  },
+  "forbidden": [
+    "Spot data",
+    "basis",
+    "premium index",
+    "open interest",
+    "funding sign or magnitude as signal",
+    "funding acceleration",
+    "funding interval transition",
+    "funding rank",
+    "funding carry",
+    "maker-fill claims",
+    "credentials",
+    "private endpoints",
+    "orders",
+    "transfers",
+    "withdrawals",
+    "providers",
+    "cloud or host mutation",
+    "UI mutation",
+    "canonical-branch mutation"
+  ]
+}

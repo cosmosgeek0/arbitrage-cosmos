@@ -1,0 +1,264 @@
+{
+  "schema": "cosmos.s1q.protocol.v1",
+  "milestone": "S-1Q",
+  "title": "Binance USD-M funding-sign-flip post-settlement cross-sectional mean reversion",
+  "frozen_at": "2026-07-29T16:18:50Z",
+  "base_commit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "consumer": {
+    "task": "N3_SUCCESSOR_OR_ORCHESTRATOR",
+    "purpose": "PROFITABILITY_SCOREBOARD_INPUT",
+    "product_authority": "NONE"
+  },
+  "scope": {
+    "public_only": true,
+    "shared_archive": "/private/tmp/cosmos-s1d-funding-dispersion-v1/raw",
+    "shared_archive_policy": "READ_ONLY",
+    "external_state_root": "/private/tmp/cosmos-s1q-usdm-funding-sign-flip-v1",
+    "private_api": false,
+    "host": false,
+    "ui": false,
+    "orders": false,
+    "test_orders": false,
+    "transfers": false,
+    "withdrawals": false,
+    "money": false,
+    "execution_authority": "NONE",
+    "capital_authority": "NONE"
+  },
+  "official_source_freeze": {
+    "path": "OFFICIAL_SOURCE_RESEARCH.md",
+    "sha256": "e004c202895b05039d14e1c443bcf3556fd04170b4d245fbb662e818ebf71e6b",
+    "publication_causality": "UNKNOWN",
+    "archive_rate_type": "UNKNOWN",
+    "account_effective_commission": "UNKNOWN",
+    "go_structurally_reachable": false
+  },
+  "distinctness": {
+    "family": "CROSS_SECTIONAL_PAIRED_FUNDING_SIGN_TRANSITION_EVENT_MEAN_REVERSION",
+    "not_s1n": "No cross-sectional funding-level rank, dispersion tail, carry, or multi-day funding-level portfolio.",
+    "not_s1o": "No own-symbol same-sign persistence, open-interest conditioning, or settlement-to-settlement hold.",
+    "not_s1p": "No spot leg, volume lead, basis, premium, or delayed basis cross.",
+    "not_s1m": "No funding acceleration, second difference, z-score, or own-history rank.",
+    "forbidden": [
+      "funding level rank or carry",
+      "premium or basis signal",
+      "volume signal",
+      "spot leg",
+      "funding acceleration or z-score",
+      "forecast funding",
+      "current exchangeInfo historical membership",
+      "current fundingInfo historical cadence",
+      "outcome-aware symbol replacement",
+      "maker or fill claim"
+    ]
+  },
+  "calendar": {
+    "timezone": "UTC",
+    "screen_and_warmup": "[2025-04-01T00:00:00Z,2025-07-01T00:00:00Z)",
+    "screen_month": "2025-06",
+    "development": "[2025-07-01T00:00:00Z,2026-04-01T00:00:00Z)",
+    "embargo": "[2026-04-01T00:00:00Z,2026-04-08T00:00:00Z)",
+    "holdout": "[2026-04-08T00:00:00Z,2026-07-01T00:00:00Z)",
+    "development_months": [
+      "2025-07",
+      "2025-08",
+      "2025-09",
+      "2025-10",
+      "2025-11",
+      "2025-12",
+      "2026-01",
+      "2026-02",
+      "2026-03"
+    ],
+    "holdout_months": [
+      "2026-04",
+      "2026-05",
+      "2026-06"
+    ]
+  },
+  "universe": {
+    "frozen_before_development": true,
+    "candidate_keys": "Official archive symbol directory keys with June 2025 fundingRate, contract 1h, and mark-price 1h cells.",
+    "screen": "Top 40 symbols by complete June 2025 contract-kline quote asset volume, descending quote volume then ascending symbol.",
+    "required_june_hours": 720,
+    "stable_fiat_and_leveraged_token_exclusions": true,
+    "future_completeness_used_for_selection": false,
+    "missing_future_data_rule": "Invalidate the complete timestamp cohort; never substitute a symbol.",
+    "manifest": "universe.v1.json"
+  },
+  "sources": {
+    "checksum_algorithm": "sha256",
+    "publisher_checksum_required": true,
+    "zip_max_bytes": 268435456,
+    "single_member_required": true,
+    "datasets": [
+      {
+        "id": "fundingRate",
+        "path": "data/futures/um/monthly/fundingRate/{symbol}/{symbol}-fundingRate-{month}.zip",
+        "required_header": [
+          "calc_time",
+          "funding_interval_hours",
+          "last_funding_rate"
+        ]
+      },
+      {
+        "id": "klines_1h",
+        "path": "data/futures/um/monthly/klines/{symbol}/1h/{symbol}-1h-{month}.zip",
+        "required_width": 12
+      },
+      {
+        "id": "markPriceKlines_1h",
+        "path": "data/futures/um/monthly/markPriceKlines/{symbol}/1h/{symbol}-1h-{month}.zip",
+        "required_width": 12
+      }
+    ],
+    "source_manifest": "source_manifest.v1.json",
+    "freeze_manifest": "freeze.v1.json",
+    "holdout_freeze_policy": "Before development admission, read only holdout path, stat size, sidecar bytes, sidecar SHA-256, and publisher-declared SHA-256. Do not read, hash, list, or decompress holdout ZIP payloads.",
+    "holdout_verification": "After candidate seal and HOLDOUT_OPEN marker only, hash the ZIP payload against the frozen publisher declaration, then validate member, header, schema, and times."
+  },
+  "event": {
+    "decision_time": "Actual settled funding timestamp t from the archive.",
+    "adjacency": "Consecutive rows for one symbol only; timestamps strictly increase with no duplicate or intervening row.",
+    "cadence": "Previous and current historical funding_interval_hours must be equal and timestamp delta must equal that interval exactly.",
+    "nonzero": "Previous and current settled funding rates must both be nonzero.",
+    "transition": {
+      "positive_to_negative": "LONG",
+      "negative_to_positive": "SHORT"
+    },
+    "shock_bps_8h_equivalent": "abs(current_rate - previous_rate) * 10000 * 8 / funding_interval_hours",
+    "cross_section": "At the exact timestamp and threshold, include every eligible flip; require at least two long and two short symbols.",
+    "entry": "Next complete hourly contract-kline open strictly after settlement.",
+    "exit": "Contract-kline open exactly hold_hours after entry.",
+    "position": "$500 long basket and $500 short basket, equal dollars within each direction.",
+    "overlap": "At most one $1,000 cohort per trial; chronological events whose entry precedes the prior accepted exit are skipped.",
+    "event_funding": "Not booked.",
+    "later_funding": "Only actual rows strictly inside (entry, exit), valued with the exact-timestamp hourly mark open.",
+    "missing_data": "Any missing required row invalidates the complete cohort; no symbol substitution."
+  },
+  "trial_family": {
+    "shock_threshold_bps_8h_equivalent": [
+      "0",
+      "0.5",
+      "1",
+      "2"
+    ],
+    "hold_hours": [
+      1,
+      3,
+      6
+    ],
+    "trial_count": 12,
+    "primary_trial_id": "shock_1bps_hold_3h",
+    "primary_predeclared": true,
+    "selection_from_outcomes": false
+  },
+  "economics": {
+    "capital_usd": "1000",
+    "gross_usd": "1000",
+    "side_notional_usd": "500",
+    "compounding": false,
+    "leverage_claim": "NONE",
+    "scenarios": {
+      "base": {
+        "taker_fee_bps_per_fill": "5",
+        "adverse_execution_bps_per_fill": "2"
+      },
+      "stress": {
+        "taker_fee_bps_per_fill": "8",
+        "adverse_execution_bps_per_fill": "5"
+      },
+      "severe": {
+        "taker_fee_bps_per_fill": "10",
+        "adverse_execution_bps_per_fill": "10"
+      }
+    },
+    "account_effective_commission": "UNKNOWN",
+    "price_proxy": "Hourly contract-kline open; not a fill.",
+    "funding_mark_proxy": "Exact-timestamp hourly mark-price open; not an executable price.",
+    "capacity_proxy": {
+      "source": "Prior complete UTC-day contract quote volume.",
+      "participation_bps": "1",
+      "required": "Every position's assigned notional is at most one basis point of prior-day quote volume.",
+      "executable_capacity": "UNKNOWN"
+    }
+  },
+  "statistics": {
+    "daily_matrix": "Synchronous UTC development days for all 12 trials, including zero days.",
+    "bootstrap": {
+      "method": "Common-seeded circular 7-day block bootstrap.",
+      "replicates": 4096,
+      "seed": 2026072904,
+      "familywise_alpha": "0.05",
+      "lower_bound": "One-sided basic bootstrap lower bound with Bonferroni alpha/12."
+    },
+    "holm": "One-sided centered circular-block p-values, Holm step-down across all 12 trials.",
+    "reality_check": "Synchronous centered maximum-mean circular-block reality-check p-value.",
+    "pbo": {
+      "method": "Complete CSCV",
+      "chronological_blocks": 12,
+      "in_sample_blocks": 6,
+      "complete_cells": 924,
+      "maximum": "0.50",
+      "diagnostic_only": false
+    }
+  },
+  "development_gates": {
+    "publication_causality": "KNOWN_REQUIRED",
+    "archive_regular_rate_type": "KNOWN_REQUIRED",
+    "minimum_primary_cohorts": 60,
+    "minimum_active_iso_weeks": 20,
+    "minimum_unique_long_symbols": 12,
+    "minimum_unique_short_symbols": 12,
+    "leave_best_symbol_stress_total_gt_usd": "0",
+    "leave_best_month_stress_total_gt_usd": "0",
+    "stress_maximum_drawdown_lte_fraction_of_capital": "0.10",
+    "familywise_bootstrap_lower_bound_gt_usd_per_day": "0",
+    "holm_adjusted_p_lte": "0.05",
+    "reality_check_p_lte": "0.05",
+    "pbo_lte": "0.50",
+    "capacity_proxy": "PASS"
+  },
+  "holdout_gates": {
+    "minimum_primary_cohorts": 20,
+    "minimum_active_iso_weeks": 8,
+    "minimum_unique_long_symbols": 8,
+    "minimum_unique_short_symbols": 8,
+    "stress_total_gt_usd": "0",
+    "stress_bootstrap_lower_bound_gt_usd_per_day": "0",
+    "leave_best_symbol_stress_total_gt_usd": "0",
+    "leave_best_month_stress_total_gt_usd": "0",
+    "stress_maximum_drawdown_lte_fraction_of_capital": "0.10",
+    "capacity_proxy": "PASS"
+  },
+  "sealing": {
+    "preseal": "preseal.v1.json binds the source note, protocol, evaluator, and tests before any June screen/warmup member decompression.",
+    "june_screen_rule": "Only after preseal, open June 2025 contract-kline members for the pre-development volume screen; no July 2025 or later member is opened.",
+    "final_freeze": "freeze.v1.json binds the preseal, selected universe, June screen receipt, source manifest, protocol, evaluator, tests, and official source note before development.",
+    "freeze_binds": [
+      "OFFICIAL_SOURCE_RESEARCH.md",
+      "protocol.v1.json",
+      "experiment.py",
+      "test_experiment.py",
+      "universe.v1.json",
+      "source_manifest.v1.json"
+    ],
+    "run_marker": "RUN_CONSUMED.v1.json",
+    "run_marker_created_before": "First July 2025 through March 2026 development archive member decompression.",
+    "run_marker_binding": "Exact freeze SHA-256, freeze bound-files digest, universe digest, source-manifest digest, protocol authority digest, trial-family digest, seed, costs, and gates.",
+    "rerun_policy": "REFUSE_AFTER_RUN_MARKER_EXISTS",
+    "failure_policy": "RUN_REMAINS_CONSUMED",
+    "candidate_seal": "candidate_seal.v1.json binds the complete development ledger and metrics digests plus freeze SHA-256.",
+    "holdout_marker": "HOLDOUT_OPEN.v1.json",
+    "holdout_rule": "Open only after every development admission gate passes and candidate seal exists; HOLDOUT_OPEN binds candidate-seal and freeze SHA-256 before any deferred holdout ZIP hash or decompression.",
+    "holdout_body_if_development_fails": "UNTOUCHED"
+  },
+  "verdict_law": {
+    "measurable_economic_statistical_sample_or_capacity_proxy_failure": "NO_GO",
+    "custody_schema_cadence_seal_publication_or_economics_incomplete": "UNMEASURED",
+    "positive_public_proxy_with_account_execution_or_capacity_unknown": "UNMEASURED",
+    "go": "STRUCTURALLY_UNAVAILABLE",
+    "capital_disposition": "NO_GO",
+    "authority": "NONE"
+  }
+}

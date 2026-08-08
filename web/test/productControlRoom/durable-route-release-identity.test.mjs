@@ -27,7 +27,7 @@ const read = (path) => readFile(new URL(`../../src/${path}`, import.meta.url), '
 const PAGES = [
   'dashboard', 'control-room', 'account', 'wallets', 'markets', 'detail', 'loans', 'execution',
   'orders', 'positions', 'fills', 'pnl', 'strategies', 'volume', 'opportunities', 'risk', 'ledger',
-  'system', 'watchdog', 'notifications', 'news', 'calendar',
+  'system', 'watchdog', 'notifications', 'news', 'calendar', 'research-lab',
 ];
 
 /** Deterministic, DOM-free stand-in for window.location + window.history. */
@@ -92,6 +92,7 @@ test('every visible page has a unique canonical path that parses back to itself'
   assert.equal(serializeRoute(routeTarget('strategies')), '/basis');
   assert.equal(serializeRoute(routeTarget('ledger')), '/logs');
   assert.equal(serializeRoute(routeTarget('system')), '/health');
+  assert.equal(serializeRoute(routeTarget('research-lab')), '/research-lab');
   assert.equal(serializeRoute(routeTarget('detail', 'BTCUSDT')), '/token/BTCUSDT');
   assert.equal(serializeRoute(routeTarget('dashboard')), CANONICAL_DASHBOARD_PATH);
 });

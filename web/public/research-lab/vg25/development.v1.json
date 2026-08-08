@@ -1,0 +1,3962 @@
+{
+  "allDevelopmentGatesPass": false,
+  "championTrialId": "VG25-S50-R125-H14",
+  "developmentGates": {
+    "activeWeeks": false,
+    "completedCohorts": false,
+    "distinctSelectedSymbols": false,
+    "holm": false,
+    "primaryInterval": false,
+    "profitConcentration": false,
+    "publicCapacity": true,
+    "sensitivityInterval": false,
+    "stressDrawdown": true,
+    "stressNet": true,
+    "timingBenchmarkInterval": false,
+    "whiteRealityCheck": false
+  },
+  "familyInference": {
+    "bootstrapReplicates": 4096,
+    "pbo": {
+      "medianLogit": 1.203972804326,
+      "probabilityBacktestOverfitting": 0.0,
+      "role": "DIAGNOSTIC_ONLY_NOT_A_P_VALUE_OR_GATE",
+      "selectionCounts": {
+        "VG25-S50-R125-H07": 25,
+        "VG25-S50-R125-H14": 35,
+        "VG25-S50-R150-H07": 10
+      },
+      "splitCount": 70,
+      "status": "AVAILABLE"
+    },
+    "whiteRealityCheck": {
+      "bestTrialId": "VG25-S25-R125-H14",
+      "familySize": 12,
+      "observedBestMeanDailyExcessLogReturn": 0.000583583447,
+      "pValue": 0.134976812302
+    }
+  },
+  "freezeSha256": "9b8279442c1920df6f94e46f6ce94cbc7f545a622746c685f2241a972948e5a3",
+  "partition": {
+    "endExclusiveUtc": "2026-03-01",
+    "startUtc": "2025-07-01"
+  },
+  "runMarkerSha256": "82bf57d6bd93b6b34482352c124d8396240080aed6010b1ed6f92f4a0ee0ad09",
+  "selectionMetric": "DEVELOPMENT_STRESS_COMPOUNDED_NET_USD_PER_1000",
+  "trialCount": 12,
+  "trials": [
+    {
+      "activeWeeks": 19,
+      "base": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2026-02-20",
+        "endingNavUsd": 752.212091410215,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.252490294186,
+        "netUsdPer1000": -247.787908589785
+      },
+      "boundaryCensoredCount": 1,
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 3301.907230405,
+        "p05SupportedCapitalUsd": 3538.985075605,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cohorts": [
+        {
+          "entryDay": "2025-07-15",
+          "grossReturn": 0.008709742759,
+          "stressReturn": 0.004681956694,
+          "supportedCapitalUsd": 14374.5695161445,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-07-29",
+          "grossReturn": -0.004923624298,
+          "stressReturn": -0.008896972218,
+          "supportedCapitalUsd": 99572.286599158,
+          "symbols": [
+            "BTCUSDT",
+            "SOLUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-08-05",
+          "grossReturn": -0.042640186916,
+          "stressReturn": -0.046462932301,
+          "supportedCapitalUsd": 6717.87881724,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-19",
+          "grossReturn": -0.031559376068,
+          "stressReturn": -0.035426367219,
+          "supportedCapitalUsd": 69246.918823672,
+          "symbols": [
+            "BNBUSDT",
+            "ETHUSDT",
+            "SOLUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 4
+        },
+        {
+          "entryDay": "2025-08-23",
+          "grossReturn": 0.039588281869,
+          "stressReturn": 0.035437197551,
+          "supportedCapitalUsd": 6713.37164833,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-29",
+          "grossReturn": -0.024473382632,
+          "stressReturn": -0.028368668211,
+          "supportedCapitalUsd": 28734.559967578,
+          "symbols": [
+            "ADAUSDT",
+            "BNBUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-09-06",
+          "grossReturn": -0.003590664273,
+          "stressReturn": -0.007569334714,
+          "supportedCapitalUsd": 18264.29961129,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-22",
+          "grossReturn": -0.074825496663,
+          "stressReturn": -0.078519725849,
+          "supportedCapitalUsd": 32448.187042819,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-23",
+          "grossReturn": -0.007971656333,
+          "stressReturn": -0.011932833438,
+          "supportedCapitalUsd": 9353.869757465,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-30",
+          "grossReturn": -0.016744568007,
+          "stressReturn": -0.020670714805,
+          "supportedCapitalUsd": 22043.60884867,
+          "symbols": [
+            "AVAXUSDT",
+            "BNBUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-10-18",
+          "grossReturn": 0.016502172837,
+          "stressReturn": 0.012443271537,
+          "supportedCapitalUsd": 42163.603934425,
+          "symbols": [
+            "ADAUSDT",
+            "AVAXUSDT",
+            "DOGEUSDT",
+            "ETHUSDT",
+            "LINKUSDT"
+          ],
+          "tradeCount": 5
+        },
+        {
+          "entryDay": "2025-10-27",
+          "grossReturn": 0.000606225674,
+          "stressReturn": -0.003389202982,
+          "supportedCapitalUsd": 56108.5156859365,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-11-08",
+          "grossReturn": -0.002394799863,
+          "stressReturn": -0.0063782454,
+          "supportedCapitalUsd": 11174.2425624925,
+          "symbols": [
+            "TRXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-11-09",
+          "grossReturn": 0.053490949608,
+          "stressReturn": 0.049284351826,
+          "supportedCapitalUsd": 203219.67784129095,
+          "symbols": [
+            "ETHUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-11-11",
+          "grossReturn": -0.027847359046,
+          "stressReturn": -0.031729172311,
+          "supportedCapitalUsd": 243550.72044691548,
+          "symbols": [
+            "BTCUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-11-25",
+          "grossReturn": -0.010532728139,
+          "stressReturn": -0.014483678863,
+          "supportedCapitalUsd": 243550.72044691548,
+          "symbols": [
+            "BTCUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-12-23",
+          "grossReturn": -0.016735183481,
+          "stressReturn": -0.020661367752,
+          "supportedCapitalUsd": 13764.1867304365,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-01-10",
+          "grossReturn": -0.007462686567,
+          "stressReturn": -0.011425895992,
+          "supportedCapitalUsd": 8219.9211978535,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-01-12",
+          "grossReturn": -0.009833694866,
+          "stressReturn": -0.013787436836,
+          "supportedCapitalUsd": 14471.7260155605,
+          "symbols": [
+            "XRPUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-04",
+          "grossReturn": -0.021169354839,
+          "stressReturn": -0.025077833428,
+          "supportedCapitalUsd": 3301.907230405,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-10",
+          "grossReturn": -0.033112582781,
+          "stressReturn": -0.036973371966,
+          "supportedCapitalUsd": 3538.985075605,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-19",
+          "grossReturn": -0.006308562768,
+          "stressReturn": -0.010276380618,
+          "supportedCapitalUsd": 17340.123612649,
+          "symbols": [
+            "DOGEUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 2
+        }
+      ],
+      "completedCohorts": 22,
+      "concentration": {
+        "topFivePositiveCohortGrossProfitShare": 1.0
+      },
+      "distinctSelectedSymbols": 10,
+      "gross": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2026-02-20",
+        "endingNavUsd": 793.013571355524,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.213833734582,
+        "netUsdPer1000": -206.986428644476
+      },
+      "inference": {
+        "holmAdjustedPValue": 1.0,
+        "holmRawPValue": 0.991945325848,
+        "primary14DayStressNetLowerBoundUsdPer1000": -409.431661112706,
+        "primary14DayStressNetUpperBoundUsdPer1000": -125.034495170521,
+        "sensitivity28DayStressNetLowerBoundUsdPer1000": -401.548314492166,
+        "sensitivity28DayStressNetUpperBoundUsdPer1000": -125.546075024105,
+        "timingMatchedExcessLowerBoundUsdPer1000": -72.274490706466,
+        "timingMatchedExcessUpperBoundUsdPer1000": 291.947346429892
+      },
+      "mechanism": {
+        "curve": [
+          {
+            "atRisk": 63,
+            "censored": 0,
+            "day": 0,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 63,
+            "censored": 0,
+            "day": 1,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 63,
+            "censored": 0,
+            "day": 2,
+            "recoveries": 10,
+            "survival": 0.84126984127
+          },
+          {
+            "atRisk": 53,
+            "censored": 1,
+            "day": 3,
+            "recoveries": 4,
+            "survival": 0.777777777778
+          },
+          {
+            "atRisk": 48,
+            "censored": 0,
+            "day": 4,
+            "recoveries": 4,
+            "survival": 0.712962962963
+          },
+          {
+            "atRisk": 44,
+            "censored": 0,
+            "day": 5,
+            "recoveries": 3,
+            "survival": 0.664351851852
+          },
+          {
+            "atRisk": 41,
+            "censored": 0,
+            "day": 6,
+            "recoveries": 8,
+            "survival": 0.534722222222
+          },
+          {
+            "atRisk": 33,
+            "censored": 29,
+            "day": 7,
+            "recoveries": 4,
+            "survival": 0.469907407407
+          }
+        ],
+        "episodeCount": 63,
+        "medianRecoveryDays": 7,
+        "recoveredCount": 33,
+        "restrictedMeanRecoveryDays": 5.531084656085,
+        "rightCensoredCount": 30,
+        "status": "AVAILABLE"
+      },
+      "nestedShockCount": 20,
+      "parameters": {
+        "maximumRecoveryHorizonDays": 7,
+        "recoveryMultiple": "1.25",
+        "shockThreshold": "2.5"
+      },
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2026-02-20",
+        "endingNavUsd": 758.860769179378,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.246184766433,
+        "netUsdPer1000": -241.139230820622
+      },
+      "selectedSymbols": [
+        "ADAUSDT",
+        "AVAXUSDT",
+        "BNBUSDT",
+        "BTCUSDT",
+        "DOGEUSDT",
+        "ETHUSDT",
+        "LINKUSDT",
+        "SOLUSDT",
+        "TRXUSDT",
+        "XRPUSDT"
+      ],
+      "stress": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2026-02-20",
+        "endingNavUsd": 726.194805586384,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.277189362516,
+        "netUsdPer1000": -273.805194413616
+      },
+      "timingMatchedStress": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2026-02-20",
+        "endingNavUsd": 669.823875083932,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.335533118662,
+        "netUsdPer1000": -330.176124916068
+      },
+      "tradeCount": 33,
+      "trialId": "VG25-S25-R125-H07"
+    },
+    {
+      "activeWeeks": 21,
+      "base": {
+        "drawdownPeakDay": "2025-07-30",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 770.785549166822,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.24239700491,
+        "netUsdPer1000": -229.214450833178
+      },
+      "boundaryCensoredCount": 1,
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 3301.907230405,
+        "p05SupportedCapitalUsd": 3538.985075605,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cohorts": [
+        {
+          "entryDay": "2025-07-15",
+          "grossReturn": 0.008709742759,
+          "stressReturn": 0.004681956694,
+          "supportedCapitalUsd": 14374.5695161445,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-07-29",
+          "grossReturn": 0.013260180989,
+          "stressReturn": 0.009214224989,
+          "supportedCapitalUsd": 28014.3061108725,
+          "symbols": [
+            "BTCUSDT",
+            "SOLUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-08-05",
+          "grossReturn": -0.047271650551,
+          "stressReturn": -0.051075902465,
+          "supportedCapitalUsd": 13127.08051189,
+          "symbols": [
+            "AVAXUSDT",
+            "LINKUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-08-19",
+          "grossReturn": -0.031559376068,
+          "stressReturn": -0.035426367219,
+          "supportedCapitalUsd": 69246.918823672,
+          "symbols": [
+            "BNBUSDT",
+            "ETHUSDT",
+            "SOLUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 4
+        },
+        {
+          "entryDay": "2025-08-23",
+          "grossReturn": 0.039588281869,
+          "stressReturn": 0.035437197551,
+          "supportedCapitalUsd": 6713.37164833,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-29",
+          "grossReturn": -0.012799377204,
+          "stressReturn": -0.01674127718,
+          "supportedCapitalUsd": 18163.739069702,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-02",
+          "grossReturn": 0.028305951857,
+          "stressReturn": 0.024199917973,
+          "supportedCapitalUsd": 13692.80272966,
+          "symbols": [
+            "AVAXUSDT",
+            "ETHUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-09-09",
+          "grossReturn": 0.007479635906,
+          "stressReturn": 0.003456761668,
+          "supportedCapitalUsd": 34001.60932972,
+          "symbols": [
+            "LINKUSDT",
+            "SOLUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-09-22",
+          "grossReturn": -0.074825496663,
+          "stressReturn": -0.078519725849,
+          "supportedCapitalUsd": 32448.187042819,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-30",
+          "grossReturn": -0.016744568007,
+          "stressReturn": -0.020670714805,
+          "supportedCapitalUsd": 22043.60884867,
+          "symbols": [
+            "AVAXUSDT",
+            "BNBUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-10-18",
+          "grossReturn": 0.016502172837,
+          "stressReturn": 0.012443271537,
+          "supportedCapitalUsd": 42163.603934425,
+          "symbols": [
+            "ADAUSDT",
+            "AVAXUSDT",
+            "DOGEUSDT",
+            "ETHUSDT",
+            "LINKUSDT"
+          ],
+          "tradeCount": 5
+        },
+        {
+          "entryDay": "2025-10-21",
+          "grossReturn": -0.024677913901,
+          "stressReturn": -0.028572382786,
+          "supportedCapitalUsd": 72740.158488829,
+          "symbols": [
+            "BTCUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-10-27",
+          "grossReturn": 0.000606225674,
+          "stressReturn": -0.003389202982,
+          "supportedCapitalUsd": 56108.5156859365,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-11-08",
+          "grossReturn": -0.002394799863,
+          "stressReturn": -0.0063782454,
+          "supportedCapitalUsd": 11174.2425624925,
+          "symbols": [
+            "TRXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-11-09",
+          "grossReturn": 0.053490949608,
+          "stressReturn": 0.049284351826,
+          "supportedCapitalUsd": 203219.67784129095,
+          "symbols": [
+            "ETHUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-11-11",
+          "grossReturn": -0.027847359046,
+          "stressReturn": -0.031729172311,
+          "supportedCapitalUsd": 243550.72044691548,
+          "symbols": [
+            "BTCUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-11-25",
+          "grossReturn": -0.010532728139,
+          "stressReturn": -0.014483678863,
+          "supportedCapitalUsd": 243550.72044691548,
+          "symbols": [
+            "BTCUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-12-23",
+          "grossReturn": -0.016735183481,
+          "stressReturn": -0.020661367752,
+          "supportedCapitalUsd": 13764.1867304365,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-01-10",
+          "grossReturn": -0.007462686567,
+          "stressReturn": -0.011425895992,
+          "supportedCapitalUsd": 8219.9211978535,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-01-12",
+          "grossReturn": -0.009833694866,
+          "stressReturn": -0.013787436836,
+          "supportedCapitalUsd": 14471.7260155605,
+          "symbols": [
+            "XRPUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-04",
+          "grossReturn": -0.021169354839,
+          "stressReturn": -0.025077833428,
+          "supportedCapitalUsd": 3301.907230405,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-10",
+          "grossReturn": -0.033112582781,
+          "stressReturn": -0.036973371966,
+          "supportedCapitalUsd": 3538.985075605,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-11",
+          "grossReturn": -0.026518277809,
+          "stressReturn": -0.030405398106,
+          "supportedCapitalUsd": 14161.58477594,
+          "symbols": [
+            "BNBUSDT",
+            "DOGEUSDT",
+            "ETHUSDT",
+            "LINKUSDT"
+          ],
+          "tradeCount": 4
+        },
+        {
+          "entryDay": "2026-02-12",
+          "grossReturn": 0.032825322392,
+          "stressReturn": 0.028701242625,
+          "supportedCapitalUsd": 4954.0568037905,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-15",
+          "grossReturn": -0.0183877461,
+          "stressReturn": -0.022307331674,
+          "supportedCapitalUsd": 43590.904920494,
+          "symbols": [
+            "BTCUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2026-02-19",
+          "grossReturn": -0.006308562768,
+          "stressReturn": -0.010276380618,
+          "supportedCapitalUsd": 17340.123612649,
+          "symbols": [
+            "DOGEUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 2
+        }
+      ],
+      "completedCohorts": 26,
+      "concentration": {
+        "topFivePositiveCohortGrossProfitShare": 0.850296282864
+      },
+      "distinctSelectedSymbols": 10,
+      "gross": {
+        "drawdownPeakDay": "2025-07-30",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 820.436245919829,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.203218483069,
+        "netUsdPer1000": -179.563754080171
+      },
+      "inference": {
+        "holmAdjustedPValue": 1.0,
+        "holmRawPValue": 0.987795948255,
+        "primary14DayStressNetLowerBoundUsdPer1000": -406.938944434649,
+        "primary14DayStressNetUpperBoundUsdPer1000": -98.910728217975,
+        "sensitivity28DayStressNetLowerBoundUsdPer1000": -386.484288551483,
+        "sensitivity28DayStressNetUpperBoundUsdPer1000": -119.086908879861,
+        "timingMatchedExcessLowerBoundUsdPer1000": -25.588320808933,
+        "timingMatchedExcessUpperBoundUsdPer1000": 393.547285087012
+      },
+      "mechanism": {
+        "curve": [
+          {
+            "atRisk": 58,
+            "censored": 0,
+            "day": 0,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 58,
+            "censored": 0,
+            "day": 1,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 58,
+            "censored": 0,
+            "day": 2,
+            "recoveries": 10,
+            "survival": 0.827586206897
+          },
+          {
+            "atRisk": 48,
+            "censored": 1,
+            "day": 3,
+            "recoveries": 4,
+            "survival": 0.758620689655
+          },
+          {
+            "atRisk": 43,
+            "censored": 0,
+            "day": 4,
+            "recoveries": 4,
+            "survival": 0.688051323176
+          },
+          {
+            "atRisk": 39,
+            "censored": 0,
+            "day": 5,
+            "recoveries": 2,
+            "survival": 0.652766639936
+          },
+          {
+            "atRisk": 37,
+            "censored": 0,
+            "day": 6,
+            "recoveries": 7,
+            "survival": 0.529270248597
+          },
+          {
+            "atRisk": 30,
+            "censored": 0,
+            "day": 7,
+            "recoveries": 3,
+            "survival": 0.476343223737
+          },
+          {
+            "atRisk": 27,
+            "censored": 0,
+            "day": 8,
+            "recoveries": 2,
+            "survival": 0.441058540497
+          },
+          {
+            "atRisk": 25,
+            "censored": 0,
+            "day": 9,
+            "recoveries": 7,
+            "survival": 0.317562149158
+          },
+          {
+            "atRisk": 18,
+            "censored": 0,
+            "day": 10,
+            "recoveries": 2,
+            "survival": 0.282277465918
+          },
+          {
+            "atRisk": 16,
+            "censored": 0,
+            "day": 11,
+            "recoveries": 0,
+            "survival": 0.282277465918
+          },
+          {
+            "atRisk": 16,
+            "censored": 0,
+            "day": 12,
+            "recoveries": 1,
+            "survival": 0.264635124298
+          },
+          {
+            "atRisk": 15,
+            "censored": 0,
+            "day": 13,
+            "recoveries": 1,
+            "survival": 0.246992782678
+          },
+          {
+            "atRisk": 14,
+            "censored": 12,
+            "day": 14,
+            "recoveries": 2,
+            "survival": 0.211708099439
+          }
+        ],
+        "episodeCount": 58,
+        "medianRecoveryDays": 7,
+        "recoveredCount": 45,
+        "restrictedMeanRecoveryDays": 7.767441860465,
+        "rightCensoredCount": 13,
+        "status": "AVAILABLE"
+      },
+      "nestedShockCount": 25,
+      "parameters": {
+        "maximumRecoveryHorizonDays": 14,
+        "recoveryMultiple": "1.25",
+        "shockThreshold": "2.5"
+      },
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-07-30",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 778.843547949969,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.236006336436,
+        "netUsdPer1000": -221.156452050031
+      },
+      "selectedSymbols": [
+        "ADAUSDT",
+        "AVAXUSDT",
+        "BNBUSDT",
+        "BTCUSDT",
+        "DOGEUSDT",
+        "ETHUSDT",
+        "LINKUSDT",
+        "SOLUSDT",
+        "TRXUSDT",
+        "XRPUSDT"
+      ],
+      "stress": {
+        "drawdownPeakDay": "2025-07-30",
+        "drawdownTroughDay": "2026-02-20",
+        "endingNavUsd": 739.378650007337,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.270786097593,
+        "netUsdPer1000": -260.621349992663
+      },
+      "timingMatchedStress": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2026-02-20",
+        "endingNavUsd": 641.622031067572,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.363509415176,
+        "netUsdPer1000": -358.377968932428
+      },
+      "tradeCount": 45,
+      "trialId": "VG25-S25-R125-H14"
+    },
+    {
+      "activeWeeks": 19,
+      "base": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2026-02-05",
+        "endingNavUsd": 695.5090886242,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.356774332,
+        "netUsdPer1000": -304.4909113758
+      },
+      "boundaryCensoredCount": 1,
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 3301.907230405,
+        "p05SupportedCapitalUsd": 3538.985075605,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cohorts": [
+        {
+          "entryDay": "2025-07-15",
+          "grossReturn": 0.008709742759,
+          "stressReturn": 0.004681956694,
+          "supportedCapitalUsd": 14374.5695161445,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-07-28",
+          "grossReturn": -0.032617037606,
+          "stressReturn": -0.036479805506,
+          "supportedCapitalUsd": 5587.74615306,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-07-29",
+          "grossReturn": -0.007610874763,
+          "stressReturn": -0.011573492471,
+          "supportedCapitalUsd": 34132.087067157,
+          "symbols": [
+            "ADAUSDT",
+            "BTCUSDT",
+            "SOLUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-08-05",
+          "grossReturn": -0.047271650551,
+          "stressReturn": -0.051075902465,
+          "supportedCapitalUsd": 13127.08051189,
+          "symbols": [
+            "AVAXUSDT",
+            "LINKUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-08-06",
+          "grossReturn": 0.010485320551,
+          "stressReturn": 0.00645044459,
+          "supportedCapitalUsd": 15772.8767901335,
+          "symbols": [
+            "TRXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-19",
+          "grossReturn": -0.036555517732,
+          "stressReturn": -0.04040255925,
+          "supportedCapitalUsd": 34601.50739395,
+          "symbols": [
+            "AVAXUSDT",
+            "BNBUSDT",
+            "ETHUSDT",
+            "SOLUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 5
+        },
+        {
+          "entryDay": "2025-08-29",
+          "grossReturn": -0.024473382632,
+          "stressReturn": -0.028368668211,
+          "supportedCapitalUsd": 28734.559967578,
+          "symbols": [
+            "ADAUSDT",
+            "BNBUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-08-30",
+          "grossReturn": 0.003100789417,
+          "stressReturn": -0.000904600052,
+          "supportedCapitalUsd": 284756.95390635956,
+          "symbols": [
+            "ETHUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-02",
+          "grossReturn": 0.052754737641,
+          "stressReturn": 0.04855107956,
+          "supportedCapitalUsd": 36528.59922258,
+          "symbols": [
+            "LINKUSDT",
+            "SOLUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-09-22",
+          "grossReturn": -0.074825496663,
+          "stressReturn": -0.078519725849,
+          "supportedCapitalUsd": 32448.187042819,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-23",
+          "grossReturn": -0.007971656333,
+          "stressReturn": -0.011932833438,
+          "supportedCapitalUsd": 9353.869757465,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-30",
+          "grossReturn": -0.016744568007,
+          "stressReturn": -0.020670714805,
+          "supportedCapitalUsd": 22043.60884867,
+          "symbols": [
+            "AVAXUSDT",
+            "BNBUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-10-14",
+          "grossReturn": -0.027317572379,
+          "stressReturn": -0.031201501086,
+          "supportedCapitalUsd": 199133.2349814914,
+          "symbols": [
+            "ETHUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-15",
+          "grossReturn": -0.043360045793,
+          "stressReturn": -0.047179916775,
+          "supportedCapitalUsd": 11249.3508724255,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-17",
+          "grossReturn": -0.046498277842,
+          "stressReturn": -0.050305617839,
+          "supportedCapitalUsd": 8504.83478777,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-18",
+          "grossReturn": 0.022945876457,
+          "stressReturn": 0.018861245397,
+          "supportedCapitalUsd": 39264.30619014,
+          "symbols": [
+            "AVAXUSDT",
+            "DOGEUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-10-27",
+          "grossReturn": 0.000606225674,
+          "stressReturn": -0.003389202982,
+          "supportedCapitalUsd": 56108.5156859365,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-11-08",
+          "grossReturn": -0.006222079505,
+          "stressReturn": -0.010190242683,
+          "supportedCapitalUsd": 22348.485124985,
+          "symbols": [
+            "ETHUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-11-11",
+          "grossReturn": -0.027847359046,
+          "stressReturn": -0.031729172311,
+          "supportedCapitalUsd": 243550.72044691548,
+          "symbols": [
+            "BTCUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-11-25",
+          "grossReturn": -0.010532728139,
+          "stressReturn": -0.014483678863,
+          "supportedCapitalUsd": 243550.72044691548,
+          "symbols": [
+            "BTCUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-12-23",
+          "grossReturn": -0.016735183481,
+          "stressReturn": -0.020661367752,
+          "supportedCapitalUsd": 13764.1867304365,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-01-10",
+          "grossReturn": -0.007462686567,
+          "stressReturn": -0.011425895992,
+          "supportedCapitalUsd": 8219.9211978535,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-01-12",
+          "grossReturn": -0.009833694866,
+          "stressReturn": -0.013787436836,
+          "supportedCapitalUsd": 14471.7260155605,
+          "symbols": [
+            "XRPUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-04",
+          "grossReturn": -0.021169354839,
+          "stressReturn": -0.025077833428,
+          "supportedCapitalUsd": 3301.907230405,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-06",
+          "grossReturn": 0.124643584521,
+          "stressReturn": 0.1201528737,
+          "supportedCapitalUsd": 4687.094922893,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-10",
+          "grossReturn": -0.033112582781,
+          "stressReturn": -0.036973371966,
+          "supportedCapitalUsd": 3538.985075605,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-11",
+          "grossReturn": -0.025548043267,
+          "stressReturn": -0.029439037718,
+          "supportedCapitalUsd": 190631.43362035448,
+          "symbols": [
+            "BTCUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-12",
+          "grossReturn": 0.032825322392,
+          "stressReturn": 0.028701242625,
+          "supportedCapitalUsd": 4954.0568037905,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-19",
+          "grossReturn": -0.006308562768,
+          "stressReturn": -0.010276380618,
+          "supportedCapitalUsd": 17340.123612649,
+          "symbols": [
+            "DOGEUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 2
+        }
+      ],
+      "completedCohorts": 29,
+      "concentration": {
+        "topFivePositiveCohortGrossProfitShare": 0.951510601416
+      },
+      "distinctSelectedSymbols": 10,
+      "gross": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2026-02-05",
+        "endingNavUsd": 745.662510119338,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.320254380472,
+        "netUsdPer1000": -254.337489880662
+      },
+      "inference": {
+        "holmAdjustedPValue": 1.0,
+        "holmRawPValue": 0.988284110325,
+        "primary14DayStressNetLowerBoundUsdPer1000": -503.897463667011,
+        "primary14DayStressNetUpperBoundUsdPer1000": -119.20485523907,
+        "sensitivity28DayStressNetLowerBoundUsdPer1000": -503.604818350524,
+        "sensitivity28DayStressNetUpperBoundUsdPer1000": -118.092766485902,
+        "timingMatchedExcessLowerBoundUsdPer1000": -100.368944521227,
+        "timingMatchedExcessUpperBoundUsdPer1000": 156.166188467838
+      },
+      "mechanism": {
+        "curve": [
+          {
+            "atRisk": 65,
+            "censored": 0,
+            "day": 0,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 65,
+            "censored": 0,
+            "day": 1,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 65,
+            "censored": 0,
+            "day": 2,
+            "recoveries": 12,
+            "survival": 0.815384615385
+          },
+          {
+            "atRisk": 53,
+            "censored": 1,
+            "day": 3,
+            "recoveries": 6,
+            "survival": 0.723076923077
+          },
+          {
+            "atRisk": 46,
+            "censored": 0,
+            "day": 4,
+            "recoveries": 7,
+            "survival": 0.613043478261
+          },
+          {
+            "atRisk": 39,
+            "censored": 0,
+            "day": 5,
+            "recoveries": 5,
+            "survival": 0.534448160535
+          },
+          {
+            "atRisk": 34,
+            "censored": 0,
+            "day": 6,
+            "recoveries": 9,
+            "survival": 0.392976588629
+          },
+          {
+            "atRisk": 25,
+            "censored": 21,
+            "day": 7,
+            "recoveries": 4,
+            "survival": 0.330100334448
+          }
+        ],
+        "episodeCount": 65,
+        "medianRecoveryDays": 6,
+        "recoveredCount": 43,
+        "restrictedMeanRecoveryDays": 5.078929765886,
+        "rightCensoredCount": 22,
+        "status": "AVAILABLE"
+      },
+      "nestedShockCount": 18,
+      "parameters": {
+        "maximumRecoveryHorizonDays": 7,
+        "recoveryMultiple": "1.50",
+        "shockThreshold": "2.5"
+      },
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2026-02-05",
+        "endingNavUsd": 703.62396947471,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.350829350794,
+        "netUsdPer1000": -296.37603052529
+      },
+      "selectedSymbols": [
+        "ADAUSDT",
+        "AVAXUSDT",
+        "BNBUSDT",
+        "BTCUSDT",
+        "DOGEUSDT",
+        "ETHUSDT",
+        "LINKUSDT",
+        "SOLUSDT",
+        "TRXUSDT",
+        "XRPUSDT"
+      ],
+      "stress": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2026-02-05",
+        "endingNavUsd": 663.974708973232,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.380014798892,
+        "netUsdPer1000": -336.025291026768
+      },
+      "timingMatchedStress": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2026-02-05",
+        "endingNavUsd": 651.672963349974,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.383674263095,
+        "netUsdPer1000": -348.327036650026
+      },
+      "tradeCount": 43,
+      "trialId": "VG25-S25-R150-H07"
+    },
+    {
+      "activeWeeks": 20,
+      "base": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2026-02-05",
+        "endingNavUsd": 690.110562637383,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.363271958924,
+        "netUsdPer1000": -309.889437362617
+      },
+      "boundaryCensoredCount": 1,
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 3301.907230405,
+        "p05SupportedCapitalUsd": 4687.094922893,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cohorts": [
+        {
+          "entryDay": "2025-07-15",
+          "grossReturn": 0.008709742759,
+          "stressReturn": 0.004681956694,
+          "supportedCapitalUsd": 14374.5695161445,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-07-28",
+          "grossReturn": -0.032617037606,
+          "stressReturn": -0.036479805506,
+          "supportedCapitalUsd": 5587.74615306,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-07-29",
+          "grossReturn": 0.004700047864,
+          "stressReturn": 0.000688272544,
+          "supportedCapitalUsd": 27734.481998175,
+          "symbols": [
+            "BTCUSDT",
+            "ETHUSDT",
+            "LINKUSDT",
+            "SOLUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 5
+        },
+        {
+          "entryDay": "2025-08-05",
+          "grossReturn": -0.047271650551,
+          "stressReturn": -0.051075902465,
+          "supportedCapitalUsd": 13127.08051189,
+          "symbols": [
+            "AVAXUSDT",
+            "LINKUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-08-06",
+          "grossReturn": 0.010485320551,
+          "stressReturn": 0.00645044459,
+          "supportedCapitalUsd": 15772.8767901335,
+          "symbols": [
+            "TRXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-19",
+          "grossReturn": -0.036555517732,
+          "stressReturn": -0.04040255925,
+          "supportedCapitalUsd": 34601.50739395,
+          "symbols": [
+            "AVAXUSDT",
+            "BNBUSDT",
+            "ETHUSDT",
+            "SOLUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 5
+        },
+        {
+          "entryDay": "2025-08-29",
+          "grossReturn": -0.024473382632,
+          "stressReturn": -0.028368668211,
+          "supportedCapitalUsd": 28734.559967578,
+          "symbols": [
+            "ADAUSDT",
+            "BNBUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-08-30",
+          "grossReturn": 0.003100789417,
+          "stressReturn": -0.000904600052,
+          "supportedCapitalUsd": 284756.95390635956,
+          "symbols": [
+            "ETHUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-02",
+          "grossReturn": 0.053114125984,
+          "stressReturn": 0.048909032862,
+          "supportedCapitalUsd": 20539.20409449,
+          "symbols": [
+            "AVAXUSDT",
+            "LINKUSDT",
+            "SOLUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-09-22",
+          "grossReturn": -0.074825496663,
+          "stressReturn": -0.078519725849,
+          "supportedCapitalUsd": 32448.187042819,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-23",
+          "grossReturn": -0.007971656333,
+          "stressReturn": -0.011932833438,
+          "supportedCapitalUsd": 9353.869757465,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-30",
+          "grossReturn": -0.016744568007,
+          "stressReturn": -0.020670714805,
+          "supportedCapitalUsd": 22043.60884867,
+          "symbols": [
+            "AVAXUSDT",
+            "BNBUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-10-14",
+          "grossReturn": -0.027317572379,
+          "stressReturn": -0.031201501086,
+          "supportedCapitalUsd": 199133.2349814914,
+          "symbols": [
+            "ETHUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-15",
+          "grossReturn": -0.043360045793,
+          "stressReturn": -0.047179916775,
+          "supportedCapitalUsd": 11249.3508724255,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-17",
+          "grossReturn": -0.046498277842,
+          "stressReturn": -0.050305617839,
+          "supportedCapitalUsd": 8504.83478777,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-18",
+          "grossReturn": 0.022945876457,
+          "stressReturn": 0.018861245397,
+          "supportedCapitalUsd": 39264.30619014,
+          "symbols": [
+            "AVAXUSDT",
+            "DOGEUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-10-21",
+          "grossReturn": -0.020215215328,
+          "stressReturn": -0.024127503804,
+          "supportedCapitalUsd": 234936.68195217277,
+          "symbols": [
+            "BTCUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-27",
+          "grossReturn": 0.000606225674,
+          "stressReturn": -0.003389202982,
+          "supportedCapitalUsd": 56108.5156859365,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-11-08",
+          "grossReturn": -0.006222079505,
+          "stressReturn": -0.010190242683,
+          "supportedCapitalUsd": 22348.485124985,
+          "symbols": [
+            "ETHUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-11-11",
+          "grossReturn": -0.027847359046,
+          "stressReturn": -0.031729172311,
+          "supportedCapitalUsd": 243550.72044691548,
+          "symbols": [
+            "BTCUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-11-25",
+          "grossReturn": -0.010532728139,
+          "stressReturn": -0.014483678863,
+          "supportedCapitalUsd": 243550.72044691548,
+          "symbols": [
+            "BTCUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-12-23",
+          "grossReturn": -0.016735183481,
+          "stressReturn": -0.020661367752,
+          "supportedCapitalUsd": 13764.1867304365,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-01-10",
+          "grossReturn": -0.007462686567,
+          "stressReturn": -0.011425895992,
+          "supportedCapitalUsd": 8219.9211978535,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-01-12",
+          "grossReturn": -0.009833694866,
+          "stressReturn": -0.013787436836,
+          "supportedCapitalUsd": 14471.7260155605,
+          "symbols": [
+            "XRPUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-04",
+          "grossReturn": -0.021169354839,
+          "stressReturn": -0.025077833428,
+          "supportedCapitalUsd": 3301.907230405,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-06",
+          "grossReturn": 0.124643584521,
+          "stressReturn": 0.1201528737,
+          "supportedCapitalUsd": 4687.094922893,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-10",
+          "grossReturn": -0.029543814569,
+          "stressReturn": -0.033418853873,
+          "supportedCapitalUsd": 7077.97015121,
+          "symbols": [
+            "AVAXUSDT",
+            "BNBUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2026-02-11",
+          "grossReturn": -0.026836832045,
+          "stressReturn": -0.030722680353,
+          "supportedCapitalUsd": 17701.980969925,
+          "symbols": [
+            "BTCUSDT",
+            "DOGEUSDT",
+            "ETHUSDT",
+            "LINKUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 5
+        },
+        {
+          "entryDay": "2026-02-12",
+          "grossReturn": 0.032825322392,
+          "stressReturn": 0.028701242625,
+          "supportedCapitalUsd": 4954.0568037905,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-19",
+          "grossReturn": -0.006308562768,
+          "stressReturn": -0.010276380618,
+          "supportedCapitalUsd": 17340.123612649,
+          "symbols": [
+            "DOGEUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 2
+        }
+      ],
+      "completedCohorts": 30,
+      "concentration": {
+        "topFivePositiveCohortGrossProfitShare": 0.93445127779
+      },
+      "distinctSelectedSymbols": 10,
+      "gross": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2026-02-05",
+        "endingNavUsd": 741.653268359872,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.3255033942,
+        "netUsdPer1000": -258.346731640128
+      },
+      "inference": {
+        "holmAdjustedPValue": 1.0,
+        "holmRawPValue": 0.98755186722,
+        "primary14DayStressNetLowerBoundUsdPer1000": -514.49937199423,
+        "primary14DayStressNetUpperBoundUsdPer1000": -121.501627362403,
+        "sensitivity28DayStressNetLowerBoundUsdPer1000": -514.218652570285,
+        "sensitivity28DayStressNetUpperBoundUsdPer1000": -118.526865763445,
+        "timingMatchedExcessLowerBoundUsdPer1000": -75.728043434521,
+        "timingMatchedExcessUpperBoundUsdPer1000": 184.522963306337
+      },
+      "mechanism": {
+        "curve": [
+          {
+            "atRisk": 60,
+            "censored": 0,
+            "day": 0,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 60,
+            "censored": 0,
+            "day": 1,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 60,
+            "censored": 0,
+            "day": 2,
+            "recoveries": 12,
+            "survival": 0.8
+          },
+          {
+            "atRisk": 48,
+            "censored": 1,
+            "day": 3,
+            "recoveries": 4,
+            "survival": 0.733333333333
+          },
+          {
+            "atRisk": 43,
+            "censored": 0,
+            "day": 4,
+            "recoveries": 7,
+            "survival": 0.613953488372
+          },
+          {
+            "atRisk": 36,
+            "censored": 0,
+            "day": 5,
+            "recoveries": 4,
+            "survival": 0.545736434109
+          },
+          {
+            "atRisk": 32,
+            "censored": 0,
+            "day": 6,
+            "recoveries": 9,
+            "survival": 0.392248062016
+          },
+          {
+            "atRisk": 23,
+            "censored": 0,
+            "day": 7,
+            "recoveries": 4,
+            "survival": 0.324031007752
+          },
+          {
+            "atRisk": 19,
+            "censored": 0,
+            "day": 8,
+            "recoveries": 2,
+            "survival": 0.28992248062
+          },
+          {
+            "atRisk": 17,
+            "censored": 0,
+            "day": 9,
+            "recoveries": 5,
+            "survival": 0.204651162791
+          },
+          {
+            "atRisk": 12,
+            "censored": 0,
+            "day": 10,
+            "recoveries": 2,
+            "survival": 0.170542635659
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 11,
+            "recoveries": 2,
+            "survival": 0.136434108527
+          },
+          {
+            "atRisk": 8,
+            "censored": 0,
+            "day": 12,
+            "recoveries": 0,
+            "survival": 0.136434108527
+          },
+          {
+            "atRisk": 8,
+            "censored": 0,
+            "day": 13,
+            "recoveries": 0,
+            "survival": 0.136434108527
+          },
+          {
+            "atRisk": 8,
+            "censored": 7,
+            "day": 14,
+            "recoveries": 1,
+            "survival": 0.119379844961
+          }
+        ],
+        "episodeCount": 60,
+        "medianRecoveryDays": 6,
+        "recoveredCount": 52,
+        "restrictedMeanRecoveryDays": 6.483720930233,
+        "rightCensoredCount": 8,
+        "status": "AVAILABLE"
+      },
+      "nestedShockCount": 23,
+      "parameters": {
+        "maximumRecoveryHorizonDays": 14,
+        "recoveryMultiple": "1.50",
+        "shockThreshold": "2.5"
+      },
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2026-02-05",
+        "endingNavUsd": 698.441776810822,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.357129935104,
+        "netUsdPer1000": -301.558223189178
+      },
+      "selectedSymbols": [
+        "ADAUSDT",
+        "AVAXUSDT",
+        "BNBUSDT",
+        "BTCUSDT",
+        "DOGEUSDT",
+        "ETHUSDT",
+        "LINKUSDT",
+        "SOLUSDT",
+        "TRXUSDT",
+        "XRPUSDT"
+      ],
+      "stress": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2026-02-05",
+        "endingNavUsd": 657.767681018638,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.387258830251,
+        "netUsdPer1000": -342.232318981362
+      },
+      "timingMatchedStress": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2026-02-05",
+        "endingNavUsd": 629.996591913207,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.404174892016,
+        "netUsdPer1000": -370.003408086793
+      },
+      "tradeCount": 52,
+      "trialId": "VG25-S25-R150-H14"
+    },
+    {
+      "activeWeeks": 7,
+      "base": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 834.823171411358,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.189766195224,
+        "netUsdPer1000": -165.176828588642
+      },
+      "boundaryCensoredCount": 0,
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 4954.0568037905,
+        "p05SupportedCapitalUsd": 4954.0568037905,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cohorts": [
+        {
+          "entryDay": "2025-07-29",
+          "grossReturn": -0.008902239214,
+          "stressReturn": -0.012859700493,
+          "supportedCapitalUsd": 49786.143299579,
+          "symbols": [
+            "SOLUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-19",
+          "grossReturn": -0.023730721499,
+          "stressReturn": -0.02762897253,
+          "supportedCapitalUsd": 51935.189117753995,
+          "symbols": [
+            "BNBUSDT",
+            "SOLUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-09-22",
+          "grossReturn": -0.074825496663,
+          "stressReturn": -0.078519725849,
+          "supportedCapitalUsd": 32448.187042819,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-30",
+          "grossReturn": -0.012824728708,
+          "stressReturn": -0.016766527455,
+          "supportedCapitalUsd": 11021.804424335,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-18",
+          "grossReturn": 0.016868170376,
+          "stressReturn": 0.012807807645,
+          "supportedCapitalUsd": 33730.88314754,
+          "symbols": [
+            "ADAUSDT",
+            "AVAXUSDT",
+            "DOGEUSDT",
+            "LINKUSDT"
+          ],
+          "tradeCount": 4
+        },
+        {
+          "entryDay": "2025-12-23",
+          "grossReturn": -0.016735183481,
+          "stressReturn": -0.020661367752,
+          "supportedCapitalUsd": 13764.1867304365,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-10",
+          "grossReturn": -0.025975046356,
+          "stressReturn": -0.02986433578,
+          "supportedCapitalUsd": 13165.9837964155,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-11",
+          "grossReturn": -0.040283387799,
+          "stressReturn": -0.044115543902,
+          "supportedCapitalUsd": 141906.2816165811,
+          "symbols": [
+            "ETHUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-12",
+          "grossReturn": 0.032825322392,
+          "stressReturn": 0.028701242625,
+          "supportedCapitalUsd": 4954.0568037905,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        }
+      ],
+      "completedCohorts": 9,
+      "concentration": {
+        "topFivePositiveCohortGrossProfitShare": 1.0
+      },
+      "distinctSelectedSymbols": 8,
+      "gross": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 853.059191911514,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.174052791486,
+        "netUsdPer1000": -146.940808088486
+      },
+      "inference": {
+        "holmAdjustedPValue": 1.0,
+        "holmRawPValue": 0.96314376373,
+        "primary14DayStressNetLowerBoundUsdPer1000": -311.310503785891,
+        "primary14DayStressNetUpperBoundUsdPer1000": -43.352667991591,
+        "sensitivity28DayStressNetLowerBoundUsdPer1000": -300.847568529476,
+        "sensitivity28DayStressNetUpperBoundUsdPer1000": -50.439423469173,
+        "timingMatchedExcessLowerBoundUsdPer1000": -78.520623523517,
+        "timingMatchedExcessUpperBoundUsdPer1000": 70.470608393887
+      },
+      "mechanism": {
+        "curve": [
+          {
+            "atRisk": 34,
+            "censored": 0,
+            "day": 0,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 34,
+            "censored": 0,
+            "day": 1,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 34,
+            "censored": 0,
+            "day": 2,
+            "recoveries": 1,
+            "survival": 0.970588235294
+          },
+          {
+            "atRisk": 33,
+            "censored": 0,
+            "day": 3,
+            "recoveries": 5,
+            "survival": 0.823529411765
+          },
+          {
+            "atRisk": 28,
+            "censored": 0,
+            "day": 4,
+            "recoveries": 1,
+            "survival": 0.794117647059
+          },
+          {
+            "atRisk": 27,
+            "censored": 0,
+            "day": 5,
+            "recoveries": 2,
+            "survival": 0.735294117647
+          },
+          {
+            "atRisk": 25,
+            "censored": 0,
+            "day": 6,
+            "recoveries": 4,
+            "survival": 0.617647058824
+          },
+          {
+            "atRisk": 21,
+            "censored": 20,
+            "day": 7,
+            "recoveries": 1,
+            "survival": 0.588235294118
+          }
+        ],
+        "episodeCount": 34,
+        "medianRecoveryDays": "NOT_ESTIMABLE",
+        "recoveredCount": 14,
+        "restrictedMeanRecoveryDays": 5.941176470588,
+        "rightCensoredCount": 20,
+        "status": "AVAILABLE"
+      },
+      "nestedShockCount": 11,
+      "parameters": {
+        "maximumRecoveryHorizonDays": 7,
+        "recoveryMultiple": "1.25",
+        "shockThreshold": "3.5"
+      },
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 837.833951020237,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.187169294188,
+        "netUsdPer1000": -162.166048979763
+      },
+      "selectedSymbols": [
+        "ADAUSDT",
+        "AVAXUSDT",
+        "BNBUSDT",
+        "DOGEUSDT",
+        "ETHUSDT",
+        "LINKUSDT",
+        "SOLUSDT",
+        "TRXUSDT"
+      ],
+      "stress": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 822.88785334154,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.200071100097,
+        "netUsdPer1000": -177.11214665846
+      },
+      "timingMatchedStress": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 827.00028452341,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.176773408663,
+        "netUsdPer1000": -172.99971547659
+      },
+      "tradeCount": 14,
+      "trialId": "VG25-S35-R125-H07"
+    },
+    {
+      "activeWeeks": 9,
+      "base": {
+        "drawdownPeakDay": "2025-07-30",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 814.010863267055,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.207431204561,
+        "netUsdPer1000": -185.989136732945
+      },
+      "boundaryCensoredCount": 0,
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 4954.0568037905,
+        "p05SupportedCapitalUsd": 4954.0568037905,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cohorts": [
+        {
+          "entryDay": "2025-07-29",
+          "grossReturn": 0.020362776175,
+          "stressReturn": 0.016288459455,
+          "supportedCapitalUsd": 18676.204073915,
+          "symbols": [
+            "SOLUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-08-19",
+          "grossReturn": -0.023730721499,
+          "stressReturn": -0.02762897253,
+          "supportedCapitalUsd": 51935.189117753995,
+          "symbols": [
+            "BNBUSDT",
+            "SOLUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-09-06",
+          "grossReturn": -0.003590664273,
+          "stressReturn": -0.007569334714,
+          "supportedCapitalUsd": 18264.29961129,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-22",
+          "grossReturn": -0.074825496663,
+          "stressReturn": -0.078519725849,
+          "supportedCapitalUsd": 32448.187042819,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-30",
+          "grossReturn": -0.012824728708,
+          "stressReturn": -0.016766527455,
+          "supportedCapitalUsd": 11021.804424335,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-18",
+          "grossReturn": 0.016868170376,
+          "stressReturn": 0.012807807645,
+          "supportedCapitalUsd": 33730.88314754,
+          "symbols": [
+            "ADAUSDT",
+            "AVAXUSDT",
+            "DOGEUSDT",
+            "LINKUSDT"
+          ],
+          "tradeCount": 4
+        },
+        {
+          "entryDay": "2025-10-21",
+          "grossReturn": -0.024677913901,
+          "stressReturn": -0.028572382786,
+          "supportedCapitalUsd": 72740.158488829,
+          "symbols": [
+            "BTCUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-12-23",
+          "grossReturn": -0.016735183481,
+          "stressReturn": -0.020661367752,
+          "supportedCapitalUsd": 13764.1867304365,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-10",
+          "grossReturn": -0.025975046356,
+          "stressReturn": -0.02986433578,
+          "supportedCapitalUsd": 13165.9837964155,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-11",
+          "grossReturn": -0.040283387799,
+          "stressReturn": -0.044115543902,
+          "supportedCapitalUsd": 141906.2816165811,
+          "symbols": [
+            "ETHUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-12",
+          "grossReturn": 0.032825322392,
+          "stressReturn": 0.028701242625,
+          "supportedCapitalUsd": 4954.0568037905,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-15",
+          "grossReturn": -0.0183877461,
+          "stressReturn": -0.022307331674,
+          "supportedCapitalUsd": 43590.904920494,
+          "symbols": [
+            "BTCUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 2
+        }
+      ],
+      "completedCohorts": 12,
+      "concentration": {
+        "topFivePositiveCohortGrossProfitShare": 1.0
+      },
+      "distinctSelectedSymbols": 10,
+      "gross": {
+        "drawdownPeakDay": "2025-07-30",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 837.805287378753,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.190118195895,
+        "netUsdPer1000": -162.194712621247
+      },
+      "inference": {
+        "holmAdjustedPValue": 1.0,
+        "holmRawPValue": 0.972418843056,
+        "primary14DayStressNetLowerBoundUsdPer1000": -337.653828340962,
+        "primary14DayStressNetUpperBoundUsdPer1000": -62.991171200683,
+        "sensitivity28DayStressNetLowerBoundUsdPer1000": -327.244292462867,
+        "sensitivity28DayStressNetUpperBoundUsdPer1000": -67.193028975934,
+        "timingMatchedExcessLowerBoundUsdPer1000": -42.336100398119,
+        "timingMatchedExcessUpperBoundUsdPer1000": 153.767978017197
+      },
+      "mechanism": {
+        "curve": [
+          {
+            "atRisk": 30,
+            "censored": 0,
+            "day": 0,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 30,
+            "censored": 0,
+            "day": 1,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 30,
+            "censored": 0,
+            "day": 2,
+            "recoveries": 1,
+            "survival": 0.966666666667
+          },
+          {
+            "atRisk": 29,
+            "censored": 0,
+            "day": 3,
+            "recoveries": 5,
+            "survival": 0.8
+          },
+          {
+            "atRisk": 24,
+            "censored": 0,
+            "day": 4,
+            "recoveries": 1,
+            "survival": 0.766666666667
+          },
+          {
+            "atRisk": 23,
+            "censored": 0,
+            "day": 5,
+            "recoveries": 2,
+            "survival": 0.7
+          },
+          {
+            "atRisk": 21,
+            "censored": 0,
+            "day": 6,
+            "recoveries": 4,
+            "survival": 0.566666666667
+          },
+          {
+            "atRisk": 17,
+            "censored": 0,
+            "day": 7,
+            "recoveries": 2,
+            "survival": 0.5
+          },
+          {
+            "atRisk": 15,
+            "censored": 0,
+            "day": 8,
+            "recoveries": 2,
+            "survival": 0.433333333333
+          },
+          {
+            "atRisk": 13,
+            "censored": 0,
+            "day": 9,
+            "recoveries": 3,
+            "survival": 0.333333333333
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 10,
+            "recoveries": 0,
+            "survival": 0.333333333333
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 11,
+            "recoveries": 0,
+            "survival": 0.333333333333
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 12,
+            "recoveries": 0,
+            "survival": 0.333333333333
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 13,
+            "recoveries": 0,
+            "survival": 0.333333333333
+          },
+          {
+            "atRisk": 10,
+            "censored": 10,
+            "day": 14,
+            "recoveries": 0,
+            "survival": 0.333333333333
+          }
+        ],
+        "episodeCount": 30,
+        "medianRecoveryDays": 8,
+        "recoveredCount": 20,
+        "restrictedMeanRecoveryDays": 8.4,
+        "rightCensoredCount": 10,
+        "status": "AVAILABLE"
+      },
+      "nestedShockCount": 15,
+      "parameters": {
+        "maximumRecoveryHorizonDays": 14,
+        "recoveryMultiple": "1.25",
+        "shockThreshold": "3.5"
+      },
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-07-30",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 817.927507890099,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.204572814845,
+        "netUsdPer1000": -182.072492109901
+      },
+      "selectedSymbols": [
+        "ADAUSDT",
+        "AVAXUSDT",
+        "BNBUSDT",
+        "BTCUSDT",
+        "DOGEUSDT",
+        "ETHUSDT",
+        "LINKUSDT",
+        "SOLUSDT",
+        "TRXUSDT",
+        "XRPUSDT"
+      ],
+      "stress": {
+        "drawdownPeakDay": "2025-07-30",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 798.530931182752,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.21876241935,
+        "netUsdPer1000": -201.469068817248
+      },
+      "timingMatchedStress": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2026-02-16",
+        "endingNavUsd": 758.705141537154,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.241294858463,
+        "netUsdPer1000": -241.294858462846
+      },
+      "tradeCount": 20,
+      "trialId": "VG25-S35-R125-H14"
+    },
+    {
+      "activeWeeks": 8,
+      "base": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 772.090921858174,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.250650692658,
+        "netUsdPer1000": -227.909078141826
+      },
+      "boundaryCensoredCount": 0,
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 4954.0568037905,
+        "p05SupportedCapitalUsd": 4954.0568037905,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cohorts": [
+        {
+          "entryDay": "2025-07-29",
+          "grossReturn": -0.010943807453,
+          "stressReturn": -0.014893116735,
+          "supportedCapitalUsd": 22754.724711438,
+          "symbols": [
+            "ADAUSDT",
+            "SOLUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-08-06",
+          "grossReturn": 0.014790685119,
+          "stressReturn": 0.010738617803,
+          "supportedCapitalUsd": 31545.753580267,
+          "symbols": [
+            "BNBUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-08-19",
+          "grossReturn": -0.032599047323,
+          "stressReturn": -0.036461887059,
+          "supportedCapitalUsd": 69246.918823672,
+          "symbols": [
+            "BNBUSDT",
+            "DOGEUSDT",
+            "SOLUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 4
+        },
+        {
+          "entryDay": "2025-09-22",
+          "grossReturn": -0.074825496663,
+          "stressReturn": -0.078519725849,
+          "supportedCapitalUsd": 32448.187042819,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-30",
+          "grossReturn": -0.012824728708,
+          "stressReturn": -0.016766527455,
+          "supportedCapitalUsd": 11021.804424335,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-15",
+          "grossReturn": -0.043360045793,
+          "stressReturn": -0.047179916775,
+          "supportedCapitalUsd": 11249.3508724255,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-17",
+          "grossReturn": -0.046498277842,
+          "stressReturn": -0.050305617839,
+          "supportedCapitalUsd": 8504.83478777,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-18",
+          "grossReturn": 0.022945876457,
+          "stressReturn": 0.018861245397,
+          "supportedCapitalUsd": 39264.30619014,
+          "symbols": [
+            "AVAXUSDT",
+            "DOGEUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-12-23",
+          "grossReturn": -0.016735183481,
+          "stressReturn": -0.020661367752,
+          "supportedCapitalUsd": 13764.1867304365,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-10",
+          "grossReturn": -0.025975046356,
+          "stressReturn": -0.02986433578,
+          "supportedCapitalUsd": 13165.9837964155,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-11",
+          "grossReturn": -0.029111500978,
+          "stressReturn": -0.032988266514,
+          "supportedCapitalUsd": 71904.0921700185,
+          "symbols": [
+            "BTCUSDT",
+            "ETHUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2026-02-12",
+          "grossReturn": 0.032825322392,
+          "stressReturn": 0.028701242625,
+          "supportedCapitalUsd": 4954.0568037905,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        }
+      ],
+      "completedCohorts": 12,
+      "concentration": {
+        "topFivePositiveCohortGrossProfitShare": 1.0
+      },
+      "distinctSelectedSymbols": 10,
+      "gross": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 794.659980425464,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.233420808338,
+        "netUsdPer1000": -205.340019574536
+      },
+      "inference": {
+        "holmAdjustedPValue": 1.0,
+        "holmRawPValue": 0.985355137906,
+        "primary14DayStressNetLowerBoundUsdPer1000": -379.4217749585,
+        "primary14DayStressNetUpperBoundUsdPer1000": -96.544535244715,
+        "sensitivity28DayStressNetLowerBoundUsdPer1000": -378.667419411006,
+        "sensitivity28DayStressNetUpperBoundUsdPer1000": -98.580374780802,
+        "timingMatchedExcessLowerBoundUsdPer1000": -109.776053246989,
+        "timingMatchedExcessUpperBoundUsdPer1000": 49.77194912122
+      },
+      "mechanism": {
+        "curve": [
+          {
+            "atRisk": 34,
+            "censored": 0,
+            "day": 0,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 34,
+            "censored": 0,
+            "day": 1,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 34,
+            "censored": 0,
+            "day": 2,
+            "recoveries": 1,
+            "survival": 0.970588235294
+          },
+          {
+            "atRisk": 33,
+            "censored": 0,
+            "day": 3,
+            "recoveries": 7,
+            "survival": 0.764705882353
+          },
+          {
+            "atRisk": 26,
+            "censored": 0,
+            "day": 4,
+            "recoveries": 3,
+            "survival": 0.676470588235
+          },
+          {
+            "atRisk": 23,
+            "censored": 0,
+            "day": 5,
+            "recoveries": 3,
+            "survival": 0.588235294118
+          },
+          {
+            "atRisk": 20,
+            "censored": 0,
+            "day": 6,
+            "recoveries": 5,
+            "survival": 0.441176470588
+          },
+          {
+            "atRisk": 15,
+            "censored": 13,
+            "day": 7,
+            "recoveries": 2,
+            "survival": 0.382352941176
+          }
+        ],
+        "episodeCount": 34,
+        "medianRecoveryDays": 6,
+        "recoveredCount": 21,
+        "restrictedMeanRecoveryDays": 5.441176470588,
+        "rightCensoredCount": 13,
+        "status": "AVAILABLE"
+      },
+      "nestedShockCount": 11,
+      "parameters": {
+        "maximumRecoveryHorizonDays": 7,
+        "recoveryMultiple": "1.50",
+        "shockThreshold": "3.5"
+      },
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 775.805867068438,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.24734629131,
+        "netUsdPer1000": -224.194132931562
+      },
+      "selectedSymbols": [
+        "ADAUSDT",
+        "AVAXUSDT",
+        "BNBUSDT",
+        "BTCUSDT",
+        "DOGEUSDT",
+        "ETHUSDT",
+        "LINKUSDT",
+        "SOLUSDT",
+        "TRXUSDT",
+        "XRPUSDT"
+      ],
+      "stress": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 757.408175505992,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.263723864498,
+        "netUsdPer1000": -242.591824494008
+      },
+      "timingMatchedStress": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 779.240909695332,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.227080751928,
+        "netUsdPer1000": -220.759090304668
+      },
+      "tradeCount": 21,
+      "trialId": "VG25-S35-R150-H07"
+    },
+    {
+      "activeWeeks": 11,
+      "base": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 766.743490875006,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.266331149771,
+        "netUsdPer1000": -233.256509124994
+      },
+      "boundaryCensoredCount": 0,
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 4954.0568037905,
+        "p05SupportedCapitalUsd": 4954.0568037905,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cohorts": [
+        {
+          "entryDay": "2025-07-29",
+          "grossReturn": 0.008605554078,
+          "stressReturn": 0.00457818404,
+          "supportedCapitalUsd": 16640.689198905002,
+          "symbols": [
+            "LINKUSDT",
+            "SOLUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-08-06",
+          "grossReturn": 0.010485320551,
+          "stressReturn": 0.00645044459,
+          "supportedCapitalUsd": 15772.8767901335,
+          "symbols": [
+            "TRXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-19",
+          "grossReturn": -0.032599047323,
+          "stressReturn": -0.036461887059,
+          "supportedCapitalUsd": 69246.918823672,
+          "symbols": [
+            "BNBUSDT",
+            "DOGEUSDT",
+            "SOLUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 4
+        },
+        {
+          "entryDay": "2025-08-29",
+          "grossReturn": -0.03614738806,
+          "stressReturn": -0.039996059242,
+          "supportedCapitalUsd": 14367.279983789,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-02",
+          "grossReturn": 0.043072824156,
+          "stressReturn": 0.038907826033,
+          "supportedCapitalUsd": 18264.29961129,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-22",
+          "grossReturn": -0.074825496663,
+          "stressReturn": -0.078519725849,
+          "supportedCapitalUsd": 32448.187042819,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-30",
+          "grossReturn": -0.012824728708,
+          "stressReturn": -0.016766527455,
+          "supportedCapitalUsd": 11021.804424335,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-15",
+          "grossReturn": -0.043360045793,
+          "stressReturn": -0.047179916775,
+          "supportedCapitalUsd": 11249.3508724255,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-17",
+          "grossReturn": -0.046498277842,
+          "stressReturn": -0.050305617839,
+          "supportedCapitalUsd": 8504.83478777,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-18",
+          "grossReturn": 0.022945876457,
+          "stressReturn": 0.018861245397,
+          "supportedCapitalUsd": 39264.30619014,
+          "symbols": [
+            "AVAXUSDT",
+            "DOGEUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-10-21",
+          "grossReturn": -0.020215215328,
+          "stressReturn": -0.024127503804,
+          "supportedCapitalUsd": 234936.68195217277,
+          "symbols": [
+            "BTCUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-12-23",
+          "grossReturn": -0.016735183481,
+          "stressReturn": -0.020661367752,
+          "supportedCapitalUsd": 13764.1867304365,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-10",
+          "grossReturn": -0.025975046356,
+          "stressReturn": -0.02986433578,
+          "supportedCapitalUsd": 13165.9837964155,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-11",
+          "grossReturn": -0.029111500978,
+          "stressReturn": -0.032988266514,
+          "supportedCapitalUsd": 71904.0921700185,
+          "symbols": [
+            "BTCUSDT",
+            "ETHUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2026-02-12",
+          "grossReturn": 0.032825322392,
+          "stressReturn": 0.028701242625,
+          "supportedCapitalUsd": 4954.0568037905,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        }
+      ],
+      "completedCohorts": 15,
+      "concentration": {
+        "topFivePositiveCohortGrossProfitShare": 1.0
+      },
+      "distinctSelectedSymbols": 10,
+      "gross": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 794.861053418859,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.244885210205,
+        "netUsdPer1000": -205.138946581141
+      },
+      "inference": {
+        "holmAdjustedPValue": 1.0,
+        "holmRawPValue": 0.978032706859,
+        "primary14DayStressNetLowerBoundUsdPer1000": -406.397311793852,
+        "primary14DayStressNetUpperBoundUsdPer1000": -81.864849708658,
+        "sensitivity28DayStressNetLowerBoundUsdPer1000": -399.078227027525,
+        "sensitivity28DayStressNetUpperBoundUsdPer1000": -86.848327633366,
+        "timingMatchedExcessLowerBoundUsdPer1000": -72.394449180464,
+        "timingMatchedExcessUpperBoundUsdPer1000": 99.737209875802
+      },
+      "mechanism": {
+        "curve": [
+          {
+            "atRisk": 30,
+            "censored": 0,
+            "day": 0,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 30,
+            "censored": 0,
+            "day": 1,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 30,
+            "censored": 0,
+            "day": 2,
+            "recoveries": 1,
+            "survival": 0.966666666667
+          },
+          {
+            "atRisk": 29,
+            "censored": 0,
+            "day": 3,
+            "recoveries": 8,
+            "survival": 0.7
+          },
+          {
+            "atRisk": 21,
+            "censored": 0,
+            "day": 4,
+            "recoveries": 3,
+            "survival": 0.6
+          },
+          {
+            "atRisk": 18,
+            "censored": 0,
+            "day": 5,
+            "recoveries": 3,
+            "survival": 0.5
+          },
+          {
+            "atRisk": 15,
+            "censored": 0,
+            "day": 6,
+            "recoveries": 4,
+            "survival": 0.366666666667
+          },
+          {
+            "atRisk": 11,
+            "censored": 0,
+            "day": 7,
+            "recoveries": 1,
+            "survival": 0.333333333333
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 8,
+            "recoveries": 0,
+            "survival": 0.333333333333
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 9,
+            "recoveries": 3,
+            "survival": 0.233333333333
+          },
+          {
+            "atRisk": 7,
+            "censored": 0,
+            "day": 10,
+            "recoveries": 0,
+            "survival": 0.233333333333
+          },
+          {
+            "atRisk": 7,
+            "censored": 0,
+            "day": 11,
+            "recoveries": 0,
+            "survival": 0.233333333333
+          },
+          {
+            "atRisk": 7,
+            "censored": 0,
+            "day": 12,
+            "recoveries": 0,
+            "survival": 0.233333333333
+          },
+          {
+            "atRisk": 7,
+            "censored": 0,
+            "day": 13,
+            "recoveries": 1,
+            "survival": 0.2
+          },
+          {
+            "atRisk": 6,
+            "censored": 6,
+            "day": 14,
+            "recoveries": 0,
+            "survival": 0.2
+          }
+        ],
+        "episodeCount": 30,
+        "medianRecoveryDays": 5,
+        "recoveredCount": 24,
+        "restrictedMeanRecoveryDays": 6.933333333333,
+        "rightCensoredCount": 6,
+        "status": "AVAILABLE"
+      },
+      "nestedShockCount": 15,
+      "parameters": {
+        "maximumRecoveryHorizonDays": 14,
+        "recoveryMultiple": "1.50",
+        "shockThreshold": "3.5"
+      },
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 771.357780909019,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.262801073839,
+        "netUsdPer1000": -228.642219090981
+      },
+      "selectedSymbols": [
+        "ADAUSDT",
+        "AVAXUSDT",
+        "BNBUSDT",
+        "BTCUSDT",
+        "DOGEUSDT",
+        "ETHUSDT",
+        "LINKUSDT",
+        "SOLUSDT",
+        "TRXUSDT",
+        "XRPUSDT"
+      ],
+      "stress": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 748.560705765436,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.280283228898,
+        "netUsdPer1000": -251.439294234564
+      },
+      "timingMatchedStress": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 737.865731726596,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.268120270063,
+        "netUsdPer1000": -262.134268273404
+      },
+      "tradeCount": 24,
+      "trialId": "VG25-S35-R150-H14"
+    },
+    {
+      "activeWeeks": 0,
+      "base": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2025-07-01",
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "boundaryCensoredCount": 0,
+      "capacity": {
+        "allOneThousandUsdPathsFit": false,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": null,
+        "p05SupportedCapitalUsd": null,
+        "status": "NULL_NO_TRADES"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cohorts": [],
+      "completedCohorts": 0,
+      "concentration": {
+        "topFivePositiveCohortGrossProfitShare": null
+      },
+      "distinctSelectedSymbols": 0,
+      "gross": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2025-07-01",
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "inference": {
+        "holmAdjustedPValue": 1.0,
+        "holmRawPValue": 1.0,
+        "primary14DayStressNetLowerBoundUsdPer1000": 0.0,
+        "primary14DayStressNetUpperBoundUsdPer1000": 0.0,
+        "sensitivity28DayStressNetLowerBoundUsdPer1000": 0.0,
+        "sensitivity28DayStressNetUpperBoundUsdPer1000": 0.0,
+        "timingMatchedExcessLowerBoundUsdPer1000": 0.0,
+        "timingMatchedExcessUpperBoundUsdPer1000": 0.0
+      },
+      "mechanism": {
+        "curve": [
+          {
+            "atRisk": 12,
+            "censored": 0,
+            "day": 0,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 12,
+            "censored": 0,
+            "day": 1,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 12,
+            "censored": 0,
+            "day": 2,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 12,
+            "censored": 0,
+            "day": 3,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 12,
+            "censored": 0,
+            "day": 4,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 12,
+            "censored": 0,
+            "day": 5,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 12,
+            "censored": 0,
+            "day": 6,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 12,
+            "censored": 12,
+            "day": 7,
+            "recoveries": 0,
+            "survival": 1.0
+          }
+        ],
+        "episodeCount": 12,
+        "medianRecoveryDays": "NOT_ESTIMABLE",
+        "recoveredCount": 0,
+        "restrictedMeanRecoveryDays": 7.0,
+        "rightCensoredCount": 12,
+        "status": "AVAILABLE"
+      },
+      "nestedShockCount": 7,
+      "parameters": {
+        "maximumRecoveryHorizonDays": 7,
+        "recoveryMultiple": "1.25",
+        "shockThreshold": "5.0"
+      },
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2025-07-01",
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "selectedSymbols": [],
+      "stress": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2025-07-01",
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "timingMatchedStress": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2025-07-01",
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "tradeCount": 0,
+      "trialId": "VG25-S50-R125-H07"
+    },
+    {
+      "activeWeeks": 2,
+      "base": {
+        "drawdownPeakDay": "2025-07-30",
+        "drawdownTroughDay": "2026-02-16",
+        "endingNavUsd": 1025.391728462164,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.020741770643,
+        "netUsdPer1000": 25.391728462164
+      },
+      "boundaryCensoredCount": 0,
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 9338.1020369575,
+        "p05SupportedCapitalUsd": 9338.1020369575,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cohorts": [
+        {
+          "entryDay": "2025-07-29",
+          "grossReturn": 0.049627791563,
+          "stressReturn": 0.045436619403,
+          "supportedCapitalUsd": 9338.1020369575,
+          "symbols": [
+            "TRXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-15",
+          "grossReturn": -0.0183877461,
+          "stressReturn": -0.022307331674,
+          "supportedCapitalUsd": 43590.904920494,
+          "symbols": [
+            "BTCUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 2
+        }
+      ],
+      "completedCohorts": 2,
+      "concentration": {
+        "topFivePositiveCohortGrossProfitShare": 1.0
+      },
+      "distinctSelectedSymbols": 3,
+      "gross": {
+        "drawdownPeakDay": "2025-07-30",
+        "drawdownTroughDay": "2026-02-16",
+        "endingNavUsd": 1030.327502232949,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0183877461,
+        "netUsdPer1000": 30.327502232949
+      },
+      "inference": {
+        "holmAdjustedPValue": 1.0,
+        "holmRawPValue": 0.383207224799,
+        "primary14DayStressNetLowerBoundUsdPer1000": -44.117046302477,
+        "primary14DayStressNetUpperBoundUsdPer1000": 117.10882769875,
+        "sensitivity28DayStressNetLowerBoundUsdPer1000": -44.117046302477,
+        "sensitivity28DayStressNetUpperBoundUsdPer1000": 117.10882769875,
+        "timingMatchedExcessLowerBoundUsdPer1000": 0.0,
+        "timingMatchedExcessUpperBoundUsdPer1000": 194.024746431508
+      },
+      "mechanism": {
+        "curve": [
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 0,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 1,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 2,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 3,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 4,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 5,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 6,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 7,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 8,
+            "recoveries": 2,
+            "survival": 0.8
+          },
+          {
+            "atRisk": 8,
+            "censored": 0,
+            "day": 9,
+            "recoveries": 1,
+            "survival": 0.7
+          },
+          {
+            "atRisk": 7,
+            "censored": 0,
+            "day": 10,
+            "recoveries": 0,
+            "survival": 0.7
+          },
+          {
+            "atRisk": 7,
+            "censored": 0,
+            "day": 11,
+            "recoveries": 0,
+            "survival": 0.7
+          },
+          {
+            "atRisk": 7,
+            "censored": 0,
+            "day": 12,
+            "recoveries": 0,
+            "survival": 0.7
+          },
+          {
+            "atRisk": 7,
+            "censored": 0,
+            "day": 13,
+            "recoveries": 0,
+            "survival": 0.7
+          },
+          {
+            "atRisk": 7,
+            "censored": 7,
+            "day": 14,
+            "recoveries": 0,
+            "survival": 0.7
+          }
+        ],
+        "episodeCount": 10,
+        "medianRecoveryDays": "NOT_ESTIMABLE",
+        "recoveredCount": 3,
+        "restrictedMeanRecoveryDays": 12.3,
+        "rightCensoredCount": 7,
+        "status": "AVAILABLE"
+      },
+      "nestedShockCount": 9,
+      "parameters": {
+        "maximumRecoveryHorizonDays": 14,
+        "recoveryMultiple": "1.25",
+        "shockThreshold": "5.0"
+      },
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-07-30",
+        "drawdownTroughDay": "2026-02-16",
+        "endingNavUsd": 1026.212370068751,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.020349988995,
+        "netUsdPer1000": 26.212370068751
+      },
+      "selectedSymbols": [
+        "BTCUSDT",
+        "TRXUSDT",
+        "XRPUSDT"
+      ],
+      "stress": {
+        "drawdownPeakDay": "2025-07-30",
+        "drawdownTroughDay": "2026-02-16",
+        "endingNavUsd": 1022.115717989287,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.022307331674,
+        "netUsdPer1000": 22.115717989287
+      },
+      "timingMatchedStress": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2026-02-16",
+        "endingNavUsd": 953.338666804859,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.046661333195,
+        "netUsdPer1000": -46.661333195141
+      },
+      "tradeCount": 3,
+      "trialId": "VG25-S50-R125-H14"
+    },
+    {
+      "activeWeeks": 2,
+      "base": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 981.986250614153,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.025867261019,
+        "netUsdPer1000": -18.013749385847
+      },
+      "boundaryCensoredCount": 0,
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 15772.8767901335,
+        "p05SupportedCapitalUsd": 15772.8767901335,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cohorts": [
+        {
+          "entryDay": "2025-08-06",
+          "grossReturn": 0.010485320551,
+          "stressReturn": 0.00645044459,
+          "supportedCapitalUsd": 15772.8767901335,
+          "symbols": [
+            "TRXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-11",
+          "grossReturn": -0.023525557567,
+          "stressReturn": -0.02742462782,
+          "supportedCapitalUsd": 47936.061446679,
+          "symbols": [
+            "BTCUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 2
+        }
+      ],
+      "completedCohorts": 2,
+      "concentration": {
+        "topFivePositiveCohortGrossProfitShare": 1.0
+      },
+      "distinctSelectedSymbols": 3,
+      "gross": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 986.713089971753,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.023525557567,
+        "netUsdPer1000": -13.286910028247
+      },
+      "inference": {
+        "holmAdjustedPValue": 1.0,
+        "holmRawPValue": 0.737612887479,
+        "primary14DayStressNetLowerBoundUsdPer1000": -74.10401641842,
+        "primary14DayStressNetUpperBoundUsdPer1000": 12.942497416336,
+        "sensitivity28DayStressNetLowerBoundUsdPer1000": -74.10401641842,
+        "sensitivity28DayStressNetUpperBoundUsdPer1000": 12.942497416336,
+        "timingMatchedExcessLowerBoundUsdPer1000": -19.436890844701,
+        "timingMatchedExcessUpperBoundUsdPer1000": 0.0
+      },
+      "mechanism": {
+        "curve": [
+          {
+            "atRisk": 12,
+            "censored": 0,
+            "day": 0,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 12,
+            "censored": 0,
+            "day": 1,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 12,
+            "censored": 0,
+            "day": 2,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 12,
+            "censored": 0,
+            "day": 3,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 12,
+            "censored": 0,
+            "day": 4,
+            "recoveries": 2,
+            "survival": 0.833333333333
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 5,
+            "recoveries": 0,
+            "survival": 0.833333333333
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 6,
+            "recoveries": 1,
+            "survival": 0.75
+          },
+          {
+            "atRisk": 9,
+            "censored": 9,
+            "day": 7,
+            "recoveries": 0,
+            "survival": 0.75
+          }
+        ],
+        "episodeCount": 12,
+        "medianRecoveryDays": "NOT_ESTIMABLE",
+        "recoveredCount": 3,
+        "restrictedMeanRecoveryDays": 6.416666666667,
+        "rightCensoredCount": 9,
+        "status": "AVAILABLE"
+      },
+      "nestedShockCount": 7,
+      "parameters": {
+        "maximumRecoveryHorizonDays": 7,
+        "recoveryMultiple": "1.50",
+        "shockThreshold": "5.0"
+      },
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 982.77215394454,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.025477529978,
+        "netUsdPer1000": -17.22784605546
+      },
+      "selectedSymbols": [
+        "BTCUSDT",
+        "TRXUSDT",
+        "XRPUSDT"
+      ],
+      "stress": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 978.848915728433,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.02742462782,
+        "netUsdPer1000": -21.151084271567
+      },
+      "timingMatchedStress": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 985.350753706495,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.027349142982,
+        "netUsdPer1000": -14.649246293505
+      },
+      "tradeCount": 3,
+      "trialId": "VG25-S50-R150-H07"
+    },
+    {
+      "activeWeeks": 4,
+      "base": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 992.915607667708,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.063331259451,
+        "netUsdPer1000": -7.084392332292
+      },
+      "boundaryCensoredCount": 0,
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 9338.1020369575,
+        "p05SupportedCapitalUsd": 9338.1020369575,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cohorts": [
+        {
+          "entryDay": "2025-07-29",
+          "grossReturn": 0.049627791563,
+          "stressReturn": 0.045436619403,
+          "supportedCapitalUsd": 9338.1020369575,
+          "symbols": [
+            "TRXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-06",
+          "grossReturn": 0.014790685119,
+          "stressReturn": 0.010738617803,
+          "supportedCapitalUsd": 31545.753580267,
+          "symbols": [
+            "BNBUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-08-29",
+          "grossReturn": -0.03614738806,
+          "stressReturn": -0.039996059242,
+          "supportedCapitalUsd": 14367.279983789,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-11",
+          "grossReturn": -0.023525557567,
+          "stressReturn": -0.02742462782,
+          "supportedCapitalUsd": 47936.061446679,
+          "symbols": [
+            "BTCUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 2
+        }
+      ],
+      "completedCohorts": 4,
+      "concentration": {
+        "topFivePositiveCohortGrossProfitShare": 1.0
+      },
+      "distinctSelectedSymbols": 5,
+      "gross": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 1002.497510494676,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.058822558168,
+        "netUsdPer1000": 2.497510494676
+      },
+      "inference": {
+        "holmAdjustedPValue": 1.0,
+        "holmRawPValue": 0.563827190627,
+        "primary14DayStressNetLowerBoundUsdPer1000": -116.833026655636,
+        "primary14DayStressNetUpperBoundUsdPer1000": 104.674365702042,
+        "sensitivity28DayStressNetLowerBoundUsdPer1000": -115.694856142452,
+        "sensitivity28DayStressNetUpperBoundUsdPer1000": 116.537041512223,
+        "timingMatchedExcessLowerBoundUsdPer1000": -2.28849561515,
+        "timingMatchedExcessUpperBoundUsdPer1000": 172.497641175562
+      },
+      "mechanism": {
+        "curve": [
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 0,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 1,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 2,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 3,
+            "recoveries": 0,
+            "survival": 1.0
+          },
+          {
+            "atRisk": 10,
+            "censored": 0,
+            "day": 4,
+            "recoveries": 2,
+            "survival": 0.8
+          },
+          {
+            "atRisk": 8,
+            "censored": 0,
+            "day": 5,
+            "recoveries": 0,
+            "survival": 0.8
+          },
+          {
+            "atRisk": 8,
+            "censored": 0,
+            "day": 6,
+            "recoveries": 1,
+            "survival": 0.7
+          },
+          {
+            "atRisk": 7,
+            "censored": 0,
+            "day": 7,
+            "recoveries": 0,
+            "survival": 0.7
+          },
+          {
+            "atRisk": 7,
+            "censored": 0,
+            "day": 8,
+            "recoveries": 0,
+            "survival": 0.7
+          },
+          {
+            "atRisk": 7,
+            "censored": 0,
+            "day": 9,
+            "recoveries": 1,
+            "survival": 0.6
+          },
+          {
+            "atRisk": 6,
+            "censored": 0,
+            "day": 10,
+            "recoveries": 0,
+            "survival": 0.6
+          },
+          {
+            "atRisk": 6,
+            "censored": 0,
+            "day": 11,
+            "recoveries": 0,
+            "survival": 0.6
+          },
+          {
+            "atRisk": 6,
+            "censored": 0,
+            "day": 12,
+            "recoveries": 1,
+            "survival": 0.5
+          },
+          {
+            "atRisk": 5,
+            "censored": 0,
+            "day": 13,
+            "recoveries": 1,
+            "survival": 0.4
+          },
+          {
+            "atRisk": 4,
+            "censored": 4,
+            "day": 14,
+            "recoveries": 0,
+            "survival": 0.4
+          }
+        ],
+        "episodeCount": 10,
+        "medianRecoveryDays": 13,
+        "recoveredCount": 6,
+        "restrictedMeanRecoveryDays": 10.4,
+        "rightCensoredCount": 4,
+        "status": "AVAILABLE"
+      },
+      "nestedShockCount": 9,
+      "parameters": {
+        "maximumRecoveryHorizonDays": 14,
+        "recoveryMultiple": "1.50",
+        "shockThreshold": "5.0"
+      },
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 994.505544271272,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.062581624635,
+        "netUsdPer1000": -5.494455728728
+      },
+      "selectedSymbols": [
+        "ADAUSDT",
+        "BNBUSDT",
+        "BTCUSDT",
+        "TRXUSDT",
+        "XRPUSDT"
+      ],
+      "stress": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 986.581236768618,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.066323810023,
+        "netUsdPer1000": -13.418763231382
+      },
+      "timingMatchedStress": {
+        "drawdownPeakDay": "2025-08-07",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 933.031351884055,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.070295605137,
+        "netUsdPer1000": -66.968648115945
+      },
+      "tradeCount": 6,
+      "trialId": "VG25-S50-R150-H14"
+    }
+  ],
+  "version": "VG25DevelopmentV1"
+}

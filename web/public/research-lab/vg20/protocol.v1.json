@@ -1,0 +1,170 @@
+{
+  "authority": {
+    "accountData": "FORBIDDEN",
+    "capitalAuthority": "NONE",
+    "consumer": "N3_SUCCESSOR_FINAL_CONVERGENCE",
+    "effectUsd": "0",
+    "execution": "FORBIDDEN",
+    "host": "FORBIDDEN",
+    "orders": "FORBIDDEN",
+    "privateApi": "FORBIDDEN",
+    "scope": "BINANCE_PUBLIC_RESEARCH_ONLY",
+    "ui": "FORBIDDEN"
+  },
+  "baseCommit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "bootstrap": {
+    "blockLengthDays": 7,
+    "coveragePerMyriad": 9000,
+    "replicates": 4096,
+    "seed": 202607292020
+  },
+  "capacity": {
+    "executableCapacity": "UNMEASURED",
+    "initialNotionalGateUsd": "1000",
+    "label": "PRIOR_30D_MEDIAN_QUOTE_VOLUME_1BP_PARTICIPATION_PROXY",
+    "participationBasisPoints": 1,
+    "truthBoundary": "NO_HISTORICAL_SYNCHRONIZED_BOOK_QUEUE_SPREAD_FILL_OR_IMPACT_EVIDENCE"
+  },
+  "collisionLaw": {
+    "altEventTimeRanking": "FORBIDDEN",
+    "altVolumeAsTrigger": "FORBIDDEN",
+    "currentExchangeInfo": "FORBIDDEN",
+    "dynamicSubstitution": "FORBIDDEN",
+    "priceOrReturnAsLeaderTrigger": "FORBIDDEN",
+    "semanticIdentity": "SYNCHRONIZED_BTC_ETH_DAILY_QUOTE_VOLUME_SHOCK_TO_FIXED_LIQUID_ALT_FUTURE_PRICE_RESPONSE",
+    "structuralCausationClaim": "FORBIDDEN"
+  },
+  "costs": {
+    "accountEffectiveFee": "UNKNOWN",
+    "baseAdversePriceBasisPointsPerLeg": 10,
+    "discountAssumed": false,
+    "historicalSpreadImpact": "UNMEASURED",
+    "publicRegularTakerFeeBasisPointsPerLeg": 10,
+    "stressAdversePriceBasisPointsPerLeg": 25
+  },
+  "data": {
+    "archiveInterval": "1d",
+    "archiveSource": "https://data.binance.vision/data/spot/monthly/klines/",
+    "developmentEndExclusiveUtc": "2026-03-01T00:00:00Z",
+    "developmentStartUtc": "2025-07-01T00:00:00Z",
+    "discoverySha256": "b4a8f7abd36df19eff0510dfcc3c61fd0df9fdcab5f4d248892ee10010fb21c3",
+    "holdoutEndExclusiveUtc": "2026-07-01T00:00:00Z",
+    "holdoutStartUtc": "2026-03-01T00:00:00Z",
+    "quoteAsset": "USDT",
+    "sourceAcquisitionManifestSha256": "01f58272602e43bfb914b649adc00d8273b2d423492220a55f86443bb6441176",
+    "sourceRoot": "/private/tmp/cosmos-s1f-weekly-momentum-cash-v1",
+    "timestampUnitFrom2025": "MICROSECONDS",
+    "warmupEndExclusiveUtc": "2025-07-01T00:00:00Z",
+    "warmupStartUtc": "2025-05-01T00:00:00Z"
+  },
+  "economics": {
+    "cohortWeighting": "EQUAL",
+    "initialUsd": "1000",
+    "longOnly": true,
+    "positionNotional": "NONCOMPOUNDED_NORMALIZED_1000_USD_PER_NONOVERLAPPING_EVENT",
+    "quantityMode": "FRACTIONAL_RESEARCH_ONLY",
+    "shorting": false,
+    "unusedAllocation": "USDT_CASH"
+  },
+  "formalDevelopmentGates": {
+    "activeCalendarMonthsMinimum": 4,
+    "baseNetUsdExclusiveMinimum": "0",
+    "benchmarkStressExcessUsdExclusiveMinimum": "0",
+    "capacityParticipationProxyUsdMinimum": "1000",
+    "closedCohortEventsMinimum": 12,
+    "holmAdjustedPValueExclusiveMaximum": "0.05",
+    "maximumDrawdownMaximum": "0.25",
+    "potentialEventsMinimum": 16,
+    "stressNetUsdExclusiveMinimum": "0",
+    "stressOneSidedBootstrapLowerBoundUsdPerDayExclusiveMinimum": "0",
+    "whiteRealityCheckPValueExclusiveMaximum": "0.05"
+  },
+  "formalHoldoutGates": {
+    "activeCalendarMonthsMinimum": 2,
+    "baseNetUsdExclusiveMinimum": "0",
+    "benchmarkStressExcessUsdExclusiveMinimum": "0",
+    "closedCohortEventsMinimum": 5,
+    "maximumDrawdownMaximum": "0.25",
+    "stressNetUsdExclusiveMinimum": "0",
+    "stressOneSidedBootstrapLowerBoundUsdPerDayExclusiveMinimum": "0"
+  },
+  "holdout": {
+    "maximumOpenCount": 1,
+    "openedOnlyAfterDevelopmentChampionAndGatesSeal": true,
+    "repairOrRunnerUpAfterOpen": "FORBIDDEN"
+  },
+  "inference": {
+    "familywiseAlphaPerMyriad": 500,
+    "holmFamily": "ALL_12_DEVELOPMENT_STRESS_DAILY_PATHS",
+    "pbo": {
+      "blockCount": 8,
+      "role": "DIAGNOSTIC_ONLY",
+      "symmetricSplitCount": 70
+    },
+    "whiteRealityCheck": "SYNCHRONOUS_CENTERED_CIRCULAR_BLOCK_BOOTSTRAP_OVER_ALL_12_STRESS_DAILY_PATHS"
+  },
+  "lifecycle": {
+    "freezeBeforeArchiveBodyOpen": true,
+    "holdoutBodyAccessBeforeDevelopmentGate": "FORBIDDEN",
+    "manualPreviewOrRerun": "FORBIDDEN",
+    "maximumAuthorizedRuns": 1,
+    "terminalMeasurementFailure": "UNMEASURED_NO_REPAIR"
+  },
+  "missingness": {
+    "candidateWarmupAnomaly": "QUARANTINE_BEFORE_RANKING_AND_RECORD_REASON",
+    "cohortIncompleteBeforeEntry": "ENTIRE_EVENT_REMAINS_CASH_NO_REPLACEMENT",
+    "duplicateOrConflictingLeaderOrSelectedCohortBar": "UNMEASURED",
+    "incompleteSelectedCohortBarAfterEntry": "UNMEASURED",
+    "leaderMissingOrInvalid": "UNMEASURED",
+    "unknownValueToZero": "FORBIDDEN"
+  },
+  "selection": {
+    "championMetric": "HIGHEST_DEVELOPMENT_STRESS_BOOTSTRAP_LCB_THEN_STRESS_NET_USD",
+    "tieBreak": [
+      "LOWER_HOLD_DAYS",
+      "LARGER_LEADER_LOOKBACK_DAYS",
+      "HIGHER_JOINT_SHOCK_RATIO",
+      "LEXICOGRAPHIC_TRIAL_ID"
+    ]
+  },
+  "signal": {
+    "cohort": {
+      "excluded": "BTC_ETH_DISCOVERY_STABLE_FIAT_AND_PAIRED_LEVERAGED_SYMBOLS",
+      "fixedCount": 10,
+      "liquidityLabel": "PREDEVELOPMENT_BINANCE_LIQUID_ALT_PROXY_NOT_MARKET_CAP",
+      "ranking": "DESCENDING_MEDIAN_DAILY_QUOTE_VOLUME_OVER_ALL_61_WARMUP_DAYS_THEN_UTF8_SYMBOL_BYTES",
+      "requiredWarmupDays": 61
+    },
+    "entry": "T_PLUS_2_UTC_DAILY_OPEN_AFTER_ONE_FULL_UNTOUCHED_LAG_DAY",
+    "event": "BOTH_BTCUSDT_AND_ETHUSDT_QUOTE_VOLUME_T_DIVIDED_BY_OWN_PRIOR_LOOKBACK_MEDIAN_MEET_TRIAL_THRESHOLD",
+    "eventAvailability": "ONLY_AFTER_BOTH_UTC_DAILY_BARS_T_CLOSE",
+    "eventInputs": "BTCUSDT_AND_ETHUSDT_QUOTE_VOLUME_ONLY",
+    "exit": "ENTRY_OPEN_PLUS_DECLARED_CALENDAR_HOLD_DAYS_AT_UTC_DAILY_OPEN",
+    "overlap": "FIRST_EVENT_OWNS_LAG_AND_HOLD_WINDOW;_LATER_QUALIFYING_EVENTS_MAP_TO_CASH_OVERLAP",
+    "response": "FIXED_EQUAL_WEIGHT_ALT_COHORT_FUTURE_PRICE_RETURN;PREDICTIVE_ASSOCIATION_ONLY"
+  },
+  "trials": {
+    "attemptedCount": 12,
+    "holdingDays": [
+      1,
+      3
+    ],
+    "jointShockRatios": [
+      "1.50",
+      "2.00"
+    ],
+    "leaderLookbackDays": [
+      10,
+      20,
+      40
+    ]
+  },
+  "verdictLaw": {
+    "GO": "VALID_PUBLIC_MEASUREMENT_AND_ALL_DEVELOPMENT_AND_SINGLE_HOLDOUT_GATES_PASS;PUBLIC_PREDICTIVE_RESEARCH_ONLY",
+    "NO_GO": "VALID_MEASUREMENT_AND_ONE_OR_MORE_FROZEN_STATISTICAL_ECONOMIC_RISK_BENCHMARK_OR_PROXY_CAPACITY_GATES_FAIL",
+    "UNMEASURED": "CUSTODY_SCHEMA_TIMESTAMP_RUN_CONTROL_REQUIRED_SOURCE_OR_SUCCESSFUL_EXIT_FAILURE_PREVENTS_PREREGISTERED_ESTIMATE",
+    "capitalAuthorityRegardlessOfResearchVerdict": "NONE",
+    "causalEffectVerdictRegardlessOfPredictiveVerdict": "NO_GO"
+  },
+  "version": "VG20ProtocolV1"
+}

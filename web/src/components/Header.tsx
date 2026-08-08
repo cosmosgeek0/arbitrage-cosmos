@@ -27,6 +27,7 @@ import {
   BadgeCheck as LucideAdvisorClear,
   BellRing as LucideBell,
   CircleAlert as LucideAdvisorReview,
+  FlaskConical as LucideResearchLab,
   Radar as LucideNotifOpportunity,
   ScrollText as LucideNotifLog,
   ShieldAlert as LucideNotifCritical,
@@ -407,6 +408,7 @@ const TITLES: Record<Page, string> = {
   notifications: 'Notifications',
   news: 'Market News',
   calendar: 'Economic Calendar',
+  'research-lab': 'Research Lab',
 };
 
 // `match` marks extra page ids that keep an item highlighted (Execution owns
@@ -447,6 +449,7 @@ const NAV: { group: string | null; items: NavItem[] }[] = [
   {
     group: 'Utility',
     items: [
+      { id: 'research-lab', label: 'Research Lab', icon: <LucideResearchLab size={19} strokeWidth={1.7} /> },
       { id: 'ledger', label: 'Logs', icon: <img className="snav-log-mark" src="/log-mark.png" alt="" aria-hidden="true" /> },
       { id: 'news', label: 'News', icon: <img className="snav-news-mark" src="/news-mark.png" alt="" aria-hidden="true" /> },
       { id: 'calendar', label: 'Calendar', icon: <img className="snav-calendar-mark" src="/calendar-check.png" alt="" aria-hidden="true" /> },

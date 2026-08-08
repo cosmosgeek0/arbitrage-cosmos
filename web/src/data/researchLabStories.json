@@ -1,0 +1,827 @@
+{
+ "provenance": "stories derived strictly from Desktop/RESEARCH_LAB_ARTIFACTS sealed files; ARTIFACTS_INSUFFICIENT means the family is a tool/incomplete packet whose folder holds no experiment verdict \u2014 displayed as-is, never invented",
+ "families": {
+  "dq11": {
+   "family": "dq11",
+   "tested": "ARTIFACTS_INSUFFICIENT",
+   "why_ended": "The dq11 folder contains only one file, README.md, and that file describes a data-quality checking tool rather than a market experiment: it is a \"sample/admission denominator validator\" that audits whether a research sample funnel (available to eligible to admitted to signaled to filled to scored) adds up honestly, and the README itself states the tool has no authority, picks no strategy, estimates no profitability, and contains no performance metrics. Missing from the folder are the protocol file (protocol.v1.json) that would say what market idea was to be tested, any result file (result.v1.json or gen_result.v1.json) that would carry the verdict and reason codes, any development files, and OFFICIAL_SOURCE_RESEARCH.md; the supporting files the README refers to (fixtures/valid-mixed.v1.json, REFERENCES.md, SHA256SUMS, the validator and test code) are also absent, so there is no recorded outcome to report.",
+   "sources": [
+    "web/public/research-lab/dq11/README.md"
+   ],
+   "author": "opus-worker"
+  },
+  "dq10": {
+   "family": "dq10",
+   "tested": "ARTIFACTS_INSUFFICIENT",
+   "why_ended": "The dq10 folder holds exactly one file, README.md, and it describes a checking tool rather than a market experiment: DQ-10 is a self-contained, offline program that reads a rules file plus a claimed research result and confirms the two match and are internally consistent \u2014 that a \"we don't know\" answer is never quietly recorded as a zero, that every required checkpoint is accounted for, and that a GO/NO-GO/UNMEASURED label follows from the numbers rather than being asserted, while never granting any money or trading permission. What is missing is everything needed to state a market idea and an outcome: there is no protocol.v1.json (which would say what was tested and how), no result.v1.json or gen_result.v1.json (which would carry the verdict and reason codes), no OFFICIAL_SOURCE_RESEARCH.md, and no development files \u2014 the README only names six illustrative test fixtures used to exercise the tool, which are examples, not findings from a real market test.",
+   "sources": [
+    "web/public/research-lab/dq10/README.md"
+   ],
+   "author": "opus-worker"
+  },
+  "dq5": {
+   "family": "dq5",
+   "tested": "ARTIFACTS_INSUFFICIENT",
+   "why_ended": "The dq5 folder contains only one file, README.md, and that file does not describe a market experiment at all \u2014 it documents a research-intake gatekeeper program that checks, purely from paperwork, whether a proposed study is allowed to start (rejecting things like two studies claiming overlapping slices of the same price history, or a study reusing a hold-back dataset that has already been peeked at). There is no protocol.v1.json stating a market idea to test, no result.v1.json or gen_result.v1.json holding a verdict or reason codes, no development files, and no OFFICIAL_SOURCE_RESEARCH.md, so nothing in this directory records what was tested or how it ended.",
+   "sources": [
+    "web/public/research-lab/dq5/README.md"
+   ],
+   "author": "opus-worker"
+  },
+  "dq13": {
+   "family": "dq13",
+   "tested": "ARTIFACTS_INSUFFICIENT",
+   "why_ended": "The folder web/public/research-lab/dq13/ holds exactly one file, README.md, and nothing else: there is no protocol.v1.json, no result.v1.json or gen_result.v1.json, no OFFICIAL_SOURCE_RESEARCH.md, and the two files the README itself points to (policy.v1.json and REFERENCES.md) are also absent \u2014 so there is no recorded verdict, no reason codes, and no outcome of any kind to report. What the one surviving file does say is that dq13 is not a market-idea experiment at all but a piece of checking machinery: an offline tool that reads timestamps on Binance price, funding and instrument-information records and decides whether a piece of evidence was genuinely known and usable at the moment a decision was made, answering only VALID, UNKNOWN, or INVALID, and explicitly claiming no authority to trade, price anything, or judge whether any strategy makes money.",
+   "sources": [
+    "web/public/research-lab/dq13/README.md"
+   ],
+   "author": "opus-worker"
+  },
+  "dq8": {
+   "family": "dq8",
+   "tested": "ARTIFACTS_INSUFFICIENT",
+   "why_ended": "The folder holds exactly one file, README.md, and nothing else: there is no protocol.v1.json, no result.v1.json or gen_result.v1.json, no development files, no OFFICIAL_SOURCE_RESEARCH.md, and not even the REFERENCES.md that the README itself links to \u2014 so there is no recorded verdict, no reason codes, and no outcome of any kind to report. What the single README does describe is not a market idea at all but a bookkeeping checker: a \"NAV/drawdown coordinate validator\" that re-adds an account's cash, positions, and value over time and issues a signed receipt only if every claimed number and timestamp matches its own recalculation, and it states plainly that it does not judge whether any trading idea is profitable.",
+   "sources": [
+    "web/public/research-lab/dq8/README.md"
+   ],
+   "author": "opus-worker"
+  },
+  "dq4": {
+   "family": "dq4",
+   "tested": "ARTIFACTS_INSUFFICIENT",
+   "why_ended": "No market idea can be reported, because the folder web/public/research-lab/dq4/ holds exactly one file, README.md, and nothing else: there is no protocol.v1.json (which would say what was to be tested), no result.v1.json or gen_result.v1.json (which would carry the verdict and reason codes), no development files, and no OFFICIAL_SOURCE_RESEARCH.md; even the two supporting files the README itself points to, policy.v1.json and fixtures/cases.v1.json, are absent. On top of that, the one file present describes DQ-4 not as a market experiment at all but as a network-free checking tool that confirms a sealed research packet really came from the Git history it claims, and it states plainly that it does not run an experiment, look at held-back data, or grant any trading or money authority \u2014 so there is no recorded outcome, verdict, or ending to translate.",
+   "sources": [
+    "web/public/research-lab/dq4/README.md"
+   ],
+   "author": "opus-worker"
+  },
+  "dq1": {
+   "family": "dq1",
+   "tested": "ARTIFACTS_INSUFFICIENT",
+   "why_ended": "No outcome can be reported because the folder web/public/research-lab/dq1/ holds only two documents \u2014 README.md and OFFICIAL_SOURCE_RESEARCH.md \u2014 with no protocol file, no result or gen_result file, no recorded verdict or reason codes, and not even the policy.v1.json that the README itself points to; the two documents that are present describe a data-handling tool that checks and cleans downloaded Binance daily price files, and they state plainly that it tests no trading idea and offers no evidence of profitability, so there is nothing here about a market mechanism or how a trial of one ended.",
+   "sources": [
+    "web/public/research-lab/dq1/README.md",
+    "web/public/research-lab/dq1/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "dq9": {
+   "family": "dq9",
+   "tested": "ARTIFACTS_INSUFFICIENT",
+   "why_ended": "No market idea can be reported, because the only file in web/public/research-lab/dq9/ is README.md, and that README describes DQ-9 not as a market experiment but as a rule-checker for the research process itself \u2014 in its own words it opens no data, computes no statistic, and evaluates no historical packet, instead confirming that a sealed study followed the required one-run-then-holdout sequence and issuing a tamper-evident receipt. Missing entirely are protocol.v1.json (what would have been tested), result.v1.json or gen_result.v1.json (the recorded verdict and reason codes for how it ended), any development files, and OFFICIAL_SOURCE_RESEARCH.md, so there is no recorded outcome, decision, or reason code available to translate.",
+   "sources": [
+    "web/public/research-lab/dq9/README.md"
+   ],
+   "author": "opus-worker"
+  },
+  "dq12": {
+   "family": "dq12",
+   "tested": "Not a trading edge but a data-trust check: given only a frozen snapshot of Binance's spot listings and a frozen snapshot of its dollar-margined perpetual futures listings, can a program prove offline \u2014 without guessing from ticker text, and refusing traps like \"1000SHIB\" versus the legitimately digit-leading \"1INCH\" \u2014 that a chosen spot pair and a chosen perpetual really are the same coin quoted in the same currency and tradable right now, answering \"MATCHED\" only when every pre-committed identity, price-unit scale, and file fingerprint lines up, and otherwise failing safe to \"UNKNOWN\" with one stated reason.",
+   "why_ended": "The artifacts record no experiment verdict at all \u2014 there is no protocol or result file in the folder, only the README and the source-research note \u2014 and what the README does record is a status rather than an outcome: the checker was built and frozen as a \"preserved source-only candidate\" carrying no authority of any kind (no trading, no money, no deployment), deliberately limited to answering about the present because Binance's public archives hold market prices but no history of which symbols were listed and trading on a past date, and it stays parked in that state until a later step called \"N3 successor/final convergence\" independently rebuilds and accepts it.",
+   "sources": [
+    "web/public/research-lab/dq12/README.md",
+    "web/public/research-lab/dq12/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "dq3": {
+   "family": "dq3",
+   "tested": "This one tested no market idea at all: DQ-3 is a rulebook-checking tool that, before any future trading study is scored, confirms the study is playing fair \u2014 that every attempted idea (including the ones that failed or were abandoned) is counted in the tally rather than quietly dropped, that all the ideas are compared over the exact same stretch of history using one shared, pre-fixed set of random reshuffles instead of each idea getting its own, and that the untouched \"final exam\" slice of data has not been peeked at.",
+   "why_ended": "No ending is recorded, because the folder holds only README.md \u2014 there is no protocol.v1.json, no result.v1.json or gen_result.v1.json, no development files, and no OFFICIAL_SOURCE_RESEARCH.md, so no verdict, reason code, or measured outcome of any kind exists to report; the README itself only states the tool's permanent design limits (it never produces an economic verdict, never grants permission to open the final-exam data, and its authority is always \"NONE\"), and it points to a set of self-checks that would have to be run from a code directory that is not present here.",
+   "sources": [
+    "web/public/research-lab/dq3/README.md"
+   ],
+   "author": "opus-worker"
+  },
+  "dq7": {
+   "family": "dq7",
+   "tested": "ARTIFACTS_INSUFFICIENT",
+   "why_ended": "No market idea can be reported for dq7 because the folder web/public/research-lab/dq7/ contains exactly one file, README.md, and nothing else \u2014 there is no protocol.v1.json saying what would be tested, no result.v1.json or gen_result.v1.json holding a verdict or reason codes, no development files, and no OFFICIAL_SOURCE_RESEARCH.md. The one file present does not describe a trading hypothesis at all: it documents \"DQ-7\", a rule-checking tool that reads a list of proposed research ideas and refuses the list if two ideas are secretly the same idea under a new name, venue, position-sizing rule, or bookkeeping label, or if the list lacks a single up-front plan for how many separate tests are being run; the README states plainly that passing it is only a paperwork check and never a profitability finding, and it records no run, no outcome, and no ending.",
+   "sources": [
+    "web/public/research-lab/dq7/README.md"
+   ],
+   "author": "opus-worker"
+  },
+  "dq14": {
+   "family": "dq14",
+   "tested": "ARTIFACTS_INSUFFICIENT",
+   "why_ended": "Nothing can be said about how this one ended, because the folder holds only a single README.md and nothing else: there is no protocol.v1.json describing what was to be tested, no result.v1.json or gen_result.v1.json holding a verdict or reason codes, no development files, no OFFICIAL_SOURCE_RESEARCH.md, and the REFERENCES.md the README links to is not there either. On top of that, the one file present does not describe a market idea at all \u2014 it describes DQ-14 as a self-contained checking tool that replays a tamper-evident log of which data files were opened, unpacked and read, and confirms that the final summary of that activity is honest; it records no outcome, and it says in its own words that accepting a replay implies no profitability conclusion.",
+   "sources": [
+    "web/public/research-lab/dq14/README.md"
+   ],
+   "author": "opus-worker"
+  },
+  "dq6": {
+   "family": "dq6",
+   "tested": "ARTIFACTS_INSUFFICIENT",
+   "why_ended": "No market idea and no outcome can be reported, because the folder web/public/research-lab/dq6/ holds exactly one file \u2014 README.md \u2014 and nothing else: there is no protocol.v1.json (so no stated hypothesis, market, date range, or preset variants), no result.v1.json or gen_result.v1.json (so no recorded verdict, no reason codes, no numbers), no development files, no OFFICIAL_SOURCE_RESEARCH.md, and not even the REFERENCES.md that the README itself links to. For what it is worth, the README does not describe a market experiment at all: it describes DQ-6 as an offline, no-network checking tool that reads a frozen results document and either rejects it or stamps it with a tamper-evident fingerprint, enforcing five honesty rules (the starting capital must be a declared research figure in USDT, the profit breakdown must add up exactly, the real trading fee an account would pay stays marked UNKNOWN, tradable size stays marked UNMEASURED and may only carry a public estimate, and USDT amounts may not be relabeled as US dollars). The README states plainly that this tool does not establish statistical validity, fee truth, fillability, or profitability \u2014 so no verdict about a trading idea exists here to report, and none of the files that would carry one are present.",
+   "sources": [
+    "web/public/research-lab/dq6/README.md"
+   ],
+   "author": "opus-worker"
+  },
+  "fee1": {
+   "family": "fee1",
+   "tested": "ARTIFACTS_INSUFFICIENT",
+   "why_ended": "The folder web/public/research-lab/fee1/ contains exactly one file, README.md, and nothing else: there is no protocol.v1.json, no result.v1.json or gen_result.v1.json, no development files, and no OFFICIAL_SOURCE_RESEARCH.md, so there is no recorded verdict, no reason code, and no statement of how the work ended. The one file present also does not describe a market idea being tested \u2014 it is a rulebook for how Binance trading-fee figures may be recorded, labelled as account-specific, public-schedule, hypothetical, or unknown, and passed to other experiments, and it states outright that its output is a fee-cost input rather than any judgement about whether a trade has an edge; the file also refers to a companion source inventory, official_sources.v1.json, which is not present in the folder.",
+   "sources": [
+    "web/public/research-lab/fee1/README.md"
+   ],
+   "author": "opus-worker"
+  },
+  "be2": {
+   "family": "be2",
+   "tested": "Whether the classic \"cash-and-carry\" basis trade on Binance actually makes money after real-world costs: buy a coin on the ordinary spot market and at the same moment sell the matching perpetual futures contract, for BTC, ETH, BNB and SOL, entering at six fixed clock times each day (00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC), holding each pair exactly four hours, and measuring the net dollars per $1,000 put in \u2014 counting the price you actually get as your order eats through the order book, trading fees, and the funding payments that pass between the two sides \u2014 using live prices recorded forward in time over a fixed 14-day window (29 July to 12 August 2026) rather than estimated from past data, precisely because the earlier E-1 work had only guessed at those slippage and size-capacity numbers.",
+   "why_ended": "It has not ended and no outcome is recorded: the folder holds only the rulebook frozen before any results were seen (protocol.v1.json and its README) with no result file of any kind, so there is no verdict, no reason code and no measured number \u2014 and the rules themselves say the recording window runs to 12 August 2026 with no early stopping, which is later than today, that the only thing the README describes running so far is a \"mechanics smoke\" (seven public price-data requests for BTCUSDT to prove that saving, sealing and replaying data works) which is explicitly marked ineligible for the campaign and for any profitability claim, and that profitability stays UNKNOWN unless every coin gets at least 20 complete four-hour round trips and at least 90 percent of scheduled slots are captured.",
+   "sources": [
+    "web/public/research-lab/be2/README.md",
+    "web/public/research-lab/be2/protocol.v1.json"
+   ],
+   "author": "opus-worker"
+  },
+  "s1f": {
+   "family": "s1f",
+   "tested": "It tested a simple weekly \"winners keep winning\" idea on Binance's regular (non-leveraged) USDT coin market: every Monday, look at the 30 most actively traded coins, buy equal-sized slots of the ones that rose the most over the previous 1 to 4 weeks, leave any slot in plain cash if the coin's recent return wasn't positive, sell everything the following Monday, and ask whether that beats simply holding cash once realistic trading fees and adverse fill prices are subtracted.",
+   "why_ended": "It could not be measured at all: while opening the practice-period price archives \u2014 the first step before any trading rules were even scored \u2014 the checker found an invalid daily close boundary in the AERGOUSDT file for March 2025, and because the experiment's own rules permit exactly one archive-opening run with no repairs or re-runs afterwards, it stopped there as \"UNMEASURED,\" with no strategy variant ever chosen, the sealed holdout period never opened, and the verdict on putting real money behind it left where it started, at NO_GO with no execution authority.",
+   "sources": [
+    "web/public/research-lab/s1f/README.md",
+    "web/public/research-lab/s1f/protocol.v1.json",
+    "web/public/research-lab/s1f/result.v1.json",
+    "web/public/research-lab/s1f/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "maker_fee_edge_grid": {
+   "family": "maker_fee_edge_grid",
+   "tested": "It asked whether a paired spot-and-futures trade \u2014 held for about four hours at a time, 366 round trips across 18 active coin pairs over the year to July 2026 \u2014 would flip from losing to making money if you entered by posting patient resting orders that earn the cheaper \"maker\" fee instead of paying the pricier \"taker\" fee, since the all-taker version of the same trade had already lost about $1.87 for every $1,000 of spot bought; two public Binance fee scenarios were frozen in advance (the standard regular-user rates, and a discounted version assuming BNB fee discounts apply), with exits still paying taker fees and a fixed 5-basis-point slippage cost on every fill.",
+   "why_ended": "It could not be measured at all: the experiment was only allowed to reuse the exact previously accepted source data, and none of the four required data files (the measurement, the manifest, the derived trade ledger, and the audit plan) were actually present \u2014 only receipts and hash fingerprints for them survived \u2014 so the run fail-closed with the verdict \"UNKNOWN_DATA / BLOCKED\", both fee scenarios were left \"NOT_MEASURED\" with every profit, confidence-interval, drawdown and capacity number recorded as null rather than zero, the out-of-sample holdout was never opened and the statistical tests were never run, and no claim of a profitable edge was made and no capital was authorized.",
+   "sources": [
+    "web/public/research-lab/maker_fee_edge_grid/README.md",
+    "web/public/research-lab/maker_fee_edge_grid/protocol.v1.json",
+    "web/public/research-lab/maker_fee_edge_grid/result.v1.json"
+   ],
+   "author": "opus-worker"
+  },
+  "n3i1": {
+   "family": "n3i1",
+   "tested": "ARTIFACTS_INSUFFICIENT",
+   "why_ended": "The n3i1 folder holds a single file, README.md, and that file describes only a read-only checking gate that takes in already-finished result packets from five other studies, confirms each one's paperwork and fingerprints match, and stamps a verdict \u2014 it never states which market pattern, instrument, or time window was actually being tested, so the market idea cannot be recovered; the missing items are protocol.v1.json (which would say what was tested and how), result.v1.json or gen_result.v1.json (the numeric outcome and reason codes), OFFICIAL_SOURCE_RESEARCH.md, and any development files, and the only outcome the README does record is a bookkeeping one \u2014 the overall scoreboard sits at UNKNOWN with no credible-positive count and no positive claim made, because fee, ledger-custody, attempt-count, and holdout information from upstream was still incomplete, and one component role (S-1C) was locally marked NO-GO purely because the real account-level trading fees were unknown.",
+   "sources": [
+    "web/public/research-lab/n3i1/README.md"
+   ],
+   "author": "opus-worker"
+  },
+  "s1l": {
+   "family": "s1l",
+   "tested": "It tested a \"calendar basis\" trade on Binance's dollar-settled Bitcoin and Ethereum futures: when a quarterly contract that expires on a set date is priced differently from the never-expiring perpetual contract on the same coin, you sell whichever leg is the expensive one and buy the cheap one, entering 14, 28 or 42 days before delivery day and closing out 1 or 2 days before it, betting the gap between the two prices closes as expiry nears \u2014 and asking whether the leftover profit is still real once trading fees, slippage, and the funding payments on the perpetual leg are subtracted.",
+   "why_ended": "It ended as UNMEASURED \u2014 no verdict either way \u2014 because the design required a fresh order-book depth snapshot (no older than 60 seconds) at every fill, and one snapshot was stale for the March-2023 Bitcoin quarterly contract on 2023-03-17; the rules treat any such missing evidence as terminal and forbid repairing or rerunning once the single permitted run has begun, so that one gap consumed the run and the experiment never reached the sealed-away 2025-2026 holdout period.",
+   "sources": [
+    "web/public/research-lab/s1l/README.md",
+    "web/public/research-lab/s1l/protocol.v1.json",
+    "web/public/research-lab/s1l/result.v1.json",
+    "web/public/research-lab/s1l/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "s1h": {
+   "family": "s1h",
+   "tested": "It tested whether, when one of the two biggest coins temporarily looks unusually expensive on its perpetual futures contract compared with its ordinary spot price \u2014 spotted by watching how far Ethereum's price gap minus Bitcoin's price gap has drifted from its own normal range over the previous 28 days \u2014 you could make money by buying the spot coin and shorting the futures on only the richer of the two, then closing out once that gap returned to normal (or after 6 or 24 hours at the latest), while paying full market-order trading fees and slippage, counting every funding payment that hurt you and throwing away every one that helped, and deliberately never using funding rates as part of the trading signal itself.",
+   "why_ended": "It ended UNMEASURED with the recorded reason \"sealed run evidence invalid\": while opening the nine months of development data, the program found a Bitcoin funding settlement (timestamped 1 July 2025, the very first moment of the test window) that had no matching mark price on the same clock, which made the evidence unusable \u2014 and because the rules allow the archives to be opened for scoring exactly once, that single permitted run was already spent and repairs or re-runs are forbidden, so the April\u2013June 2026 holdout period was never opened at all, the public proxy result is marked INVALID, and the capital verdict stays NO_GO with execution authority NONE (which, per the protocol, it would have been even if the idea had looked profitable).",
+   "sources": [
+    "web/public/research-lab/s1h/README.md",
+    "web/public/research-lab/s1h/protocol.v1.json",
+    "web/public/research-lab/s1h/result.v1.json",
+    "web/public/research-lab/s1h/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "n3_successor": {
+   "family": "n3_successor",
+   "tested": "This one did not test a single market mechanism \u2014 it was a frozen stock-take that pooled every trading idea the program had formally accepted up to a fixed cutoff (36 accepted origins, 35 once duplicate families were merged) and asked one question: has any of them shown credible evidence of real, after-cost profitability, and is that enough to justify putting the owner's $1,000 at risk?",
+   "why_ended": "It ended as UNKNOWN rather than a pass or a fail: not one accepted idea produced a credible positive result (the program-wide statistical bar came out at the weakest possible level, an effective p-value of 1), and the count of genuine winners was recorded as null rather than zero because the evidence base itself was still incomplete. Six required inputs were still missing at the freeze \u2014 the accepted family alias registry, the complete global attempt ledger, sanitized account-effective fees, proof that trades could actually be executed at size, complete marked-equity paths, and a fresh holdout check to be run only if a winner ever appeared \u2014 so the snapshot recorded funding verdict NO, recommendation NONE, and capital authority NONE.",
+   "sources": [
+    "web/public/research-lab/n3_successor/README.md"
+   ],
+   "author": "opus-worker"
+  },
+  "s1k": {
+   "family": "s1k",
+   "tested": "It tested a paired bet on the two flavours of the same Binance perpetual futures contract \u2014 the coin-margined one and the dollar-margined one \u2014 for BTC, ETH, BNB, SOL and XRP: if over the past seven days the dollar-margined side has been paying out more in funding fees than the coin-margined side, buy the coin-margined contract and sell the dollar-margined one (and the other way round when the funding gap leans the other way), enter only on Mondays at 01:00 UTC and only when each contract's price-versus-fair-value gap leans in the direction that should close, hold for one day, three days or one week, and ask whether that earns a positive profit after public example trading costs on roughly USD 1,000 of face value per leg.",
+   "why_ended": "It ended UNMEASURED \u2014 no verdict on the idea at all: while checking the funding-payment history the run found a funding event missing from the middle of a required seven-day window, and the rules written down in advance say that any gap in that record makes the measurement invalid and stops everything on the spot, so the honest year of out-of-sample data was never opened and none of the profit, confidence-interval or drawdown numbers exist; because the design allows only one run of the sealed data and that single run is now recorded as consumed, no retry is permitted, and a second recorded limitation is that the account's real fees and margin terms were never knowable from public data anyway (separately, the packet notes the idea could never have earned a GO in any case, since the order-book evidence needed to prove the trades were actually executable is not published).",
+   "sources": [
+    "web/public/research-lab/s1k/README.md",
+    "web/public/research-lab/s1k/protocol.v1.json",
+    "web/public/research-lab/s1k/result.v1.json",
+    "web/public/research-lab/s1k/freeze.v1.json",
+    "web/public/research-lab/s1k/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "s1i": {
+   "family": "s1i",
+   "tested": "It tested a simple \"too cheap vs too expensive\" idea on Binance's US-dollar perpetual futures: three times a day it ranked the 30 biggest coins by how far each contract's price was sitting below or above its underlying index (its premium), after mathematically stripping out whatever part of that gap was just explained by the coin's most recent funding rate, then bought equal dollar amounts of the cheapest-looking tail and shorted the most expensive-looking tail, holding one, two or four hours, to see whether those stretched prices snap back toward each other \u2014 using one full year of public archives (July 2025 through June 2026) with the last three months sealed as an untouched final test.",
+   "why_ended": "It ended UNMEASURED and never actually ran: the pre-run integrity check on the sealed, checksum-verified data package found that required archive files were missing from the download (\"ACQUISITION_CONTAINS_MISSING_REQUIRED_ARTIFACTS\"), and because the rules treat an incomplete data package as immediately final, the study stopped at that checkpoint with no retry permitted \u2014 the one allowed data-opening run was never used, the sealed final-test months were never opened, and the capital verdict stayed NO-GO with no trading authority.",
+   "sources": [
+    "web/public/research-lab/s1i/README.md",
+    "web/public/research-lab/s1i/protocol.v1.json",
+    "web/public/research-lab/s1i/result.v1.json",
+    "web/public/research-lab/s1i/freeze.v1.json",
+    "web/public/research-lab/s1i/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "s1m": {
+   "family": "s1m",
+   "tested": "It tested whether, when a perpetual futures contract's own funding fee starts changing unusually fast compared with its own past behaviour (an extreme \"acceleration\", not just a high level), the price then moves the opposite way to that funding \u2014 buying or selling one USD-M contract at the first full hour after the funding payment, holding for at most one or two later funding payments, and only counting it a win after trading fees, slippage, funding payments and deliberately harsher stress costs were subtracted, across a frozen list of 12 coins and 16 preset variants.",
+   "why_ended": "It ended UNMEASURED \u2014 no economic answer at all \u2014 because the sealed-away final test data was looked at too early: April 2026 rows for the FUNUSDT contract were opened during a custody inspection and again by a later read-only audit (recorded as \"holdout pre-open row access by primary worker\" and \"by bounded auditor\"), which permanently invalidated the honest out-of-sample evaluation, and since the experiment was allowed only one run and that run was already used up, repairing, re-fetching or re-running it is forbidden; the packet was frozen with the untouched-holdout section never properly opened and a capital verdict of NO-GO, meaning no money may be committed on it.",
+   "sources": [
+    "web/public/research-lab/s1m/README.md",
+    "web/public/research-lab/s1m/protocol.v1.json",
+    "web/public/research-lab/s1m/result.v1.json",
+    "web/public/research-lab/s1m/freeze.v1.json",
+    "web/public/research-lab/s1m/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "s1n": {
+   "family": "s1n",
+   "tested": "It tested whether, among the 30 highest-volume Binance USD-margined perpetual coins, a sudden widening in how spread-out funding rates are across those coins signals that the coins paying the highest funding will keep outperforming the coins paying the lowest over the following 6, 12, or 24 hours \u2014 with the two groups deliberately paired so each side carries the same amount of Bitcoin exposure, so any gain comes from the funding spread itself and not from a hidden bet on Bitcoin's direction.",
+   "why_ended": "It has no recorded ending at all: the folder contains only the plan (README.md and protocol.v1.json) and the lock-in record (freeze.v1.json), with no result file of any kind, and the lock-in record itself states that no price or funding data files were ever downloaded or opened \u2014 so the single permitted measurement run was never carried out and neither of the two possible verdicts (NO-GO for failing the statistical bar, or NOT-MEASURABLE for bad data) was ever reached.",
+   "sources": [
+    "web/public/research-lab/s1n/README.md",
+    "web/public/research-lab/s1n/protocol.v1.json",
+    "web/public/research-lab/s1n/freeze.v1.json"
+   ],
+   "author": "opus-worker"
+  },
+  "s1p": {
+   "family": "s1p",
+   "tested": "On Bitcoin and Ethereum (BTCUSDT and ETHUSDT) five-minute bars over July 2025 through June 2026, it tested whether a burst of unusually heavy trading on the futures side relative to the spot side \u2014 measured against each market's own normal volume for that same time of day, and only when the spot-vs-futures price gap was still ordinary at that moment \u2014 is followed within the next one to six bars (up to 30 minutes) by that same coin's futures price stretching unusually far above its spot price, and whether buying spot and shorting the perpetual future at the very next bar's opening price then earns money as that gap closes back, after trading fees, slippage and funding payments.",
+   "why_ended": "It ended UNMEASURED with no answer about the idea at all: the recorded reason code is FUNDING_TIMESTAMP_OFF_HOUR, meaning one funding-fee record in the downloaded exchange data was stamped 7 milliseconds past the hour (1 July 2025, 00:00:00.007 UTC) instead of exactly on the hour, and the frozen rules treat any off-hour funding timestamp as invalid evidence and an immediate hard stop rather than something to clean up or work around. Because the protocol allows exactly one data-opening run and forbids any repair, retune or re-run, that single run was consumed by the failed check, the three-month held-back test period (April\u2013June 2026) was never opened, and \u2014 as was true in advance for every possible outcome of this experiment \u2014 the capital verdict stays NO_GO with no product or trading authority granted.",
+   "sources": [
+    "web/public/research-lab/s1p/README.md",
+    "web/public/research-lab/s1p/protocol.v1.json",
+    "web/public/research-lab/s1p/result.v1.json",
+    "web/public/research-lab/s1p/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "s1r": {
+   "family": "s1r",
+   "tested": "Using only Binance's public historical files for Bitcoin and Ethereum, it asked a single narrow question: when a perpetual-futures funding payment settles at a positive rate that is unusually large compared with that same coin's own earlier positive settlements (and every settlement in the recent lookback window was positive too), does the gap between the futures price and the spot price then shrink \u2014 enough that buying the coin on spot and shorting the same perpetual a minute after settlement, and closing exactly 15, 30, or 45 minutes later, would make money after realistic trading costs?",
+   "why_ended": "It ended NO-GO (\"valid measured development public-proxy gates failed\"): the entry conditions were so strict that not a single qualifying trade occurred in any of the 12 preset variants \u2014 every candidate settlement was rejected because the funding jump was not large enough or because not all recent settlements were positive \u2014 so each variant recorded zero trades, zero dollars, and a p-value of 1.0, missing the required minimums (24 round trips, 12 active weeks, 2 coins) and every statistical bar, which left the reserved April-June 2026 holdout data unopened and sealed; separately the artifacts note that real-money approval was blocked regardless, because funding publication delay, the archive's funding-rate type, account-specific fees, whether both legs could fill together, and true tradable size are all unknown or unmeasured from public data.",
+   "sources": [
+    "web/public/research-lab/s1r/README.md",
+    "web/public/research-lab/s1r/protocol.v1.json",
+    "web/public/research-lab/s1r/result.v1.json",
+    "web/public/research-lab/s1r/development.v1.json",
+    "web/public/research-lab/s1r/freeze.v1.json",
+    "web/public/research-lab/s1r/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "s1o": {
+   "family": "s1o",
+   "tested": "On Bitcoin perpetual futures at Binance, it asked whether the funding fee tends to keep its sign: when the funding payment has come out the same direction two settlements in a row, and open interest (the total money parked in the contract) has also grown over the prior 8 or 24 hours \u2014 measured only from data already published before the decision moment, never peeking ahead \u2014 does taking the side that collects the fee (short when funding is positive, long when negative), entering on the first complete five-minute bar after the settlement and holding through exactly one more settlement, still make money on a $1,000 position after conservative public estimates of trading fees and bad fills?",
+   "why_ended": "It ended UNMEASURED \u2014 not a win, not a loss, simply never measurable: the run deliberately stopped itself (\"fail closed\") with an evidence error coded METRICS_ALIGNMENT at an open-interest record timestamped 2025-06-12 05:15:01 UTC, meaning the exchange's own published open-interest data did not line up with the strict five-minute timing grid the frozen protocol demanded, so it tripped during the June 2025 warm-up data before the July 2025\u2013February 2026 study window was even reached and no profit-and-loss number, none of the 8 preset variants, and no statistical test were ever computed; the rules allow only one run and any failure uses it up, the untouched February\u2013June 2026 holdout period was left unopened, and in any case this packet was built so that a \"GO\" was structurally unreachable and the capital verdict was fixed at NO-GO from the outset, because the official archive documentation never explains how the open-interest figures are derived and real account fees, tradable depth, and fill behaviour all remain UNKNOWN.",
+   "sources": [
+    "web/public/research-lab/s1o/README.md",
+    "web/public/research-lab/s1o/protocol.v1.json",
+    "web/public/research-lab/s1o/gen_result.v1.json",
+    "web/public/research-lab/s1o/gen_freeze.v1.json",
+    "web/public/research-lab/s1o/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "s1u": {
+   "family": "s1u",
+   "tested": "It tested a crowd-fading idea on the six biggest Binance dollar-margined perpetual futures (BTC, ETH, BNB, SOL, XRP, DOGE): at each moment when all six had just posted a funding settlement \u2014 used purely as a clock, never as a buy-or-sell signal \u2014 it ranked them by how lopsided aggressive buying had been in the already-finished five-minute bars from 30, 60, or 180 minutes earlier, then bet $250 each on the two coins with the least buying pressure to rise and the two with the most buying pressure to fall, entering a few minutes after settlement and closing out 15, 30, or 45 minutes later, to see whether the most-bought names really do give back ground shortly after.",
+   "why_ended": "It ended NO-GO on the development period, and the sealed final three months of data were never opened: the best of the nine preset variants lost about $1,083 per $1,000 after costs, its statistical significance scores were the weakest possible (1.00), the overfitting probability was 78%, and its worst losing streak exceeded the whole stake \u2014 eight of the fourteen required checks failed, and money was never authorized in any case while the real account's fees and true tradable size remain unknown.",
+   "sources": [
+    "web/public/research-lab/s1u/README.md",
+    "web/public/research-lab/s1u/protocol.v1.json",
+    "web/public/research-lab/s1u/result.v1.json",
+    "web/public/research-lab/s1u/freeze.v1.json"
+   ],
+   "author": "opus-worker"
+  },
+  "s1y": {
+   "family": "s1y",
+   "tested": "It tested whether six fixed pairs of crypto perpetual futures that normally move together (BTC vs ETH, SOL vs AVAX, XRP vs ADA, DOGE vs SHIB, LTC vs BCH, LINK vs DOT) snap back to their usual price relationship after one side temporarily drifts unusually far from the other \u2014 so that betting against the gap (shorting whichever contract has become expensive relative to its partner and buying the other) and closing out once the gap narrows would earn money on a $1,000 market-neutral position, using nothing but hourly prices for the signal.",
+   "why_ended": "It ended NO-GO because the profits it showed on the first eight months of data (July 2025 to February 2026) failed the pass/fail bar set in advance: the main setting made about $34 per $1,000 under gentle cost assumptions but turned into a loss once more realistic trading costs were applied, the gains were statistically indistinguishable from luck (the multiplicity-adjusted p-value was 1.0 and the across-all-12-variants reality check came out at 0.87), and the worst peak-to-trough loss under stress costs was 10.05% of capital, just over the 10% ceiling. Because the development phase failed, the sealed later period (March to July 2026) was deliberately never opened or even read, and the single permitted run has been used up, so the experiment cannot be repeated.",
+   "sources": [
+    "web/public/research-lab/s1y/README.md",
+    "web/public/research-lab/s1y/protocol.v1.json",
+    "web/public/research-lab/s1y/result.v1.json",
+    "web/public/research-lab/s1y/freeze.v1.json",
+    "web/public/research-lab/s1y/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "s2a": {
+   "family": "s2a",
+   "tested": "It tested whether a big one-hour price move in a major crypto futures contract that cannot be explained by Bitcoin's move in that same hour \u2014 and that happens only after the contract's previous hour already traded unusually heavily \u2014 tends to snap back over the following 2, 4, or 8 hours, by buying the contract with the largest unexplained drop, selling the one with the largest unexplained jump, and adding a mechanical Bitcoin position so the overall bet is not a bet on the market's direction.",
+   "why_ended": "It ended NO-GO on the first nine months of data: the best of the 12 preset variants (a 2.0 surprise threshold, 1.5x volume confirmation, 4-hour hold) made about $27 per $1,000 before costs but lost about $51 per $1,000 once the standard 5bp fee and 5bp execution-cost allowance were charged, and it lost more under the harsher cost assumptions; it also failed the statistical bars badly (the \"is this just luck?\" tests came out at essentially no evidence \u2014 p of about 0.84, a reality-check p of 0.997, and a multiple-comparison-adjusted p of 1.0), and it only produced 39 completed trades against a required minimum of 96 \u2014 7 of the 12 preset checks failed, so the final three months of data were left sealed and never opened.",
+   "sources": [
+    "web/public/research-lab/s2a/README.md",
+    "web/public/research-lab/s2a/protocol.v1.json",
+    "web/public/research-lab/s2a/result.v1.json",
+    "web/public/research-lab/s2a/freeze.v1.json"
+   ],
+   "author": "opus-worker"
+  },
+  "s2c": {
+   "family": "s2c",
+   "tested": "It tested whether, among 14 big Binance USD-margined crypto perpetual futures, buying the calmest coins and short-selling the jumpiest ones makes money \u2014 where \"calm\" and \"jumpy\" mean how much a coin's own price wobbles once you strip out the general crypto market move (an equal blend of Bitcoin and Ethereum), re-ranked every Monday, held for exactly one week, with leftover market exposure hedged away and realistic trading fees and funding payments charged against a fixed $1,000 stake.",
+   "why_ended": "It ended UNMEASURED rather than as a win or a loss: the data checks tripped on the Binance funding-fee file for Bitcoin in July 2025, where the funding timestamps did not follow the expected hourly spacing (recorded as \"FUNDING_TIME_NOT_HOURLY\" on row 2 of BTCUSDT-fundingRate-2025-07.zip), and because the rules allow only one economic run with no repairs, re-runs, or retuning, that single permitted run was used up, the sealed later-period holdout data was never opened, and the capital verdict stands at NO-GO with no execution authority.",
+   "sources": [
+    "web/public/research-lab/s2c/README.md",
+    "web/public/research-lab/s2c/protocol.v1.json",
+    "web/public/research-lab/s2c/result.v1.json"
+   ],
+   "author": "opus-worker"
+  },
+  "s1z": {
+   "family": "s1z",
+   "tested": "It tested whether, among 14 large Binance dollar-settled crypto perpetual futures, the coins whose recent price moves ran furthest ahead of \u2014 or behind \u2014 what Bitcoin's and Ethereum's moves alone would explain keep drifting the same direction over the next few days: buy the four strongest, short the four weakest, on a fixed $1,000 stake balanced so the basket has no net bet on the market or on Bitcoin and Ethereum, and see if anything is left over a full year (22 June 2025 to 22 June 2026) after subtracting the actual recorded funding payments and deliberately harsh assumptions about trading fees and slippage.",
+   "why_ended": "It ended NO-GO: the single permitted run was carried out and reruns are forbidden, and the idea lost money in almost every version tested \u2014 about $199 lost per $1,000 in the development period and $211 over the full year under the main \"stress\" cost assumption, with even the untouched final holdout period ending slightly negative ($12 lost per $1,000) \u2014 so it flunked 10 of the 12 required checks (it never came close to the statistical bar: the two significance tests came out at essentially the worst possible readings, p = 1.00 and p = 0.98, and the profit range stayed entirely below zero), passing only the two checks that it stayed genuinely market-neutral and could in principle absorb the $1,000 size; profitability for a real trading account and real-world capacity were never measured, and no money, orders, or trading authority were ever involved.",
+   "sources": [
+    "web/public/research-lab/s1z/README.md",
+    "web/public/research-lab/s1z/protocol.v1.json",
+    "web/public/research-lab/s1z/result.v1.json",
+    "web/public/research-lab/s1z/freeze.v1.json",
+    "web/public/research-lab/s1z/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "s1t": {
+   "family": "s1t",
+   "tested": "It tested a fixed list of the 100 busiest Binance dollar-settled perpetual futures from June 2025 and asked whether, right after a coin's funding-fee settlement schedule visibly sped up from every 8 hours to every 4 or every 1 hour, betting against the direction of the last confirming funding payment would make money on a fixed $1,000 stake once publicly estimated trading costs were deducted \u2014 checked across 12 preset variants that differ in how many confirming settlements are required (1 or 2), how long entry is delayed (1 or 2 hours), and how long the position is held (4, 8, or 12 hours).",
+   "why_ended": "How it ended is not recorded here: the folder holds only the frozen plan and rulebook (README.md, protocol.v1.json) plus the notes on which official Binance data pages were used (OFFICIAL_SOURCE_RESEARCH.md), and none of the outcome files the rulebook itself requires \u2014 there is no result.v1.json or REPORT.md carrying a verdict, no development.v1.json with the trial results, and no run_consumed.v1.json marker showing the single permitted run was ever started \u2014 so from these artifacts alone it is impossible to say which of the four allowed endings applied (passed the statistics but still no trading go-ahead; failed a development checkpoint with the sealed 2026 data left unopened; failed on that sealed data; or became unmeasurable after the one run was already used up).",
+   "sources": [
+    "web/public/research-lab/s1t/README.md",
+    "web/public/research-lab/s1t/protocol.v1.json",
+    "web/public/research-lab/s1t/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "s2h": {
+   "family": "s2h",
+   "tested": "It tested whether the 30 most heavily traded Binance spot coin pairs tend to bounce back from the price jump that happens between the last hour of one UTC day and the first hour of the next \u2014 buying the coins that gapped down the most and shorting the ones that gapped up the most, entering at 02:00 UTC and closing out at either 06:00 or 10:00 the same morning.",
+   "why_ended": "It has no recorded ending: the folder holds only the setup paperwork \u2014 the plain-English README, the frozen rulebook (protocol.v1.json) and the source-review notes \u2014 and contains no result.v1.json or gen_result.v1.json, no development-run output, and therefore no verdict or reason codes at all, so it is impossible to say whether the idea passed, failed, or was never run; the rulebook also states in advance that even a positive result would carry a money-management verdict of NO-GO with no permission to trade, because short-selling costs, real account fees, and tradability were never measured.",
+   "sources": [
+    "web/public/research-lab/s2h/README.md",
+    "web/public/research-lab/s2h/protocol.v1.json",
+    "web/public/research-lab/s2h/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "s2k": {
+   "family": "s2k",
+   "tested": "It tested whether a coin's lopsidedness of price moves on one day predicts the next day's return on Binance's spot market: every UTC day it ranked a fixed group of 20 USDT coins by that day's \"realized skewness\" (computed from the day's 288 five-minute price changes), then bought the four most negatively-skewed coins and short-sold the four most positively-skewed ones at the next morning's 00:05 UTC five-minute average price, sold everything one day later, and asked whether that dollar-neutral $1,000 portfolio made money after a 10-basis-point-per-fill public fee proxy and small adverse-price allowances (holding cash on any day the full cohort's data was incomplete).",
+   "why_ended": "It ended NO-GO on its one permitted run: the idea was measurable (213 valid days across July 2025-June 2026, all 20 coins traded) but it lost money instead of making it - about $942 lost per $1,000 in the base cost scenario and about $1,070 in the stress scenario - and it failed 7 of the 11 frozen pass/fail gates, including the statistical bar (a Holm-adjusted p-value of 0.999 where under 0.05 was required, and the same 0.999 on the supplementary White reality check), a worst-case intraday drawdown of 96% against a 40% ceiling, and a public-volume capacity estimate of roughly $1.14 against a $1,000 requirement; because the rules said the reserved holdout period may only be opened if every development gate passes, that later data was left sealed and never examined, and the recorded reason was simply that one or more frozen development gates failed.",
+   "sources": [
+    "web/public/research-lab/s2k/README.md",
+    "web/public/research-lab/s2k/protocol.v1.json",
+    "web/public/research-lab/s2k/result.v1.json",
+    "web/public/research-lab/s2k/OFFICIAL_SOURCE_RESEARCH.md",
+    "web/public/research-lab/s2k/development.v1.json"
+   ],
+   "author": "opus-worker"
+  },
+  "verdict-normalization": {
+   "family": "verdict-normalization",
+   "tested": "ARTIFACTS_INSUFFICIENT",
+   "why_ended": "Nothing can be said about this experiment because its records are not there: the folder web/public/research-lab/verdict-normalization/ does not exist at all, so none of the expected files (README.md, protocol.v1.json, result.v1.json or gen_result.v1.json, OFFICIAL_SOURCE_RESEARCH.md, or any development notes) could be read. A listing of the parent folder web/public/research-lab/ shows 85 other experiment folders (be2, dq1-dq14, fee1, maker_fee_edge_grid, n3_successor, n3i1, s1f-s2k, ve1, ve2, vg1-vg38, volume-economics) but no folder whose name contains \"verdict\" or \"normalization\", so the family either was never filed here or lives under a different name that I was not permitted to open.",
+   "sources": [
+    "web/public/research-lab/ (manifest custody: verdict-normalization directory absent; no artifact file recorded)"
+   ],
+   "author": "opus-worker"
+  },
+  "ve2": {
+   "family": "ve2",
+   "tested": "Whether a \"volume detector\" signal on Binance spot markets is actually worth trading: every time the detector flagged a USDT coin that was confirmed tradable at that exact moment, the plan was to pretend to buy about 10 USDT of it at the first two-second price snapshot and pretend to sell at the first snapshot 60 seconds or more later, then see what that round trip would have earned once fees of 10 or 12 basis points per side were subtracted \u2014 all measured forward in time on a rulebook frozen in advance, with no real orders ever placed.",
+   "why_ended": "It has not ended and produced no answer, because the 30-day measuring window was never even switched on \u2014 the packet records the start time as deliberately blank, states plainly that it contains no evidence from a measurement interval and makes no profitability claim, and the recorded verdict is still \"BLOCKED_VE2_INTERVAL_NOT_TERMINAL_ACCEPTED\", meaning the window cannot count until someone independently signs off on the capture setup and the full 30 days plus a 62-second settling period have run to completion; there is no result file in the folder, so profit and loss remains UNKNOWN by design rather than by failure.",
+   "sources": [
+    "web/public/research-lab/ve2/README.md"
+   ],
+   "author": "opus-worker"
+  },
+  "ve1": {
+   "family": "ve1",
+   "tested": "It tested whether one specific volume-based crypto trading strategy \u2014 a frozen, already-accepted version of the code, together with its \"economic exit\" rules for deciding when to close a position and whether the trade cleared its costs \u2014 could be scored exactly against twelve months of Binance's official public spot-market history (a warm-up day, eight research months from July 2025 to March 2026, and four sealed holdout months to June 2026), with realistic trading fees of about 10 basis points per side (7.5 with the BNB discount) plus a 2-basis-point stress margin on both the buy and the sell.",
+   "why_ended": "It ended UNMEASURED (recorded reason: \"accepted lifecycle and public input mapping unavailable\") for two stacked reasons: the accepted strategy never actually defines a complete round-trip trade \u2014 its exit policy is set to reject-only, with trade size, fees, slippage and all three exit thresholds left blank, the strategy and exit switches off, and the exit checked at most once per newly recorded volume candidate, so there is no profit-and-loss number it could even produce; and Binance's official public archive only publishes trades, aggregated trades and candles, not the historical best-bid/ask quotes, synchronized order-book depth, local receive clocks or point-in-time symbol rules the strategy's own rules depend on, and substituting candles or today's order book would have measured a different strategy. The four-month holdout window was therefore never opened, and the zeros in the verdict file are counts of what failed the entry gate, not evidence of zero profit.",
+   "sources": [
+    "web/public/research-lab/ve1/README.md",
+    "web/public/research-lab/ve1/protocol.v1.json"
+   ],
+   "author": "opus-worker"
+  },
+  "s1v": {
+   "family": "s1v",
+   "tested": "It tested whether, on Binance's dollar-settled perpetual futures, a sudden widening in how spread-out funding rates are across 30 large coins right after a calm, tightly-clustered stretch signals a short-term winner-versus-loser move \u2014 specifically, buying the three coins whose funding rate jumped up the most and shorting the three whose funding rate fell the most, holding 6, 12, or 24 hours, and asking whether that pair trade still makes money after estimated trading fees and slippage.",
+   "why_ended": "It ended as \"could not be measured\" (recorded verdict UNMEASURED_RUN_CONSUMED_NO_RERUN, reason code PRE_RUN_SOURCE_OR_UNIVERSE_INVALID): after the June-2025 screening pass over the archives was used up, the checks on the source files and the 30-coin lineup failed before the study period was ever read, so zero data files for the July-2025-to-March-2026 development window were opened, and because the rules allow exactly one attempt with no repair and no rerun, the single permitted run was spent and the experiment stopped there \u2014 the sealed April-to-June-2026 test data was left completely untouched, no edge was claimed, and no trading or capital authority was granted.",
+   "sources": [
+    "web/public/research-lab/s1v/README.md",
+    "web/public/research-lab/s1v/protocol.v1.json",
+    "web/public/research-lab/s1v/result.v1.json",
+    "web/public/research-lab/s1v/freeze.v1.json",
+    "web/public/research-lab/s1v/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "s2g": {
+   "family": "s2g",
+   "tested": "It tested whether a coin's day-of-the-week habit, combined with how heavily it had been traded recently, predicts which coins to buy and which to bet against: each day, using a fixed list of 12 Binance spot coins and only public price/volume data ending two days earlier, it scored every coin by its recent same-weekday average return multiplied by its recent trading-volume ranking, then bought the top few and short-sold the bottom few in equal amounts, asking whether that turned a starting 1,000 USDT into a profit after realistic public trading-fee estimates.",
+   "why_ended": "It ended NO-GO on the eight-month development period and the reserved final test window was never opened: all 12 preset variants (4- or 8-week weekday history, 1/7/28-day volume windows, top-and-bottom 2 or 3 coins) lost money rather than made it, none passed the profit, statistical-significance, positive-months, or drawdown checks, every variant's statistical p-value came out at the worst possible value of 1 (adjusted p-values also 1), and even the best-performing variant ended down about 685 USDT of the initial 1,000 with a 69% peak loss and zero profitable months out of eight \u2014 so the experiment stopped at \"development gates failed\" and granted no trading authority, while separately noting that real fees, short-borrow availability and cost, and true tradable size were never established.",
+   "sources": [
+    "web/public/research-lab/s2g/README.md",
+    "web/public/research-lab/s2g/result.v1.json",
+    "web/public/research-lab/s2g/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "s2i": {
+   "family": "s2i",
+   "tested": "Using only free public Binance history for eight fixed large coins (BTC, ETH, BNB, SOL, XRP, ADA, DOGE, LINK), it tested whether a completed one-hour move in a coin's spot price that is out of line with what that same coin's perpetual-futures move would normally imply (\"spot leading futures\") predicts where that coin's perpetual future goes over the next one to six hours \u2014 betting on it by going long the few coins with the biggest positive gap and short the few with the biggest negative gap, in perpetual futures only, with a full idle hour inserted after the signal before any entry.",
+   "why_ended": "It ended NO-GO: across the eight-month development period the idea failed its predeclared economic bar badly and in every direction \u2014 it lost money under all three cost assumptions (roughly $1,255, $2,746 and $3,678 lost per $1,000 staked, versus a requirement to be profitable), its worst peak-to-trough loss was about $3,678 against a $100 limit, and it never came close to the statistical bar, with multiple-testing-adjusted p-values of 0.83 and 1.00 and an overall \"could this be luck\" reality-check p-value of 0.30 against a required 0.05 or better, even though 12 preset variants (1, 2, 3 or 6-hour horizons crossed with 2, 3 or 4 names per side) were all pre-registered rather than cherry-picked. Because the development gates failed, the sealed later-period holdout data was left completely unopened (zero files read, its one-shot permission never spent), and the packet grants no capital authority \u2014 real trading fees, tradable size and market impact were never measured and remain unknown.",
+   "sources": [
+    "web/public/research-lab/s2i/README.md",
+    "web/public/research-lab/s2i/protocol.v1.json",
+    "web/public/research-lab/s2i/result.v1.json",
+    "web/public/research-lab/s2i/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg13": {
+   "family": "vg13",
+   "tested": "It tested whether Binance coins that were trading unusually heavily in dollar terms but had been unusually calm in price over the prior 7 or 14 days went on to make money over the following week \u2014 buying the top 3, 5, or 8 such \"busy but quiet\" coins with equal shares, entering the next morning and selling seven days later, and comparing each pick head-to-head against an equally busy but jumpy coin to check the gain came from the calmness rather than just from big-volume crypto going up.",
+   "why_ended": "It ended UNMEASURED \u2014 no answer either way: while working through the development period the run hit a daily price file for ACAUSDT in February 2026 whose timestamps did not sit on the required exact UTC day boundaries, and the pre-agreed rules treat any such data-clock mismatch as an automatic stop with no fixing, skipping, or re-running allowed, so the single permitted run was spent, the untouched March\u2013June 2026 test months were never opened, and the money verdict stays NO-GO with no trading authority.",
+   "sources": [
+    "web/public/research-lab/vg13/README.md",
+    "web/public/research-lab/vg13/protocol.v1.json",
+    "web/public/research-lab/vg13/result.v1.json",
+    "web/public/research-lab/vg13/freeze.v1.json",
+    "web/public/research-lab/vg13/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg1": {
+   "family": "vg1",
+   "tested": "It asked whether hours in which Bitcoin buying is unusually lopsided and unusually busy on Binance's spot market \u2014 far more money hitting the buy side than the sell side, and total turnover well above its recent normal \u2014 but the price has barely budged over that stretch, tend to be followed by the price drifting upward over the next 12 or 24 hours, with the pretend purchase made at the opening price of the second hour after the signal (a full hour later, to be realistic) and charged a standard 0.10% trading fee plus an extra slippage penalty each time it buys and sells.",
+   "why_ended": "It has no recorded ending: the folder contains only the sealed plan and its supporting paperwork \u2014 the write-up, the frozen rulebook, the source-citation list, and a freeze receipt \u2014 and no results file (no result.v1.json, gen_result.v1.json, or failure record), so no GO, NO_GO, or UNMEASURED verdict and no reason codes were ever written down; the freeze receipt in fact states the opposite of a finished run, recording that the working data folder was still absent, that not one of the Bitcoin hourly price archives had been opened, and that no profit-or-loss figure had yet been calculated, which means the experiment was locked in and ready but the measurement itself is not present in these artifacts.",
+   "sources": [
+    "web/public/research-lab/vg1/README.md",
+    "web/public/research-lab/vg1/protocol.v1.json",
+    "web/public/research-lab/vg1/freeze.v1.json",
+    "web/public/research-lab/vg1/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg19": {
+   "family": "vg19",
+   "tested": "Using only Binance's public hourly price-and-volume archives for ten major USDT coins, it tested whether an unusually busy hour for a coin \u2014 one whose trading volume far exceeds what that same hour of the same weekday normally looks like \u2014 tends to be followed by more unusually busy hours, and whether simply buying the three most abnormally busy coins (equally weighted, or sitting in cash when fewer than three qualify), waiting a full hour, then holding for four hours, would beat just holding all ten coins equally over the same windows once trading costs are counted.",
+   "why_ended": "It ended NO-GO: the \"busy hours cluster together\" mechanism itself did hold up (the hour-to-hour link was strong and faded only slowly, roughly halving after eight hours), but on the untouched March-June 2026 holdout period the money side failed five of the eleven pre-committed pass/fail tests \u2014 after realistic stress costs the strategy lost money and trailed the simple equal-weight benchmark, both statistical confidence checks left zero inside their range (so the edge was indistinguishable from luck), and the sample was far too small to judge anyway (18 trade cohorts against a required minimum of 100, and 8 distinct weeks against a required 12). Under the sealed rules there is no rerun, repair, or threshold change, so that single measurement was final; profitability on a real account and tradeable size were never established and remain unknown.",
+   "sources": [
+    "web/public/research-lab/vg19/README.md",
+    "web/public/research-lab/vg19/protocol.v1.json",
+    "web/public/research-lab/vg19/result.v1.json",
+    "web/public/research-lab/vg19/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg10": {
+   "family": "vg10",
+   "tested": "It tested a crowd-pressure idea on Binance spot crypto: for each of 40 large USDT coins, it measured how lopsided each 15-minute bar was toward eager buyers (the share of trading value from buyers who took the offer rather than waiting), compared that to what is normal for that coin at that exact time of day, and asked whether a coin showing several unusually buyer-heavy quarter-hours in a row keeps drifting upward over the next two or four hours \u2014 buying an equal-weighted basket of the top few such coins at four fixed times a day (midnight, 6am, noon and 6pm UTC) and selling exactly 2 or 4 hours later, after subtracting stressed trading costs.",
+   "why_ended": "It ended UNMEASURED (reason code EVIDENCE_INVALID) rather than with any profit or loss finding: a mandatory integrity check on the official Binance archive files failed because one coin's data, ALPACAUSDT for May 2025, had a bar whose recorded close time did not land exactly on the interval boundary, and the experiment's own rules forbid repairing, replaying or re-running a one-use attempt, so it stopped there with capital verdict NO_GO and execution authority NONE \u2014 meaning the market idea itself was never actually judged.",
+   "sources": [
+    "web/public/research-lab/vg10/README.md",
+    "web/public/research-lab/vg10/result.v1.json",
+    "web/public/research-lab/vg10/protocol.v1.json",
+    "web/public/research-lab/vg10/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg15": {
+   "family": "vg15",
+   "tested": "It tested a crowd-activity idea on twelve big Binance dollar-priced coins (Bitcoin, Ethereum, XRP and nine others): on any day when enough of those twelve traded more dollar volume than their own recent typical day \u2014 with \"enough\" meaning half, 60%, 70% or 80% of them, and \"recent typical\" measured over the previous 20, 40 or 60 days \u2014 you buy an equal slice of all twelve at the next morning's open and hold until the crowd-activity signal switches off, otherwise you sit in cash; the question was whether that busy-market on/off switch beats simply holding cash once realistic trading costs are subtracted, using no price information at all in the signal.",
+   "why_ended": "It ended NO-GO: none of the 12 preset variants cleared the pre-agreed bar on the practice data \u2014 every one of them lost money after costs (the best variant turned $1,000 into about $598 and fell more than 54% from its peak, versus a maximum-loss limit of 10%), and the statistical test found the results indistinguishable from luck, so under the rules the four reserved holdout months were never opened and the experiment was closed with no trading authority granted.",
+   "sources": [
+    "web/public/research-lab/vg15/README.md",
+    "web/public/research-lab/vg15/protocol.v1.json",
+    "web/public/research-lab/vg15/result.v1.json",
+    "web/public/research-lab/vg15/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg16": {
+   "family": "vg16",
+   "tested": "It tested whether, on a day when trading activity across Binance's US-dollar-stablecoin spot market suddenly bunched up into a few coins more than usual, the handful of coins that caused that bunching go on to make money the next day \u2014 buy an equal-weight basket of them at the next daily open, sell the whole basket at the following daily open, and see if the return is still positive after paying a normal 0.10% trading fee on each side plus extra slippage penalties.",
+   "why_ended": "It ended UNMEASURED \u2014 the question was never actually answered \u2014 because one required official Binance price-history file, the daily file for the coin ACAUSDT covering February 2026, had a broken day-boundary on row 13, and the rules say invalid or missing evidence must be recorded as unmeasurable rather than skipped or treated as sitting in cash. The experiment was allowed exactly one run, that run had already been consumed, and repair or rerun is forbidden, so the twelve preset variants were never scored, the four months of held-back test data were left sealed and untouched, and no capital or trading authority was granted.",
+   "sources": [
+    "web/public/research-lab/vg16/README.md",
+    "web/public/research-lab/vg16/protocol.v1.json",
+    "web/public/research-lab/vg16/result.v1.json",
+    "web/public/research-lab/vg16/freeze.v1.json",
+    "web/public/research-lab/vg16/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg2": {
+   "family": "vg2",
+   "tested": "It asked whether a coin having an unusually big trading-day \u2014 daily turnover far above its own recent normal, on a day that also closed up \u2014 tends to keep rising afterwards: buy the biggest such movers among Binance's dollar-quoted spot coins at the next day's opening price, hold for either 1 or 3 days, and see whether anything is left after realistic trading costs (a 0.1% fee per side plus a slippage allowance).",
+   "why_ended": "It ended UNMEASURED \u2014 not a yes and not a no, but \"we could not honestly measure it\": while checking the raw price files before any results were computed, the program found that the AXSUSDT file for February 2026 listed the exact same trading day twice (two identical rows for the same day), and the rules written in advance say a duplicated daily bar makes the study unmeasurable rather than something to quietly patch. Because the one permitted pass over the development data had already been spent, none of the 12 pre-registered variants were ever scored, no champion was picked, no repair or re-run was allowed, and the held-back March\u2013June 2026 data was left completely unopened.",
+   "sources": [
+    "web/public/research-lab/vg2/README.md",
+    "web/public/research-lab/vg2/protocol.v1.json",
+    "web/public/research-lab/vg2/result.v1.json",
+    "web/public/research-lab/vg2/freeze.v1.json",
+    "web/public/research-lab/vg2/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg14": {
+   "family": "vg14",
+   "tested": "It tested whether an unusually busy half-hour is followed by a price rise: for ten fixed Binance USDT coins, it checked each completed 30-minute bar to see whether its dollar trading volume was several times the typical volume for that exact same half-hour slot of the week across the previous eight weeks, and if so bought at the open one hour later and sold 6 or 12 hours after that, asking whether the trades still made money once assumed fees and slippage were subtracted.",
+   "why_ended": "It ended NO-GO on the development data (July 2025 through February 2026): the one permitted development run did authenticate all 100 official archive files against their checksums and validate 145,920 bars, but all four preset variants (a 2x and a 4x volume threshold, each paired with a 6-hour and a 12-hour hold) failed the required bars for after-cost profit, statistical significance including the multiple-testing correction, worst-case drawdown, month-to-month consistency, and the tradeable-size screen, so no winner was locked in and the March-June 2026 holdout months were never downloaded or opened. (The verdict and gate list come from README.md; the folder holds no result file or TERMINAL.md, so no per-trial numbers were available.)",
+   "sources": [
+    "web/public/research-lab/vg14/README.md",
+    "web/public/research-lab/vg14/protocol.v1.json",
+    "web/public/research-lab/vg14/freeze.v1.json",
+    "web/public/research-lab/vg14/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg21": {
+   "family": "vg21",
+   "tested": "It tested whether a coin having an unusually busy trading day \u2014 its daily dollar trading volume compared with its own normal level over the previous 20 days, after subtracting the part that yesterday's market-wide volume swing already explained \u2014 flags a group of coins worth buying at the next available daily open, versus just sitting in cash earning nothing (Binance spot, USDT pairs, public daily data only).",
+   "why_ended": "It could not be measured: the recorded verdict is UNMEASURED with capital NO-GO, because a data-integrity check found a duplicated identical daily price bar for AXSUSDT on 2026-02-10, so all profit and statistics numbers were left blank; the experiment's single permitted run had already been used up and no rerun is allowed, and the held-back later months (March-June 2026) were never opened.",
+   "sources": [
+    "web/public/research-lab/vg21/README.md",
+    "web/public/research-lab/vg21/protocol.v1.json",
+    "web/public/research-lab/vg21/result.v1.json",
+    "web/public/research-lab/vg21/freeze.v1.json",
+    "web/public/research-lab/vg21/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg17": {
+   "family": "vg17",
+   "tested": "It tested whether, among a fixed list of 20 long-lived Binance USDT coins, the ones whose recent daily price swings had been largest relative to how many dollars actually traded in them (a \"price moves a lot per dollar of volume\" score, measured over the past 7, 14, 28 or 56 days) would go on to earn money if you bought the top 3, 6 or 9 of them the next morning, held each for exactly 7 days, and parked everything else in cash \u2014 counting a 10-basis-point trading fee plus a worse-price penalty on every buy and sell.",
+   "why_ended": "It ended NO-GO on the development data, with the holdout months (March\u2013June 2026) left unopened: none of the 12 preset variants made money \u2014 the best one lost about $2.05 per day per $1,000 in the normal cost case and about $2.25 per day in the harsher one, finishing roughly 50% down, with a worst drop of about 67% against the pre-set 40% limit, only 13 different coins traded against a 15-coin minimum, an overfitting score of about 0.89 against the 0.50 ceiling, and significance tests far from the bar (p-value about 0.83 normal / 0.86 stress versus the required under 0.05, and no variant survived the multiple-testing correction).",
+   "sources": [
+    "web/public/research-lab/vg17/README.md",
+    "web/public/research-lab/vg17/protocol.v1.json",
+    "web/public/research-lab/vg17/result.v1.json",
+    "web/public/research-lab/vg17/freeze.v1.json",
+    "web/public/research-lab/vg17/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg12": {
+   "family": "vg12",
+   "tested": "It tested whether trading activity spreading out more evenly across the market predicts a good week: every Monday it took the 30 biggest USDT coins on Binance's public spot data (ranked by their median daily turnover over a 30-day stretch that ended more than a month earlier, so no fresh information could leak in), then asked whether turnover was shared more evenly among those 30 coins over the last 7 days than over the prior 28 days \u2014 if yes, it held all 30 in equal amounts from Tuesday open to the next Tuesday open; if it was a tie or activity had become more concentrated, it held cash instead \u2014 and it compared that on-off approach against simply holding the same 30 coins every week, using only volume (never price, futures, funding, or account data) to make the decision.",
+   "why_ended": "It has no ending recorded: the folder contains only the sealed plan and the freeze record dated 2026-07-29, whose state is \"frozen before any V-G12 archive body was opened\", and there is no run marker, no draft, and no result file, so none of the three permitted outcomes (GO, NO_GO, or UNMEASURED) was ever written \u2014 the README itself states that this task deliberately stops short of creating the real run marker, result, receipt, or checksums, leaving the single one-shot run to a later operator, and it notes in advance that even a GO would carry a capital verdict of NO_GO because this is retrospective public-data research with no trading authority.",
+   "sources": [
+    "web/public/research-lab/vg12/README.md",
+    "web/public/research-lab/vg12/protocol.v1.json",
+    "web/public/research-lab/vg12/freeze.v1.json",
+    "web/public/research-lab/vg12/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg20": {
+   "family": "vg20",
+   "tested": "It asked whether a day on which Bitcoin and Ethereum BOTH see a big jump in daily dollar trading volume \u2014 each one's volume at least 1.5x or 2x its own recent 10-, 20-, or 40-day typical level \u2014 tends to be followed by a rise in a fixed basket of ten heavily traded smaller coins, buying that basket equally at the market open two days later (one full day is deliberately skipped) and holding for either 1 or 3 days, using only free public Binance daily price history and assuming ordinary trading costs.",
+   "why_ended": "It ended NO-GO: the measurement itself worked, but the best of the twelve preset variants failed five of the pre-set pass/fail bars \u2014 it found only 15 qualifying volume events where at least 16 were required and only 7 completed basket trades where at least 12 were required, and its apparent profit did not clear the statistical bar (the conservative lower bound on daily profit was slightly negative, the multiple-comparison-adjusted p-value was 1.00 and the \"is this just luck across all 12 variants\" check came out at 0.64, both far above the required 0.05), so the reserved holdout period was never opened and the experiment recorded no tradable edge.",
+   "sources": [
+    "web/public/research-lab/vg20/README.md",
+    "web/public/research-lab/vg20/protocol.v1.json",
+    "web/public/research-lab/vg20/result.v1.json",
+    "web/public/research-lab/vg20/freeze.v1.json",
+    "web/public/research-lab/vg20/development.v1.json",
+    "web/public/research-lab/vg20/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg18": {
+   "family": "vg18",
+   "tested": "Using only free, public Binance daily price-history files, it tested whether a coin whose average dollar size per trade on the last completed day suddenly jumped well above its own 120-day usual level (1.5x, 2x or 3x) is worth buying: pick the top 3 or 5 such coins by that jump, buy them at the next day's opening price, hold 3 or 7 days, and see whether the basket still makes money after fixed assumed trading costs \u2014 with no shorting, no leverage, no real orders, and no price or return information used to choose the coins.",
+   "why_ended": "It ended NO-GO: the held-back final test period was never opened (the recorded result says holdoutOpened=false, and the rules only allow opening it after every development-stage requirement passes), so the idea stopped at the development stage, judged against the recorded checklist of reason codes \u2014 profit after both the normal and the harsher cost assumptions, the statistical significance bars, enough distinct coins, months and trading days, limits on any one coin dominating the picks, and a minimum tradable-size floor; on top of that the packet is capped at NO-GO by design, because this account's real fees are unknown and true tradable capacity was never measured, so no claim of a genuine edge is made.",
+   "sources": [
+    "web/public/research-lab/vg18/README.md",
+    "web/public/research-lab/vg18/protocol.v1.json",
+    "web/public/research-lab/vg18/result.v1.json",
+    "web/public/research-lab/vg18/freeze.v1.json",
+    "web/public/research-lab/vg18/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg22": {
+   "family": "vg22",
+   "tested": "Whether a coin's jump in trading activity predicts a further rise: each day the test sorted every USDT coin's daily dollar-turnover into low/medium/high bands based on its own recent history, and when a coin moved up at least one band from the previous day and also closed higher that day, it bought an equal-weight basket of the top 5 such coins at the next day's opening price and held for 1 or 3 days, checking 12 preset variants (three history lengths, two band-jump sizes, two holding periods) after realistic fee and slippage charges.",
+   "why_ended": "It ended UNMEASURED \u2014 nothing could be concluded, because while reading the practice-period price files the program hit a bad daily bar in the ACAUSDT February-2026 archive whose day-close timestamp did not line up with the required UTC day boundary, and the rules written in advance treat that kind of data fault as an immediate, unfixable stop with no repair and no rerun. As a result all 12 variants are recorded with no profit numbers and no statistical test at all (the multiplicity/overfitting check reads \"unavailable\"), and the sealed final-test months of March-June 2026 were never opened, so the one permitted look at them is still unused.",
+   "sources": [
+    "web/public/research-lab/vg22/README.md",
+    "web/public/research-lab/vg22/protocol.v1.json",
+    "web/public/research-lab/vg22/result.v1.json",
+    "web/public/research-lab/vg22/development.v1.json",
+    "web/public/research-lab/vg22/freeze.v1.json",
+    "web/public/research-lab/vg22/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg30": {
+   "family": "vg30",
+   "tested": "It tested whether, on a Sunday when the week's unusual trading-volume spikes across Binance's US-dollar spot coins are bunched up in just a handful of names (the top 10% or 20% of the list holding an unusually large share of all the \"busier than their own normal\" activity, compared with the previous 26 Sundays), buying that whole bunched-up group of coins in equal amounts the following Tuesday morning and selling them the next Tuesday morning would make money after subtracting realistic public trading costs of 20 to 120 basis points per round trip.",
+   "why_ended": "It ended UNMEASURED \u2014 meaning no answer at all rather than a yes or no: while reading the frozen public price archives, the program hit a bad record in the ACAUSDT February-2026 daily file (row 13 had an invalid close-time boundary), and the rules of this experiment say a broken required input must be reported as unmeasurable instead of quietly skipped or treated as zero, so all six preset variants failed on \"measurement unavailable\", no winning variant was picked, the March-June 2026 holdout data was never opened, and because the design allows only one sealed run \u2014 which was already consumed \u2014 it cannot be repaired or re-run.",
+   "sources": [
+    "web/public/research-lab/vg30/README.md",
+    "web/public/research-lab/vg30/protocol.v1.json",
+    "web/public/research-lab/vg30/result.v1.json",
+    "web/public/research-lab/vg30/development-result.v1.json",
+    "web/public/research-lab/vg30/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg24": {
+   "family": "vg24",
+   "tested": "It tested whether unusual trading-activity spikes spread from one crypto coin to another in a predictable chain: each Sunday it looked at the 30 busiest Binance USDT coins, flagged any coin whose daily dollar trading volume was far above its own recent normal (after stripping out what the whole market was doing), used the past 120 days to learn which three other coins each flagged coin's spike tends to be followed by two days later, and then bought the top 3, 5, or 8 of those \"downstream\" coins at Tuesday's open, holding 1 or 3 days (or sitting in cash when no clear signal appeared), to see if that beat cash and a simple same-size comparator after trading costs.",
+   "why_ended": "It ended UNMEASURED \u2014 not a yes and not a no, but a measurement that never completed: while reading the historical daily data, the file for the coin AXSUSDT covering February 2026 contained a duplicated or out-of-order day, which the pre-written rules treat as an instant, terminal data-integrity failure, and because the experiment was allowed exactly one evaluation run with no repairs, reruns, or substitutions, the fresh March-June test period was never opened at all (zero opens), so no profit or loss figures exist; the headline capital verdict stays NO_GO with real-world profitability UNKNOWN and no trading authority, which is the default whenever the local screen does not fully pass.",
+   "sources": [
+    "web/public/research-lab/vg24/README.md",
+    "web/public/research-lab/vg24/protocol.v1.json",
+    "web/public/research-lab/vg24/result.v1.json",
+    "web/public/research-lab/vg24/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg23": {
+   "family": "vg23",
+   "tested": "It tested whether a simple \"how busy is the whole market\" gauge \u2014 each week, counting what share of eligible Binance spot USDT coins had unusually heavy recent trading (their average trading value over the last 5 days being at least 1.5x or 2x their normal level over the prior 60 days) \u2014 could tell you how much money to put into a plain 50/50 Bitcoin/Ethereum holding, with the rest parked in cash; the gauge was only allowed to dial total exposure up or down, never to pick or favour any individual coin, and it used trading volume only, never price.",
+   "why_ended": "It ended NO-GO: across all six preset variants the idea failed the statistical bar in the practice period (every variant's adjusted p-value came out at the worst possible value of 1, and the data-snooping check gave 0.91 against holding cash and 0.29 against the matched always-invested 50/50 basket), and when the single sealed champion variant was finally run on the untouched four-month holdout it lost money \u2014 roughly $158 per $1,000 started, with none of the four months positive and the profit too concentrated in a handful of holding periods \u2014 so 12 of the 27 pass/fail checks failed and the packet was closed as terminal with no rerun, retune, runner-up test, or reopening of the holdout permitted.",
+   "sources": [
+    "web/public/research-lab/vg23/README.md",
+    "web/public/research-lab/vg23/protocol.v1.json",
+    "web/public/research-lab/vg23/result.v1.json",
+    "web/public/research-lab/vg23/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg26": {
+   "family": "vg26",
+   "tested": "It tested a simple on/off switch for a basket of twelve big Binance dollar-priced coins (Bitcoin, Ethereum, and ten others): using only fully finished past days, it measured how closely each coin's daily price moves tracked its daily changes in trading volume over the previous 20, 40, or 60 days, took the middle reading across the twelve coins, and asked whether holding the whole equally-weighted basket on days when that middle reading sat above a set level (0, 0.10, 0.20, or 0.30) and sitting in cash otherwise made money after trading fees and slippage, and did better than just holding the same basket continuously.",
+   "why_ended": "It ended NO-GO: none of the twelve preset variants cleared every pre-set development hurdle \u2014 all twelve missed the statistical bar (neither the plain returns nor the returns above the always-held basket had a 95% lower bound above zero, and after correcting for testing twelve versions at once no result came close to significance, with fewer than four of five two-month stretches profitable), and seven also blew past the 20% loss-from-peak limit \u2014 so no champion was ever sealed, the January\u2013March 2026 holdout data was left completely unopened, and the experiment granted no approval to use the idea for anything.",
+   "sources": [
+    "web/public/research-lab/vg26/README.md",
+    "web/public/research-lab/vg26/protocol.v1.json",
+    "web/public/research-lab/vg26/result.v1.json",
+    "web/public/research-lab/vg26/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg37": {
+   "family": "vg37",
+   "tested": "It tested a market-wide \"everyone is moving together\" idea on Binance's public spot market: each Monday it measured how closely the daily trading-volume swings of hundreds of USDT coins were moving in step, compared that with the immediately preceding eight-week stretch, and treated a big jump in togetherness as a buy signal. When the jump crossed a preset size, the plan bought an equal slice of a fixed, unchanging basket of 12 large coins (BTC, ETH, SOL, XRP and nine others) for either 3 or 7 days, otherwise sat in cash \u2014 and asked whether that beat both plain cash and simply always holding the basket, after deducting assumed trading fees and bad-fill costs.",
+   "why_ended": "It ended UNMEASURED rather than with a yes or no: the recorded reason code says the frozen data source or the experiment's own measurement rules blocked the pre-registered calculation from being produced, so no performance number ever existed to compare against the statistical bars. Because the experiment was sealed to a single permitted run with no repair, rerun, re-freeze, or swapping in different data allowed once the run marker was spent, the result is final and terminal \u2014 and capital authority stays NO_GO, which is the standing outcome for this public-research-only work regardless of results.",
+   "sources": [
+    "web/public/research-lab/vg37/README.md",
+    "web/public/research-lab/vg37/protocol.v1.json",
+    "web/public/research-lab/vg37/result.v1.json",
+    "web/public/research-lab/vg37/freeze.v1.json",
+    "web/public/research-lab/vg37/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg4": {
+   "family": "vg4",
+   "tested": "It asked whether a coin that has slid to a fresh multi-day low (down at least 5%) on quiet, shrinking trade volume \u2014 specifically ruling out any volume spike \u2014 and then posts a clear up day of at least half a percent, tends to keep bouncing for a profitable 3-to-7-day hold, buying at the next day's open on Binance spot with a 10-basis-point public taker fee charged on each side, tested across 12 preset variants over the 12 months from July 2025 through June 2026.",
+   "why_ended": "It ended UNMEASURED rather than yes or no: while validating the source data the run found that the official, checksum-verified February 2026 daily price file for AXSUSDT contained two identical rows for the same day (recorded as \"daily rows are duplicate or unsorted\"), and the frozen rules forbade cleaning up the duplicate, dropping that coin, or rerunning, so no variant was ever scored, the final 122 days of data stayed sealed and untouched, and no capital authority was granted.",
+   "sources": [
+    "web/public/research-lab/vg4/README.md",
+    "web/public/research-lab/vg4/protocol.v1.json",
+    "web/public/research-lab/vg4/result.v1.json",
+    "web/public/research-lab/vg4/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg32": {
+   "family": "vg32",
+   "tested": "It tested whether day-to-day reshuffling in the membership of Binance's top-20 most-traded USDT spot pairs is a useful market-mood signal: each day it counted how many of today's top 20 (ranked by trailing 30-day median trading value) were missing from the top 20 of a week earlier, and asked whether an unusually high \u2014 or in the opposite version, unusually low \u2014 amount of that reshuffling, compared with the prior 30 or 60 days, predicted that simply holding a fixed half-Bitcoin/half-Ether basket (switching to idle cash otherwise, and only acting two days after the signal) would make money.",
+   "why_ended": "It ended NO-GO: although the best of the 8 preset variants showed a paper profit, it failed 10 of the 16 required checks \u2014 the gain was statistically indistinguishable from luck (adjusted significance of 1.00, and 0.67 versus sitting in cash and 0.20 versus just always holding the basket, all far above the 0.05 bar), the cautious worst-case estimates of its return were negative rather than positive, its worst peak-to-trough loss of about 28% (29% under stress fees) blew through the 20% and 25% limits, only 5 of a required 6 months were profitable, and its backtest-overfitting score of 0.229 exceeded the 0.20 cap \u2014 so under the sealed rules the March\u2013June 2026 holdout data was never opened and no money was ever at stake ($0 effect, no execution authority).",
+   "sources": [
+    "web/public/research-lab/vg32/README.md",
+    "web/public/research-lab/vg32/result.v1.json",
+    "web/public/research-lab/vg32/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg36": {
+   "family": "vg36",
+   "tested": "It tested whether a sudden one-day collapse in how much of the day's trading came from eager buyers is a buy signal for major crypto: for twelve big coins (BTC, ETH, BNB, XRP, ADA, DOGE, SOL, TRX, LTC, LINK, AVAX, DOT), it measured each day the share of dollar volume done by aggressive buyers, averaged that across the twelve, and when that average dropped unusually sharply in a single day after an otherwise calm prior day, it waited a full day and then bought an equal slice of all twelve coins at the next morning's opening price, holding 1, 3, or 5 days \u2014 asking whether, after trading costs, that made money and also beat simply holding the same twelve coins the whole time.",
+   "why_ended": "It ended NO-GO on a valid measurement: all twelve preset variants (two lookback lengths x two shock sizes x three holding periods) failed the pre-agreed pass marks, and above all none came close to the statistical significance bar \u2014 after correcting for testing twelve variants at once, the best variant's odds-of-luck score was about 0.48 against a required 0.05 or lower, and the family-wide test came in at 0.073 for plain returns and 0.105 for returns above the buy-and-hold basket, so no variant was sealed as a candidate and the reserved March-June 2026 data was never opened; on top of that, the protocol records the archive and holdout as shared with other research families, so even a clean pass would have been globally ineligible with no trading authority granted.",
+   "sources": [
+    "web/public/research-lab/vg36/README.md",
+    "web/public/research-lab/vg36/protocol.v1.json",
+    "web/public/research-lab/vg36/result.v1.json",
+    "web/public/research-lab/vg36/development.v1.json"
+   ],
+   "author": "opus-worker"
+  },
+  "vg5": {
+   "family": "vg5",
+   "tested": "It asked whether, on Binance's regular spot market, a coin that closes above its highest price of the last 20 or 55 days for the very first time \u2014 and does so on unusually heavy trading (1.5x or 2x its normal 20-day volume) while already in a rising price trend and in either a calm or a jumpy volatility patch \u2014 goes on to make money if you buy it at the next-but-one daily open and sell 3 or 7 days later, after realistic trading fees and slippage; each day it picked only the single best-ranked coin from the 50 most liquid names, and it checked 32 preset variations of those settings over a year of history before testing the surviving best one on a sealed, never-peeked-at final period.",
+   "why_ended": "It ended UNMEASURED \u2014 meaning no verdict, good or bad, could be produced: while reading the practice-period price files the checker found an invalid daily time boundary in the ACAUSDT data for February 2026 (day 13), so the price bars could not be trusted, and the development stage was recorded as invalid and incomplete; the rules permit only one run with no rerun allowed, so that single attempt was consumed, the sealed final-test months were left unopened, no winning variant was ever picked, and the experiment closed with no capital authority.",
+   "sources": [
+    "web/public/research-lab/vg5/README.md",
+    "web/public/research-lab/vg5/protocol.v1.json",
+    "web/public/research-lab/vg5/result.v1.json",
+    "web/public/research-lab/vg5/freeze.v1.json",
+    "web/public/research-lab/vg5/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg29": {
+   "family": "vg29",
+   "tested": "Using ten big Binance USDT coins (BTC, ETH, BNB, SOL, XRP, ADA, DOGE, AVAX, LINK, TRX) and official daily price/volume files, it tested whether a shift in how each coin's daily dollar trading volume tracks its daily high-to-low price swing \u2014 the recent 14- or 28-day relationship minus an older 84- or 168-day baseline \u2014 marks a good stretch to own crypto: when at least 60% or 80% of the ten coins showed that relationship turning upward, the test bought an equal slice of all ten at Monday's opening price and sold seven days later, otherwise it sat in cash.",
+   "why_ended": "It ended NO-GO on the practice year (July 2024 to June 2025) before the held-back later data was ever opened: the best of the eight preset variants only ever gave a buy signal in 4 of 50 weeks (the rules required at least 12) with 40 buy-and-sell round trips instead of the required 120, and although those few weeks happened to gain about $736 per $1,000, the result was well inside what luck could produce \u2014 roughly a 12% chance by luck before adjusting, about 62% after accounting for trying eight variants and effectively 100% after accounting for the 29 sibling experiments, the pessimistic end of the confidence range sat at zero rather than above it, and the overfitting check came out at 0.94 against a 0.50 ceiling \u2014 so the one permitted look at the later holdout data was never taken and those files stay unopened.",
+   "sources": [
+    "web/public/research-lab/vg29/README.md",
+    "web/public/research-lab/vg29/protocol.v1.json",
+    "web/public/research-lab/vg29/result.v1.json",
+    "web/public/research-lab/vg29/freeze.v1.json",
+    "web/public/research-lab/vg29/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg6": {
+   "family": "vg6",
+   "tested": "Using only free public Binance daily price history for 382 USDT spot coins, V-G6 tested a quiet-market breakout idea: when a coin has been unusually calm \u2014 below-average trading volume and a narrow high-to-low price range over the previous 5 or 10 days \u2014 and then a completed daily close finishes above its highest price of the prior 20 days, but on a breakout day that is itself calm (its trading volume under 1.5 times the 20-day median), does buying at the next day's opening price and selling at the opening price 3 or 7 days later still make money after fees and adverse-price costs?",
+   "why_ended": "It ended UNMEASURED \u2014 meaning no answer was produced at all: while reading the sealed data the program hit an invalid daily timestamp boundary in the ACAUSDT February 2026 file (row 13), and under the rules frozen beforehand that kind of data failure, once the single permitted run had already been consumed, is terminal and may not be repaired or rerun \u2014 so none of the 16 preset variants ever produced numbers, no development gate was scored, and the held-back March\u2013June 2026 verification window was never opened (0 opens); the capital verdict stays NO-GO with no execution authority.",
+   "sources": [
+    "web/public/research-lab/vg6/README.md",
+    "web/public/research-lab/vg6/protocol.v1.json",
+    "web/public/research-lab/vg6/result.v1.json",
+    "web/public/research-lab/vg6/freeze.v1.json",
+    "web/public/research-lab/vg6/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg31": {
+   "family": "vg31",
+   "tested": "It tested whether a sudden change in how actively a fixed basket of twelve major Binance coins is being traded works as a buy signal: each coin's daily dollar turnover was sorted into one of four busy-ness bands measured against that same coin's own previous 84 days, and if the recent 7-, 14-, or 28-day pattern of day-to-day switching between those bands looked different enough from the preceding 84-day pattern, the strategy bought all twelve coins in equal amounts for 3 or 7 days (otherwise it sat in cash), to see whether that beat doing nothing once trading fees and unfavourable fill prices were charged.",
+   "why_ended": "It ended NO-GO in the development stage: across July 2025 to February 2026 all twelve preset variants lost money (roughly 260 to 520 USDT lost on a 1,000 USDT starting stake under the stress-cost scenario), every one of them fell further from its peak than the 25% loss limit allowed, and none came anywhere near the statistical bar (every multiplicity-adjusted p-value was 1, and the best variant's reality-check p-value was 0.98, versus the required 0.05). Because zero variants qualified, no champion was sealed and the reserved March-June 2026 out-of-sample period was never opened; the capital verdict remains NO-GO with no execution authority, account-effective fees unknown, and tradable capacity unmeasured.",
+   "sources": [
+    "web/public/research-lab/vg31/README.md",
+    "web/public/research-lab/vg31/protocol.v1.json",
+    "web/public/research-lab/vg31/result.v1.json",
+    "web/public/research-lab/vg31/freeze.v1.json",
+    "web/public/research-lab/vg31/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "volume-economics": {
+   "family": "volume-economics",
+   "tested": "It asked whether a volume-driven trading idea would actually have made money on real Binance history \u2014 running twelve months of one-second price-and-volume records for eight USDT trading pairs through a pipeline that derived features, extracted trade lifecycles, generated trade events, and then computed the economics: net edge after costs, drawdown, and how much money the idea could realistically absorb (including at a $1,000 size); the one file present names these outputs but never states the specific volume rule that was supposed to trigger a trade.",
+   "why_ended": "It ended as INVALID_TEST / UNMEASURED rather than a win or a loss: the NEARUSDT data contained 2,313 duplicate one-second timestamps and one time-step that ran backwards, and the program that actually did the run had quietly re-sorted, de-duplicated, and filled those broken timestamps before measuring \u2014 so its numbers are kept only as forensic evidence of a spoiled run, the earlier NO_GO reading was withdrawn as unsupported, GO/NO_GO is marked NOT_APPLICABLE, out-of-sample testing is recorded as failed with overfitting risk NOT_ESTABLISHED, and no authority exists to repair the data or rerun it; note also that only README.md is present in this directory (no protocol.v1.json, result.v1.json/gen_result.v1.json, development files, or OFFICIAL_SOURCE_RESEARCH.md), so every statement above comes from that README's own recorded verdict.",
+   "sources": [
+    "web/public/research-lab/volume-economics/README.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg38": {
+   "family": "vg38",
+   "tested": "It tested whether unusually calm stretches in Bitcoin's trading activity mark a good time to be invested: when the day-to-day swings in BTC's daily dollar trading volume over the most recent 7 or 14 days shrank to at most half (or three-quarters) of how much they had swung over the preceding 30 or 45 days, the plan bought a fixed, equally-weighted basket of the same twelve big Binance coins at the next daily open, and otherwise sat entirely in cash \u2014 with a full untouched day between the last data used and the trade \u2014 and the question was whether that on/off switching made more money, after realistic trading costs, than simply holding the same basket the whole time.",
+   "why_ended": "It ended NO-GO because not one of the eight pre-declared variants passed every pass/fail check on the 2025 development period: even the best-looking variant (7-day versus 30-day windows at the half threshold, about +$144 per $1,000 and +$276 versus always holding the basket) could not be told apart from luck \u2014 its multiplicity-adjusted p-value was 1.00 and its conservative statistical floor was still below zero \u2014 while the overfitting check came out at 0.51 against a 0.20 maximum, and other variants also broke the drawdown, consistency, or stress-cost limits; because the development gates failed, the sealed 2026 holdout period was never opened and remains untouched, and separately the study records that real account fees are unknown and tradeable capacity was never measured.",
+   "sources": [
+    "web/public/research-lab/vg38/README.md",
+    "web/public/research-lab/vg38/protocol.v1.json",
+    "web/public/research-lab/vg38/result.v1.json",
+    "web/public/research-lab/vg38/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg8": {
+   "family": "vg8",
+   "tested": "It asked whether crowd attention alone can pick winners: each week it looked at which Binance spot coins had grabbed a bigger slice of the market's total dollar trading volume over the last five days than they normally held over the prior sixty days, then bought an equal-weight basket of the top few of those \"volume-share accelerating\" coins (top 3, 5 or 8, with or without a small hold-on buffer), held a week, and repeated \u2014 using only trading volume, never price, direction, or trend \u2014 to see if that beat both cash and a same-schedule basket that just bought the highest-volume coins.",
+   "why_ended": "It ended NO-GO: over the eight-month practice period all six preset variants lost money after realistic fees and slippage (the best variant was down roughly $551 per $1,000 and profitable in only 1 of 8 months, with statistical scores of 1.00, 0.93 and 0.79 where anything above 0.05 counts as failure), and when the one chosen variant (top 8, no buffer) was opened a single time on the sealed March-June 2026 out-of-sample window it lost again \u2014 about $130 per $1,000, profitable in only 1 of 4 months, a 32% peak-to-trough drop against a 25% limit, a 0.65 significance score, and no advantage over the plain highest-volume benchmark \u2014 and the sealed rules allow no rerun, retune, or second look.",
+   "sources": [
+    "web/public/research-lab/vg8/README.md",
+    "web/public/research-lab/vg8/protocol.v1.json",
+    "web/public/research-lab/vg8/result.v1.json",
+    "web/public/research-lab/vg8/OFFICIAL_SOURCE_RESEARCH.md"
+   ],
+   "author": "opus-worker"
+  },
+  "vg3": {
+   "family": "vg3",
+   "tested": "When a coin's daily trading volume spikes unusually high while its price falls much harder than the rest of the market that day, does the price bounce back over the next 24 hours? Tested on public Binance spot data over a sealed twelve-month window, with the rules frozen before any outcome was seen.",
+   "why_ended": "It ended UNMEASURED with every profit number recorded as UNKNOWN: a required daily price archive was missing from the public source, and the experiment's own rules terminate it before the development stage may even open rather than work around missing evidence \u2014 no result was fabricated and its one permitted run cannot be repaired or rerun.",
+   "sources": [
+    "web/public/research-lab/vg3/README.md",
+    "web/public/research-lab/vg3/result.v1.json"
+   ],
+   "author": "fable-manual-from-sealed-artifacts"
+  }
+ }
+}

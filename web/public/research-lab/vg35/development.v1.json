@@ -1,0 +1,2089 @@
+{
+  "allDevelopmentGatesPass": false,
+  "championMeaning": "SEALED_ONLY_IF_ALL_DEVELOPMENT_GATES_PASS_OTHERWISE_DIAGNOSTIC_LEADER",
+  "championTrialId": "VG35-D05-H01",
+  "developmentGates": {
+    "activeCalendarDays": false,
+    "cashCalendarDays": true,
+    "completedCohorts": false,
+    "completedSymbolSides": false,
+    "distinctSelectedSymbols": true,
+    "feeStressDrawdown": true,
+    "feeStressNet": true,
+    "hazardRiskSet": false,
+    "holmAbsolute": false,
+    "holmTimingMatched": false,
+    "positiveFeeStressMonths": false,
+    "primaryInterval": false,
+    "publicCapacity": true,
+    "sensitivityInterval": false,
+    "sensitivityTimingBenchmarkInterval": false,
+    "severeNet": true,
+    "stressNet": true,
+    "timingBenchmarkInterval": false,
+    "whiteCash": false,
+    "whiteTimingMatched": false
+  },
+  "familyInference": {
+    "bootstrapReplicates": 4096,
+    "holmHypothesisCount": 12,
+    "pbo": {
+      "medianLogit": 1.791759469228,
+      "probabilityBacktestOverfitting": 0.242857142857,
+      "role": "DIAGNOSTIC_ONLY_NOT_A_P_VALUE_OR_GATE",
+      "selectionCounts": {
+        "VG35-D02-H01": 3,
+        "VG35-D02-H03": 53,
+        "VG35-D03-H03": 8,
+        "VG35-D05-H01": 3,
+        "VG35-D05-H03": 3
+      },
+      "splitCount": 70,
+      "status": "AVAILABLE"
+    },
+    "whiteRealityChecks": {
+      "cash": {
+        "bestTrialId": "VG35-D05-H01",
+        "familySize": 6,
+        "observedBestMeanDailyExcessLogReturn": 0.001016617823,
+        "pValue": 0.61972174762
+      },
+      "timingMatched": {
+        "bestTrialId": "VG35-D02-H03",
+        "familySize": 6,
+        "observedBestMeanDailyExcessLogReturn": 0.001102623823,
+        "pValue": 0.167927752014
+      }
+    }
+  },
+  "freezeSha256": "9ced3b7f45995b6656bd8923d9e406d1bcb4c1a0d8f5265f75d41d799f7ff483",
+  "partition": {
+    "endExclusiveUtc": "2026-03-01",
+    "startUtc": "2025-07-01"
+  },
+  "runMarkerSha256": "cc9c78b9a8a06666e90e86e9f266ff79590758c46446cd8b602a2820c1468e8a",
+  "selectionMetric": "DEVELOPMENT_FEE_STRESS_PRIMARY_LCB_THEN_NET_THEN_TRIAL_ID",
+  "trialCount": 6,
+  "trials": [
+    {
+      "activeCalendarDays": 23,
+      "activeWeeks": 16,
+      "base": {
+        "drawdownPeakDay": "2025-08-22",
+        "drawdownTroughDay": "2026-02-10",
+        "endingNavUsd": 695.979220002462,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.357108702433,
+        "netUsdPer1000": -304.020779997538
+      },
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 6846.40136483,
+        "p05SupportedCapitalUsd": 7199.782224225,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cashCalendarDays": 220,
+      "cohorts": [
+        {
+          "entryDay": "2025-07-14",
+          "exitDay": "2025-07-15",
+          "feeStressReturn": 0.033702575907,
+          "grossReturn": 0.043052078559,
+          "signalDay": "2025-07-12",
+          "skippedCompleteDay": "2025-07-13",
+          "supportedCapitalUsd": 26531.350369286,
+          "symbols": [
+            "XRPUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-07-17",
+          "exitDay": "2025-07-18",
+          "feeStressReturn": -0.00439297111,
+          "grossReturn": 0.004611969744,
+          "signalDay": "2025-07-15",
+          "skippedCompleteDay": "2025-07-16",
+          "supportedCapitalUsd": 136893.9698774168,
+          "symbols": [
+            "BTCUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-07-20",
+          "exitDay": "2025-07-21",
+          "feeStressReturn": 0.005110513044,
+          "grossReturn": 0.014201409813,
+          "signalDay": "2025-07-18",
+          "skippedCompleteDay": "2025-07-19",
+          "supportedCapitalUsd": 12067.833747584998,
+          "symbols": [
+            "AVAXUSDT",
+            "BNBUSDT",
+            "TRXUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-07-23",
+          "exitDay": "2025-07-24",
+          "feeStressReturn": -0.076222764642,
+          "grossReturn": -0.067867500843,
+          "signalDay": "2025-07-21",
+          "skippedCompleteDay": "2025-07-22",
+          "supportedCapitalUsd": 13025.338286655,
+          "symbols": [
+            "ADAUSDT",
+            "ETHUSDT",
+            "LINKUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-07-30",
+          "exitDay": "2025-07-31",
+          "feeStressReturn": -0.023242422809,
+          "grossReturn": -0.014407969097,
+          "signalDay": "2025-07-28",
+          "skippedCompleteDay": "2025-07-29",
+          "supportedCapitalUsd": 14142.234938435,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-04",
+          "exitDay": "2025-08-05",
+          "feeStressReturn": 0.007377151841,
+          "grossReturn": 0.016488549618,
+          "signalDay": "2025-08-02",
+          "skippedCompleteDay": "2025-08-03",
+          "supportedCapitalUsd": 15772.8767901335,
+          "symbols": [
+            "TRXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-10",
+          "exitDay": "2025-08-11",
+          "feeStressReturn": -0.003545634351,
+          "grossReturn": 0.005466970387,
+          "signalDay": "2025-08-08",
+          "skippedCompleteDay": "2025-08-09",
+          "supportedCapitalUsd": 7199.782224225,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-15",
+          "exitDay": "2025-08-16",
+          "feeStressReturn": -0.021391622033,
+          "grossReturn": -0.012540428432,
+          "signalDay": "2025-08-13",
+          "skippedCompleteDay": "2025-08-14",
+          "supportedCapitalUsd": 42344.115852538496,
+          "symbols": [
+            "ADAUSDT",
+            "ETHUSDT",
+            "SOLUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-08-20",
+          "exitDay": "2025-08-21",
+          "feeStressReturn": 0.112602408897,
+          "grossReturn": 0.122665534805,
+          "signalDay": "2025-08-18",
+          "skippedCompleteDay": "2025-08-19",
+          "supportedCapitalUsd": 10283.0503981,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-25",
+          "exitDay": "2025-08-26",
+          "feeStressReturn": -0.10411537295,
+          "grossReturn": -0.096012388695,
+          "signalDay": "2025-08-23",
+          "skippedCompleteDay": "2025-08-24",
+          "supportedCapitalUsd": 6846.40136483,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-30",
+          "exitDay": "2025-08-31",
+          "feeStressReturn": -0.020512564836,
+          "grossReturn": -0.01165342045,
+          "signalDay": "2025-08-28",
+          "skippedCompleteDay": "2025-08-29",
+          "supportedCapitalUsd": 68253.0952093675,
+          "symbols": [
+            "SOLUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-16",
+          "exitDay": "2025-09-17",
+          "feeStressReturn": -0.002905830985,
+          "grossReturn": 0.006112560567,
+          "signalDay": "2025-09-14",
+          "skippedCompleteDay": "2025-09-15",
+          "supportedCapitalUsd": 32448.187042819,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-21",
+          "exitDay": "2025-09-22",
+          "feeStressReturn": -0.012548899999,
+          "grossReturn": -0.003617726862,
+          "signalDay": "2025-09-19",
+          "skippedCompleteDay": "2025-09-20",
+          "supportedCapitalUsd": 9353.869757465,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-25",
+          "exitDay": "2025-09-26",
+          "feeStressReturn": -0.121839303515,
+          "grossReturn": -0.113896626431,
+          "signalDay": "2025-09-23",
+          "skippedCompleteDay": "2025-09-24",
+          "supportedCapitalUsd": 9353.869757465,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-28",
+          "exitDay": "2025-09-29",
+          "feeStressReturn": 0.034469646402,
+          "grossReturn": 0.043826086957,
+          "signalDay": "2025-09-26",
+          "skippedCompleteDay": "2025-09-27",
+          "supportedCapitalUsd": 10018.488242595,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-05",
+          "exitDay": "2025-10-06",
+          "feeStressReturn": 0.005358306728,
+          "grossReturn": 0.01445144471,
+          "signalDay": "2025-10-03",
+          "skippedCompleteDay": "2025-10-04",
+          "supportedCapitalUsd": 27434.9161325116,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-09",
+          "exitDay": "2025-10-10",
+          "feeStressReturn": -0.04841858384,
+          "grossReturn": -0.039811840294,
+          "signalDay": "2025-10-07",
+          "skippedCompleteDay": "2025-10-08",
+          "supportedCapitalUsd": 35303.66598639089,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-13",
+          "exitDay": "2025-10-14",
+          "feeStressReturn": 0.023229477045,
+          "grossReturn": 0.032484253933,
+          "signalDay": "2025-10-11",
+          "skippedCompleteDay": "2025-10-12",
+          "supportedCapitalUsd": 56246.7543621275,
+          "symbols": [
+            "ADAUSDT",
+            "AVAXUSDT",
+            "BTCUSDT",
+            "DOGEUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 5
+        },
+        {
+          "entryDay": "2025-11-06",
+          "exitDay": "2025-11-07",
+          "feeStressReturn": -0.026795397796,
+          "grossReturn": -0.017993079585,
+          "signalDay": "2025-11-04",
+          "skippedCompleteDay": "2025-11-05",
+          "supportedCapitalUsd": 10356.7556528465,
+          "symbols": [
+            "TRXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-01-08",
+          "exitDay": "2026-01-09",
+          "feeStressReturn": -0.028456698512,
+          "grossReturn": -0.019669406224,
+          "signalDay": "2026-01-06",
+          "skippedCompleteDay": "2026-01-07",
+          "supportedCapitalUsd": 15346.45507764,
+          "symbols": [
+            "XRPUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-01",
+          "exitDay": "2026-02-02",
+          "feeStressReturn": -0.037944240265,
+          "grossReturn": -0.029242759697,
+          "signalDay": "2026-01-30",
+          "skippedCompleteDay": "2026-01-31",
+          "supportedCapitalUsd": 11303.135852374,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-05",
+          "exitDay": "2026-02-06",
+          "feeStressReturn": -0.147881429004,
+          "grossReturn": -0.140174294452,
+          "signalDay": "2026-02-03",
+          "skippedCompleteDay": "2026-02-04",
+          "supportedCapitalUsd": 147029.36817383472,
+          "symbols": [
+            "BTCUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-08",
+          "exitDay": "2026-02-09",
+          "feeStressReturn": -0.015786146912,
+          "grossReturn": -0.006884253617,
+          "signalDay": "2026-02-06",
+          "skippedCompleteDay": "2026-02-07",
+          "supportedCapitalUsd": 17701.980969925,
+          "symbols": [
+            "ADAUSDT",
+            "DOGEUSDT",
+            "LINKUSDT",
+            "SOLUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 5
+        }
+      ],
+      "completedCohorts": 23,
+      "completedSymbolSides": 74,
+      "distinctSelectedSymbols": 10,
+      "feeStress": {
+        "drawdownPeakDay": "2025-07-22",
+        "drawdownTroughDay": "2026-02-10",
+        "endingNavUsd": 597.916108070997,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.421979973526,
+        "netUsdPer1000": -402.083891929003
+      },
+      "feeStressMonthlyLogReturns": {
+        "2025-07": -0.068959170553,
+        "2025-08": -0.041793324724,
+        "2025-09": -0.111575163561,
+        "2025-10": -0.02132224816,
+        "2025-11": -0.027160939145,
+        "2025-12": 0.0,
+        "2026-01": -0.028869439374,
+        "2026-02": -0.214624536862
+      },
+      "gross": {
+        "drawdownPeakDay": "2025-08-22",
+        "drawdownTroughDay": "2026-02-10",
+        "endingNavUsd": 735.494321223794,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.335131242354,
+        "netUsdPer1000": -264.505678776206
+      },
+      "inference": {
+        "absoluteHolmAdjustedPValue": 1.0,
+        "absoluteRawPValue": 0.97461557237,
+        "primary14DayFeeStressNetLowerBoundUsdPer1000": -608.751264598974,
+        "primary14DayFeeStressNetMedianUsdPer1000": -394.241069589442,
+        "primary14DayFeeStressNetUpperBoundUsdPer1000": -142.350599915814,
+        "sensitivity28DayFeeStressNetLowerBoundUsdPer1000": -586.894242655714,
+        "sensitivity28DayFeeStressNetMedianUsdPer1000": -396.916292359571,
+        "sensitivity28DayFeeStressNetUpperBoundUsdPer1000": -171.76154078011,
+        "sensitivity28DayTimingMatchedExcessLowerBoundUsdPer1000": -162.741662178442,
+        "sensitivity28DayTimingMatchedExcessMedianUsdPer1000": -55.290780232535,
+        "sensitivity28DayTimingMatchedExcessUpperBoundUsdPer1000": 48.931682512699,
+        "timingMatchedExcessHolmAdjustedPValue": 1.0,
+        "timingMatchedExcessLowerBoundUsdPer1000": -175.302722760831,
+        "timingMatchedExcessMedianUsdPer1000": -57.186499141963,
+        "timingMatchedExcessRawPValue": 0.767146692702,
+        "timingMatchedExcessUpperBoundUsdPer1000": 74.167713306144
+      },
+      "mechanism": {
+        "ageDays": 2,
+        "atRisk": 55,
+        "observedNextDay": 55,
+        "rightCensoredAtPartitionEnd": 0,
+        "role": "DESCRIPTIVE_ONLY_NEVER_SELECTS_OR_RESCUES",
+        "status": "AVAILABLE",
+        "terminatedNextDay": 25,
+        "terminationProbability": 0.454545454545,
+        "wilson95Interval": [
+          0.33025280252,
+          0.584773097581
+        ]
+      },
+      "parameters": {
+        "abnormalThresholdMultiple": "2.0",
+        "exactAbnormalAgeDays": 2,
+        "holdingDays": 1
+      },
+      "positiveFeeStressMonths": 0,
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-08-22",
+        "drawdownTroughDay": "2026-02-10",
+        "endingNavUsd": 702.411773286479,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.353498411739,
+        "netUsdPer1000": -297.588226713521
+      },
+      "selectedSymbols": [
+        "ADAUSDT",
+        "AVAXUSDT",
+        "BNBUSDT",
+        "BTCUSDT",
+        "DOGEUSDT",
+        "ETHUSDT",
+        "LINKUSDT",
+        "SOLUSDT",
+        "TRXUSDT",
+        "XRPUSDT"
+      ],
+      "severe": {
+        "drawdownPeakDay": "2025-07-22",
+        "drawdownTroughDay": "2026-02-10",
+        "endingNavUsd": 626.105923784005,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.398354374852,
+        "netUsdPer1000": -373.894076215995
+      },
+      "stress": {
+        "drawdownPeakDay": "2025-08-22",
+        "drawdownTroughDay": "2026-02-10",
+        "endingNavUsd": 670.832707939271,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.371349382324,
+        "netUsdPer1000": -329.167292060729
+      },
+      "suppressedOverlappingFormationDays": 12,
+      "timingMatchedFeeStress": {
+        "drawdownPeakDay": "2025-07-22",
+        "drawdownTroughDay": "2026-02-10",
+        "endingNavUsd": 633.807254697251,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.401883286932,
+        "netUsdPer1000": -366.192745302749
+      },
+      "tradeCount": 37,
+      "trialId": "VG35-D02-H01"
+    },
+    {
+      "activeCalendarDays": 57,
+      "activeWeeks": 15,
+      "base": {
+        "drawdownPeakDay": "2025-10-15",
+        "drawdownTroughDay": "2026-02-11",
+        "endingNavUsd": 1368.487789034815,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.163366087854,
+        "netUsdPer1000": 368.487789034815
+      },
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 6846.40136483,
+        "p05SupportedCapitalUsd": 6846.40136483,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cashCalendarDays": 186,
+      "cohorts": [
+        {
+          "entryDay": "2025-07-14",
+          "exitDay": "2025-07-17",
+          "feeStressReturn": 0.061587595702,
+          "grossReturn": 0.071189309263,
+          "signalDay": "2025-07-12",
+          "skippedCompleteDay": "2025-07-13",
+          "supportedCapitalUsd": 26531.350369286,
+          "symbols": [
+            "XRPUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-07-19",
+          "exitDay": "2025-07-22",
+          "feeStressReturn": 0.112022982231,
+          "grossReturn": 0.122080867414,
+          "signalDay": "2025-07-17",
+          "skippedCompleteDay": "2025-07-18",
+          "supportedCapitalUsd": 6867.98902911,
+          "symbols": [
+            "DOGEUSDT",
+            "LINKUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-07-24",
+          "exitDay": "2025-07-27",
+          "feeStressReturn": 0.003724750292,
+          "grossReturn": 0.012803113289,
+          "signalDay": "2025-07-22",
+          "skippedCompleteDay": "2025-07-23",
+          "supportedCapitalUsd": 13935.668622705,
+          "symbols": [
+            "AVAXUSDT",
+            "BNBUSDT",
+            "SOLUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-07-30",
+          "exitDay": "2025-08-02",
+          "feeStressReturn": -0.068085308893,
+          "grossReturn": -0.059656444461,
+          "signalDay": "2025-07-28",
+          "skippedCompleteDay": "2025-07-29",
+          "supportedCapitalUsd": 14142.234938435,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-04",
+          "exitDay": "2025-08-07",
+          "feeStressReturn": 0.020691839339,
+          "grossReturn": 0.029923664122,
+          "signalDay": "2025-08-02",
+          "skippedCompleteDay": "2025-08-03",
+          "supportedCapitalUsd": 15772.8767901335,
+          "symbols": [
+            "TRXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-10",
+          "exitDay": "2025-08-13",
+          "feeStressReturn": 0.065533440385,
+          "grossReturn": 0.075170842825,
+          "signalDay": "2025-08-08",
+          "skippedCompleteDay": "2025-08-09",
+          "supportedCapitalUsd": 7199.782224225,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-15",
+          "exitDay": "2025-08-18",
+          "feeStressReturn": -0.004285147159,
+          "grossReturn": 0.004720768927,
+          "signalDay": "2025-08-13",
+          "skippedCompleteDay": "2025-08-14",
+          "supportedCapitalUsd": 42344.115852538496,
+          "symbols": [
+            "ADAUSDT",
+            "ETHUSDT",
+            "SOLUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-08-20",
+          "exitDay": "2025-08-23",
+          "feeStressReturn": 0.127324936047,
+          "grossReturn": 0.137521222411,
+          "signalDay": "2025-08-18",
+          "skippedCompleteDay": "2025-08-19",
+          "supportedCapitalUsd": 10283.0503981,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-25",
+          "exitDay": "2025-08-28",
+          "feeStressReturn": -0.06306198747,
+          "grossReturn": -0.054587688734,
+          "signalDay": "2025-08-23",
+          "skippedCompleteDay": "2025-08-24",
+          "supportedCapitalUsd": 6846.40136483,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-30",
+          "exitDay": "2025-09-02",
+          "feeStressReturn": -0.046509813978,
+          "grossReturn": -0.037885806231,
+          "signalDay": "2025-08-28",
+          "skippedCompleteDay": "2025-08-29",
+          "supportedCapitalUsd": 68253.0952093675,
+          "symbols": [
+            "SOLUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-16",
+          "exitDay": "2025-09-19",
+          "feeStressReturn": 0.028934399203,
+          "grossReturn": 0.038240775252,
+          "signalDay": "2025-09-14",
+          "skippedCompleteDay": "2025-09-15",
+          "supportedCapitalUsd": 32448.187042819,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-21",
+          "exitDay": "2025-09-24",
+          "feeStressReturn": 0.003883720425,
+          "grossReturn": 0.012963521254,
+          "signalDay": "2025-09-19",
+          "skippedCompleteDay": "2025-09-20",
+          "supportedCapitalUsd": 9353.869757465,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-28",
+          "exitDay": "2025-10-01",
+          "feeStressReturn": 0.034814354715,
+          "grossReturn": 0.044173913043,
+          "signalDay": "2025-09-26",
+          "skippedCompleteDay": "2025-09-27",
+          "supportedCapitalUsd": 10018.488242595,
+          "symbols": [
+            "AVAXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-05",
+          "exitDay": "2025-10-08",
+          "feeStressReturn": 0.12338701712,
+          "grossReturn": 0.133547686292,
+          "signalDay": "2025-10-03",
+          "skippedCompleteDay": "2025-10-04",
+          "supportedCapitalUsd": 27434.9161325116,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-13",
+          "exitDay": "2025-10-16",
+          "feeStressReturn": -0.050110885353,
+          "grossReturn": -0.041519448122,
+          "signalDay": "2025-10-11",
+          "skippedCompleteDay": "2025-10-12",
+          "supportedCapitalUsd": 56246.7543621275,
+          "symbols": [
+            "ADAUSDT",
+            "AVAXUSDT",
+            "BTCUSDT",
+            "DOGEUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 5
+        },
+        {
+          "entryDay": "2025-11-06",
+          "exitDay": "2025-11-09",
+          "feeStressReturn": -4.7702598e-05,
+          "grossReturn": 0.008996539792,
+          "signalDay": "2025-11-04",
+          "skippedCompleteDay": "2025-11-05",
+          "supportedCapitalUsd": 10356.7556528465,
+          "symbols": [
+            "TRXUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-01-08",
+          "exitDay": "2026-01-11",
+          "feeStressReturn": -0.043328193095,
+          "grossReturn": -0.034675408625,
+          "signalDay": "2026-01-06",
+          "skippedCompleteDay": "2026-01-07",
+          "supportedCapitalUsd": 14843.103033787,
+          "symbols": [
+            "XRPUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-01",
+          "exitDay": "2026-02-04",
+          "feeStressReturn": -0.042713045676,
+          "grossReturn": -0.034054697398,
+          "signalDay": "2026-01-30",
+          "skippedCompleteDay": "2026-01-31",
+          "supportedCapitalUsd": 11303.135852374,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-07",
+          "exitDay": "2026-02-10",
+          "feeStressReturn": -0.040374091086,
+          "grossReturn": -0.031694587727,
+          "signalDay": "2026-02-05",
+          "skippedCompleteDay": "2026-02-06",
+          "supportedCapitalUsd": 12280.6940652185,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        }
+      ],
+      "completedCohorts": 19,
+      "completedSymbolSides": 56,
+      "distinctSelectedSymbols": 10,
+      "feeStress": {
+        "drawdownPeakDay": "2025-10-15",
+        "drawdownTroughDay": "2026-02-11",
+        "endingNavUsd": 1207.134102536034,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.18786228871,
+        "netUsdPer1000": 207.134102536034
+      },
+      "feeStressMonthlyLogReturns": {
+        "2025-07": 0.150652558479,
+        "2025-08": 0.066648148467,
+        "2025-09": 0.052629342678,
+        "2025-10": 0.047525413279,
+        "2025-11": -4.7703736e-05,
+        "2025-12": 0.0,
+        "2026-01": -0.04429488584,
+        "2026-02": -0.084863833376
+      },
+      "gross": {
+        "drawdownPeakDay": "2025-10-15",
+        "drawdownTroughDay": "2026-02-11",
+        "endingNavUsd": 1432.36272973955,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.154277647769,
+        "netUsdPer1000": 432.36272973955
+      },
+      "inference": {
+        "absoluteHolmAdjustedPValue": 1.0,
+        "absoluteRawPValue": 0.224310471076,
+        "primary14DayFeeStressNetLowerBoundUsdPer1000": -194.321918334136,
+        "primary14DayFeeStressNetMedianUsdPer1000": 197.070176432184,
+        "primary14DayFeeStressNetUpperBoundUsdPer1000": 846.18796524701,
+        "sensitivity28DayFeeStressNetLowerBoundUsdPer1000": -153.760171049443,
+        "sensitivity28DayFeeStressNetMedianUsdPer1000": 208.110300029961,
+        "sensitivity28DayFeeStressNetUpperBoundUsdPer1000": 758.046201062616,
+        "sensitivity28DayTimingMatchedExcessLowerBoundUsdPer1000": -19.153288199135,
+        "sensitivity28DayTimingMatchedExcessMedianUsdPer1000": 293.859080470491,
+        "sensitivity28DayTimingMatchedExcessUpperBoundUsdPer1000": 852.621187879668,
+        "timingMatchedExcessHolmAdjustedPValue": 0.770319746156,
+        "timingMatchedExcessLowerBoundUsdPer1000": 6.479495429193,
+        "timingMatchedExcessMedianUsdPer1000": 287.227851210005,
+        "timingMatchedExcessRawPValue": 0.06419331218,
+        "timingMatchedExcessUpperBoundUsdPer1000": 749.626071503463
+      },
+      "mechanism": {
+        "ageDays": 2,
+        "atRisk": 55,
+        "observedNextDay": 55,
+        "rightCensoredAtPartitionEnd": 0,
+        "role": "DESCRIPTIVE_ONLY_NEVER_SELECTS_OR_RESCUES",
+        "status": "AVAILABLE",
+        "terminatedNextDay": 25,
+        "terminationProbability": 0.454545454545,
+        "wilson95Interval": [
+          0.33025280252,
+          0.584773097581
+        ]
+      },
+      "parameters": {
+        "abnormalThresholdMultiple": "2.0",
+        "exactAbnormalAgeDays": 2,
+        "holdingDays": 3
+      },
+      "positiveFeeStressMonths": 4,
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-10-15",
+        "drawdownTroughDay": "2026-02-11",
+        "endingNavUsd": 1378.927918611293,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.161858773868,
+        "netUsdPer1000": 378.927918611293
+      },
+      "selectedSymbols": [
+        "ADAUSDT",
+        "AVAXUSDT",
+        "BNBUSDT",
+        "BTCUSDT",
+        "DOGEUSDT",
+        "ETHUSDT",
+        "LINKUSDT",
+        "SOLUSDT",
+        "TRXUSDT",
+        "XRPUSDT"
+      ],
+      "severe": {
+        "drawdownPeakDay": "2025-10-15",
+        "drawdownTroughDay": "2026-02-11",
+        "endingNavUsd": 1253.95947958729,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.180508978543,
+        "netUsdPer1000": 253.95947958729
+      },
+      "stress": {
+        "drawdownPeakDay": "2025-10-15",
+        "drawdownTroughDay": "2026-02-11",
+        "endingNavUsd": 1327.511734988102,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.169368619597,
+        "netUsdPer1000": 327.511734988102
+      },
+      "suppressedOverlappingFormationDays": 16,
+      "timingMatchedFeeStress": {
+        "drawdownPeakDay": "2025-08-24",
+        "drawdownTroughDay": "2026-02-11",
+        "endingNavUsd": 923.403896718467,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.219809540256,
+        "netUsdPer1000": -76.596103281533
+      },
+      "tradeCount": 28,
+      "trialId": "VG35-D02-H03"
+    },
+    {
+      "activeCalendarDays": 15,
+      "activeWeeks": 12,
+      "base": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2026-02-03",
+        "endingNavUsd": 871.19636053139,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.235865271454,
+        "netUsdPer1000": -128.80363946861
+      },
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 7199.782224225,
+        "p05SupportedCapitalUsd": 7199.782224225,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cashCalendarDays": 228,
+      "cohorts": [
+        {
+          "entryDay": "2025-07-15",
+          "exitDay": "2025-07-16",
+          "feeStressReturn": -0.022129624417,
+          "grossReturn": -0.013285105808,
+          "signalDay": "2025-07-13",
+          "skippedCompleteDay": "2025-07-14",
+          "supportedCapitalUsd": 27899.973848141,
+          "symbols": [
+            "XRPUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-07-19",
+          "exitDay": "2025-07-20",
+          "feeStressReturn": 0.003632093539,
+          "grossReturn": 0.012709618486,
+          "signalDay": "2025-07-17",
+          "skippedCompleteDay": "2025-07-18",
+          "supportedCapitalUsd": 115497.0318273423,
+          "symbols": [
+            "ETHUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-07-24",
+          "exitDay": "2025-07-25",
+          "feeStressReturn": -0.010615079551,
+          "grossReturn": -0.001666415639,
+          "signalDay": "2025-07-22",
+          "skippedCompleteDay": "2025-07-23",
+          "supportedCapitalUsd": 13025.338286655,
+          "symbols": [
+            "ADAUSDT",
+            "ETHUSDT",
+            "LINKUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-07-31",
+          "exitDay": "2025-08-01",
+          "feeStressReturn": -0.021927467643,
+          "grossReturn": -0.013081120591,
+          "signalDay": "2025-07-29",
+          "skippedCompleteDay": "2025-07-30",
+          "supportedCapitalUsd": 15613.8726544935,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-11",
+          "exitDay": "2025-08-12",
+          "feeStressReturn": -0.053867832941,
+          "grossReturn": -0.045310376076,
+          "signalDay": "2025-08-09",
+          "skippedCompleteDay": "2025-08-10",
+          "supportedCapitalUsd": 7199.782224225,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-16",
+          "exitDay": "2025-08-17",
+          "feeStressReturn": -0.01174904723,
+          "grossReturn": -0.002810639685,
+          "signalDay": "2025-08-14",
+          "skippedCompleteDay": "2025-08-15",
+          "supportedCapitalUsd": 42344.115852538496,
+          "symbols": [
+            "ADAUSDT",
+            "ETHUSDT",
+            "SOLUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-08-21",
+          "exitDay": "2025-08-22",
+          "feeStressReturn": -0.070036921617,
+          "grossReturn": -0.061625708885,
+          "signalDay": "2025-08-19",
+          "skippedCompleteDay": "2025-08-20",
+          "supportedCapitalUsd": 10283.0503981,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-31",
+          "exitDay": "2025-09-01",
+          "feeStressReturn": -0.019133091426,
+          "grossReturn": -0.010261470153,
+          "signalDay": "2025-08-29",
+          "skippedCompleteDay": "2025-08-30",
+          "supportedCapitalUsd": 69505.1016215325,
+          "symbols": [
+            "SOLUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-17",
+          "exitDay": "2025-09-18",
+          "feeStressReturn": 0.037405183619,
+          "grossReturn": 0.04678817515,
+          "signalDay": "2025-09-15",
+          "skippedCompleteDay": "2025-09-16",
+          "supportedCapitalUsd": 32594.3750336405,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-24",
+          "exitDay": "2025-09-25",
+          "feeStressReturn": -0.006515224689,
+          "grossReturn": 0.002470521073,
+          "signalDay": "2025-09-22",
+          "skippedCompleteDay": "2025-09-23",
+          "supportedCapitalUsd": 16314.9507899285,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-10",
+          "exitDay": "2025-10-11",
+          "feeStressReturn": -0.129575813559,
+          "grossReturn": -0.121703110686,
+          "signalDay": "2025-10-08",
+          "skippedCompleteDay": "2025-10-09",
+          "supportedCapitalUsd": 36091.462607478,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-14",
+          "exitDay": "2025-10-15",
+          "feeStressReturn": -0.027360584364,
+          "grossReturn": -0.01856337808,
+          "signalDay": "2025-10-12",
+          "skippedCompleteDay": "2025-10-13",
+          "supportedCapitalUsd": 185066.5670246441,
+          "symbols": [
+            "BTCUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-02",
+          "exitDay": "2026-02-03",
+          "feeStressReturn": 0.011156577958,
+          "grossReturn": 0.020302159412,
+          "signalDay": "2026-01-31",
+          "skippedCompleteDay": "2026-02-01",
+          "supportedCapitalUsd": 11625.232093248,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-06",
+          "exitDay": "2026-02-07",
+          "feeStressReturn": 0.111870151871,
+          "grossReturn": 0.121926654752,
+          "signalDay": "2026-02-04",
+          "skippedCompleteDay": "2026-02-05",
+          "supportedCapitalUsd": 147029.36817383472,
+          "symbols": [
+            "BTCUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-09",
+          "exitDay": "2026-02-10",
+          "feeStressReturn": -0.006999858955,
+          "grossReturn": 0.001981503449,
+          "signalDay": "2026-02-07",
+          "skippedCompleteDay": "2026-02-08",
+          "supportedCapitalUsd": 10375.112603692,
+          "symbols": [
+            "ADAUSDT",
+            "XRPUSDT"
+          ],
+          "tradeCount": 2
+        }
+      ],
+      "completedCohorts": 15,
+      "completedSymbolSides": 40,
+      "distinctSelectedSymbols": 8,
+      "feeStress": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2026-02-03",
+        "endingNavUsd": 789.044064470614,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.296400335293,
+        "netUsdPer1000": -210.955935529386
+      },
+      "feeStressMonthlyLogReturns": {
+        "2025-07": -0.033923348901,
+        "2025-08": -0.161973462937,
+        "2025-09": 0.015366423367,
+        "2025-10": -0.166516471319,
+        "2025-11": 0.0,
+        "2025-12": 0.0,
+        "2026-01": 0.0,
+        "2026-02": 0.110113748599
+      },
+      "gross": {
+        "drawdownPeakDay": "2025-07-16",
+        "drawdownTroughDay": "2025-10-16",
+        "endingNavUsd": 903.144356760565,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.21258407091,
+        "netUsdPer1000": -96.855643239435
+      },
+      "inference": {
+        "absoluteHolmAdjustedPValue": 1.0,
+        "absoluteRawPValue": 0.854283622163,
+        "primary14DayFeeStressNetLowerBoundUsdPer1000": -465.15410084181,
+        "primary14DayFeeStressNetMedianUsdPer1000": -205.084997113231,
+        "primary14DayFeeStressNetUpperBoundUsdPer1000": 129.38830226198,
+        "sensitivity28DayFeeStressNetLowerBoundUsdPer1000": -466.304925804127,
+        "sensitivity28DayFeeStressNetMedianUsdPer1000": -208.890505800375,
+        "sensitivity28DayFeeStressNetUpperBoundUsdPer1000": 157.18418199936,
+        "sensitivity28DayTimingMatchedExcessLowerBoundUsdPer1000": -115.305099534467,
+        "sensitivity28DayTimingMatchedExcessMedianUsdPer1000": 14.749630951852,
+        "sensitivity28DayTimingMatchedExcessUpperBoundUsdPer1000": 175.842777815759,
+        "timingMatchedExcessHolmAdjustedPValue": 1.0,
+        "timingMatchedExcessLowerBoundUsdPer1000": -113.891450239891,
+        "timingMatchedExcessMedianUsdPer1000": 11.98642531513,
+        "timingMatchedExcessRawPValue": 0.431779350744,
+        "timingMatchedExcessUpperBoundUsdPer1000": 169.351419645974
+      },
+      "mechanism": {
+        "ageDays": 3,
+        "atRisk": 30,
+        "observedNextDay": 30,
+        "rightCensoredAtPartitionEnd": 0,
+        "role": "DESCRIPTIVE_ONLY_NEVER_SELECTS_OR_RESCUES",
+        "status": "AVAILABLE",
+        "terminatedNextDay": 11,
+        "terminationProbability": 0.366666666667,
+        "wilson95Interval": [
+          0.218739208061,
+          0.544864363452
+        ]
+      },
+      "parameters": {
+        "abnormalThresholdMultiple": "2.0",
+        "exactAbnormalAgeDays": 3,
+        "holdingDays": 1
+      },
+      "positiveFeeStressMonths": 2,
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2026-02-03",
+        "endingNavUsd": 876.439251709352,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.232035045496,
+        "netUsdPer1000": -123.560748290648
+      },
+      "selectedSymbols": [
+        "ADAUSDT",
+        "BNBUSDT",
+        "BTCUSDT",
+        "DOGEUSDT",
+        "ETHUSDT",
+        "LINKUSDT",
+        "SOLUSDT",
+        "XRPUSDT"
+      ],
+      "severe": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2026-02-03",
+        "endingNavUsd": 813.110679886994,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.278561529395,
+        "netUsdPer1000": -186.889320113006
+      },
+      "stress": {
+        "drawdownPeakDay": "2025-07-01",
+        "drawdownTroughDay": "2026-02-03",
+        "endingNavUsd": 850.536548742569,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.250995799522,
+        "netUsdPer1000": -149.463451257431
+      },
+      "suppressedOverlappingFormationDays": 7,
+      "timingMatchedFeeStress": {
+        "drawdownPeakDay": "2025-07-21",
+        "drawdownTroughDay": "2026-02-03",
+        "endingNavUsd": 778.365218549522,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.308299795904,
+        "netUsdPer1000": -221.634781450478
+      },
+      "tradeCount": 20,
+      "trialId": "VG35-D03-H01"
+    },
+    {
+      "activeCalendarDays": 39,
+      "activeWeeks": 10,
+      "base": {
+        "drawdownPeakDay": "2025-09-19",
+        "drawdownTroughDay": "2025-10-12",
+        "endingNavUsd": 1156.694195476509,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.224013918957,
+        "netUsdPer1000": 156.694195476509
+      },
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 7199.782224225,
+        "p05SupportedCapitalUsd": 7199.782224225,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cashCalendarDays": 204,
+      "cohorts": [
+        {
+          "entryDay": "2025-07-15",
+          "exitDay": "2025-07-18",
+          "feeStressReturn": 0.166281865948,
+          "grossReturn": 0.176830505037,
+          "signalDay": "2025-07-13",
+          "skippedCompleteDay": "2025-07-14",
+          "supportedCapitalUsd": 27899.973848141,
+          "symbols": [
+            "XRPUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-07-20",
+          "exitDay": "2025-07-23",
+          "feeStressReturn": 0.085558869782,
+          "grossReturn": 0.095377395699,
+          "signalDay": "2025-07-18",
+          "skippedCompleteDay": "2025-07-19",
+          "supportedCapitalUsd": 7714.99864459,
+          "symbols": [
+            "DOGEUSDT",
+            "LINKUSDT"
+          ],
+          "tradeCount": 2
+        },
+        {
+          "entryDay": "2025-07-25",
+          "exitDay": "2025-07-28",
+          "feeStressReturn": 0.066196357049,
+          "grossReturn": 0.075839755353,
+          "signalDay": "2025-07-23",
+          "skippedCompleteDay": "2025-07-24",
+          "supportedCapitalUsd": 14990.40287244,
+          "symbols": [
+            "AVAXUSDT",
+            "BNBUSDT",
+            "SOLUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-07-31",
+          "exitDay": "2025-08-03",
+          "feeStressReturn": -0.080252378272,
+          "grossReturn": -0.071933561014,
+          "signalDay": "2025-07-29",
+          "skippedCompleteDay": "2025-07-30",
+          "supportedCapitalUsd": 15613.8726544935,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-11",
+          "exitDay": "2025-08-14",
+          "feeStressReturn": 0.076803482015,
+          "grossReturn": 0.086542818305,
+          "signalDay": "2025-08-09",
+          "skippedCompleteDay": "2025-08-10",
+          "supportedCapitalUsd": 7199.782224225,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-16",
+          "exitDay": "2025-08-19",
+          "feeStressReturn": -0.030886555106,
+          "grossReturn": -0.022121240079,
+          "signalDay": "2025-08-14",
+          "skippedCompleteDay": "2025-08-15",
+          "supportedCapitalUsd": 42344.115852538496,
+          "symbols": [
+            "ADAUSDT",
+            "ETHUSDT",
+            "SOLUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-08-21",
+          "exitDay": "2025-08-24",
+          "feeStressReturn": -0.015333211123,
+          "grossReturn": -0.006427221172,
+          "signalDay": "2025-08-19",
+          "skippedCompleteDay": "2025-08-20",
+          "supportedCapitalUsd": 10283.0503981,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-31",
+          "exitDay": "2025-09-03",
+          "feeStressReturn": 0.024967294953,
+          "grossReturn": 0.034237789837,
+          "signalDay": "2025-08-29",
+          "skippedCompleteDay": "2025-08-30",
+          "supportedCapitalUsd": 71926.3643714385,
+          "symbols": [
+            "SOLUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-17",
+          "exitDay": "2025-09-20",
+          "feeStressReturn": -0.026145383421,
+          "grossReturn": -0.017337186041,
+          "signalDay": "2025-09-15",
+          "skippedCompleteDay": "2025-09-16",
+          "supportedCapitalUsd": 32594.3750336405,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-09-24",
+          "exitDay": "2025-09-27",
+          "feeStressReturn": -0.062779107339,
+          "grossReturn": -0.054302250044,
+          "signalDay": "2025-09-22",
+          "skippedCompleteDay": "2025-09-23",
+          "supportedCapitalUsd": 16314.9507899285,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-10",
+          "exitDay": "2025-10-13",
+          "feeStressReturn": 0.02837739687,
+          "grossReturn": 0.037678735014,
+          "signalDay": "2025-10-08",
+          "skippedCompleteDay": "2025-10-09",
+          "supportedCapitalUsd": 36091.462607478,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-02",
+          "exitDay": "2026-02-05",
+          "feeStressReturn": -0.089013170126,
+          "grossReturn": -0.080773591373,
+          "signalDay": "2026-01-31",
+          "skippedCompleteDay": "2026-02-01",
+          "supportedCapitalUsd": 11625.232093248,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-08",
+          "exitDay": "2026-02-11",
+          "feeStressReturn": -0.050565042392,
+          "grossReturn": -0.041977712864,
+          "signalDay": "2026-02-06",
+          "skippedCompleteDay": "2026-02-07",
+          "supportedCapitalUsd": 13165.9837964155,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        }
+      ],
+      "completedCohorts": 13,
+      "completedSymbolSides": 36,
+      "distinctSelectedSymbols": 8,
+      "feeStress": {
+        "drawdownPeakDay": "2025-09-19",
+        "drawdownTroughDay": "2025-10-12",
+        "endingNavUsd": 1061.546608152842,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.234194245751,
+        "netUsdPer1000": 61.546608152842
+      },
+      "feeStressMonthlyLogReturns": {
+        "2025-07": 0.295514363741,
+        "2025-08": -0.056484637405,
+        "2025-09": -0.062169943144,
+        "2025-10": 0.02798221724,
+        "2025-11": 0.0,
+        "2025-12": 0.0,
+        "2026-01": 0.0,
+        "2026-02": -0.145115091412
+      },
+      "gross": {
+        "drawdownPeakDay": "2025-09-19",
+        "drawdownTroughDay": "2025-10-12",
+        "endingNavUsd": 1193.367465695673,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.220278671598,
+        "netUsdPer1000": 193.367465695673
+      },
+      "inference": {
+        "absoluteHolmAdjustedPValue": 1.0,
+        "absoluteRawPValue": 0.400536978277,
+        "primary14DayFeeStressNetLowerBoundUsdPer1000": -341.810446181124,
+        "primary14DayFeeStressNetMedianUsdPer1000": 38.784453347273,
+        "primary14DayFeeStressNetUpperBoundUsdPer1000": 871.125742695607,
+        "sensitivity28DayFeeStressNetLowerBoundUsdPer1000": -334.810272497054,
+        "sensitivity28DayFeeStressNetMedianUsdPer1000": 41.879214649615,
+        "sensitivity28DayFeeStressNetUpperBoundUsdPer1000": 784.222993156912,
+        "sensitivity28DayTimingMatchedExcessLowerBoundUsdPer1000": -164.238766735183,
+        "sensitivity28DayTimingMatchedExcessMedianUsdPer1000": 123.989653796764,
+        "sensitivity28DayTimingMatchedExcessUpperBoundUsdPer1000": 617.322206260436,
+        "timingMatchedExcessHolmAdjustedPValue": 1.0,
+        "timingMatchedExcessLowerBoundUsdPer1000": -179.78432205634,
+        "timingMatchedExcessMedianUsdPer1000": 124.750148165001,
+        "timingMatchedExcessRawPValue": 0.26629240908,
+        "timingMatchedExcessUpperBoundUsdPer1000": 637.26146783533
+      },
+      "mechanism": {
+        "ageDays": 3,
+        "atRisk": 30,
+        "observedNextDay": 30,
+        "rightCensoredAtPartitionEnd": 0,
+        "role": "DESCRIPTIVE_ONLY_NEVER_SELECTS_OR_RESCUES",
+        "status": "AVAILABLE",
+        "terminatedNextDay": 11,
+        "terminationProbability": 0.366666666667,
+        "wilson95Interval": [
+          0.218739208061,
+          0.544864363452
+        ]
+      },
+      "parameters": {
+        "abnormalThresholdMultiple": "2.0",
+        "exactAbnormalAgeDays": 3,
+        "holdingDays": 3
+      },
+      "positiveFeeStressMonths": 2,
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-09-19",
+        "drawdownTroughDay": "2025-10-12",
+        "endingNavUsd": 1162.724671021142,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.223392881702,
+        "netUsdPer1000": 162.724671021142
+      },
+      "selectedSymbols": [
+        "ADAUSDT",
+        "AVAXUSDT",
+        "BNBUSDT",
+        "DOGEUSDT",
+        "ETHUSDT",
+        "LINKUSDT",
+        "SOLUSDT",
+        "XRPUSDT"
+      ],
+      "severe": {
+        "drawdownPeakDay": "2025-09-19",
+        "drawdownTroughDay": "2025-10-12",
+        "endingNavUsd": 1089.55131053614,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.231120267659,
+        "netUsdPer1000": 89.55131053614
+      },
+      "stress": {
+        "drawdownPeakDay": "2025-09-19",
+        "drawdownTroughDay": "2025-10-12",
+        "endingNavUsd": 1132.883436711361,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.226493106625,
+        "netUsdPer1000": 132.883436711361
+      },
+      "suppressedOverlappingFormationDays": 9,
+      "timingMatchedFeeStress": {
+        "drawdownPeakDay": "2025-09-20",
+        "drawdownTroughDay": "2026-02-12",
+        "endingNavUsd": 936.295535623598,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.242212798621,
+        "netUsdPer1000": -63.704464376402
+      },
+      "tradeCount": 18,
+      "trialId": "VG35-D03-H03"
+    },
+    {
+      "activeCalendarDays": 9,
+      "activeWeeks": 7,
+      "base": {
+        "drawdownPeakDay": "2025-07-19",
+        "drawdownTroughDay": "2025-10-13",
+        "endingNavUsd": 1358.614277673914,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.079835910603,
+        "netUsdPer1000": 358.614277673914
+      },
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 7663.237927295,
+        "p05SupportedCapitalUsd": 7663.237927295,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cashCalendarDays": 234,
+      "cohorts": [
+        {
+          "entryDay": "2025-07-17",
+          "exitDay": "2025-07-18",
+          "feeStressReturn": 0.135646812326,
+          "grossReturn": 0.145918367347,
+          "signalDay": "2025-07-15",
+          "skippedCompleteDay": "2025-07-16",
+          "supportedCapitalUsd": 30387.0349181245,
+          "symbols": [
+            "XRPUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-07-22",
+          "exitDay": "2025-07-23",
+          "feeStressReturn": -0.010716225975,
+          "grossReturn": -0.001768476899,
+          "signalDay": "2025-07-20",
+          "skippedCompleteDay": "2025-07-21",
+          "supportedCapitalUsd": 16429.2902746265,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-07-26",
+          "exitDay": "2025-07-27",
+          "feeStressReturn": -0.003745118597,
+          "grossReturn": 0.005265681872,
+          "signalDay": "2025-07-24",
+          "skippedCompleteDay": "2025-07-25",
+          "supportedCapitalUsd": 13725.941422560001,
+          "symbols": [
+            "ADAUSDT",
+            "ETHUSDT",
+            "LINKUSDT"
+          ],
+          "tradeCount": 3
+        },
+        {
+          "entryDay": "2025-08-02",
+          "exitDay": "2025-08-03",
+          "feeStressReturn": -0.035994960483,
+          "grossReturn": -0.027275849316,
+          "signalDay": "2025-07-31",
+          "skippedCompleteDay": "2025-08-01",
+          "supportedCapitalUsd": 18120.911086687,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-13",
+          "exitDay": "2025-08-14",
+          "feeStressReturn": 0.006993764749,
+          "grossReturn": 0.016101694915,
+          "signalDay": "2025-08-11",
+          "skippedCompleteDay": "2025-08-12",
+          "supportedCapitalUsd": 7663.237927295,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-18",
+          "exitDay": "2025-08-19",
+          "feeStressReturn": -0.047635676921,
+          "grossReturn": -0.039021852237,
+          "signalDay": "2025-08-16",
+          "skippedCompleteDay": "2025-08-17",
+          "supportedCapitalUsd": 14114.7052841795,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-23",
+          "exitDay": "2025-08-24",
+          "feeStressReturn": -0.028192665456,
+          "grossReturn": -0.019402985075,
+          "signalDay": "2025-08-21",
+          "skippedCompleteDay": "2025-08-22",
+          "supportedCapitalUsd": 10791.10541238,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-12",
+          "exitDay": "2025-10-13",
+          "feeStressReturn": 0.137351498287,
+          "grossReturn": 0.147638471636,
+          "signalDay": "2025-10-10",
+          "skippedCompleteDay": "2025-10-11",
+          "supportedCapitalUsd": 37741.47651016714,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-06",
+          "exitDay": "2026-02-07",
+          "feeStressReturn": 0.119356904917,
+          "grossReturn": 0.129481123038,
+          "signalDay": "2026-02-04",
+          "skippedCompleteDay": "2026-02-05",
+          "supportedCapitalUsd": 135084.31970724076,
+          "symbols": [
+            "ETHUSDT"
+          ],
+          "tradeCount": 1
+        }
+      ],
+      "completedCohorts": 9,
+      "completedSymbolSides": 22,
+      "distinctSelectedSymbols": 6,
+      "feeStress": {
+        "drawdownPeakDay": "2025-07-19",
+        "drawdownTroughDay": "2025-10-13",
+        "endingNavUsd": 1280.227928292603,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.118490728955,
+        "netUsdPer1000": 280.227928292603
+      },
+      "feeStressMonthlyLogReturns": {
+        "2025-07": 0.112676159945,
+        "2025-08": -0.107094669608,
+        "2025-09": 0.0,
+        "2025-10": 0.128702312364,
+        "2025-11": 0.0,
+        "2025-12": 0.0,
+        "2026-01": 0.0,
+        "2026-02": 0.112754328357
+      },
+      "gross": {
+        "drawdownPeakDay": "2025-07-28",
+        "drawdownTroughDay": "2025-08-25",
+        "endingNavUsd": 1388.29208091167,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.068611324025,
+        "netUsdPer1000": 388.29208091167
+      },
+      "inference": {
+        "absoluteHolmAdjustedPValue": 1.0,
+        "absoluteRawPValue": 0.134488650232,
+        "primary14DayFeeStressNetLowerBoundUsdPer1000": -81.452921977733,
+        "primary14DayFeeStressNetMedianUsdPer1000": 274.10987908853,
+        "primary14DayFeeStressNetUpperBoundUsdPer1000": 896.689532778729,
+        "sensitivity28DayFeeStressNetLowerBoundUsdPer1000": -69.884851428548,
+        "sensitivity28DayFeeStressNetMedianUsdPer1000": 282.049421020465,
+        "sensitivity28DayFeeStressNetUpperBoundUsdPer1000": 812.745791453546,
+        "sensitivity28DayTimingMatchedExcessLowerBoundUsdPer1000": -55.609913835725,
+        "sensitivity28DayTimingMatchedExcessMedianUsdPer1000": 102.307895018469,
+        "sensitivity28DayTimingMatchedExcessUpperBoundUsdPer1000": 314.722753147243,
+        "timingMatchedExcessHolmAdjustedPValue": 1.0,
+        "timingMatchedExcessLowerBoundUsdPer1000": -54.901497909586,
+        "timingMatchedExcessMedianUsdPer1000": 97.107367739207,
+        "timingMatchedExcessRawPValue": 0.173297534782,
+        "timingMatchedExcessUpperBoundUsdPer1000": 337.465721981413
+      },
+      "mechanism": {
+        "ageDays": 5,
+        "atRisk": 15,
+        "observedNextDay": 15,
+        "rightCensoredAtPartitionEnd": 0,
+        "role": "DESCRIPTIVE_ONLY_NEVER_SELECTS_OR_RESCUES",
+        "status": "AVAILABLE",
+        "terminatedNextDay": 2,
+        "terminationProbability": 0.133333333333,
+        "wilson95Interval": [
+          0.037361259103,
+          0.378819828323
+        ]
+      },
+      "parameters": {
+        "abnormalThresholdMultiple": "2.0",
+        "exactAbnormalAgeDays": 5,
+        "holdingDays": 1
+      },
+      "positiveFeeStressMonths": 3,
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-07-19",
+        "drawdownTroughDay": "2025-10-13",
+        "endingNavUsd": 1363.514103533606,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.077440389538,
+        "netUsdPer1000": 363.514103533606
+      },
+      "selectedSymbols": [
+        "ADAUSDT",
+        "BNBUSDT",
+        "DOGEUSDT",
+        "ETHUSDT",
+        "LINKUSDT",
+        "XRPUSDT"
+      ],
+      "severe": {
+        "drawdownPeakDay": "2025-07-19",
+        "drawdownTroughDay": "2025-10-13",
+        "endingNavUsd": 1303.515927216964,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.106938855412,
+        "netUsdPer1000": 303.515927216964
+      },
+      "stress": {
+        "drawdownPeakDay": "2025-07-19",
+        "drawdownTroughDay": "2025-10-13",
+        "endingNavUsd": 1339.190411526524,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.089355593526,
+        "netUsdPer1000": 339.190411526524
+      },
+      "suppressedOverlappingFormationDays": 4,
+      "timingMatchedFeeStress": {
+        "drawdownPeakDay": "2025-07-24",
+        "drawdownTroughDay": "2025-10-13",
+        "endingNavUsd": 1159.862365408678,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.069614667582,
+        "netUsdPer1000": 159.862365408678
+      },
+      "tradeCount": 11,
+      "trialId": "VG35-D05-H01"
+    },
+    {
+      "activeCalendarDays": 27,
+      "activeWeeks": 7,
+      "base": {
+        "drawdownPeakDay": "2025-07-19",
+        "drawdownTroughDay": "2025-10-13",
+        "endingNavUsd": 872.736052530519,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.371680267227,
+        "netUsdPer1000": -127.263947469481
+      },
+      "capacity": {
+        "allOneThousandUsdPathsFit": true,
+        "executableCapacity": "UNMEASURED",
+        "minimumSupportedCapitalUsd": 7663.237927295,
+        "p05SupportedCapitalUsd": 7663.237927295,
+        "status": "AVAILABLE"
+      },
+      "cash": {
+        "endingNavUsd": 1000.0,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.0,
+        "netUsdPer1000": 0.0
+      },
+      "cashCalendarDays": 216,
+      "cohorts": [
+        {
+          "entryDay": "2025-07-17",
+          "exitDay": "2025-07-20",
+          "feeStressReturn": 0.117052646841,
+          "grossReturn": 0.1271560237,
+          "signalDay": "2025-07-15",
+          "skippedCompleteDay": "2025-07-16",
+          "supportedCapitalUsd": 30387.0349181245,
+          "symbols": [
+            "XRPUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-07-22",
+          "exitDay": "2025-07-25",
+          "feeStressReturn": -0.152204179926,
+          "grossReturn": -0.144536143247,
+          "signalDay": "2025-07-20",
+          "skippedCompleteDay": "2025-07-21",
+          "supportedCapitalUsd": 16429.2902746265,
+          "symbols": [
+            "DOGEUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-07-27",
+          "exitDay": "2025-07-30",
+          "feeStressReturn": 0.005790136393,
+          "grossReturn": 0.014887180134,
+          "signalDay": "2025-07-25",
+          "skippedCompleteDay": "2025-07-26",
+          "supportedCapitalUsd": 9705.9083546235,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-02",
+          "exitDay": "2025-08-05",
+          "feeStressReturn": 0.006142543722,
+          "grossReturn": 0.015242774872,
+          "signalDay": "2025-07-31",
+          "skippedCompleteDay": "2025-08-01",
+          "supportedCapitalUsd": 18120.911086687,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-13",
+          "exitDay": "2025-08-16",
+          "feeStressReturn": -0.086650776343,
+          "grossReturn": -0.078389830508,
+          "signalDay": "2025-08-11",
+          "skippedCompleteDay": "2025-08-12",
+          "supportedCapitalUsd": 7663.237927295,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-18",
+          "exitDay": "2025-08-21",
+          "feeStressReturn": -0.09156715517,
+          "grossReturn": -0.083350676379,
+          "signalDay": "2025-08-16",
+          "skippedCompleteDay": "2025-08-17",
+          "supportedCapitalUsd": 14114.7052841795,
+          "symbols": [
+            "ADAUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-08-23",
+          "exitDay": "2025-08-26",
+          "feeStressReturn": -0.135431678781,
+          "grossReturn": -0.127611940299,
+          "signalDay": "2025-08-21",
+          "skippedCompleteDay": "2025-08-22",
+          "supportedCapitalUsd": 10791.10541238,
+          "symbols": [
+            "LINKUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2025-10-12",
+          "exitDay": "2025-10-15",
+          "feeStressReturn": 0.055192226043,
+          "grossReturn": 0.064736095571,
+          "signalDay": "2025-10-10",
+          "skippedCompleteDay": "2025-10-11",
+          "supportedCapitalUsd": 37741.47651016714,
+          "symbols": [
+            "BNBUSDT"
+          ],
+          "tradeCount": 1
+        },
+        {
+          "entryDay": "2026-02-06",
+          "exitDay": "2026-02-09",
+          "feeStressReturn": 0.133656932548,
+          "grossReturn": 0.143910489755,
+          "signalDay": "2026-02-04",
+          "skippedCompleteDay": "2026-02-05",
+          "supportedCapitalUsd": 135084.31970724076,
+          "symbols": [
+            "ETHUSDT"
+          ],
+          "tradeCount": 1
+        }
+      ],
+      "completedCohorts": 9,
+      "completedSymbolSides": 18,
+      "distinctSelectedSymbols": 6,
+      "feeStress": {
+        "drawdownPeakDay": "2025-07-19",
+        "drawdownTroughDay": "2025-10-13",
+        "endingNavUsd": 822.382840249805,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.400060954078,
+        "netUsdPer1000": -177.617159750195
+      },
+      "feeStressMonthlyLogReturns": {
+        "2025-07": -0.048648361085,
+        "2025-08": -0.326072474898,
+        "2025-09": 0.0,
+        "2025-10": 0.053722955111,
+        "2025-11": 0.0,
+        "2025-12": 0.0,
+        "2026-01": 0.0,
+        "2026-02": 0.125448630918
+      },
+      "gross": {
+        "drawdownPeakDay": "2025-07-19",
+        "drawdownTroughDay": "2025-08-27",
+        "endingNavUsd": 891.800248506615,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.361030852824,
+        "netUsdPer1000": -108.199751493385
+      },
+      "inference": {
+        "absoluteHolmAdjustedPValue": 1.0,
+        "absoluteRawPValue": 0.736880644374,
+        "primary14DayFeeStressNetLowerBoundUsdPer1000": -541.737822179891,
+        "primary14DayFeeStressNetMedianUsdPer1000": -153.09976357863,
+        "primary14DayFeeStressNetUpperBoundUsdPer1000": 361.147699359786,
+        "sensitivity28DayFeeStressNetLowerBoundUsdPer1000": -551.161236552562,
+        "sensitivity28DayFeeStressNetMedianUsdPer1000": -147.73719511456,
+        "sensitivity28DayFeeStressNetUpperBoundUsdPer1000": 376.18688297581,
+        "sensitivity28DayTimingMatchedExcessLowerBoundUsdPer1000": -396.374117322311,
+        "sensitivity28DayTimingMatchedExcessMedianUsdPer1000": -158.966566210244,
+        "sensitivity28DayTimingMatchedExcessUpperBoundUsdPer1000": 63.560686710898,
+        "timingMatchedExcessHolmAdjustedPValue": 1.0,
+        "timingMatchedExcessLowerBoundUsdPer1000": -376.71039013294,
+        "timingMatchedExcessMedianUsdPer1000": -162.051337878721,
+        "timingMatchedExcessRawPValue": 0.881864779107,
+        "timingMatchedExcessUpperBoundUsdPer1000": 53.309858403567
+      },
+      "mechanism": {
+        "ageDays": 5,
+        "atRisk": 15,
+        "observedNextDay": 15,
+        "rightCensoredAtPartitionEnd": 0,
+        "role": "DESCRIPTIVE_ONLY_NEVER_SELECTS_OR_RESCUES",
+        "status": "AVAILABLE",
+        "terminatedNextDay": 2,
+        "terminationProbability": 0.133333333333,
+        "wilson95Interval": [
+          0.037361259103,
+          0.378819828323
+        ]
+      },
+      "parameters": {
+        "abnormalThresholdMultiple": "2.0",
+        "exactAbnormalAgeDays": 5,
+        "holdingDays": 3
+      },
+      "positiveFeeStressMonths": 2,
+      "publicFeeOnly": {
+        "drawdownPeakDay": "2025-07-19",
+        "drawdownTroughDay": "2025-10-13",
+        "endingNavUsd": 875.883564483799,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.369918506638,
+        "netUsdPer1000": -124.116435516201
+      },
+      "selectedSymbols": [
+        "ADAUSDT",
+        "BNBUSDT",
+        "DOGEUSDT",
+        "ETHUSDT",
+        "LINKUSDT",
+        "XRPUSDT"
+      ],
+      "severe": {
+        "drawdownPeakDay": "2025-07-19",
+        "drawdownTroughDay": "2025-10-13",
+        "endingNavUsd": 837.342403524364,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.39158994169,
+        "netUsdPer1000": -162.657596475636
+      },
+      "stress": {
+        "drawdownPeakDay": "2025-07-19",
+        "drawdownTroughDay": "2025-10-13",
+        "endingNavUsd": 860.258700757521,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.37867818961,
+        "netUsdPer1000": -139.741299242479
+      },
+      "suppressedOverlappingFormationDays": 4,
+      "timingMatchedFeeStress": {
+        "drawdownPeakDay": "2025-07-24",
+        "drawdownTroughDay": "2025-10-13",
+        "endingNavUsd": 997.638803300064,
+        "intradayBound": "UNMEASURED",
+        "maximumDrawdownFraction": 0.202468069175,
+        "netUsdPer1000": -2.361196699936
+      },
+      "tradeCount": 9,
+      "trialId": "VG35-D05-H03"
+    }
+  ],
+  "version": "VG35DevelopmentV1"
+}

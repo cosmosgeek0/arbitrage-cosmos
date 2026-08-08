@@ -1,0 +1,227 @@
+{
+  "schema": "cosmos.s1o.protocol.v1",
+  "milestone": "S-1O",
+  "title": "BTCUSDT USD-M open-interest-conditioned funding-sign persistence",
+  "frozen_at": "2026-07-29T00:00:00Z",
+  "base_commit": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "authority": {
+    "data": "PUBLIC_REPLAY_ONLY",
+    "research": "NO_PRODUCTION_AUTHORITY",
+    "capital_disposition": "NO_GO",
+    "go_structurally_reachable": false,
+    "account_effective_fees": "UNKNOWN",
+    "executable_depth": "UNKNOWN",
+    "historical_filters": "UNKNOWN",
+    "executable_capacity": "UNKNOWN"
+  },
+  "instrument": {
+    "venue": "BINANCE",
+    "market": "USD_M_FUTURES",
+    "symbol": "BTCUSDT",
+    "contract": "PERPETUAL",
+    "quote_asset": "USDT"
+  },
+  "calendar": {
+    "acquisition_start": "2025-06-01T00:00:00Z",
+    "analysis_start": "2025-07-01T00:00:00Z",
+    "development_end": "2026-02-10T00:00:00Z",
+    "embargo_end": "2026-02-17T00:00:00Z",
+    "analysis_end": "2026-07-01T00:00:00Z",
+    "development": "[2025-07-01T00:00:00Z,2026-02-10T00:00:00Z)",
+    "embargo": "[2026-02-10T00:00:00Z,2026-02-17T00:00:00Z)",
+    "holdout": "[2026-02-17T00:00:00Z,2026-07-01T00:00:00Z)"
+  },
+  "sources": {
+    "base_url": "https://data.binance.vision/",
+    "checksum_algorithm": "sha256",
+    "rest_archive_stitching": false,
+    "partition_boundary_completeness": "metrics first=start+5m and last=end-5m; mark and contract bars first=start and last=end-5m; funding first within 1000ms of start and final gap no larger than the final advertised interval plus 1000ms",
+    "datasets": [
+      {
+        "id": "metrics",
+        "cadence": "daily",
+        "archive_path": "data/futures/um/daily/metrics/BTCUSDT/BTCUSDT-metrics-{date}.zip",
+        "timestamp_format": "UTC text YYYY-MM-DD HH:MM:SS interpreted as +00:00",
+        "required_columns": [
+          "create_time",
+          "symbol",
+          "sum_open_interest",
+          "sum_open_interest_value"
+        ]
+      },
+      {
+        "id": "funding_rate",
+        "cadence": "monthly",
+        "archive_path": "data/futures/um/monthly/fundingRate/BTCUSDT/BTCUSDT-fundingRate-{month}.zip",
+        "required_columns": [
+          "calc_time",
+          "funding_interval_hours",
+          "last_funding_rate"
+        ]
+      },
+      {
+        "id": "mark_price_5m",
+        "cadence": "monthly",
+        "archive_path": "data/futures/um/monthly/markPriceKlines/BTCUSDT/5m/BTCUSDT-5m-{month}.zip",
+        "required_width": 12
+      },
+      {
+        "id": "contract_5m",
+        "cadence": "monthly",
+        "archive_path": "data/futures/um/monthly/klines/BTCUSDT/5m/BTCUSDT-5m-{month}.zip",
+        "required_width": 12
+      }
+    ]
+  },
+  "hypothesis": {
+    "family": "OWN_SYMBOL_TEMPORAL_FUNDING_SIGN_PERSISTENCE",
+    "decision_event": "settled funding event t",
+    "required_same_sign_streak_events": 2,
+    "oi_observation_rule": "for event t, current OI is the latest row with create_time <= t-5m and age from that cutoff <=10m; baseline OI is the latest row with create_time <= t-window-5m and age from that cutoff <=10m; timestamps must be 5m-aligned, no row after either cutoff is admissible, and forward-fill beyond 10m is forbidden",
+    "entry_rule": "close of first complete contract 5m bar after t",
+    "direction_rule": "positive funding at t => short; negative funding at t => long",
+    "holding_rule": "hold through exactly the next actual funding settlement t+1",
+    "exit_rule": "close of first complete contract 5m bar after t+1",
+    "funding_rule": "apply archived funding rate at t+1 to position quantity times latest complete mark-price bar at-or-before t+1",
+    "timestamp_rule": "retain exact archived funding milliseconds; cadence is valid when elapsed time is within 1000ms of either adjacent row's advertised interval, which admits interval transitions without rounding or normalizing timestamps",
+    "excluded_families": [
+      "cross-sectional ranks or tails",
+      "spot leg or spot-hedged carry",
+      "basis or premium signal",
+      "funding acceleration or second difference",
+      "immediate post-settlement unwind",
+      "funding-sign-flip mean reversion",
+      "COIN-M",
+      "dated futures",
+      "maker or fill claim"
+    ]
+  },
+  "trial_family": {
+    "multiplicity_family": "S1O_EIGHT_TRIALS",
+    "oi_window_hours": [
+      8,
+      24
+    ],
+    "minimum_oi_growth_fraction": [
+      "0",
+      "0.01"
+    ],
+    "minimum_abs_funding_rate": [
+      "0.00005",
+      "0.0001"
+    ],
+    "trial_count": 8,
+    "champion_rule": "highest development stress mean net PnL among trials passing every development gate; stable trial id breaks ties"
+  },
+  "economics": {
+    "notional_usdt": "1000",
+    "compounding": false,
+    "leverage_claim": "NONE",
+    "scenarios": {
+      "base": {
+        "taker_fee_bps_per_fill": "4",
+        "adverse_fill_bps_per_fill": "2"
+      },
+      "stress": {
+        "taker_fee_bps_per_fill": "8",
+        "adverse_fill_bps_per_fill": "5"
+      },
+      "severe": {
+        "taker_fee_bps_per_fill": "10",
+        "adverse_fill_bps_per_fill": "10"
+      }
+    },
+    "components": [
+      "price_pnl",
+      "funding_pnl",
+      "fee_proxy",
+      "adverse_fill_proxy",
+      "net_pnl"
+    ],
+    "capacity_proxy": {
+      "prior_contract_quote_volume_fraction": "0.000001",
+      "lagged_oi_value_fraction": "0.000001",
+      "minimum_usdt": "1000",
+      "lookback": "exactly 288 gap-free complete contract 5m bars with close_time in [t-24h,t)",
+      "clock": "funding event t; no bar with close_time >= t and no OI row after the signal OI cutoff is admissible",
+      "formula": "min(0.000001 * sum(prior 288 quote_asset_volume), 0.000001 * current lagged sum_open_interest_value)",
+      "label": "PUBLIC_COARSE_PROXY_NOT_EXECUTABLE_DEPTH"
+    }
+  },
+  "statistics": {
+    "seed": 17102026,
+    "bootstrap_replicates": 4096,
+    "circular_block_days": 7,
+    "alpha": "0.05",
+    "tests": [
+      "one-sided centered circular-block bootstrap per trial",
+      "Holm step-down across all eight frozen trials",
+      "White max-mean centered circular-block reality check",
+      "development lower confidence bound",
+      "CSCV/PBO diagnostic over eight chronological 28-day development blocks and all 70 four-block train/four-block test splits",
+      "chronological holdout confirmation only after champion seal"
+    ],
+    "cscv_pbo": {
+      "role": "DIAGNOSTIC_ONLY_NOT_A_GATE",
+      "development_blocks": 8,
+      "block_days": 28,
+      "split_rule": "all combinations choosing 4 of the 8 blocks as training; the other 4 are test",
+      "split_count": 70,
+      "selection": "highest training stress mean; stable trial id breaks ties",
+      "loss_event": "selected trial test stress mean ranks in the bottom half of the eight trials; stable trial id breaks ties",
+      "pbo": "loss_event_count / 70"
+    }
+  },
+  "development_gates": {
+    "minimum_trades": 20,
+    "minimum_active_iso_weeks": 12,
+    "minimum_positive_signal_trades": 5,
+    "minimum_negative_signal_trades": 5,
+    "base_mean_net_pnl_gt_usdt": "0",
+    "stress_mean_net_pnl_gt_usdt": "0",
+    "stress_bootstrap_lcb_gt_usdt": "0",
+    "holm_adjusted_p_lte": "0.05",
+    "white_reality_check_p_lte": "0.05",
+    "maximum_drawdown_lte_fraction_of_notional": "0.10",
+    "minimum_capacity_proxy_usdt": "1000"
+  },
+  "holdout_gates": {
+    "minimum_trades": 10,
+    "minimum_active_iso_weeks": 8,
+    "base_total_net_pnl_gt_usdt": "0",
+    "stress_total_net_pnl_gt_usdt": "0",
+    "stress_mean_net_pnl_gt_usdt": "0",
+    "maximum_drawdown_lte_fraction_of_notional": "0.10"
+  },
+  "custody": {
+    "external_data_root_required": true,
+    "repository_or_shared_root_forbidden": true,
+    "data_root_marker": "S1O_DATA_ROOT.json binds schema, protocol SHA-256, public base URL, and canonical absolute root",
+    "custody_file_identity": "every planned ZIP and checksum must be a regular non-symlink single-link file with a unique device/inode identity",
+    "development_root": "development",
+    "holdout_root": "holdout",
+    "overlap_months_are_independent_checksum_verified_copies": true,
+    "run_marker": "generated/RUN_CONSUMED.json",
+    "run_marker_created_before": "first development archive member decompression",
+    "verified_source_manifest_copy": "generated/source-data-manifest.v1.json",
+    "verified_source_manifest_copy_created_before": "RUN_CONSUMED",
+    "champion_seal": "generated/champion.seal.v1.json",
+    "holdout_open_marker": "generated/HOLDOUT_OPENED.json",
+    "holdout_open_marker_created_before": "first holdout archive member decompression",
+    "rerun_policy": "REFUSE_AFTER_RUN_MARKER_EXISTS",
+    "failure_policy": "RUN_REMAINS_CONSUMED"
+  },
+  "verdict_law": {
+    "invalid_or_incomplete_public_evidence": "UNMEASURED",
+    "measured_development_or_holdout_economic_gate_failure": "NO_GO",
+    "all_numeric_gates_pass_but_metrics_semantics_or_execution_truth_missing": "UNMEASURED",
+    "go": "STRUCTURALLY_UNREACHABLE",
+    "capital_disposition": "NO_GO"
+  },
+  "known_limitations": [
+    "official public-data README does not document metrics semantic derivation, publication latency, or correction policy",
+    "archive fundingRate rows do not expose the current REST rateType field",
+    "five-minute bars are price, mark, slippage, and capacity proxies rather than executable quotes or fills",
+    "account-effective fees, executable depth, fill probability, latency, impact, historical filters, and liquidation mechanics are UNKNOWN"
+  ]
+}

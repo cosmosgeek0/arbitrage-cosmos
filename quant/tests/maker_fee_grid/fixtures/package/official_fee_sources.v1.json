@@ -1,0 +1,49 @@
+{
+  "schema": "MakerFeeGridOfficialSourcesV1",
+  "version": 1,
+  "accessedAtUtc": "2026-07-30T00:36:30Z",
+  "feePosture": "PUBLIC_SCHEDULE_SCENARIO_ONLY",
+  "accountEffectiveFees": "UNKNOWN",
+  "productScope": "BINANCE_SPOT_AND_USDT_MARGINED_USD_M_FUTURES",
+  "sources": [
+    {
+      "sourceId": "BINANCE_SPOT_FEE_SCHEDULE",
+      "url": "https://www.binance.com/en/fee/trading",
+      "sourceRole": "CURRENT_PUBLIC_SCHEDULE",
+      "publicTierLabel": "Regular User",
+      "makerBps": "10",
+      "takerBps": "10",
+      "bnbDiscountPercent": "25",
+      "discountedMakerBps": "7.5",
+      "discountedTakerBps": "7.5"
+    },
+    {
+      "sourceId": "BINANCE_USD_M_FEE_SCHEDULE",
+      "url": "https://www.binance.com/en/fee/futureFee",
+      "sourceRole": "CURRENT_PUBLIC_SCHEDULE",
+      "contractColumn": "USDT",
+      "publicTierLabel": "Regular User",
+      "makerBps": "2",
+      "takerBps": "5",
+      "bnbDiscountPercent": "10",
+      "discountedMakerBps": "1.8",
+      "discountedTakerBps": "4.5",
+      "usdcPromotionExcluded": true
+    },
+    {
+      "sourceId": "BINANCE_FEE_EDUCATION",
+      "url": "https://www.binance.com/en/academy/articles/how-to-calculate-transaction-fees-on-binance",
+      "sourceRole": "DISCOUNT_MECHANICS_AND_CAVEATS_NOT_LIVE_RATE_TRUTH",
+      "updatedByPublisher": "2026-01-22"
+    }
+  ],
+  "limitations": [
+    "PUBLIC_REGULAR_USER_IS_ONLY_COLLOQUIAL_VIP0_SHORTHAND",
+    "PUBLIC_TABLE_DOES_NOT_PROVE_ACCOUNT_TIER",
+    "BNB_DISCOUNT_REQUIRES_ACCOUNT_SETTING_BALANCE_AND_ELIGIBILITY",
+    "SYMBOL_PROMOTION_SPECIAL_TAX_AND_AFFILIATE_TREATMENT_UNKNOWN",
+    "REALIZED_FILL_ROLE_AND_COMMISSION_UNKNOWN",
+    "USDC_PROMOTIONAL_COLUMN_EXCLUDED"
+  ],
+  "capitalAuthority": "NONE"
+}

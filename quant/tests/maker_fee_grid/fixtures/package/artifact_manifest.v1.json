@@ -1,0 +1,24 @@
+{
+  "schema": "MakerFeeGridArtifactManifestV1",
+  "version": 1,
+  "artifacts": [
+    {
+      "path": "custody_receipt.v1.json",
+      "sha256": "0b1b102cf83d5dd6215110a322d347f436f98fce6136a4d3c18a8954c0991711"
+    },
+    {
+      "path": "official_fee_sources.v1.json",
+      "sha256": "3a944c0ec2febda17b8d256a620aca872b188d9c75523d144242ce418940482b"
+    },
+    {
+      "path": "protocol.v1.json",
+      "sha256": "afb271bfe9f1110029b02f56b36f41d31baa73e574c9131a2c7208a0f1450a02"
+    },
+    {
+      "path": "result.v1.json",
+      "sha256": "d3b694562ca88cec109b8fd410fba718123e73115fb297ee1bc66f24591fb726"
+    }
+  ],
+  "networkRequiredToVerify": false,
+  "capitalAuthority": "NONE"
+}

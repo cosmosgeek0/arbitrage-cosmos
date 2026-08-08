@@ -109,7 +109,6 @@ const BACKUP_MANIFEST_V2_KEYS = Object.freeze([
   'eventsCount', 'journalState', 'dataSchema', 'rollbackFloor',
   'sourceJournalSha256', 'integrityCheck', 'evidence',
 ]);
-const BACKUP_JOURNAL_STATES = Object.freeze(['PRESENT', 'PENDING', 'ABSENT']);
 const EXECUTABLE_SLOTS = Object.freeze({
   node: 16,
   bash: 17,
@@ -1645,15 +1644,14 @@ function inspectBoundBackupOutput({
       && manifest.integrityCheck === 'ok'
       && sameJson(manifest.evidence, []),
     'backup output manifest does not describe one database-only artifact');
-    // Version 2 adds the recovery fields the publisher now records. journalState
-    // is one of the three states the journal snapshot can report, but a manifest
-    // is only publishable from a steady PRESENT journal, so PRESENT is the only
-    // value a real backup carries. rollbackFloor must be a concrete non-negative
-    // schema number no higher than the schema the backup was taken at, which also
-    // means dataSchema can no longer be the version-1 null.
+    // Version 2 adds the recovery fields the publisher now records. A manifest
+    // is only publishable from a steady PRESENT journal - the publisher refuses
+    // to write anything else - so PRESENT is the only value a real backup
+    // carries. rollbackFloor must be a concrete non-negative schema number no
+    // higher than the schema the backup was taken at, which also means
+    // dataSchema can no longer be the version-1 null.
     outputRequire(manifestVersion !== 2
       || (manifest.schemaVersion === 2
-        && BACKUP_JOURNAL_STATES.includes(manifest.journalState)
         && manifest.journalState === 'PRESENT'
         && Number.isSafeInteger(manifest.dataSchema) && manifest.dataSchema >= 0
         && Number.isSafeInteger(manifest.rollbackFloor) && manifest.rollbackFloor >= 0

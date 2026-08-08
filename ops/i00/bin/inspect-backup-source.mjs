@@ -193,7 +193,13 @@ const BACKUP_MANIFEST_V2_KEYS = Object.freeze([
   'eventsCount', 'journalState', 'dataSchema', 'rollbackFloor',
   'sourceJournalSha256', 'integrityCheck', 'evidence',
 ]);
-const BACKUP_JOURNAL_STATES = Object.freeze(['PRESENT', 'PENDING', 'ABSENT']);
+// Canonical JSON is not yet a manifest: null, an array and every scalar parse
+// and re-serialise exactly as well as an object does. Reading a version off one
+// of those throws rather than refusing, so the document is proven to be a
+// non-array object first, as the sibling consumers already prove it.
+if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest)) {
+  fail('backup manifest must be an object');
+}
 const manifestVersion = Object.hasOwn(manifest, 'schemaVersion')
   ? manifest.schemaVersion : 1;
 if (manifestVersion !== 1 && manifestVersion !== 2) {
@@ -220,18 +226,21 @@ if (manifest.backupId !== basename(requested)
     || !Array.isArray(manifest.evidence) || manifest.evidence.length > 10_000) {
   fail('backup manifest does not describe one complete verified backup');
 }
-// Version 2 adds the recovery fields the publisher now records. journalState is
-// one of the three states the journal snapshot can report, but a manifest is
-// only publishable from a steady PRESENT journal - the publisher refuses to
-// write anything else and the restore path accepts nothing else - so PRESENT is
-// the only value a real backup can carry here. rollbackFloor must be a concrete
-// non-negative schema number no higher than the schema the backup was taken at,
-// which also means dataSchema can no longer be the version-1 null.
+// Version 2 adds the recovery fields the publisher now records, and narrows the
+// fields version 1 left loose to what the publisher guarantees it writes. A
+// manifest is only publishable from a steady PRESENT journal - the publisher
+// refuses to write anything else and the restore path accepts nothing else - so
+// PRESENT is the only value a real backup can carry here. The publisher counts
+// the events it captured before it writes, so the version-1 unknown-count
+// sentinel of -1 cannot occur. rollbackFloor must be a concrete non-negative
+// schema number no higher than the schema the backup was taken at, and that
+// schema is a real applied migration, so dataSchema can be neither the
+// version-1 null nor zero.
 if (manifestVersion === 2
     && (manifest.schemaVersion !== 2
-      || !BACKUP_JOURNAL_STATES.includes(manifest.journalState)
       || manifest.journalState !== 'PRESENT'
-      || !Number.isSafeInteger(manifest.dataSchema) || manifest.dataSchema < 0
+      || manifest.eventsCount < 0
+      || !Number.isSafeInteger(manifest.dataSchema) || manifest.dataSchema < 1
       || !Number.isSafeInteger(manifest.rollbackFloor) || manifest.rollbackFloor < 0
       || manifest.rollbackFloor > manifest.dataSchema
       || !/^[0-9a-f]{64}$/u.test(manifest.sourceJournalSha256))) {

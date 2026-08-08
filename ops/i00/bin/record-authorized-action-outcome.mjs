@@ -73,7 +73,6 @@ const BACKUP_MANIFEST_V2_KEYS = Object.freeze([
   'eventsCount', 'journalState', 'dataSchema', 'rollbackFloor',
   'sourceJournalSha256', 'integrityCheck', 'evidence',
 ]);
-const BACKUP_JOURNAL_STATES = Object.freeze(['PRESENT', 'PENDING', 'ABSENT']);
 const RESTORE_REPORT_KEYS = Object.freeze([
   'ts', 'backupId', 'target', 'production', 'dbSha256',
   'declaredEventsCount', 'eventsCount', 'declaredEvidenceArchives',
@@ -934,15 +933,18 @@ function validateBackupManifest(manifest, backup, label) {
     && Array.isArray(manifest.evidence) && manifest.evidence.length <= 10_000,
   `${label} manifest database metadata is invalid`);
   if (version !== 2) return;
-  // journalState is one of the three states the journal snapshot reports, but a
-  // manifest is only publishable from a steady PRESENT journal, so PRESENT is
-  // the only value a real backup carries. rollbackFloor must be a concrete
+  // Version 2 narrows the fields version 1 left loose to what the publisher
+  // guarantees it writes. A manifest is only publishable from a steady PRESENT
+  // journal, so PRESENT is the only value a real backup carries. The publisher
+  // counts the events it captured before it writes, so the version-1
+  // unknown-count sentinel of -1 cannot occur. rollbackFloor must be a concrete
   // non-negative schema number no higher than the schema the backup was taken
-  // at, which also means dataSchema cannot be the version-1 null.
+  // at, and that schema is a real applied migration, so dataSchema can be
+  // neither the version-1 null nor zero.
   assert(manifest.schemaVersion === 2
-    && BACKUP_JOURNAL_STATES.includes(manifest.journalState)
     && manifest.journalState === 'PRESENT'
-    && Number.isSafeInteger(manifest.dataSchema) && manifest.dataSchema >= 0
+    && manifest.eventsCount >= 0
+    && Number.isSafeInteger(manifest.dataSchema) && manifest.dataSchema >= 1
     && Number.isSafeInteger(manifest.rollbackFloor) && manifest.rollbackFloor >= 0
     && manifest.rollbackFloor <= manifest.dataSchema
     && /^[0-9a-f]{64}$/u.test(manifest.sourceJournalSha256),

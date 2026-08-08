@@ -98,7 +98,7 @@ test('canonical public feed readiness is independent of global machine and priva
   assert.equal(canonicalMarketFeedRejected(nonOperationalSource), true);
 });
 
-test('all cockpit consumers render canonical supervisor presentation without client-side recomputation', async () => {
+test('all cockpit consumers render or delegate canonical supervisor presentation without client-side recomputation', async () => {
   const consumers = await Promise.all([
     readFile(new URL('../../src/components/Header.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../src/pages/Dashboard.tsx', import.meta.url), 'utf8'),
@@ -109,7 +109,9 @@ test('all cockpit consumers render canonical supervisor presentation without cli
   const combined = consumers.join('\n');
   assert.match(consumers[0], /productSnapshot\.canonicalCockpit\.watchmanOverall/);
   assert.match(consumers[0], /productSnapshot\.canonicalCockpit\.marketFeedReadiness/);
-  assert.match(consumers[1], /productSnapshot\.canonicalCockpit\.strategyRuntime/);
+  assert.match(consumers[1], /binding\.snapshot\?\.dashboard/);
+  assert.match(consumers[1], /<SystemDashboard/);
+  assert.doesNotMatch(consumers[1], /canonicalCockpit|strategyRuntime/);
   assert.match(consumers[2], /productSnapshot\.canonicalCockpit\.strategyRuntime/);
   assert.match(consumers[3], /snapshot\.canonicalCockpit\.watchmanOverall/);
   // The retired floating launcher owned the component-presentation render;

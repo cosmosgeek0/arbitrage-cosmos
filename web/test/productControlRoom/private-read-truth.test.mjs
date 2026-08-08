@@ -1136,9 +1136,12 @@ test('mounted private-read surfaces consume one projection and retain no money-a
     read('styles.css'),
   ]);
   const combined = [account, dashboard, loans, health, header].join('\n');
-  for (const source of [account, dashboard, loans, health, header]) {
+  for (const source of [account, loans, health, header]) {
     assert.match(source, /projectPrivateRead/);
   }
+  assert.match(dashboard, /binding\.snapshot\?\.dashboard/);
+  assert.match(dashboard, /<SystemDashboard/);
+  assert.doesNotMatch(dashboard, /projectPrivateRead|privateRead|privateAccountTruth/);
   assert.match(store, /readPrivateReadStateField\(snapshot\)/);
   assert.match(store, /const privateReadGuard = projectPrivateReadGuard\(\{/);
   assert.match(store, /snapshot: privateReadClient\.snapshot/);
@@ -1171,16 +1174,15 @@ test('the private-account surfaces present the freshness guard and never invent 
     read('store.tsx'),
   ]);
 
-  for (const source of [account, dashboard, loans, health]) {
+  for (const source of [account, loans, health]) {
     assert.match(source, /freshness\.(?:label|reason|state)/);
   }
-  for (const source of [account, dashboard, loans]) {
+  for (const source of [account, loans]) {
     assert.match(source, /guardTone/, 'a stale snapshot must not keep a green source badge');
   }
-  const accountSync = dashboard.match(/label: 'Account Sync',[\s\S]*?\n\s*},/)?.[0] ?? '';
-  assert.match(accountSync, /privatePresentation\.freshness\.label/);
-  assert.match(accountSync, /tone: privatePresentation\.guardTone/);
-  assert.doesNotMatch(accountSync, /tone: privatePresentation\.tone/);
+  assert.match(dashboard, /binding\.snapshot\?\.dashboard/);
+  assert.match(dashboard, /readOnlyProjection/);
+  assert.doesNotMatch(dashboard, /privatePresentation|Account Sync|guardTone/);
   assert.match(account, /position\.marginType \?\? 'Margin Mode Not Published'/);
   assert.match(account, /position\.leverage === null/);
   assert.doesNotMatch(account, /position\.leverage \?\? '1'|marginType \?\? 'cross'/i);

@@ -112,7 +112,6 @@ test('bottom-up pages keep native summaries ahead of canonical surface bands', a
     ['pages/Opportunities.tsx', 'opportunityx-summary', 'opportunities', 'opportunityx-filters'],
     ['pages/VolumeScanner.tsx', 'volx-summary', 'volume', 'volx-filters'],
     ['pages/Strategies.tsx', 'volx-summary', 'basis', 'volx-filters'],
-    ['pages/Dashboard.tsx', 'dcx-summary', 'dashboard', 'dcx-section'],
   ];
 
   for (const [path, summaryClass, surfaceId, nextClass] of surfaces) {
@@ -124,12 +123,21 @@ test('bottom-up pages keep native summaries ahead of canonical surface bands', a
     assert.ok(adapterIndex > summaryIndex, `${path} must append ${surfaceId} after its native summary`);
     assert.ok(nextIndex > adapterIndex, `${path} must mount ${surfaceId} before the next native section`);
   }
+
+  const dashboard = await read('pages/Dashboard.tsx');
+  const taskIndex = dashboard.indexOf('className="dashboard-task"');
+  const adapterIndex = dashboard.indexOf('<ProductSurfaceAdapter surfaceId="dashboard" />');
+  const systemDashboardIndex = dashboard.indexOf('<SystemDashboard', adapterIndex);
+  assert.ok(taskIndex >= 0, 'Dashboard must retain its one native operator task');
+  assert.ok(adapterIndex > taskIndex, 'Dashboard must append its canonical surface after the native task');
+  assert.ok(systemDashboardIndex > adapterIndex, 'Dashboard must mount the surface band before the full canonical projection');
 });
 
-test('account and dashboard summary typography and hairlines retain the measured ship-gate contract', async () => {
-  const [accountCss, dashboardCss] = await Promise.all([
+test('account summary typography remains measured and retired Dashboard dcx selectors stay purged', async () => {
+  const [accountCss, dashboardCss, metricTilesCss] = await Promise.all([
     read('pages/Account.css'),
     read('pages/Dashboard.css'),
+    read('pages/MetricTiles.css'),
   ]);
   const rule = (source, selector) => {
     const marker = `${selector} {`;
@@ -162,9 +170,9 @@ test('account and dashboard summary typography and hairlines retain the measured
   assert.match(accountCss, /\.accountx-summary article:nth-child\(n \+ 3\)\s*\{\s*border-top:\s*1px solid var\(--line-2\);\s*\}/);
   assert.match(accountCss, /\.accountx-summary article:nth-child\(n \+ 2\)\s*\{\s*border-top:\s*1px solid var\(--line-2\);\s*\}/);
 
-  assert.match(rule(dashboardCss, '.dcx-summary > .dcx-summary-cell > span'), /letter-spacing:\s*\.055em;/);
-  assert.match(rule(dashboardCss, '.dcx-summary > .dcx-summary-cell > strong'), /font-weight:\s*510;/);
-  assert.match(rule(dashboardCss, '.dcx-summary,\n.dcx-performance-summary'), /min-height:\s*102px;/);
+  assert.match(dashboardCss, /\.dashboard-page > \.sdx-page/);
+  assert.doesNotMatch(dashboardCss, /\.dcx-/);
+  assert.doesNotMatch(metricTilesCss, /\.dcx-/);
 });
 
 test('account routes are controlled and header consumes read-only product truth', async () => {
@@ -203,15 +211,16 @@ test('mobile shell preserves the canonical non-green execution identity', async 
   assert.match(css, /\.hdr-right > \.smenu-bar\.topbar-suite-v4 > button\[data-topbar-key="power"\]\s*\{[\s\S]*display:\s*inline-flex !important;/);
 });
 
-test('dashboard and health read the shared Product snapshot without a legacy health poll', async () => {
+test('dashboard and health read the shared Product snapshot without a legacy health poll or manual reread', async () => {
   for (const path of ['pages/Dashboard.tsx', 'pages/SystemHealth.tsx']) {
     const source = await read(path);
     assert.match(source, /useProductControlRoomContext/);
     assert.doesNotMatch(source, /\/api\/system(?!-integration)/);
   }
   const health = await read('pages/SystemHealth.tsx');
-  assert.match(health, /binding\.refresh\(\)/);
+  assert.doesNotMatch(health, /binding\.refresh\(\)/);
   assert.match(health, /ownerView\.machineReady/);
+  assert.match(health, /projectOwnerCommandTruth\(snapshot, null, nowMs\)/);
 });
 
 test('product mount uses live trace reads and structurally omits donor action surfaces', async () => {

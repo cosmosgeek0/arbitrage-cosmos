@@ -7,7 +7,7 @@ import {
   reduceCompatibilityStateTruth,
 } from '../../src/store.tsx';
 
-test('compatibility state distinguishes unavailable, current, and retained stale truth', async () => {
+test('compatibility state remains explicit while delegated Dashboard consumes only canonical Product truth', async () => {
   const unavailable = reduceCompatibilityStateTruth(INITIAL_COMPATIBILITY_STATE_TRUTH, {
     kind: 'FAILURE',
     observedAtMs: 100,
@@ -42,9 +42,11 @@ test('compatibility state distinguishes unavailable, current, and retained stale
 
   const dashboard = await readFile(new URL('../../src/pages/Dashboard.tsx', import.meta.url), 'utf8');
   const risk = await readFile(new URL('../../src/pages/Risk.tsx', import.meta.url), 'utf8');
-  for (const source of [dashboard, risk]) {
-    assert.match(source, /stateStatus/);
-    assert.match(source, /STALE LAST-KNOWN/);
-    assert.match(source, /UNAVAILABLE/);
-  }
+  assert.match(risk, /stateStatus/);
+  assert.match(risk, /STALE LAST-KNOWN/);
+  assert.match(risk, /UNAVAILABLE/);
+  assert.match(dashboard, /useProductControlRoomContext/);
+  assert.match(dashboard, /binding\.snapshot\?\.dashboard/);
+  assert.match(dashboard, /Material-event continuity is \$\{binding\.continuity\}/);
+  assert.doesNotMatch(dashboard, /stateStatus|STALE LAST-KNOWN|reduceCompatibilityStateTruth/);
 });

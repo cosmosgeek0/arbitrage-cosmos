@@ -12,6 +12,10 @@ const styles = await readFile(
   new URL('../../src/pages/Health.css', import.meta.url),
   'utf8',
 );
+const controlPanelSource = await readFile(
+  new URL('../../src/features/productControlRoom/components/ControlRegistryPanel.tsx', import.meta.url),
+  'utf8',
+);
 
 function loadExactHealthSelector() {
   const start = source.indexOf('export function selectHealthManagedRestartControl');
@@ -66,6 +70,11 @@ test('Epoch 5R Health delegates preview, submit, and durable readback without a 
   assert.match(source, /client\.readCommandResult\(identity, signal\)/);
   assert.match(source, /controls=\{recoveryControls\}/);
   assert.match(source, /selectHealthManagedRestartControl\(\[control\], binding\.continuity\)/);
+  assert.match(source, /projectOwnerCommandTruth\(snapshot, null, nowMs\)/);
+  assert.match(source, /const commandAuthorityReady = commandTruth === 'CURRENT' && commandContinuityProven/);
+  assert.match(source, /busy=\{binding\.loading \|\| !commandAuthorityReady\}/);
+  assert.match(source, /availabilityBlocker=\{commandAvailabilityBlocker\}/);
+  assert.match(source, /COMMAND_POSTURE_STALE/);
   assert.doesNotMatch(source, /selectHealthManagedRestartControl\(\[control\], 'PROVEN'\)/);
   assert.doesNotMatch(source, /fetch\(/);
   assert.doesNotMatch(source, /\/commands\/preview|\/commands['"`]/);
@@ -76,5 +85,11 @@ test('Epoch 5R Health removes manual rereads and retains the real Audit Ledger n
   assert.doesNotMatch(source, /onClick=\{\(\) => void binding\.refresh\(\)\}/);
   assert.match(source, /onClick=\{\(\) => setPage\('ledger'\)\}/);
   assert.match(styles, /\.healthx-recovery-control \.pcr-control-filters \{ display: none; \}/);
-  assert.match(styles, /content: 'Preview ';/);
+  assert.doesNotMatch(styles, /\.healthx-recovery-control \.pcr-control-action > button::before/);
+  assert.equal(
+    (controlPanelSource.match(/`Preview \$\{control\.label\}`/g) ?? []).length,
+    1,
+    'restart preview label must be prefixed once by the shared panel',
+  );
+  assert.match(controlPanelSource, />\{buttonLabel\}<\/button>/);
 });

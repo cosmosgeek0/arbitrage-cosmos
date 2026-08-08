@@ -288,7 +288,6 @@
 .healthx-recovery-control .pcr-band,
 .healthx-recovery-control .pcr-control-filters { display: none; }
 .healthx-recovery-control .pcr-control { padding-top: 14px; padding-bottom: 14px; }
-.healthx-recovery-control .pcr-control-action > button::before { content: 'Preview '; }
 .healthx-recovery-control .pcr-control-facts { background: color-mix(in srgb, var(--tile) 34%, transparent); }
 
 .healthx-recovery-unavailable {

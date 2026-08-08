@@ -20,7 +20,12 @@ test('Epoch 5R Dashboard admits only proven canonical supervisor truth', () => {
     dashboardSource,
     /<SystemDashboard[\s\S]*snapshot=\{dashboardSnapshot\}[\s\S]*readOnlyProjection/,
   );
-  assert.doesNotMatch(dashboardSource, /ProductSurfaceAdapter/);
+  assert.match(dashboardSource, /ProductSurfaceAdapter/);
+  assert.equal(
+    (dashboardSource.match(/<ProductSurfaceAdapter surfaceId="dashboard" \/>/g) ?? []).length,
+    1,
+    'Dashboard must retain its one registered canonical surface band',
+  );
   assert.doesNotMatch(dashboardSource, /\/api\/pnl|fetchJson|useDashboardSources|decodeDashboardPnlData/);
   assert.doesNotMatch(
     dashboardSource,

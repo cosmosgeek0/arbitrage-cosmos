@@ -1,10 +1,11 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   BookOpen,
   ShieldCheck,
 } from 'lucide-react';
 import { ControlRegistryPanel } from '../features/productControlRoom/components/ControlRegistryPanel';
+import { projectOwnerCommandTruth } from '../features/productControlRoom/ProductControlRoom';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { useStore } from '../store';
@@ -48,6 +49,24 @@ export function SystemHealth() {
   const snapshot = binding.snapshot;
   const healthSurface = snapshot?.surfaces.health;
   const machineReady = snapshot?.ownerView.machineReady ?? null;
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 5_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const commandTruth = projectOwnerCommandTruth(snapshot, null, nowMs);
+  const commandMaterialEvents = binding.materialEvents ?? snapshot?.materialEvents ?? null;
+  const commandContinuityProven = snapshot !== null
+    && binding.continuity === 'PROVEN'
+    && commandMaterialEvents?.continuity === 'PROVEN';
+  const commandAuthorityReady = commandTruth === 'CURRENT' && commandContinuityProven;
+  const commandAvailabilityBlocker = commandAuthorityReady
+    ? null
+    : !commandContinuityProven
+      ? `COMMAND_CONTINUITY_NOT_PROVEN · ${binding.error ?? `MATERIAL_EVENT_CONTINUITY_${commandMaterialEvents?.continuity ?? 'UNPROVEN'}`}`
+      : commandTruth === 'STALE'
+        ? 'COMMAND_POSTURE_STALE'
+        : 'COMMAND_POSTURE_UNAVAILABLE';
   const restartControl = useMemo(
     () => selectHealthManagedRestartControl(snapshot?.controls ?? [], binding.continuity),
     [binding.continuity, snapshot?.controls],
@@ -162,7 +181,8 @@ export function SystemHealth() {
             <div className="healthx-recovery-control">
               <ControlRegistryPanel
                 controls={recoveryControls}
-                busy={binding.loading || binding.continuity !== 'PROVEN'}
+                busy={binding.loading || !commandAuthorityReady}
+                availabilityBlocker={commandAvailabilityBlocker}
                 onPreview={previewRestart}
                 onSubmit={submitRestart}
                 onReadCommandResult={readRestartResult}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
+import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { SystemDashboard } from '../features/systemDashboard/SystemDashboard';
 import { useStore } from '../store';
@@ -47,6 +48,8 @@ export function Dashboard() {
           <ChevronRight size={14} aria-hidden="true" />
         </button>
       </section>
+
+      <ProductSurfaceAdapter surfaceId="dashboard" />
 
       <SystemDashboard
         snapshot={dashboardSnapshot}

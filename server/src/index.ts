@@ -155,7 +155,15 @@ import {
   createProductIncidentOwner,
   createProductIncidentRouter,
 } from './productIntegration/incidents/index.js';
-import { getNewsContext, newsContextStatus, refreshNewsContextNow, scoreNewsImpact, subscribeNewsContext } from './services/newsContext.js';
+import {
+  getNewsContext,
+  newsContextStatus,
+  refreshNewsContextNow,
+  scoreNewsImpact,
+  startNewsContextRuntime,
+  stopNewsContextRuntime,
+  subscribeNewsContext,
+} from './services/newsContext.js';
 import { disambiguateNewsItemIds } from './services/newsIdentity.js';
 import { OperatorAccess } from './security/access.js';
 import type { AppConfig } from './types.js';
@@ -4762,6 +4770,7 @@ function startServerTimers(): void {
   // operator events remain dedicated-cursor truth; raw Ledger events and
   // metrics are never exposed on the application WebSocket.
   if (privateReadTransportAdmitted) privateRead.start();
+  if (startupPublicSourceEgressAdmitted) startNewsContextRuntime();
   pruneEphemeralLedgerEvents(5);
   eventRetentionTimer = setInterval(() => {
     pruneEphemeralLedgerEvents(5);
@@ -4900,6 +4909,7 @@ function gracefulShutdown(signal: NodeJS.Signals): Promise<GracefulShutdownOutco
     websocketHeartbeatTimer = null;
     canonicalDeliveryTimer = null;
     loopLagTimer = null;
+    stopNewsContextRuntime();
     privateRead.stop();
     bookHub.stop();
     for (const socket of pendingWsUpgradeSockets) {

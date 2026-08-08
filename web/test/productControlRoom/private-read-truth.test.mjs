@@ -22,8 +22,10 @@ import {
   permissionViolations,
   privateReadAccessReasonForStatus,
   privateReadErrorFact,
+  privateReadExactZeroAdmitted,
   privateReadFreshness,
   projectPrivateRead,
+  projectPrivateReadGuard,
   readPrivateReadStateField,
   reduceRealDataClientTuple,
   unavailablePrivateRead,
@@ -648,6 +650,93 @@ test('available exact-empty arrays stay distinguishable from unavailable unknown
   assert.equal(unavailableProjection.counts.positions, null);
   assert.equal(unavailableProjection.counts.liabilities, null);
   assert.equal(exactOrDash(null), '—');
+});
+
+test('exact zero claims require current preferred complete reconciled truth', () => {
+  const exactEmpty = flatMarginFixture();
+  exactEmpty.spot.balances = [{ asset: 'USDT', free: '0.00000000', locked: '0.00000000' }];
+  exactEmpty.spot.openOrders = [];
+  exactEmpty.spot.fills = [];
+  exactEmpty.margin.openOrders = [];
+  exactEmpty.margin.fills = [];
+  exactEmpty.usdm.balances = [];
+  exactEmpty.usdm.positions = [];
+  exactEmpty.usdm.openOrders = [];
+  exactEmpty.usdm.fills = [];
+  const decoded = decodePrivateReadSnapshot(exactEmpty);
+  assert.ok(decoded);
+  const currentNow = decoded.observedAt + 1_000;
+
+  const current = projectPrivateReadGuard({
+    snapshot: decoded,
+    source: 'STATE',
+    error: null,
+    now: currentNow,
+  }).presentation;
+  assert.equal(current.counts.openOrders, null, 'order absence stays unknown without reconciled order truth');
+  assert.equal(current.counts.fills, null, 'fill absence stays unknown without reconciled fill truth');
+  assert.equal(current.counts.positions, null, 'position absence stays unknown without reconciled position truth');
+  assert.equal(current.counts.liabilities, 0);
+  assert.equal(current.spotAvailableUsdt, null, 'a zero balance stays unknown without reconciled balance truth');
+  assert.equal(current.marginLiabilityBtc, '0.00000000');
+  assert.equal(privateReadExactZeroAdmitted({
+    snapshot: decoded,
+    source: 'STATE',
+    error: null,
+    fact: 'LIABILITIES',
+    now: currentNow,
+  }), true);
+  assert.equal(privateReadExactZeroAdmitted({
+    snapshot: decoded,
+    source: 'STATE',
+    error: null,
+    fact: 'OPEN_ORDERS',
+    now: currentNow,
+  }), false);
+
+  const partialCoverage = {
+    ...decoded,
+    margin: {
+      ...decoded.margin,
+      coverage: {
+        state: 'PARTIAL_SYMBOL_SCOPED',
+        symbols: ['USDT'],
+        limitation: 'SYMBOL_SCOPED_HISTORY',
+      },
+    },
+  };
+
+  for (const guard of [
+    projectPrivateReadGuard({ snapshot: decoded, source: 'FALLBACK', error: null, now: currentNow }),
+    projectPrivateReadGuard({ snapshot: decoded, source: 'STATE', error: 'HTTP_503', now: currentNow }),
+    projectPrivateReadGuard({ snapshot: partialCoverage, source: 'STATE', error: null, now: currentNow }),
+    projectPrivateReadGuard({
+      snapshot: decoded,
+      source: 'STATE',
+      error: null,
+      now: decoded.observedAt + PRIVATE_READ_STALE_AFTER_MS,
+    }),
+  ]) {
+    assert.equal(guard.presentation.counts.openOrders, null);
+    assert.equal(guard.presentation.counts.fills, null);
+    assert.equal(guard.presentation.counts.positions, null);
+    assert.equal(guard.presentation.counts.liabilities, null);
+    assert.equal(guard.presentation.spotAvailableUsdt, null);
+    assert.equal(guard.presentation.marginLiabilityBtc, null);
+  }
+
+  const positive = availableFixture();
+  const positiveDecoded = decodePrivateReadSnapshot(positive);
+  assert.ok(positiveDecoded);
+  const retained = projectPrivateReadGuard({
+    snapshot: positiveDecoded,
+    source: 'FALLBACK',
+    error: 'HTTP_503',
+    now: positiveDecoded.observedAt + PRIVATE_READ_STALE_AFTER_MS,
+  }).presentation;
+  assert.equal(retained.counts.openOrders, 1, 'nonzero retained observations are not fabricated absence');
+  assert.equal(retained.counts.liabilities, 1);
+  assert.equal(retained.spotAvailableUsdt, '12.50000000');
 });
 
 test('private-read HTTP admission is status-authoritative for 401 and 403', async () => {

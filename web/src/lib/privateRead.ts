@@ -1772,6 +1772,90 @@ export function privateReadReconciliationTone(snapshot: PrivateReadSnapshot): Pr
     .reduce(worstTone, 'ok' as PrivateReadTone);
 }
 
+export type PrivateReadExactZeroFact =
+  | 'SPOT_BALANCES'
+  | 'MARGIN_ASSETS'
+  | 'USDM_BALANCES'
+  | 'OPEN_ORDERS'
+  | 'FILLS'
+  | 'POSITIONS'
+  | 'LIABILITIES'
+  | 'SPOT_AVAILABLE_USDT'
+  | 'MARGIN_LIABILITY_BTC';
+
+/**
+ * An exact zero is a current absence claim, not merely a retained value. Admit
+ * it only from the preferred source with the matching complete coverage and
+ * reconciliation fact; every missing guard leaves the zero unknown.
+ */
+export function privateReadExactZeroAdmitted({
+  snapshot,
+  source,
+  error,
+  fact,
+  now = Date.now(),
+  staleAfterMs = PRIVATE_READ_STALE_AFTER_MS,
+}: {
+  readonly snapshot: PrivateReadSnapshot;
+  readonly source: PrivateReadSourceId;
+  readonly error: string | null | undefined;
+  readonly fact: PrivateReadExactZeroFact;
+  readonly now?: number;
+  readonly staleAfterMs?: number;
+}): boolean {
+  let coverageStates: readonly CoverageState[];
+  let reconciliationState: ReconciliationState;
+  switch (fact) {
+    case 'SPOT_BALANCES':
+    case 'SPOT_AVAILABLE_USDT':
+      coverageStates = [snapshot.spot.coverage.state];
+      reconciliationState = snapshot.reconciliation.balances.state;
+      break;
+    case 'MARGIN_ASSETS':
+    case 'LIABILITIES':
+    case 'MARGIN_LIABILITY_BTC':
+      coverageStates = [snapshot.margin.coverage.state];
+      reconciliationState = snapshot.reconciliation.liabilities.state;
+      break;
+    case 'USDM_BALANCES':
+      coverageStates = [snapshot.usdm.coverage.state];
+      reconciliationState = snapshot.reconciliation.balances.state;
+      break;
+    case 'POSITIONS':
+      coverageStates = [snapshot.usdm.coverage.state];
+      reconciliationState = snapshot.reconciliation.positions.state;
+      break;
+    case 'OPEN_ORDERS':
+      coverageStates = [
+        snapshot.spot.coverage.state,
+        snapshot.margin.coverage.state,
+        snapshot.usdm.coverage.state,
+      ];
+      reconciliationState = snapshot.reconciliation.orders.state;
+      break;
+    case 'FILLS':
+      coverageStates = [
+        snapshot.spot.coverage.state,
+        snapshot.margin.coverage.state,
+        snapshot.usdm.coverage.state,
+      ];
+      reconciliationState = snapshot.reconciliation.fills.state;
+      break;
+    default: {
+      const exhaustive: never = fact;
+      return exhaustive;
+    }
+  }
+  return snapshot.state === 'AVAILABLE'
+    && snapshot.permissionPosture.state === 'VERIFIED_READ_ONLY'
+    && source === 'STATE'
+    && privateReadErrorFact(error).id === 'NONE'
+    && privateReadFreshness(snapshot, now, staleAfterMs).state === 'CURRENT'
+    && privateReadPermissionFreshness(snapshot, now, staleAfterMs).state === 'CURRENT'
+    && coverageStates.every((state) => state === 'COMPLETE_CURRENT')
+    && reconciliationState === 'RECONCILED';
+}
+
 export interface PermissionPresentationRow {
   id: string;
   label: string;
@@ -1978,9 +2062,43 @@ export function projectPrivateReadGuard({
   readonly now?: number;
   readonly staleAfterMs?: number;
 }): PrivateReadGuardProjection {
-  const presentation = projectPrivateRead(snapshot, now, staleAfterMs);
+  const decodedPresentation = projectPrivateRead(snapshot, now, staleAfterMs);
   const permissionFreshness = privateReadPermissionFreshness(snapshot, now, staleAfterMs);
   const errorFact = privateReadErrorFact(error);
+  const zeroAdmitted = (fact: PrivateReadExactZeroFact) => privateReadExactZeroAdmitted({
+    snapshot,
+    source,
+    error,
+    fact,
+    now,
+    staleAfterMs,
+  });
+  const redactCount = (value: number | null, fact: PrivateReadExactZeroFact) => (
+    value === 0 && !zeroAdmitted(fact) ? null : value
+  );
+  const redactDecimal = (value: string | null, fact: PrivateReadExactZeroFact) => (
+    isZeroDecimal(value) && !zeroAdmitted(fact) ? null : value
+  );
+  const presentation: PrivateReadPresentation = {
+    ...decodedPresentation,
+    spotAvailableUsdt: redactDecimal(
+      decodedPresentation.spotAvailableUsdt,
+      'SPOT_AVAILABLE_USDT',
+    ),
+    marginLiabilityBtc: redactDecimal(
+      decodedPresentation.marginLiabilityBtc,
+      'MARGIN_LIABILITY_BTC',
+    ),
+    counts: {
+      spotBalances: redactCount(decodedPresentation.counts.spotBalances, 'SPOT_BALANCES'),
+      marginAssets: redactCount(decodedPresentation.counts.marginAssets, 'MARGIN_ASSETS'),
+      usdmBalances: redactCount(decodedPresentation.counts.usdmBalances, 'USDM_BALANCES'),
+      openOrders: redactCount(decodedPresentation.counts.openOrders, 'OPEN_ORDERS'),
+      fills: redactCount(decodedPresentation.counts.fills, 'FILLS'),
+      positions: redactCount(decodedPresentation.counts.positions, 'POSITIONS'),
+      liabilities: redactCount(decodedPresentation.counts.liabilities, 'LIABILITIES'),
+    },
+  };
   const commonTone = [presentation.postureTone, permissionFreshness.tone, errorFact.guardTone]
     .reduce(worstTone, presentation.guardTone);
   const coverageTone = privateReadCoverageTone(snapshot);

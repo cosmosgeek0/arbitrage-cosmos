@@ -49726,6 +49726,26 @@ body::after {
   line-height: 15px !important;
 }
 
+.smenu-bar.topbar-suite-v4 .ops-aws-sheet .ops-row-copy > em,
+.smenu-bar.topbar-suite-v4 .ops-advisor-sheet .ops-row-copy > em,
+.smenu-bar.topbar-suite-v4 .ops-notification-sheet .ops-row-copy > em {
+  display: -webkit-box !important;
+  overflow: hidden !important;
+  white-space: normal !important;
+  text-overflow: clip !important;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.smenu-bar.topbar-suite-v4 .ops-aws-sheet .ops-sheet-title > em,
+.smenu-bar.topbar-suite-v4 .ops-notification-sheet .ops-sheet-title > em {
+  display: -webkit-box !important;
+  overflow: hidden !important;
+  white-space: normal !important;
+  line-height: 14px !important;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
 .smenu-bar.topbar-suite-v4 .ops-basis-sheet .ops-basis-definition {
   min-height: 80px !important;
   height: 80px !important;

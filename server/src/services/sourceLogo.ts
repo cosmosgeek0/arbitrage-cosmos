@@ -160,8 +160,8 @@ export function createSourceLogoSource(options: SourceLogoSourceOptions = {}): R
     const key = lifecycleKey(domain, size, lifecycle);
     const hit = cached(domain, size, lifecycle);
     if (hit) return Promise.resolve(hit);
-    const failedAt = failures.get(key) ?? 0;
-    if (now() - failedAt < SOURCE_LOGO_FAILURE_TTL_MS) {
+    const failedAt = failures.get(key);
+    if (failedAt !== undefined && now() - failedAt < SOURCE_LOGO_FAILURE_TTL_MS) {
       return Promise.reject(new Error('source logo is cooling down'));
     }
 

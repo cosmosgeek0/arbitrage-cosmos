@@ -153,6 +153,20 @@ def test_archive_parser_accepts_exact_header_and_derives_symbol(
     assert bars[0].quote_volume == Decimal("1200")
 
 
+def test_archive_parser_never_swallows_headerless_first_row(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    second_open_us = OPEN_US + 86_400_000_000
+    artifact, _zip_path, _checksum_path = _write_archive(
+        tmp_path,
+        header=False,
+        rows=(_row(), _row(open_us=second_open_us)),
+    )
+    bars = _parse(tmp_path, artifact, monkeypatch)
+    assert tuple(bar.day for bar in bars) == (date(2025, 7, 1), date(2025, 7, 2))
+
+
 @pytest.mark.parametrize(
     ("field", "escaped_value"),
     [

@@ -311,9 +311,9 @@ test('legacy liveness and PnL surfaces cannot imply semantic readiness or valida
   assert.match(account, /const openOrders = \[/);
   assert.match(account, /privateRead\.spot\.openOrders/);
   assert.doesNotMatch(account, /fetchJson<FillRow\[\]>\('\/api\/fills'/);
-  assert.match(dashboard, /pnlTruthState === 'UNKNOWN' \? 'Account PnL Context Unavailable'/);
+  assert.match(dashboard, /binding\.snapshot\?\.dashboard[\s\S]*<SystemDashboard[\s\S]*snapshot=\{dashboardSnapshot\}/);
   assert.doesNotMatch(dashboard, /Strategy Performance/);
-  assert.match(dashboard, /unavailable private\/account truth is not converted into validated zero PnL/);
+  assert.doesNotMatch(dashboard, /\/api\/pnl|fetchJson|decodeDashboardPnlData|useDashboardSources/);
   assert.match(pnl, /setData\(null\)/);
   assert.match(pnl, /data !== null && data\.integrity\.state !== 'UNKNOWN'/);
   assert.match(pnl, /does not convert an unavailable durable outcome read into a zero-PnL claim/);

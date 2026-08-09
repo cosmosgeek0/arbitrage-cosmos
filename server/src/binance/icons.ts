@@ -69,6 +69,38 @@ const cache = new Map<string, { ts: number; url: string | null }>();
 const pending = new Set<string>();
 let queue: string[] = [];
 let draining = false;
+let lifecycleState: IconSourceLifecycleState = 'STOPPED';
+let lifecycleGeneration = 0;
+let lifecycleStartCount = 0;
+let lifecycleStopCount = 0;
+let lifecycleCancelled = 0;
+let activeSearchController: AbortController | null = null;
+let drainRun: Promise<void> | null = null;
+let stopSettlement: Promise<void> | null = null;
+let gapTimer: NodeJS.Timeout | null = null;
+let resolveGap: (() => void) | null = null;
+
+export type IconSourceLifecycleState = 'STARTED' | 'STOPPING' | 'STOPPED';
+
+export interface IconSourceLifecycleStatus {
+  state: IconSourceLifecycleState;
+  generation: number;
+  startCount: number;
+  stopCount: number;
+  lifecycleCancelled: number;
+  queued: number;
+  pending: number;
+  draining: boolean;
+  activeRequest: boolean;
+}
+
+function incrementBoundedCounter(value: number): number {
+  return value < Number.MAX_SAFE_INTEGER ? value + 1 : value;
+}
+
+function iconSourceGenerationActive(owner: number): boolean {
+  return lifecycleState === 'STARTED' && lifecycleGeneration === owner;
+}
 
 function canonicalBase(value: string): string | null {
   const base = value.trim().toUpperCase();
@@ -169,16 +201,15 @@ function saveDisk(): void {
 
 loadDisk();
 
-async function searchIcon(base: string): Promise<string | null> {
+async function searchIcon(base: string, controller: AbortController): Promise<string | null> {
   const q = QUERY_ALIASES[base] ?? base;
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   let data: { coins?: { symbol?: string; large?: string; thumb?: string }[] };
   try {
     const res = await fetch(`${CG}/search?query=${encodeURIComponent(q)}`, {
       headers: { Accept: 'application/json' },
       redirect: 'error',
-      signal: ctrl.signal,
+      signal: controller.signal,
     });
     if (!res.ok) {
       await res.body?.cancel().catch(() => undefined);
@@ -198,29 +229,71 @@ async function searchIcon(base: string): Promise<string | null> {
   return null;
 }
 
-async function drain(): Promise<void> {
-  if (draining) return;
+function waitForResolveGap(owner: number): Promise<void> {
+  if (!iconSourceGenerationActive(owner)) return Promise.resolve();
+  return new Promise((resolve) => {
+    resolveGap = resolve;
+    gapTimer = setTimeout(() => {
+      gapTimer = null;
+      resolveGap = null;
+      resolve();
+    }, RESOLVE_GAP_MS);
+    gapTimer.unref?.();
+  });
+}
+
+function cancelResolveGap(): void {
+  if (gapTimer) clearTimeout(gapTimer);
+  gapTimer = null;
+  const settle = resolveGap;
+  resolveGap = null;
+  settle?.();
+}
+
+async function drain(owner: number): Promise<void> {
+  if (draining || !iconSourceGenerationActive(owner)) return;
   draining = true;
   let sinceSave = 0;
-  while (queue.length) {
-    const b = queue.shift()!;
-    let url: string | null = null;
-    try {
-      url = await searchIcon(b);
-    } catch {
-      url = null;
+  try {
+    while (queue.length && iconSourceGenerationActive(owner)) {
+      const b = queue.shift()!;
+      const controller = new AbortController();
+      activeSearchController = controller;
+      let url: string | null = null;
+      try {
+        url = await searchIcon(b, controller);
+      } catch {
+        if (!iconSourceGenerationActive(owner)) break;
+        url = null;
+      } finally {
+        if (activeSearchController === controller) activeSearchController = null;
+      }
+      if (!iconSourceGenerationActive(owner)) break;
+      cacheSet(b, { ts: Date.now(), url });
+      pending.delete(b);
+      // save as we go — a restart mid-drain must never lose resolved logos
+      if (url && ++sinceSave >= 5) {
+        saveDisk();
+        sinceSave = 0;
+      }
+      await waitForResolveGap(owner);
     }
-    cacheSet(b, { ts: Date.now(), url });
-    pending.delete(b);
-    // save as we go — a restart mid-drain must never lose resolved logos
-    if (url && ++sinceSave >= 5) {
-      saveDisk();
-      sinceSave = 0;
-    }
-    await new Promise((r) => setTimeout(r, RESOLVE_GAP_MS));
+    if (iconSourceGenerationActive(owner)) saveDisk();
+  } finally {
+    activeSearchController = null;
+    draining = false;
   }
-  draining = false;
-  saveDisk();
+}
+
+function ensureDrain(): void {
+  if (drainRun || !queue.length || lifecycleState !== 'STARTED') return;
+  const owner = lifecycleGeneration;
+  const work = drain(owner);
+  drainRun = work;
+  void work.finally(() => {
+    if (drainRun === work) drainRun = null;
+    if (iconSourceGenerationActive(owner) && queue.length) ensureDrain();
+  });
 }
 
 /** Known logo URLs for the requested bases; unknown ones queue for background
@@ -237,12 +310,12 @@ export function resolveIcons(bases: string[]): Record<string, string> {
     const ttl = hit && hit.url ? ICON_TTL : ICON_RETRY;
     if (hit && now - hit.ts < ttl) {
       if (hit.url) out[b] = hit.url;
-    } else if (!pending.has(b) && queue.length < 400) {
+    } else if (lifecycleState === 'STARTED' && !pending.has(b) && queue.length < 400) {
       pending.add(b);
       queue.push(b);
     }
   }
-  if (queue.length) void drain();
+  ensureDrain();
   return out;
 }
 
@@ -250,4 +323,55 @@ export function iconCacheStats(): { resolved: number; pending: number } {
   let resolved = 0;
   for (const v of cache.values()) if (v.url) resolved++;
   return { resolved, pending: pending.size };
+}
+
+export function iconSourceLifecycle(): Readonly<IconSourceLifecycleStatus> {
+  return Object.freeze({
+    state: lifecycleState,
+    generation: lifecycleGeneration,
+    startCount: lifecycleStartCount,
+    stopCount: lifecycleStopCount,
+    lifecycleCancelled,
+    queued: queue.length,
+    pending: pending.size,
+    draining,
+    activeRequest: activeSearchController !== null,
+  });
+}
+
+export function startIconSource(): Readonly<IconSourceLifecycleStatus> {
+  if (lifecycleState === 'STARTED' || stopSettlement) return iconSourceLifecycle();
+  lifecycleGeneration = incrementBoundedCounter(lifecycleGeneration);
+  lifecycleStartCount = incrementBoundedCounter(lifecycleStartCount);
+  lifecycleState = 'STARTED';
+  ensureDrain();
+  return iconSourceLifecycle();
+}
+
+export function stopIconSource(): Promise<Readonly<IconSourceLifecycleStatus>> {
+  if (stopSettlement) return stopSettlement.then(iconSourceLifecycle);
+  if (lifecycleState === 'STOPPED') return Promise.resolve(iconSourceLifecycle());
+  lifecycleGeneration = incrementBoundedCounter(lifecycleGeneration);
+  const owner = lifecycleGeneration;
+  lifecycleStopCount = incrementBoundedCounter(lifecycleStopCount);
+  lifecycleState = 'STOPPING';
+  lifecycleCancelled = Math.min(Number.MAX_SAFE_INTEGER, lifecycleCancelled + pending.size);
+  queue = [];
+  pending.clear();
+  activeSearchController?.abort(new DOMException('icon source stopped', 'AbortError'));
+  cancelResolveGap();
+  const owned = drainRun;
+  let settle!: () => void;
+  const settlement = new Promise<void>((resolve) => {
+    settle = resolve;
+  });
+  stopSettlement = settlement;
+  void Promise.allSettled(owned ? [owned] : []).then(() => {
+    if (stopSettlement === settlement) {
+      if (lifecycleGeneration === owner) lifecycleState = 'STOPPED';
+      stopSettlement = null;
+    }
+    settle();
+  });
+  return settlement.then(iconSourceLifecycle);
 }

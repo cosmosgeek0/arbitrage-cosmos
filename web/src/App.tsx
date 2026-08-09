@@ -5,21 +5,20 @@ import { Sidebar, Topbar, BottomNav, Overlays, RefreshDock } from './components/
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Tape } from './components/Tape';
 import { Palette } from './components/Palette';
+import {
+  OptionalSurfaceControlProvider,
+  OptionalSurfaceGate,
+} from './components/OptionalSurfaceGate';
 import { Dashboard } from './pages/Dashboard';
-import { Markets } from './pages/Markets';
-import { TokenDetail } from './pages/TokenDetail';
 import { Loans } from './pages/Loans';
 import { Account } from './pages/Account';
 import { Strategies } from './pages/Strategies';
 import { VolumeScanner } from './pages/VolumeScanner';
 import { Opportunities } from './pages/Opportunities';
 import { Risk } from './pages/Risk';
-import { LedgerPage } from './pages/LedgerPage';
 import { SystemHealth } from './pages/SystemHealth';
 import { Watchdog } from './pages/Watchdog';
 import { NotificationsPage } from './pages/NotificationsPage';
-import { News } from './pages/News';
-import { CalendarPage } from './pages/CalendarPage';
 import {
   ProductControlRoomProvider,
   ProductControlRoomRoute,
@@ -32,6 +31,31 @@ import {
   type ProductIntegrationEndpoints,
 } from './lib/productIntegration';
 import './pages/MetricTiles.css';
+
+const Markets = lazy(async () => {
+  const module = await import('./pages/Markets');
+  return { default: module.Markets };
+});
+
+const TokenDetail = lazy(async () => {
+  const module = await import('./pages/TokenDetail');
+  return { default: module.TokenDetail };
+});
+
+const LedgerPage = lazy(async () => {
+  const module = await import('./pages/LedgerPage');
+  return { default: module.LedgerPage };
+});
+
+const News = lazy(async () => {
+  const module = await import('./pages/News');
+  return { default: module.News };
+});
+
+const CalendarPage = lazy(async () => {
+  const module = await import('./pages/CalendarPage');
+  return { default: module.CalendarPage };
+});
 
 const ResearchLab = lazy(async () => {
   const module = await import('./pages/ResearchLab');
@@ -117,8 +141,20 @@ function Shell() {
                 {page === 'control-room' && <ProductControlRoomRoute />}
                 {page === 'account' && <Account view="overview" />}
                 {page === 'wallets' && <Account view="overview" />}
-                {page === 'markets' && <Markets />}
-                {page === 'detail' && <TokenDetail symbol={detailSymbol} />}
+                {page === 'markets' && (
+                  <OptionalSurfaceGate surfaceId="markets">
+                    <Suspense fallback={<div className="optional-page-loading" role="status">Loading Markets…</div>}>
+                      <Markets />
+                    </Suspense>
+                  </OptionalSurfaceGate>
+                )}
+                {page === 'detail' && (
+                  <OptionalSurfaceGate surfaceId="token">
+                    <Suspense fallback={<div className="optional-page-loading" role="status">Loading Token…</div>}>
+                      <TokenDetail symbol={detailSymbol} />
+                    </Suspense>
+                  </OptionalSurfaceGate>
+                )}
                 {page === 'loans' && <Loans />}
                 {page === 'execution' && <Account view="execution" />}
                 {page === 'orders' && <Account view="orders" />}
@@ -129,12 +165,30 @@ function Shell() {
                 {page === 'volume' && <VolumeScanner />}
                 {page === 'opportunities' && <Opportunities />}
                 {page === 'risk' && <Risk />}
-                {page === 'ledger' && <LedgerPage />}
+                {page === 'ledger' && (
+                  <OptionalSurfaceGate surfaceId="logs">
+                    <Suspense fallback={<div className="optional-page-loading" role="status">Loading Logs…</div>}>
+                      <LedgerPage />
+                    </Suspense>
+                  </OptionalSurfaceGate>
+                )}
                 {page === 'system' && <SystemHealth />}
                 {page === 'watchdog' && <Watchdog />}
                 {page === 'notifications' && <NotificationsPage />}
-                {page === 'news' && <News />}
-                {page === 'calendar' && <CalendarPage />}
+                {page === 'news' && (
+                  <OptionalSurfaceGate surfaceId="news">
+                    <Suspense fallback={<div className="optional-page-loading" role="status">Loading News…</div>}>
+                      <News />
+                    </Suspense>
+                  </OptionalSurfaceGate>
+                )}
+                {page === 'calendar' && (
+                  <OptionalSurfaceGate surfaceId="calendar">
+                    <Suspense fallback={<div className="optional-page-loading" role="status">Loading Calendar…</div>}>
+                      <CalendarPage />
+                    </Suspense>
+                  </OptionalSurfaceGate>
+                )}
                 {page === 'research-lab' && (
                   <Suspense fallback={(
                     <div className="container page" role="status" aria-live="polite">
@@ -191,9 +245,11 @@ function Shell() {
 export default function App() {
   return (
     <StoreProvider>
-      <ProductControlRoomProvider client={productIntegrationClient} initialMaterialCursor={durableResumeCursor}>
-        <Shell />
-      </ProductControlRoomProvider>
+      <OptionalSurfaceControlProvider>
+        <ProductControlRoomProvider client={productIntegrationClient} initialMaterialCursor={durableResumeCursor}>
+          <Shell />
+        </ProductControlRoomProvider>
+      </OptionalSurfaceControlProvider>
     </StoreProvider>
   );
 }

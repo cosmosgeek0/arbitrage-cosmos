@@ -1,0 +1,3341 @@
+{
+  "artifactSha256": {
+    "research/dq13/README.md": "bde6ee8109ef00b15c4bccb413db1306007790bd042f029348e13e185397bf66",
+    "research/dq13/REFERENCES.md": "8263b3a8edbc5f7f2a0247abc2b323096c80a6ea255e6d3b4f6e52dfe7cc7ccc",
+    "research/dq13/__init__.py": "c3904fd946c42a4104519afa07e7674aa504e22e5394625554a09c60a1848ef2",
+    "research/dq13/__main__.py": "27a4c9509209e1704c81692e3155b46917567c1fea66ab18c32595d89bea3996",
+    "research/dq13/fixture_support.py": "c47eb6e6ca7f3e25b03ee26aa0ae6ce386f1834782e2081f9c068e6826cbc5c9",
+    "research/dq13/fixtures/cases.v1.json": "5293ad24d305fda15153bae347b7c867fcacd28ac77979882e72bdc4600ae5e1",
+    "research/dq13/policy.v1.json": "ac4954089b41f2e1dc7a24c294a1070718d13c0faea95dec7eee1cc65544a198",
+    "research/dq13/pytest-proof.ini": "db56f039bcfe34a78a373c9fa1630cd53a55c8be5adf6070ed5034aae2bb3c71",
+    "research/dq13/test_validator.py": "b6c56f5a4dd501fca0ad3c5b30915ac83511016f5300e183fae7cbc20d1bad65",
+    "research/dq13/validator.py": "22e397c1567e2028bdfa14bec9a8e65a034ba8190106fa27a7184b3e62257942",
+    "research/dq13/verify.py": "f31f4a1e67ed4c739105beee46f4caebdd9a148d49e1ef777920cecb0685330a",
+    "uv.lock": "716a9d0208f449bba51cde7fd67f9c90206ab0724aeac86ba862e119be859d29"
+  },
+  "authority": "NONE",
+  "canonicalBase": "a169b123fb186d1943a75ad648552c4d95be1be1",
+  "caseCount": 64,
+  "cases": [
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "valid-all-feeds",
+      "nonvalidSelections": [],
+      "reasonCodes": [],
+      "receiptDigest": "6a8d7e1d1a3c5dec3f183f0e04d406a57f14795b0129d77c25c322da2b67f4a9",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "VALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "observation-order-invariant",
+      "nonvalidSelections": [],
+      "reasonCodes": [],
+      "receiptDigest": "6a8d7e1d1a3c5dec3f183f0e04d406a57f14795b0129d77c25c322da2b67f4a9",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "VALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "missing-required-funding",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:FUNDING:-",
+          "reasonCodes": [
+            "MISSING_REQUIRED_FEED"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "MISSING_REQUIRED_FEED"
+      ],
+      "receiptDigest": "1db92980ea8e961eaa539c4661b459ec1b527a4cb839a8a2e19d76ac2577d632",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "future-mark-availability",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+          "reasonCodes": [
+            "AVAILABLE_AFTER_DECISION"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "AVAILABLE_AFTER_DECISION"
+      ],
+      "receiptDigest": "27854e64dcd56524fe92bd954ba4a64949df4ac2eac2e8c3daaff77d97d5253b",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "stale-funding-event",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:FUNDING:-",
+          "reasonCodes": [
+            "EVENT_STALE"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "EVENT_STALE"
+      ],
+      "receiptDigest": "74c5cdbeecade7a9eb76f66c0fb1ca4b7aa6eed39c0fa8e32a46be8e17cfe2f2",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "exchange-info-exact-expiry",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-",
+          "reasonCodes": [
+            "AVAILABILITY_STALE"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "AVAILABILITY_STALE"
+      ],
+      "receiptDigest": "41ce656c28b9425de2b09a1c896a27fa28de3f2981d3e7dd85e85ff9674d700a",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "contradictory-mark-snapshot",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+          "reasonCodes": [
+            "CONTRADICTORY_ASOF_RECORDS"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "CONTRADICTORY_ASOF_RECORDS"
+      ],
+      "receiptDigest": "befd88c423774585e2ac5e74f22bbc11b48aad66f23e5d8012f6435a51b70bef",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "record-id-contradiction",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+          "reasonCodes": [
+            "RECORD_ID_CONTRADICTION"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "RECORD_ID_CONTRADICTION"
+      ],
+      "receiptDigest": "3cbb5ab762e2396c9b53a097f5c4e3edabb17adbeb2ea6ae6458239b7f061bef",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "coexisting-unplaceable-mark-poisons-feed",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+          "reasonCodes": [
+            "AVAILABILITY_DECISION_ORDER_AMBIGUOUS"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "AVAILABILITY_DECISION_ORDER_AMBIGUOUS"
+      ],
+      "receiptDigest": "c0992872d5d249a85f97986dbc07d0601d60fa6ca6ae138ba54940735c806025",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "coexisting-eventless-mark-poisons-feed",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+          "reasonCodes": [
+            "EVENT_TIME_MISSING"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "EVENT_TIME_MISSING"
+      ],
+      "receiptDigest": "5055513bc9a69523181312539c217800a1b4aeae2ba01ef23ace5ddc9dc46257",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ]
+      },
+      "caseId": "coexisting-ambiguous-interval-availability-poisons-feed",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC",
+          "reasonCodes": [
+            "INTERVAL_AVAILABILITY_END_ORDER_AMBIGUOUS"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "INTERVAL_AVAILABILITY_END_ORDER_AMBIGUOUS"
+      ],
+      "receiptDigest": "3f2251841fcd1542915ad43b2e7eae184ecd7c930a49c78d177ce438f0edd07a",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "coexisting-future-mark-ignored",
+      "nonvalidSelections": [],
+      "reasonCodes": [],
+      "receiptDigest": "6a8d7e1d1a3c5dec3f183f0e04d406a57f14795b0129d77c25c322da2b67f4a9",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "VALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "coexisting-stale-mark-ignored",
+      "nonvalidSelections": [],
+      "reasonCodes": [],
+      "receiptDigest": "6a8d7e1d1a3c5dec3f183f0e04d406a57f14795b0129d77c25c322da2b67f4a9",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "VALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "coexisting-partial-kline-ignored",
+      "nonvalidSelections": [],
+      "reasonCodes": [],
+      "receiptDigest": "6a8d7e1d1a3c5dec3f183f0e04d406a57f14795b0129d77c25c322da2b67f4a9",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "VALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "coexisting-incomplete-rest-kline-ignored",
+      "nonvalidSelections": [],
+      "reasonCodes": [],
+      "receiptDigest": "6a8d7e1d1a3c5dec3f183f0e04d406a57f14795b0129d77c25c322da2b67f4a9",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "VALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "fill-before-decision",
+      "nonvalidSelections": [],
+      "reasonCodes": [
+        "FILL_BEFORE_DECISION"
+      ],
+      "receiptDigest": "fda22dbfe9fe9673edb5d3c283bf8fbe79395df1e6355c9d23503494d20c41ce",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "executed-fill-missing",
+      "nonvalidSelections": [],
+      "reasonCodes": [
+        "FILL_TIME_MISSING"
+      ],
+      "receiptDigest": "84ebae4b5cf500bb7d0928d6712016b5088e20c2349af8fb5a8d590d7c101e12",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "no-fill-has-clock",
+      "nonvalidSelections": [],
+      "reasonCodes": [
+        "NO_FILL_HAS_FILL_TIME"
+      ],
+      "receiptDigest": "995839b63c9e1ec1ce2d398f9a2c24ae36393710a9945ceff2598b7da07923aa",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "partial-kline",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC",
+          "reasonCodes": [
+            "INTERVAL_NOT_FINAL"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "INTERVAL_NOT_FINAL"
+      ],
+      "receiptDigest": "a8d47ae6f656de4d77b5a9a5f00b9ac61efe121563c60ce45868bd94a715c464",
+      "selectedRecordIds": {
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "stream-kline-final-flag-missing",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC",
+          "reasonCodes": [
+            "INTERVAL_FINAL_FLAG_MISSING"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "INTERVAL_FINAL_FLAG_MISSING"
+      ],
+      "receiptDigest": "d90105de589d771ac1c385850726d82b73fdc2343fa6e54c3d8ef468e87be67c",
+      "selectedRecordIds": {
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "malformed-interval-duration",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC",
+          "reasonCodes": [
+            "INTERVAL_DURATION_INVALID"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "INTERVAL_DURATION_INVALID"
+      ],
+      "receiptDigest": "78c0a1366019e4b692b04da2c889c39b4e83d7b2c79611f826b6b9b336041377",
+      "selectedRecordIds": {
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "source-unit-contradiction",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC",
+          "reasonCodes": [
+            "SOURCE_UNIT_CONTRADICTION"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "SOURCE_UNIT_CONTRADICTION"
+      ],
+      "receiptDigest": "97465b30b3a1457d7cb4d3e4f52e2f3c10690a5d6406fa7c37fa3b30aee74195",
+      "selectedRecordIds": {
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "stream-release-without-receipt",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+          "reasonCodes": [
+            "STREAM_RECEIPT_REQUIRED"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "STREAM_RECEIPT_REQUIRED"
+      ],
+      "receiptDigest": "5dce8fe8952be3ed56685e4bf19b24fc1f74a347ffe1338e7f1dc27ed7de81a1",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "bare-frozen-release-evidence",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:FUNDING:-",
+          "reasonCodes": [
+            "AVAILABILITY_EVIDENCE_MISSING"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "AVAILABILITY_EVIDENCE_MISSING"
+      ],
+      "receiptDigest": "ba39c3e13ec62f3dfadfd4e50aae8527065fc75be05a97005910be7a9aeb2eb1",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "bound-frozen-release-evidence-passes",
+      "nonvalidSelections": [],
+      "reasonCodes": [],
+      "receiptDigest": "a7f18fa459339439ccdd31541f7941feae38f49f9824bc9f201112510473c426",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "VALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "availability-evidence-digest-missing",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+          "reasonCodes": [
+            "AVAILABILITY_EVIDENCE_MISSING"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "AVAILABILITY_EVIDENCE_MISSING"
+      ],
+      "receiptDigest": "760fde0818089c8027bd6d1c54bb51c0e917a6da6f95129cba5a1828d68d9c73",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "availability-evidence-without-clock",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-",
+          "reasonCodes": [
+            "AVAILABILITY_EVIDENCE_WITHOUT_CLOCK"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "AVAILABILITY_EVIDENCE_WITHOUT_CLOCK"
+      ],
+      "receiptDigest": "41849eb3f528944f53b47df48b11962f6d4cf4895926a8ab7051e9208a4c3f4f",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {},
+      "caseId": "boolean-timestamp",
+      "nonvalidSelections": [],
+      "reasonCodes": [
+        "INTEGER_INVALID"
+      ],
+      "receiptDigest": "53f1537de152d3d9708e288fb8d5efafd304f0d1ab52459bb18cabfe5d271446",
+      "selectedRecordIds": {},
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "timestamp-normalization-overflow",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+          "reasonCodes": [
+            "TIMESTAMP_OVERFLOW"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "TIMESTAMP_OVERFLOW"
+      ],
+      "receiptDigest": "4a7f3f452e707c94fe6331e4d073f95c928b0168dcb1e97151211f2fa2c74836",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "event-after-availability",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+          "reasonCodes": [
+            "EVENT_AFTER_AVAILABILITY"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "EVENT_AFTER_AVAILABILITY"
+      ],
+      "receiptDigest": "1c1258723cd0b7bbf78d4f5a4aa563dcdb091fd3eedb7503e18bb4622584564f",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "event-availability-order-ambiguous",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+          "reasonCodes": [
+            "EVENT_AVAILABILITY_ORDER_AMBIGUOUS"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "EVENT_AVAILABILITY_ORDER_AMBIGUOUS"
+      ],
+      "receiptDigest": "8b65b2edfff8a9fe9d249d615f5a48aa2bdf5276ea9b0f57fc6b290921068047",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {},
+      "caseId": "decision-clock-missing",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC",
+          "reasonCodes": [
+            "DECISION_TIME_MISSING"
+          ],
+          "status": "UNKNOWN"
+        },
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-",
+          "reasonCodes": [
+            "DECISION_TIME_MISSING"
+          ],
+          "status": "UNKNOWN"
+        },
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-",
+          "reasonCodes": [
+            "DECISION_TIME_MISSING"
+          ],
+          "status": "UNKNOWN"
+        },
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:FUNDING:-",
+          "reasonCodes": [
+            "DECISION_TIME_MISSING"
+          ],
+          "status": "UNKNOWN"
+        },
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-",
+          "reasonCodes": [
+            "DECISION_TIME_MISSING"
+          ],
+          "status": "UNKNOWN"
+        },
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+          "reasonCodes": [
+            "DECISION_TIME_MISSING"
+          ],
+          "status": "UNKNOWN"
+        },
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC",
+          "reasonCodes": [
+            "DECISION_TIME_MISSING"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "DECISION_TIME_MISSING"
+      ],
+      "receiptDigest": "fb6f6fffcf652876fd35388bff0b8006583ed3e6bb6eb91d0e10a7035dbb8e3e",
+      "selectedRecordIds": {},
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "event-clock-missing",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+          "reasonCodes": [
+            "EVENT_TIME_MISSING"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "EVENT_TIME_MISSING"
+      ],
+      "receiptDigest": "5055513bc9a69523181312539c217800a1b4aeae2ba01ef23ace5ddc9dc46257",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "availability-clock-missing",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-",
+          "reasonCodes": [
+            "AVAILABILITY_TIME_MISSING"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "AVAILABILITY_TIME_MISSING"
+      ],
+      "receiptDigest": "ebab52f9eaeadce9f8350740dca014105bfd11480a92d6f41e4c7e45247e8e67",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "current-snapshot-backfill",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-",
+          "reasonCodes": [
+            "CURRENT_SNAPSHOT_BACKFILL_FORBIDDEN"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "CURRENT_SNAPSHOT_BACKFILL_FORBIDDEN"
+      ],
+      "receiptDigest": "c9a1a1cdd2342ddd0f786c30c47befc83c3abc100f3608a4c978f5b4db5e7b63",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "current-snapshot-event-forbidden",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-",
+          "reasonCodes": [
+            "CURRENT_SNAPSHOT_EVENT_OR_INTERVAL_FORBIDDEN"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "CURRENT_SNAPSHOT_EVENT_OR_INTERVAL_FORBIDDEN"
+      ],
+      "receiptDigest": "ed99cb185d62a22e50a1bb5025b4c98304f2ae6e8ea9f0cb2c11324b0744284b",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "funding-info-cannot-come-from-exchange-info",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-",
+          "reasonCodes": [
+            "SOURCE_ENDPOINT_CONTRADICTION"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "SOURCE_ENDPOINT_CONTRADICTION"
+      ],
+      "receiptDigest": "d2733dafd22c873011ffee06ad69b4a51c41df4761ba161ea8a66cf89aa7a725",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "premium-index-cannot-settle-funding",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:FUNDING:-",
+          "reasonCodes": [
+            "SETTLED_FUNDING_SOURCE_INVALID"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "SETTLED_FUNDING_SOURCE_INVALID"
+      ],
+      "receiptDigest": "2bda2744ba261aa01d5058c24d28e77b395a0c053495db6e0f6a0fc595aa37d6",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ]
+      },
+      "caseId": "rest-interval-event-clock-forbidden",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC",
+          "reasonCodes": [
+            "INTERVAL_EVENT_CLOCK_FORBIDDEN"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "INTERVAL_EVENT_CLOCK_FORBIDDEN"
+      ],
+      "receiptDigest": "b7cf9f69e736b943184ced6014828d7356a5d4f8be149637c98f435185684d9f",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ]
+      },
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ]
+      },
+      "caseId": "rest-interval-final-flag-forbidden",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC",
+          "reasonCodes": [
+            "INTERVAL_FINAL_FLAG_FORBIDDEN"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "INTERVAL_FINAL_FLAG_FORBIDDEN"
+      ],
+      "receiptDigest": "c4ec78b2ec1c89c0230950f628d035f00685b888690b3f712b1cbaa19dacf32d",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ]
+      },
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ]
+      },
+      "caseId": "rest-interval-received-before-end",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC",
+          "reasonCodes": [
+            "INTERVAL_INCOMPLETE_AT_AVAILABILITY"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "INTERVAL_INCOMPLETE_AT_AVAILABILITY"
+      ],
+      "receiptDigest": "17ae81185fd2c01c8c6719ef6fdf52b8ae95cded05f90d17a43d24b4b9953f1a",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {},
+      "caseId": "interval-identity-without-zone",
+      "nonvalidSelections": [],
+      "reasonCodes": [
+        "INTERVAL_ID_INVALID"
+      ],
+      "receiptDigest": "2b6ed33e42dc28387789cd82377f09a9a5e80b4471897bb8cfdb0a9f86c38c73",
+      "selectedRecordIds": {},
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {},
+      "caseId": "interval-step-unsupported",
+      "nonvalidSelections": [],
+      "reasonCodes": [
+        "INTERVAL_STEP_UNSUPPORTED"
+      ],
+      "receiptDigest": "4477d2c078aef4c9b80372c288c40788c8a018852713ea366cd81f2547f3c7d9",
+      "selectedRecordIds": {},
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {},
+      "caseId": "interval-zone-unsupported",
+      "nonvalidSelections": [],
+      "reasonCodes": [
+        "INTERVAL_ZONE_UNSUPPORTED"
+      ],
+      "receiptDigest": "0544d5ca35bf8f2acc9b3738c6aef7f6d982f330fb111f0659a415c8fb9c28ae",
+      "selectedRecordIds": {},
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {},
+      "caseId": "interval-duration-missing",
+      "nonvalidSelections": [],
+      "reasonCodes": [
+        "INTERVAL_DURATION_MISSING"
+      ],
+      "receiptDigest": "0aa780fa4438b18e907798365144f140fa6660ce1c969986a08ad53178b974f7",
+      "selectedRecordIds": {},
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {},
+      "caseId": "interval-duration-declaration-invalid",
+      "nonvalidSelections": [],
+      "reasonCodes": [
+        "INTERVAL_DURATION_DECLARATION_INVALID"
+      ],
+      "receiptDigest": "f5ca01206078aaec15d23f283c445c2ade370c17c0e6565b1e449c5316ae638a",
+      "selectedRecordIds": {},
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {},
+      "caseId": "usdm-second-interval-unsupported",
+      "nonvalidSelections": [],
+      "reasonCodes": [
+        "USD_M_SECOND_INTERVAL_UNSUPPORTED"
+      ],
+      "receiptDigest": "ca712d3d9d5b3ac3297e8dbf7a7dca7437e0ff1072e7ef578f215564848da6db",
+      "selectedRecordIds": {},
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "duplicate-availability-clock-contradiction",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+          "reasonCodes": [
+            "CONTRADICTORY_ASOF_RECORDS"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "CONTRADICTORY_ASOF_RECORDS"
+      ],
+      "receiptDigest": "befd88c423774585e2ac5e74f22bbc11b48aad66f23e5d8012f6435a51b70bef",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "duplicate-availability-evidence-contradiction",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+          "reasonCodes": [
+            "CONTRADICTORY_ASOF_RECORDS"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "CONTRADICTORY_ASOF_RECORDS"
+      ],
+      "receiptDigest": "befd88c423774585e2ac5e74f22bbc11b48aad66f23e5d8012f6435a51b70bef",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "receipt:usdm-ws-mark-price:0002",
+          "2222222222222222222222222222222222222222222222222222222222222222"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "duplicate-availability-basis-contradiction",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:FUNDING:-",
+          "reasonCodes": [
+            "CONTRADICTORY_ASOF_RECORDS"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "CONTRADICTORY_ASOF_RECORDS"
+      ],
+      "receiptDigest": "288875767c1be11b519004cd9e64ea40510d3f8882e544c779101c33732e5f1b",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-": [
+          "mark-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "receipt:usdm-rest-exchange-info:0005",
+          "5555555555555555555555555555555555555555555555555555555555555555"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "receipt:usdm-rest-funding-info:0006",
+          "6666666666666666666666666666666666666666666666666666666666666666"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "receipt:usdm-rest-funding-history:0004",
+          "4444444444444444444444444444444444444444444444444444444444444444"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "receipt:usdm-ws-index-price:0003",
+          "3333333333333333333333333333333333333333333333333333333333333333"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "receipt:usdm-rest-mark-kline-1m:0007",
+          "7777777777777777777777777777777777777777777777777777777777777777"
+        ]
+      },
+      "caseId": "same-effective-sequence-payload-conflict",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+          "reasonCodes": [
+            "CONTRADICTORY_ASOF_RECORDS"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "CONTRADICTORY_ASOF_RECORDS"
+      ],
+      "receiptDigest": "befd88c423774585e2ac5e74f22bbc11b48aad66f23e5d8012f6435a51b70bef",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-": [
+          "exchange-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-": [
+          "funding-info-current"
+        ],
+        "BINANCE:USD_M:BTCUSDT:FUNDING:-": [
+          "settled-funding"
+        ],
+        "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-": [
+          "index-instant"
+        ],
+        "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC": [
+          "mark-kline-rest"
+        ]
+      },
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {},
+      "caseId": "cyclic-asof-dominance",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+          "reasonCodes": [
+            "ASOF_ORDER_CYCLE"
+          ],
+          "status": "UNKNOWN"
+        }
+      ],
+      "reasonCodes": [
+        "ASOF_ORDER_CYCLE"
+      ],
+      "receiptDigest": "68b22f016595bfb0ded21270804c88710d9de66b52d06754d9db76c92f38c8bd",
+      "selectedRecordIds": {},
+      "status": "UNKNOWN"
+    },
+    {
+      "availabilityEvidence": {},
+      "caseId": "fixed-daily-phase-invalid",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:SPOT:BTCUSDT:KLINE:1d@UTC",
+          "reasonCodes": [
+            "INTERVAL_PHASE_INVALID"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "INTERVAL_PHASE_INVALID"
+      ],
+      "receiptDigest": "35d427e1d3e530b81404faa50175c590b76626035c763b2022e7eecd68079d64",
+      "selectedRecordIds": {},
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {},
+      "caseId": "fixed-three-day-phase-invalid",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:SPOT:BTCUSDT:KLINE:3d@UTC+08:00",
+          "reasonCodes": [
+            "INTERVAL_PHASE_INVALID"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "INTERVAL_PHASE_INVALID"
+      ],
+      "receiptDigest": "929dd193ab1585d6ba18bf4d5e5aa9426a66a79c93b2ec625fc6c835294d5fab",
+      "selectedRecordIds": {},
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {},
+      "caseId": "fixed-weekly-phase-invalid",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:SPOT:BTCUSDT:KLINE:1w@UTC",
+          "reasonCodes": [
+            "INTERVAL_PHASE_INVALID"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "INTERVAL_PHASE_INVALID"
+      ],
+      "receiptDigest": "0fdcea9b2ee14cd30e9969b240def56ff75f5887b8f4cca6cfea5a5672bf1b05",
+      "selectedRecordIds": {},
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1M@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ]
+      },
+      "caseId": "calendar-month-utc-valid",
+      "nonvalidSelections": [],
+      "reasonCodes": [],
+      "receiptDigest": "d9cd71a3ca6d2d1544bcc7cc77a8c5eb3af4f57ce3e3e6b29a512021d9d5e65f",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1M@UTC": [
+          "spot-kline-final"
+        ]
+      },
+      "status": "VALID"
+    },
+    {
+      "availabilityEvidence": {},
+      "caseId": "calendar-month-shifted-zone-invalid",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:SPOT:BTCUSDT:KLINE:1M@UTC+08:00",
+          "reasonCodes": [
+            "INTERVAL_CALENDAR_EDGE_INVALID"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "INTERVAL_CALENDAR_EDGE_INVALID"
+      ],
+      "receiptDigest": "05f6075daa9426b45f7de0939c1ecbf62739d54e3dd96963611206e22cf7b468",
+      "selectedRecordIds": {},
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1d@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ]
+      },
+      "caseId": "archive-pre-cutover-ms-valid",
+      "nonvalidSelections": [],
+      "reasonCodes": [],
+      "receiptDigest": "fb2542e2368b1eafab06978817ce5c58ba0f2f95befda038e158da3454ab110f",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1d@UTC": [
+          "spot-kline-final"
+        ]
+      },
+      "status": "VALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ]
+      },
+      "caseId": "archive-post-cutover-us-valid",
+      "nonvalidSelections": [],
+      "reasonCodes": [],
+      "receiptDigest": "24229bc1411ed507e20d56530828d0f3b80b565845d6579b0d02b7a4b8b603b5",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC": [
+          "spot-kline-final"
+        ]
+      },
+      "status": "VALID"
+    },
+    {
+      "availabilityEvidence": {},
+      "caseId": "archive-pre-cutover-profile-after-cutover",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC",
+          "reasonCodes": [
+            "SPOT_ARCHIVE_UNIT_EPOCH_INVALID"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "SPOT_ARCHIVE_UNIT_EPOCH_INVALID"
+      ],
+      "receiptDigest": "d80c8479cbf8bce72538b610b96c2f843ceb0f302681a4871b3b836a5d0a43f3",
+      "selectedRecordIds": {},
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1d@UTC+08:00": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ]
+      },
+      "caseId": "spot-rest-shifted-zone-valid",
+      "nonvalidSelections": [],
+      "reasonCodes": [],
+      "receiptDigest": "49b16f6129b5191b3ed2cd07f88c221c9de4dfe54b6db9f928a71cfad5e49be7",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1d@UTC+08:00": [
+          "spot-kline-final"
+        ]
+      },
+      "status": "VALID"
+    },
+    {
+      "availabilityEvidence": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1d@UTC+08:00": [
+          "receipt:spot-ws-kline-1m:0001",
+          "1111111111111111111111111111111111111111111111111111111111111111"
+        ]
+      },
+      "caseId": "spot-ws-shifted-zone-documented",
+      "nonvalidSelections": [],
+      "reasonCodes": [],
+      "receiptDigest": "6e7552f65aa567f3e20e86239aadf97fcb478334797d81c8af70b0b685bf65c0",
+      "selectedRecordIds": {
+        "BINANCE:SPOT:BTCUSDT:KLINE:1d@UTC+08:00": [
+          "spot-kline-final"
+        ]
+      },
+      "status": "VALID"
+    },
+    {
+      "availabilityEvidence": {},
+      "caseId": "spot-archive-shifted-zone-invalid",
+      "nonvalidSelections": [
+        {
+          "keyId": "BINANCE:SPOT:BTCUSDT:KLINE:1d@UTC+08:00",
+          "reasonCodes": [
+            "SOURCE_INTERVAL_ZONE_CONTRADICTION"
+          ],
+          "status": "INVALID"
+        }
+      ],
+      "reasonCodes": [
+        "SOURCE_INTERVAL_ZONE_CONTRADICTION"
+      ],
+      "receiptDigest": "b33356c32434aa75855dfeb3b76c341dbcf52b4f74e7411bd611ea987748ea6a",
+      "selectedRecordIds": {},
+      "status": "INVALID"
+    },
+    {
+      "availabilityEvidence": {},
+      "caseId": "usdm-shifted-zone-unserviceable",
+      "nonvalidSelections": [],
+      "reasonCodes": [
+        "INTERVAL_ZONE_PROFILE_UNSERVICEABLE"
+      ],
+      "receiptDigest": "f8aa8ac6918486459ed6ab8566d0cec2ef8a91d9e59ead602a5809685cd034d6",
+      "selectedRecordIds": {},
+      "status": "INVALID"
+    }
+  ],
+  "consumerScope": [
+    "FUTURE_S1_VG",
+    "N3_FINAL_CONVERGENCE"
+  ],
+  "fixtureSchema": "cosmos.dq13.hostile-fixtures.v1",
+  "focusedTest": {
+    "command": [
+      "python",
+      "-B",
+      "-m",
+      "pytest",
+      "-c",
+      "research/dq13/pytest-proof.ini",
+      "--noconftest",
+      "-s",
+      "-q",
+      "-p",
+      "no:cacheprovider",
+      "-p",
+      "research.dq13.verify",
+      "research/dq13/test_validator.py"
+    ],
+    "conftestLoading": false,
+    "executedTestCount": 214,
+    "externalAddopts": false,
+    "externalPlugins": false,
+    "nodeIdOutcomeSha256": "97d34818379cafb23e863d2144fb46c851126277f89a42ba15cd1f7ab3e71b97",
+    "pluginAutoload": false,
+    "result": "PASS",
+    "testFileSha256": "b6c56f5a4dd501fca0ad3c5b30915ac83511016f5300e183fae7cbc20d1bad65"
+  },
+  "historicalReclassification": false,
+  "policySchema": "cosmos.dq13.causal-asof-policy.v1",
+  "schema": "cosmos.dq13.causal-asof-proof.v1",
+  "validReceipt": {
+    "authority": "NONE",
+    "consumerScope": [
+      "FUTURE_S1_VG",
+      "N3_FINAL_CONVERGENCE"
+    ],
+    "decisionBounds": {
+      "clockId": "local-capture",
+      "earliestUs": 1735689660003000,
+      "latestUs": 1735689660003000,
+      "resolutionUs": 1,
+      "sequence": 20
+    },
+    "decisionId": "decision-all-feeds",
+    "failurePath": null,
+    "fillBounds": {
+      "clockId": "local-capture",
+      "earliestUs": 1735689660004000,
+      "latestUs": 1735689660004000,
+      "resolutionUs": 1,
+      "sequence": 21
+    },
+    "historicalReclassification": false,
+    "reasonCodes": [],
+    "receiptDigest": "6a8d7e1d1a3c5dec3f183f0e04d406a57f14795b0129d77c25c322da2b67f4a9",
+    "schema": "cosmos.dq13.causal-asof-clock-receipt.v1",
+    "selections": [
+      {
+        "availabilityBasis": "OBSERVED_RECEIPT",
+        "availabilityBounds": {
+          "clockId": "local-capture",
+          "earliestUs": 1735689660000200,
+          "latestUs": 1735689660000200,
+          "resolutionUs": 1,
+          "sequence": 10
+        },
+        "availabilityEvidenceDigest": "1111111111111111111111111111111111111111111111111111111111111111",
+        "availabilityEvidenceId": "receipt:spot-ws-kline-1m:0001",
+        "eventBounds": {
+          "clockId": "binance-spot",
+          "earliestUs": 1735689660000100,
+          "latestUs": 1735689660000100,
+          "resolutionUs": 1,
+          "sequence": null
+        },
+        "intervalEndExclusiveUs": 1735689660000000,
+        "intervalOpenUs": 1735689600000000,
+        "keyId": "BINANCE:SPOT:BTCUSDT:KLINE:1m@UTC",
+        "maxAvailabilityAgeUs": 10000000,
+        "maxEventAgeUs": 120000000,
+        "reasonCodes": [],
+        "selectedPayloadDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "selectedRecordIds": [
+          "spot-kline-final"
+        ],
+        "sourceProfile": "SPOT_WS_KLINE_US",
+        "status": "VALID"
+      },
+      {
+        "availabilityBasis": "OBSERVED_RECEIPT",
+        "availabilityBounds": {
+          "clockId": "local-capture",
+          "earliestUs": 1735689660001500,
+          "latestUs": 1735689660001500,
+          "resolutionUs": 1,
+          "sequence": 14
+        },
+        "availabilityEvidenceDigest": "5555555555555555555555555555555555555555555555555555555555555555",
+        "availabilityEvidenceId": "receipt:usdm-rest-exchange-info:0005",
+        "eventBounds": null,
+        "intervalEndExclusiveUs": null,
+        "intervalOpenUs": null,
+        "keyId": "BINANCE:USD_M:BTCUSDT:CURRENT_EXCHANGE_INFO:-",
+        "maxAvailabilityAgeUs": 10000000,
+        "maxEventAgeUs": null,
+        "reasonCodes": [],
+        "selectedPayloadDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "selectedRecordIds": [
+          "exchange-info-current"
+        ],
+        "sourceProfile": "USDM_REST_EXCHANGE_INFO_MS",
+        "status": "VALID"
+      },
+      {
+        "availabilityBasis": "OBSERVED_RECEIPT",
+        "availabilityBounds": {
+          "clockId": "local-capture",
+          "earliestUs": 1735689660001600,
+          "latestUs": 1735689660001600,
+          "resolutionUs": 1,
+          "sequence": 15
+        },
+        "availabilityEvidenceDigest": "6666666666666666666666666666666666666666666666666666666666666666",
+        "availabilityEvidenceId": "receipt:usdm-rest-funding-info:0006",
+        "eventBounds": null,
+        "intervalEndExclusiveUs": null,
+        "intervalOpenUs": null,
+        "keyId": "BINANCE:USD_M:BTCUSDT:CURRENT_FUNDING_INFO:-",
+        "maxAvailabilityAgeUs": 10000000,
+        "maxEventAgeUs": null,
+        "reasonCodes": [],
+        "selectedPayloadDigest": "8888888888888888888888888888888888888888888888888888888888888888",
+        "selectedRecordIds": [
+          "funding-info-current"
+        ],
+        "sourceProfile": "USDM_REST_FUNDING_INFO_MS",
+        "status": "VALID"
+      },
+      {
+        "availabilityBasis": "OBSERVED_RECEIPT",
+        "availabilityBounds": {
+          "clockId": "local-capture",
+          "earliestUs": 1735689660001400,
+          "latestUs": 1735689660001400,
+          "resolutionUs": 1,
+          "sequence": 13
+        },
+        "availabilityEvidenceDigest": "4444444444444444444444444444444444444444444444444444444444444444",
+        "availabilityEvidenceId": "receipt:usdm-rest-funding-history:0004",
+        "eventBounds": {
+          "clockId": "binance-usdm",
+          "earliestUs": 1735689600000000,
+          "latestUs": 1735689600000999,
+          "resolutionUs": 1000,
+          "sequence": null
+        },
+        "intervalEndExclusiveUs": null,
+        "intervalOpenUs": null,
+        "keyId": "BINANCE:USD_M:BTCUSDT:FUNDING:-",
+        "maxAvailabilityAgeUs": 10000000,
+        "maxEventAgeUs": 120000000,
+        "reasonCodes": [],
+        "selectedPayloadDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "selectedRecordIds": [
+          "settled-funding"
+        ],
+        "sourceProfile": "USDM_REST_FUNDING_HISTORY_MS",
+        "status": "VALID"
+      },
+      {
+        "availabilityBasis": "OBSERVED_RECEIPT",
+        "availabilityBounds": {
+          "clockId": "local-capture",
+          "earliestUs": 1735689660001300,
+          "latestUs": 1735689660001300,
+          "resolutionUs": 1,
+          "sequence": 12
+        },
+        "availabilityEvidenceDigest": "3333333333333333333333333333333333333333333333333333333333333333",
+        "availabilityEvidenceId": "receipt:usdm-ws-index-price:0003",
+        "eventBounds": {
+          "clockId": "binance-usdm",
+          "earliestUs": 1735689660000000,
+          "latestUs": 1735689660000999,
+          "resolutionUs": 1000,
+          "sequence": null
+        },
+        "intervalEndExclusiveUs": null,
+        "intervalOpenUs": null,
+        "keyId": "BINANCE:USD_M:BTCUSDT:INDEX_PRICE:-",
+        "maxAvailabilityAgeUs": 10000000,
+        "maxEventAgeUs": 120000000,
+        "reasonCodes": [],
+        "selectedPayloadDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "selectedRecordIds": [
+          "index-instant"
+        ],
+        "sourceProfile": "USDM_WS_MARK_PRICE_MS",
+        "status": "VALID"
+      },
+      {
+        "availabilityBasis": "OBSERVED_RECEIPT",
+        "availabilityBounds": {
+          "clockId": "local-capture",
+          "earliestUs": 1735689660001200,
+          "latestUs": 1735689660001200,
+          "resolutionUs": 1,
+          "sequence": 11
+        },
+        "availabilityEvidenceDigest": "2222222222222222222222222222222222222222222222222222222222222222",
+        "availabilityEvidenceId": "receipt:usdm-ws-mark-price:0002",
+        "eventBounds": {
+          "clockId": "binance-usdm",
+          "earliestUs": 1735689660000000,
+          "latestUs": 1735689660000999,
+          "resolutionUs": 1000,
+          "sequence": null
+        },
+        "intervalEndExclusiveUs": null,
+        "intervalOpenUs": null,
+        "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:-",
+        "maxAvailabilityAgeUs": 10000000,
+        "maxEventAgeUs": 120000000,
+        "reasonCodes": [],
+        "selectedPayloadDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "selectedRecordIds": [
+          "mark-instant"
+        ],
+        "sourceProfile": "USDM_WS_MARK_PRICE_MS",
+        "status": "VALID"
+      },
+      {
+        "availabilityBasis": "OBSERVED_RECEIPT",
+        "availabilityBounds": {
+          "clockId": "local-capture",
+          "earliestUs": 1735689660001700,
+          "latestUs": 1735689660001700,
+          "resolutionUs": 1,
+          "sequence": 16
+        },
+        "availabilityEvidenceDigest": "7777777777777777777777777777777777777777777777777777777777777777",
+        "availabilityEvidenceId": "receipt:usdm-rest-mark-kline-1m:0007",
+        "eventBounds": null,
+        "intervalEndExclusiveUs": 1735689660000000,
+        "intervalOpenUs": 1735689600000000,
+        "keyId": "BINANCE:USD_M:BTCUSDT:MARK_PRICE:1m@UTC",
+        "maxAvailabilityAgeUs": 10000000,
+        "maxEventAgeUs": 120000000,
+        "reasonCodes": [],
+        "selectedPayloadDigest": "9999999999999999999999999999999999999999999999999999999999999999",
+        "selectedRecordIds": [
+          "mark-kline-rest"
+        ],
+        "sourceProfile": "USDM_REST_MARK_PRICE_KLINES_MS",
+        "status": "VALID"
+      }
+    ],
+    "status": "VALID"
+  }
+}

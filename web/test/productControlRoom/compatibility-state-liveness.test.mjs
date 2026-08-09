@@ -7,7 +7,7 @@ import {
   reduceCompatibilityStateTruth,
 } from '../../src/store.tsx';
 
-test('compatibility state remains explicit while delegated Dashboard consumes only canonical Product truth', async () => {
+test('compatibility state remains explicit while the owner Dashboard consumes canonical Product truth', async () => {
   const unavailable = reduceCompatibilityStateTruth(INITIAL_COMPATIBILITY_STATE_TRUTH, {
     kind: 'FAILURE',
     observedAtMs: 100,
@@ -46,7 +46,11 @@ test('compatibility state remains explicit while delegated Dashboard consumes on
   assert.match(risk, /STALE LAST-KNOWN/);
   assert.match(risk, /UNAVAILABLE/);
   assert.match(dashboard, /useProductControlRoomContext/);
-  assert.match(dashboard, /binding\.snapshot\?\.dashboard/);
-  assert.match(dashboard, /Material-event continuity is \$\{binding\.continuity\}/);
-  assert.doesNotMatch(dashboard, /stateStatus|STALE LAST-KNOWN|reduceCompatibilityStateTruth/);
+  assert.match(dashboard, /productBinding\.snapshot/);
+  assert.match(dashboard, /Product continuity \$\{productBinding\.continuity\}/);
+  // The owner page surfaces the compatibility-state truth itself rather than
+  // hiding it behind a delegate, but it must never re-derive the reducer.
+  assert.match(dashboard, /stateStatus !== 'CURRENT'/);
+  assert.match(dashboard, /STALE LAST-KNOWN/);
+  assert.doesNotMatch(dashboard, /reduceCompatibilityStateTruth/);
 });

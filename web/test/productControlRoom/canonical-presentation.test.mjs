@@ -137,9 +137,9 @@ test('all cockpit consumers render or delegate canonical supervisor presentation
   const combined = consumers.join('\n');
   assert.match(consumers[0], /productSnapshot\.canonicalCockpit\.watchmanOverall/);
   assert.match(consumers[0], /productSnapshot\.canonicalCockpit\.marketFeedReadiness/);
-  assert.match(consumers[1], /binding\.snapshot\?\.dashboard/);
-  assert.match(consumers[1], /<SystemDashboard/);
-  assert.doesNotMatch(consumers[1], /canonicalCockpit|strategyRuntime/);
+  assert.match(consumers[1], /productSnapshot\.canonicalCockpit\.strategyRuntime/);
+  assert.match(consumers[1], /productSnapshot\.canonicalCockpit\.marketFeedReadiness/);
+  assert.match(consumers[1], /component\?\.canonicalPresentation \?\? unavailablePosture/);
   assert.match(consumers[2], /productSnapshot\.canonicalCockpit\.strategyRuntime/);
   assert.match(consumers[3], /snapshot\.canonicalCockpit\.watchmanOverall/);
   // The retired floating launcher owned the component-presentation render; the

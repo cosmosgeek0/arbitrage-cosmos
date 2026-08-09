@@ -125,15 +125,15 @@ test('bottom-up pages keep native summaries ahead of canonical surface bands', a
   }
 
   const dashboard = await read('pages/Dashboard.tsx');
-  const taskIndex = dashboard.indexOf('className="dashboard-task"');
+  const summaryIndex = dashboard.indexOf('className="dcx-summary"');
   const adapterIndex = dashboard.indexOf('<ProductSurfaceAdapter surfaceId="dashboard" />');
-  const systemDashboardIndex = dashboard.indexOf('<SystemDashboard', adapterIndex);
-  assert.ok(taskIndex >= 0, 'Dashboard must retain its one native operator task');
-  assert.ok(adapterIndex > taskIndex, 'Dashboard must append its canonical surface after the native task');
-  assert.ok(systemDashboardIndex > adapterIndex, 'Dashboard must mount the surface band before the full canonical projection');
+  const nextIndex = dashboard.indexOf('className="dcx-section', adapterIndex);
+  assert.ok(summaryIndex >= 0, 'Dashboard must retain its native money summary');
+  assert.ok(adapterIndex > summaryIndex, 'Dashboard must append its canonical surface after the native summary');
+  assert.ok(nextIndex > adapterIndex, 'Dashboard must mount the surface band before the next native section');
 });
 
-test('account summary typography remains measured and retired Dashboard dcx selectors stay purged', async () => {
+test('account summary typography remains measured and the owner Dashboard keeps its dcx stylesheet', async () => {
   const [accountCss, dashboardCss, metricTilesCss] = await Promise.all([
     read('pages/Account.css'),
     read('pages/Dashboard.css'),
@@ -170,8 +170,10 @@ test('account summary typography remains measured and retired Dashboard dcx sele
   assert.match(accountCss, /\.accountx-summary article:nth-child\(n \+ 3\)\s*\{\s*border-top:\s*1px solid var\(--line-2\);\s*\}/);
   assert.match(accountCss, /\.accountx-summary article:nth-child\(n \+ 2\)\s*\{\s*border-top:\s*1px solid var\(--line-2\);\s*\}/);
 
-  assert.match(dashboardCss, /\.dashboard-page > \.sdx-page/);
-  assert.doesNotMatch(dashboardCss, /\.dcx-/);
+  assert.match(dashboardCss, /\.dcx-page/);
+  assert.match(dashboardCss, /\.dcx-summary/);
+  // The dcx namespace belongs to the Dashboard page alone; shared tile styling
+  // must not reach into it.
   assert.doesNotMatch(metricTilesCss, /\.dcx-/);
 });
 

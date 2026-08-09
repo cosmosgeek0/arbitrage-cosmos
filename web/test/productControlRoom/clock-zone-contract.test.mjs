@@ -34,7 +34,7 @@ test('canonical clock formatting honors the selected IANA zone independent of th
   assert.equal(tradingViewClockZone('America/New_York'), 'America/New_York');
 });
 
-test('Token and TradingView consume the clock-zone owner while Dashboard delegates age rendering', async () => {
+test('Token, TradingView, and Dashboard all render times through the clock-zone owner', async () => {
   const [token, chart, widget, dashboard] = await Promise.all([
     readFile(new URL('../../src/pages/TokenDetail.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../src/components/TradingViewChart.tsx', import.meta.url), 'utf8'),
@@ -55,6 +55,6 @@ test('Token and TradingView consume the clock-zone owner while Dashboard delegat
 
   assert.match(dashboard, /const \[nowMs, setNowMs\] = useState\(\(\) => Date\.now\(\)\)/);
   assert.match(dashboard, /window\.setInterval\(\(\) => setNowMs\(Date\.now\(\)\), 5_000\)/);
-  assert.match(dashboard, /<SystemDashboard[\s\S]*nowMs=\{nowMs\}/);
-  assert.doesNotMatch(dashboard, /formatClockZone|prefs\.clockZone|toLocaleTimeString/);
+  assert.match(dashboard, /formatClockZone\(event\.ts, prefs\.clockZone/);
+  assert.doesNotMatch(dashboard, /new Date\([^)]*\)\.toLocale(?:Time|Date)?String/);
 });

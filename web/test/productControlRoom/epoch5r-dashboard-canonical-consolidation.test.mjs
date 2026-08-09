@@ -7,18 +7,24 @@ const [dashboardSource, systemDashboardSource] = await Promise.all([
   readFile(new URL('../../src/features/systemDashboard/SystemDashboard.tsx', import.meta.url), 'utf8'),
 ]);
 
-test('Epoch 5R Dashboard admits only proven canonical supervisor truth', () => {
+test('Owner Dashboard admits only proven canonical supervisor truth', () => {
   assert.match(
     dashboardSource,
-    /const continuityProven = binding\.continuity === 'PROVEN'/,
+    /const productCurrent = retainedProductSnapshot !== null && productBinding\.continuity === 'PROVEN'/,
   );
   assert.match(
     dashboardSource,
-    /const dashboardSnapshot = continuityProven[\s\S]*\? binding\.snapshot\?\.dashboard \?\? null[\s\S]*: null/,
+    /const productSnapshot = productCurrent \? retainedProductSnapshot : null/,
+  );
+  // Engine values re-enter the page only when the canonical component is both
+  // operational and fresh; absence must not render as a measured zero.
+  assert.match(
+    dashboardSource,
+    /const basisStrategy = engineValuesCurrent\(basisComponent, rawBasisStrategy\) \? rawBasisStrategy : null/,
   );
   assert.match(
     dashboardSource,
-    /<SystemDashboard[\s\S]*snapshot=\{dashboardSnapshot\}[\s\S]*readOnlyProjection/,
+    /const volumeStrategy = engineValuesCurrent\(volumeComponent, rawVolumeStrategy\) \? rawVolumeStrategy : null/,
   );
   assert.match(dashboardSource, /ProductSurfaceAdapter/);
   assert.equal(
@@ -26,37 +32,27 @@ test('Epoch 5R Dashboard admits only proven canonical supervisor truth', () => {
     1,
     'Dashboard must retain its one registered canonical surface band',
   );
-  assert.doesNotMatch(dashboardSource, /\/api\/pnl|fetchJson|useDashboardSources|decodeDashboardPnlData/);
-  assert.doesNotMatch(
-    dashboardSource,
-    /projectPrivateRead|resolveMarketFreshness|privateRead|marketsUpdatedAt|privateAccountTruth/,
-  );
   assert.doesNotMatch(dashboardSource, /mutate=|lastReceipt=/);
 });
 
-test('Epoch 5R Dashboard exposes exactly one truthful page task routed to fills', () => {
-  assert.equal(
-    (dashboardSource.match(/data-dashboard-task/g) ?? []).length,
-    1,
-    'Dashboard must declare one page task',
-  );
-  assert.equal(
-    (dashboardSource.match(/<button\b/g) ?? []).length,
-    1,
-    'Dashboard must expose one page-local task control',
-  );
+test('Owner Dashboard exposes only navigation-effect page controls', () => {
+  assert.match(dashboardSource, /const open = \(page: Page\) => setPage\(page\)/);
   assert.equal(
     (dashboardSource.match(/setPage\(/g) ?? []).length,
     1,
-    'Dashboard task must have one navigation effect',
+    'Dashboard routes every page control through one navigation effect',
   );
-  assert.match(dashboardSource, /onClick=\{\(\) => setPage\('fills'\)\}/);
-  assert.match(dashboardSource, />\s*Review Account Fills\s*</);
-  assert.match(dashboardSource, /Review provider fill evidence/);
-  assert.match(dashboardSource, /read-only Account fills from symbol-scoped private-provider history/);
-  assert.match(dashboardSource, /does not place, cancel, or alter orders/);
-  assert.doesNotMatch(dashboardSource, /fills ledger/);
-  assert.doesNotMatch(dashboardSource, /setPage\('account'\)/);
+  for (const handler of dashboardSource.match(/onClick=\{[^}]*\}/g) ?? []) {
+    assert.match(
+      handler,
+      /open\(|setRange\(/,
+      `page control ${handler} must be navigation-only`,
+    );
+  }
+  assert.match(dashboardSource, /onClick=\{\(\) => open\('account'\)\}/);
+  assert.match(dashboardSource, />Review Fills </);
+  assert.doesNotMatch(dashboardSource, /<button[^>]*type="submit"/);
+  assert.doesNotMatch(dashboardSource, /method:\s*['"]POST['"]/);
 });
 
 test('Epoch 5R consolidation retains the complete canonical dashboard presentation', () => {

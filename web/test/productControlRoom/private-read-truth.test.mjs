@@ -1136,12 +1136,15 @@ test('mounted private-read surfaces consume one projection and retain no money-a
     read('styles.css'),
   ]);
   const combined = [account, dashboard, loans, health, header].join('\n');
-  for (const source of [account, loans, health, header]) {
+  for (const source of [account, dashboard, loans, health, header]) {
     assert.match(source, /projectPrivateRead/);
   }
-  assert.match(dashboard, /binding\.snapshot\?\.dashboard/);
-  assert.match(dashboard, /<SystemDashboard/);
-  assert.doesNotMatch(dashboard, /projectPrivateRead|privateRead|privateAccountTruth/);
+  assert.equal(
+    (dashboard.match(/projectPrivateRead\(/g) ?? []).length,
+    1,
+    'Dashboard consumes exactly one private-read projection',
+  );
+  assert.match(dashboard, /productBinding\.snapshot/);
   assert.match(store, /readPrivateReadStateField\(snapshot\)/);
   assert.match(store, /const privateReadGuard = projectPrivateReadGuard\(\{/);
   assert.match(store, /snapshot: privateReadClient\.snapshot/);
@@ -1174,15 +1177,19 @@ test('the private-account surfaces present the freshness guard and never invent 
     read('store.tsx'),
   ]);
 
-  for (const source of [account, loans, health]) {
+  for (const source of [account, dashboard, loans, health]) {
     assert.match(source, /freshness\.(?:label|reason|state)/);
   }
-  for (const source of [account, loans]) {
+  for (const source of [account, dashboard, loans]) {
     assert.match(source, /guardTone/, 'a stale snapshot must not keep a green source badge');
   }
-  assert.match(dashboard, /binding\.snapshot\?\.dashboard/);
-  assert.match(dashboard, /readOnlyProjection/);
-  assert.doesNotMatch(dashboard, /privatePresentation|Account Sync|guardTone/);
+  // The Dashboard money tiles withhold their numerics unless the private
+  // snapshot is CURRENT; a stale read renders a dash, never a stale figure.
+  assert.match(dashboard, /const privateValuesCurrent = privatePresentation\.freshness\.state === 'CURRENT'/);
+  assert.match(
+    dashboard,
+    /exactOrDash\(privateValuesCurrent \? privatePresentation\.spotAvailableUsdt : null\)/,
+  );
   assert.match(account, /position\.marginType \?\? 'Margin Mode Not Published'/);
   assert.match(account, /position\.leverage === null/);
   assert.doesNotMatch(account, /position\.leverage \?\? '1'|marginType \?\? 'cross'/i);

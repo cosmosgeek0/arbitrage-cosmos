@@ -16,7 +16,7 @@ import { apiErrorMessage, fetchJson } from '../lib/http';
 import { createSettledPoll } from '../lib/polling';
 import { tokenName } from '../lib/tokenNames';
 import { PillSelect, pageList, Star } from '../components/PillSelect';
-import { useOptionalSurface } from '../components/OptionalSurfaceGate';
+import { OptionalSurfaceSwitch, useOptionalSurface } from '../components/OptionalSurfaceGate';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import type { MarketRow } from '../types';
@@ -562,6 +562,7 @@ export function Markets() {
               <input aria-label="Search Markets" placeholder="Search" value={search} onChange={(event) => setSearch(event.target.value)} spellCheck={false} />
               {search && <button type="button" aria-label="Clear Search" onClick={() => setSearch('')}>×</button>}
             </label>
+            <OptionalSurfaceSwitch surfaceId="markets" />
           </div>
         </header>
 

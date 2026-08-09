@@ -359,6 +359,56 @@ test('sidebar switches are sibling controls and token discovery closes when Toke
   assert.match(header, /if \(e\.symbol && !tokenSurface\.enabled\) return/);
 });
 
+test('News, Calendar, Markets, and Token own one admitted-state switch in their page toolbar', async () => {
+  const [gate, news, calendar, markets, token] = await Promise.all([
+    read('components/OptionalSurfaceGate.tsx'),
+    read('pages/News.tsx'),
+    read('pages/CalendarPage.tsx'),
+    read('pages/Markets.tsx'),
+    read('pages/TokenDetail.tsx'),
+  ]);
+
+  const gateComponentStart = gate.indexOf('export function OptionalSurfaceGate');
+  const admittedStart = gate.indexOf('if (input.enabled)', gateComponentStart);
+  const closedStart = gate.indexOf('className="optional-surface-gate closed"');
+  assert.ok(admittedStart >= 0 && closedStart > admittedStart);
+  assert.doesNotMatch(
+    gate.slice(admittedStart, closedStart),
+    /OptionalSurfaceSwitch/,
+    'the generic admitted gate must not duplicate a page-owned switch',
+  );
+  assert.match(
+    gate.slice(closedStart),
+    /<OptionalSurfaceSwitch surfaceId=\{surfaceId\} \/>/,
+    'an OFF page must retain the recovery switch before its module mounts',
+  );
+
+  for (const [surface, source, wrapper] of [
+    ['news', news, 'lix-toolbar-tools'],
+    ['calendar', calendar, 'lix-toolbar-tools'],
+    ['markets', markets, 'mkx-tools'],
+    ['token', token, 'tkx-tools'],
+  ]) {
+    assert.match(
+      source,
+      /import \{[^}]*\bOptionalSurfaceSwitch\b[^}]*\} from '\.\.\/components\/OptionalSurfaceGate'/,
+    );
+    const toolbarStart = source.indexOf(`<div className="${wrapper}">`);
+    const toolbarEnd = source.indexOf('</header>', toolbarStart);
+    assert.ok(toolbarStart >= 0 && toolbarEnd > toolbarStart, `${surface} toolbar is missing`);
+    assert.match(
+      source.slice(toolbarStart, toolbarEnd),
+      new RegExp(`<OptionalSurfaceSwitch surfaceId="${surface}" \/>`),
+      `${surface} switch must live in its right-side page toolbar`,
+    );
+    assert.equal(
+      source.split(`<OptionalSurfaceSwitch surfaceId="${surface}" />`).length - 1,
+      1,
+      `${surface} page must render exactly one admitted-state switch`,
+    );
+  }
+});
+
 test('OFF clears optional enrichment and overlays without disabling passive Opportunities market truth', async () => {
   const [app, header, markets, opportunities, store] = await Promise.all([
     read('App.tsx'),

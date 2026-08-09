@@ -23,6 +23,7 @@ import {
   OptionalSurfaceControl,
   OptionalSurfaceOffError,
 } from '../src/services/optionalSurfaceControl.ts';
+import { createSourceLogoSource } from '../src/services/sourceLogo.ts';
 import {
   newsContextStatus,
 } from '../src/services/newsContext.ts';
@@ -284,6 +285,62 @@ test('one ON surface is isolated and OFF closes admission, aborts, and drains be
   }
 });
 
+test('News logo provider work is zero at default OFF and aborts without cache publication on OFF', async () => {
+  const { control } = harness();
+  let providerCalls = 0;
+  let providerStarted;
+  const started = new Promise((resolve) => {
+    providerStarted = resolve;
+  });
+  const source = createSourceLogoSource({
+    fetchImpl: (_url, init) => {
+      providerCalls += 1;
+      providerStarted();
+      const signal = init?.signal;
+      return new Promise((_resolve, reject) => {
+        const abort = () => reject(signal?.reason ?? new DOMException('aborted', 'AbortError'));
+        if (signal?.aborted) abort();
+        else signal?.addEventListener('abort', abort, { once: true });
+      });
+    },
+  });
+
+  assert.deepEqual(source.snapshot(), {
+    providerCalls: 0,
+    inFlight: 0,
+    cached: 0,
+    failures: 0,
+  });
+  assert.equal(providerCalls, 0);
+
+  await control.setEnabled('news', true);
+  const lease = control.acquire('news');
+  const lifecycle = {
+    cacheScope: 'news',
+    generation: lease.generation,
+    signal: lease.signal,
+  };
+  const work = source.load('example.com', 64, lifecycle);
+  await started;
+  assert.equal(providerCalls, 1);
+
+  const disabling = control.setEnabled('news', false);
+  await assert.rejects(
+    work,
+    (error) => error instanceof OptionalSurfaceOffError && error.surface === 'news',
+  );
+  lease.release();
+  const disabled = await disabling;
+
+  assert.equal(disabled.snapshot.phase, 'OFF');
+  assert.deepEqual(source.snapshot(), {
+    providerCalls: 1,
+    inFlight: 0,
+    cached: 0,
+    failures: 0,
+  });
+});
+
 test('Token REST work aborts on OFF and lifecycle caches never cross generations or seed retained core', async (t) => {
   const { control } = harness();
   const originalFetch = globalThis.fetch;
@@ -485,7 +542,7 @@ test('every mapped optional route crosses admission before handler work while co
   );
 });
 
-test('Token public-provider routes carry the admitted generation signal', () => {
+test('News logo and Token public-provider routes carry the admitted generation signal', () => {
   const lifecycleHelpers = sourceBetween(
     'type OptionalSurfaceRequestContext',
     '// Ambient bearer material cannot widen Phase 2 authority.',
@@ -498,6 +555,8 @@ test('Token public-provider routes carry the admitted generation signal', () => 
     'every Token REST cache must isolate lifecycle generations from retained core callers',
   );
 
+  assert.match(indexSource, /sourceLogoSource\.cached\(domain, size, lifecycle\)/);
+  assert.match(indexSource, /sourceLogoSource\.load\(domain, size, lifecycle\)/);
   assert.match(indexSource, /fetchMoneyFlow\(symbol, window, context\.signal\)/);
   assert.equal(
     indexSource.match(/fetchBookTicker\(symbol, lifecycle\)/g)?.length,

@@ -99,6 +99,7 @@ import {
   type OptionalSurfaceId,
   type OptionalSurfaceLease,
 } from './services/optionalSurfaceControl.js';
+import { createSourceLogoSource } from './services/sourceLogo.js';
 import { BasisRuntime } from './services/basisRuntime.js';
 import { VolumeRuntime } from './services/volumeRuntime.js';
 import {
@@ -206,17 +207,6 @@ const startupPublicSourceEgressAdmitted = publicSourceStartupEgressAdmitted();
 const PORT = resolveBindPort(process.env.PORT);
 const HOST = resolveBindHost(process.env.HOST);
 const CANONICAL_DELIVERY_MS = 2_000;
-const SOURCE_LOGO_TTL_MS = 24 * 60 * 60 * 1000;
-const SOURCE_LOGO_MAX_BYTES = 256 * 1024;
-const DIRECT_SOURCE_LOGOS: Record<string, string> = {
-  'financialjuice.com': 'https://www.financialjuice.com/favicon.ico',
-};
-type SourceLogoEntry = { ts: number; contentType: string; body: Buffer };
-const SOURCE_LOGO_CACHE_MAX = 256;
-const SOURCE_LOGO_FAILURE_TTL_MS = 60_000;
-const sourceLogoCache = new Map<string, SourceLogoEntry>();
-const sourceLogoInFlight = new Map<string, Promise<SourceLogoEntry>>();
-const sourceLogoFailures = new Map<string, number>();
 
 const { dataDir: canonicalDataDir } = DATA_DIR_AUTHORITY;
 // Environment bootstrap acquired both the normalized logical-path lease and
@@ -1059,6 +1049,7 @@ function legacyStateBuildStats(): Readonly<{
 const app = express();
 const operatorAccess = new OperatorAccess();
 const optionalSurfaceControl = new OptionalSurfaceControl();
+const sourceLogoSource = createSourceLogoSource();
 const createBookHub = () => new BookStreamHub((symbol) => engine.filters.has(symbol));
 let bookHub = createBookHub();
 const bookSurfaceLeases = new Map<WebSocket, Readonly<{
@@ -3568,90 +3559,17 @@ async function readBoundedJson<T>(response: Response, maximumBytes: number): Pro
   return JSON.parse(body.toString('utf8')) as T;
 }
 
-function sourceLogoType(body: Buffer): string | null {
-  if (body.length >= 8 && body.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
-  if (body.length >= 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) return 'image/jpeg';
-  if (body.length >= 12 && body.toString('ascii', 0, 4) === 'RIFF' && body.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
-  if (body.length >= 4 && body[0] === 0 && body[1] === 0 && body[2] === 1 && body[3] === 0) return 'image/x-icon';
-  return null;
-}
-
-function cachedSourceLogo(key: string): SourceLogoEntry | null {
-  const cached = sourceLogoCache.get(key);
-  if (!cached) return null;
-  if (Date.now() - cached.ts >= SOURCE_LOGO_TTL_MS) {
-    sourceLogoCache.delete(key);
-    return null;
-  }
-  sourceLogoCache.delete(key);
-  sourceLogoCache.set(key, cached);
-  return cached;
-}
-
-function rememberSourceLogo(key: string, entry: SourceLogoEntry): void {
-  sourceLogoCache.delete(key);
-  sourceLogoCache.set(key, entry);
-  while (sourceLogoCache.size > SOURCE_LOGO_CACHE_MAX) {
-    const oldest = sourceLogoCache.keys().next().value as string | undefined;
-    if (!oldest) break;
-    sourceLogoCache.delete(oldest);
-  }
-}
-
-async function loadSourceLogo(domain: string, size: number): Promise<SourceLogoEntry> {
-  if (deterministicOfflinePublicSourcesEnabled()) throw new Error('source logo unavailable');
-  const key = `${domain}:${size}`;
-  const cached = cachedSourceLogo(key);
-  if (cached) return cached;
-  const failedAt = sourceLogoFailures.get(key) ?? 0;
-  if (Date.now() - failedAt < SOURCE_LOGO_FAILURE_TTL_MS) throw new Error('source logo is cooling down');
-  const existing = sourceLogoInFlight.get(key);
-  if (existing) return existing;
-
-  const request = (async () => {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 5_000);
-    try {
-      const faviconUrl = DIRECT_SOURCE_LOGOS[domain] ?? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=${size}`;
-      const upstream = await fetch(faviconUrl, {
-        headers: { Accept: 'image/avif,image/webp,image/png,image/jpeg,image/x-icon,*/*;q=0.5' },
-        signal: ctrl.signal,
-        redirect: 'error',
-      });
-      if (!upstream.ok) throw new Error(`favicon HTTP ${upstream.status}`);
-      const body = await readBoundedBody(upstream, SOURCE_LOGO_MAX_BYTES);
-      const contentType = sourceLogoType(body);
-      if (!contentType) throw new Error('unsupported favicon payload');
-      const entry = { ts: Date.now(), contentType, body };
-      rememberSourceLogo(key, entry);
-      sourceLogoFailures.delete(key);
-      return entry;
-    } catch (error) {
-      sourceLogoFailures.set(key, Date.now());
-      while (sourceLogoFailures.size > SOURCE_LOGO_CACHE_MAX) {
-        const oldest = sourceLogoFailures.keys().next().value as string | undefined;
-        if (!oldest) break;
-        sourceLogoFailures.delete(oldest);
-      }
-      throw error;
-    } finally {
-      clearTimeout(timer);
-    }
-  })().finally(() => sourceLogoInFlight.delete(key));
-  sourceLogoInFlight.set(key, request);
-  return request;
-}
-
 app.get('/api/source-logo', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'news');
+    const lifecycle = binanceRestLifecycle(context);
     const domain = normalizeLogoDomain(String(req.query.domain ?? ''));
     const size = integerQuery(req.query.sz, 64, 16, 128);
     if (!domain || size === null) {
       res.status(400).json({ error: 'valid domain and integer size required' });
       return;
     }
-    const key = `${domain}:${size}`;
-    const cached = cachedSourceLogo(key);
+    const cached = sourceLogoSource.cached(domain, size, lifecycle);
     if (cached) {
       res.setHeader('Cache-Control', 'private, no-store');
       res.type(cached.contentType);
@@ -3660,11 +3578,12 @@ app.get('/api/source-logo', (req, res) => {
     }
 
     try {
-      const entry = await loadSourceLogo(domain, size);
+      const entry = await sourceLogoSource.load(domain, size, lifecycle);
       res.setHeader('Cache-Control', 'private, no-store');
       res.type(entry.contentType);
       res.send(entry.body);
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       const message = err instanceof Error ? err.message : String(err);
       // The first upstream failure is observable; repeated browser image
       // retries during the negative-cache window are expected and must not

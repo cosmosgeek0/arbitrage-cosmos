@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { FileText, Globe2, Grid2X2, Search, Star as StarIcon, X } from 'lucide-react';
 import { resolveMarketFreshness, useStore } from '../store';
 import { TokenIcon } from '../components/TokenIcon';
-import { useOptionalSurface } from '../components/OptionalSurfaceGate';
+import { OptionalSurfaceSwitch, useOptionalSurface } from '../components/OptionalSurfaceGate';
 import { projectMarketConsumerTruth } from '../components/Header';
 import { PillSelect } from '../components/PillSelect';
 import { normalizeTvCandles, type TvCandle } from '../components/TradingViewChart';
@@ -1824,6 +1824,7 @@ export function TokenDetail({ symbol }: { symbol: string }) {
             {profile?.homepage ? <a className="tkx-icon-button" href={profile.homepage} target="_blank" rel="noreferrer noopener" aria-label="Official Website" title="Official Website"><Globe2 size={16} /></a> : null}
             {profile?.whitepaper ? <a className="tkx-icon-button" href={profile.whitepaper} target="_blank" rel="noreferrer noopener" aria-label="Whitepaper" title="Whitepaper"><FileText size={16} /></a> : null}
             <button type="button" className="tkx-markets" onClick={() => setPage('markets')}><Grid2X2 size={14} />All Markets</button>
+            <OptionalSurfaceSwitch surfaceId="token" />
           </div>
         </header>
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { IconSearch } from '../components/Icons';
+import { OptionalSurfaceSwitch } from '../components/OptionalSurfaceGate';
 import { PillSelect } from '../components/PillSelect';
 import { CALENDAR_COUNTRIES, calVal, categoryName, countryName, flag, type CalItem } from '../lib/calendar';
 import { liveAge } from '../format';
@@ -435,11 +436,14 @@ export function CalendarPage() {
           <h1>Economic Calendar</h1>
           <CalendarFeedStatus presentation={feedPresentation} fetchedAt={feed.fetchedAt} />
         </div>
-        <label className="lix-search">
-          <IconSearch size={15} />
-          <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" spellCheck={false} />
-          {query && <button type="button" aria-label="Clear Search" onClick={() => setQuery('')}>×</button>}
-        </label>
+        <div className="lix-toolbar-tools">
+          <label className="lix-search">
+            <IconSearch size={15} />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" spellCheck={false} />
+            {query && <button type="button" aria-label="Clear Search" onClick={() => setQuery('')}>×</button>}
+          </label>
+          <OptionalSurfaceSwitch surfaceId="calendar" />
+        </div>
       </header>
 
       <section className="calx-navigation" aria-label="Calendar Navigation">

@@ -3,6 +3,7 @@ import { useStore, type Page } from '../store';
 import { TokenIcon } from './TokenIcon';
 import { IconSearch } from './Icons';
 import { fmtPrice, fmtPct, signClass } from '../format';
+import { useOptionalSurface } from './OptionalSurfaceGate';
 
 const PAGES: { page: Page; name: string; sub: string }[] = [
   { page: 'dashboard', name: 'Dashboard', sub: 'Operator overview' },
@@ -38,6 +39,7 @@ export function Palette() {
     setPage,
     openDetail,
   } = useStore();
+  const tokenSurface = useOptionalSurface('token');
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -70,11 +72,13 @@ export function Palette() {
     const pages = PAGES.filter(
       (p) => !query || p.name.toUpperCase().includes(query) || p.sub.toUpperCase().includes(query)
     ).slice(0, query ? 4 : 5);
-    const syms = query
-      ? markets.filter((m) => m.symbol.includes(query) || m.base.includes(query)).slice(0, 8)
-      : markets.slice(0, 6);
+    const syms = tokenSurface.enabled
+      ? query
+        ? markets.filter((m) => m.symbol.includes(query) || m.base.includes(query)).slice(0, 8)
+        : markets.slice(0, 6)
+      : [];
     return { pages, syms };
-  }, [q, markets]);
+  }, [q, markets, tokenSurface.enabled]);
 
   if (!paletteOpen) return null;
 
@@ -89,7 +93,7 @@ export function Palette() {
     if (!f) return;
     setPaletteOpen(false);
     if (f.kind === 'page') setPage(results.pages[f.idx].page);
-    else openDetail(results.syms[f.idx].symbol);
+    else if (tokenSurface.enabled) openDetail(results.syms[f.idx].symbol);
   };
 
   return (
@@ -100,7 +104,7 @@ export function Palette() {
           <input
             ref={inputRef}
             className="cmd-input"
-            placeholder="Search tokens or pages…"
+            placeholder={tokenSurface.enabled ? 'Search tokens or pages…' : 'Search pages…'}
             value={q}
             onChange={(e) => {
               setQ(e.target.value);

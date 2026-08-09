@@ -44,6 +44,7 @@ import {
   fetchKlineCandles,
   fetchKlines,
   fetchTrades,
+  type BinanceRestLifecycleContext,
   type BookTicker,
   type Futures24hTicker,
 } from './binance/rest.js';
@@ -54,9 +55,25 @@ import {
   rateLimit,
 } from './binance/client.js';
 import { BinancePrivateReadClient } from './binance/privateReadClient.js';
-import { resolveIcons, STOCK_TOKENS } from './binance/icons.js';
-import { tokenProfile, warmAllProfiles, profileWarmStatus } from './binance/profile.js';
-import { fetchMoneyFlow, FLOW_WINDOWS } from './binance/moneyflow.js';
+import {
+  resolveIcons,
+  startIconSource,
+  stopIconSource,
+  STOCK_TOKENS,
+} from './binance/icons.js';
+import {
+  tokenProfile,
+  warmAllProfiles,
+  profileWarmStatus,
+  startProfileSource,
+  stopProfileSource,
+} from './binance/profile.js';
+import {
+  fetchMoneyFlow,
+  FLOW_WINDOWS,
+  startMoneyFlow,
+  stopMoneyFlow,
+} from './binance/moneyflow.js';
 import {
   deterministicOfflinePublicSourcesEnabled,
   publicSourceStartupEgressAdmitted,
@@ -74,6 +91,15 @@ import { PrivateReadService } from './services/privateRead.js';
 import { RiskService } from './services/risk.js';
 import { OrderService } from './services/orders.js';
 import { BookStreamHub } from './services/bookStream.js';
+import {
+  OPTIONAL_SURFACE_IDS,
+  OptionalSurfaceControl,
+  OptionalSurfaceOffError,
+  isOptionalSurfaceId,
+  type OptionalSurfaceId,
+  type OptionalSurfaceLease,
+} from './services/optionalSurfaceControl.js';
+import { createSourceLogoSource } from './services/sourceLogo.js';
 import { BasisRuntime } from './services/basisRuntime.js';
 import { VolumeRuntime } from './services/volumeRuntime.js';
 import {
@@ -181,17 +207,6 @@ const startupPublicSourceEgressAdmitted = publicSourceStartupEgressAdmitted();
 const PORT = resolveBindPort(process.env.PORT);
 const HOST = resolveBindHost(process.env.HOST);
 const CANONICAL_DELIVERY_MS = 2_000;
-const SOURCE_LOGO_TTL_MS = 24 * 60 * 60 * 1000;
-const SOURCE_LOGO_MAX_BYTES = 256 * 1024;
-const DIRECT_SOURCE_LOGOS: Record<string, string> = {
-  'financialjuice.com': 'https://www.financialjuice.com/favicon.ico',
-};
-type SourceLogoEntry = { ts: number; contentType: string; body: Buffer };
-const SOURCE_LOGO_CACHE_MAX = 256;
-const SOURCE_LOGO_FAILURE_TTL_MS = 60_000;
-const sourceLogoCache = new Map<string, SourceLogoEntry>();
-const sourceLogoInFlight = new Map<string, Promise<SourceLogoEntry>>();
-const sourceLogoFailures = new Map<string, number>();
 
 const { dataDir: canonicalDataDir } = DATA_DIR_AUTHORITY;
 // Environment bootstrap acquired both the normalized logical-path lease and
@@ -1033,6 +1048,71 @@ function legacyStateBuildStats(): Readonly<{
 
 const app = express();
 const operatorAccess = new OperatorAccess();
+const optionalSurfaceControl = new OptionalSurfaceControl();
+const sourceLogoSource = createSourceLogoSource();
+const createBookHub = () => new BookStreamHub((symbol) => engine.filters.has(symbol));
+let bookHub = createBookHub();
+const bookSurfaceLeases = new Map<WebSocket, Readonly<{
+  hub: BookStreamHub;
+  lease: OptionalSurfaceLease;
+}>>();
+
+function validBookSubscriptionSymbol(raw: unknown): string | null {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const message = raw as Record<string, unknown>;
+  if (message.type !== 'sub-book' || typeof message.symbol !== 'string') return null;
+  const symbol = message.symbol.toUpperCase();
+  if (!/^[A-Z0-9]{5,20}$/.test(symbol)) return null;
+  try {
+    return engine.filters.has(symbol) ? symbol : null;
+  } catch {
+    return null;
+  }
+}
+
+function releaseBookSubscription(ws: WebSocket): void {
+  const binding = bookSurfaceLeases.get(ws);
+  if (!binding) {
+    bookHub.drop(ws);
+    return;
+  }
+  binding.hub.drop(ws);
+  bookSurfaceLeases.delete(ws);
+  binding.lease.release();
+}
+
+function handleBookStreamMessage(ws: WebSocket, raw: unknown): void {
+  if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
+    const message = raw as Record<string, unknown>;
+    if (message.type === 'unsub-book') {
+      releaseBookSubscription(ws);
+      return;
+    }
+  }
+
+  if (validBookSubscriptionSymbol(raw) !== null && !bookSurfaceLeases.has(ws)) {
+    let lease: OptionalSurfaceLease;
+    try {
+      lease = optionalSurfaceControl.acquire('token');
+    } catch (error) {
+      if (error instanceof OptionalSurfaceOffError) return;
+      throw error;
+    }
+    bookSurfaceLeases.set(ws, Object.freeze({ hub: bookHub, lease }));
+  }
+  (bookSurfaceLeases.get(ws)?.hub ?? bookHub).handleMessage(ws, raw);
+}
+
+function resetBookStreamRuntime(): void {
+  const drainingHub = bookHub;
+  drainingHub.stop();
+  for (const [ws, binding] of bookSurfaceLeases) {
+    binding.hub.drop(ws);
+    bookSurfaceLeases.delete(ws);
+    binding.lease.release();
+  }
+  bookHub = createBookHub();
+}
 app.disable('x-powered-by');
 app.disable('etag');
 
@@ -1133,18 +1213,31 @@ registerI00HealthRoutes(app, Object.freeze({
 }));
 
 function runAsync(res: express.Response, task: () => Promise<void>): void {
-  void task().catch((error) => {
-    try {
-      ledger.logEvent('error_event', null, { source: 'http.async', message: error instanceof Error ? error.message : String(error) });
-    } catch {
-      // Response containment must not depend on the event sink being healthy.
-    }
-    if (!res.headersSent) {
-      res.status(500).json({ ok: false, code: 'REQUEST_FAILED', error: 'Request could not be completed.' });
-    } else {
-      res.end();
-    }
-  });
+  const release = res.locals.optionalSurfaceRelease as (() => void) | undefined;
+  if (release) res.locals.optionalSurfaceAsyncPending = true;
+  void task()
+    .catch((error) => {
+      if (!(error instanceof OptionalSurfaceOffError)) {
+        try {
+          ledger.logEvent('error_event', null, { source: 'http.async', message: error instanceof Error ? error.message : String(error) });
+        } catch {
+          // Response containment must not depend on the event sink being healthy.
+        }
+      }
+      if (!res.headersSent) {
+        const shed = error instanceof OptionalSurfaceOffError;
+        res.status(shed ? 503 : 500).json(shed
+          ? { ok: false, code: error.code, surface: error.surface, error: error.message }
+          : { ok: false, code: 'REQUEST_FAILED', error: 'Request could not be completed.' });
+      } else {
+        res.end();
+      }
+    })
+    .finally(() => {
+      if (!release) return;
+      res.locals.optionalSurfaceAsyncPending = false;
+      release();
+    });
 }
 
 // Compression is applied per-route to the few large JSON reads, never as app
@@ -1318,6 +1411,198 @@ function notificationRoutingSnapshot() {
 
 // Every mounted API route shares one operator admission boundary.
 app.use('/api', operatorAccess.middleware());
+
+app.get('/api/optional-surfaces', (req, res) => {
+  if (Object.keys(req.query).length !== 0) {
+    res.status(400).json({
+      ok: false,
+      code: 'INVALID_OPTIONAL_SURFACE_QUERY',
+      error: 'Optional surface policy does not accept query parameters.',
+    });
+    return;
+  }
+  res.json({ surfaces: optionalSurfaceControl.snapshots() });
+});
+
+app.put('/api/optional-surfaces/:surface', (req, res) => {
+  runAsync(res, async () => {
+    const surface = String(req.params.surface ?? '');
+    if (!isOptionalSurfaceId(surface)) {
+      res.status(400).json({
+        ok: false,
+        code: 'INVALID_OPTIONAL_SURFACE',
+        error: `Optional surface must be one of: ${OPTIONAL_SURFACE_IDS.join(', ')}.`,
+      });
+      return;
+    }
+    if (!req.is('application/json')) {
+      res.status(415).json({
+        ok: false,
+        code: 'UNSUPPORTED_MEDIA_TYPE',
+        error: 'Optional surface changes require application/json.',
+      });
+      return;
+    }
+    const body = req.body as Record<string, unknown> | null;
+    if (body === null
+        || Array.isArray(body)
+        || typeof body !== 'object'
+        || Object.keys(body).length !== 1
+        || typeof body.enabled !== 'boolean') {
+      res.status(400).json({
+        ok: false,
+        code: 'INVALID_OPTIONAL_SURFACE_REQUEST',
+        error: 'Request body must be exactly {"enabled": boolean}.',
+      });
+      return;
+    }
+    const result = await optionalSurfaceControl.setEnabled(surface, body.enabled);
+    res.status(result.snapshot.phase === 'FAILED' ? 503 : 200).json(result);
+  });
+});
+
+function optionalSurfaceForRequest(pathname: string): OptionalSurfaceId | null {
+  if (pathname === '/api/events' || pathname === '/api/events/count') return 'logs';
+  if (pathname === '/api/calendar' || pathname === '/api/calendar/refresh') return 'calendar';
+  if (pathname === '/api/news'
+      || pathname === '/api/news/refresh'
+      || pathname === '/api/news-context'
+      || pathname === '/api/news-context/refresh'
+      || pathname === '/api/news-stream'
+      || pathname === '/api/source-logo') return 'news';
+  if (pathname === '/api/markets/enrichment') return 'markets';
+  if (pathname.startsWith('/api/token/')
+      || pathname === '/api/intelligence/token'
+      || pathname === '/api/market/detail'
+      || pathname === '/api/market/quote'
+      || pathname === '/api/market/depth'
+      || pathname === '/api/market/trades'
+      || pathname === '/api/klines'
+      || pathname === '/api/candles'
+      || pathname === '/api/funding/history'
+      || pathname === '/api/futures/telemetry'
+      || pathname === '/api/futures/funding-hist'
+      || pathname === '/api/futures/liquidations'
+      || pathname === '/api/futures/liquidations/stats'
+      || pathname === '/api/futures/oi-hist'
+      || pathname === '/api/futures/basis-hist'
+      || pathname === '/api/symbol/context') return 'token';
+  return null;
+}
+
+function canonicalOptionalSurfacePath(pathname: string): string {
+  const canonical = pathname.toLowerCase().replace(/\/+$/u, '');
+  return canonical.length === 0 ? '/' : canonical;
+}
+
+type IconSurfaceOwner = 'token' | 'markets';
+
+function iconSurfaceOwner(value: unknown): IconSurfaceOwner | null {
+  return value === 'token' || value === 'markets' ? value : null;
+}
+
+app.use('/api', (req, res, next) => {
+  const pathname = canonicalOptionalSurfacePath(`/api${req.path === '/' ? '' : req.path}`);
+  const mappedSurface = optionalSurfaceForRequest(pathname);
+  const requestedIconOwner = pathname === '/api/icons'
+    ? iconSurfaceOwner(req.query.owner)
+    : null;
+  if (pathname === '/api/icons' && requestedIconOwner === null) {
+    res.status(400).json({
+      ok: false,
+      code: 'INVALID_ICON_OWNER',
+      error: 'Icon requests require exactly one owner: token or markets.',
+    });
+    return;
+  }
+  const candidateSurfaces: readonly OptionalSurfaceId[] = requestedIconOwner !== null
+    ? [requestedIconOwner]
+    : mappedSurface === null
+      ? []
+      : [mappedSurface];
+  if (candidateSurfaces.length === 0) {
+    next();
+    return;
+  }
+
+  let lease: OptionalSurfaceLease | null = null;
+  for (const surface of candidateSurfaces) {
+    try {
+      lease = optionalSurfaceControl.acquire(surface);
+      break;
+    } catch (error) {
+      if (!(error instanceof OptionalSurfaceOffError)) {
+        next(error);
+        return;
+      }
+    }
+  }
+  if (lease === null) {
+    const surface = candidateSurfaces.join('|');
+    res.status(503).json({
+      ok: false,
+      code: 'OPTIONAL_SURFACE_OFF',
+      surface,
+      error: `${candidateSurfaces.join(' or ')} is off; enable at least one authoritative control-room surface first.`,
+    });
+    return;
+  }
+  res.locals.optionalSurface = Object.freeze({
+    id: lease.id,
+    generation: lease.generation,
+    signal: lease.signal,
+  });
+  let released = false;
+  const release = () => {
+    if (released) return;
+    released = true;
+    lease.release();
+  };
+  res.locals.optionalSurfaceRelease = release;
+  res.locals.optionalSurfaceAsyncPending = false;
+  res.once('finish', release);
+  res.once('close', () => {
+    if (res.locals.optionalSurfaceAsyncPending !== true) release();
+  });
+  next();
+});
+
+type OptionalSurfaceRequestContext<T extends OptionalSurfaceId = OptionalSurfaceId> = Readonly<{
+  id: T;
+  generation: number;
+  signal: AbortSignal;
+}>;
+
+function assertOptionalSurfaceRequestActive(
+  context: OptionalSurfaceRequestContext,
+): void {
+  const snapshot = optionalSurfaceControl.snapshot(context.id);
+  if (context.signal.aborted
+      || !optionalSurfaceControl.enabled(context.id)
+      || snapshot.generation !== context.generation) {
+    throw new OptionalSurfaceOffError(context.id);
+  }
+}
+
+function requireOptionalSurfaceRequest<T extends OptionalSurfaceId>(
+  res: express.Response,
+  surface: T,
+): OptionalSurfaceRequestContext<T> {
+  const context = res.locals.optionalSurface as OptionalSurfaceRequestContext<T> | undefined;
+  if (!context || context.id !== surface) throw new OptionalSurfaceOffError(surface);
+  assertOptionalSurfaceRequestActive(context);
+  return context;
+}
+
+function binanceRestLifecycle(
+  context: OptionalSurfaceRequestContext,
+): Readonly<BinanceRestLifecycleContext> {
+  return Object.freeze({
+    cacheScope: context.id,
+    generation: context.generation,
+    signal: context.signal,
+  });
+}
 
 // Ambient bearer material cannot widen Phase 2 authority. This route remains
 // present only as an explicit owner-gated boundary and performs no
@@ -1904,11 +2189,17 @@ const NEWS_CATALOGS = new Set([48, 49, 93, 50, 161, 157, 51, 128]);
 const NEWS_AGGREGATE_CATALOGS = [48, 49, 93, 50, 161, 157, 51, 128];
 const newsCache = new Map<number, { at: number; items: NewsItem[] }>();
 const newsInFlight = new Map<number, Promise<boolean>>();
+const newsCatalogControllers = new Set<AbortController>();
 
 async function refreshNews(catalogId: number): Promise<void> {
   if (deterministicOfflinePublicSourcesEnabled()) throw new Error('binance announcements unavailable');
+  const lifecycleSignal = optionalSurfaceControl.signal('news');
+  if (lifecycleSignal.aborted) throw new OptionalSurfaceOffError('news');
   const url = `https://www.binance.com/bapi/apex/v1/public/apex/cms/article/catalog/list/query?catalogId=${catalogId}&pageNo=1&pageSize=16`;
   const ctrl = new AbortController();
+  const abortForLifecycle = () => ctrl.abort(lifecycleSignal.reason);
+  lifecycleSignal.addEventListener('abort', abortForLifecycle, { once: true });
+  newsCatalogControllers.add(ctrl);
   const timer = setTimeout(() => ctrl.abort(), 10_000);
   try {
     const res = await fetch(url, {
@@ -1918,6 +2209,9 @@ async function refreshNews(catalogId: number): Promise<void> {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await readBoundedJson<{ data?: { articles?: { id: number; code: string; title: string }[] } }>(res, 512 * 1024);
+    if (ctrl.signal.aborted || lifecycleSignal.aborted || !optionalSurfaceControl.enabled('news')) {
+      throw new OptionalSurfaceOffError('news');
+    }
     const items: NewsItem[] = (json.data?.articles ?? []).map((a) => {
       const m = a.title.match(/\s*\((\d{4}-\d{2}-\d{2})\)\s*$/);
       const title = m ? a.title.slice(0, m.index).trim() : a.title.trim();
@@ -1932,6 +2226,8 @@ async function refreshNews(catalogId: number): Promise<void> {
     newsCache.set(catalogId, { at: Date.now(), items });
   } finally {
     clearTimeout(timer);
+    lifecycleSignal.removeEventListener('abort', abortForLifecycle);
+    newsCatalogControllers.delete(ctrl);
   }
 }
 
@@ -1949,7 +2245,9 @@ async function ensureNewsCatalog(catalogId: number, force: boolean): Promise<boo
     const p = refreshNews(catalogId)
       .then(() => true)
       .catch((err) => {
-        safeLogEvent('error_event', null, { source: 'news.fetch', message: String(err), catalogId });
+        if (optionalSurfaceControl.enabled('news')) {
+          safeLogEvent('error_event', null, { source: 'news.fetch', message: String(err), catalogId });
+        }
         return false;
       })
       .finally(() => newsInFlight.delete(catalogId));
@@ -2080,6 +2378,7 @@ app.post('/api/news-context/refresh', (req, res) => {
 
 let newsStreamClients = 0;
 const NEWS_STREAM_MAX_CLIENTS = 16;
+const newsStreamClosers = new Set<() => void>();
 
 app.get('/api/news-stream', (req, res) => {
   const limit = integerQuery(req.query.limit, 220, 20, 600);
@@ -2123,7 +2422,13 @@ app.get('/api/news-stream', (req, res) => {
     newsStreamClients--;
     clearInterval(heartbeat);
     unsubscribe();
+    newsStreamClosers.delete(terminate);
   };
+  const terminate = () => {
+    if (!closed) res.end();
+    close();
+  };
+  newsStreamClosers.add(terminate);
   req.on('close', close);
   res.on('close', close);
 });
@@ -2137,9 +2442,12 @@ type CalItem = {
 };
 let calCache: { at: number; items: CalItem[] } | null = null;
 let calInFlight: Promise<boolean> | null = null;
+const calendarControllers = new Set<AbortController>();
 
 async function refreshCalendar(): Promise<void> {
   if (deterministicOfflinePublicSourcesEnabled()) throw new Error('calendar unavailable');
+  const lifecycleSignal = optionalSurfaceControl.signal('calendar');
+  if (lifecycleSignal.aborted) throw new OptionalSurfaceOffError('calendar');
   const now = new Date();
   const day = now.getDay();
   const mondayOffset = day === 0 ? -6 : 1 - day;
@@ -2149,6 +2457,9 @@ async function refreshCalendar(): Promise<void> {
   const countries = 'US,EU,GB,JP,CN,IN,DE,CA,AU,FR,KR,ID,TR,IT,MX,BR,CH,NZ,ZA,SA';
   const url = `https://economic-calendar.tradingview.com/events?from=${from}&to=${to}&countries=${countries}`;
   const ctrl = new AbortController();
+  const abortForLifecycle = () => ctrl.abort(lifecycleSignal.reason);
+  lifecycleSignal.addEventListener('abort', abortForLifecycle, { once: true });
+  calendarControllers.add(ctrl);
   const timer = setTimeout(() => ctrl.abort(), 10_000);
   try {
     const res = await fetch(url, {
@@ -2158,6 +2469,9 @@ async function refreshCalendar(): Promise<void> {
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await readBoundedJson<{ result?: Record<string, unknown>[] }>(res, 2 * 1024 * 1024);
+    if (ctrl.signal.aborted || lifecycleSignal.aborted || !optionalSurfaceControl.enabled('calendar')) {
+      throw new OptionalSurfaceOffError('calendar');
+    }
     const items: CalItem[] = (json.result ?? []).map((e) => ({
       id: String(e.id),
       title: String(e.title ?? ''),
@@ -2180,6 +2494,8 @@ async function refreshCalendar(): Promise<void> {
     calCache = { at: Date.now(), items };
   } finally {
     clearTimeout(timer);
+    lifecycleSignal.removeEventListener('abort', abortForLifecycle);
+    calendarControllers.delete(ctrl);
   }
 }
 
@@ -2188,7 +2504,9 @@ function startCalendarRefresh(): Promise<boolean> {
     calInFlight = refreshCalendar()
       .then(() => true)
       .catch((err) => {
-        safeLogEvent('error_event', null, { source: 'calendar.fetch', message: String(err) });
+        if (optionalSurfaceControl.enabled('calendar')) {
+          safeLogEvent('error_event', null, { source: 'calendar.fetch', message: String(err) });
+        }
         return false;
       })
       .finally(() => { calInFlight = null; });
@@ -2654,14 +2972,23 @@ const initialMarketSourceSnapshot: MarketSourceSnapshot = (() => {
 })();
 
 function triggerMarketSourceRefresh(now = Date.now()): void {
+  if (!optionalSurfaceControl.enabled('markets')) return;
+  const generation = optionalSurfaceControl.snapshot('markets').generation;
+  const lifecycleSignal = optionalSurfaceControl.signal('markets');
+  if (lifecycleSignal.aborted) return;
   if (marketSourceInFlight) return;
   const cacheAgeMs = marketSourceCache ? now - marketSourceCache.at : null;
   if (cacheAgeMs !== null && cacheAgeMs >= 0 && cacheAgeMs < MARKET_SOURCE_REFRESH_MS) return;
 
+  const restLifecycle = Object.freeze({
+    cacheScope: 'markets',
+    generation,
+    signal: lifecycleSignal,
+  } satisfies BinanceRestLifecycleContext);
   const acquisition = Promise.allSettled([
-    fetchAllBookTickers('spot'),
-    fetchAllBookTickers('futures'),
-    fetchAllFutures24hTickers(),
+    fetchAllBookTickers('spot', restLifecycle),
+    fetchAllBookTickers('futures', restLifecycle),
+    fetchAllFutures24hTickers(restLifecycle),
   ]);
   let acquisitionTimer: NodeJS.Timeout | null = null;
   const acquisitionDeadline = new Promise<never>((_resolve, reject) => {
@@ -2676,6 +3003,11 @@ function triggerMarketSourceRefresh(now = Date.now()): void {
     acquisition,
     acquisitionDeadline,
   ]).then(([spotBookRes, perpBookRes, perp24hRes]) => {
+    if (lifecycleSignal.aborted
+        || !optionalSurfaceControl.enabled('markets')
+        || optionalSurfaceControl.snapshot('markets').generation !== generation) {
+      throw new OptionalSurfaceOffError('markets');
+    }
     const at = Date.now();
     const nextSpot = observedMarketSourceResult(spotBookRes, at);
     const nextPerp = observedMarketSourceResult(perpBookRes, at);
@@ -2704,9 +3036,11 @@ function triggerMarketSourceRefresh(now = Date.now()): void {
     },
     (error) => {
       if (marketSourceInFlight === refresh) marketSourceInFlight = null;
-      logMarketSourceRefreshFailure(
-        error instanceof Error ? error.message : 'Market source snapshot refresh failed',
-      );
+      if (optionalSurfaceControl.enabled('markets')) {
+        logMarketSourceRefreshFailure(
+          error instanceof Error ? error.message : 'Market source snapshot refresh failed',
+        );
+      }
     },
   );
 }
@@ -2858,8 +3192,22 @@ app.get('/api/markets', (req, res) => {
   });
 });
 
+app.get('/api/markets/enrichment', (req, res) => {
+  runAsync(res, async () => {
+    const snapshot = readMarketOwnerSnapshot();
+    await sendJsonBody(req, res, JSON.stringify({
+      updatedAt: snapshot.observedAtMs,
+      streamUpdatedAt: snapshot.streamUpdatedAt,
+      dataSources: snapshot.dataSources,
+      rows: snapshot.rows,
+    }));
+  });
+});
+
 app.get('/api/market/detail', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = String(req.query.symbol ?? '');
     if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol' });
@@ -2871,10 +3219,12 @@ app.get('/api/market/detail', (req, res) => {
       .find((r) => r.symbol === symbol);
     let book = null;
     try {
-      book = await fetchBookTicker(symbol);
+      book = await fetchBookTicker(symbol, lifecycle);
     } catch {
+      assertOptionalSurfaceRequestActive(context);
       // ok — book optional
     }
+    assertOptionalSurfaceRequestActive(context);
     res.json({
       row: row ?? null,
       book,
@@ -3021,6 +3371,7 @@ app.post('/api/proposals/:id/reject', (_req, res) => {
 // bases. Unknown ones resolve in the background and appear on a later call.
 app.get('/api/token/moneyflow', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
     const symbol = marketSymbol(req.query.symbol, 1, 20) ?? '';
     const window = String(req.query.window ?? '15m');
     if (!symbol || !FLOW_WINDOWS[window]) {
@@ -3028,8 +3379,9 @@ app.get('/api/token/moneyflow', (req, res) => {
       return;
     }
     try {
-      res.json(await fetchMoneyFlow(symbol, window));
+      res.json(await fetchMoneyFlow(symbol, window, context.signal));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3037,6 +3389,8 @@ app.get('/api/token/moneyflow', (req, res) => {
 
 app.get('/api/futures/funding-hist', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = marketSymbol(req.query.symbol, 1, 20) ?? '';
     const limit = integerQuery(req.query.limit, 1_000, 1, 1_000);
     if (!symbol || limit === null) {
@@ -3044,8 +3398,9 @@ app.get('/api/futures/funding-hist', (req, res) => {
       return;
     }
     try {
-      res.json(await fetchFundingHist(symbol, limit));
+      res.json(await fetchFundingHist(symbol, limit, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3067,6 +3422,8 @@ app.get('/api/futures/liquidations/stats', (_req, res) => {
 
 app.get('/api/futures/oi-hist', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = marketSymbol(req.query.symbol, 1, 20) ?? '';
     const period = String(req.query.period ?? '1d');
     const limit = integerQuery(req.query.limit, 30, 1, 500);
@@ -3075,8 +3432,9 @@ app.get('/api/futures/oi-hist', (req, res) => {
       return;
     }
     try {
-      res.json(await fetchOiHist(symbol, period, limit));
+      res.json(await fetchOiHist(symbol, period, limit, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3084,6 +3442,8 @@ app.get('/api/futures/oi-hist', (req, res) => {
 
 app.get('/api/futures/basis-hist', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = marketSymbol(req.query.symbol, 1, 20) ?? '';
     const period = String(req.query.period ?? '1h');
     const limit = integerQuery(req.query.limit, 48, 1, 500);
@@ -3092,8 +3452,9 @@ app.get('/api/futures/basis-hist', (req, res) => {
       return;
     }
     try {
-      res.json(await fetchBasisHist(symbol, period, limit));
+      res.json(await fetchBasisHist(symbol, period, limit, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3120,6 +3481,7 @@ app.post('/api/token/profiles/warm', (_req, res) => {
 
 app.get('/api/token/profile', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
     const rawBase = String(req.query.base ?? '').trim().toUpperCase();
     const base = /^[A-Z0-9\u3400-\u9fff]{1,24}$/u.test(rawBase) ? rawBase : '';
     if (!base) {
@@ -3128,8 +3490,10 @@ app.get('/api/token/profile', (req, res) => {
     }
     try {
       const profile = await tokenProfile(base);
+      assertOptionalSurfaceRequestActive(context);
       res.json({ ok: !!profile, profile });
     } catch (error) {
+      assertOptionalSurfaceRequestActive(context);
       try {
         ledger.logEvent('error_event', null, { source: 'token.profile', message: error instanceof Error ? error.message : String(error) });
       } catch {
@@ -3141,12 +3505,24 @@ app.get('/api/token/profile', (req, res) => {
 });
 
 app.get('/api/icons', (req, res) => {
-  const bases = String(req.query.bases ?? '')
-    .split(',')
-    .map((s) => s.trim().toUpperCase())
-    .filter((b) => /^[A-Z0-9\u3400-\u9fff]{1,24}$/u.test(b))
-    .slice(0, 200);
-  res.json(resolveIcons(bases));
+  runAsync(res, async () => {
+    const owner = iconSurfaceOwner(req.query.owner);
+    const admission = res.locals.optionalSurface as { id?: unknown } | undefined;
+    if (owner === null || admission?.id !== owner) {
+      res.status(400).json({
+        ok: false,
+        code: 'INVALID_ICON_OWNER',
+        error: 'Icon requests require exactly one owner: token or markets.',
+      });
+      return;
+    }
+    const bases = String(req.query.bases ?? '')
+      .split(',')
+      .map((s) => s.trim().toUpperCase())
+      .filter((b) => /^[A-Z0-9\u3400-\u9fff]{1,24}$/u.test(b))
+      .slice(0, 200);
+    res.json(resolveIcons(bases));
+  });
 });
 
 async function readBoundedBody(response: Response, maximumBytes: number): Promise<Buffer> {
@@ -3183,90 +3559,17 @@ async function readBoundedJson<T>(response: Response, maximumBytes: number): Pro
   return JSON.parse(body.toString('utf8')) as T;
 }
 
-function sourceLogoType(body: Buffer): string | null {
-  if (body.length >= 8 && body.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
-  if (body.length >= 3 && body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff) return 'image/jpeg';
-  if (body.length >= 12 && body.toString('ascii', 0, 4) === 'RIFF' && body.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
-  if (body.length >= 4 && body[0] === 0 && body[1] === 0 && body[2] === 1 && body[3] === 0) return 'image/x-icon';
-  return null;
-}
-
-function cachedSourceLogo(key: string): SourceLogoEntry | null {
-  const cached = sourceLogoCache.get(key);
-  if (!cached) return null;
-  if (Date.now() - cached.ts >= SOURCE_LOGO_TTL_MS) {
-    sourceLogoCache.delete(key);
-    return null;
-  }
-  sourceLogoCache.delete(key);
-  sourceLogoCache.set(key, cached);
-  return cached;
-}
-
-function rememberSourceLogo(key: string, entry: SourceLogoEntry): void {
-  sourceLogoCache.delete(key);
-  sourceLogoCache.set(key, entry);
-  while (sourceLogoCache.size > SOURCE_LOGO_CACHE_MAX) {
-    const oldest = sourceLogoCache.keys().next().value as string | undefined;
-    if (!oldest) break;
-    sourceLogoCache.delete(oldest);
-  }
-}
-
-async function loadSourceLogo(domain: string, size: number): Promise<SourceLogoEntry> {
-  if (deterministicOfflinePublicSourcesEnabled()) throw new Error('source logo unavailable');
-  const key = `${domain}:${size}`;
-  const cached = cachedSourceLogo(key);
-  if (cached) return cached;
-  const failedAt = sourceLogoFailures.get(key) ?? 0;
-  if (Date.now() - failedAt < SOURCE_LOGO_FAILURE_TTL_MS) throw new Error('source logo is cooling down');
-  const existing = sourceLogoInFlight.get(key);
-  if (existing) return existing;
-
-  const request = (async () => {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 5_000);
-    try {
-      const faviconUrl = DIRECT_SOURCE_LOGOS[domain] ?? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=${size}`;
-      const upstream = await fetch(faviconUrl, {
-        headers: { Accept: 'image/avif,image/webp,image/png,image/jpeg,image/x-icon,*/*;q=0.5' },
-        signal: ctrl.signal,
-        redirect: 'error',
-      });
-      if (!upstream.ok) throw new Error(`favicon HTTP ${upstream.status}`);
-      const body = await readBoundedBody(upstream, SOURCE_LOGO_MAX_BYTES);
-      const contentType = sourceLogoType(body);
-      if (!contentType) throw new Error('unsupported favicon payload');
-      const entry = { ts: Date.now(), contentType, body };
-      rememberSourceLogo(key, entry);
-      sourceLogoFailures.delete(key);
-      return entry;
-    } catch (error) {
-      sourceLogoFailures.set(key, Date.now());
-      while (sourceLogoFailures.size > SOURCE_LOGO_CACHE_MAX) {
-        const oldest = sourceLogoFailures.keys().next().value as string | undefined;
-        if (!oldest) break;
-        sourceLogoFailures.delete(oldest);
-      }
-      throw error;
-    } finally {
-      clearTimeout(timer);
-    }
-  })().finally(() => sourceLogoInFlight.delete(key));
-  sourceLogoInFlight.set(key, request);
-  return request;
-}
-
 app.get('/api/source-logo', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'news');
+    const lifecycle = binanceRestLifecycle(context);
     const domain = normalizeLogoDomain(String(req.query.domain ?? ''));
     const size = integerQuery(req.query.sz, 64, 16, 128);
     if (!domain || size === null) {
       res.status(400).json({ error: 'valid domain and integer size required' });
       return;
     }
-    const key = `${domain}:${size}`;
-    const cached = cachedSourceLogo(key);
+    const cached = sourceLogoSource.cached(domain, size, lifecycle);
     if (cached) {
       res.setHeader('Cache-Control', 'private, no-store');
       res.type(cached.contentType);
@@ -3275,11 +3578,12 @@ app.get('/api/source-logo', (req, res) => {
     }
 
     try {
-      const entry = await loadSourceLogo(domain, size);
+      const entry = await sourceLogoSource.load(domain, size, lifecycle);
       res.setHeader('Cache-Control', 'private, no-store');
       res.type(entry.contentType);
       res.send(entry.body);
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       const message = err instanceof Error ? err.message : String(err);
       // The first upstream failure is observable; repeated browser image
       // retries during the negative-cache window are expected and must not
@@ -3294,6 +3598,8 @@ app.get('/api/source-logo', (req, res) => {
 
 app.get('/api/market/quote', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = String(req.query.symbol ?? '');
     if (!/^[A-Z0-9]{4,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol' });
@@ -3302,10 +3608,12 @@ app.get('/api/market/quote', (req, res) => {
     const last = engine.priceOf(symbol);
     let book = null;
     try {
-      book = await fetchBookTicker(symbol);
+      book = await fetchBookTicker(symbol, lifecycle);
     } catch {
+      assertOptionalSurfaceRequestActive(context);
       // book unavailable — last price may still exist
     }
+    assertOptionalSurfaceRequestActive(context);
     res.json({ symbol, last, change24hPct: engine.changeOf(symbol), book, tradable: engine.filters.has(symbol) });
   });
 });
@@ -3314,6 +3622,8 @@ const KLINE_INTERVALS = new Set(['1s', '1m', '3m', '5m', '15m', '30m', '1h', '2h
 const FUTURES_DATA_PERIODS = new Set(['5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d']);
 app.get('/api/klines', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = String(req.query.symbol ?? 'BTCUSDT');
     const interval = String(req.query.interval ?? '5m');
     const limit = integerQuery(req.query.limit, 288, 1, 1_000);
@@ -3324,8 +3634,9 @@ app.get('/api/klines', (req, res) => {
       return;
     }
     try {
-      res.json(await fetchKlines(symbol, interval, limit, market, field));
+      res.json(await fetchKlines(symbol, interval, limit, market, field, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3333,6 +3644,8 @@ app.get('/api/klines', (req, res) => {
 
 app.get('/api/candles', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = String(req.query.symbol ?? 'BTCUSDT');
     const interval = String(req.query.interval ?? '5m');
     const limit = integerQuery(req.query.limit, 288, 1, 1_000);
@@ -3342,8 +3655,9 @@ app.get('/api/candles', (req, res) => {
       return;
     }
     try {
-      res.json(await fetchKlineCandles(symbol, interval, limit, market));
+      res.json(await fetchKlineCandles(symbol, interval, limit, market, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3351,14 +3665,17 @@ app.get('/api/candles', (req, res) => {
 
 app.get('/api/market/depth', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = String(req.query.symbol ?? '');
     if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol' });
       return;
     }
     try {
-      res.json(await fetchDepth(symbol, 20));
+      res.json(await fetchDepth(symbol, 20, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3366,14 +3683,17 @@ app.get('/api/market/depth', (req, res) => {
 
 app.get('/api/market/trades', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = String(req.query.symbol ?? '');
     if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol' });
       return;
     }
     try {
-      res.json(await fetchTrades(symbol, 30));
+      res.json(await fetchTrades(symbol, 30, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3381,14 +3701,17 @@ app.get('/api/market/trades', (req, res) => {
 
 app.get('/api/funding/history', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = String(req.query.symbol ?? '');
     if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol' });
       return;
     }
     try {
-      res.json(await fetchFundingHistory(symbol));
+      res.json(await fetchFundingHistory(symbol, 120, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3396,6 +3719,8 @@ app.get('/api/funding/history', (req, res) => {
 
 app.get('/api/futures/telemetry', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = String(req.query.symbol ?? '');
     const period = String(req.query.period ?? '5m');
     const limit = integerQuery(req.query.limit, 40, 1, 120);
@@ -3404,8 +3729,9 @@ app.get('/api/futures/telemetry', (req, res) => {
       return;
     }
     try {
-      res.json(await fetchFuturesTelemetry(symbol, period, limit));
+      res.json(await fetchFuturesTelemetry(symbol, period, limit, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String((err as Error).message) });
     }
   });
@@ -4042,16 +4368,45 @@ app.post('/api/refresh', (req, res) => {
         steps.push({ key, ok: false, durationMs: Date.now() - stepStartedAt, detail: message });
       }
     };
+    const runOptionalStep = async (
+      surface: 'news' | 'calendar',
+      key: string,
+      fn: () => Promise<string> | string,
+    ) => {
+      let lease: OptionalSurfaceLease;
+      try {
+        lease = optionalSurfaceControl.acquire(surface);
+      } catch (error) {
+        if (!(error instanceof OptionalSurfaceOffError)) throw error;
+        steps.push({
+          key,
+          ok: true,
+          durationMs: 0,
+          detail: `skipped: ${surface} optional surface is OFF`,
+        });
+        return;
+      }
+      try {
+        await runStep(key, async () => {
+          if (lease.signal.aborted) throw new OptionalSurfaceOffError(surface);
+          const detail = await fn();
+          if (lease.signal.aborted) throw new OptionalSurfaceOffError(surface);
+          return detail;
+        });
+      } finally {
+        lease.release();
+      }
+    };
 
     try {
       if (target === 'news') {
-        await runStep('news-context', async () => {
+        await runOptionalStep('news', 'news-context', async () => {
           const payload = await refreshNewsContextNow();
           return `${payload.sources.length} source states refreshed`;
         });
       }
       if (target === 'calendar') {
-        await runStep('economic-calendar', async () => {
+        await runOptionalStep('calendar', 'economic-calendar', async () => {
           if (!(await startCalendarRefresh())) throw new Error('Economic calendar refresh failed');
           return `${calCache?.items.length ?? 0} events cached`;
         });
@@ -4297,6 +4652,81 @@ app.post('/api/orders/cancel', (_req, res) => {
   sendLiveExecutionNotImplemented(res, 'ORDER_CANCEL');
 });
 
+const iconSurfaceOwners = new Set<IconSurfaceOwner>();
+let iconSurfaceTransition: Promise<void> = Promise.resolve();
+
+function startSharedIconSource(owner: IconSurfaceOwner): Promise<void> {
+  iconSurfaceOwners.add(owner);
+  const transition = iconSurfaceTransition
+    .catch(() => undefined)
+    .then(() => {
+      if (iconSurfaceOwners.size > 0) startIconSource();
+    });
+  iconSurfaceTransition = transition;
+  return transition;
+}
+
+function stopSharedIconSource(owner: IconSurfaceOwner): Promise<void> {
+  iconSurfaceOwners.delete(owner);
+  const otherOwner: IconSurfaceOwner = owner === 'token' ? 'markets' : 'token';
+  const transition = iconSurfaceTransition
+    .catch(() => undefined)
+    .then(async () => {
+      await stopIconSource();
+      if (iconSurfaceOwners.has(otherOwner)) startIconSource();
+    });
+  iconSurfaceTransition = transition;
+  return transition;
+}
+
+optionalSurfaceControl.registerRuntime('news', {
+  start: () => {
+    startNewsContextRuntime();
+  },
+  stop: async () => {
+    for (const controller of newsCatalogControllers) controller.abort(new OptionalSurfaceOffError('news'));
+    for (const close of [...newsStreamClosers]) close();
+    await Promise.all([...newsInFlight.values()]);
+    stopNewsContextRuntime();
+  },
+});
+optionalSurfaceControl.registerRuntime('calendar', {
+  stop: async () => {
+    for (const controller of calendarControllers) controller.abort(new OptionalSurfaceOffError('calendar'));
+    if (calInFlight) await calInFlight;
+  },
+});
+optionalSurfaceControl.registerRuntime('logs', {});
+optionalSurfaceControl.registerRuntime('token', {
+  start: async () => {
+    startProfileSource();
+    startMoneyFlow();
+    await startSharedIconSource('token');
+  },
+  stop: async () => {
+    resetBookStreamRuntime();
+    await Promise.all([
+      stopProfileSource(),
+      stopMoneyFlow(),
+      stopSharedIconSource('token'),
+    ]);
+  },
+});
+optionalSurfaceControl.registerRuntime('markets', {
+  start: () => startSharedIconSource('markets'),
+  stop: async () => {
+    if (marketSourceInFlight) {
+      try {
+        await marketSourceInFlight;
+      } catch (error) {
+        if (!(error instanceof OptionalSurfaceOffError)) throw error;
+      }
+    }
+    marketSourceCache = null;
+    await stopSharedIconSource('markets');
+  },
+});
+
 // Conventional probe paths — the defaults of ALB target groups, k8s probes,
 // Cloudflare health checks, and uptime monitors — are deliberately NOT routes.
 // Without this guard the SPA fallback below answered 200 text/html on every
@@ -4506,7 +4936,6 @@ server.on('upgrade', (request, socket, head) => {
 });
 
 // Live order-book/trade fan-out (public market data only, symbol-validated).
-const bookHub = new BookStreamHub((s) => engine.filters.has(s));
 wss.on('connection', (ws, request) => {
   const afterCursor = parseProductRuntimeMaterialDeliveryAfterCursor(request.url);
   if (afterCursor === null) {
@@ -4529,7 +4958,7 @@ wss.on('connection', (ws, request) => {
   });
   wsAlive.set(ws, true);
   ws.on('error', () => {
-    bookHub.drop(ws);
+    releaseBookSubscription(ws);
     try { ws.terminate(); } catch { /* already closed */ }
   });
   ws.on('pong', () => wsAlive.set(ws, true));
@@ -4565,12 +4994,12 @@ wss.on('connection', (ws, request) => {
           return;
         }
       }
-      bookHub.handleMessage(ws, decoded);
+      handleBookStreamMessage(ws, decoded);
     } catch {
       ws.close(1007, 'invalid message');
     }
   });
-  ws.on('close', () => bookHub.drop(ws));
+  ws.on('close', () => releaseBookSubscription(ws));
 });
 
 // A frame is the serialized form of one outbound message plus its measured
@@ -4770,7 +5199,6 @@ function startServerTimers(): void {
   // operator events remain dedicated-cursor truth; raw Ledger events and
   // metrics are never exposed on the application WebSocket.
   if (privateReadTransportAdmitted) privateRead.start();
-  if (startupPublicSourceEgressAdmitted) startNewsContextRuntime();
   pruneEphemeralLedgerEvents(5);
   eventRetentionTimer = setInterval(() => {
     pruneEphemeralLedgerEvents(5);
@@ -4909,7 +5337,7 @@ function gracefulShutdown(signal: NodeJS.Signals): Promise<GracefulShutdownOutco
     websocketHeartbeatTimer = null;
     canonicalDeliveryTimer = null;
     loopLagTimer = null;
-    stopNewsContextRuntime();
+    await optionalSurfaceControl.stopAll();
     privateRead.stop();
     bookHub.stop();
     for (const socket of pendingWsUpgradeSockets) {

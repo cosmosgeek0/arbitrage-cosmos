@@ -25,6 +25,34 @@ const jsonInFlight = new Map<string, Promise<unknown>>();
 const jsonFailures = new Map<string, { until: number; message: string }>();
 const hostRateLimitBans = new Map<string, { until: number; strikes: number }>();
 
+export interface BinanceRestLifecycleContext {
+  readonly cacheScope: string;
+  readonly generation: number;
+  readonly signal: AbortSignal;
+}
+
+function lifecycleRequestKey(url: URL, lifecycle?: Readonly<BinanceRestLifecycleContext>): string {
+  return lifecycle
+    ? `${lifecycle.cacheScope}:${lifecycle.generation}:${url.toString()}`
+    : url.toString();
+}
+
+function lifecycleCacheKey(
+  key: string,
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
+): string {
+  return lifecycle
+    ? `${lifecycle.cacheScope}:${lifecycle.generation}:${key}`
+    : key;
+}
+
+function throwIfLifecycleAborted(lifecycle?: Readonly<BinanceRestLifecycleContext>): void {
+  if (!lifecycle?.signal.aborted) return;
+  throw lifecycle.signal.reason instanceof Error
+    ? lifecycle.signal.reason
+    : new Error('Binance REST lifecycle aborted');
+}
+
 function retryAfterMs(res: Response): number | null {
   const header = res.headers.get('retry-after');
   if (header === null) return null;
@@ -100,11 +128,17 @@ async function readBoundedBody(res: Response, maxBytes: number): Promise<string>
   return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8');
 }
 
-async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAULT_JSON_LIMIT_BYTES): Promise<T> {
+async function requestJson<T>(
+  urlValue: string,
+  label: string,
+  maxBytes = DEFAULT_JSON_LIMIT_BYTES,
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
+): Promise<T> {
   if (deterministicOfflinePublicSourcesEnabled()) throw new Error(`${label} unavailable`);
+  throwIfLifecycleAborted(lifecycle);
   const url = new URL(urlValue);
   if (url.protocol !== 'https:' || !BINANCE_HOSTS.has(url.hostname)) throw new Error(`${label} unavailable`);
-  const key = url.toString();
+  const key = lifecycleRequestKey(url, lifecycle);
   const hostBan = hostRateLimitBans.get(url.hostname);
   if (hostBan && hostBan.until > Date.now()) {
     throw new Error(`${label} unavailable (upstream rate limit cooldown)`);
@@ -121,6 +155,8 @@ async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAUL
 
   const work = (async (): Promise<T> => {
     const ctrl = new AbortController();
+    const abortForLifecycle = () => ctrl.abort(lifecycle?.signal.reason);
+    lifecycle?.signal.addEventListener('abort', abortForLifecycle, { once: true });
     let timer: NodeJS.Timeout | null = null;
     const transport = (async (): Promise<T> => {
       const res = await fetch(url, {
@@ -130,6 +166,7 @@ async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAUL
       });
       if (ctrl.signal.aborted) {
         await res.body?.cancel().catch(() => undefined);
+        throwIfLifecycleAborted(lifecycle);
         throw new Error(`${label} unavailable`);
       }
       if (!res.ok) {
@@ -146,10 +183,16 @@ async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAUL
         throw new Error(`${label} invalid content type`);
       }
       const text = await readBoundedBody(res, maxBytes);
-      if (ctrl.signal.aborted) throw new Error(`${label} unavailable`);
+      if (ctrl.signal.aborted) {
+        throwIfLifecycleAborted(lifecycle);
+        throw new Error(`${label} unavailable`);
+      }
       try {
-        return JSON.parse(text) as T;
+        const decoded = JSON.parse(text) as T;
+        throwIfLifecycleAborted(lifecycle);
+        return decoded;
       } catch {
+        throwIfLifecycleAborted(lifecycle);
         throw new Error(`${label} invalid JSON`);
       }
     })();
@@ -163,6 +206,7 @@ async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAUL
     try {
       return await Promise.race([transport, deadline]);
     } catch (err) {
+      if (lifecycle?.signal.aborted) throwIfLifecycleAborted(lifecycle);
       const message = err instanceof Error && /^(?:[\w -]+) (?:HTTP \d{3}|invalid content type|invalid JSON)$/.test(err.message)
         ? err.message
         : err instanceof Error && err.message === 'Binance response too large'
@@ -172,6 +216,7 @@ async function requestJson<T>(urlValue: string, label: string, maxBytes = DEFAUL
       throw new Error(message);
     } finally {
       if (timer !== null) clearTimeout(timer);
+      lifecycle?.signal.removeEventListener('abort', abortForLifecycle);
     }
   })();
   jsonInFlight.set(key, work);
@@ -330,25 +375,45 @@ function parseBookTicker(raw: RawBookTicker): BookTicker {
   };
 }
 
-export async function fetchBookTicker(symbol: string): Promise<BookTicker> {
+export async function fetchBookTicker(
+  symbol: string,
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
+): Promise<BookTicker> {
+  throwIfLifecycleAborted(lifecycle);
   const safeSymbol = canonicalSymbol(symbol);
-  const cached = bookCache.get(safeSymbol);
-  if (cached && Date.now() - cached.fetchedAt < BOOK_CACHE_MS) return cached.data;
+  const key = lifecycleCacheKey(safeSymbol, lifecycle);
+  const cached = bookCache.get(key);
+  if (cached && Date.now() - cached.fetchedAt < BOOK_CACHE_MS) {
+    throwIfLifecycleAborted(lifecycle);
+    return cached.data;
+  }
   const raw = await requestJson<RawBookTicker>(
     `${SPOT_API}/api/v3/ticker/bookTicker?symbol=${encodeURIComponent(safeSymbol)}`,
     'bookTicker',
+    DEFAULT_JSON_LIMIT_BYTES,
+    lifecycle,
   );
   const data = parseBookTicker(raw);
-  boundedMapSet(bookCache, safeSymbol, { fetchedAt: Date.now(), data });
+  throwIfLifecycleAborted(lifecycle);
+  boundedMapSet(bookCache, key, { fetchedAt: Date.now(), data });
   return data;
 }
 
-export async function fetchAllBookTickers(market: 'spot' | 'futures'): Promise<Map<string, BookTicker>> {
-  const cached = allBookCache.get(market);
+export async function fetchAllBookTickers(
+  market: 'spot' | 'futures',
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
+): Promise<Map<string, BookTicker>> {
+  throwIfLifecycleAborted(lifecycle);
+  const cached = lifecycle ? undefined : allBookCache.get(market);
   if (cached && Date.now() - cached.fetchedAt < ALL_BOOK_CACHE_MS) return cached.data;
 
   const url = market === 'futures' ? `${FAPI}/fapi/v1/ticker/bookTicker` : `${SPOT_API}/api/v3/ticker/bookTicker`;
-  const raw = await requestJson<RawBookTicker[]>(url, `${market} bookTicker`, LARGE_JSON_LIMIT_BYTES);
+  const raw = await requestJson<RawBookTicker[]>(
+    url,
+    `${market} bookTicker`,
+    LARGE_JSON_LIMIT_BYTES,
+    lifecycle,
+  );
   if (!Array.isArray(raw)) throw new Error(`${market} bookTicker invalid JSON`);
   const data = new Map<string, BookTicker>();
   const rows = raw.slice(0, 20_000);
@@ -366,7 +431,8 @@ export async function fetchAllBookTickers(market: 'spot' | 'futures'): Promise<M
   if (rows.length > 0 && skipped > rows.length / 2) {
     throw new Error(`${market} bookTicker schema mismatch: ${skipped} of ${rows.length} rows malformed`);
   }
-  allBookCache.set(market, { fetchedAt: Date.now(), data });
+  throwIfLifecycleAborted(lifecycle);
+  if (!lifecycle) allBookCache.set(market, { fetchedAt: Date.now(), data });
   return data;
 }
 
@@ -395,10 +461,18 @@ type RawFutures24hTicker = {
 const futures24hCache = new Map<'all', { fetchedAt: number; data: Map<string, Futures24hTicker> }>();
 const FUTURES_24H_CACHE_MS = 15_000;
 
-export async function fetchAllFutures24hTickers(): Promise<Map<string, Futures24hTicker>> {
-  const cached = futures24hCache.get('all');
+export async function fetchAllFutures24hTickers(
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
+): Promise<Map<string, Futures24hTicker>> {
+  throwIfLifecycleAborted(lifecycle);
+  const cached = lifecycle ? undefined : futures24hCache.get('all');
   if (cached && Date.now() - cached.fetchedAt < FUTURES_24H_CACHE_MS) return cached.data;
-  const raw = await requestJson<RawFutures24hTicker[]>(`${FAPI}/fapi/v1/ticker/24hr`, 'futures 24hr', LARGE_JSON_LIMIT_BYTES);
+  const raw = await requestJson<RawFutures24hTicker[]>(
+    `${FAPI}/fapi/v1/ticker/24hr`,
+    'futures 24hr',
+    LARGE_JSON_LIMIT_BYTES,
+    lifecycle,
+  );
   if (!Array.isArray(raw)) throw new Error('futures 24hr invalid JSON');
   const data = new Map<string, Futures24hTicker>();
   for (const row of raw.slice(0, 20_000)) {
@@ -422,7 +496,8 @@ export async function fetchAllFutures24hTickers(): Promise<Map<string, Futures24
       count,
     });
   }
-  futures24hCache.set('all', { fetchedAt: Date.now(), data });
+  throwIfLifecycleAborted(lifecycle);
+  if (!lifecycle) futures24hCache.set('all', { fetchedAt: Date.now(), data });
   return data;
 }
 
@@ -476,8 +551,10 @@ async function fetchRawKlines(
   symbol: string,
   interval: string,
   limit: number,
-  market: 'spot' | 'futures'
+  market: 'spot' | 'futures',
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
 ): Promise<[number, string, string, string, string, string, number, string, ...unknown[]][]> {
+  throwIfLifecycleAborted(lifecycle);
   const safeSymbol = canonicalSymbol(symbol);
   const safeInterval = canonicalToken(interval, 'interval', 3);
   const safeLimit = boundedInteger(limit, 1, 1_000, 288);
@@ -485,8 +562,14 @@ async function fetchRawKlines(
     market === 'futures'
       ? `${FAPI}/fapi/v1/klines?symbol=${encodeURIComponent(safeSymbol)}&interval=${encodeURIComponent(safeInterval)}&limit=${safeLimit}`
       : `${SPOT_API}/api/v3/klines?symbol=${encodeURIComponent(safeSymbol)}&interval=${encodeURIComponent(safeInterval)}&limit=${safeLimit}`;
-  const rows = await requestJson<[number, string, string, string, string, string, number, string, ...unknown[]][]>(url, 'klines');
+  const rows = await requestJson<[number, string, string, string, string, string, number, string, ...unknown[]][]>(
+    url,
+    'klines',
+    DEFAULT_JSON_LIMIT_BYTES,
+    lifecycle,
+  );
   if (!Array.isArray(rows)) throw new Error('klines invalid JSON');
+  throwIfLifecycleAborted(lifecycle);
   return rows.slice(0, safeLimit);
 }
 
@@ -495,16 +578,24 @@ export async function fetchKlines(
   interval: string,
   limit: number,
   market: 'spot' | 'futures' = 'spot',
-  field: 'close' | 'volume' = 'close'
+  field: 'close' | 'volume' = 'close',
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
 ): Promise<KlinePoint[]> {
+  throwIfLifecycleAborted(lifecycle);
   const safeSymbol = canonicalSymbol(symbol);
   const safeInterval = canonicalToken(interval, 'interval', 3);
   const safeLimit = boundedInteger(limit, 1, 1_000, 288);
-  const key = `${market}:${safeSymbol}:${safeInterval}:${safeLimit}:${field}`;
+  const key = lifecycleCacheKey(
+    `${market}:${safeSymbol}:${safeInterval}:${safeLimit}:${field}`,
+    lifecycle,
+  );
   const cached = klineCache.get(key);
-  if (cached && Date.now() - cached.fetchedAt < KLINE_CACHE_MS) return cached.data;
+  if (cached && Date.now() - cached.fetchedAt < KLINE_CACHE_MS) {
+    throwIfLifecycleAborted(lifecycle);
+    return cached.data;
+  }
 
-  const raw = await fetchRawKlines(safeSymbol, safeInterval, safeLimit, market);
+  const raw = await fetchRawKlines(safeSymbol, safeInterval, safeLimit, market, lifecycle);
   // k[4] = close, k[5] = base volume; volume is reported in quote terms (×close)
   const data = raw.flatMap((k) => {
     const t = finiteNumber(k?.[0], 0);
@@ -514,6 +605,7 @@ export async function fetchKlines(
     const v = field === 'volume' ? volume * close : close;
     return Number.isFinite(v) ? [{ t, v }] : [];
   });
+  throwIfLifecycleAborted(lifecycle);
   boundedMapSet(klineCache, key, { fetchedAt: Date.now(), data });
   return data;
 }
@@ -522,15 +614,23 @@ export async function fetchKlineCandles(
   symbol: string,
   interval: string,
   limit: number,
-  market: 'spot' | 'futures' = 'spot'
+  market: 'spot' | 'futures' = 'spot',
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
 ): Promise<KlineCandle[]> {
+  throwIfLifecycleAborted(lifecycle);
   const safeSymbol = canonicalSymbol(symbol);
   const safeInterval = canonicalToken(interval, 'interval', 3);
   const safeLimit = boundedInteger(limit, 1, 1_000, 288);
-  const key = `${market}:${safeSymbol}:${safeInterval}:${safeLimit}:ohlcv`;
+  const key = lifecycleCacheKey(
+    `${market}:${safeSymbol}:${safeInterval}:${safeLimit}:ohlcv`,
+    lifecycle,
+  );
   const cached = candleCache.get(key);
-  if (cached && Date.now() - cached.fetchedAt < KLINE_CACHE_MS) return cached.data;
-  const raw = await fetchRawKlines(safeSymbol, safeInterval, safeLimit, market);
+  if (cached && Date.now() - cached.fetchedAt < KLINE_CACHE_MS) {
+    throwIfLifecycleAborted(lifecycle);
+    return cached.data;
+  }
+  const raw = await fetchRawKlines(safeSymbol, safeInterval, safeLimit, market, lifecycle);
   const data = raw.flatMap((k) => {
     const t = finiteNumber(k?.[0], 0);
     const o = finiteNumber(k?.[1], 0);
@@ -546,6 +646,7 @@ export async function fetchKlineCandles(
     if (!Number.isFinite(qv)) return [];
     return [{ t, o, h, l, c, v, qv, trades, takerBuyQv }];
   });
+  throwIfLifecycleAborted(lifecycle);
   boundedMapSet(candleCache, key, { fetchedAt: Date.now(), data });
   return data;
 }
@@ -557,18 +658,27 @@ export interface DepthLevel {
 
 const depthCache = new Map<string, { fetchedAt: number; data: { bids: DepthLevel[]; asks: DepthLevel[] } }>();
 
-export async function fetchDepth(symbol: string, limit = 20): Promise<{ bids: DepthLevel[]; asks: DepthLevel[] }> {
+export async function fetchDepth(
+  symbol: string,
+  limit = 20,
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
+): Promise<{ bids: DepthLevel[]; asks: DepthLevel[] }> {
+  throwIfLifecycleAborted(lifecycle);
   const safeSymbol = canonicalSymbol(symbol);
   const supportedLimits = [5, 10, 20, 50, 100, 500, 1_000, 5_000];
   const requestedLimit = boundedInteger(limit, 5, 5_000, 20);
   const safeLimit = supportedLimits.find((candidate) => candidate >= requestedLimit) ?? 5_000;
-  const key = `${safeSymbol}:${safeLimit}`;
+  const key = lifecycleCacheKey(`${safeSymbol}:${safeLimit}`, lifecycle);
   const cached = depthCache.get(key);
-  if (cached && Date.now() - cached.fetchedAt < 2_500) return cached.data;
+  if (cached && Date.now() - cached.fetchedAt < 2_500) {
+    throwIfLifecycleAborted(lifecycle);
+    return cached.data;
+  }
   const raw = await requestJson<{ bids: [string, string][]; asks: [string, string][] }>(
     `${SPOT_API}/api/v3/depth?symbol=${encodeURIComponent(safeSymbol)}&limit=${safeLimit}`,
     'depth',
     safeLimit > 1_000 ? LARGE_JSON_LIMIT_BYTES : DEFAULT_JSON_LIMIT_BYTES,
+    lifecycle,
   );
   if (!Array.isArray(raw.bids) || !Array.isArray(raw.asks)) throw new Error('depth invalid JSON');
   const data = {
@@ -583,6 +693,7 @@ export async function fetchDepth(symbol: string, limit = 20): Promise<{ bids: De
       return price !== null && qty !== null ? [{ price, qty }] : [];
     }),
   };
+  throwIfLifecycleAborted(lifecycle);
   boundedMapSet(depthCache, key, { fetchedAt: Date.now(), data });
   return data;
 }
@@ -597,15 +708,25 @@ export interface PublicTrade {
 
 const tradesCache = new Map<string, { fetchedAt: number; data: PublicTrade[] }>();
 
-export async function fetchTrades(symbol: string, limit = 30): Promise<PublicTrade[]> {
+export async function fetchTrades(
+  symbol: string,
+  limit = 30,
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
+): Promise<PublicTrade[]> {
+  throwIfLifecycleAborted(lifecycle);
   const safeSymbol = canonicalSymbol(symbol);
   const safeLimit = boundedInteger(limit, 1, 1_000, 30);
-  const key = `${safeSymbol}:${safeLimit}`;
+  const key = lifecycleCacheKey(`${safeSymbol}:${safeLimit}`, lifecycle);
   const cached = tradesCache.get(key);
-  if (cached && Date.now() - cached.fetchedAt < 2_500) return cached.data;
+  if (cached && Date.now() - cached.fetchedAt < 2_500) {
+    throwIfLifecycleAborted(lifecycle);
+    return cached.data;
+  }
   const raw = await requestJson<{ id: number; price: string; qty: string; time: number; isBuyerMaker: boolean }[]>(
     `${SPOT_API}/api/v3/trades?symbol=${encodeURIComponent(safeSymbol)}&limit=${safeLimit}`,
     'trades',
+    DEFAULT_JSON_LIMIT_BYTES,
+    lifecycle,
   );
   if (!Array.isArray(raw)) throw new Error('trades invalid JSON');
   const data = raw
@@ -619,6 +740,7 @@ export async function fetchTrades(symbol: string, limit = 30): Promise<PublicTra
       return [{ id, price, qty, time, isBuyerMaker: t.isBuyerMaker }];
     })
     .reverse();
+  throwIfLifecycleAborted(lifecycle);
   boundedMapSet(tradesCache, key, { fetchedAt: Date.now(), data });
   return data;
 }
@@ -626,15 +748,25 @@ export async function fetchTrades(symbol: string, limit = 30): Promise<PublicTra
 const fundingCache = new Map<string, { fetchedAt: number; data: { t: number; v: number }[] }>();
 
 /** Funding-rate history from the futures REST API (public), rate as percent. */
-export async function fetchFundingHistory(symbol: string, limit = 120): Promise<{ t: number; v: number }[]> {
+export async function fetchFundingHistory(
+  symbol: string,
+  limit = 120,
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
+): Promise<{ t: number; v: number }[]> {
+  throwIfLifecycleAborted(lifecycle);
   const safeSymbol = canonicalSymbol(symbol);
   const safeLimit = boundedInteger(limit, 1, 1_000, 120);
-  const key = `${safeSymbol}:${safeLimit}`;
+  const key = lifecycleCacheKey(`${safeSymbol}:${safeLimit}`, lifecycle);
   const cached = fundingCache.get(key);
-  if (cached && Date.now() - cached.fetchedAt < 300_000) return cached.data;
+  if (cached && Date.now() - cached.fetchedAt < 300_000) {
+    throwIfLifecycleAborted(lifecycle);
+    return cached.data;
+  }
   const raw = await requestJson<{ fundingTime: number; fundingRate: string }[]>(
     `${FAPI}/fapi/v1/fundingRate?symbol=${encodeURIComponent(safeSymbol)}&limit=${safeLimit}`,
     'fundingRate',
+    DEFAULT_JSON_LIMIT_BYTES,
+    lifecycle,
   );
   if (!Array.isArray(raw)) throw new Error('fundingRate invalid JSON');
   const data = raw.slice(0, safeLimit).flatMap((r) => {
@@ -642,6 +774,7 @@ export async function fetchFundingHistory(symbol: string, limit = 120): Promise<
     const rate = finiteNumber(r?.fundingRate);
     return t !== null && rate !== null ? [{ t, v: rate * 100 }] : [];
   });
+  throwIfLifecycleAborted(lifecycle);
   boundedMapSet(fundingCache, key, { fetchedAt: Date.now(), data });
   return data;
 }
@@ -687,7 +820,14 @@ export interface FuturesTelemetry {
 const futuresTelemetryCache = new Map<string, { fetchedAt: number; data: FuturesTelemetry }>();
 const FUTURES_TELEMETRY_CACHE_MS = 60_000;
 
-async function fetchFuturesData<T>(pathName: string, symbol: string, period: string, limit: number): Promise<T[]> {
+async function fetchFuturesData<T>(
+  pathName: string,
+  symbol: string,
+  period: string,
+  limit: number,
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
+): Promise<T[]> {
+  throwIfLifecycleAborted(lifecycle);
   const allowedPaths = new Set([
     'openInterestHist',
     'topLongShortAccountRatio',
@@ -702,8 +842,9 @@ async function fetchFuturesData<T>(pathName: string, symbol: string, period: str
   const url =
     `${FAPI}/futures/data/${pathName}?symbol=${encodeURIComponent(safeSymbol)}` +
     `&period=${encodeURIComponent(safePeriod)}&limit=${safeLimit}`;
-  const rows = await requestJson<T[]>(url, pathName);
+  const rows = await requestJson<T[]>(url, pathName, DEFAULT_JSON_LIMIT_BYTES, lifecycle);
   if (!Array.isArray(rows)) throw new Error(`${pathName} invalid JSON`);
+  throwIfLifecycleAborted(lifecycle);
   return rows.slice(0, safeLimit);
 }
 
@@ -716,25 +857,35 @@ function settledValue<T>(r: PromiseSettledResult<T[]>, errors: string[]): T[] {
   return [];
 }
 
-export async function fetchFuturesTelemetry(symbol: string, period = '5m', limit = 40): Promise<FuturesTelemetry> {
+export async function fetchFuturesTelemetry(
+  symbol: string,
+  period = '5m',
+  limit = 40,
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
+): Promise<FuturesTelemetry> {
+  throwIfLifecycleAborted(lifecycle);
   const safeSymbol = canonicalSymbol(symbol);
   const safePeriod = canonicalToken(period, 'period', 3);
   const safeLimit = boundedInteger(limit, 5, 120, 40);
-  const key = `${safeSymbol}:${safePeriod}:${safeLimit}`;
+  const key = lifecycleCacheKey(`${safeSymbol}:${safePeriod}:${safeLimit}`, lifecycle);
   const cached = futuresTelemetryCache.get(key);
-  if (cached && Date.now() - cached.fetchedAt < FUTURES_TELEMETRY_CACHE_MS) return cached.data;
+  if (cached && Date.now() - cached.fetchedAt < FUTURES_TELEMETRY_CACHE_MS) {
+    throwIfLifecycleAborted(lifecycle);
+    return cached.data;
+  }
 
   type OI = { sumOpenInterest: string; sumOpenInterestValue: string; timestamp: string | number };
   type Ratio = { longAccount: string; shortAccount: string; longShortRatio: string; timestamp: string | number };
   type Taker = { buySellRatio: string; buyVol: string; sellVol: string; timestamp: string | number };
 
   const [oiRes, topAccountRes, topPositionRes, globalRes, takerRes] = await Promise.allSettled([
-    fetchFuturesData<OI>('openInterestHist', safeSymbol, safePeriod, safeLimit),
-    fetchFuturesData<Ratio>('topLongShortAccountRatio', safeSymbol, safePeriod, safeLimit),
-    fetchFuturesData<Ratio>('topLongShortPositionRatio', safeSymbol, safePeriod, safeLimit),
-    fetchFuturesData<Ratio>('globalLongShortAccountRatio', safeSymbol, safePeriod, safeLimit),
-    fetchFuturesData<Taker>('takerlongshortRatio', safeSymbol, safePeriod, safeLimit),
+    fetchFuturesData<OI>('openInterestHist', safeSymbol, safePeriod, safeLimit, lifecycle),
+    fetchFuturesData<Ratio>('topLongShortAccountRatio', safeSymbol, safePeriod, safeLimit, lifecycle),
+    fetchFuturesData<Ratio>('topLongShortPositionRatio', safeSymbol, safePeriod, safeLimit, lifecycle),
+    fetchFuturesData<Ratio>('globalLongShortAccountRatio', safeSymbol, safePeriod, safeLimit, lifecycle),
+    fetchFuturesData<Taker>('takerlongshortRatio', safeSymbol, safePeriod, safeLimit, lifecycle),
   ]);
+  throwIfLifecycleAborted(lifecycle);
 
   const errors: string[] = [];
   const openInterest = settledValue(oiRes, errors).flatMap((p) => {
@@ -776,6 +927,7 @@ export async function fetchFuturesTelemetry(symbol: string, period = '5m', limit
     globalRatio,
     takerFlow,
   };
+  throwIfLifecycleAborted(lifecycle);
   boundedMapSet(futuresTelemetryCache, key, { fetchedAt: Date.now(), data });
   return data;
 }
@@ -801,17 +953,31 @@ export interface BasisPoint {
 
 const basisCache = new Map<string, { fetchedAt: number; rows: BasisPoint[] }>();
 
-export async function fetchBasisHist(pair: string, period: string, limit: number): Promise<BasisPoint[]> {
+export async function fetchBasisHist(
+  pair: string,
+  period: string,
+  limit: number,
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
+): Promise<BasisPoint[]> {
+  throwIfLifecycleAborted(lifecycle);
   const safePair = canonicalSymbol(pair);
   const safePeriod = canonicalToken(period, 'period', 3);
   const safeLimit = boundedInteger(limit, 5, 200, 48);
-  const key = `${safePair}:${safePeriod}:${safeLimit}`;
+  const key = lifecycleCacheKey(`${safePair}:${safePeriod}:${safeLimit}`, lifecycle);
   const hit = basisCache.get(key);
-  if (hit && Date.now() - hit.fetchedAt < 60_000) return hit.rows;
+  if (hit && Date.now() - hit.fetchedAt < 60_000) {
+    throwIfLifecycleAborted(lifecycle);
+    return hit.rows;
+  }
   const url =
     `${FAPI}/futures/data/basis?pair=${encodeURIComponent(safePair)}&contractType=PERPETUAL` +
     `&period=${encodeURIComponent(safePeriod)}&limit=${safeLimit}`;
-  const raw = await requestJson<{ timestamp: number; futuresPrice: string; indexPrice: string; basis: string; basisRate: string }[]>(url, 'basis');
+  const raw = await requestJson<{ timestamp: number; futuresPrice: string; indexPrice: string; basis: string; basisRate: string }[]>(
+    url,
+    'basis',
+    DEFAULT_JSON_LIMIT_BYTES,
+    lifecycle,
+  );
   if (!Array.isArray(raw)) throw new Error('basis invalid JSON');
   const rows = raw.slice(0, safeLimit).flatMap((p) => {
     const t = finiteNumber(p?.timestamp, 0);
@@ -823,6 +989,7 @@ export async function fetchBasisHist(pair: string, period: string, limit: number
       ? [{ t, futuresPrice, indexPrice, basis, basisRatePct: basisRate * 100 }]
       : [];
   });
+  throwIfLifecycleAborted(lifecycle);
   boundedMapSet(basisCache, key, { fetchedAt: Date.now(), rows });
   return rows;
 }
@@ -836,21 +1003,37 @@ export interface OiHistPoint {
 
 const oiHistCache = new Map<string, { fetchedAt: number; rows: OiHistPoint[] }>();
 
-export async function fetchOiHist(symbol: string, period: string, limit: number): Promise<OiHistPoint[]> {
+export async function fetchOiHist(
+  symbol: string,
+  period: string,
+  limit: number,
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
+): Promise<OiHistPoint[]> {
+  throwIfLifecycleAborted(lifecycle);
   const safeSymbol = canonicalSymbol(symbol);
   const safePeriod = canonicalToken(period, 'period', 3);
   const safeLimit = boundedInteger(limit, 5, 200, 30);
-  const key = `${safeSymbol}:${safePeriod}:${safeLimit}`;
+  const key = lifecycleCacheKey(`${safeSymbol}:${safePeriod}:${safeLimit}`, lifecycle);
   const hit = oiHistCache.get(key);
-  if (hit && Date.now() - hit.fetchedAt < 60_000) return hit.rows;
+  if (hit && Date.now() - hit.fetchedAt < 60_000) {
+    throwIfLifecycleAborted(lifecycle);
+    return hit.rows;
+  }
   type OI = { sumOpenInterest: string; sumOpenInterestValue: string; timestamp: string | number };
-  const raw = await fetchFuturesData<OI>('openInterestHist', safeSymbol, safePeriod, safeLimit);
+  const raw = await fetchFuturesData<OI>(
+    'openInterestHist',
+    safeSymbol,
+    safePeriod,
+    safeLimit,
+    lifecycle,
+  );
   const rows = raw.flatMap((p) => {
     const t = finiteNumber(p?.timestamp, 0);
     const contracts = finiteNumber(p?.sumOpenInterest, 0);
     const notional = finiteNumber(p?.sumOpenInterestValue, 0);
     return t !== null && contracts !== null && notional !== null ? [{ t, contracts, notional }] : [];
   });
+  throwIfLifecycleAborted(lifecycle);
   boundedMapSet(oiHistCache, key, { fetchedAt: Date.now(), rows });
   return rows;
 }
@@ -864,15 +1047,25 @@ export interface FundingHistPoint {
 
 const fundingHistCache = new Map<string, { fetchedAt: number; rows: FundingHistPoint[] }>();
 
-export async function fetchFundingHist(symbol: string, limit: number): Promise<FundingHistPoint[]> {
+export async function fetchFundingHist(
+  symbol: string,
+  limit: number,
+  lifecycle?: Readonly<BinanceRestLifecycleContext>,
+): Promise<FundingHistPoint[]> {
+  throwIfLifecycleAborted(lifecycle);
   const safeSymbol = canonicalSymbol(symbol);
   const safeLimit = boundedInteger(limit, 10, 1_000, 1_000);
-  const key = `${safeSymbol}:${safeLimit}`;
+  const key = lifecycleCacheKey(`${safeSymbol}:${safeLimit}`, lifecycle);
   const hit = fundingHistCache.get(key);
-  if (hit && Date.now() - hit.fetchedAt < 10 * 60_000) return hit.rows;
+  if (hit && Date.now() - hit.fetchedAt < 10 * 60_000) {
+    throwIfLifecycleAborted(lifecycle);
+    return hit.rows;
+  }
   const raw = await requestJson<{ fundingTime: number; fundingRate: string }[]>(
     `${FAPI}/fapi/v1/fundingRate?symbol=${encodeURIComponent(safeSymbol)}&limit=${safeLimit}`,
     'fundingRate',
+    DEFAULT_JSON_LIMIT_BYTES,
+    lifecycle,
   );
   if (!Array.isArray(raw)) throw new Error('fundingRate invalid JSON');
   const rows = raw.slice(0, safeLimit).flatMap((p) => {
@@ -880,6 +1073,7 @@ export async function fetchFundingHist(symbol: string, limit: number): Promise<F
     const rate = finiteNumber(p?.fundingRate);
     return t !== null && rate !== null ? [{ t, ratePct: rate * 100 }] : [];
   });
+  throwIfLifecycleAborted(lifecycle);
   boundedMapSet(fundingHistCache, key, { fetchedAt: Date.now(), rows });
   return rows;
 }

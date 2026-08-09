@@ -109,9 +109,13 @@ export function TokenIcon({ symbol, size = 26 }: { symbol: string; size?: number
 
   // ask the manifest for this base and re-render when its logo resolves
   useEffect(() => {
-    requestIcon(base);
+    const releaseIcon = requestIcon(base);
+    const unsubscribe = onIcons(force);
     setIdx(0);
-    return onIcons(force);
+    return () => {
+      unsubscribe();
+      releaseIcon();
+    };
   }, [base]);
 
   const resolved = iconUrl(base);

@@ -1,25 +1,99 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity,
   BookOpen,
-  RefreshCw,
   ShieldCheck,
 } from 'lucide-react';
+import { ControlRegistryPanel } from '../features/productControlRoom/components/ControlRegistryPanel';
+import { projectOwnerCommandTruth } from '../features/productControlRoom/ProductControlRoom';
 import { ProductSurfaceAdapter } from '../features/productControlRoom/components/SurfaceBindingPanel';
 import { useProductControlRoomContext } from '../features/productControlRoom/ProductControlRoomProvider';
 import { useStore } from '../store';
 import { timeAgo } from '../format';
 import { projectPrivateRead } from '../lib/privateRead';
+import {
+  type ProductBindingContinuity,
+  type ProductCommandRequest,
+  type ProductCommandResultIdentity,
+  type ProductControlRegistryEntry,
+} from '../lib/productIntegration';
 import { ComponentOperationalHealthTable } from './ComponentOperationalHealthTable';
 import './Health.css';
 
 type HealthTone = 'healthy' | 'degraded' | 'broken';
 
+export const HEALTH_MANAGED_RESTART_CONTROL_ID = 'component.engine-supervisor.restart' as const;
+
+export function selectHealthManagedRestartControl(
+  controls: readonly Readonly<ProductControlRegistryEntry>[],
+  continuity: ProductBindingContinuity,
+): Readonly<ProductControlRegistryEntry> | null {
+  if (continuity !== 'PROVEN') return null;
+  const control = controls.find((entry) => entry.controlId === HEALTH_MANAGED_RESTART_CONTROL_ID);
+  if (!control
+    || control.wiringState !== 'WIRED_LIVE'
+    || control.backendCommandId !== 'RESTART_COMPONENT'
+    || control.targetType !== 'COMPONENT'
+    || control.targetId !== 'engine-supervisor'
+    || control.effect !== 'RESTART'
+    || Object.keys(control.payload).length !== 1
+    || control.payload.componentId !== 'engine-supervisor') {
+    return null;
+  }
+  return control;
+}
+
 export function SystemHealth() {
   const { privateRead, privateReadError, setPage } = useStore();
-  const { binding } = useProductControlRoomContext();
+  const { binding, client } = useProductControlRoomContext();
   const snapshot = binding.snapshot;
   const healthSurface = snapshot?.surfaces.health;
   const machineReady = snapshot?.ownerView.machineReady ?? null;
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNowMs(Date.now()), 5_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const commandTruth = projectOwnerCommandTruth(snapshot, null, nowMs);
+  const commandMaterialEvents = binding.materialEvents ?? snapshot?.materialEvents ?? null;
+  const commandContinuityProven = snapshot !== null
+    && binding.continuity === 'PROVEN'
+    && commandMaterialEvents?.continuity === 'PROVEN';
+  const commandAuthorityReady = commandTruth === 'CURRENT' && commandContinuityProven;
+  const commandAvailabilityBlocker = commandAuthorityReady
+    ? null
+    : !commandContinuityProven
+      ? `COMMAND_CONTINUITY_NOT_PROVEN · ${binding.error ?? `MATERIAL_EVENT_CONTINUITY_${commandMaterialEvents?.continuity ?? 'UNPROVEN'}`}`
+      : commandTruth === 'STALE'
+        ? 'COMMAND_POSTURE_STALE'
+        : 'COMMAND_POSTURE_UNAVAILABLE';
+  const restartControl = useMemo(
+    () => selectHealthManagedRestartControl(snapshot?.controls ?? [], binding.continuity),
+    [binding.continuity, snapshot?.controls],
+  );
+  const recoveryControls = useMemo<readonly Readonly<ProductControlRegistryEntry>[]>(
+    () => restartControl ? [restartControl] : [],
+    [restartControl],
+  );
+  const previewRestart = useCallback((
+    control: Readonly<ProductControlRegistryEntry>,
+    signal: AbortSignal,
+  ) => {
+    if (selectHealthManagedRestartControl([control], binding.continuity) === null) {
+      return Promise.reject(new Error('HEALTH_MANAGED_RESTART_CONTROL_INVALID'));
+    }
+    return client.previewCommand(control.controlId, control.currentStateRevision, undefined, signal);
+  }, [binding.continuity, client]);
+  const submitRestart = useCallback((request: Readonly<ProductCommandRequest>) => {
+    if (request.controlId !== HEALTH_MANAGED_RESTART_CONTROL_ID) {
+      return Promise.reject(new Error('HEALTH_MANAGED_RESTART_SUBMIT_INVALID'));
+    }
+    return client.submitCommand(request);
+  }, [client]);
+  const readRestartResult = useCallback((
+    identity: Readonly<ProductCommandResultIdentity>,
+    signal?: AbortSignal,
+  ) => client.readCommandResult(identity, signal), [client]);
   const overallPresentation = snapshot && binding.continuity === 'PROVEN'
     ? snapshot.canonicalCockpit.watchmanOverall
     : { status: 'outage' as const, label: 'Canonical Truth Unavailable' };
@@ -62,15 +136,6 @@ export function SystemHealth() {
               <ShieldCheck size={14} />
               Product Integration
             </span>
-            <button
-              type="button"
-              className={`healthx-button${binding.loading ? ' loading' : ''}`}
-              disabled={binding.loading}
-              onClick={() => void binding.refresh()}
-            >
-              <RefreshCw size={14} />
-              {binding.loading ? 'Refreshing' : 'Refresh'}
-            </button>
           </div>
         </header>
 
@@ -101,6 +166,39 @@ export function SystemHealth() {
 
         <ProductSurfaceAdapter surfaceId="health" />
 
+        <section className="healthx-recovery" aria-labelledby="healthx-recovery-title">
+          <header className="healthx-recovery-head">
+            <div>
+              <span>Operational Recovery</span>
+              <h2 id="healthx-recovery-title">Restart Managed Root</h2>
+              <p>One bounded task: preview the current canonical revision, confirm the supervised graph restart, then prove its durable receipt and readback.</p>
+            </div>
+            <strong className={restartControl ? 'ready' : 'blocked'}>
+              {restartControl ? restartControl.wiringState : 'CONTROL UNAVAILABLE'}
+            </strong>
+          </header>
+          {restartControl ? (
+            <div className="healthx-recovery-control">
+              <ControlRegistryPanel
+                controls={recoveryControls}
+                busy={binding.loading || !commandAuthorityReady}
+                availabilityBlocker={commandAvailabilityBlocker}
+                onPreview={previewRestart}
+                onSubmit={submitRestart}
+                onReadCommandResult={readRestartResult}
+              />
+            </div>
+          ) : (
+            <div className="healthx-recovery-unavailable" role="status">
+              <ShieldCheck size={15} />
+              <span>
+                <strong>Managed restart is unavailable.</strong>
+                Canonical continuity and the exact live restart registry entry are both required.
+              </span>
+            </div>
+          )}
+        </section>
+
         {snapshot ? (
           <>
 
@@ -124,9 +222,6 @@ export function SystemHealth() {
             <Activity size={18} />
             <strong>Canonical Health Unavailable</strong>
             <span>{binding.error ?? 'Waiting for the Product Integration supervisor.'}</span>
-            {!binding.loading ? (
-              <button type="button" className="healthx-button" onClick={() => void binding.refresh()}>Try Again</button>
-            ) : null}
           </div>
         )}
       </section>

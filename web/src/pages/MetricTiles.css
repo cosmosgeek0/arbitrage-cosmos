@@ -10,9 +10,7 @@
   .opportunityx-summary,
   .riskx-summary,
   .healthx-summary,
-  .notifx-command,
-  .dcx-summary,
-  .dcx-performance-summary
+  .notifx-command
 ) {
   display: grid;
   gap: 0;
@@ -32,9 +30,7 @@
   .opportunityx-summary-cell,
   .riskx-summary-cell,
   .healthx-summary-cell,
-  .notifx-command > div,
-  .dcx-summary > .dcx-summary-cell,
-  .dcx-performance-summary > .dcx-summary-cell
+  .notifx-command > div
 ) {
   display: flex;
   min-width: 0;
@@ -58,9 +54,7 @@
   .opportunityx-summary-cell,
   .riskx-summary-cell,
   .healthx-summary-cell,
-  .notifx-command > div,
-  .dcx-summary > .dcx-summary-cell,
-  .dcx-performance-summary > .dcx-summary-cell
+  .notifx-command > div
 ) + :is(article, div) {
   border-left: 1px solid var(--line-2);
 }
@@ -74,8 +68,7 @@
   .opportunityx-summary-cell > span,
   .riskx-summary-cell > span,
   .healthx-summary-cell > span,
-  .notifx-command > div > span,
-  .dcx-summary-cell > span
+  .notifx-command > div > span
 ) {
   margin: 0;
   color: var(--muted);
@@ -96,8 +89,7 @@
   .opportunityx-summary-cell > strong,
   .riskx-summary-cell > strong,
   .healthx-summary-cell > strong,
-  .notifx-command > div > strong,
-  .dcx-summary-cell > strong
+  .notifx-command > div > strong
 ) {
   margin: 0;
   font-size: 18px;
@@ -115,8 +107,7 @@
   .opportunityx-summary-cell > small,
   .riskx-summary-cell > small,
   .healthx-summary-cell > small,
-  .notifx-command > div > em,
-  .dcx-summary-cell > small
+  .notifx-command > div > em
 ) {
   margin: 0;
   color: var(--muted);
@@ -126,21 +117,19 @@
 }
 
 @container (max-width: 1120px) {
-  :is(.dcx-summary, .dcx-performance-summary) { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   :is(.accountx-summary, .borrowx-summary, .mkx-summary, .tkx-summary, .volx-summary, .opportunityx-summary, .riskx-summary, .healthx-summary, .notifx-command) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  :is(.dcx-summary, .dcx-performance-summary) > :is(article, div):nth-child(n + 4),
   :is(.accountx-summary, .borrowx-summary, .mkx-summary, .tkx-summary, .volx-summary, .opportunityx-summary, .riskx-summary, .healthx-summary, .notifx-command) > :is(article, div):nth-child(n + 3) {
     border-top: 1px solid var(--line-2);
   }
 }
 
 @container (max-width: 620px) {
-  :is(.dcx-summary, .dcx-performance-summary, .accountx-summary, .borrowx-summary, .mkx-summary, .tkx-summary, .volx-summary, .opportunityx-summary, .riskx-summary, .healthx-summary, .notifx-command) {
+  :is(.accountx-summary, .borrowx-summary, .mkx-summary, .tkx-summary, .volx-summary, .opportunityx-summary, .riskx-summary, .healthx-summary, .notifx-command) {
     grid-template-columns: minmax(0, 1fr);
   }
-  :is(.dcx-summary, .dcx-performance-summary, .accountx-summary, .borrowx-summary, .mkx-summary, .tkx-summary, .volx-summary, .opportunityx-summary, .riskx-summary, .healthx-summary, .notifx-command) > :is(article, div):nth-child(n + 2) {
+  :is(.accountx-summary, .borrowx-summary, .mkx-summary, .tkx-summary, .volx-summary, .opportunityx-summary, .riskx-summary, .healthx-summary, .notifx-command) > :is(article, div):nth-child(n + 2) {
     border-top: 1px solid var(--line-2);
   }
 }

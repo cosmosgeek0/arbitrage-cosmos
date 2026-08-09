@@ -1,0 +1,421 @@
+/* =============================================================================
+   WatchdogSurface.css — the page frame, and the two shared kill switches.
+
+   Source of truth: docs/design/watchdog/BIBLE.md §1.9 (tokens), §3.14
+   (CoverageCounter), §3.18 (CardFrame), §3.19 (Motion), §3.20 (kill switches),
+   §4.1-§4.7 (composition).
+
+   THERE ARE NO CARDS. A section is a head, one hairline, and content on the page
+   canvas. That is not a style preference: eight cards means eight interior right
+   edges, so no numeric column on the page could ever share an x, and on a
+   comparing surface that is the entire job (§4.2 item 1, §5 L18).
+
+   Every length below is a token. The only literals are the 1px hairlines, which
+   §5 L12 declares, and the two head track widths, which §3.14 declares as its
+   own custom properties (--sec-track, and the title track it pairs with).
+   ========================================================================== */
+
+/* Layer order is DECLARED, because for `!important` the EARLIER layer wins.
+   Unlayered styles beat every layer for normal declarations, which is why the
+   kill switches are the only thing in here that uses `!important` (§3.20). */
+@layer wd-kill, wd-motion;
+
+@layer wd-kill {
+  /* Kill switch 1 — a theme swap repaints every colour at once. Letting sixty
+     rows ease between two palettes reads as a fault, not as polish.
+     Driver: the MutationObserver in WatchdogSurface.tsx. */
+  [data-theme-switching] .watchdog,
+  [data-theme-switching] .watchdog * {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  /* Kill switch 2 — zeroes DELAYS as well as durations, because the JS dwell
+     timers read the same [data-instant] attribute off the page root. Otherwise
+     the escape hatch still races the 320ms arm timer.
+     Driver: matchMedia('(update: slow)') in WatchdogSurface.tsx. */
+  .watchdog[data-instant] *,
+  .watchdog[data-instant] *::before,
+  .watchdog[data-instant] *::after {
+    transition-duration: var(--mo-instant) !important;
+    animation-duration: var(--mo-instant) !important;
+    transition-delay: 0s !important;
+    animation-delay: 0s !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  @media (update: slow) {
+    .watchdog * { transition: none !important; animation: none !important; }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   THE PAGE — two tiers, cluster > section, and no third.
+   The gap RATIO lives in the source as calc(), so re-ordering can never produce
+   an arbitrary gap and the two numbers can never drift apart (§2 D7, §4.2 #2).
+   ------------------------------------------------------------------------ */
+.container.page.wdf-page {
+  container-type: inline-size;
+  container-name: wdf;
+  display: grid;
+  align-content: start;
+  gap: calc(var(--sp-7) * 2);              /* 48 — BETWEEN clusters */
+  /* Vertical only. The horizontal gutter stays with .container so the page
+     keeps its distance from the sidebar divider, and so every numeric column
+     terminates on that one gutter. NEVER add padding-inline here. */
+  padding-block: var(--sp-7) calc(var(--sp-7) * 3);
+}
+
+.wdf-page-head {
+  display: grid;
+  align-content: start;
+  gap: var(--sp-5);
+}
+
+.wdf-cluster {
+  display: grid;
+  align-content: start;
+  gap: var(--sp-7);                        /* 24 — BETWEEN sections */
+}
+
+/* DELETED: `.wdf-cluster-label`. Its four <h2>s are gone — see the note in
+   WatchdogSurface.tsx. A rule whose only declaration is `margin: 0` on an
+   element with no other job was the whole element's résumé. */
+
+/* The ONE bounded surface on the page, and it marks exactly the region that
+   MUTATES the machine. margin-inline and padding cancel EXACTLY, so its
+   contents stay on the page axis and its numeric columns still land on the one
+   shared right edge (§4.2 item 5, §4.4). */
+.wdf-page .wdf-region {
+  margin-inline: calc(var(--sp-5) * -1);
+  padding: var(--sp-5);
+  border-radius: var(--r-sm);
+  background: var(--tile);
+}
+
+/* …and the licence is structurally revoked everywhere else, so a child that
+   ships a .wdf-region of its own cannot quietly make a second bounded surface.
+   Specificity (0,3,0) beats the grant's (0,2,0) — no !important. */
+.wdf-page :not([data-mutates="true"]) .wdf-region,
+.wdf-page .wdf-region .wdf-region {
+  margin-inline: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* ---------------------------------------------------------------------------
+   THE NAMED RESET — every property `.card` sets, neutralised by name.
+   Scoped high enough (0,3,0 / 0,4,0) to beat both `.card` (0,1,0) and
+   `[data-theme="dark"] .card` (0,2,0), which sit LATER in the bundle because
+   styles.css is imported after the page tree. It covers `.card` itself as well
+   as `.wdf-section`, so "there are no cards" is enforced rather than requested.
+   ------------------------------------------------------------------------ */
+.wdogx-page.watchdog :is(.wdf-section, .card),
+.wdogx-page.watchdog :is(.wdf-section, .card):hover,
+[data-theme="dark"] .wdogx-page.watchdog :is(.wdf-section, .card),
+[data-theme="dark"] .wdogx-page.watchdog :is(.wdf-section, .card):hover {
+  position: relative;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  margin-bottom: 0;
+  transition: none;
+}
+.wdogx-page.watchdog :is(.wdf-section, .card)::after,
+[data-theme="dark"] .wdogx-page.watchdog :is(.wdf-section, .card)::after {
+  content: none;
+}
+
+.wdf-section {
+  --sec-track: 96px;                       /* §3.14's own declared track       */
+  --wdf-title: 224px;                      /* §3.14's own declared title track */
+  display: block;
+  scroll-margin-top: var(--sp-6);          /* NOT calc(--header-h + …)         */
+}
+
+/* Deep-link target: a 2px bar OUTSIDE the content axis, so nothing insets. */
+.wdf-section:target .wdf-head::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--sp-5) * -1);
+  top: var(--sp-4);
+  bottom: var(--sp-4);
+  width: 2px;
+  border-radius: var(--r-pill);
+  background: var(--focus-ring);
+}
+
+/* ---------------------------------------------------------------------------
+   THE SECTION HEAD — §3.14's coverage counter on §3.18's hairline.
+
+   The vertical gate: the DECLARED cadence sits on row 1 at the right edge and
+   the MEASURED age of the stalest member sits directly beneath it in the same
+   --col-age track. Both tabular, both in the section's own unit. The comparison
+   is vertical and needs no hue.
+
+   Column 1 is --sp-7 (24px), not §3.14's --gutter-icon, because that is exactly
+   --gutter-mark + --gutter-icon — the left gutter every table below the head
+   already uses (§2 D3, §4.3). The caret therefore sits on the same x as the
+   rows' change mark, and the 24x26 control clears WCAG 2.5.8 on both axes.
+   ------------------------------------------------------------------------ */
+.wdf-head {
+  position: relative;
+  display: grid;
+  grid-template-columns:
+    var(--sp-7)
+    var(--wdf-title)
+    calc(5 * var(--sec-track))
+    minmax(0, 1fr)
+    var(--col-age);
+  grid-template-areas:
+    "disc title count heartbeat heartbeat"
+    "disc note  note  age       age";
+  align-items: center;
+  /* ZERO, deliberately. The disclosure track is exactly --sp-7 (= --gutter-mark
+     + --gutter-icon), so with no gap the section title and the note begin on
+     the SAME x as the identity column of every row beneath them. A gap here
+     would offset the head from its own table by 12px forever. Separation
+     between head cells is paid by padding on the cells that need it. */
+  column-gap: 0;
+  row-gap: var(--sp-1);
+  min-height: var(--row-h-head);           /* a FLOOR, not a constant */
+  padding-block: var(--sp-4);
+  padding-inline: 0;
+  border-block-end: 1px solid var(--line-2);
+}
+
+.wdf-disclose {
+  grid-area: disc;
+  /* The caret belongs to the TITLE, not to the head's centre of mass — at
+     narrow widths the head grows a third row and a centred caret drifts down
+     beside the counter. Optically centred on the T2 line box; 24x26 still
+     clears WCAG 2.5.8 on both axes. */
+  align-self: start;
+  margin-block-start: calc((var(--lh-2) - var(--ctl-sm)) / 2);
+  justify-self: start;
+  display: grid;
+  place-items: center;
+  inline-size: var(--sp-7);
+  block-size: var(--ctl-sm);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .wdf-disclose:hover { color: var(--ink-1); background: var(--hover); }
+}
+.wdf-caret { transition: rotate var(--mo-fast) var(--mo-out); }
+.wdf-disclose[aria-expanded="true"] .wdf-caret { rotate: 90deg; }
+
+.wdf-title {
+  grid-area: title;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  padding-inline-end: var(--sp-5);
+}
+/* The ordinal is the reading order made explicit — an operator walks 1..6. */
+.wdf-ord {
+  flex: none;
+  font-variant-numeric: lining-nums tabular-nums;
+  color: var(--ink-3);
+}
+
+/* ---- the coverage counter -------------------------------------------------
+   An exhaustive partition whose visible integers sum to the printed
+   population. The TRACK is the separation — no middots, no pipes. */
+.wdf-count {
+  grid-area: count;
+  display: grid;
+  grid-template-columns: repeat(5, var(--sec-track));
+  column-gap: 0;
+  align-items: baseline;
+  min-width: 0;
+}
+.wdf-fig {
+  display: grid;
+  grid-template-columns: 4ch auto;
+  column-gap: var(--sp-2);
+  align-items: baseline;
+  min-width: 0;
+}
+.wdf-fig .n { text-align: right; }
+.wdf-fig .u { color: var(--ink-3); }
+/* An unmeasured class renders the slot-scale absence rule from StatusChip.
+   Never a zero: a zero is a measurement, and this one was not made (§5 L1).
+
+   DELETED: `[data-measured="false"] .u { color: var(--ink-mute) }`. `.u` is the
+   UNIT — "owners", "proven", "failing" — which is the column's MEANING and is
+   therefore TRUTH. §1.5 restricts --ink-mute (Lc 42) to disabled and
+   placeholder only and §5 L15 says it never carries truth; the rule also aimed
+   at the wrong element, since §3.14 demotes the FIGURE and the figure here is
+   already an `AbsenceSlot` that draws the dotted rule and speaks its reason. */
+
+/* ---- the vertical gate ----------------------------------------------------
+   The DECLARED cadence and the MEASURED age of the stalest member are two grid
+   items, one directly above the other, each splitting into [label | --col-age].
+   The two FIGURES therefore land in the same reserved track and terminate on
+   the page gutter, so "is this section older than it promised to be" is a
+   vertical comparison between two tabular numbers and needs no hue — and the
+   six sections' ages read down the page as ONE column, which is the whole
+   reason there are no cards. */
+.wdf-hb, .wdf-age {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--col-age);
+  column-gap: var(--sp-3);
+  align-items: baseline;
+  white-space: nowrap;
+}
+.wdf-hb { grid-area: heartbeat; }
+.wdf-age { grid-area: age; }
+.wdf-gate-label { text-align: right; color: var(--ink-3); }
+.wdf-gate-value { min-width: 0; }
+
+.wdf-note {
+  grid-area: note;
+  min-width: 0;
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  padding-inline-end: var(--sp-5);
+}
+/* No width cap. A cap truncates a path the operator can read in full, and a
+   truncation that did not need to happen is the exact failure §2 D35 names.
+   The identifier truncates on REAL overflow and nothing sooner. */
+.wdf-source { min-width: 0; }
+
+/* THE VETO of §3.18: the counter ASSERTS, the frame REFUSES TO PAINT. A head
+   that cannot say where its integers came from paints the path it tried in
+   --warn. Specificity (0,2,0), no !important — a container that can only
+   DOWNGRADE is exactly the right amount of power for a container to have. */
+.wdf-head:not([data-source]) .wdf-source { color: var(--warn); }
+
+/* ---- the body -------------------------------------------------------------
+   padding-inline: 0, PERMANENTLY. That is the contract with the table and
+   numeric specialists: rows bleed to the page gutter, so every reserved numeric
+   track lands on the same right edge as the head's age for free (§4.3, §5 L18). */
+.wdf-body {
+  padding-block-start: var(--sp-5);
+  padding-inline: 0;
+}
+
+/* THE COLUMN-CONTRACT GUARD, and it is not defensive dressing — it is the one
+   trap §6 names as having "failed silently, in the direction that makes the
+   stylesheet look correct": any `.x-table th` a child writes is (0,1,1) and
+   beats `.wd-col-num` (0,1,0), so a numeric column renders LEFT-aligned with
+   L17 dead on the page while the CSS reads as if it were satisfied. Reproduced
+   in the render harness before this rule existed. (0,2,1) settles it for every
+   table on the page, from the file that owns the column contract (§4.3). */
+.wdf-page :is(th, td).wd-col-num { text-align: right; }
+.wdf-page :is(th, td).wd-num {
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: 0;   /* `ch` excludes tracking, so tracking clips a ch column */
+}
+.wdf-page .wdf-body[hidden] { display: none; }
+.wdf-body[data-measure="prose"] { max-width: var(--measure); }
+
+/* ---------------------------------------------------------------------------
+   SINGLETON · STICKY. `.app-main main` is the only scroll container on this
+   route, so the page gets exactly ONE sticky object and the owner ledger holds
+   the licence. Every other section has it structurally revoked, so a neighbour
+   cannot introduce a second one by shipping its own thead rule.
+   The offset is --sticky-top (0). NEVER --header-h: the app header is a SIBLING
+   ABOVE the scroll container, not inside it.
+   ------------------------------------------------------------------------ */
+.wdf-page .wdf-section[data-sticky="licensed"] .wdf-body :is(thead th, thead td) {
+  position: sticky;
+  top: var(--sticky-top);
+  z-index: 1;
+  background: var(--panel);
+}
+.wdf-page .wdf-section[data-sticky="revoked"] .wdf-body :is(thead th, thead td, [data-sticky-head]) {
+  position: static;
+}
+
+/* ---------------------------------------------------------------------------
+   SINGLETON · FOCUS. The roving tabindex is installed by WatchdogSurface.tsx
+   over native table rows. All this file owes it is a scroll margin, so a row
+   moved into view by the keyboard never lands under the sticky column head.
+   ------------------------------------------------------------------------ */
+.wdf-page .wdf-body :is(tbody > tr, [role="row"]) {
+  scroll-margin-block: var(--row-h-head) var(--row-h);
+}
+
+/* ---------------------------------------------------------------------------
+   The unresolvable blocker reference. Stated as a sentence in reading order,
+   never a toast: an operator clicked a component id the supervisor named and
+   the census does not contain it, and that silence would otherwise read as a
+   broken button.
+   ------------------------------------------------------------------------ */
+.wdf-miss {
+  margin: 0;
+  padding-block: var(--sp-3);
+  border-block-end: 1px solid var(--line-2);
+  max-width: var(--measure);
+  color: var(--ink-1);
+  text-wrap: pretty;
+}
+.wdf-miss b { font-weight: var(--fw-label); }
+
+/* ---------------------------------------------------------------------------
+   RESPONSIVE — container queries only. @media is reserved for
+   prefers-reduced-motion and forced-colors. No vh/vw anywhere: the app root
+   carries a CSS zoom, and viewport units ignore it.
+   ------------------------------------------------------------------------ */
+@container wdf (max-width: 1120px) {
+  /* The head becomes one column of stacked rows. The gate is kept ADJACENT —
+     cadence directly above age — because that adjacency IS the comparison; the
+     counter moves below them rather than between them. Both figures still
+     resolve into --col-age on the page gutter. */
+  .wdf-head {
+    grid-template-columns: var(--sp-7) minmax(0, 1fr);
+    grid-template-areas:
+      "disc title"
+      "disc heartbeat"
+      "disc age"
+      "disc count"
+      "disc note";
+  }
+  .wdf-count { grid-template-columns: repeat(auto-fit, var(--sec-track)); }
+}
+
+@container wdf (max-width: 620px) {
+  /* The fixed track can no longer hold five figures, so the TRACK stops being
+     the separator and an explicit gap takes over. The 4ch integer reservation
+     inside each figure is kept: it is what makes the counts scannable as a
+     partition rather than as a sentence. */
+  .wdf-count {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: var(--sp-6);
+    row-gap: var(--sp-1);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Accessibility modes.
+   ------------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  /* The caret is a STATE with a transition, not a keyframe, so removing the
+     transition costs exactly zero information (§5 L21). */
+  .wdf-caret { transition: none; }
+}
+
+@media (forced-colors: active) {
+  .wdf-head { border-block-end-color: CanvasText; }
+  .wdf-miss { border-block-end-color: CanvasText; }
+  .wdf-page .wdf-region { background: Canvas; border: 1px solid CanvasText; }
+  .wdf-page .wdf-section[data-sticky="licensed"] .wdf-body :is(thead th, thead td) {
+    background: Canvas;
+  }
+}

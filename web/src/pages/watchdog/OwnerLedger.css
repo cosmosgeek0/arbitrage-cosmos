@@ -1,0 +1,432 @@
+/* =============================================================================
+   OwnerLedger.css — the grouped owner census.
+
+   Every value here is a token from web/src/pages/watchdog/tokens.css (BIBLE
+   §1.9). No raw length, no raw colour, no raw duration, no raw weight, and no
+   @media query except the three the bible reserves — prefers-reduced-motion,
+   prefers-contrast and forced-colors. Responsive work is container queries
+   only: the page root carries a CSS `zoom`, which viewport units ignore, so
+   `vh`/`vw` appear nowhere in this file.
+
+   THE COLUMN CONTRACT (§4.3 / D34). Widths come from OwnerRow's published
+   `OWNER_ROW_COLUMNS`, emitted into one <colgroup> with `table-layout: fixed`,
+   so the head, the counters and every row are physically incapable of
+   disagreeing about where a column is. The cell padding model is restated from
+   OwnerRow.css unchanged — symmetric `--sp-5`, zero on both gutter cells, zero
+   trailing on the age cell — so the two files cannot drift:
+
+     [8 mark][16 glyph][owner auto][state 26ch][action 22ch][lag 9ch][age 10ch]|
+      ^ x=0                                                                    ^ page gutter
+
+   The absence marks are StatusChip's `AbsenceSlot` (`.wd-abs`, `.st-void`),
+   not a local rule: §3.12's 3ch dotted hairline must be IDENTICAL in every
+   column or the countable grid it buys stops existing.
+   ========================================================================== */
+
+.wdl {
+  container-type: inline-size;
+  container-name: wdl;
+
+  /* §3.14's coverage track, at the bible's own measured value and never
+     redefined: one track per class figure, and THE TRACK IS THE SEPARATION,
+     which is why there are no middots between the five integers. The responsive
+     steps below re-FLOW the band (5 across → its own row → 3 across) rather than
+     shrinking this number, so no width on this page is a literal I invented. */
+  --sec-track: 96px;
+}
+
+/* §4.2 mechanism 1 / D32: an explicit, NAMED reset of every property `.card`
+   sets, restated at this scope so law L18 holds even if this section is
+   mounted without the shared frame layer. Eight cards means eight interior
+   right edges, so no numeric column on the page could ever share an x — and on
+   a comparing surface that is the entire job. */
+.wdl,
+.wdl:hover {
+  display: block;
+  position: relative;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.wdl { scroll-margin-top: var(--sp-6); }   /* NOT calc(--header-h + …) */
+
+/* ---- the section head -----------------------------------------------------
+   REMOVED AT INTEGRATION: `.wdl-head`, `.wdl-head-id`, `.wdl-source`,
+   `.wdl-head-right` and the three `.wdl-receipt*` tracks. WatchdogSurface's
+   `.wdf-head` is the one section head on this page (§4.1, §3.14) and it already
+   prints the title, the ordinal, the evidence source, the exhaustive coverage
+   partition and the stalest-evidence age on the shared right edge — which is
+   what this receipt existed to do. Two heads per section is the box-filling this
+   page was rebuilt to remove, and two coverage receipts counting different
+   things is worse than either alone.
+
+   What survives below is the one thing the shell cannot render: the order
+   control this section actually owns. */
+
+.wdl-order {
+  display: grid;
+  justify-items: end;
+  row-gap: var(--sp-3);
+  padding-block-end: var(--sp-4);
+}
+
+/* ---- the sort control (§3.6) --------------------------------------------- */
+
+.wdl-sort { display: flex; gap: var(--sp-3); }
+
+.wdl-sortbtn[aria-pressed='true'] {
+  --wdb-fill: var(--tile);
+  --wdb-edge: var(--line-strong);
+  --wdb-ink: var(--ink-1);
+}
+
+/* DELETED: this file's private pill geometry, its `font-weight: var(--fw-head)`
+   press state and its `color: var(--ink-mute)` refusal.
+
+   The element already carries `wdb wdb--sm`, so the geometry was a second copy
+   of §3.6 that had visibly drifted — `height` instead of `min-height`,
+   `transparent` instead of `--panel`, `--sp-5` instead of `--sp-4` — and this
+   pill did not match the pills beside it.
+
+   The weight change is a defect twice over: §5 L11 forbids a state transition
+   changing a font weight, and §3.9 fixes `font-weight: var(--fw-value)` as
+   CONSTANT in every state — a weight change here re-measures the label and
+   reflows the sort row under the pointer that caused it. The fill and the ink
+   already carry the state.
+
+   `--ink-mute` on the refused level is §3.6's named failure: non-actionable
+   RECEDES VIA SUNKEN FILL + DASHED EDGE and INK STAYS AT FULL CONTRAST, because
+   a washed-out control is indistinguishable from a crashed render. That is the
+   shared `[aria-disabled="true"]` level, which this now inherits. */
+
+.wdl-sortnote { max-width: var(--measure); text-align: end; }
+
+/* ---- body ---------------------------------------------------------------- */
+
+.wdl-body {
+  padding-block-start: var(--sp-5);
+  padding-inline: 0;                /* CONTRACT: rows bleed to the page gutter */
+}
+
+.wdl-continuity { max-width: var(--measure); margin-block-end: var(--sp-5); }
+.wdl-continuity b { color: var(--ink-1); font-weight: var(--fw-value); }
+
+/* ---- the table (D33 / D34) ----------------------------------------------- */
+
+.wdl-table {
+  width: 100%;
+  table-layout: fixed;
+  /* `separate`, not `collapse`: a collapsed border belongs to the table rather
+     than the cell, and Blink/WebKit drop it on a `position: sticky` cell —
+     which would erase the column head's hairline exactly while it is pinned. */
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--font);
+}
+
+/* Identical to OwnerRow.css's own cell contract, restated so the head and the
+   rows cannot disagree. `vertical-align: top` is what lets a reason wrap onto a
+   second line while the value and the age stay pinned to the first. */
+.wdl-table > * > tr > :where(th, td) {
+  padding: var(--sp-3) var(--sp-5);
+  vertical-align: top;
+  text-align: left;
+}
+
+.wdl-table :where(th, td).wd-col-num { text-align: right; }
+
+/* THE FIFTH WEIGHT, closed. The UA stylesheet renders `<th>` at weight 700 —
+   the same defect §1.4 closes for `<strong>`/`<b>`, and one this table would
+   otherwise reopen on every column head and every group head. Weight comes from
+   the type ROLE the child carries, never from the element. */
+.wdl-table th { font-weight: inherit; }
+
+/* ---- the page's ONE sticky object (§4.7 / D27) ---------------------------- */
+/* `top` is `--sticky-top` (0px). NEVER `--header-h`: `.app-main main` is the
+   scroll container and the app header is a SIBLING ABOVE it, outside the
+   scroller, so an offset buys 58px of dead band instead of clearance. */
+
+.wdl-thead th {
+  position: sticky;
+  top: var(--sticky-top);
+  z-index: 2;
+  padding-block: var(--sp-2) var(--sp-3);
+  background: var(--panel);
+  box-shadow: inset 0 -1px 0 var(--line-2);
+  vertical-align: bottom;
+  white-space: nowrap;              /* a column head must never wrap */
+}
+
+/* The two gutters carry no padding at all — with `table-layout: fixed` a <col>
+   width is the cell's OUTER width, so 12px of inline padding would collapse the
+   8px mark gutter to nothing. */
+.wdl-thead th.wdl-h-mark,
+.wdl-thead th.wdl-h-glyph { padding-inline: 0; }
+.wdl-thead th.wdl-h-age { padding-inline-end: 0; }
+
+/* The measured-case second line. Its unanimous-absence twin, `.wd-abs-colnote`,
+   is StatusChip's and is NOT restated here — one definition, so the two lines a
+   column header can grow cannot drift into two typographies. */
+.wdl-colnote {
+  display: block;
+  text-transform: none;             /* .wd-t3 uppercases; this line is prose */
+  letter-spacing: var(--ls-6);
+  font-size: var(--fs-6);
+  font-weight: var(--fw-support);
+  line-height: var(--lh-6);
+  color: var(--ink-3);              /* TRUTH ink. Never --ink-mute. */
+}
+
+/* ---- the coverage counter (§3.14) ---------------------------------------- */
+
+.wdl-sec-cell {
+  padding-block: var(--sp-6) 0;
+  padding-inline: 0;
+}
+
+.wdl-group:first-of-type .wdl-sec-cell { padding-block-start: var(--sp-3); }
+
+/* NOT sticky (D27): `coverage-counter` and `owner-row` both wanted a second
+   sticky tier and both lost — a two-tier ladder would have shipped 90px of
+   empty gap above every pinned header on this exact scroll container. */
+/* THE GUTTER ARITHMETIC, and it is load-bearing. The two table gutters carry no
+   padding, so a row's glyph box starts at x = --gutter-mark (8) and its owner
+   cell content at x = 8 + 16 + --sp-5 (36). This head therefore FUSES both
+   gutters into one 24px track and pads the glyph by --gutter-mark, which lands
+   the head glyph and the row glyph on the same x, and the group name and the
+   owner name on the same x — with a single `column-gap` and no per-item
+   padding to drift. Track 5 is `--col-age`, so the head's ages and every row's
+   age terminate on the ONE page gutter (§4.3, law L18). */
+.wdl-sec-head {
+  display: grid;
+  grid-template-columns:
+    calc(var(--gutter-mark) + var(--gutter-icon))
+    minmax(0, 34ch)
+    calc(5 * var(--sec-track))
+    minmax(0, 1fr)
+    var(--col-age);
+  column-gap: var(--sp-5);
+  row-gap: var(--sp-2);
+  align-items: baseline;
+  min-height: var(--row-h-head);
+  padding-block-end: var(--sp-3);
+  border-block-end: 1px solid var(--line-2);
+}
+
+.wdl-sec-glyph {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: center;
+  padding-inline-start: var(--gutter-mark);
+}
+
+/* D19 / §1.6 rule 2: the icon gutter is `--ink-3`, ALWAYS. Colouring it is what
+   previously put `--ok` and `--warn` 0.3 Lc apart in dark — one state, in
+   greyscale and under protanopia. Groups separate by SILHOUETTE, never hue. */
+.wdl-glyph { display: block; color: var(--ink-3); }
+
+.wdl-sec-id {
+  grid-column: 2;
+  grid-row: 1;
+  display: grid;
+  row-gap: var(--sp-1);
+  min-width: 0;
+}
+
+.wdl-sec-id em { font-style: normal; }
+
+.wdl-sec-count {
+  grid-column: 3;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: repeat(5, var(--sec-track));
+  column-gap: 0;
+  align-items: baseline;
+}
+
+.wdl-fig {
+  display: grid;
+  grid-template-columns: 4ch auto;
+  column-gap: var(--sp-2);
+  align-items: baseline;
+}
+
+/* A MEASURED ZERO keeps full ink (§3.12 `.st-none`: a measured empty set is a
+   COMPLETE ANSWER, no demotion). There is no unmeasured branch here at all —
+   these five integers are derived from the rows on screen, so §3.14's
+   `[data-measured="false"]` rule has no call site on this counter and is not
+   shipped. A stylesheet rule nothing can reach is the same defect as a control
+   nothing is wired to. */
+.wdl-fig-n { text-align: right; }
+.wdl-fig-u { white-space: nowrap; }
+
+/* THE VERTICAL GATE: oldest above newest, one `--col-age` track, one unit, both
+   tabular, both MEASURED. A group-wide stall reads as two large numbers; one
+   wedged owner reads as a large number over a small one. Needs no hue. */
+.wdl-sec-age {
+  grid-column: 5;
+  grid-row: 1 / span 2;
+  display: grid;
+  row-gap: var(--sp-1);
+  justify-items: end;
+  text-align: end;
+  white-space: nowrap;
+}
+
+.wdl-sec-line {
+  grid-column: 2 / 5;
+  grid-row: 2;
+  min-height: var(--row-h-tight);
+  max-width: var(--measure);
+}
+
+.wdl-sec-line b { color: var(--ink-1); font-weight: var(--fw-value); }
+.wdl-sec-demote { color: var(--ink-2); }
+
+/* The doctrine as a RUNTIME invariant shipped in production (§3.1's mechanism,
+   applied to the partition): if the four class integers ever fail to sum to the
+   printed population, the head paints as untrustworthy AND says why in words —
+   a stylesheet can refuse to paint a claim, it cannot refuse to write one. */
+.wdl-sec-head[data-defect='true'] {
+  border-block-end-style: dashed;
+  border-block-end-color: var(--line-strong);
+}
+
+/* ---- absence, column scale (§3.12 / D37) --------------------------------- */
+/* The literal words at `--ink-3`, never an em dash: NVDA reads a dash as
+   nothing at all, and on an evidence-gated surface silence is the most complete
+   form of the lie. `.wd-nodata` carries the ink; this only stops the wrap. */
+.wdl-noproof { white-space: nowrap; }
+
+/* ---- the jump every blocker id on the page shares ------------------------ */
+
+.wdl-jump {
+  display: inline-flex;
+  align-items: center;
+  height: var(--ctl-sm);
+  margin-inline: calc(var(--sp-4) * -1);
+  padding-inline: var(--sp-4);
+  border: 0;
+  border-radius: var(--r-sm);       /* D1: an icon/inline affordance, not a pill */
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    color var(--mo-fast) var(--mo-out),
+    background-color var(--mo-fast) var(--mo-out);
+}
+
+/* Dotted, not solid: the page's other dotted rule is the absence slot, and an
+   id you can JUMP TO is the one affordance that resolves an absence. */
+.wdl-jump .wd-id { text-decoration: underline dotted; text-underline-offset: var(--sp-1); }
+
+@media (hover: hover) and (pointer: fine) {
+  .wdl-jump:hover { background: var(--tile); color: var(--ink-1); }
+}
+
+/* ---- the two head addenda ------------------------------------------------ */
+
+.wdl-add {
+  grid-column: 2 / -1;
+  grid-row: 3;
+  display: grid;
+  row-gap: var(--sp-4);
+  max-width: var(--measure);
+  padding-block-start: var(--sp-3);
+}
+
+.wdl-add-hero b { color: var(--ink-1); font-weight: var(--fw-value); }
+.wdl-add-symbols { font-variant-numeric: lining-nums tabular-nums; }
+.wdl-add-why { color: var(--ink-3); }
+.wdl-add-self b { color: var(--ink-1); font-weight: var(--fw-value); }
+
+.wdl-add-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13ch, 1fr));
+  column-gap: var(--sp-6);
+  row-gap: var(--sp-4);
+  margin: 0;
+}
+
+.wdl-add-pair { display: grid; row-gap: var(--sp-2); min-width: 0; }
+.wdl-add-pair dd { margin: 0; }
+
+/* ---- §3.13 the unmet measurement contract -------------------------------- */
+
+/* §3.13's panel is `.wd-empty` in patterns.css; this element composes it and
+   adds only the measure. The private copy that used to live here was the same
+   component under a second name, and it had drifted: it kept
+   `padding-inline: var(--sp-6)` on its FLUSH variant, so the owner ledger's
+   empty panel broke the one shared right edge the whole page is built around —
+   in exactly the state (nothing to show) where an operator most needs the
+   columns to line up with the rows above. */
+.wdl-empty { max-inline-size: var(--measure); margin: 0; }
+.wdl-obls { display: grid; row-gap: var(--sp-5); margin: 0; width: 100%; }
+.wdl-obl { display: grid; row-gap: var(--sp-2); }
+.wdl-obl dd { margin: 0; }
+.wdl-obl-why { color: var(--ink-2); }
+
+/* §3.13: a proven-ACTIVE exposure takes the one hue an empty panel may carry.
+   UNKNOWN exposure stays HUELESS — a doubt is not a proven exposure, and
+   painting it would be this page's own sin pointed the other way. */
+.wdl-exposure[data-exposure='unknown'] { color: var(--ink-1); }
+
+/* Byte-identical to `.wd-empty-byline`, which is now in patterns.css. */
+
+@media print {
+  .wdl-empty { break-inside: avoid; }
+}
+
+/* ---- responsive: container queries only ---------------------------------- */
+
+@container wdl (max-width: 880px) {
+  /* The counters stop competing with the identity for one row and take their
+     own. The age track keeps its column and its position, so the single shared
+     right edge — the only thing on this page that cannot be given up — lives. */
+  .wdl-sec-head { grid-template-columns:
+    calc(var(--gutter-mark) + var(--gutter-icon)) minmax(0, 1fr) var(--col-age); }
+  .wdl-sec-id { grid-column: 2; grid-row: 1; }
+  .wdl-sec-count { grid-column: 2; grid-row: 2; }
+  .wdl-sec-age { grid-column: 3; grid-row: 1 / span 2; }
+  .wdl-sec-line { grid-column: 2 / -1; grid-row: 3; }
+  .wdl-add { grid-column: 2 / -1; grid-row: 4; }
+
+  .wdl-order { justify-items: start; }
+  .wdl-sortnote { text-align: start; }
+}
+
+@container wdl (max-width: 620px) {
+  /* The band wraps to three tracks over two rows. The TRACK WIDTH IS UNCHANGED,
+     so the five integers stay on the same grid they had at full width and a
+     narrow window costs the operator nothing but a line. */
+  .wdl-sec-count { grid-template-columns: repeat(3, var(--sec-track)); row-gap: var(--sp-2); }
+}
+
+/* ---- accessibility modes: RE-SOLVED, never renamed ----------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  /* M4: every information-bearing motion has a non-motion carrier, so removing
+     the transition costs ZERO information — it removes the fade, not the fact. */
+  .wdl-sortbtn,
+  .wdl-jump { transition: none; }
+}
+
+@media (forced-colors: active) {
+  /* D24: `GrayText` is the OS DISABLED colour. A reason is TRUTH and must never
+     render as disabled — that is the single worst a11y defect the bible fixes,
+     and it was committed inside the query meant to prevent it. */
+  .wdl-glyph { color: CanvasText; }
+  .wdl-sortbtn { border-color: CanvasText; }
+  .wdl-sortbtn[aria-pressed='true'] { border-color: Highlight; color: Highlight; }
+    /* GrayText is the OS DISABLED colour and a refusal reason is TRUTH; only the
+     button's own chrome may recede, which patterns.css handles. */
+  .wdl-thead th { box-shadow: none; border-block-end: 1px solid CanvasText; }
+  .wdl-sec-head { border-block-end-color: CanvasText; }
+  .wdl-sec-head[data-defect='true'] { border-block-end-color: Highlight; }
+}

@@ -1,0 +1,318 @@
+/* =============================================================================
+   StatusChip.css — the state vocabulary, the stale modifier, and the three
+   non-row scales of absence.
+
+   Source of truth: BIBLE §3.1 (chip), §3.12 (absence), §1.5-1.8 (tokens).
+   Every length here is a token. The ONLY literals are the 1px hairline
+   (declared permissible by Law 12) and --wd-glyph, which restates §3.1's own
+   `width:12px;height:12px` exactly once so no rule body repeats it.
+
+   HIERARCHY IS FILL MASS, NEVER SIZE OR HUE.
+   bare -> tint -> solid. BT.601 luma separation 2.8x (light) / 4.4x (dark),
+   so the severity ladder survives a monochrome screenshot and protanopia.
+   No rung changes the font size, the weight, the radius or the geometry, so a
+   state transition can never reflow a row (Law 11).
+   ========================================================================== */
+
+.wd-chip-slot {
+  --wd-glyph: 12px;
+  /* THE LEADING INSET — the chip's inline padding PLUS its 1px border. Measured,
+     not assumed: omitting the hairline put the reason at x+26 while the label
+     sat at x+27, and a 1px miss is exactly the class of silent misalignment
+     that reads as correct in the source and wrong on the screen. */
+  --wd-chip-inset: calc(var(--sp-4) + 1px);
+  /* col 1 is the inset + glyph + gap, so the reason on row 2 hangs under the
+     state WORD, not under the glyph. Alignment falls out of the grid; no rule
+     computes a magic indent. */
+  display: inline-grid;
+  grid-template-columns:
+    calc(var(--wd-chip-inset) + var(--wd-glyph) + var(--sp-3))
+    minmax(0, 1fr);
+  align-items: start;
+  row-gap: var(--sp-1);
+  min-width: 0;
+}
+
+/* In a MetricCell the chip is the warrant row of a baseline-aligned subgrid,
+   sitting under a T1 reading. Pulling back by the leading inset lands the
+   GLYPH on the cell's text edge, so the warrant's first ink is flush with the
+   reading's first ink. It is a margin, not a padding removal, so a tinted chip
+   and a bare chip still start at the same x — a state change moves nothing. */
+.wd-chip-slot[data-size='band'] {
+  margin-inline-start: calc(var(--wd-chip-inset) * -1);
+}
+
+.wd-chip {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+  padding: var(--sp-1) var(--sp-4);
+  border: 1px solid transparent;   /* PRESENT in every rung: never reflows */
+  border-radius: var(--r-sm);
+  background: transparent;
+  /* D17 — the label is ALWAYS --ink-1. Hue is always the fill. Worth 25-43 Lc,
+     free, and it is why no rung ever sets `color` to its own hue. */
+  color: var(--ink-1);
+  font-family: var(--font);
+  font-size: var(--fs-4);
+  font-weight: var(--fw-value);
+  line-height: var(--lh-4);
+  letter-spacing: var(--ls-4);
+  text-transform: none;            /* a status is a VALUE, not a column head */
+  white-space: nowrap;
+  cursor: default;
+  user-select: text;               /* it goes into the incident ticket */
+}
+
+.wd-chip-glyph {
+  flex: none;
+  width: var(--wd-glyph);
+  height: var(--wd-glyph);
+  color: currentColor;
+}
+
+.wd-chip-label {
+  min-width: 0;
+}
+
+/* ---- THE FILL LADDER — the only hierarchy mechanism -----------------------
+   MEASURED, headless, on the WORST surface of each theme (--tile-hover), not
+   the flattering one. BT.601 luma of the chip's own background:
+
+     light   bare 241 · tint 239-240 · solid  91
+     dark    bare  36 · tint  49- 50 · solid 105
+
+   READ THE LIGHT ROW BEFORE TOUCHING THE BORDER. On the worst light surface a
+   tint is TWO luma steps away from bare — on --panel the bible measures 16, but
+   this page's rows sit on the hover surface. In light mode the tint alone does
+   NOT carry the ladder; the 26% border does. So the real ladder is topological,
+   not tonal: NO CONTAINER -> OUTLINED CONTAINER -> FILLED CONTAINER. It is that
+   sequence, not the grey values, that survives a monochrome screenshot and
+   protanopia. Deleting `border-color` here because "the tint carries it" is
+   true in dark and silently collapses DEGRADED into READY in light.
+
+   APCA on the same run: label 94.5-97.2 Lc on every tinted rung, 81.4 / 78.7
+   for --on-solid on --bad-solid (floor 75), --ok glyph 53.4 / 52.3 (floor 45
+   for a fine pictogram), reason 87.3 / 88.0. Theme drift <= 0.8 Lc everywhere,
+   inside the 1.5 Lc gate.                                                    */
+.wd-chip[data-rung='gated'] {
+  background: var(--held-tint);
+  border-color: color-mix(in srgb, var(--held) 26%, transparent);
+}
+.wd-chip[data-rung='warn'] {
+  background: var(--warn-tint);
+  border-color: color-mix(in srgb, var(--warn) 26%, transparent);
+}
+.wd-chip[data-rung='blocked'] {
+  background: var(--bad-solid);
+  color: var(--on-solid);          /* Lc 81.4 light / 78.7 dark — the label rides the fill */
+  border-color: transparent;
+}
+
+/* --ok is a <=12px GLYPH and nothing else (D18). Never a word, never a fill,
+   never a number. It aliases --up so the product has ONE green. */
+.wd-chip[data-rung='ready'] .wd-chip-glyph { color: var(--ok); }
+
+/* Absent rungs: the glyph steps back one ink tier, the LABEL stays at full
+   legibility. Unknown / unavailable / not-configured carry no hue at all. */
+.wd-chip[data-rung='absent'] .wd-chip-glyph { color: var(--ink-3); }
+
+/* ---- STALE — an orthogonal modifier, carried without hue ------------------
+   The border is PRESENT in every rung already, so switching its lower edge to
+   dashed costs zero layout: no reflow, no weight change, no size change.
+   currentColor is legible both on the solid fill (--on-solid) and on a bare
+   chip (--ink-1), and it is hueless in every rung — staleness is a property of
+   the CLOCK, not a severity, and must never read as a fifth hue. Held to 62%
+   so the modifier never out-shouts the state it modifies. */
+.wd-chip[data-stale='true'] {
+  border-bottom-style: dashed;
+  border-bottom-color: color-mix(in srgb, currentColor 62%, transparent);
+}
+
+/* ---- THE REASON — T5, its own line, real DOM text in reading order --------
+   Never a title, never a tooltip, never `content:`. It must survive a
+   screenshot pasted into an incident ticket. */
+.wd-chip-reason {
+  grid-column: 2;
+  min-width: 0;
+  max-inline-size: var(--measure);
+  color: var(--ink-2);
+  font-family: var(--font);
+  font-size: var(--fs-5);
+  font-weight: var(--fw-support);
+  line-height: var(--lh-5);
+  letter-spacing: var(--ls-5);
+  white-space: normal;
+  overflow-wrap: anywhere;         /* a reason code must never widen a column */
+  font-variant-numeric: lining-nums tabular-nums;
+  user-select: text;
+  /* No explicit grid-row: the chip is pinned to row 1 and spans both tracks, so
+     auto-placement drops the reason into the next free cell of column 2. An
+     explicit `:first-of-type` here silently never matched — the chip is the
+     first <span> — and the layout only looked right because auto-placement was
+     already doing the work. */
+}
+
+/* Promotion inside a reason is by INK, not by weight — no webfont is loaded,
+   so 700 would snap and the emphasis would silently stop existing. */
+.wd-chip-reason b,
+.wd-chip-reason strong {
+  color: var(--ink-1);
+  font-weight: var(--fw-value);
+}
+
+/* In a band the reason is a full-measure sentence under a T1 reading, so it
+   takes the whole cell instead of hanging off the 27px label indent. */
+.wd-chip-slot[data-size='band'] .wd-chip-reason {
+  grid-column: 1 / -1;
+  /* cancels the pull-back exactly, so the sentence starts on the cell's text
+     edge with the glyph above it */
+  padding-inline-start: var(--wd-chip-inset);
+}
+
+/* ---- THE DOCTRINE AS A RUNTIME INVARIANT, SHIPPED IN PRODUCTION ----------
+   An adverse rung with no reason does not get to render clean. The hatch is
+   deliberately ugly and deliberately not a severity hue: it is a defect in the
+   PAGE, not a state of the machine. */
+.wd-chip[data-defect='true'] {
+  border: 1px dashed var(--line-strong);
+  background: repeating-linear-gradient(135deg, transparent 0 5px, var(--tile) 5px 10px);
+}
+
+/* =============================================================================
+   ABSENCE, SLOT SCALE (§3.12)
+   3ch is narrower than any real value, so a rule can never imply a magnitude,
+   and it is identical in every column, so the page's blindness reads as a
+   countable grid rather than as noise.
+   ========================================================================== */
+/* `.st-none` has NO rule, deliberately: a measured empty set is a COMPLETE
+   ANSWER, so it inherits the host's own value register with no demotion. It is
+   the only one of the three that renders a figure, and the figure is the
+   measured zero. */
+.wd-abs.st-void,
+.wd-abs.st-na {
+  display: inline-block;
+  width: 3ch;
+  height: .7em;
+  vertical-align: baseline;
+}
+.wd-abs.st-void { border-bottom: 1px dotted var(--ink-3); }
+/* .st-na has NO rule on purpose. NOT-APPLICABLE is the ONLY visually blank
+   state on this page — the exact inversion of what ships everywhere else —
+   and its sr-only text is what carries the meaning. */
+
+/* =============================================================================
+   ABSENCE, COLUMN SCALE (§3.12)
+   The second line a columnheader grows when 100% of its slots are one kind.
+   ========================================================================== */
+.wd-abs-colnote {
+  display: block;
+  color: var(--ink-3);             /* TRUTH ink. Never --ink-mute; never GrayText. */
+  font-family: var(--font);
+  font-size: var(--fs-6);
+  font-weight: var(--fw-support);
+  line-height: var(--lh-6);
+  letter-spacing: var(--ls-6);
+  text-transform: none;            /* the head above is T3 UPPERCASE; this is not */
+}
+
+/* =============================================================================
+   ABSENCE, PANEL SCALE (§3.12)
+   Left-aligned, never centred. Height declared in row atoms so the region
+   occupies the space the data would have and nothing reflows on its return.
+   No illustration, ever.
+   ========================================================================== */
+.wd-abs-panel {
+  display: grid;
+  align-content: start;            /* NEVER place-items:center */
+  justify-items: start;
+  gap: var(--sp-4);
+  min-block-size: calc(var(--row-h) * var(--wd-abs-rows, 3));
+  padding-block: var(--sp-5);
+  padding-inline: 0;               /* Law 18 — nothing insets content */
+  text-align: left;
+}
+
+.wd-abs-panel-kind {
+  margin: 0;
+  color: var(--ink-3);
+  font-family: var(--font);
+  font-size: var(--fs-3);
+  font-weight: var(--fw-label);
+  line-height: var(--lh-3);
+  letter-spacing: var(--ls-3);
+  text-transform: uppercase;
+}
+.wd-abs-panel-headline {
+  margin: 0;
+  color: var(--ink-1);
+  font-family: var(--font);
+  font-size: var(--fs-4);
+  font-weight: var(--fw-value);
+  line-height: var(--lh-4);
+  letter-spacing: var(--ls-4);
+}
+.wd-abs-panel-consequence {
+  margin: 0;
+  /* 52ch, per §3.12. The consequence is the one string an operator must ACT
+     on, so it is capped for reading speed, not shrunk for tidiness. */
+  max-inline-size: 52ch;
+  color: var(--ink-2);
+  font-family: var(--font);
+  font-size: var(--fs-5);
+  font-weight: var(--fw-support);
+  line-height: var(--lh-5);
+  letter-spacing: var(--ls-5);
+}
+.wd-abs-panel-evidence {
+  margin: 0;
+  max-inline-size: var(--measure);
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: var(--fs-6);
+  font-weight: var(--fw-support);
+  line-height: var(--lh-6);
+  letter-spacing: 0;               /* `ch` excludes tracking; keep the grid honest */
+  font-variant-numeric: lining-nums tabular-nums;
+  overflow-wrap: anywhere;
+  user-select: text;               /* the evidence line is the thing you paste */
+}
+
+/* =============================================================================
+   ACCESSIBILITY MODES — re-solved, never renamed.
+   ========================================================================== */
+@media (forced-colors: active) {
+  /* color-mix and tint backgrounds are dropped here, so the ladder is re-cut
+     in system colours: tint rungs become an outline, the solid rung becomes
+     the system Highlight pair. */
+  .wd-chip[data-rung='warn'],
+  .wd-chip[data-rung='gated'] {
+    border-color: CanvasText;
+    background: Canvas;
+  }
+  .wd-chip[data-rung='blocked'] {
+    background: Highlight;
+    color: HighlightText;
+    border-color: Highlight;
+  }
+  .wd-chip[data-defect='true'] {
+    border: 1px dashed CanvasText;
+    background: Canvas;
+  }
+  /* D24 — GrayText is the OS DISABLED colour. A reason is TRUTH and must never
+     render as disabled inside the very query meant to protect it. */
+  .wd-chip-label,
+  .wd-chip-reason,
+  .wd-abs-colnote,
+  .wd-abs-panel-kind,
+  .wd-abs-panel-headline,
+  .wd-abs-panel-consequence,
+  .wd-abs-panel-evidence {
+    color: CanvasText;
+  }
+  .wd-abs.st-void { border-bottom-color: CanvasText; }
+}

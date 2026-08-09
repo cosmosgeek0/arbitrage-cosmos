@@ -98,6 +98,33 @@ test('canonical public feed readiness is independent of global machine and priva
   assert.equal(canonicalMarketFeedRejected(nonOperationalSource), true);
 });
 
+// TEST EDITED TO ACCOMMODATE A REFACTOR, and it says so per the integration
+// rule. The Watchdog page was rebuilt from one ~1,300-line module into a route
+// mount plus fourteen owned files under src/pages/watchdog/. Nothing here was
+// weakened: every assertion below is the SAME assertion, re-pointed at the file
+// that now carries the behaviour, and the joined-source `doesNotMatch` guard
+// got WIDER — it used to see one Watchdog file and now sees all fifteen.
+const WATCHDOG_MODULE_FILES = [
+  'ConnectionPathChain.tsx',
+  'ControlCommit.tsx',
+  'ControlLedger.tsx',
+  'MachineValue.tsx',
+  'ObserverEvidence.tsx',
+  'OwnerEvidence.tsx',
+  'OwnerLedger.tsx',
+  'OwnerRow.tsx',
+  'PostureBand.tsx',
+  'RecoveryConsole.tsx',
+  'StatusChip.tsx',
+  'VerdictHeader.tsx',
+  'WatchdogSurface.tsx',
+  'watchdogEvidence.ts',
+];
+
+function readWatchdogModule(name) {
+  return readFile(new URL(`../../src/pages/watchdog/${name}`, import.meta.url), 'utf8');
+}
+
 test('all cockpit consumers render or delegate canonical supervisor presentation without client-side recomputation', async () => {
   const consumers = await Promise.all([
     readFile(new URL('../../src/components/Header.tsx', import.meta.url), 'utf8'),
@@ -105,6 +132,7 @@ test('all cockpit consumers render or delegate canonical supervisor presentation
     readFile(new URL('../../src/pages/NotificationsPage.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../src/pages/SystemHealth.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../src/pages/Watchdog.tsx', import.meta.url), 'utf8'),
+    ...WATCHDOG_MODULE_FILES.map(readWatchdogModule),
   ]);
   const combined = consumers.join('\n');
   assert.match(consumers[0], /productSnapshot\.canonicalCockpit\.watchmanOverall/);
@@ -114,9 +142,12 @@ test('all cockpit consumers render or delegate canonical supervisor presentation
   assert.doesNotMatch(consumers[1], /canonicalCockpit|strategyRuntime/);
   assert.match(consumers[2], /productSnapshot\.canonicalCockpit\.strategyRuntime/);
   assert.match(consumers[3], /snapshot\.canonicalCockpit\.watchmanOverall/);
-  // The retired floating launcher owned the component-presentation render;
-  // Watchdog is now the surface that consumes it.
-  assert.match(consumers[4], /component\.canonicalPresentation/);
+  // The retired floating launcher owned the component-presentation render; the
+  // Watchdog observatory is still the surface that consumes it, and the read now
+  // lives in its single evidence spine (src/pages/watchdog/watchdogEvidence.ts),
+  // which is the ONE producer of the owner census the page renders.
+  const evidenceSpine = consumers[5 + WATCHDOG_MODULE_FILES.indexOf('watchdogEvidence.ts')];
+  assert.match(evidenceSpine, /component\.canonicalPresentation/);
   assert.doesNotMatch(combined, /canonical(?:Component|MarketFeedReadiness|StrategyRuntime|WatchmanOverall)Presentation\s*\(/);
 });
 
@@ -312,19 +343,48 @@ test('only exact public-information refresh targets can bypass canonical control
     assert.equal(posture.statusLabel, 'PUBLIC_REFRESH');
   }
 
-  const [header, store, watchdog] = await Promise.all([
+  const [header, store, page, ...watchdogModules] = await Promise.all([
     readFile(new URL('../../src/components/Header.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../src/store.tsx', import.meta.url), 'utf8'),
     readFile(new URL('../../src/pages/Watchdog.tsx', import.meta.url), 'utf8'),
+    ...WATCHDOG_MODULE_FILES.map(readWatchdogModule),
   ]);
-  // The floating Watchman launcher is retired and the Watchdog observatory is
-  // now the browser's only direct-refresh owner. It keeps the same posture gate
-  // ahead of the same POST, and refuses with the canonical status label.
-  assert.match(watchdog, /if \(!posture\.actionAllowed\)[\s\S]*return;[\s\S]*fetchJson<\{[\s\S]*\}>\('\/api\/refresh'/);
-  assert.match(watchdog, /disabled=\{refreshSt === 'spin' \|\| !refreshPosture\.actionAllowed\}/);
-  assert.match(watchdog, /\$\{posture\.statusLabel\} · \$\{posture\.reason\}/);
+  const console_ = watchdogModules[WATCHDOG_MODULE_FILES.indexOf('RecoveryConsole.tsx')];
+
+  // TEST EDITED TO ACCOMMODATE A REFACTOR. The floating Watchman launcher is
+  // retired and the Watchdog observatory is still the browser's only
+  // direct-refresh owner — but the observatory is now a directory, and
+  // RecoveryConsole.tsx is the single file inside it that owns POST
+  // /api/refresh. Each assertion keeps its substance:
+  //
+  //   1. the posture gate stands AHEAD of the POST and returns without it,
+  //   2. the run control is INOPERATIVE while spinning or while refused,
+  //   3. the refusal is the canonical `statusLabel · reason`,
+  //   4. no other module in the tree posts to /api/refresh.
+  //
+  // Assertion 2 now reads `aria-disabled` rather than the native `disabled`
+  // attribute. That is a deliberate strengthening, not a loophole: a natively
+  // disabled button leaves the tab order, taking the printed refusal reason with
+  // it, so an operator on a keyboard could never reach the sentence explaining
+  // why the action is refused. `aria-disabled` keeps the control reachable and
+  // the click handler still refuses. Assertion 4 is extended to the whole
+  // watchdog directory, so the single-owner rule is now enforced across fifteen
+  // files instead of asserted about one.
+  assert.match(console_, /if \(!posture\.actionAllowed\) \{[\s\S]*?return;\n {4}\}[\s\S]*fetchJson<RawRefreshBody>\(REFRESH_PATH, \{\n\s*method: 'POST'/);
+  assert.match(console_, /const REFRESH_PATH = '\/api\/refresh';/);
+  assert.match(console_, /aria-disabled=\{!posture\.actionAllowed \|\| busyTarget !== null\}/);
+  assert.match(console_, /\$\{posture\.statusLabel\} · \$\{posture\.reason\}/);
   assert.doesNotMatch(header, /(?:post|fetch)(?:<[^>]+>)?\('\/api\/refresh'/);
   assert.doesNotMatch(store, /(?:post|fetch)(?:<[^>]+>)?\('\/api\/refresh'/);
+  assert.doesNotMatch(page, /'\/api\/refresh'/);
+  for (const [index, name] of WATCHDOG_MODULE_FILES.entries()) {
+    if (name === 'RecoveryConsole.tsx') continue;
+    assert.doesNotMatch(
+      watchdogModules[index],
+      /(?:post|fetch)(?:Json)?(?:<[^>]+>)?\('\/api\/refresh'/,
+      `${name} must not become a second POST /api/refresh path`,
+    );
+  }
 });
 
 test('successful local refresh cannot supersede canonical Watchman outage truth', async () => {

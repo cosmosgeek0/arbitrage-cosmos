@@ -1,0 +1,194 @@
+/* =============================================================================
+   PostureBand.css — CLUSTER 1 · SURFACE · §1
+
+   Every value below is a token from web/src/pages/watchdog/tokens.css (BIBLE
+   §1.9) or a house token from styles.css. No raw sizes, no raw hues, no new
+   design system, no new dependency.
+
+   BANNED AND ABSENT, grep-gated: --muted, --muted-2, --faint, and any --warn
+   that is not the page's own token layer. This file also contains no `vh`, no
+   `vw` (the root carries a CSS `zoom`, which viewport units ignore) and no
+   `display:none` — nothing on this band may be hidden at any width.
+
+   RESPONSIVE IS CONTAINER QUERIES ONLY. The three @media rules here are not
+   viewport queries: `hover`/`pointer` is a capability query (§3.2 ships the same
+   one on .wd-idbtn), and the other two are prefers-reduced-motion and
+   forced-colors, which §4.1 reserves @media for.
+
+   SHARED PATTERNS (§3.5 FieldPair, §3.10 MetricCell, §3.12 UnknownState SLOT)
+   are reproduced here as the bible writes them, because no roster component
+   owns them as a file. If a neighbour ships them too, the bytes are identical
+   by construction. INTEGRATION NOTE: hoist the two marked blocks into a shared
+   web/src/pages/watchdog/patterns.css and delete them from here.
+   ========================================================================== */
+
+/* ---- the section. It draws NO container (Law 4 / §4.2). ------------------
+   No container-type here: nothing queries the section, and declaring an unused
+   container costs containment for no query. The BAND is the container (.mx). */
+.pbx {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--sp-7);
+  /* the named reset: every property .card sets, refused explicitly, both themes */
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.pbx:hover { background: none; box-shadow: none; }
+
+/* REMOVED AT INTEGRATION: `.pbx-head` and `.pbx-count`. This section used to
+   draw its own T2 head, hairline and coverage counter INSIDE the shell's, which
+   meant two heads and two counters free to disagree. WatchdogSurface's
+   `.wdf-head` / `.wdf-count` are the single owners (§3.14, §4.1). */
+
+
+/* SHARED PATTERNS LIVE IN patterns.css: §3.10 MetricCell and §3.5 FieldPair
+   were declared here AND in two other sheets, globally, with different bodies —
+   so which one applied was decided by import order, and the two MetricCell
+   copies had already drifted into two visibly different components. This band
+   sets only what is genuinely its own. */
+
+/* =========================================================================
+   PostureBand's own layer
+   ========================================================================= */
+
+/* DELETED: this band's private `.mx-unit`. It was a seventh type role
+   (`--fs-2` at `--lh-1`, `--fw-value`, --ink-2) that exists in no table in §1.4,
+   and it disagreed with the unit register used everywhere else on the page.
+   patterns.css carries §3.3's `.numx-u` contract for every unit. */
+/* reserved widths so a 1 Hz tick cannot slide `ms` sideways when the digit
+   count changes (§3.5 the jitter lock). The server clamps rttMs to 120000. */
+.mx-cell[data-cell='browser'] .mx-num { --mx-digits: 6ch; }
+
+.mx-name { color: var(--ink-3); }
+/* The warrant is the cell's third rail. It gets no max-height and no clamp: the
+   reason is the cell's load-bearing content, so a cell that cannot prove itself
+   is physically taller than one that can (Law 3). */
+.mx-warrant { display: block; min-width: 0; padding-block-start: var(--sp-3); }
+
+/* an inline documentation reference — a field path, a reason code, a command
+   id. Not an Identifier: there is nothing here to copy that the label does not
+   already say, and a copy button per field path would be noise. */
+.pbx-ref {
+  font-family: var(--mono);
+  font-size: inherit;
+  font-weight: var(--fw-value);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.wd-field-value .pbx-ref { color: var(--ink-1); }
+
+/* the two readback timestamps stack rather than running together, because they
+   are a pair the operator reads as an interval and pastes as two values */
+.pbx-stamps { display: grid; justify-items: start; row-gap: var(--sp-1); min-width: 0; }
+
+.pbx-shared {
+  margin: 0;
+  padding-block-start: var(--sp-4);
+  max-inline-size: var(--measure);
+  text-wrap: pretty;
+}
+
+/* a block is NOT a section: two tiers and no third (§4.1). No container. */
+.pbx-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  row-gap: var(--sp-5);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.pbx-block-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--sp-5);
+  row-gap: var(--sp-2);
+  min-width: 0;
+}
+.pbx-block-head > h3 { flex: none; }
+
+/* the reason code takes the label column but not the label REGISTER: a blocking
+   code is a value, not a column head, so it re-registers to T4 mono ink-1. */
+.wd-field-label[data-kind='code'] {
+  font-family: var(--mono);
+  font-size: var(--fs-4);
+  line-height: var(--lh-4);
+  letter-spacing: 0;
+  font-weight: var(--fw-value);
+  color: var(--ink-1);
+  text-transform: none;
+}
+
+/* THE RIGHT EDGE (Law 4). Every trailing value in every block terminates here,
+   so `which fact is stale` is answerable in one vertical scan. */
+.wd-field-trail {
+  grid-column: 2 / -1;
+  grid-row: 1;
+  justify-self: end;
+  align-self: baseline;
+  padding-inline-start: var(--sp-5);
+  color: var(--ink-2);
+  text-align: right;
+  white-space: nowrap;
+}
+/* a chip may occupy the trailing cell when there is no value to put there
+   (§3.5: no value at all -> StatusChip renders in the value's own cell). Its
+   reason is a sentence, so the cell stops enforcing nowrap for it. */
+.wd-field-trail:has(.wd-chip-slot) {
+  white-space: normal;
+  text-align: start;
+  max-inline-size: calc(var(--measure) / 2);
+}
+/* Without :has, nowrap would let a chip's reason sentence run off the right
+   edge — the one thing this column exists to hold. Wrapping every trailing
+   value is the safe loss, so the fallback takes it. */
+@supports not selector(:has(*)) {
+  .wd-field-trail { white-space: normal; }
+}
+
+/* the click-through. Geometry from §3.2's .wd-idbtn; it navigates focus rather
+   than copying, so it carries no copy glyph and no copied state. */
+.pbx-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  height: var(--ctl-sm);
+  margin: 0 calc(var(--sp-4) * -1);
+  padding: 0 var(--sp-4);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-1);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: var(--sp-1);
+  /* on the base, not on :hover — a transition declared only on the hover state
+     animates in and snaps out */
+  transition: background var(--mo-fast) var(--mo-out);
+}
+@media (hover: hover) and (pointer: fine) {
+  .pbx-jump:hover { background: var(--tile); text-decoration-color: currentColor; }
+}
+.pbx-jump:active { background: var(--tile); }
+
+@media (prefers-reduced-motion: reduce) {
+  .pbx-jump, .pbx-jump:hover { transition: none; }
+}
+
+@media (forced-colors: active) {
+  /* the band's own border and the reading tones are restored in patterns.css */
+  .pbx-jump { text-decoration-color: LinkText; color: LinkText; }
+  /* the reading tones are reinforcement; in forced colors the chip fill is the
+     ladder and the reading returns to system ink rather than an invented hue */
+}

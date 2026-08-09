@@ -1,0 +1,546 @@
+/* =============================================================================
+   patterns.css — THE SHARED PATTERN LIBRARY.
+
+   BIBLE §3.0 names five owners and says an element that RE-IMPLEMENTS one of
+   them is "wrong by construction, not by taste"; §5 L23/L24 make it a law. Two
+   of those owners ship as React components (`StatusChip`, `MachineValue`) and
+   own their own CSS. The other three — §3.5 FieldPair, §3.6 Button, §3.11
+   InfoRow — plus §3.4's table contract, §3.13's empty panel and §3.18's one
+   bounded region have no component in the roster, so every consumer used to
+   carry its own "byte-identical" copy behind an INTEGRATOR fence.
+
+   THEY WERE NOT BYTE-IDENTICAL, AND THEY WERE NOT SCOPED. `.wdb`, `.wd-field*`,
+   `.gdx-*`, `.wd-table`, `.wd-row`, `.wd-empty*` and `.wdf-region` were all
+   declared globally in three or four per-component modules with different
+   bodies, so the computed value of any conflicting declaration was decided by
+   CSS IMPORT ORDER. Concretely, before this file existed:
+
+     - `cursor: pointer` was present on two copies of `.wdb` and absent from
+       two; the merged rule kept it by accident.
+     - `letter-spacing: var(--ls-4)` existed on one copy only.
+     - one copy used `padding-inline` alone, so the UA `<button>` padding-block
+       survived and that section's pills were taller than every other pill.
+     - one copy omitted `.wdb[aria-disabled="true"]` ENTIRELY and its hover rule
+       lacked the `:not([aria-disabled])` guard, so a refused control there
+       rendered identical to a live one AND lit up on hover.
+     - `.wd-field-value{grid-column:1;grid-row:1}` existed in one copy;
+       `.wd-field-value.wd-num` existed in the other two. Neither file got both.
+     - four `@keyframes` existed for one spinner, under three names.
+
+   ONE COPY. Imported by WatchdogSurface immediately after tokens.css, before
+   any section sheet, so a section can OVERRIDE a pattern deliberately at higher
+   specificity and can never fork one by accident.
+
+   Every length here is a token (§5 L12). The only literals in a rule body are
+   the 1px hairline, the 1.5px spinner rim and the 12px glyph square — all three
+   licensed by §5 L12 and §1.3.
+   ========================================================================== */
+
+/* =============================================================================
+   BIBLE §3.6 · Button
+   -----------------------------------------------------------------------------
+   Geometry and weight are IDENTICAL at every level (§5 L11): a state transition
+   may change fill, edge and edge-style, and nothing else. A non-actionable
+   button RECEDES VIA SUNKEN FILL + DASHED EDGE and its INK STAYS AT FULL
+   CONTRAST — a washed-out control is indistinguishable from a crashed render.
+   ========================================================================== */
+.wdb {
+  --wdb-fill: var(--panel);
+  --wdb-edge: var(--line-2);
+  --wdb-ink: var(--ink-2);
+  --wdb-edge-style: solid;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  /* Logical, so a vertical writing mode does not silently lose the floor. The
+     shorthand `padding` is deliberate: `padding-inline` alone leaves the UA
+     button's padding-block in place and the control grows taller than its
+     siblings. */
+  min-block-size: var(--ctl-md);
+  padding: 0 var(--sp-5);
+  border: 1px var(--wdb-edge-style) var(--wdb-edge);
+  border-radius: var(--r-pill);
+  background: var(--wdb-fill);
+  color: var(--wdb-ink);
+  font-family: var(--font);
+  font-size: var(--fs-4);
+  font-weight: var(--fw-value);
+  line-height: var(--lh-4);
+  letter-spacing: var(--ls-4);
+  font-variant-numeric: lining-nums tabular-nums;
+  white-space: nowrap;
+  user-select: none;
+  cursor: pointer;
+  transition:
+    background-color var(--mo-fast) var(--mo-out),
+    border-color var(--mo-fast) var(--mo-out),
+    color var(--mo-fast) var(--mo-out),
+    transform var(--mo-fast) var(--mo-out);
+}
+
+.wdb--sm { min-block-size: var(--ctl-sm); padding: 0 var(--sp-4); }
+.wdb--lg { min-block-size: var(--ctl-lg); padding: 0 var(--sp-6); }
+.wdb--icon { inline-size: var(--ctl-md); padding: 0; gap: 0; border-radius: var(--r-sm); }
+
+.wdb--primary     { --wdb-fill: var(--cta-bg); --wdb-edge: transparent; --wdb-ink: var(--cta-fg); }
+.wdb--secondary   { /* the base level, named so a call site can state it */ }
+.wdb--tertiary    { --wdb-fill: transparent; --wdb-edge: transparent; --wdb-ink: var(--ink-3); }
+.wdb--destructive { --wdb-edge: color-mix(in srgb, var(--bad) 42%, var(--line-2)); --wdb-ink: var(--bad); }
+
+/* DELETED: `.wdb--restorative`. It set `--wdb-ink: var(--ok)` — `--ok` as the
+   ink of a TEXT LABEL. §1.6 rule 1 and §2 D18 restrict `--ok` to a <=12px glyph
+   and nothing else ("never text, never a word, never a fill"), and §5 L5 is
+   flat: there is no green number and no green word. The bible's own §3.6
+   snippet shipped the line and the law sheet overrides it. It also had zero
+   call sites in this tree, so it was dead CSS encoding a false green — the
+   worst of both. */
+
+/* The refusal level. Ink stays at --ink-2 (full label contrast), not --ink-mute:
+   §1.5 restricts --ink-mute to disabled and placeholder only. */
+.wdb[aria-disabled="true"] {
+  --wdb-fill: var(--tile);
+  --wdb-edge: var(--line-strong);
+  --wdb-ink: var(--ink-2);
+  --wdb-edge-style: dashed;
+  cursor: not-allowed;
+}
+
+@media (hover: hover) {
+  .wdb:not([aria-disabled="true"]):not(.is-pending):hover {
+    background: var(--hover);
+    border-color: var(--line-strong);
+    color: var(--ink-1);
+  }
+  /* A refused control does not light up. Without this guard a refusal is
+     indistinguishable from a live control under a pointer. */
+  .wdb[aria-disabled="true"]:hover {
+    background: var(--wdb-fill);
+    border-color: var(--wdb-edge);
+    color: var(--wdb-ink);
+  }
+}
+.wdb:not([aria-disabled="true"]):not(.is-pending):active { transform: scale(.98); }
+
+.wdb--destructive.is-armed {
+  --wdb-fill: var(--bad-solid);
+  --wdb-edge: transparent;
+  --wdb-ink: var(--on-solid);
+  --wdb-edge-style: solid;
+}
+.wdb-cluster:has(.is-armed) .wdb:not(.is-armed) {
+  --wdb-fill: transparent;
+  --wdb-edge: transparent;
+  --wdb-ink: var(--ink-3);
+}
+
+/* In flight: the label's width is RESERVED, so pressing reflows nothing. */
+.wdb.is-pending > :is(.wdb-glyph, .wdb-label) { visibility: hidden; }
+.wdb-spin {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  inline-size: var(--glyph);
+  block-size: var(--glyph);
+  border: 1.5px solid color-mix(in srgb, currentColor 24%, transparent);
+  /* Logical, matching the `border` shorthand above. */
+  border-block-start-color: currentColor;
+  /* 50%, never --r-pill: --r-pill on a square renders a circle by accident and
+     is a fourth radius language (§1.3). */
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+.wdb.is-pending > .wdb-spin { opacity: 1; animation: wdb-spin var(--mo-spin) linear infinite; }
+@keyframes wdb-spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .wdb { transition: none; }
+  .wdb:active { transform: none; }
+  /* The rotation is KEPT and only slowed: it is the only evidence a request is
+     in flight, and removing it costs information rather than motion. */
+  .wdb.is-pending > .wdb-spin { opacity: 1; animation-duration: var(--mo-seek); }
+}
+
+/* =============================================================================
+   THE INLINE-ID CONTROL — one geometry for "a named thing you can jump to".
+   -----------------------------------------------------------------------------
+   Seven private copies existed (`.wd-idbtn`, `.wdl-jump`, `.pbx-jump`,
+   `.wdoe-idbtn`, `.wdorow-linkid`, `.wdcl-jump`, `.wdcpx-root`) with five
+   different geometries; two of them cleared no 24px target at all (WCAG 2.5.8)
+   while the other five deliberately did, and one was a bordered chip where every
+   sibling was an underlined word. One shape: an underlined identifier with a
+   negative inline bleed so the text still starts on the column's x.
+   ========================================================================== */
+.wd-jump {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--ctl-sm);
+  margin-inline: calc(var(--sp-4) * -1);
+  padding-inline: var(--sp-4);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: var(--sp-1);
+}
+@media (hover: hover) {
+  .wd-jump:hover { background: var(--hover); text-decoration-color: currentColor; }
+}
+
+/* =============================================================================
+   BIBLE §3.11 · InfoRow — sentence | warrant | provenance.
+   -----------------------------------------------------------------------------
+   Provenance has NO ABSENT CASE: if a sentence claims something about the
+   system, something proves it. A narrow container REFLOWS the stamp under its
+   sentence; it never withdraws it.
+   ========================================================================== */
+.gdx-list {
+  display: grid;
+  grid-template-columns:
+    var(--sp-6) var(--gutter-icon) var(--sp-5) minmax(0, 1fr) var(--sp-5) var(--col-prov) var(--sp-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--mono);
+}
+.gdx-row {
+  position: relative;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: start;
+  padding-block: var(--sp-3);
+  padding-inline: 0;
+}
+/* The separator starts at the body column, not at the row edge, so it reads as
+   a rule between SENTENCES rather than a table border. The inset used to be the
+   raw literal `44px`, copied into three files with no token behind it. */
+.gdx-row + .gdx-row::before {
+  content: "";
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: var(--inforow-rule-inset) 0;
+  block-size: 1px;
+  background: var(--line);
+}
+.gdx-glyph {
+  grid-column: 2;
+  align-self: start;
+  display: grid;
+  place-items: center;
+  inline-size: var(--gutter-icon);
+  block-size: var(--lh-5);
+  color: var(--ink-3);
+}
+.gdx-body { grid-column: 4; min-width: 0; font-family: var(--font); }
+/* `display:block` lives in the base rule. Every consumer used to patch it back
+   on, and one consumer solved it a third way. */
+.gdx-say { display: block; text-wrap: pretty; overflow-wrap: break-word; }
+.gdx-why { display: block; margin-block-start: var(--sp-1); }
+.gdx-prov {
+  grid-column: 6;
+  justify-self: end;
+  direction: ltr;
+  unicode-bidi: isolate;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: var(--fs-6);
+  font-weight: var(--fw-value);
+  line-height: var(--lh-6);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.gdx-prov[data-prov="stale"] { color: var(--warn); }
+/* DELETED: `.gdx-row[data-register="binding"]{--gdx-ink:var(--ink-1)}` — a
+   custom property nothing read. §1.7: a token nothing reads is a defect, not a
+   spare. The register is carried by `--ink-2` on the advisory row instead. */
+.gdx-row[data-register="advisory"] .gdx-body { color: var(--ink-2); }
+
+/* =============================================================================
+   BIBLE §3.5 · FieldPair
+   ========================================================================== */
+/* A container query can NEVER style its own container. `container-type` used to
+   sit on `.wd-fields` itself, so the `@container` block's re-declaration of
+   `.wd-fields{grid-template-columns:…}` was silently dropped while its
+   DESCENDANT rules still applied — pinning the label to column 1 / row 1 and the
+   body to column 2 / row 1 of a grid that only ever had ONE track. Both landed
+   in the same cell and every label printed on top of its own value. The
+   ControlCommit agent found this by rendering it and patched its own scope; this
+   is the same fix at the source, so the other 12 `.wd-fields` instances across
+   PostureBand, ControlLedger and RecoveryConsole are correct too.
+
+   The two-column layout is now the BASE, so it needs no container to be right.
+   The container query only COLLAPSES it when an ANCESTOR declares the container
+   (ControlCommit's `.wdcx-preview` does). If no ancestor ever does, the layout
+   is still correct — it simply never stacks. Failing to a correct wide layout
+   beats failing to overlapping text. */
+.wd-fields {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: start;
+  column-gap: 0;
+  row-gap: var(--sp-3);
+  margin: 0;
+}
+.wd-field {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  column-gap: 0;
+  row-gap: var(--sp-1);
+  min-width: 0;
+}
+.wd-field-body {
+  display: grid;
+  grid-column: 2 / -1;
+  grid-row: 1;
+  grid-template-columns: subgrid;
+  margin: 0;
+}
+@container wd-fields (max-width: 319px) {
+  .wd-fields { grid-template-columns: minmax(0, 1fr); row-gap: var(--sp-4); }
+  .wd-field { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .wd-field-label { grid-column: 1; grid-row: auto; padding-inline-end: 0; }
+  .wd-field-body { grid-column: 1 / -1; grid-row: auto; }
+}
+.wd-field-label {
+  grid-column: 1;
+  grid-row: 1;
+  padding-inline-end: var(--sp-5);
+  overflow-wrap: break-word;
+}
+/* BOTH of these existed, in different files. Neither file had both, so which
+   one applied depended on which sheet was imported last. */
+.wd-field-value { grid-column: 1; grid-row: 1; }
+.wd-field-value.wd-num {
+  display: inline-block;
+  min-inline-size: var(--wd-digits, auto);
+  text-align: right;
+}
+.wd-field-note {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  max-inline-size: var(--measure);
+  text-wrap: pretty;
+  overflow-wrap: anywhere;
+}
+.wd-field[data-proof="qualified"] .wd-field-value { color: var(--ink-2); }
+
+/* =============================================================================
+   BIBLE §3.4 · the table contract.
+   -----------------------------------------------------------------------------
+   `separate` + `border-spacing: 0`, not `collapse`: Blink DROPS collapsed
+   borders on a position:sticky cell, so any table that ever grows a sticky head
+   silently loses its hairlines. The hairline is therefore an inset box-shadow,
+   which sticky cells keep. Trailing rule, `:last-child` suppressed — one
+   convention, so a trailing-rule list followed by a leading-rule list cannot
+   paint two hairlines at the boundary.
+   ========================================================================== */
+.wd-table {
+  inline-size: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-family: var(--font);
+}
+.wd-table :where(th, td) { padding: var(--sp-3) var(--sp-5); vertical-align: top; text-align: start; }
+/* Law 18: the first and last cells pay NO inline padding, so every table on the
+   page starts on the same x and every numeric column terminates on the same
+   right edge. This is the mechanism the whole no-cards decision rests on. */
+.wd-table :where(th, td):first-child { padding-inline-start: 0; }
+.wd-table :where(th, td):last-child { padding-inline-end: 0; }
+.wd-table th { white-space: nowrap; }                      /* a head must never wrap */
+.wd-table :where(th, td).wd-col-num { text-align: right; } /* MUST follow the base rule */
+
+/* The hairline is an inset box-shadow, not a border: a `position: sticky` cell
+   drops collapsed borders in Blink, so any table that ever grows a sticky head
+   silently loses its rules. TRAILING, `:last-child` suppressed — one convention
+   for the whole page, so a trailing-rule list followed by a leading-rule list
+   cannot paint two hairlines at the boundary. */
+.wd-row { min-block-size: var(--row-h); box-shadow: inset 0 -1px 0 var(--line); }
+.wd-row:last-child { box-shadow: none; }
+
+/* =============================================================================
+   BIBLE §3.13 · the empty panel.
+   -----------------------------------------------------------------------------
+   NEVER `place-items: center` and never an illustration: an empty state is a
+   claim about evidence and it reads in the same left-aligned reading order as
+   every other sentence. `padding-inline: 0` — Law 18: nothing insets content,
+   or this panel's right edge stops being the page's right edge.
+   ========================================================================== */
+.wd-empty {
+  display: grid;
+  align-content: start;
+  justify-items: start;              /* NEVER place-items: center */
+  gap: var(--sp-5);
+  padding-block: var(--sp-5) var(--sp-6);
+  /* Law 18. The bible's own snippet insets this by --sp-6 and the two copies in
+     the tree had already drifted apart on exactly that declaration, so one of
+     them broke the shared right edge in precisely the state where the page can
+     least afford an interior edge. Zero, always. */
+  padding-inline: 0;
+  text-align: start;
+  color: var(--ink-3);
+}
+.wd-empty[data-flush="true"] { padding-block-start: 0; }
+.wd-empty-byline {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--sp-4);
+  row-gap: var(--sp-1);
+  inline-size: 100%;
+  margin: 0;
+  padding-block-start: var(--sp-4);
+  border-block-start: 1px solid var(--line);
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: var(--fs-6);
+  font-weight: var(--fw-support);
+  line-height: var(--lh-6);
+  font-variant-numeric: lining-nums tabular-nums;
+  user-select: text;
+}
+
+/* =============================================================================
+   THE DEFECT HATCH — one utility, four private copies deleted.
+   -----------------------------------------------------------------------------
+   Rendered when an adverse element carries no reason. It must be OBVIOUS and it
+   must not resemble any legitimate state, which is why it is a hatch and not a
+   hue. No radius: three of the four copies had none and the fourth invented one.
+   ========================================================================== */
+.wd-defect {
+  background-image: repeating-linear-gradient(
+    135deg, transparent 0 5px, var(--tile) 5px 10px
+  );
+  border: 1px dashed var(--line-strong);
+}
+
+/* =============================================================================
+   BIBLE §3.18 · the ONE bounded surface — a region that MUTATES.
+   -----------------------------------------------------------------------------
+   §4.4 licenses EXACTLY ONE per page, and WatchdogSurface has spent it on the
+   whole CONTROL cluster. Its margin and padding cancel, so its contents stay on
+   the page axis and Law 18 survives.
+   ========================================================================== */
+.wdf-region {
+  margin-inline: calc(var(--sp-5) * -1);
+  padding: var(--sp-5);
+  border-radius: var(--r-sm);
+  background: var(--tile);
+}
+
+@media (forced-colors: active) {
+  /* background-image is dropped in forced colors, so the hatch survives as its
+     border alone — which is why the border is part of the utility. */
+  .wd-defect { border-color: CanvasText; background: Canvas; }
+  .wdb { border-color: ButtonText; }
+  .wdb[aria-disabled="true"] { border-color: GrayText; }
+  .wd-row { box-shadow: inset 0 -1px 0 CanvasText; }
+}
+
+/* =============================================================================
+   BIBLE §3.10 · MetricCell
+   -----------------------------------------------------------------------------
+   Two divergent copies existed, one at each end of the page, and they rendered
+   as two unrelated components: `--panel` fill vs transparent, 16px cell padding
+   vs 0, an interior `border-inline-start` vs a `--sp-7` column gap, three
+   subgrid rows vs four, a 2-line reason clamp vs 3, and a `warn` reading tone
+   that existed in one copy only — so a warn-tone reading rendered hueless in one
+   section and `--warn` in the other.
+
+   This is the Law-18 shape, and it is the right one: the BAND pays the block
+   padding and every CELL pays zero, so the outer cells' readings terminate on
+   the page's shared right edge. A 16px inset on the outer cell is exactly the
+   interior edge that "no cards" exists to prevent. The interior rule is dropped
+   because the subgrid baseline rail already separates the cells and §4.2.3
+   allows one semantic device plus one reinforcement, not three.
+
+   `--mx-rows` is the ONE thing a consumer sets: a band that carries a facts rail
+   under each chip declares 4, a band that does not declares 3. Everything else
+   is identical by construction.
+   ========================================================================== */
+.mx { container-type: inline-size; container-name: mx; --mx-rows: 3; }
+.mx-band {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(var(--mx-rows), auto);
+  column-gap: var(--sp-7);
+  row-gap: 0;
+  padding-block: var(--sp-6);
+  padding-inline: 0;
+  border-block: 1px solid var(--line-2);
+  background: transparent;
+}
+.mx-cell {
+  grid-row: span var(--mx-rows);
+  display: grid;
+  grid-template-rows: subgrid;
+  align-items: baseline;
+  row-gap: 0;
+  min-inline-size: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+@supports not (grid-template-rows: subgrid) {
+  .mx-cell { display: flex; flex-direction: column; }
+  .mx-name { min-block-size: var(--lh-3); }
+  .mx-reading { min-block-size: var(--lh-1); }
+  .mx-warrant { min-block-size: var(--lh-4); }
+}
+.mx-name { padding-block-end: var(--sp-2); }
+.mx-reading { display: block; padding-block-end: var(--sp-4); overflow-wrap: break-word; }
+.mx-reading[data-reading="value"] {
+  white-space: nowrap;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+.mx-num { display: inline-block; }
+/* The unit is §3.3's `.numx-u` contract, verbatim — one unit register on the
+   page. One copy of this used `--fs-2` (14px) at `--lh-1` and `--fw-value`,
+   which is a SEVENTH type role that exists in no table. */
+.mx-unit {
+  padding-inline-start: 1ch;
+  color: var(--ink-3);
+  font-size: var(--fs-6);
+  font-weight: var(--fw-support);
+  letter-spacing: var(--ls-6);
+  font-variant-numeric: normal;
+}
+/* With no number, the CONSEQUENCE takes the reading register. Never
+   `--ink-mute`: that ink is disabled and placeholder only, and an unmeasured
+   reading is truth, not a placeholder (§1.5, §5 L15). */
+.mx-reading[data-reading="reason"] {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-wrap: pretty;
+}
+.mx-reading[data-tone="warn"] { color: var(--warn); }
+.mx-reading[data-tone="bad"] { color: var(--bad); }
+.mx-warrant { padding-block-end: var(--sp-5); }
+.mx-facts { align-self: start; }
+
+@container mx (max-width: 1120px) {
+  .mx-band { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: var(--sp-7); }
+}
+@container mx (max-width: 620px) {
+  .mx-band { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (forced-colors: active) {
+  .mx-band { border-block-color: CanvasText; }
+  .mx-reading[data-tone="warn"],
+  .mx-reading[data-tone="bad"] { color: CanvasText; }
+}

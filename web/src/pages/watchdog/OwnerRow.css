@@ -1,0 +1,343 @@
+/* =============================================================================
+   OwnerRow.css — the one dense row type of the Watchdog owner ledger.
+
+   Source of law: docs/design/watchdog/BIBLE.md §1 (tokens), §3.1 (chip), §3.3
+   (numeric), §3.4 (DataRow), §3.12 (absence), §3.17 (OwnerRow), §3.19 (motion),
+   plus §2 D26/D31/D32/D33 and the §5 law sheet.
+
+   HUELESS BY CONSTRUCTION. This file declares no semantic hue at all. Hue lives
+   inside the chip, where a whole container separates the rungs (§1.6 rule 2);
+   the icon gutter, the advance mark and every rule on the row are --ink-3 /
+   --line-*. The severity ladder therefore survives a monochrome screenshot,
+   because it is fill mass inside the chip and nothing else.
+
+   NO CONTAINER. The row draws one hairline and nothing else — no card, no
+   radius, no shadow, no inset. That is what keeps the age column on the same x
+   as every other numeric column on the page (law L18).
+
+   Every length below is a token. The only literals are the 1px hairline and the
+   1.5px spinner rim, both of which §5 law 12 declares.
+   ========================================================================== */
+
+/* ---- the row -------------------------------------------------------------- */
+
+.wdorow {
+  /* The one glyph size the page uses (§1.6 / law L19), named so the two
+     centring calcs below carry no literal. */
+  --wdorow-glyph-size: 12px;
+  min-height: var(--row-h);
+  border-bottom: 1px solid var(--line);
+}
+
+.wdorow:last-of-type { border-bottom: 0; }
+
+/* D26: NO transition on a row. A 90ms fade across a dense table leaves a
+   three-row comet trail behind a fast traverse; a button is not a row. */
+@media (hover: hover) and (pointer: fine) {
+  .wdorow:not([data-expanded="true"]):hover { background: var(--hover); }
+}
+
+/* Expanded = a persistent tint plus a 2px inset rule on the mark gutter, which
+   is exactly why the mark gutter is 8px: the mark sits at x=3..5 with 1px clear
+   of a 2px rule at x=0..2 (§1.2). FONT WEIGHT NEVER CHANGES here — background
+   and colour only, or the row reflows under the pointer that opened it. */
+.wdorow[data-expanded="true"] { background: var(--tile); }
+.wdorow[data-expanded="true"] > :first-child { box-shadow: inset 2px 0 0 0 var(--line-strong); }
+
+/* Focus, form (b) — inset, because the ledger clips (§1.8). Painted on the
+   CELLS, not the <tr>: box-shadow on a table-row under `border-collapse:
+   collapse` is not reliably composited, and a focus ring that sometimes does
+   not paint is worse than none. tokens.css supplies the forced-colors restore
+   through `.watchdog .is-clipped:focus-visible`. */
+.wdorow.is-clipped:focus-visible { outline: none; }
+.wdorow.is-clipped:focus-visible > * {
+  box-shadow: inset 0 2px 0 0 var(--focus-ring), inset 0 -2px 0 0 var(--focus-ring);
+}
+.wdorow.is-clipped:focus-visible > :first-child {
+  box-shadow:
+    inset 0 2px 0 0 var(--focus-ring),
+    inset 0 -2px 0 0 var(--focus-ring),
+    inset 2px 0 0 0 var(--focus-ring);
+}
+.wdorow.is-clipped:focus-visible > :last-child {
+  box-shadow:
+    inset 0 2px 0 0 var(--focus-ring),
+    inset 0 -2px 0 0 var(--focus-ring),
+    inset -2px 0 0 0 var(--focus-ring);
+}
+
+/* ---- the cells ------------------------------------------------------------
+   Restated at the row scope so the row is correct on its own; identical to the
+   shared `.wd-table :where(th,td)` contract, so the two cannot disagree.
+   `vertical-align: top` is what lets the reason and the register wrap onto a
+   second line while the value and the age stay pinned to the first. */
+.wdorow > :where(th, td) {
+  padding: var(--sp-3) var(--sp-5);
+  vertical-align: top;
+  text-align: left;
+  font-family: var(--font);
+}
+
+/* col 0 — the advance gutter. Reserved even when empty (law L19). */
+.wdorow-mark-cell {
+  width: var(--gutter-mark);
+  padding: 0;
+}
+
+/* THE ADVANCE MARK (§3.4, D31). 2 x 12px, dashed, hueless, POLARITY INVERTED:
+   the expected case renders nothing, so on a healthy wall this gutter is empty
+   and a wedged writer is the only object in it. A render-diff change mark was
+   deleted for the opposite failure — present on nearly every row every poll,
+   and silent forever exactly when a writer wedges. */
+.wd-mark {
+  display: block;
+  inline-size: 2px;
+  block-size: var(--wdorow-glyph-size);
+  margin-inline: calc((var(--gutter-mark) - 2px) / 2);
+  margin-block: calc((var(--row-h) - var(--wdorow-glyph-size)) / 2);
+  border-radius: 1px;
+  border-inline-start: 2px dashed var(--ink-3);
+  opacity: 0;
+  transition: opacity var(--mo-decay) var(--mo-out);
+}
+
+/* Information appears at 0ms; only its withdrawal is eased (M3). */
+.wd-mark[data-advance="wedged"] {
+  opacity: 1;
+  transition-duration: var(--mo-instant);
+}
+
+/* col 1 — the semantic glyph. --ink-3 ALWAYS. Colouring this gutter is what
+   previously put --ok and --warn 0.3 Lc apart in dark: one state, in greyscale
+   and under protanopia. */
+.wdorow-glyph-cell {
+  width: var(--gutter-icon);
+  padding: 0;
+}
+
+.wdorow-glyph {
+  display: block;
+  margin-inline: auto;
+  margin-block: calc((var(--row-h) - var(--wdorow-glyph-size)) / 2);
+  color: var(--ink-3);
+}
+
+/* col 2 — identity. */
+.wdorow-id-cell { font-weight: var(--fw-value); }
+
+.wdorow-name {
+  display: block;
+  /* A truncated value is a bug; a truncated NAME is an incident (law L20). */
+  overflow-wrap: anywhere;
+}
+
+.wdorow-register {
+  display: block;
+  max-width: var(--measure);
+  margin-block-start: var(--sp-1);
+  overflow-wrap: anywhere;
+}
+
+/* The separators are aria-hidden, so they are silent to a screen reader — but
+   they stay SELECTABLE. D35's warning is the precedent: `user-select: none` on a
+   separator silently turns `server/src/engine/basis` into `serversrcenginebasis`
+   on copy. This page exists so an operator can paste evidence into an incident
+   ticket, and a register that pastes as one run-on word is not evidence. */
+.wdorow-sep {
+  padding-inline: var(--sp-2);
+  color: var(--ink-3);
+}
+
+/* The attestation is a prepositional phrase, never a second noun — that is the
+   whole reason ProductCapability LIVE_PUBLIC and ProductTruthLabel LIVE_PUBLIC
+   do not render as "Live public · Live public" (§3.17). */
+.wdorow-attest { font-style: normal; }
+
+.wdorow-owner,
+.wdorow-code {
+  font-size: inherit;
+  color: inherit;
+}
+
+.wdorow-rtt { white-space: nowrap; }
+
+/* col 3 — state. The chip's own root display is left untouched: forcing it to
+   block would stretch a tinted fill across the whole cell, and fill mass IS the
+   severity ladder. Only this file's own children are made block-level. */
+.wdorow-state-cell { min-width: 0; }
+
+.wdorow-advance,
+.wdorow-upstream {
+  display: block;
+  margin-block-start: var(--sp-1);
+}
+
+/* col 4 — action. The base cell carries no block padding: each variant declares
+   its own, so a bound row stays exactly --row-h tall and only a REFUSED row
+   grows. Height is the honesty signal (§3.4). */
+.wdorow-action-cell { padding-block: 0; }
+
+.wdorow-actbox {
+  display: flex;
+  align-items: center;
+  min-height: var(--row-h);
+}
+
+.wdorow-action-cell > .wd-nodata {
+  display: flex;
+  align-items: center;
+  min-height: var(--row-h);
+}
+
+.wdorow-refusal {
+  display: grid;
+  gap: var(--sp-1);
+  padding-block: var(--sp-3);
+}
+
+.wdorow-refusal-why { overflow-wrap: anywhere; }
+
+/* col 5 — processing lag, and col 6 — the evidence age. The two numeric tracks
+   sit last and adjacent, so they resolve into one countable grid down the page
+   and the age terminates on the page gutter itself (law L18). */
+.wdorow-lag-cell {
+  width: var(--col-num);
+  white-space: nowrap;
+}
+
+.wdorow-age-cell {
+  width: var(--col-age);
+  padding-inline-end: 0;
+  white-space: nowrap;
+}
+
+/* ---- the action control (BIBLE §3.6 recipe, row-scoped) -------------------
+   The element also carries `wdb`/`wdb--sm`, so a deduplicated shared button
+   sheet resolves it to the same tokens rather than a second geometry — but
+   every declaration here is SCOPED TO `.wdorow` (specificity 0,2,0) and the
+   spinner keyframes are named locally, so neither stylesheet load order nor a
+   neighbour's divergent `.wdb` can silently reshape a control inside a row. Non-actionable
+   never renders here at all: where no action is legal this row renders NO
+   CONTROL and a visible reason (law L22), never a ghost with nothing behind it,
+   and never the native `disabled` attribute that would remove the reason from
+   the tab order. */
+.wdorow .wdorow-act {
+  --wdb-fill: var(--panel);
+  --wdb-edge: var(--line-2);
+  --wdb-ink: var(--ink-2);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  min-height: var(--ctl-sm);
+  padding: 0 var(--sp-4);
+  border: 1px solid var(--wdb-edge);
+  border-radius: var(--r-pill);
+  background: var(--wdb-fill);
+  color: var(--wdb-ink);
+  font-family: var(--font);
+  font-size: var(--fs-4);
+  font-weight: var(--fw-value);
+  line-height: var(--lh-4);
+  font-variant-numeric: lining-nums tabular-nums;
+  white-space: nowrap;
+  user-select: none;
+  cursor: pointer;
+  transition:
+    background-color var(--mo-fast) var(--mo-out),
+    border-color var(--mo-fast) var(--mo-out),
+    color var(--mo-fast) var(--mo-out),
+    transform var(--mo-fast) var(--mo-out);
+}
+
+@media (hover: hover) {
+  .wdorow .wdorow-act:not(.is-pending):hover {
+    background: var(--hover);
+    border-color: var(--line-strong);
+    color: var(--ink-1);
+  }
+}
+
+.wdorow .wdorow-act:not(.is-pending):active { transform: scale(.98); }
+
+/* In flight: the label's width is RESERVED, never collapsed, so the row cannot
+   jump under the pointer that just pressed it. */
+.wdorow .wdorow-act.is-pending > .wdb-label { visibility: hidden; }
+
+.wdorow .wdorow-spin {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid color-mix(in srgb, currentColor 24%, transparent);
+  border-top-color: currentColor;
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.wdorow .wdorow-act.is-pending > .wdorow-spin {
+  opacity: 1;
+  animation: wdorow-spin var(--mo-spin) linear infinite;
+}
+
+@keyframes wdorow-spin { to { transform: rotate(360deg); } }
+
+/* ---- the root-cause control ----------------------------------------------
+   Every blocker id on this page is a control, not a caption: pressing it opens
+   the owner that actually broke. One alarm, N attributions, and the N are
+   physically incapable of shouting because their tone carries no fill (§3.17). */
+.wdorow-linkid {
+  display: inline-flex;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: var(--ink-1);
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: var(--sp-1);
+  cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .wdorow-linkid:hover { text-decoration-color: currentColor; }
+}
+
+/* ---- the expansion --------------------------------------------------------
+   Nothing insets content (law L18): the evidence region bleeds to the same
+   gutters as the row above it, so the two read as one object rather than as a
+   card that opened inside a table. */
+.wdorow-evidence { background: var(--tile); }
+
+.wdorow-evidence-cell {
+  padding: 0 0 var(--sp-5);
+  box-shadow: inset 2px 0 0 0 var(--line-strong);
+  border-bottom: 1px solid var(--line);
+}
+
+/* ---- reduced motion -------------------------------------------------------
+   M4: every information-bearing motion has a non-motion carrier, so removing
+   the transition removes the fade and keeps the fact. The advance mark becomes
+   an instant on/off and loses zero information. The spinner is KEPT, slowed: it
+   is the only evidence a mutation is in flight. */
+@media (prefers-reduced-motion: reduce) {
+  .wd-mark { transition: none; }
+  .wdorow .wdorow-act { transition: none; }
+  .wdorow .wdorow-act:active { transform: none; }
+  .wdorow .wdorow-act.is-pending > .wdorow-spin { opacity: 1; animation-duration: 1.2s; }
+}
+
+@media (forced-colors: active) {
+  .wdorow[data-expanded="true"] > :first-child,
+  .wdorow-evidence-cell { box-shadow: none; }
+  /* A filled 8px gutter, not a border: a border would widen the cell and shift
+     every column right in exactly the mode that can least afford it. */
+  .wdorow[data-expanded="true"] > :first-child { background: Highlight; }
+  .wdorow.is-clipped:focus-visible > * { box-shadow: none; }
+  .wdorow .wdorow-act { border-color: ButtonText; }
+}

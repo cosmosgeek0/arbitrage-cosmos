@@ -1,0 +1,345 @@
+/* =============================================================================
+   VerdictHeader.css — the Watchdog page head.
+
+   Every length, ink, hue, radius, duration and curve below is a token from
+   web/src/pages/watchdog/tokens.css (BIBLE §1.9). The only literals in a rule
+   body are the 1px hairline and the 1.5px spinner rim, both licensed by L12,
+   plus the hatch geometry copied verbatim from BIBLE §3.1's defect tone.
+
+   NOTHING HERE INSETS CONTENT (L18). The header draws no card, no radius, no
+   shadow and no fill; it has `padding-inline: 0`, so the receipt's age track
+   terminates on exactly the same right edge as every numeric column further
+   down the page. That shared edge is the whole reason there are no cards.
+
+   RESPONSIVE VIA CONTAINER QUERIES ONLY. `@media` appears three times and only
+   for `prefers-reduced-motion`, `prefers-contrast` and `forced-colors`, plus the
+   `hover: hover` capability query BIBLE §3.6 declares. No `vh`/`vw` anywhere —
+   the app root carries a CSS `zoom`, which viewport units ignore.
+   ========================================================================== */
+
+/* §3.6 Button lives in patterns.css. This file used to carry its own partial
+   copy — no `--sm`/`--lg`/`--primary`/`--tertiary`/`--destructive`, no
+   `.is-armed`, no `.wdb-cluster:has()` — declared GLOBALLY under the canonical
+   names, so which body applied to a neighbour's button depended on import
+   order. Only this header's two genuine deltas remain, below. */
+
+/* MEASURED DEFENCE, and an upstream bug worth naming.
+   `styles.css:146` forces `border-radius: 4px` on every `:focus-visible`, which
+   squares a pill. tokens.css answers with `.watchdog :focus-visible {
+   border-radius: inherit }` — but `inherit` takes the PARENT's computed radius,
+   and a header row has none. Read out of the live DOM: the icon control goes
+   8px -> 0px and the pill goes 999px -> 0px the instant a keyboard user focuses
+   it. That is a visible geometry jump on focus (L11) and it reproduces the exact
+   squared pill the rule exists to prevent. Restated here at (0,3,0) so this
+   header's two controls keep their own geometry; the shared layer still needs
+   the real fix, which is `revert` rather than `inherit`. */
+.wdvh .wdb:focus-visible { border-radius: var(--r-pill); }
+.wdvh .wdb--icon:focus-visible { border-radius: var(--r-sm); }
+
+/* -----------------------------------------------------------------------------
+   The header itself.
+   -------------------------------------------------------------------------- */
+.wdvh {
+  container-type: inline-size;
+  container-name: wdvh;
+  display: grid;
+  gap: var(--sp-5);                       /* header and its body — §4.5 */
+  margin: 0;
+  padding-block: 0 var(--sp-6);
+  padding-inline: 0;                      /* L18: nothing insets content */
+  border: 0;
+  border-block-end: 1px solid var(--line-2);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* ---- identity row --------------------------------------------------------- */
+.wdvh-identity {
+  display: grid;
+  grid-template-columns: var(--ctl-lg) minmax(0, 1fr) minmax(0, max-content) max-content;
+  align-items: center;
+  column-gap: var(--sp-6);
+  row-gap: var(--sp-5);
+}
+
+.wdvh-name { display: grid; row-gap: var(--sp-1); min-width: 0; }
+.wdvh-title { /* .wd-t1 */ }
+/* DELETED: `.wdvh-scope` — its element was a hardcoded subtitle, see the note in VerdictHeader.tsx. */
+
+/* ---- the mark: the operator's trained click target, now a real control ----- */
+.wdvh-mark {
+  width: var(--ctl-lg);
+  height: var(--ctl-lg);
+  min-height: var(--ctl-lg);
+}
+.wdvh-mark-img {
+  /* The artwork sits inside the --ctl-lg control with one --sp-5 of optical
+     padding on each axis, so it clears the 2px rung ring at the blocked rung
+     without the control changing size between rungs. */
+  width: calc(var(--ctl-lg) - var(--sp-5));
+  height: calc(var(--ctl-lg) - var(--sp-5));
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+}
+
+/* DELETED: the mark's own four-rung ring (`gated` dotted --held-tint, `warn`
+   dashed --warn-tint, `blocked` --bad-tint at 2px).
+
+   It was a FOURTH severity ladder, on a BUTTON, and it contradicted the one it
+   claimed to extend: §1.6 and §3.1 fix BLOCKED as the SOLID rung, and this
+   rendered the page's most severe state as a tint on its headline control,
+   collapsing the fill-mass separation the ladder is built on. It also carried
+   the difference in a border COLOUR and a border WIDTH — hierarchy from colour
+   variation (§5 L8), and a state transition that changes a control's geometry
+   (§5 L11, §3.6: geometry and weight identical at every level).
+
+   The verdict is carried, once, by the pill beside it, at full §3.1 strength.
+   The mark is now a plain §3.6 icon button in every state. */
+
+/* The mark's hover is §3.6's, restated at (0,5,0) only so it beats the shared
+   block's (0,4,0) deterministically rather than by source order across files.
+   It is the same fill and the same edge — not a variant. */
+@media (hover: hover) {
+  .wdvh .wdvh-mark:not([aria-disabled="true"]):not(.is-pending):hover {
+    background: var(--hover);
+    border-color: var(--line-strong);
+    color: var(--ink-1);
+  }
+}
+
+/* ---- the verdict: the page's canonical machine indicator ------------------- */
+/* BIBLE §3.1's fill ladder, verbatim. The label is ALWAYS --ink-1 (or --on-solid
+   when it rides the fill); hue is ALWAYS the fill. That is worth 25–43 Lc, free.
+   There is no glyph and no --ok anywhere on this element. */
+.wdvh-verdict {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin: 0;
+  padding: var(--sp-1) var(--sp-4);
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-1);
+  /* A verdict is a NAME. L20: values truncate, names never do — so it wraps. */
+  white-space: normal;
+  overflow-wrap: break-word;
+  user-select: text;
+  justify-self: start;
+}
+.wdvh[data-rung="gated"] .wdvh-verdict {
+  background: var(--held-tint);
+  border-color: color-mix(in srgb, var(--held) 26%, transparent);
+}
+.wdvh[data-rung="warn"] .wdvh-verdict {
+  background: var(--warn-tint);
+  border-color: color-mix(in srgb, var(--warn) 26%, transparent);
+}
+.wdvh[data-rung="blocked"] .wdvh-verdict {
+  background: var(--bad-solid);
+  color: var(--on-solid);
+  border-color: transparent;
+}
+/* The hueless rung. StatusChip resolves UNKNOWN / UNAVAILABLE / NOT_CONFIGURED
+   to one tone with NO hue (§1.6 rule 4) — grey plus a mandatory reason, because
+   green is earned. Without this case those three fell through to the bare
+   `operational` treatment, which is the healthy rendering. */
+.wdvh[data-rung="absent"] .wdvh-verdict {
+  background: var(--tile);
+  border-color: var(--line-strong);
+  border-style: dashed;
+  color: var(--ink-1);
+}
+
+.wdvh-actions { display: inline-flex; align-items: center; gap: var(--sp-4); justify-self: end; }
+.wdvh-reread-glyph { flex: none; }
+
+/* ---- the rule, the evidence stream, and the action's own readback ---------- */
+/* One narrative block, so the readback sits with the sentences it belongs to
+   rather than opening a --sp-5 canyon in the middle of the header. */
+.wdvh-narrative { display: grid; row-gap: var(--sp-3); }
+.wdvh-why { display: grid; row-gap: var(--sp-3); margin: 0; }
+.wdvh-why-item {
+  display: grid;
+  grid-template-columns: 16ch minmax(0, 1fr);   /* fits the longest label, "Evidence stream" */
+  column-gap: var(--sp-5);
+  align-items: baseline;
+}
+.wdvh-why-item > dt { margin: 0; }
+.wdvh-why-item > dd { margin: 0; max-width: var(--measure); overflow-wrap: break-word; }
+
+/* The re-read readback. Always in the layout, empty when idle: a control's own
+   readback must never shove the page it is reporting on. */
+.wdvh-readback {
+  /* TWO lines, reserved: both readback sentences measure ~127 characters, which
+     is two lines at the --measure prose cap. Reserving one line would let the
+     header grow under the pointer at the exact moment an operator presses. */
+  min-height: calc(var(--lh-5) * 2);
+  margin: 0;
+  max-width: var(--measure);
+  overflow-wrap: break-word;
+}
+.wdvh-readback[data-outcome="flat"] { color: var(--ink-1); }
+
+/* ---- the receipt ---------------------------------------------------------- */
+.wdvh-receipt {
+  display: grid;
+  grid-template-columns: minmax(0, 22ch) minmax(0, 26ch) minmax(0, 1fr) var(--col-age);
+  column-gap: var(--sp-6);
+  row-gap: var(--sp-5);
+  align-items: start;
+  padding-inline: 0;
+}
+.wdvh-cell { display: grid; row-gap: var(--sp-1); min-width: 0; }
+.wdvh-cell-label { /* .wd-t3 */ }
+
+/* ---- the notes: every receipt fact that could not prove itself -------------
+   A reason rendered inside a 10ch age track wraps into a five-line ribbon, so
+   reasons leave their column and land here, at full measure, each naming its
+   own field in TEXT rather than by alignment. The block exists only when there
+   is something to say, which is what makes the header physically taller exactly
+   when it is carrying a reason. */
+.wdvh-notes {
+  display: grid;
+  row-gap: var(--sp-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.wdvh-note {
+  display: grid;
+  grid-template-columns: 16ch max-content minmax(0, 1fr);
+  column-gap: var(--sp-5);
+  align-items: baseline;
+  padding: var(--sp-1) 0;
+}
+.wdvh-note-field { color: var(--ink-1); font-weight: var(--fw-value); }
+.wdvh-note-word { white-space: nowrap; }
+/* The prose cap belongs to the SENTENCE, not to the row: capping the row would
+   spend the measure on the two label tracks and leave the reason a ribbon. */
+.wdvh-note-reason { max-width: var(--measure); overflow-wrap: anywhere; }
+
+.wdvh-idhost { min-width: 0; display: block; }
+
+/* MEASURED, not assumed. tokens.css gives `.wd-id` `display: inline-flex`, which
+   BLOCKIFIES its children — and `Selection.toString()` inserts a line break
+   between block boxes. Selecting a revision therefore yields
+   `4f9a2c1\nb7e88d1a5c33\n6b3d0a92`: three lines pasted into an incident ticket
+   instead of one identifier. Verified in-browser across four hiding techniques;
+   the break comes from the flex container, not from how the middle is hidden.
+   This header's truncation is computed in TS, so it needs no flex, no
+   `overflow: hidden` and no CSS ellipsis — going back to `inline` restores an
+   unbroken clipboard value. Re-checked: the copied string is
+   `4f9a2c1b7e88d1a5c336b3d0a92`.
+   `overflow-wrap` is the guard for the un-elided case: a value must wrap rather
+   than overflow, because overflow would break the one shared right edge. */
+/* The host only. `Identifier` styles the value; this reserves the width and
+   guarantees a value wraps rather than overflowing the shared right edge. */
+.wdvh-cell .wd-id { max-width: 100%; overflow-wrap: anywhere; }
+
+/* DELETED: `.wdvh-idv > i::before` and `.wdvh-idv[data-elided]`. The generated
+   ellipsis, the DOM-ordered elided middle and the copy affordance are all
+   `Identifier`'s (§3.2, D35), which this header now composes. A second copy of
+   the elision rule is a second place for the truncation budget to drift. */
+
+/* The coverage tally: five figures on FIXED tracks, because the track is the
+   separation. No middots, no bullets, no separators to align around. */
+.wdvh-figs {
+  display: grid;
+  grid-template-columns: repeat(5, calc(var(--sp-9) * 2));
+  column-gap: 0;
+  row-gap: var(--sp-2);
+  align-items: baseline;
+}
+.wdvh-fig {
+  display: grid;
+  grid-template-columns: 4ch auto;
+  column-gap: var(--sp-2);
+  align-items: baseline;
+}
+.wdvh-fig-n { text-align: right; }
+/* DELETED: `[data-measured="false"] .wdvh-fig-n { color: var(--ink-mute) }`.
+   §1.5 restricts --ink-mute to disabled and placeholder ONLY (Lc 42), and §5
+   L15 says it never carries truth. The unmeasured figure is now `AbsenceSlot`,
+   which draws §3.12's dotted rule and speaks its reason — so the rule had no
+   correct target left even if the ink were permitted. */
+
+.wdvh-cell--age { justify-items: end; text-align: end; }
+.wdvh-age { white-space: nowrap; }
+.wdvh-age-u {
+  /* No gap: `12s` is ONE token. The unit demotes to T6/--ink-3 so the digits
+     stay the value and the unit stays the label — BIBLE §3.3's `.numx-u`. */
+  font-size: var(--fs-6);
+  font-weight: var(--fw-support);
+  color: var(--ink-3);
+  font-variant-numeric: normal;
+}
+
+/* ---- the doctrine as a RUNTIME invariant, shipped in production ----------- */
+/* A fact that claims unknown with no reason, a verdict with no rule, or a
+   coverage counter that is not an exhaustive partition renders hatched. The
+   stylesheet can refuse to paint a claim; it cannot refuse to write one, so the
+   words always come from the component. */
+.wdvh [data-defect="true"] {
+  border: 1px dashed var(--line-strong);
+  background: repeating-linear-gradient(135deg, transparent 0 5px, var(--tile) 5px 10px);
+}
+
+/* -----------------------------------------------------------------------------
+   Container queries. Breakpoints are measured against the content, not chosen:
+   the receipt's four tracks need ~22 + 26 + 44 + 10 ch plus three --sp-6 gaps,
+   which stops fitting near 780px; the identity row needs the mark, the name, the
+   verdict and the action, which stops fitting near 620px.
+   -------------------------------------------------------------------------- */
+@container wdvh (max-width: 780px) {
+  .wdvh-receipt { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .wdvh-cell--tally { grid-column: 1 / -1; }
+  .wdvh-cell--age { grid-column: 2; }
+}
+
+@container wdvh (max-width: 620px) {
+  .wdvh-identity { grid-template-columns: var(--ctl-lg) minmax(0, 1fr); }
+  .wdvh-verdict { grid-column: 1 / -1; }
+  .wdvh-actions { grid-column: 1 / -1; justify-self: start; }
+  .wdvh-figs { grid-template-columns: repeat(2, calc(var(--sp-9) * 2)); }
+}
+
+@container wdvh (max-width: 460px) {
+  .wdvh-why-item,
+  .wdvh-note { grid-template-columns: minmax(0, 1fr); row-gap: var(--sp-1); }
+  .wdvh-note-word { justify-self: start; }
+  .wdvh-receipt { grid-template-columns: minmax(0, 1fr); }
+  .wdvh-cell--tally,
+  .wdvh-cell--age { grid-column: 1; }
+  .wdvh-cell--age { justify-items: start; text-align: start; }
+}
+
+/* -----------------------------------------------------------------------------
+   Accessibility modes.
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .wdb { transition: none; }
+  .wdb:active { transform: none; }
+  /* The rotation is KEPT and only slowed: it is the only evidence a re-read is
+     in flight, and removing it would cost information rather than motion. */
+  .wdb.is-pending > .wdb-spin { opacity: 1; animation-duration: 1.2s; }
+}
+
+@media (forced-colors: active) {
+  .wdvh[data-rung="warn"] .wdvh-verdict,
+  .wdvh[data-rung="gated"] .wdvh-verdict {
+    border-color: CanvasText;
+    background: Canvas;
+  }
+  .wdvh[data-rung="blocked"] .wdvh-verdict {
+    background: Highlight;
+    color: HighlightText;
+    border-color: Highlight;
+  }
+  /* box-shadow and background-image are dropped in Windows High Contrast, so the
+     defect tone must survive as a real border. */
+  .wdvh [data-defect="true"] { border: 1px dashed CanvasText; background: Canvas; }
+  .wdvh-mark { border-color: CanvasText; }
+}

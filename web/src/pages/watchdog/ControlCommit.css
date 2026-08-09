@@ -1,0 +1,188 @@
+/* =============================================================================
+   ControlCommit.css — the commit lifecycle for ONE control.
+
+   Every length is a token from tokens.css (§1.2 / §1.9). The only literals in a
+   rule body are the 1px hairline and the 1.5px spinner rim, both licensed by
+   §5 law 12.
+
+   ACCENT BUDGET (§5 law 16), declared: `--held-tint` is spent exactly twice on
+   this surface — once persistently, on the kill switch's frozen engage-only
+   posture, and once transiently, on an ACCEPTED_ASYNC receipt whose truth the
+   durable readback still owns. Transient chrome is inside the budget; a third
+   persistent use would not be.
+   ========================================================================== */
+
+/* SHARED PATTERNS LIVE IN patterns.css.
+   The §3.5 FieldPair, §3.6 Button, §3.11 InfoRow, §3.4 table, §3.13 empty panel
+   and §3.18 region blocks that used to be fenced here were global, were NOT
+   byte-identical across their copies, and were therefore resolved by CSS import
+   order. They are one copy now, imported before every section sheet, so a
+   section can override a pattern deliberately at higher specificity and cannot
+   fork one by accident. Do not re-declare them here. */
+
+
+.wdcx{
+  container-type:inline-size;container-name:wdcx;
+  display:grid;gap:var(--sp-4);min-width:0;
+}
+
+/* The whole component is one action cluster: while an authority is armed, the
+   armed control is the only filled object, so the initiator recedes to
+   tertiary. Same mechanism as §3.6's `:has(.is-armed)` rule, reached across a
+   region boundary rather than through it. */
+.wdcx[data-phase="ARMED"]     .wdcx-initiator,
+.wdcx[data-phase="SUBMITTING"] .wdcx-initiator{
+  --wdb-fill:transparent;--wdb-edge:transparent;--wdb-ink:var(--ink-3);
+}
+
+.wdcx .wd-id{max-width:100%;}
+
+/* --- the note: a refusal, or a decision that was just invalidated ---------- */
+.wdcx-note{
+  margin:0;max-width:var(--measure);
+  text-wrap:pretty;overflow-wrap:break-word;
+}
+.wdcx-note[data-tone="adverse"]{color:var(--ink-1);}
+.wdcx-note-code{
+  font-family:var(--mono);font-size:var(--fs-6);font-weight:var(--fw-value);
+  letter-spacing:0;color:var(--ink-3);white-space:nowrap;
+}
+/* §3.1's runtime invariant, applied to a refusal with no reason: the surface
+   states that it is defective rather than quietly rendering an empty gutter. */
+.wdcx-note[data-defect="true"]{
+  padding:var(--sp-2) var(--sp-4);
+  border:1px dashed var(--line-strong);border-radius:var(--r-sm);
+  background:repeating-linear-gradient(135deg,transparent 0 5px,var(--tile) 5px 10px);
+}
+
+/* --- the kill switch's frozen posture (§3.20) -----------------------------
+   ENGAGED is never green and never `--up`: an engaged kill switch is a HELD
+   machine, and the fill says held. */
+.wdcx-frozen{
+  margin:0;max-width:var(--measure);
+  padding:var(--sp-2) var(--sp-4);
+  border:1px solid color-mix(in srgb,var(--held) 26%,transparent);
+  border-radius:var(--r-sm);background:var(--held-tint);color:var(--ink-1);
+}
+.wdcx-frozen-word{
+  font-family:var(--mono);font-size:var(--fs-3);letter-spacing:var(--ls-3);
+  font-weight:var(--fw-label);text-transform:uppercase;color:var(--ink-1);
+}
+
+/* --- the preview region --------------------------------------------------- */
+.wdcx-preview{display:grid;gap:var(--sp-5);min-width:0;}
+.wdcx-eyebrow{display:flex;flex-wrap:wrap;align-items:baseline;gap:var(--sp-2);}
+.wdcx-eyebrow .wd-id{
+  font-size:var(--fs-6);letter-spacing:0;text-transform:none;color:var(--ink-3);
+}
+.wdcx-consequence{max-width:var(--measure);text-wrap:pretty;}
+/* cancels the region's padding EXACTLY, so the §3.11 list's own 16px inset
+   becomes the guidance gutter and the row hairline runs the region's width */
+.wdcx-guidance{margin-inline:calc(var(--sp-5) * -1);}
+/* §3.11 sets `.gdx-why{margin-top:--sp-1}` but declares no display on
+   `.gdx-body`'s children, so an inline host collapses the two sentences into
+   one run — "…resumes intake.Reversibility, as published by…". Caught in the
+   render. The sentence and its qualifier are two lines, so they are two blocks. */
+.wdcx-guidance .gdx-say,
+.wdcx-guidance .gdx-why{display:block;}
+/* ---------------------------------------------------------------------------
+   §3.5 DEFECT, FOUND BY RENDERING IT — and fixed here without touching the
+   verbatim block above.
+
+   The shared block puts `container-type` on `.wd-fields` ITSELF and then, inside
+   `@container wd-fields (min-width:320px)`, re-declares
+   `.wd-fields{grid-template-columns:auto minmax(0,1fr) auto auto;}`.
+   A container query can never style its own container, so that declaration is
+   dropped on the floor: `.wd-fields` keeps its ONE-column base template while
+   the descendant rules — which DO apply — pin the label to `grid-column:1;
+   grid-row:1` and the body to `grid-column:2/-1; grid-row:1`. Column 2 does not
+   exist, both land on row 1, and every label prints ON TOP of its own value.
+   Confirmed in a two-theme render, not by reading the CSS.
+
+   The fix moves the container one level out, to the region that already wraps
+   the list. The shared block stays byte-identical, so lifting it into a common
+   stylesheet is still a straight copy — and this override travels with it.
+   INTEGRATOR: the same two lines are needed anywhere else `.wd-fields` is used.
+   -------------------------------------------------------------------------- */
+.wdcx-preview{container-type:inline-size;container-name:wd-fields;}
+.wdcx .wd-fields{container-type:normal;}
+.wdcx-fields{padding-block-start:var(--sp-1);}
+.wdcx-payload{
+  font-family:var(--mono);letter-spacing:0;overflow-wrap:anywhere;
+  font-variant-numeric:lining-nums tabular-nums;
+}
+.wdcx-invariants{display:grid;gap:var(--sp-2);}
+.wdcx-invariant-list{
+  display:grid;gap:var(--sp-1);margin:0;
+  padding-inline-start:var(--sp-5);list-style:disc;
+}
+.wdcx-invariant-list li{max-width:var(--measure);}
+.wdcx-invariant-list li::marker{color:var(--ink-3);}
+.wdcx-cluster,.wdcx-commit{display:flex;flex-wrap:wrap;align-items:center;gap:var(--sp-4);}
+/* the in-flight sentence breaks the action row so it reads BELOW the buttons it
+   explains, never squeezed between them */
+.wdcx-commit .wdcx-note{flex-basis:100%;}
+
+/* --- the receipt ----------------------------------------------------------
+   Padding and border are constant across every outcome so a state change can
+   never reflow the row (§5 law 11). Only the FILL moves. */
+.wdcx-receipt-slot{min-width:0;}
+.wdcx-empty{margin:0;max-width:var(--measure);}
+.wdcx-receipt{
+  display:grid;grid-template-columns:minmax(0,1fr);gap:var(--sp-1);
+  padding:var(--sp-3) var(--sp-4);
+  border:1px solid transparent;border-radius:var(--r-sm);
+  background:transparent;color:var(--ink-1);
+}
+.wdcx-receipt > p{margin:0;min-width:0;}
+.wdcx-outcome{
+  font-family:var(--mono);letter-spacing:0;font-weight:var(--fw-label);
+  color:inherit;
+}
+.wdcx-transition{color:inherit;overflow-wrap:anywhere;}
+.wdcx-transition .wdcx-state{font-family:var(--mono);letter-spacing:0;}
+.wdcx-arrow{color:var(--ink-3);}
+.wdcx-receipt-id,.wdcx-truth,.wdcx-correlation,.wdcx-durable{color:inherit;}
+.wdcx-truth,.wdcx-correlation,.wdcx-durable{
+  font-family:var(--mono);letter-spacing:0;font-variant-numeric:tabular-nums;
+}
+.wdcx-sep{color:var(--ink-3);}
+
+/* the fill ladder — bare -> tint -> solid, mapped from the SERVER's status
+   word only (see outcomeRung in ControlCommit.tsx) */
+.wdcx-receipt[data-outcome="settled"] {background:transparent;}
+.wdcx-receipt[data-outcome="inflight"]{background:var(--held-tint);border-color:color-mix(in srgb,var(--held) 26%,transparent);}
+.wdcx-receipt[data-outcome="refused"] {background:var(--warn-tint);border-color:color-mix(in srgb,var(--warn) 26%,transparent);}
+.wdcx-receipt[data-outcome="failed"]  {background:var(--bad-solid);border-color:transparent;color:var(--on-solid);}
+.wdcx-receipt[data-outcome="failed"] .wdcx-arrow,
+.wdcx-receipt[data-outcome="failed"] .wdcx-sep{color:var(--on-solid);}
+
+/* The breakpoint is MEASURED, not chosen: the widest status the result contract
+   can publish is FAILED_ATTENTION_REQUIRED (25 characters), plus --sp-5 of gap,
+   plus a floor of 20 characters for the before -> after transition beside it.
+   Below that width the two would collide, so the receipt stays stacked. */
+@container wdcx (min-width:47ch){
+  .wdcx-receipt{
+    grid-template-columns:max-content minmax(0,1fr);
+    column-gap:var(--sp-5);align-items:baseline;
+  }
+  /* All three selectors are `.wdcx-receipt > *` so they carry the SAME
+     specificity and resolve by source order. Writing the last two as bare class
+     selectors let `.wdcx-receipt > p` (0,2,0) beat `.wdcx-outcome` (0,1,0), which
+     parked the status word and the transition in the same cell — they printed on
+     top of each other. Caught in the render. */
+  .wdcx-receipt > p{grid-column:2;}
+  .wdcx-receipt > .wdcx-outcome{grid-column:1;grid-row:1;}
+  .wdcx-receipt > .wdcx-transition{grid-column:2;grid-row:1;}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .wdcx *{transition:none;}
+}
+
+@media (forced-colors: active){
+  .wdcx-receipt{border-color:CanvasText;background:Canvas;color:CanvasText;}
+  .wdcx-receipt[data-outcome="failed"]{background:Highlight;color:HighlightText;border-color:Highlight;}
+  .wdcx-frozen{border-color:CanvasText;background:Canvas;}
+  .wdcx-note[data-defect="true"]{background:Canvas;border-color:CanvasText;}
+}

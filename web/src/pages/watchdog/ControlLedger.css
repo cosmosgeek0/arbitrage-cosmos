@@ -1,0 +1,258 @@
+/* =============================================================================
+   ControlLedger.css — the control registry section.
+
+   Reads ONLY the token layer (pages/watchdog/tokens.css) and the house surface
+   tokens it aliases. The one raw value below is the 2px mark rail, which the
+   bible itself writes as a literal (§3.8 `.wdc-rail`).
+   ========================================================================== */
+
+/* SHARED PATTERNS LIVE IN patterns.css.
+   The §3.5 FieldPair, §3.6 Button, §3.11 InfoRow, §3.4 table, §3.13 empty panel
+   and §3.18 region blocks that used to be fenced here were global, were NOT
+   byte-identical across their copies, and were therefore resolved by CSS import
+   order. They are one copy now, imported before every section sheet, so a
+   section can override a pattern deliberately at higher specificity and cannot
+   fork one by accident. Do not re-declare them here. */
+
+
+/* ---------------------------------------------------------------------------
+   THE SECTION DRAWS NO CONTAINER — Law 4.
+   A named reset of every property `.card` sets (styles.css:264-303), so this
+   section cannot acquire a frame by inheritance, by a `.card` on an ancestor,
+   or by a well-meaning neighbour. Eight interior right edges is the exact
+   failure this reset exists to prevent: with no frames, every numeric column
+   and every evidence age on the page terminates on one shared x.
+   --------------------------------------------------------------------------- */
+.watchdog .wdcl {
+  --sec-track: 96px;
+  position: static;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: none;
+  container-type: inline-size;
+}
+.watchdog .wdcl::after { content: none; }
+
+/* --------------------------------------------------------------- section head
+   REMOVED AT INTEGRATION: `.wdcl-head`, `.wdcl-disclose`, `.wdcl-caret`,
+   `.wdcl-count`, `.wdcl-age` and `.wd-sec-fig`. This section drew its own T2
+   head, its own disclosure caret, its own §3.14 partition and its own evidence
+   age INSIDE WatchdogSurface's, which draws all four from the hook's measured
+   `sections.control`. Two heads, two disclosure buttons and two counters per
+   section is the box-filling this page was rebuilt to remove — and two counters
+   over different populations can disagree, which is worse than one.
+   --------------------------------------------------------------------------- */
+
+/* --------------------------------------------------------------- mutex strip
+   Pinned above the collapsible body: an unresolved receipt is the reason every
+   control is refusing, so it can never be collapsed or scrolled out of view.
+   It draws NO box. Its weight is the BLOCKED chip's solid fill — the only
+   hierarchy mechanism in this system that survives a monochrome screenshot.
+   --------------------------------------------------------------------------- */
+.wdcl-mutex {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--sp-5);
+  row-gap: var(--sp-4);
+  align-items: start;
+  padding-block: var(--sp-5);
+  border-block-end: 1px solid var(--line);
+}
+.wdcl-mutex-verdict { grid-column: 1; display: grid; gap: var(--sp-1); justify-items: start; }
+.wdcl-mutex-fields  { grid-column: 1; }
+.wdcl-mutex-note    { grid-column: 1; margin: 0; max-width: var(--measure); }
+.wdcl-recheck       { grid-column: 2; grid-row: 1 / -1; justify-self: end; }
+
+/* A jump that resolved to no row renders the SHELL's `.wdf-miss`, not a second
+   miss line of this file's own. One unresolvable-reference treatment on the
+   page or the two drift, and an operator learns to read two different shapes
+   for one fact. */
+
+/* ------------------------------------------------------------- section alert */
+.wdcl-alert {
+  margin: 0;
+  padding-block: var(--sp-4);
+  max-width: var(--measure);
+  border-block-end: 1px solid var(--line);
+}
+
+/* --------------------------------------------------------------------- body */
+.wdcl-body { display: grid; gap: var(--sp-6); padding-block-start: var(--sp-5); }
+/* An author `display` beats the UA `[hidden]` rule; without this the collapse
+   silently does nothing. */
+.wdcl-body[hidden] { display: none; }
+
+/* the two InfoRows stack their sentence over its warrant */
+.wdcl-guide .gdx-say,
+.wdcl-guide .gdx-why { display: block; }
+
+.wdcl-group { display: grid; }
+.wdcl-group-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--col-num);
+  align-items: baseline;
+  min-height: var(--row-h-tight);
+  margin: 0;
+  padding-block: var(--sp-2);
+}
+
+.wdcl-empty {
+  margin: 0;
+  padding-block: var(--sp-4);
+  max-width: var(--measure);
+  border-block-start: 1px solid var(--line);
+}
+
+/* ---------------------------------------------------------------------- row
+   §4.3 column contract: [8 mark][16 glyph][identity 1fr][action].
+   `padding-inline: 0` — the row bleeds to the page gutter, so the action cell
+   terminates on the same x as every neighbour section's numeric column.
+   A row that cannot prove itself is PHYSICALLY TALLER, because it is carrying
+   its reason. That is the intended geometry, not a defect.
+   --------------------------------------------------------------------------- */
+.wdcl-row {
+  display: grid;
+  grid-template-columns: var(--gutter-mark) var(--gutter-icon) minmax(0, 1fr) auto;
+  column-gap: var(--sp-5);
+  align-items: start;
+  padding-block: var(--sp-4);
+  padding-inline: 0;
+  border-block-start: 1px solid var(--line);
+}
+/* The row is a programmatic focus target: a blocker id anywhere on the page
+   focuses it. `:focus-visible` heuristics do not reliably fire for scripted
+   focus, and an operator sent here by a jump must be able to see where they
+   landed — so the ring is drawn for `:focus`, using the one page ring token. */
+.wdcl-row:focus { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* §2 D23 adjudicated this rail: a neutral 2px --ink-1 left rule, always
+   present, transparent by default — and rejected --bad explicitly, because
+   painting consequence in the failure hue re-commits the shipped sin of
+   `.pcr-emergency-control.engaged { background: var(--up) }`. It is also the
+   icon gutter, which §1.6 rule 2 and this file's own next comment both say must
+   never carry severity.
+
+   `--held` is kept for the ONE role §5 L16 licenses on this surface: "a person
+   set this". `--bad-solid` for an OPEN incident is deleted; the incident row's
+   own chip carries the severity, at full §3.1 strength, with its reason. An
+   OPEN and an ACKNOWLEDGED incident were also being painted the SAME hue, so
+   the channel could not be read back to a fact in any case — they are now
+   separated by the one thing a 2px rail can carry, which is presence.
+
+   `--r-pill` on a 2px rail is a fourth radius language (§1.3); every sibling
+   rail on the page uses 1px. */
+.wdcl-mark {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: stretch;
+  justify-self: start;
+  width: 2px;
+  border-radius: 1px;
+  background: transparent;
+}
+.wdcl-mark[data-changed="yes"]           { background: var(--held); }
+.wdcl-mark[data-incident="OPEN"]         { background: var(--ink-1); }
+.wdcl-mark[data-incident="ACKNOWLEDGED"] { background: var(--held); }
+
+/* §1.6 rule 2 — the icon gutter is --ink-3, ALWAYS. Colouring it is what put
+   two states 0.3 Lc apart in dark. Hue lives only inside the chip. */
+.wdcl-glyph {
+  grid-column: 2;
+  display: grid;
+  place-items: center;
+  width: var(--gutter-icon);
+  height: var(--lh-4);
+  color: var(--ink-3);
+}
+
+.wdcl-identity { grid-column: 3; min-width: 0; display: grid; gap: var(--sp-2); }
+.wdcl-action   { grid-column: 4; min-width: 0; justify-self: end; }
+
+.wdcl-label  { margin: 0; }
+.wdcl-idline { margin: 0; overflow-wrap: anywhere; }
+.wdcl-say,
+.wdcl-disagree,
+.wdcl-routing,
+.wdcl-gov,
+.wdcl-proof  { margin: 0; max-width: var(--measure); text-wrap: pretty; }
+
+/* T3 case and tracking, T4 ink: a capital-relevance flag is a word, not a hue. */
+.wdcl-capital {
+  color: var(--ink-1);
+  font-size: var(--fs-3);
+  font-weight: var(--fw-label);
+  letter-spacing: var(--ls-3);
+}
+
+/* jump-to-owner: a real button, drawn as the identifier it is */
+.wdcl-jump {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-xs);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--line-strong);
+  text-underline-offset: 2px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .wdcl-jump:hover { color: var(--ink-1); text-decoration-color: currentColor; }
+}
+
+.wdcl-verdict { display: grid; gap: var(--sp-1); justify-items: start; }
+
+/* The two-fact readback (§3.7 doctrine). EFFECT is the measurement and leads;
+   INTENT is present only on disagreement, and takes the full value ink when it
+   is — the disagreement is the information, so it is never the quieter half. */
+.wdcl-readback .wd-field[data-disagreement="true"] .wd-field-value { color: var(--ink-1); }
+
+/* ---------------------------------------------------------------------------
+   RESPONSIVE — container queries only. @media is reserved for
+   prefers-reduced-motion, prefers-contrast and forced-colors. No vh/vw: the
+   page root carries a CSS `zoom`, which viewport units ignore.
+   --------------------------------------------------------------------------- */
+@container (max-width: 1120px) {
+  /* the head is the shell's now; nothing here reflows it */
+}
+@container (max-width: 620px) {
+  .wdcl-row { grid-template-columns: var(--gutter-mark) var(--gutter-icon) minmax(0, 1fr); }
+  .wdcl-action { grid-column: 3; justify-self: start; padding-block-start: var(--sp-3); }
+  .wdcl-mutex { grid-template-columns: minmax(0, 1fr); }
+  .wdcl-recheck { grid-column: 1; grid-row: auto; justify-self: start; }
+  /* §3.11: provenance has NO absent case — if a sentence claims something about
+     the system, something proves it. Below 620px the column cannot hold its
+     12ch without lying about its width, so the row REFLOWS: the stamp drops
+     under the sentence it warrants, at full measure, in reading order. It used
+     to be `display: none`, which silently removed the warrant with no reason
+     anywhere in the DOM — the one thing §5 L2 forbids outright, and the exact
+     discipline `PostureBand.css` states for its own band. */
+  .gdx-list { grid-template-columns: 0 var(--gutter-icon) var(--sp-5) minmax(0, 1fr) 0 0 0; }
+  .gdx-row { row-gap: var(--sp-2); }
+  .gdx-prov {
+    grid-column: 4;
+    grid-row: 2;
+    justify-self: start;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   ACCESSIBILITY MODES. GrayText is the OS DISABLED colour, and a refusal reason
+   is TRUTH — only the button's own chrome may recede.
+   --------------------------------------------------------------------------- */
+@media (forced-colors: active) {
+  .wdcl-mark[data-changed="yes"],
+  .wdcl-mark[data-incident="OPEN"],
+  .wdcl-mark[data-incident="ACKNOWLEDGED"] { background: CanvasText; forced-color-adjust: none; }
+  .wdcl-jump { text-decoration-color: LinkText; }
+}

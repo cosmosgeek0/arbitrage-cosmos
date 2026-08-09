@@ -523,6 +523,38 @@ test('preserves only canonical exact decimals and enforces public alignment', ()
   }));
   assert.equal(lossyPrice.ok, false);
   assert.equal(lossyPrice.blockingCodes.includes('PRICE_INVALID'), true);
+
+  const marketUsesMarketLotOnly = adapter.buildOrderIntent(intentInput({
+    leg: 'PERP_CLOSE',
+    existingClientOrderId: 'm1i1-perp-close-market-lot-a1',
+    type: 'MARKET',
+    publicEvidence: publicEvidence({
+      exchangeSymbol: exchangeSymbol({
+        filters: exchangeFilters({
+          lotSize: {
+            minQty: '1',
+            maxQty: '100',
+            stepSize: '1',
+          },
+        }),
+      }),
+    }),
+  }));
+  assert.equal(marketUsesMarketLotOnly.ok, true);
+
+  const marketLotRangeEnforced = adapter.buildOrderIntent(intentInput({
+    leg: 'PERP_CLOSE',
+    existingClientOrderId: 'm1i1-perp-close-market-range-a1',
+    type: 'MARKET',
+    quantity: '75',
+  }));
+  assert.equal(marketLotRangeEnforced.ok, false);
+  assert.equal(
+    marketLotRangeEnforced.blockingCodes.includes(
+      'QUANTITY_OUT_OF_RANGE',
+    ),
+    true,
+  );
 });
 
 test('applies official side-directed PERCENT_PRICE bounds', () => {
@@ -1143,6 +1175,53 @@ test('hostile config is inert and nominal guards reject proxies without traps', 
   assert.equal(adapter.sourceEnabled, false);
   assert.equal(adapter.killSwitchEngaged, true);
   assert.equal(getterCalls, 0);
+
+  const invalidAuthorityAdapter = createBinanceUsdMBasisValidateOnlyAdapter({
+    enabled: true,
+    sourceEnabled: true,
+    killSwitchEngaged: false,
+    authority: 'LIVE_PRIVATE',
+    allowedSymbols: Object.freeze(['BTCUSDT']),
+  });
+  const invalidAuthorityResult = invalidAuthorityAdapter.buildOrderIntent(
+    intentInput(),
+  );
+  assert.equal(invalidAuthorityAdapter.enabled, false);
+  assert.equal(invalidAuthorityAdapter.sourceEnabled, false);
+  assert.equal(invalidAuthorityAdapter.killSwitchEngaged, true);
+  assert.equal(
+    invalidAuthorityResult.blockingCodes.includes('CONFIG_INVALID'),
+    true,
+  );
+  assert.equal(
+    invalidAuthorityResult.blockingCodes.includes('AUTHORITY_INVALID'),
+    true,
+  );
+
+  for (const symbol of ['BTC-USDT', 'BTC.USDT']) {
+    const punctuationAdapter = enabledAdapter({
+      allowedSymbols: Object.freeze([symbol]),
+    });
+    const punctuationResult = punctuationAdapter.buildOrderIntent(
+      intentInput({ symbol }),
+    );
+    assert.equal(punctuationAdapter.enabled, true, symbol);
+    assert.equal(
+      punctuationResult.blockingCodes.includes('CONFIG_INVALID'),
+      false,
+      symbol,
+    );
+    assert.equal(
+      punctuationResult.blockingCodes.includes('SYMBOL_NOT_ALLOWLISTED'),
+      false,
+      symbol,
+    );
+    assert.equal(
+      punctuationResult.blockingCodes.includes('PUBLIC_SYMBOL_MISMATCH'),
+      true,
+      symbol,
+    );
+  }
 
   let trapCalls = 0;
   const proxy = new Proxy({}, {

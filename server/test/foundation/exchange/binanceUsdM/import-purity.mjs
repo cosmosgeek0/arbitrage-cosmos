@@ -114,6 +114,13 @@ section('3. compiled modules contain no implicit I/O or authority expansion');
     distRoots.every(([root]) => compiledModules.some((module) => module.root === root)),
     files.join(','),
   );
+  const publicGroundworkModules = compiledModules
+    .filter((module) => module.root === 'binanceUsdM');
+  check(
+    'compiled public groundwork module set is non-trivial',
+    publicGroundworkModules.length >= 8,
+    `${publicGroundworkModules.length}`,
+  );
   const forbidden = [
     ['environment access', /process\.env/],
     ['wall clock', /Date\.now\s*\(/],
@@ -132,8 +139,9 @@ section('3. compiled modules contain no implicit I/O or authority expansion');
     ['capital movement path', /\/(?:borrow|repay|transfer|withdraw)/],
   ];
   for (const [name, pattern] of forbidden) check(`no ${name}`, !pattern.test(source));
-  const publicGroundworkSource = compiledModules
-    .filter((module) => module.root === 'binanceUsdM')
+  const combinedPostDeclarations = source.match(/method:\s*'POST'/g) ?? [];
+  check('exactly two combined compiled POST declarations', combinedPostDeclarations.length === 2, `${combinedPostDeclarations.length}`);
+  const publicGroundworkSource = publicGroundworkModules
     .map((module) => module.source)
     .join('\n');
   const postDeclarations = publicGroundworkSource.match(/method:\s*'POST'/g) ?? [];

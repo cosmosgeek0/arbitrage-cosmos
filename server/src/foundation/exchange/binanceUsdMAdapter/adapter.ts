@@ -130,6 +130,7 @@ interface ConfigSnapshot {
   readonly sourceEnabled: boolean;
   readonly killSwitchEngaged: boolean | null;
   readonly authority: 'NONE';
+  readonly authorityInvalid: boolean;
   readonly allowedSymbols: readonly string[];
 }
 
@@ -242,13 +243,14 @@ function plainDataArray(value: unknown, maximum = 256): readonly unknown[] | nul
 function exactStringArray(
   value: unknown,
   maximum = 64,
+  pattern: RegExp = CAPABILITY_PATTERN,
 ): readonly string[] | null {
   const values = plainDataArray(value, maximum);
   if (
     values === null ||
     !values.every(
       (item) =>
-        typeof item === 'string' && CAPABILITY_PATTERN.test(item),
+        typeof item === 'string' && pattern.test(item),
     ) ||
     new Set(values).size !== values.length
   ) {
@@ -524,11 +526,18 @@ function parseConfig(value: unknown): ConfigSnapshot {
     sourceEnabled: false,
     killSwitchEngaged: true,
     authority: 'NONE' as const,
+    authorityInvalid: false,
     allowedSymbols: Object.freeze([] as string[]),
   });
   const record = plainDataRecord(value);
   if (record === null) return fallback;
-  const symbols = exactStringArray(record.allowedSymbols, 500);
+  const authorityInvalid =
+    Object.hasOwn(record, 'authority') && record.authority !== 'NONE';
+  const symbols = exactStringArray(
+    record.allowedSymbols,
+    500,
+    SYMBOL_PATTERN,
+  );
   if (
     typeof record.enabled !== 'boolean' ||
     typeof record.sourceEnabled !== 'boolean' ||
@@ -537,10 +546,11 @@ function parseConfig(value: unknown): ConfigSnapshot {
       record.killSwitchEngaged === null
     ) ||
     record.authority !== 'NONE' ||
-    symbols === null ||
-    !symbols.every((symbol) => SYMBOL_PATTERN.test(symbol))
+    symbols === null
   ) {
-    return fallback;
+    return authorityInvalid
+      ? Object.freeze({ ...fallback, authorityInvalid: true })
+      : fallback;
   }
   return Object.freeze({
     valid: true,
@@ -548,6 +558,7 @@ function parseConfig(value: unknown): ConfigSnapshot {
     sourceEnabled: record.sourceEnabled,
     killSwitchEngaged: record.killSwitchEngaged,
     authority: 'NONE' as const,
+    authorityInvalid: false,
     allowedSymbols: symbols,
   });
 }
@@ -563,7 +574,7 @@ function controlBlockingCodes(
   if (config.killSwitchEngaged !== false) {
     codes.push('KILL_SWITCH_ENGAGED_OR_UNKNOWN');
   }
-  if (config.authority !== 'NONE') codes.push('AUTHORITY_INVALID');
+  if (config.authorityInvalid) codes.push('AUTHORITY_INVALID');
   if (typeof symbol !== 'string' || !SYMBOL_PATTERN.test(symbol)) {
     codes.push('SYMBOL_INVALID');
   } else if (!config.allowedSymbols.includes(symbol)) {
@@ -802,20 +813,11 @@ function validateFilters(
 ): void {
   validateRange(
     quantity,
-    context.lotSize,
+    type === 'MARKET' ? context.marketLotSize : context.lotSize,
     'QUANTITY_OUT_OF_RANGE',
     'QUANTITY_STEP_MISMATCH',
     codes,
   );
-  if (type === 'MARKET') {
-    validateRange(
-      quantity,
-      context.marketLotSize,
-      'QUANTITY_OUT_OF_RANGE',
-      'QUANTITY_STEP_MISMATCH',
-      codes,
-    );
-  }
   if (price !== null) {
     validateRange(
       price,

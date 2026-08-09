@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { IconSearch } from '../components/Icons';
-import { OptionalSurfaceSwitch } from '../components/OptionalSurfaceGate';
 import { PillSelect } from '../components/PillSelect';
 import { CALENDAR_COUNTRIES, calVal, categoryName, countryName, flag, type CalItem } from '../lib/calendar';
 import { liveAge } from '../format';
@@ -442,7 +441,6 @@ export function CalendarPage() {
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search" spellCheck={false} />
             {query && <button type="button" aria-label="Clear Search" onClick={() => setQuery('')}>×</button>}
           </label>
-          <OptionalSurfaceSwitch surfaceId="calendar" />
         </div>
       </header>
 

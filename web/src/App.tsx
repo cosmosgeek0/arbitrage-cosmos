@@ -5,10 +5,7 @@ import { Sidebar, Topbar, BottomNav, Overlays, RefreshDock } from './components/
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Tape } from './components/Tape';
 import { Palette } from './components/Palette';
-import {
-  OptionalSurfaceControlProvider,
-  OptionalSurfaceGate,
-} from './components/OptionalSurfaceGate';
+import { OptionalSurfaceControlProvider } from './components/OptionalSurfaceGate';
 import { Dashboard } from './pages/Dashboard';
 import { Loans } from './pages/Loans';
 import { Account } from './pages/Account';
@@ -142,18 +139,14 @@ function Shell() {
                 {page === 'account' && <Account view="overview" />}
                 {page === 'wallets' && <Account view="overview" />}
                 {page === 'markets' && (
-                  <OptionalSurfaceGate surfaceId="markets">
-                    <Suspense fallback={<div className="optional-page-loading" role="status">Loading Markets…</div>}>
-                      <Markets />
-                    </Suspense>
-                  </OptionalSurfaceGate>
+                  <Suspense fallback={<div className="optional-page-loading" role="status">Loading Markets…</div>}>
+                    <Markets />
+                  </Suspense>
                 )}
                 {page === 'detail' && (
-                  <OptionalSurfaceGate surfaceId="token">
-                    <Suspense fallback={<div className="optional-page-loading" role="status">Loading Token…</div>}>
-                      <TokenDetail symbol={detailSymbol} />
-                    </Suspense>
-                  </OptionalSurfaceGate>
+                  <Suspense fallback={<div className="optional-page-loading" role="status">Loading Token…</div>}>
+                    <TokenDetail symbol={detailSymbol} />
+                  </Suspense>
                 )}
                 {page === 'loans' && <Loans />}
                 {page === 'execution' && <Account view="execution" />}
@@ -166,28 +159,22 @@ function Shell() {
                 {page === 'opportunities' && <Opportunities />}
                 {page === 'risk' && <Risk />}
                 {page === 'ledger' && (
-                  <OptionalSurfaceGate surfaceId="logs">
-                    <Suspense fallback={<div className="optional-page-loading" role="status">Loading Logs…</div>}>
-                      <LedgerPage />
-                    </Suspense>
-                  </OptionalSurfaceGate>
+                  <Suspense fallback={<div className="optional-page-loading" role="status">Loading Logs…</div>}>
+                    <LedgerPage />
+                  </Suspense>
                 )}
                 {page === 'system' && <SystemHealth />}
                 {page === 'watchdog' && <Watchdog />}
                 {page === 'notifications' && <NotificationsPage />}
                 {page === 'news' && (
-                  <OptionalSurfaceGate surfaceId="news">
-                    <Suspense fallback={<div className="optional-page-loading" role="status">Loading News…</div>}>
-                      <News />
-                    </Suspense>
-                  </OptionalSurfaceGate>
+                  <Suspense fallback={<div className="optional-page-loading" role="status">Loading News…</div>}>
+                    <News />
+                  </Suspense>
                 )}
                 {page === 'calendar' && (
-                  <OptionalSurfaceGate surfaceId="calendar">
-                    <Suspense fallback={<div className="optional-page-loading" role="status">Loading Calendar…</div>}>
-                      <CalendarPage />
-                    </Suspense>
-                  </OptionalSurfaceGate>
+                  <Suspense fallback={<div className="optional-page-loading" role="status">Loading Calendar…</div>}>
+                    <CalendarPage />
+                  </Suspense>
                 )}
                 {page === 'research-lab' && (
                   <Suspense fallback={(

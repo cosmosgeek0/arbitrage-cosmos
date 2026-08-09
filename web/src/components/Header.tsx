@@ -28,14 +28,10 @@ import {
 } from '../lib/privateRead';
 import { ACCENTS, CURRENCIES, DATA_CADENCE_DEFAULTS, MARKET_PING_CHOICES, type AccentKey, type DataCadenceKey, type NotificationRuleKey } from '../lib/prefs';
 import { openOverlay, useOverlay } from '../lib/overlay';
-import {
-  optionalSurfaceAllowsOverlay,
-  optionalSurfaceForPage,
-} from '../lib/optionalSurfaceControl';
+import { optionalSurfaceAllowsOverlay } from '../lib/optionalSurfaceControl';
 import { TokenIcon } from './TokenIcon';
 import { PillSelect } from './PillSelect';
 import {
-  OptionalSurfaceSwitch,
   useOptionalSurface,
   useOptionalSurfaceControl,
 } from './OptionalSurfaceGate';
@@ -944,24 +940,19 @@ export function Sidebar() {
         {NAV.map((g, i) => (
           <div key={i} className="snav-group" data-nav-group={g.group?.toLowerCase() ?? 'utility'}>
             {g.group && <div className="snav-group-title">{g.group}</div>}
-            {g.items.map((n) => {
-              const optionalSurface = optionalSurfaceForPage(n.id ?? '');
-              return (
-                <div className="snav-optional-row" key={n.id}>
-                  <button
-                    className={`snav-item ${page === n.id || n.match?.includes(page) ? 'active' : ''}`}
-                    data-nav-id={n.id}
-                    onClick={() => setPage(n.id!)}
-                    title={n.label}
-                    aria-current={page === n.id || n.match?.includes(page) ? 'page' : undefined}
-                  >
-                    <span className="snav-ic">{n.icon}</span>
-                    <span className="snav-label">{n.label}</span>
-                  </button>
-                  {optionalSurface && <OptionalSurfaceSwitch surfaceId={optionalSurface} compact />}
-                </div>
-              );
-            })}
+            {g.items.map((n) => (
+              <button
+                key={n.id}
+                className={`snav-item ${page === n.id || n.match?.includes(page) ? 'active' : ''}`}
+                data-nav-id={n.id}
+                onClick={() => setPage(n.id!)}
+                title={n.label}
+                aria-current={page === n.id || n.match?.includes(page) ? 'page' : undefined}
+              >
+                <span className="snav-ic">{n.icon}</span>
+                <span className="snav-label">{n.label}</span>
+              </button>
+            ))}
           </div>
         ))}
       </nav>

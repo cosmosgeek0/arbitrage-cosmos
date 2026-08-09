@@ -242,18 +242,18 @@ test('GET and PUT races preserve monotonic terminal truth and pending closes ico
   );
 });
 
-test('cold Dashboard keeps optional routes lazy and Opportunities outside every optional gate', async () => {
+test('cold Dashboard keeps optional routes lazy and every route renders its own page', async () => {
   const app = await read('App.tsx');
   const lazyRoutes = [
     ['Markets', 'markets', 'Markets'],
-    ['TokenDetail', 'token', 'TokenDetail'],
-    ['LedgerPage', 'logs', 'LedgerPage'],
+    ['TokenDetail', 'detail', 'TokenDetail'],
+    ['LedgerPage', 'ledger', 'LedgerPage'],
     ['News', 'news', 'News'],
     ['CalendarPage', 'calendar', 'CalendarPage'],
   ];
 
   assert.match(app, /import \{[^}]*\bSuspense\b[^}]*\blazy\b[^}]*\} from 'react'/);
-  for (const [moduleName, surfaceId, componentName] of lazyRoutes) {
+  for (const [moduleName, pageId, componentName] of lazyRoutes) {
     assert.doesNotMatch(
       app,
       new RegExp(`import\\s*\\{[^}]*\\b${moduleName}\\b[^}]*\\}\\s*from\\s*['"]\\.\\/pages\\/${moduleName}['"]`),
@@ -266,17 +266,18 @@ test('cold Dashboard keeps optional routes lazy and Opportunities outside every 
     );
     assert.match(
       app,
-      new RegExp(
-        `page === '[^']+'[\\s\\S]{0,180}<OptionalSurfaceGate surfaceId=["']${surfaceId}["']>`
-        + `[\\s\\S]{0,240}<${componentName}\\b`,
-      ),
-      `${moduleName} must remain behind backend admission`,
+      new RegExp(`page === '${pageId}' && \\(\\s*<Suspense[\\s\\S]{0,200}<${componentName}\\b`),
+      `${moduleName} must render its own content behind its deferred chunk`,
     );
   }
 
   assert.match(app, /page === 'dashboard' && <Dashboard \/>/);
   assert.match(app, /page === 'opportunities' && <Opportunities \/>/);
-  assert.doesNotMatch(app, /OptionalSurfaceGate surfaceId=["']opportunities["']/);
+  assert.doesNotMatch(
+    app,
+    /OptionalSurfaceGate surfaceId=/,
+    'no route may be replaced by an optional-surface wall',
+  );
   assert.equal((app.match(/<OptionalSurfaceControlProvider>/g) ?? []).length, 1);
 
   // Preserve source-discovered route contracts used by I00 and product-control tests.
@@ -307,7 +308,7 @@ test('cold Dashboard keeps optional routes lazy and Opportunities outside every 
   }
 });
 
-test('sidebar switches are sibling controls and token discovery closes when Token is OFF', async () => {
+test('sidebar rows are plain route buttons and token discovery closes when Token is OFF', async () => {
   const [header, gate, palette, styles] = await Promise.all([
     read('components/Header.tsx'),
     read('components/OptionalSurfaceGate.tsx'),
@@ -315,40 +316,23 @@ test('sidebar switches are sibling controls and token discovery closes when Toke
     read('styles.css'),
   ]);
 
-  const rowStart = header.indexOf('<div className="snav-optional-row"');
-  const rowEnd = header.indexOf('</div>', rowStart);
-  assert.ok(rowStart >= 0 && rowEnd > rowStart, 'sidebar optional row wrapper is missing');
-  const row = header.slice(rowStart, rowEnd);
+  const navStart = header.indexOf('{g.items.map((n) => (');
+  const navEnd = header.indexOf('</aside>', navStart);
+  assert.ok(navStart >= 0 && navEnd > navStart, 'sidebar route row renderer is missing');
+  const row = header.slice(navStart, navEnd);
   assert.match(row, /className=\{`snav-item /);
   assert.match(row, /data-nav-id=\{n\.id\}/);
-  assert.match(row, /<\/button>[\s\S]*<OptionalSurfaceSwitch surfaceId=\{optionalSurface\} compact \/>/);
-  assert.doesNotMatch(row, /<button[\s\S]*<button/, 'the switch must not nest inside the route button');
+  assert.doesNotMatch(row, /snav-optional-row/, 'the sidebar must not keep the toggle row wrapper');
+  assert.doesNotMatch(row, /OptionalSurfaceSwitch/, 'no sidebar row may carry a surface toggle');
+  assert.doesNotMatch(row, /<button[\s\S]*<button/, 'a route row is exactly one button');
 
-  assert.match(gate, /type="button"[\s\S]*role="switch"[\s\S]*aria-checked=\{checked\}/);
-  assert.match(gate, /disabled=\{disabled\}/);
-  assert.match(gate, /data-optional-surface=\{surfaceId\}/);
-  assert.match(
-    gate,
-    /<section className="optional-surface-inert" aria-disabled="true"[\s\S]*<\/section>\s*<OptionalSurfaceSwitch surfaceId=\{surfaceId\} \/>/,
-    'the active switch must sit outside the inert visual panel',
-  );
-  assert.doesNotMatch(
-    gate,
-    /feed, polling, subscriptions, and workers are stopped/i,
-    'generic OFF copy must not claim that retained shared/core owners stop',
-  );
-  assert.match(gate, /passive market cut remains available to Opportunities/);
-  assert.match(gate, /durable ledger and canonical incident retention remain active/);
-  assert.match(
-    styles,
-    /\.optional-surface-gate\.closed > \.optional-surface-switch\s*\{[^}]*position:\s*absolute;[^}]*top:\s*24px;[^}]*right:\s*24px;/s,
-    'the closed-surface control must remain in the top-right corner',
-  );
-  assert.match(
-    styles,
-    /\.optional-surface-inert\s*\{[^}]*filter:\s*grayscale\(\.72\);[^}]*opacity:\s*\.82;[^}]*pointer-events:\s*none;/s,
-    'the closed surface must read as gray and inert',
-  );
+  for (const source of [header, gate, palette, styles]) {
+    assert.doesNotMatch(
+      source,
+      /OptionalSurfaceSwitch|optional-surface-switch|snav-optional-row|ON-DEMAND SURFACE/,
+      'the optional-surface toggle system must leave no shell, page, or style behind',
+    );
+  }
 
   for (const source of [header, palette]) {
     assert.match(source, /useOptionalSurface\('token'\)/);
@@ -359,7 +343,7 @@ test('sidebar switches are sibling controls and token discovery closes when Toke
   assert.match(header, /if \(e\.symbol && !tokenSurface\.enabled\) return/);
 });
 
-test('News, Calendar, Markets, and Token own one admitted-state switch in their page toolbar', async () => {
+test('News, Calendar, Markets, and Token render their toolbars with no surface toggle', async () => {
   const [gate, news, calendar, markets, token] = await Promise.all([
     read('components/OptionalSurfaceGate.tsx'),
     read('pages/News.tsx'),
@@ -368,20 +352,11 @@ test('News, Calendar, Markets, and Token own one admitted-state switch in their 
     read('pages/TokenDetail.tsx'),
   ]);
 
-  const gateComponentStart = gate.indexOf('export function OptionalSurfaceGate');
-  const admittedStart = gate.indexOf('if (input.enabled)', gateComponentStart);
-  const closedStart = gate.indexOf('className="optional-surface-gate closed"');
-  assert.ok(admittedStart >= 0 && closedStart > admittedStart);
-  assert.doesNotMatch(
-    gate.slice(admittedStart, closedStart),
-    /OptionalSurfaceSwitch/,
-    'the generic admitted gate must not duplicate a page-owned switch',
-  );
-  assert.match(
-    gate.slice(closedStart),
-    /<OptionalSurfaceSwitch surfaceId=\{surfaceId\} \/>/,
-    'an OFF page must retain the recovery switch before its module mounts',
-  );
+  // The gate module keeps the admission owner only: no switch, no wall.
+  assert.doesNotMatch(gate, /export function OptionalSurfaceSwitch/);
+  assert.doesNotMatch(gate, /export function OptionalSurfaceGate/);
+  assert.match(gate, /export function OptionalSurfaceControlProvider/);
+  assert.match(gate, /export function useOptionalSurface\(/);
 
   for (const [surface, source, wrapper] of [
     ['news', news, 'lix-toolbar-tools'],
@@ -389,23 +364,14 @@ test('News, Calendar, Markets, and Token own one admitted-state switch in their 
     ['markets', markets, 'mkx-tools'],
     ['token', token, 'tkx-tools'],
   ]) {
-    assert.match(
+    assert.doesNotMatch(
       source,
-      /import \{[^}]*\bOptionalSurfaceSwitch\b[^}]*\} from '\.\.\/components\/OptionalSurfaceGate'/,
+      /\bOptionalSurfaceSwitch\b/,
+      `${surface} must not import or render a surface toggle`,
     );
     const toolbarStart = source.indexOf(`<div className="${wrapper}">`);
     const toolbarEnd = source.indexOf('</header>', toolbarStart);
     assert.ok(toolbarStart >= 0 && toolbarEnd > toolbarStart, `${surface} toolbar is missing`);
-    assert.match(
-      source.slice(toolbarStart, toolbarEnd),
-      new RegExp(`<OptionalSurfaceSwitch surfaceId="${surface}" \/>`),
-      `${surface} switch must live in its right-side page toolbar`,
-    );
-    assert.equal(
-      source.split(`<OptionalSurfaceSwitch surfaceId="${surface}" />`).length - 1,
-      1,
-      `${surface} page must render exactly one admitted-state switch`,
-    );
   }
 });
 

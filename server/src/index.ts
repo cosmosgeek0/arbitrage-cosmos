@@ -5230,6 +5230,16 @@ function startServerTimers(): void {
   }, LOOP_LAG_SAMPLE_MS);
   // Observation only: sampling must never keep the event loop alive (F-053).
   loopLagTimer.unref();
+  // Owner order 2026-08-10: optional surfaces DEFAULT OPEN. This is the one
+  // place the boot default lives. The admission mechanism itself is unchanged —
+  // leases, generations, drain, and the PUT route still own every transition,
+  // and a start failure still lands the surface in FAILED/OFF — but a surface
+  // the owner never touched is admitted rather than answering its routes with
+  // 503 OPTIONAL_SURFACE_OFF. Each transition reports through the same promise
+  // chain and never rejects, so no boot path depends on this settling.
+  for (const id of OPTIONAL_SURFACE_IDS) {
+    void optionalSurfaceControl.setEnabled(id, true);
+  }
   // One eager envelope build at boot so the first browser poll usually finds a
   // published cut rather than paying for the cold build itself.
   productIntegrationRuntime.primeSupervisor();

@@ -11,6 +11,38 @@ const DIST_ROOT = path.resolve('server/dist/systemIntegration');
 const DATA_DIR_LEASE_SOURCE = path.resolve(
   'server/src/systemIntegration/persistence/dataDirLease.ts',
 );
+const M0_SPOT_READINESS_SOURCE = path.resolve(
+  'server/src/systemIntegration/evidence/m0SpotReadinessCard.ts',
+);
+const M0_SPOT_PERSISTENCE_SOURCE = path.resolve(
+  'server/src/systemIntegration/persistence/m0SpotLifecyclePersistenceAdapter.ts',
+);
+const M0_SPOT_EXECUTOR_SOURCE = path.resolve(
+  'server/src/systemIntegration/production/m0SpotExecutor.ts',
+);
+const M0_SPOT_RUNTIME_SOURCE = path.resolve(
+  'server/src/systemIntegration/production/m0SpotRuntimeBoundary.ts',
+);
+const APPROVED_M0_SPOT_ENDPOINTS_BY_SOURCE = new Map([
+  [M0_SPOT_READINESS_SOURCE, new Set([
+    '/api/v3/order/test',
+    '/api/v3/order',
+    '/api/v3/myTrades',
+  ])],
+  [M0_SPOT_PERSISTENCE_SOURCE, new Set([
+    '/api/v3/order/test',
+    '/api/v3/order',
+    '/api/v3/myTrades',
+  ])],
+  [M0_SPOT_EXECUTOR_SOURCE, new Set([
+    '/api/v3/order',
+  ])],
+  [M0_SPOT_RUNTIME_SOURCE, new Set([
+    '/api/v3/order/test',
+    '/api/v3/order',
+    '/api/v3/myTrades',
+  ])],
+]);
 const DATA_DIR_LEASE_FS_CAPABILITIES = Object.freeze([
   'Stats',
   'closeSync',
@@ -177,6 +209,17 @@ function approvedDataDirLeaseFsImport(file, node, specifier) {
     && importedNames.every((name, index) => name === DATA_DIR_LEASE_FS_CAPABILITIES[index]);
 }
 
+function approvedM0SpotEndpointLiteral(file, value) {
+  return APPROVED_M0_SPOT_ENDPOINTS_BY_SOURCE
+    .get(path.resolve(file))
+    ?.has(value) === true;
+}
+
+function approvedM0SpotCredentialToken(file, value) {
+  return path.resolve(file) === M0_SPOT_EXECUTOR_SOURCE
+    && value === 'apiKey';
+}
+
 function isProcessEnv(node) {
   if (!ts.isPropertyAccessExpression(node) && !ts.isElementAccessExpression(node)) return false;
   const property = nodeName(node);
@@ -286,15 +329,22 @@ function productionViolations(files) {
       if (
         (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node))
         && FORBIDDEN_SECRET_FIELD_NAMES.has(nodeName(node) ?? '')
+        && !approvedM0SpotCredentialToken(file, nodeName(node))
       ) report(node, `accesses credential-like field ${nodeName(node)}`);
 
       if (ts.isStringLiteralLike(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
         const value = node.text;
         if (/^(?:https?|wss?):\/\//i.test(value)) report(node, 'embeds a network target');
-        if (/X-MBX|(?:^|[?&])signature=|\/(?:api|sapi|fapi|dapi|vapi)\/v\d+\/[^\s]*(?:order|loan|borrow|repay|withdraw|transfer)|\/(?:order\/test|test\/order)(?:$|[?/#])/i.test(value)) {
+        if (
+          /X-MBX|(?:^|[?&])signature=|\/(?:api|sapi|fapi|dapi|vapi)\/v\d+\/[^\s]*(?:order|myTrades|loan|borrow|repay|withdraw|transfer)|\/(?:order\/test|test\/order)(?:$|[?/#])/i.test(value)
+          && !approvedM0SpotEndpointLiteral(file, value)
+        ) {
           report(node, 'embeds a signed, private, test-order, or money endpoint');
         }
-        if (FORBIDDEN_SECRET_FIELD_NAMES.has(value)) report(node, `contains credential-like field name ${value}`);
+        if (
+          FORBIDDEN_SECRET_FIELD_NAMES.has(value)
+          && !approvedM0SpotCredentialToken(file, value)
+        ) report(node, `contains credential-like field name ${value}`);
       }
 
       if (
@@ -307,7 +357,11 @@ function productionViolations(files) {
         || ts.isMethodDeclaration(node)
       ) {
         const name = nodeName(node.name);
-        if (name && FORBIDDEN_SECRET_FIELD_NAMES.has(name)) report(node, `declares credential-like field ${name}`);
+        if (
+          name
+          && FORBIDDEN_SECRET_FIELD_NAMES.has(name)
+          && !approvedM0SpotCredentialToken(file, name)
+        ) report(node, `declares credential-like field ${name}`);
       }
 
       if (ts.isPropertyAssignment(node)) {
@@ -401,6 +455,13 @@ function withPatchedImportBoundaries(run) {
 }
 
 test('production convergence source has no private, signed, money-moving, ambient, or execution-grant seam', () => {
+  assert.equal(approvedM0SpotEndpointLiteral(M0_SPOT_READINESS_SOURCE, '/api/v3/order/test'), true);
+  assert.equal(approvedM0SpotEndpointLiteral(M0_SPOT_EXECUTOR_SOURCE, '/api/v3/order/test'), false);
+  assert.equal(approvedM0SpotEndpointLiteral(path.resolve('server/src/systemIntegration/other.ts'), '/api/v3/order'), false);
+  assert.equal(approvedM0SpotEndpointLiteral(M0_SPOT_RUNTIME_SOURCE, '/sapi/v1/capital/withdraw/apply'), false);
+  assert.equal(approvedM0SpotCredentialToken(M0_SPOT_EXECUTOR_SOURCE, 'apiKey'), true);
+  assert.equal(approvedM0SpotCredentialToken(M0_SPOT_EXECUTOR_SOURCE, 'apiSecret'), false);
+  assert.equal(approvedM0SpotCredentialToken(M0_SPOT_RUNTIME_SOURCE, 'apiKey'), false);
   const files = filesUnder(SOURCE_ROOT, ['.ts', '.tsx']);
   assert.ok(files.length >= 30, 'expected the complete system-integration production source tree');
   assert.deepEqual(productionViolations(files), []);

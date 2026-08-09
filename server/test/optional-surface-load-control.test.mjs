@@ -341,6 +341,82 @@ test('News logo provider work is zero at default OFF and aborts without cache pu
   });
 });
 
+test('News logo positive cache is isolated across lifecycle generations', async () => {
+  let providerCalls = 0;
+  const source = createSourceLogoSource({
+    fetchImpl: async () => {
+      providerCalls += 1;
+      return new Response(Uint8Array.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, providerCalls,
+      ]), { status: 200 });
+    },
+  });
+  const firstLifecycle = {
+    cacheScope: 'news',
+    generation: 1,
+    signal: new AbortController().signal,
+  };
+  const secondLifecycle = {
+    cacheScope: 'news',
+    generation: 2,
+    signal: new AbortController().signal,
+  };
+
+  const first = await source.load('example.com', 64, firstLifecycle);
+  assert.equal(first.body.at(-1), 1);
+  assert.equal(source.cached('example.com', 64, firstLifecycle)?.body.at(-1), 1);
+  assert.equal(source.cached('example.com', 64, secondLifecycle), null);
+
+  const second = await source.load('example.com', 64, secondLifecycle);
+  assert.equal(second.body.at(-1), 2);
+  assert.equal(providerCalls, 2);
+  assert.deepEqual(source.snapshot(), {
+    providerCalls: 2,
+    inFlight: 0,
+    cached: 2,
+    failures: 0,
+  });
+});
+
+test('News logo failure cache is isolated across lifecycle generations', async () => {
+  let providerCalls = 0;
+  const source = createSourceLogoSource({
+    fetchImpl: async () => {
+      providerCalls += 1;
+      if (providerCalls === 1) throw new Error('generation-one source failure');
+      return new Response(Uint8Array.from([
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, providerCalls,
+      ]), { status: 200 });
+    },
+  });
+  const firstLifecycle = {
+    cacheScope: 'news',
+    generation: 1,
+    signal: new AbortController().signal,
+  };
+  const secondLifecycle = {
+    cacheScope: 'news',
+    generation: 2,
+    signal: new AbortController().signal,
+  };
+
+  await assert.rejects(
+    source.load('example.com', 64, firstLifecycle),
+    /generation-one source failure/,
+  );
+  assert.equal(source.snapshot().failures, 1);
+
+  const second = await source.load('example.com', 64, secondLifecycle);
+  assert.equal(second.body.at(-1), 2);
+  assert.equal(providerCalls, 2);
+  assert.deepEqual(source.snapshot(), {
+    providerCalls: 2,
+    inFlight: 0,
+    cached: 1,
+    failures: 1,
+  });
+});
+
 test('Token REST work aborts on OFF and lifecycle caches never cross generations or seed retained core', async (t) => {
   const { control } = harness();
   const originalFetch = globalThis.fetch;

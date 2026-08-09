@@ -125,7 +125,7 @@ export function createSourceLogoSource(options: SourceLogoSourceOptions = {}): R
     lifecycle: SourceLogoLifecycleContext,
   ): SourceLogoEntry | null => {
     assertLifecycleActive(lifecycle);
-    const key = `${domain}:${size}`;
+    const key = lifecycleKey(domain, size, lifecycle);
     const entry = cache.get(key);
     if (!entry) return null;
     if (now() - entry.ts >= SOURCE_LOGO_TTL_MS) {
@@ -157,7 +157,7 @@ export function createSourceLogoSource(options: SourceLogoSourceOptions = {}): R
       return Promise.reject(new Error('source logo unavailable'));
     }
     assertLifecycleActive(lifecycle);
-    const key = `${domain}:${size}`;
+    const key = lifecycleKey(domain, size, lifecycle);
     const hit = cached(domain, size, lifecycle);
     if (hit) return Promise.resolve(hit);
     const failedAt = failures.get(key) ?? 0;
@@ -165,7 +165,7 @@ export function createSourceLogoSource(options: SourceLogoSourceOptions = {}): R
       return Promise.reject(new Error('source logo is cooling down'));
     }
 
-    const requestKey = lifecycleKey(domain, size, lifecycle);
+    const requestKey = key;
     const existing = inFlight.get(requestKey);
     if (existing) return existing;
 

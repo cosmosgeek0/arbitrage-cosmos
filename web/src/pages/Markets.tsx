@@ -405,6 +405,7 @@ export function Markets() {
     marketsSurface.controlStatus,
     marketsSurface.enabled,
     marketsSurface.snapshot.failureCode,
+    marketsSurface.snapshot.generation,
     prefs.dataCadence?.market,
     prefs.refreshSec,
   ]);

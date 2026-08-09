@@ -780,6 +780,7 @@ export function VolumeScanner() {
     expanded,
     tokenIntelligenceAdmissionError,
     tokenSurface.enabled,
+    tokenSurface.snapshot.generation,
   ]);
 
   const volumeComponent = binding.snapshot?.components.find((component) => component.componentId === 'volume-engine');

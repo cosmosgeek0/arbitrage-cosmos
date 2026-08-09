@@ -17,6 +17,7 @@ import {
   startMoneyFlow,
   stopMoneyFlow,
 } from '../src/binance/moneyflow.ts';
+import { fetchDepth } from '../src/binance/rest.ts';
 import {
   OPTIONAL_SURFACE_IDS,
   OptionalSurfaceControl,
@@ -26,11 +27,12 @@ import {
   newsContextStatus,
 } from '../src/services/newsContext.ts';
 
-const [indexSource, volumeRuntimeSource, bookStreamSource, iconResolverSource] = await Promise.all([
+const [indexSource, volumeRuntimeSource, bookStreamSource, iconResolverSource, restSource] = await Promise.all([
   readFile(new URL('../src/index.ts', import.meta.url), 'utf8'),
   readFile(new URL('../src/services/volumeRuntime.ts', import.meta.url), 'utf8'),
   readFile(new URL('../src/services/bookStream.ts', import.meta.url), 'utf8'),
   readFile(new URL('../src/binance/icons.ts', import.meta.url), 'utf8'),
+  readFile(new URL('../src/binance/rest.ts', import.meta.url), 'utf8'),
 ]);
 
 function sourceBetween(start, end) {
@@ -282,6 +284,95 @@ test('one ON surface is isolated and OFF closes admission, aborts, and drains be
   }
 });
 
+test('Token REST work aborts on OFF and lifecycle caches never cross generations or seed retained core', async (t) => {
+  const { control } = harness();
+  const originalFetch = globalThis.fetch;
+  let providerCalls = 0;
+  let providerStarted;
+  const started = new Promise((resolve) => {
+    providerStarted = resolve;
+  });
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  globalThis.fetch = (_url, init) => {
+    providerCalls += 1;
+    providerStarted();
+    const signal = init?.signal;
+    return new Promise((_resolve, reject) => {
+      const abort = () => reject(signal?.reason ?? new DOMException('aborted', 'AbortError'));
+      if (signal?.aborted) abort();
+      else signal?.addEventListener('abort', abort, { once: true });
+    });
+  };
+
+  await control.setEnabled('token', true);
+  const firstLease = control.acquire('token');
+  const firstLifecycle = {
+    cacheScope: 'token',
+    generation: firstLease.generation,
+    signal: firstLease.signal,
+  };
+  const firstRead = fetchDepth('OFFPROOFUSDT', 20, firstLifecycle);
+  await started;
+  assert.equal(providerCalls, 1);
+
+  const firstDisable = control.setEnabled('token', false);
+  await assert.rejects(
+    firstRead,
+    (error) => error instanceof OptionalSurfaceOffError && error.surface === 'token',
+  );
+  firstLease.release();
+  await firstDisable;
+
+  const depthPayload = {
+    bids: [['10', '2']],
+    asks: [['11', '3']],
+  };
+  globalThis.fetch = async () => {
+    providerCalls += 1;
+    return new Response(JSON.stringify(depthPayload), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  await control.setEnabled('token', true);
+  const secondLease = control.acquire('token');
+  const secondLifecycle = {
+    cacheScope: 'token',
+    generation: secondLease.generation,
+    signal: secondLease.signal,
+  };
+  const depth = await fetchDepth('OFFPROOFUSDT', 20, secondLifecycle);
+  assert.equal(providerCalls, 2, 'the aborted generation must not publish a reusable cache entry');
+  assert.deepEqual(depth, {
+    bids: [{ price: 10, qty: 2 }],
+    asks: [{ price: 11, qty: 3 }],
+  });
+
+  secondLease.release();
+  const secondDisabled = await control.setEnabled('token', false);
+  assert.equal(secondDisabled.snapshot.phase, 'OFF');
+  assert.equal(secondDisabled.snapshot.inFlight, 0);
+
+  await control.setEnabled('token', true);
+  const thirdLease = control.acquire('token');
+  const thirdLifecycle = {
+    cacheScope: 'token',
+    generation: thirdLease.generation,
+    signal: thirdLease.signal,
+  };
+  await fetchDepth('OFFPROOFUSDT', 20, thirdLifecycle);
+  assert.equal(providerCalls, 3, 'a successful prior generation must not seed a later ON generation');
+  thirdLease.release();
+  await control.setEnabled('token', false);
+
+  await fetchDepth('OFFPROOFUSDT', 20);
+  assert.equal(providerCalls, 4, 'optional Token data must not seed the retained core cache namespace');
+});
+
 test('GET and PUT wire contracts are mounted behind operator admission', () => {
   const operatorAdmissionAt = indexSource.indexOf("app.use('/api', operatorAccess.middleware())");
   const getMountAt = indexSource.indexOf("app.get('/api/optional-surfaces',");
@@ -392,6 +483,40 @@ test('every mapped optional route crosses admission before handler work while co
     coreMarketsRoute,
     /optionalSurface|readMarketEnrichmentSnapshot|marketSources/,
   );
+});
+
+test('Token public-provider routes carry the admitted generation signal', () => {
+  const lifecycleHelpers = sourceBetween(
+    'type OptionalSurfaceRequestContext',
+    '// Ambient bearer material cannot widen Phase 2 authority.',
+  );
+  assert.match(lifecycleHelpers, /context\.signal\.aborted/);
+  assert.match(lifecycleHelpers, /snapshot\.generation !== context\.generation/);
+  assert.match(lifecycleHelpers, /cacheScope: context\.id/);
+  assert.ok(
+    (restSource.match(/lifecycleCacheKey\(/g)?.length ?? 0) >= 11,
+    'every Token REST cache must isolate lifecycle generations from retained core callers',
+  );
+
+  assert.match(indexSource, /fetchMoneyFlow\(symbol, window, context\.signal\)/);
+  assert.equal(
+    indexSource.match(/fetchBookTicker\(symbol, lifecycle\)/g)?.length,
+    2,
+    'Token detail and quote must both propagate lifecycle cancellation',
+  );
+  for (const call of [
+    'fetchFundingHist(symbol, limit, lifecycle)',
+    'fetchOiHist(symbol, period, limit, lifecycle)',
+    'fetchBasisHist(symbol, period, limit, lifecycle)',
+    'fetchKlines(symbol, interval, limit, market, field, lifecycle)',
+    'fetchKlineCandles(symbol, interval, limit, market, lifecycle)',
+    'fetchDepth(symbol, 20, lifecycle)',
+    'fetchTrades(symbol, 30, lifecycle)',
+    'fetchFundingHistory(symbol, 120, lifecycle)',
+    'fetchFuturesTelemetry(symbol, period, limit, lifecycle)',
+  ]) {
+    assert.ok(indexSource.includes(call), `${call} must carry Token lifecycle cancellation`);
+  }
 });
 
 test('icon requests require one explicit Token-or-Markets owner before admission or queueing', () => {

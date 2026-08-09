@@ -474,8 +474,8 @@ test('Volume exact-symbol intelligence follows authoritative Token admission and
   assert.match(intelligenceEffect, /return poll\.stop/);
   assert.match(
     intelligenceEffect,
-    new RegExp(`\\[[^\\]]*${tokenOwner}\\.enabled[^\\]]*\\]`),
-    'Token state transitions must tear down and re-evaluate the Volume intelligence poll',
+    new RegExp(`\\[[^\\]]*${tokenOwner}\\.enabled[^\\]]*${tokenOwner}\\.snapshot\\.generation[^\\]]*\\]`),
+    'Token state or generation transitions must tear down and re-evaluate the Volume intelligence poll',
   );
   assert.match(volume, /tokenIntelligenceAdmissionPending\s*=\s*tokenSurface\.controlStatus === 'LOADING'/);
   assert.match(volume, /tokenIntelligenceAdmissionPending[\s\S]*?'ADMISSION PENDING'/);

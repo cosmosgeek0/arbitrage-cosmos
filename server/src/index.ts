@@ -44,6 +44,7 @@ import {
   fetchKlineCandles,
   fetchKlines,
   fetchTrades,
+  type BinanceRestLifecycleContext,
   type BookTicker,
   type Futures24hTicker,
 } from './binance/rest.js';
@@ -1575,6 +1576,43 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+type OptionalSurfaceRequestContext<T extends OptionalSurfaceId = OptionalSurfaceId> = Readonly<{
+  id: T;
+  generation: number;
+  signal: AbortSignal;
+}>;
+
+function assertOptionalSurfaceRequestActive(
+  context: OptionalSurfaceRequestContext,
+): void {
+  const snapshot = optionalSurfaceControl.snapshot(context.id);
+  if (context.signal.aborted
+      || !optionalSurfaceControl.enabled(context.id)
+      || snapshot.generation !== context.generation) {
+    throw new OptionalSurfaceOffError(context.id);
+  }
+}
+
+function requireOptionalSurfaceRequest<T extends OptionalSurfaceId>(
+  res: express.Response,
+  surface: T,
+): OptionalSurfaceRequestContext<T> {
+  const context = res.locals.optionalSurface as OptionalSurfaceRequestContext<T> | undefined;
+  if (!context || context.id !== surface) throw new OptionalSurfaceOffError(surface);
+  assertOptionalSurfaceRequestActive(context);
+  return context;
+}
+
+function binanceRestLifecycle(
+  context: OptionalSurfaceRequestContext,
+): Readonly<BinanceRestLifecycleContext> {
+  return Object.freeze({
+    cacheScope: context.id,
+    generation: context.generation,
+    signal: context.signal,
+  });
+}
+
 // Ambient bearer material cannot widen Phase 2 authority. This route remains
 // present only as an explicit owner-gated boundary and performs no
 // persistence. Registered BELOW the admission boundary (F-070) so it shares
@@ -2951,10 +2989,15 @@ function triggerMarketSourceRefresh(now = Date.now()): void {
   const cacheAgeMs = marketSourceCache ? now - marketSourceCache.at : null;
   if (cacheAgeMs !== null && cacheAgeMs >= 0 && cacheAgeMs < MARKET_SOURCE_REFRESH_MS) return;
 
+  const restLifecycle = Object.freeze({
+    cacheScope: 'markets',
+    generation,
+    signal: lifecycleSignal,
+  } satisfies BinanceRestLifecycleContext);
   const acquisition = Promise.allSettled([
-    fetchAllBookTickers('spot'),
-    fetchAllBookTickers('futures'),
-    fetchAllFutures24hTickers(),
+    fetchAllBookTickers('spot', restLifecycle),
+    fetchAllBookTickers('futures', restLifecycle),
+    fetchAllFutures24hTickers(restLifecycle),
   ]);
   let acquisitionTimer: NodeJS.Timeout | null = null;
   const acquisitionDeadline = new Promise<never>((_resolve, reject) => {
@@ -3172,6 +3215,8 @@ app.get('/api/markets/enrichment', (req, res) => {
 
 app.get('/api/market/detail', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = String(req.query.symbol ?? '');
     if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol' });
@@ -3183,10 +3228,12 @@ app.get('/api/market/detail', (req, res) => {
       .find((r) => r.symbol === symbol);
     let book = null;
     try {
-      book = await fetchBookTicker(symbol);
+      book = await fetchBookTicker(symbol, lifecycle);
     } catch {
+      assertOptionalSurfaceRequestActive(context);
       // ok — book optional
     }
+    assertOptionalSurfaceRequestActive(context);
     res.json({
       row: row ?? null,
       book,
@@ -3333,6 +3380,7 @@ app.post('/api/proposals/:id/reject', (_req, res) => {
 // bases. Unknown ones resolve in the background and appear on a later call.
 app.get('/api/token/moneyflow', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
     const symbol = marketSymbol(req.query.symbol, 1, 20) ?? '';
     const window = String(req.query.window ?? '15m');
     if (!symbol || !FLOW_WINDOWS[window]) {
@@ -3340,8 +3388,9 @@ app.get('/api/token/moneyflow', (req, res) => {
       return;
     }
     try {
-      res.json(await fetchMoneyFlow(symbol, window));
+      res.json(await fetchMoneyFlow(symbol, window, context.signal));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3349,6 +3398,8 @@ app.get('/api/token/moneyflow', (req, res) => {
 
 app.get('/api/futures/funding-hist', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = marketSymbol(req.query.symbol, 1, 20) ?? '';
     const limit = integerQuery(req.query.limit, 1_000, 1, 1_000);
     if (!symbol || limit === null) {
@@ -3356,8 +3407,9 @@ app.get('/api/futures/funding-hist', (req, res) => {
       return;
     }
     try {
-      res.json(await fetchFundingHist(symbol, limit));
+      res.json(await fetchFundingHist(symbol, limit, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3379,6 +3431,8 @@ app.get('/api/futures/liquidations/stats', (_req, res) => {
 
 app.get('/api/futures/oi-hist', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = marketSymbol(req.query.symbol, 1, 20) ?? '';
     const period = String(req.query.period ?? '1d');
     const limit = integerQuery(req.query.limit, 30, 1, 500);
@@ -3387,8 +3441,9 @@ app.get('/api/futures/oi-hist', (req, res) => {
       return;
     }
     try {
-      res.json(await fetchOiHist(symbol, period, limit));
+      res.json(await fetchOiHist(symbol, period, limit, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3396,6 +3451,8 @@ app.get('/api/futures/oi-hist', (req, res) => {
 
 app.get('/api/futures/basis-hist', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = marketSymbol(req.query.symbol, 1, 20) ?? '';
     const period = String(req.query.period ?? '1h');
     const limit = integerQuery(req.query.limit, 48, 1, 500);
@@ -3404,8 +3461,9 @@ app.get('/api/futures/basis-hist', (req, res) => {
       return;
     }
     try {
-      res.json(await fetchBasisHist(symbol, period, limit));
+      res.json(await fetchBasisHist(symbol, period, limit, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3432,6 +3490,7 @@ app.post('/api/token/profiles/warm', (_req, res) => {
 
 app.get('/api/token/profile', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
     const rawBase = String(req.query.base ?? '').trim().toUpperCase();
     const base = /^[A-Z0-9\u3400-\u9fff]{1,24}$/u.test(rawBase) ? rawBase : '';
     if (!base) {
@@ -3440,8 +3499,10 @@ app.get('/api/token/profile', (req, res) => {
     }
     try {
       const profile = await tokenProfile(base);
+      assertOptionalSurfaceRequestActive(context);
       res.json({ ok: !!profile, profile });
     } catch (error) {
+      assertOptionalSurfaceRequestActive(context);
       try {
         ledger.logEvent('error_event', null, { source: 'token.profile', message: error instanceof Error ? error.message : String(error) });
       } catch {
@@ -3618,6 +3679,8 @@ app.get('/api/source-logo', (req, res) => {
 
 app.get('/api/market/quote', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = String(req.query.symbol ?? '');
     if (!/^[A-Z0-9]{4,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol' });
@@ -3626,10 +3689,12 @@ app.get('/api/market/quote', (req, res) => {
     const last = engine.priceOf(symbol);
     let book = null;
     try {
-      book = await fetchBookTicker(symbol);
+      book = await fetchBookTicker(symbol, lifecycle);
     } catch {
+      assertOptionalSurfaceRequestActive(context);
       // book unavailable — last price may still exist
     }
+    assertOptionalSurfaceRequestActive(context);
     res.json({ symbol, last, change24hPct: engine.changeOf(symbol), book, tradable: engine.filters.has(symbol) });
   });
 });
@@ -3638,6 +3703,8 @@ const KLINE_INTERVALS = new Set(['1s', '1m', '3m', '5m', '15m', '30m', '1h', '2h
 const FUTURES_DATA_PERIODS = new Set(['5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h', '1d']);
 app.get('/api/klines', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = String(req.query.symbol ?? 'BTCUSDT');
     const interval = String(req.query.interval ?? '5m');
     const limit = integerQuery(req.query.limit, 288, 1, 1_000);
@@ -3648,8 +3715,9 @@ app.get('/api/klines', (req, res) => {
       return;
     }
     try {
-      res.json(await fetchKlines(symbol, interval, limit, market, field));
+      res.json(await fetchKlines(symbol, interval, limit, market, field, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3657,6 +3725,8 @@ app.get('/api/klines', (req, res) => {
 
 app.get('/api/candles', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = String(req.query.symbol ?? 'BTCUSDT');
     const interval = String(req.query.interval ?? '5m');
     const limit = integerQuery(req.query.limit, 288, 1, 1_000);
@@ -3666,8 +3736,9 @@ app.get('/api/candles', (req, res) => {
       return;
     }
     try {
-      res.json(await fetchKlineCandles(symbol, interval, limit, market));
+      res.json(await fetchKlineCandles(symbol, interval, limit, market, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3675,14 +3746,17 @@ app.get('/api/candles', (req, res) => {
 
 app.get('/api/market/depth', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = String(req.query.symbol ?? '');
     if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol' });
       return;
     }
     try {
-      res.json(await fetchDepth(symbol, 20));
+      res.json(await fetchDepth(symbol, 20, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3690,14 +3764,17 @@ app.get('/api/market/depth', (req, res) => {
 
 app.get('/api/market/trades', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = String(req.query.symbol ?? '');
     if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol' });
       return;
     }
     try {
-      res.json(await fetchTrades(symbol, 30));
+      res.json(await fetchTrades(symbol, 30, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3705,14 +3782,17 @@ app.get('/api/market/trades', (req, res) => {
 
 app.get('/api/funding/history', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = String(req.query.symbol ?? '');
     if (!/^[A-Z0-9]{5,20}$/.test(symbol)) {
       res.status(400).json({ error: 'bad symbol' });
       return;
     }
     try {
-      res.json(await fetchFundingHistory(symbol));
+      res.json(await fetchFundingHistory(symbol, 120, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String(err) });
     }
   });
@@ -3720,6 +3800,8 @@ app.get('/api/funding/history', (req, res) => {
 
 app.get('/api/futures/telemetry', (req, res) => {
   runAsync(res, async () => {
+    const context = requireOptionalSurfaceRequest(res, 'token');
+    const lifecycle = binanceRestLifecycle(context);
     const symbol = String(req.query.symbol ?? '');
     const period = String(req.query.period ?? '5m');
     const limit = integerQuery(req.query.limit, 40, 1, 120);
@@ -3728,8 +3810,9 @@ app.get('/api/futures/telemetry', (req, res) => {
       return;
     }
     try {
-      res.json(await fetchFuturesTelemetry(symbol, period, limit));
+      res.json(await fetchFuturesTelemetry(symbol, period, limit, lifecycle));
     } catch (err) {
+      assertOptionalSurfaceRequestActive(context);
       res.status(502).json({ error: String((err as Error).message) });
     }
   });

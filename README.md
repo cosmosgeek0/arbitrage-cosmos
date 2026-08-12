@@ -18,6 +18,8 @@ Governing / read first:
 | `DIRECTOR.md` | Director boot file: laws, environment, recovery |
 | `DESIGN.md` | UI design system, ship gate, locked surface baselines |
 | `MANUAL.md` | Owner's operating manual |
+| `FULL_AUDIT.md` | Historical read-only whole-tree source audit; not runtime, browser, or deployment proof |
+| `MISTAKES.md` | Historical recovery failure-prevention lessons; not current product truth |
 
 Live protocol / authorization contracts: `EDGE_PROTOCOL_V1.md`, `IP_ASSURANCE.md`,
 `IP_OPS_ACTIVATION_REQUEST.md`.
